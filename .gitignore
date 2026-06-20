@@ -1,0 +1,93 @@
+# =====================================================
+# Incudal 项目 .gitignore
+# =====================================================
+
+# ==================== 依赖 ====================
+node_modules/
+.pnpm-store/
+
+# ==================== 构建产物 ====================
+dist/
+build/
+client/dist/
+server/dist/
+!agent/dist/
+!agent/dist/incudal-agent-linux-amd64
+!agent/dist/incudal-agent-linux-amd64.gz
+!agent/dist/incudal-agent-linux-arm64
+!agent/dist/incudal-agent-linux-arm64.gz
+
+# ==================== 环境变量 ====================
+.env
+.env.local
+.env.*.local
+server/.env
+
+# ==================== Prisma ====================
+server/src/generated/
+**/generated/prisma/
+
+# ==================== 日志 ====================
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==================== IDE/编辑器 ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# ==================== 操作系统 ====================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ==================== 证书 (敏感) ====================
+server/certs/*.key
+server/certs/*.crt
+server/certs/*.pem
+!server/certs/.gitkeep
+
+# ==================== 数据库 ====================
+*.db
+*.sqlite
+*.sqlite3
+
+# ==================== Docker ====================
+.docker/
+
+# ==================== 临时文件 ====================
+tmp/
+temp/
+.cache/
+*.tmp
+*.temp
+*.pid
+
+# ==================== Vite ====================
+client/node_modules/.vite/
+client/node_modules/.vite-temp/
+
+# ==================== TypeScript ====================
+*.tsbuildinfo
+
+# ==================== 测试覆盖率 ====================
+coverage/
+.nyc_output/
+
+# ==================== 文档 (内部) ====================
+docs/
+SDK/
+SDKNEW/
+namecrane_modules/

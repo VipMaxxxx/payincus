@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+
+    <style>
+
+      @keyframes spinSlow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes spinReverse {
+        from { transform: rotate(360deg); }
+        to { transform: rotate(0deg); }
+      }
+
+
+      @keyframes corePulse {
+        0%, 100% {
+          transform: scale(1);
+          filter: drop-shadow(0 0 2px rgba(234, 179, 8, 0.5));
+        }
+        50% {
+          transform: scale(1.05);
+          filter: drop-shadow(0 0 8px rgba(234, 179, 8, 0.9));
+        }
+      }
+
+
+      @keyframes circuitFlow {
+        to { stroke-dashoffset: -20; }
+      }
+
+
+      @keyframes glitchText {
+        0%, 90%, 100% { opacity: 1; transform: translate(0); }
+        92% { opacity: 0.8; transform: translate(-2px, 1px); }
+        94% { opacity: 1; transform: translate(2px, -1px); }
+        96% { opacity: 0.5; transform: translate(0); }
+      }
+
+
+      .ring-outer {
+        transform-origin: 100px 100px;
+        animation: spinSlow 10s linear infinite;
+      }
+
+      .ring-inner {
+        transform-origin: 100px 100px;
+        animation: spinReverse 6s linear infinite;
+      }
+
+      .core-hex {
+        transform-origin: 100px 100px;
+        animation: corePulse 3s ease-in-out infinite;
+      }
+
+      .circuit-line {
+        stroke-dasharray: 4 4;
+        animation: circuitFlow 1s linear infinite;
+      }
+
+      .pro-text {
+        font-family: 'Courier New', monospace;
+        animation: glitchText 4s infinite;
+      }
+    </style>
+
+
+    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#eab308" />
+    </linearGradient>
+  </defs>
+
+
+  <path d="M20 100 H180 M100 20 V180" stroke="#334155" stroke-width="1" />
+  <circle cx="100" cy="100" r="80" stroke="#334155" stroke-width="1" fill="none"/>
+
+
+  <circle cx="100" cy="100" r="75" fill="none" stroke="#0e7490" stroke-width="2"
+          stroke-dasharray="20 40" stroke-opacity="0.5" class="ring-outer" />
+
+  <circle cx="100" cy="100" r="65" fill="none" stroke="#0ea5e9" stroke-width="1.5"
+          stroke-dasharray="60 100" class="ring-outer" style="animation-duration: 15s; opacity: 0.3;" />
+
+
+  <g class="ring-inner">
+      <circle cx="100" cy="100" r="55" fill="none" stroke="#64748b" stroke-width="1" stroke-dasharray="2 8" />
+      <rect x="98" y="42" width="4" height="4" fill="#22d3ee" />
+      <rect x="98" y="154" width="4" height="4" fill="#22d3ee" />
+  </g>
+
+
+  <g class="core-hex">
+
+      <path d="M100 55 L138.9 77.5 L138.9 122.5 L100 145 L61.1 122.5 L61.1 77.5 Z"
+            fill="#0f172a" stroke="url(#goldGradient)" stroke-width="3" />
+
+
+      <path d="M100 60 L134 80 L134 120 L100 140 L66 120 L66 80 Z"
+            fill="url(#goldGradient)" opacity="0.1" />
+
+
+      <path d="M61.1 77.5 L40 65 M138.9 77.5 L160 65 M100 145 L100 165"
+            stroke="#eab308" stroke-width="2" class="circuit-line" />
+  </g>
+
+
+  <text x="100" y="108" text-anchor="middle" font-size="32" font-weight="900"
+        fill="url(#goldGradient)" class="pro-text" letter-spacing="2">LXC</text>
+
+
+  <rect x="80" y="125" width="40" height="4" rx="2" fill="#22d3ee" opacity="0.8" />
+
+</svg>

@@ -1,0 +1,4 @@
+# 此目录用于存放 Incus mTLS 证书
+# 请将 client.crt 和 client.key 放置于此
+# 注意：证书文件不应提交到 Git
+

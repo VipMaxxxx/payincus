@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+
+    <style>
+
+      @keyframes orbitRotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+
+      @keyframes nebulaPulse {
+        0%, 100% {
+          transform: scale(1);
+          filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.6));
+        }
+        50% {
+          transform: scale(1.02);
+          filter: drop-shadow(0 0 12px rgba(236, 72, 153, 0.8));
+        }
+      }
+
+
+      @keyframes dataStream {
+        to { stroke-dashoffset: -40; }
+      }
+
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0); opacity: 0.8; }
+        50% { transform: translateY(-4px); opacity: 1; }
+      }
+
+      .orbit-ring {
+        transform-origin: 100px 100px;
+        animation: orbitRotate 12s linear infinite;
+      }
+
+      .orbit-ring-reverse {
+        transform-origin: 100px 100px;
+        animation: orbitRotate 8s linear infinite reverse;
+      }
+
+      .prime-core {
+        transform-origin: 100px 100px;
+        animation: nebulaPulse 4s ease-in-out infinite;
+      }
+
+      .stream-line {
+        stroke-dasharray: 6 6;
+        animation: dataStream 1.5s linear infinite;
+      }
+
+      .crown-dot {
+        animation: float 2s ease-in-out infinite;
+      }
+      .crown-dot:nth-child(2) { animation-delay: 0.5s; }
+      .crown-dot:nth-child(3) { animation-delay: 1s; }
+
+      .prime-text {
+        font-family: 'Courier New', monospace;
+        letter-spacing: 3px;
+
+      }
+    </style>
+
+
+
+
+    <linearGradient id="platinumGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="40%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#94a3b8" /> 
+    </linearGradient>
+
+
+    <linearGradient id="royalGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#d946ef" />
+    </linearGradient>
+
+
+    <linearGradient id="voidGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2e1065" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+  </defs>
+
+
+
+
+  <path d="M20 50 V20 H50 M150 20 H180 V50 M180 150 V180 H150 M50 180 H20 V150"
+        stroke="#475569" stroke-width="1" fill="none" opacity="0.5"/>
+
+
+  <circle cx="100" cy="100" r="85" stroke="#334155" stroke-width="0.5" fill="none" opacity="0.3"/>
+
+
+  <g class="orbit-ring">
+      <circle cx="100" cy="100" r="78" fill="none" stroke="url(#royalGradient)" stroke-width="1.5"
+              stroke-dasharray="20 120" stroke-linecap="round" />
+      <circle cx="100" cy="100" r="78" fill="none" stroke="url(#royalGradient)" stroke-width="0.5"
+              stroke-dasharray="2 10" opacity="0.5"/>
+  </g>
+
+
+  <g class="orbit-ring-reverse">
+      <circle cx="100" cy="100" r="62" fill="none" stroke="#e2e8f0" stroke-width="1"
+              stroke-dasharray="40 80" opacity="0.4" />
+
+      <circle cx="100" cy="38" r="2" fill="#d946ef" />
+      <circle cx="100" cy="162" r="2" fill="#d946ef" />
+  </g>
+
+
+  <g class="prime-core">
+
+      <path d="M100 50 L145 75 V125 L100 150 L55 125 V75 Z"
+            fill="url(#voidGradient)" stroke="url(#platinumGradient)" stroke-width="2" />
+
+
+      <path d="M55 75 L100 85 M145 75 L100 85 M100 150 V120"
+            stroke="#a855f7" stroke-width="1" opacity="0.6"/>
+
+
+      <g transform="translate(0, -5)">
+          <circle cx="100" cy="40" r="3" fill="#f8fafc" class="crown-dot" />
+          <circle cx="85" cy="46" r="2" fill="#d946ef" class="crown-dot" />
+          <circle cx="115" cy="46" r="2" fill="#d946ef" class="crown-dot" />
+      </g>
+
+
+      <path d="M80 135 H120" stroke="#d946ef" stroke-width="3" stroke-linecap="round"
+            class="stream-line" />
+  </g>
+
+
+  <text x="100" y="108" text-anchor="middle" font-size="36" font-weight="900"
+        fill="url(#platinumGradient)" class="prime-text">KVM</text>
+
+
+  <rect x="90" y="122" width="20" height="2" rx="1" fill="#a855f7" opacity="0.8" />
+
+</svg>

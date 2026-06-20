@@ -1,0 +1,257 @@
+# ============================================================================
+# Incudal 预构建产物包发布工作流
+# 在推送版本 tag (v*) 或手动触发时，自动构建前后端并打包为 .tar.gz 发行包
+# 支持 amd64 和 arm64 双架构
+# ============================================================================
+
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发行版本号（例如 v1.0.0），留空则使用 git SHA 作为预览版'
+        required: false
+        default: ''
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # ===== 构建发行包（多架构矩阵） =====
+  build:
+    name: 构建 (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    permissions:
+      contents: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      # ===== 安装依赖 =====
+      - name: 安装全部依赖
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: 重新构建 esbuild（Vite 构建需要）
+        run: pnpm rebuild esbuild
+
+      # ===== 生成 Prisma Client =====
+      - name: 生成 Prisma Client
+        run: pnpm --filter server exec prisma generate
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+
+      # ===== 构建前端 =====
+      - name: 构建前端 (Vite)
+        run: pnpm --filter client build
+
+      # ===== 构建后端 =====
+      - name: 编译后端 (TypeScript)
+        run: pnpm --filter server build
+
+      # ===== 准备发行目录 =====
+      - name: 准备发行目录结构
+        run: |
+          mkdir -p release/client/dist
+          mkdir -p release/server
+
+          # 复制前端构建产物
+          cp -r client/dist/* release/client/dist/
+
+          # 复制后端构建产物
+          cp -r server/dist release/server/
+          cp -r server/prisma release/server/
+          cp server/prisma.config.ts release/server/
+          cp server/package.json release/server/
+          cp -r server/templates release/server/
+
+          # 复制根配置文件
+          cp package.json release/
+          cp pnpm-workspace.yaml release/
+
+      # ===== 安装生产依赖 =====
+      - name: 安装后端生产依赖
+        working-directory: release/server
+        run: |
+          # 在发行目录中只安装生产依赖
+          npm install --omit=dev --ignore-scripts
+
+          # 在当前架构的 runner 上原生生成 Prisma Client
+          DATABASE_URL="postgresql://user:pass@localhost:5432/db" npx prisma generate
+
+      # ===== 创建启动辅助脚本 =====
+      - name: 创建管理脚本
+        run: |
+          cat > release/incudal.sh << 'SCRIPT'
+          #!/bin/bash
+          # Incudal 快捷管理脚本
+          set -e
+          APP_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+          case "${1:-}" in
+            start)
+              echo "🚀 启动 Incudal..."
+              cd "$APP_DIR/server"
+              npx prisma migrate deploy
+              cd "$APP_DIR"
+              exec node server/dist/app.js
+              ;;
+            migrate)
+              echo "🔄 执行数据库迁移..."
+              cd "$APP_DIR/server"
+              npx prisma migrate deploy
+              echo "✅ 迁移完成"
+              ;;
+            version)
+              echo "Incudal $(node -e "console.log(require('./package.json').version)")"
+              ;;
+            *)
+              echo "用法: $0 {start|migrate|version}"
+              exit 1
+              ;;
+          esac
+          SCRIPT
+          chmod +x release/incudal.sh
+
+      # ===== 确定版本号 =====
+      - name: 确定版本号
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          elif [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="preview-$(echo ${{ github.sha }} | head -c 7)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 版本号: $VERSION"
+
+      # ===== 打包 =====
+      - name: 打包为 tar.gz
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd release
+          tar -czf "../incudal-${VERSION}-linux-${{ matrix.arch }}.tar.gz" .
+          cd ..
+          ls -lh "incudal-${VERSION}-linux-${{ matrix.arch }}.tar.gz"
+          echo "📦 发行包大小: $(du -h "incudal-${VERSION}-linux-${{ matrix.arch }}.tar.gz" | cut -f1)"
+
+      # ===== 上传构建产物 =====
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: incudal-${{ steps.version.outputs.version }}-linux-${{ matrix.arch }}
+          path: incudal-${{ steps.version.outputs.version }}-linux-${{ matrix.arch }}.tar.gz
+          retention-days: 30
+
+  # ===== 发布 Release（等待所有架构构建完成） =====
+  release:
+    name: 发布 Release
+    needs:
+      - build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 确定版本号
+        id: version
+        run: echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+      # 下载所有架构的构建产物
+      - name: 下载 amd64 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: incudal-${{ steps.version.outputs.version }}-linux-amd64
+
+      - name: 下载 arm64 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: incudal-${{ steps.version.outputs.version }}-linux-arm64
+
+      - name: 列出发行文件
+        run: ls -lh incudal-*.tar.gz
+
+      # 创建 Release 并上传所有架构的产物
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            incudal-*.tar.gz
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+
+  # ===== 构建并推送 Docker 镜像（多架构） =====
+  docker:
+    name: 构建 Docker 镜像
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 设置 QEMU（用于跨架构构建 arm64）
+      - name: 设置 QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 设置 Docker Buildx（多架构构建引擎）
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 登录 GitHub Container Registry
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 提取版本号和元数据
+      - name: 提取 Docker 元数据
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      # 构建并推送多架构镜像
+      - name: 构建并推送 Docker 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

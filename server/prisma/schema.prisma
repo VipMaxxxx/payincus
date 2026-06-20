@@ -1,0 +1,2978 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== 枚举类型 ====================
+
+enum UserRole {
+  admin
+  user
+}
+
+enum UserStatus {
+  active
+  banned
+}
+
+enum HostStatus {
+  online
+  offline
+  maintenance
+}
+
+enum HostAddressKind {
+  domain
+  ipv4
+  ipv6
+}
+
+enum HostAddressSource {
+  input
+  resolved
+}
+
+enum HostAddressCheckTrigger {
+  create
+  update
+  backfill
+  poll
+}
+
+enum HostAddressCheckStatus {
+  success
+  failed
+}
+
+enum HostAddressConflictStatus {
+  active
+  resolved
+}
+
+enum InstanceType {
+  container
+  vm
+  both
+}
+
+enum NetworkMode {
+  nat          // 纯 IPv4 NAT
+  nat_ipv6     // IPv4 NAT + IPv6 独立（Routed）
+  nat_ipv6_nat // IPv4 NAT + IPv6 NAT（共享宿主机 IPv6）
+  ipv6_only    // 纯 IPv6 独立（Routed），无 NAT 端口映射
+  ipv6_nat     // 纯 IPv6 NAT（共享宿主机 IPv6），无 NAT 端口映射
+}
+
+// 存储池用途枚举
+enum StoragePurpose {
+  instance_data // 用于实例数据盘（创建实例时默认存储）
+  instance_storage // 用于实例存储盘（可手动挂载）
+}
+
+// 反代站点状态枚举
+enum ProxySiteStatus {
+  pending // 等待 DNS 解析
+  active // 已生效
+  error // 配置失败
+}
+
+enum InstanceStatus {
+  creating
+  running
+  stopped
+  suspended // 封停状态（到期或手动封停）
+  error
+  deleted
+}
+
+enum Protocol {
+  tcp
+  udp
+}
+
+enum BackupStatus {
+  creating
+  ready
+  error
+  deleted
+}
+
+enum RestoreTaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// 存储类型枚举
+enum StorageType {
+  S3 // 预留
+  WEBDAV
+  FTP
+  SFTP
+}
+
+// 备份上传任务状态
+enum BackupUploadTaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// 实例操作任务类型
+enum InstanceTaskType {
+  start
+  stop
+  restart
+  rebuild
+  clone
+  recreate  // 重建：创建新实例替换旧实例
+  change_host // 改节点：在其他节点重建实例并保留数据库实例 ID
+}
+
+// 实例操作任务状态
+enum InstanceTaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum HostNotificationEmailTaskStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+// ==================== 恢复任务模型 ====================
+
+model RestoreTask {
+  id                   Int               @id @default(autoincrement())
+  instanceId           Int               @map("instance_id")
+  backupId             Int?              @map("backup_id")
+  hostId               Int               @map("host_id")
+  userId               Int               @map("user_id")
+  status               RestoreTaskStatus @default(PENDING)
+  progress             String? // 当前执行步骤: stopping, restoring, cleaning, replacing, starting
+  retryCount           Int               @default(0) @map("retry_count") // 重试次数
+  tempInstanceName     String?           @map("temp_instance_name")
+  originalInstanceName String            @map("original_instance_name")
+  originalIncusId      String            @map("original_incus_id")
+  error                String?
+  createdAt            DateTime          @default(now()) @map("created_at")
+  startedAt            DateTime?         @map("started_at")
+  finishedAt           DateTime?         @map("finished_at")
+
+  @@index([hostId, status])
+  @@index([instanceId])
+  @@map("restore_tasks")
+}
+
+// ==================== 实例操作任务模型 ====================
+
+model InstanceTask {
+  id         Int                @id @default(autoincrement())
+  instanceId Int                @map("instance_id")
+  hostId     Int                @map("host_id")
+  userId     Int                @map("user_id")
+  taskType   InstanceTaskType   @map("task_type")
+  status     InstanceTaskStatus @default(PENDING)
+  progress   String? // 当前执行步骤
+  retryCount Int                @default(0) @map("retry_count")
+
+  // 重装/克隆操作特有字段
+  imageAlias           String? @map("image_alias") // 重装使用的镜像别名
+  sshKeyId             Int?    @map("ssh_key_id") // 重装使用的 SSH 密钥 ID
+  customInitCommandIds String? @map("custom_init_command_ids") // 重装使用的自定义初始化命令ID列表 (JSON数组)
+  targetName           String? @map("target_name") // 克隆的目标名称
+  targetHostId         Int?    @map("target_host_id") // 克隆的目标宿主机
+  snapshotName         String? @map("snapshot_name") // 克隆时的快照名称
+  newInstanceId        Int?    @map("new_instance_id") // 克隆后的新实例 ID
+
+  error      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  startedAt  DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([hostId, status])
+  @@index([instanceId])
+  @@index([userId])
+  @@map("instance_tasks")
+}
+
+enum NotificationChannelType {
+  telegram
+  discord
+  email
+  webhook
+}
+
+enum NotificationLogStatus {
+  pending
+  sent
+  failed
+}
+
+enum OAuthProvider {
+  github
+  google
+}
+
+// ==================== 计费相关枚举 ====================
+
+// 余额变动类型
+enum BalanceLogType {
+  recharge          // 充值
+  consume           // 消费（开通/续费实例）
+  refund            // 退款
+  admin_adjust      // 管理员调整
+  gift              // 赠送
+  transfer_fee      // 转移手续费
+  transfer_refund   // 转移手续费退还
+  hosting_withdraw  // 托管余额提现
+  hosting_deduction // 托管实例销毁扣款（从面板余额补扣）
+  invite_generate   // 生成邀请码扣款
+}
+
+enum VipBenefitRewardType {
+  balance
+  points
+  instance
+}
+
+enum VipBenefitClaimStatus {
+  delivered
+  pending
+}
+
+// 支付渠道类型
+enum PaymentProviderType {
+  yipay         // 易支付
+  heleket       // Heleket 加密支付
+  stripe        // Stripe
+  alipay_direct // 支付宝直连（预留）
+  wechat_direct // 微信直连（预留）
+  manual        // 人工充值
+}
+
+// 支付渠道状态
+enum PaymentProviderStatus {
+  active        // 启用
+  disabled      // 禁用
+  testing       // 测试模式
+}
+
+// 充值记录状态
+enum RechargeStatus {
+  pending       // 待支付
+  paid          // 已支付，处理中
+  completed     // 已完成（余额已到账）
+  failed        // 失败
+  cancelled     // 已取消
+  refunded      // 已退款
+}
+
+enum VipLevelRuleType {
+  user
+  hosting
+}
+
+enum VipLevelConditionMode {
+  any
+  all
+}
+
+// 实例计费记录类型
+enum BillingRecordType {
+  newPurchase   // 新开
+  renew         // 续费
+  upgrade       // 升级
+  downgrade     // 降级
+  refund        // 退款（仅管理员操作）
+  transfer_fee  // 转移手续费
+}
+
+// AFF余额变动类型
+enum AffLogType {
+  new_purchase  // 新购返利
+  renew         // 续费返利
+  convert       // 转化为主余额
+}
+
+// AFF转化申请状态
+enum AffWithdrawalStatus {
+  pending   // 待审核
+  approved  // 已通过
+  rejected  // 已拒绝
+}
+
+// 流量状态枚举
+enum TrafficStatus {
+  NORMAL // 正常
+  WARNING // 已发送 80% 预警
+  LIMITED // 已限速
+}
+
+// 好友关系状态枚举
+enum FriendshipStatus {
+  pending // 待确认
+  accepted // 已接受
+  rejected // 已拒绝
+  removed // 已删除（双方都已不是好友，但保留历史记录）
+}
+
+// ==================== 用户相关模型 ====================
+
+model User {
+  id           Int        @id @default(autoincrement())
+  username     String     @unique
+  email        String?
+  passwordHash String     @map("password_hash")
+  role         UserRole   @default(user)
+  status       UserStatus @default(active)
+  banReason    String?    @map("ban_reason") // 封禁原因（管理员可选填写）
+  balance      Decimal    @default(0) @db.Decimal(10, 2)
+  avatarStyle  String     @default("bigSmile") @map("avatar_style") // bigSmile, croodles, notionists, lorelei
+  avatarBadgeId String?   @map("avatar_badge_id")
+  hasCreatedHostBefore Boolean @default(false) @map("has_created_host_before")
+
+  // 2FA 双因素认证
+  twoFactorEnabled       Boolean @default(false) @map("two_factor_enabled")
+  twoFactorSecret        String? @map("two_factor_secret")
+  twoFactorRecoveryCodes String? @map("two_factor_recovery_codes") // JSON array of encrypted codes
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关系
+  quota                UserQuota?
+  inviteCodes          InviteCode[]          @relation("CreatedInviteCodes")
+  usedInviteCodes      InviteCode[]          @relation("UsedInviteCodes")
+  sshKeys              SshKey[]
+  instances            Instance[]
+  notificationChannels NotificationChannel[]
+  storageConfigs       StorageConfig[]
+  oauthBindings        UserOAuthBinding[]
+  telegramBinding      UserTelegramBinding?
+  telegramBindTokens   TelegramBindToken[]
+  helpArticles         HelpArticle[]         @relation("CreatedArticles")
+  logs                 Log[]
+  transfersSent        InstanceTransfer[]    @relation("TransferFrom")
+  transfersReceived    InstanceTransfer[]    @relation("TransferTo")
+  refreshTokens        RefreshToken[]
+  tokenInvalidations   TokenInvalidation[]
+
+  // 用户资源关系
+  hosts    Host[]
+  packages Package[]
+
+  // 好友关系
+  friendshipsSent     Friendship[] @relation("FriendshipSent")
+  friendshipsReceived Friendship[] @relation("FriendshipReceived")
+
+  // 套餐共享关系
+  packageSharesOwned    PackageShare[] @relation("PackageShareOwner")
+  packageSharesReceived PackageShare[] @relation("PackageShareReceiver")
+
+  // 敏感操作验证
+  operationVerifications OperationVerification[]
+
+  // 站内信
+  inboxMessages InboxMessage[]
+  hostNotificationEmailTasks HostNotificationEmailTask[]
+
+  // 登录记录
+  loginRecords LoginRecord[]
+
+  // 公告发送记录
+  announcements Announcement[] @relation("AnnouncementSender")
+
+  // 工单系统
+  ticketsCreated   Ticket[]        @relation("TicketCreator")
+  ticketMessages   TicketMessage[] @relation("TicketMessageSender")
+  ticketAttachments TicketMessageAttachment[] @relation("TicketAttachmentUploader")
+
+  // 签到系统
+  checkinRecords   CheckinRecord[] @relation("CheckinRecords")
+  redeemRecords    CheckinRecord[] @relation("RedeemRecords")
+  checkinStats     CheckinStats?
+
+  // 系统兑换码
+  redeemCodesCreated RedeemCode[]      @relation("RedeemCodesCreated")
+  redeemCodeUsages   RedeemCodeUsage[] @relation("RedeemCodeUsages")
+
+  // 用户自定义初始化命令
+  customInitCommands CustomInitCommand[]
+
+  // 用户终端快捷命令
+  terminalSavedCommands TerminalSavedCommand[]
+
+  // 计费相关
+  balanceLogs     BalanceLog[]
+  rechargeRecords RechargeRecord[]
+  badgeOwnerships UserBadgeOwnership[]
+  vipBenefitClaims VipBenefitClaim[]
+
+  // AFF推荐计划
+  affBalance       Decimal         @default(0) @map("aff_balance") @db.Decimal(10, 2)  // AFF余额
+  affActivatedAt   DateTime?       @map("aff_activated_at")                            // AFF激活时间
+  affCodes         AffCode[]
+  affLogs          AffLog[]
+  affWithdrawals   AffWithdrawal[]
+
+  // 托管余额系统
+  hostingBalance      Decimal              @default(0) @map("hosting_balance") @db.Decimal(10, 2) // 可用托管余额
+  hostingBalanceLogs  HostingBalanceLog[]
+  hostingWithdrawals  HostingWithdrawal[]
+  hostingBlocksCreated  HostingUserBlock[] @relation("HostingBlocker")
+  hostingBlocksReceived HostingUserBlock[] @relation("HostingBlockedUser")
+  hostingZone         HostingZone?         @relation("HostingZoneOwner")
+
+  // 域名邮箱系统
+  mailSubscriptions   MailSubscription[]
+
+  // 抽奖系统
+  userPoints       UserPoints?
+  pointsLogs       PointsLog[]
+  lotteryRecords   LotteryRecord[]
+
+  // 资源池系统
+  resourcePool     UserResourcePool?
+  resourcePoolLogs ResourcePoolLog[]
+
+  // 销毁记录
+  destroyRecords   UserDestroyRecord[]
+  instanceAuditRules InstanceAuditRule[] @relation("InstanceAuditRuleCreator")
+  instanceAuditBuiltinRuleOverrides InstanceAuditBuiltinRuleOverride[] @relation("InstanceAuditBuiltinRuleOverrideCreator")
+  instanceAuditIgnores InstanceAuditIgnore[] @relation("InstanceAuditIgnoreCreator")
+  instanceAuditScans InstanceAuditScan[] @relation("InstanceAuditScanUser")
+  instanceAuditActions InstanceAuditAction[] @relation("InstanceAuditActionUser")
+
+  @@map("users")
+}
+
+model UserQuota {
+  id     Int @id @default(autoincrement())
+  userId Int @unique @map("user_id")
+
+  // 新配额系统：控制用户可拥有的资源数量
+  // 默认值为 0，表示功能未开放，需要管理员授权才能使用
+  // 注意：不再限制实例配额，用户可以创建无限数量的实例
+  hostLimit    Int @default(0) @map("host_limit") // 宿主机数量上限（0 = 未授权）
+  hostUsed     Int @default(0) @map("host_used") // 已使用宿主机数量
+  friendLimit  Int @default(0) @map("friend_limit") // 好友数量上限（0 = 未授权）
+  friendUsed   Int @default(0) @map("friend_used") // 已使用好友数量
+  packageLimit Int @default(0) @map("package_limit") // 套餐数量上限（0 = 未授权）
+  packageUsed  Int @default(0) @map("package_used") // 已使用套餐数量
+
+  // 流量控制 (单位: Bytes)
+  monthlyTrafficLimit  BigInt?       @map("monthly_traffic_limit") // null = 无限制
+  monthlyTrafficUsed   BigInt        @default(0) @map("monthly_traffic_used")
+  trafficStatus        TrafficStatus @default(NORMAL) @map("traffic_status")
+  trafficWarningSentAt DateTime?     @map("traffic_warning_sent_at")
+
+  // 流量包扩展 (预留)
+  extraTrafficQuota BigInt @default(0) @map("extra_traffic_quota")
+  extraTrafficUsed  BigInt @default(0) @map("extra_traffic_used")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_quotas")
+}
+
+model InviteCode {
+  id           Int       @id @default(autoincrement())
+  code         String    @unique
+  createdBy    Int       @map("created_by")
+  usedBy       Int?      @map("used_by")
+  usedAt       DateTime? @map("used_at")
+  expiresAt    DateTime? @map("expires_at")
+  costSnapshot Json?     @map("cost_snapshot")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  creator User  @relation("CreatedInviteCodes", fields: [createdBy], references: [id])
+  user    User? @relation("UsedInviteCodes", fields: [usedBy], references: [id])
+
+  @@index([code])
+  @@map("invite_codes")
+}
+
+model SshKey {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  name        String
+  publicKey   String   @map("public_key")
+  fingerprint String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("ssh_keys")
+}
+
+// ==================== 会话管理模型 ====================
+
+model RefreshToken {
+  id           Int      @id @default(autoincrement())
+  token        String   @unique // Refresh Token 完整值
+  userId       Int      @map("user_id")
+  username     String
+  role         UserRole
+  ip           String? // 登录 IP
+  userAgent    String?  @map("user_agent") // 用户代理
+  createdAt    DateTime @default(now()) @map("created_at")
+  expiresAt    DateTime @map("expires_at") // 过期时间
+  lastActiveAt DateTime @default(now()) @updatedAt @map("last_active_at") // 最后活跃时间
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt]) // 用于清理过期 token
+  @@map("refresh_tokens")
+}
+
+// ==================== Token 失效标记模型 ====================
+
+model TokenInvalidation {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @map("user_id")
+  sessionId     String?  @map("session_id") // 会话ID（Refresh Token 前缀），null 表示用户级别的失效
+  invalidatedAt Int      @map("invalidated_at") // 失效时间戳（秒级，与 JWT iat 一致）
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sessionId]) // 每个用户每个会话只能有一条失效记录（sessionId 为 null 时表示用户级别）
+  @@index([userId])
+  @@index([sessionId])
+  @@index([invalidatedAt]) // 用于清理过期记录
+  @@map("token_invalidations")
+}
+
+// ==================== 好友关系模型 ====================
+
+model Friendship {
+  id         Int              @id @default(autoincrement())
+  userId     Int              @map("user_id") // 发起者
+  friendId   Int              @map("friend_id") // 接收者
+  status     FriendshipStatus @default(pending)
+  remark     String? // 申请备注
+  createdAt  DateTime         @default(now()) @map("created_at")
+  acceptedAt DateTime?        @map("accepted_at")
+  rejectedAt DateTime?        @map("rejected_at")
+
+  user   User @relation("FriendshipSent", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendshipReceived", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([friendId, status])
+  @@index([userId, status])
+  @@map("friendships")
+}
+
+// ==================== 节点相关模型 ====================
+
+model Host {
+  id                  Int          @id @default(autoincrement())
+  userId              Int          @map("user_id") // 所有者
+  name                String
+  url                 String
+  location            String?
+  countryCode         String       @default("us") @map("country_code")
+  architecture        String       @default("x86_64")
+  status              HostStatus   @default(offline)
+  certPath            String?      @map("cert_path")
+  keyPath             String?      @map("key_path")
+  natPublicIp         String?      @map("nat_public_ip")
+  natPublicIpv6       String?      @map("nat_public_ipv6") // 宿主机公网 IPv6（用于 nat_ipv6_nat / ipv6_nat 模式）
+  natBindIp           String?      @map("nat_bind_ip") // 端口映射实际监听的 IPv4 地址
+  natBindIpv6         String?      @map("nat_bind_ipv6") // 端口映射实际监听的 IPv6 地址
+  natPortStart        Int?         @map("nat_port_start")
+  natPortEnd          Int?         @map("nat_port_end")
+  cpuUsed             Int          @default(0) @map("cpu_used")
+  memoryUsed          Int          @default(0) @map("memory_used")
+  diskUsed            Int          @default(0) @map("disk_used")
+  tags                Json?        @default("[]")
+  natPortsUsedCount   Int          @default(0) @map("nat_ports_used_count")
+  cpuAllowanceMax     Int          @default(0) @map("cpu_allowance_max")
+  memoryMax           Int          @default(0) @map("memory_max")
+  instanceType        InstanceType @default(container) @map("instance_type")
+  // 初始化配置字段
+  ipAddress           String?      @map("ip_address")
+  // 存储配置
+  storageDriver       String       @default("zfs") @map("storage_driver") // zfs | lvm
+  storageType         String       @default("loop") @map("storage_type") // loop | disk
+  storagePath         String?      @map("storage_path") // 设备路径如 /dev/sdb，或 loop 模式下为空
+  storageSize         Int          @default(60) @map("storage_size") // loop 模式下的大小 (GB)
+  // 网络配置
+  ipv6Mode            Int          @default(1) @map("ipv6_mode") // 1=Routed, 2=NAT, 3=Disabled
+  ipv6Subnet          String?      @map("ipv6_subnet")
+  ipv6Gateway         String?      @map("ipv6_gateway")
+  ipv6ParentInterface String?      @map("ipv6_parent_interface") // 宿主机物理网卡名 (routed 模式)
+  // API 与内核配置
+  enableApi           Boolean      @default(true) @map("enable_api")
+  sysctlConfig        String?      @map("sysctl_config") // 自定义内核参数
+  // 安装流程
+  installToken        String?      @unique @map("install_token")
+  installTokenExpire  DateTime?    @map("install_token_expire")
+  isInstalled         Boolean      @default(false) @map("is_installed")
+  // 证书下载限制（每次安装操作独立计数）
+  certDownloadCount   Int          @default(0) @map("cert_download_count")
+  certDownloadExpire  DateTime?    @map("cert_download_expire")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  // Caddy 反代配置
+  caddyEnabled  Boolean @default(false) @map("caddy_enabled") // 是否已安装 Caddy
+  caddyUsername String? @map("caddy_username") // Basic Auth 用户名
+  caddyPassword String? @map("caddy_password") // Basic Auth 密码
+  caddyPort     Int     @default(8444) @map("caddy_port") // Caddy API 端口
+
+  // 转移控制
+  transferEnabled Boolean @default(true) @map("transfer_enabled") // 是否允许该宿主机下的实例进行转移
+
+  // 流量配置
+  trafficResetDay Int @default(1) @map("traffic_reset_day") // 流量重置日（1-28），默认每月1号
+
+  // 节点公告
+  announcement String? @map("announcement") // 节点公告内容，显示给该节点下的实例用户
+
+  // 节点通知设置（仅托管主外部通知）
+  notifyPurchase Boolean @default(true) @map("notify_purchase") // 是否通知新购
+  notifyRenew    Boolean @default(true) @map("notify_renew") // 是否通知续费
+  notifyDestroy  Boolean @default(false) @map("notify_destroy") // 是否通知销毁/退款
+
+  // 资源池玩法
+  enableResourcePool Boolean @default(true) @map("enable_resource_pool") // 是否参与资源池玩法（签到/抽奖资源应用）
+
+  // 探针地址
+  probeUrl String? @map("probe_url") // 节点探针监控地址
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instances    Instance[]
+  ipAddresses  IpAddress[]
+  allowedImages HostAllowedImage[]
+  portMappings PortMapping[]
+  packageHosts PackageHost[]
+  storagePools StoragePool[]
+  proxySites   ProxySite[]
+  announcements Announcement[] @relation("HostAnnouncements")
+  tickets       Ticket[]       @relation("HostTickets")
+  redeemCodes   RedeemCode[]
+  destroyRecords UserDestroyRecord[]
+  hostNotificationEmailTasks HostNotificationEmailTask[]
+  addressAliases         HostAddressAlias[]         @relation("HostAddressAliases")
+  addressResolutionLogs  HostAddressResolutionLog[] @relation("HostAddressResolutionLogs")
+  addressConflictsA      HostAddressConflict[]      @relation("HostAddressConflictA")
+  addressConflictsB      HostAddressConflict[]      @relation("HostAddressConflictB")
+  agent                  HostAgent?
+  instanceAuditRules     InstanceAuditRule[]
+  instanceAuditBuiltinRuleOverrides InstanceAuditBuiltinRuleOverride[]
+  instanceAuditIgnores   InstanceAuditIgnore[]
+  instanceAuditScans     InstanceAuditScan[]
+  instanceAuditActions   InstanceAuditAction[]
+
+  @@unique([userId, name]) // 同一用户下名称唯一
+  @@index([userId])
+  @@map("hosts")
+}
+
+model HostAgent {
+  id                    Int       @id @default(autoincrement())
+  hostId                Int       @unique @map("host_id")
+  agentId               String    @unique @map("agent_id")
+  secretHash            String    @map("secret_hash")
+  secretEncrypted       String    @map("secret_encrypted")
+  installTokenHash      String?   @unique @map("install_token_hash")
+  installTokenExpiresAt DateTime? @map("install_token_expires_at")
+  installTokenUsedAt    DateTime? @map("install_token_used_at")
+  enabled               Boolean   @default(true)
+  status                String    @default("offline")
+  version               String?
+  capabilities          Json?     @default("[]")
+  lastReport            Json?     @default("{}") @map("last_report")
+  lastSeenAt            DateTime? @map("last_seen_at")
+  lastHeartbeatIp       String?   @map("last_heartbeat_ip")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  host   Host             @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  nonces HostAgentNonce[]
+
+  @@index([enabled])
+  @@index([status])
+  @@index([lastSeenAt])
+  @@index([installTokenExpiresAt])
+  @@map("host_agents")
+}
+
+model HostAgentNonce {
+  id        Int      @id @default(autoincrement())
+  agentId   String   @map("agent_id")
+  nonce     String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  agent HostAgent @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+
+  @@unique([agentId, nonce])
+  @@index([agentId])
+  @@index([expiresAt])
+  @@map("host_agent_nonces")
+}
+
+model HostAddressAlias {
+  id        Int               @id @default(autoincrement())
+  hostId    Int               @map("host_id")
+  address   String
+  kind      HostAddressKind
+  source    HostAddressSource
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  host Host @relation("HostAddressAliases", fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@unique([hostId, address])
+  @@index([hostId])
+  @@index([address])
+  @@index([source, kind])
+  @@map("host_address_aliases")
+}
+
+model HostAddressResolutionLog {
+  id                Int                    @id @default(autoincrement())
+  hostId            Int                    @map("host_id")
+  inputAddress      String                 @map("input_address")
+  inputKind         HostAddressKind        @map("input_kind")
+  trigger           HostAddressCheckTrigger
+  status            HostAddressCheckStatus
+  resolvedAddresses Json                   @default("[]") @map("resolved_addresses")
+  error             String?
+  details           Json?                  @default("{}")
+  createdAt         DateTime               @default(now()) @map("created_at")
+
+  host Host @relation("HostAddressResolutionLogs", fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([hostId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("host_address_resolution_logs")
+}
+
+model HostAddressConflict {
+  id              Int                       @id @default(autoincrement())
+  hostAId         Int                       @map("host_a_id")
+  hostBId         Int                       @map("host_b_id")
+  address         String
+  status          HostAddressConflictStatus @default(active)
+  firstDetectedAt DateTime                  @default(now()) @map("first_detected_at")
+  lastDetectedAt  DateTime                  @updatedAt @map("last_detected_at")
+  resolvedAt      DateTime?                 @map("resolved_at")
+
+  hostA Host @relation("HostAddressConflictA", fields: [hostAId], references: [id], onDelete: Cascade)
+  hostB Host @relation("HostAddressConflictB", fields: [hostBId], references: [id], onDelete: Cascade)
+
+  @@unique([hostAId, hostBId, address])
+  @@index([address])
+  @@index([status, lastDetectedAt(sort: Desc)])
+  @@map("host_address_conflicts")
+}
+
+// 存储池模型
+model StoragePool {
+  id          Int            @id @default(autoincrement())
+  hostId      Int            @map("host_id")
+  name        String // 存储池名称（与 Incus 一致）
+  driver      String // zfs | lvm | btrfs | dir
+  purpose     StoragePurpose @default(instance_data)
+  description String?
+  config      Json?          @default("{}") // 存储原始配置
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  host Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@unique([hostId, name]) // 同一宿主机下存储池名称唯一
+  @@index([hostId])
+  @@map("storage_pools")
+}
+
+// ==================== 套餐相关模型 ====================
+
+// 套餐与宿主机的多对多关联表
+model PackageHost {
+  id        Int      @id @default(autoincrement())
+  packageId Int      @map("package_id")
+  hostId    Int      @map("host_id")
+  storagePoolName String? @map("storage_pool_name")
+  trafficMultiplier Decimal @default(1.0) @map("traffic_multiplier") @db.Decimal(8, 3)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  host    Host    @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, hostId]) // 防止重复绑定
+  @@index([packageId])
+  @@index([hostId])
+  @@map("package_hosts")
+}
+
+model Package {
+  id                  Int          @id @default(autoincrement())
+  userId              Int          @map("user_id") // 所有者
+  name                String
+  description         String?
+  cpuMax              Int          @map("cpu_max")
+  memoryMax           Int          @map("memory_max")
+  diskMax             Int          @map("disk_max")
+  bandwidthMax        Int?         @map("bandwidth_max")
+  networkMode         NetworkMode  @default(nat) @map("network_mode")
+  instanceType        InstanceType @default(container) @map("instance_type") // 实例类型: 容器/虚拟机
+  nodeSelectors       Json?        @default("[]") @map("node_selectors")
+  privileged          Boolean      @default(false)
+  nested              Boolean      @default(false)
+  active              Boolean      @default(true)
+  // 套餐资源限制
+  portLimit           Int          @default(20) @map("port_limit") // 端口映射数上限
+  snapshotLimit       Int          @default(5) @map("snapshot_limit") // 快照数上限
+  backupLimit         Int          @default(3) @map("backup_limit") // 备份数上限
+  siteLimit           Int          @default(10) @map("site_limit") // 反代站点数上限
+  monthlyTrafficLimit BigInt?      @map("monthly_traffic_limit") // 月流量限额 (Bytes)，null = 无限制
+
+  // 存储 I/O 限制
+  ioLimitMode     String @default("throughput") @map("io_limit_mode") // "throughput" | "iops" - IO限制模式
+  limitsRead      String @default("100MB") @map("limits_read") // 磁盘读取吞吐限制
+  limitsWrite     String @default("100MB") @map("limits_write") // 磁盘写入吞吐限制
+  limitsReadIops  Int    @default(500) @map("limits_read_iops") // 磁盘读取 IOPS
+  limitsWriteIops Int    @default(500) @map("limits_write_iops") // 磁盘写入 IOPS
+
+
+  // 网络限制
+  limitsIngress String @default("300Mbit") @map("limits_ingress") // 网络入站带宽
+  limitsEgress  String @default("300Mbit") @map("limits_egress") // 网络出站带宽
+
+  // 进程与调度
+  limitsProcesses   Int @default(500) @map("limits_processes") // 进程数限制
+  limitsCpuPriority Int @default(10) @map("limits_cpu_priority") // CPU 调度优先级 (0-10)
+
+  // 启动配置
+  bootAutostart           Boolean @default(true) @map("boot_autostart") // 开机自启
+  bootAutostartPriority   Int     @default(20) @map("boot_autostart_priority") // 启动优先级 (0-100)
+  bootAutostartDelay      Int     @default(15) @map("boot_autostart_delay") // 启动延迟 (5-600秒)
+  bootHostShutdownTimeout Int     @default(30) @map("boot_host_shutdown_timeout") // 关机超时 (30-600秒)
+
+  // 全局共享配置（当 globalShared = true 时，所有用户都可以使用此套餐）
+  globalShared          Boolean  @default(false) @map("global_shared") // 是否全局共享
+  globalQuotaMultiplier Decimal? @map("global_quota_multiplier") @db.Decimal(3, 1) // 全局共享的配额倍数限制，如 0.5, 1.0, 1.5, 2.0，null 表示无限制（1x）
+  globalMaxInstances    Int?     @map("global_max_instances") // 全局共享的最大实例数，null 表示无限制
+
+  // 开通门槛：创建本套餐实例前，用户必须已持有指定前置套餐的正常实例
+  requiredPackageId Int? @map("required_package_id")
+
+  // 实例操作权限
+  allowInstanceDeletion Boolean @default(true) @map("allow_instance_deletion") // 是否允许用户删除实例
+
+  // 资源释放通知渠道（可选）
+  releaseChannelId Int? @map("release_channel_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instances      Instance[]
+  shares         PackageShare[]
+  packageHosts   PackageHost[]
+  plans          PackagePlan[]        // 套餐下的付费方案
+  requiredPackage  Package?  @relation("PackagePrerequisite", fields: [requiredPackageId], references: [id], onDelete: NoAction)
+  dependentPackages Package[] @relation("PackagePrerequisite")
+  releaseChannel NotificationChannel? @relation("PackageReleaseChannel", fields: [releaseChannelId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, name]) // 同一用户下名称唯一
+  @@index([userId])
+  @@index([requiredPackageId])
+  @@map("packages")
+}
+
+// ==================== 实例相关模型 ====================
+
+model Instance {
+  id               Int            @id @default(autoincrement())
+  incusId          String         @map("incus_id")
+  name             String
+  userId           Int            @map("user_id")
+  hostId           Int            @map("host_id")
+  packageId        Int?           @map("package_id")
+  packagePlanId    Int?           @map("package_plan_id")  // 套餐方案 ID：null 表示免费实例
+  storagePoolName  String?        @map("storage_pool_name")
+  image            String
+  status           InstanceStatus @default(creating)
+  cpu              Int
+  memory           Int
+  disk             Int
+  ipv4             String?
+  ipv6             String?
+  networkMode      NetworkMode    @default(nat) @map("network_mode")
+  sshPort          Int?           @map("ssh_port")
+  rootPassword     String?        @map("root_password")
+  snapshottedSpecs Json?          @default("{}") @map("snapshotted_specs")
+  portLimit        Int?           @map("port_limit")
+  snapshotLimit    Int?           @map("snapshot_limit")
+  backupLimit      Int?           @map("backup_limit")
+  siteLimit        Int?           @map("site_limit")
+  swapEnabled      Boolean        @default(false) @map("swap_enabled")
+  swapSize         Int?           @map("swap_size") // SWAP 大小(MB)，null/0 表示未配置
+
+  // 实例级流量控制
+  monthlyTrafficLimit BigInt?       @map("monthly_traffic_limit")
+  monthlyTrafficUsed  BigInt        @default(0) @map("monthly_traffic_used")
+  trafficStatus       TrafficStatus @default(NORMAL) @map("traffic_status")
+
+  // 存储 I/O 限制 (null = 继承套餐)
+  limitsRead      String? @map("limits_read")
+  limitsWrite     String? @map("limits_write")
+  limitsReadIops  Int?    @map("limits_read_iops")
+  limitsWriteIops Int?    @map("limits_write_iops")
+
+  // 网络限制
+  limitsIngress String? @map("limits_ingress")
+  limitsEgress  String? @map("limits_egress")
+
+  // 进程与调度
+  limitsProcesses   Int? @map("limits_processes")
+  limitsCpuPriority Int? @map("limits_cpu_priority")
+
+  // 启动配置
+  bootAutostart           Boolean? @map("boot_autostart")
+  bootAutostartPriority   Int?     @map("boot_autostart_priority")
+  bootAutostartDelay      Int?     @map("boot_autostart_delay")
+  bootHostShutdownTimeout Int?     @map("boot_host_shutdown_timeout")
+
+  // 恢复来源信息
+  restoredFrom Json? @map("restored_from") // { backupId, backupName, restoredAt }
+
+  // ========== 计费与封停相关字段 ==========
+  // 到期时间：null 表示永不到期（免费实例），有值表示付费实例的到期时间
+  expiresAt        DateTime? @map("expires_at")
+  // 封停信息
+  suspendedAt      DateTime? @map("suspended_at")      // 封停时间
+  suspendedBy      Int?      @map("suspended_by")      // 封停操作者（null=系统自动，有值=用户ID）
+  suspendReason    String?   @map("suspend_reason")    // 封停原因（expired=到期封停，其他=手动封停原因）
+  // 计费价格（从方案复制，支持后续调整）
+  billingPrice     Decimal?  @map("billing_price") @db.Decimal(10, 2)  // 单周期价格
+  billingCycle     Int?      @map("billing_cycle")  // 计费周期（月）
+  // 自动续费
+  autoRenew        Boolean   @default(false) @map("auto_renew")
+  iconBadgeId      String?   @map("icon_badge_id")
+  autoRenewAttempts     Int        @default(0) @map("auto_renew_attempts")      // 已尝试次数
+  lastAutoRenewAttemptAt DateTime? @map("last_auto_renew_attempt_at")           // 上次尝试时间
+  // 到期提醒记录
+  expiryNotifiedAt DateTime? @map("expiry_notified_at") // 上次发送到期提醒时间
+  // 乐观锁
+  version          Int       @default(0)  // 版本号，用于并发控制
+  // IPv6 重新分配冷却
+  lastIpv6ReassignAt DateTime? @map("last_ipv6_reassign_at") // 上次重新分配 IPv6 时间（每实例每天限一次）
+  // 方案变更冷却
+  lastPlanChangeAt   DateTime? @map("last_plan_change_at")   // 上次变更方案时间（3天冷却期）
+  // 用户自定义显示顺序；相同顺序时按创建时间倒序
+  displayOrder       Int       @default(0) @map("display_order")
+
+  // Cloud-init 检测状态
+  cloudInitState             String?   @map("cloud_init_state")
+  cloudInitSource            String?   @map("cloud_init_source")
+  cloudInitLastCheckedAt     DateTime? @map("cloud_init_last_checked_at")
+  cloudInitCompletedAt       DateTime? @map("cloud_init_completed_at")
+  cloudInitManualCompletedAt DateTime? @map("cloud_init_manual_completed_at")
+  cloudInitManualCompletedBy Int?      @map("cloud_init_manual_completed_by")
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  lastSyncedAt DateTime? @map("last_synced_at") // 最后与 Incus 同步时间
+
+  user            User               @relation(fields: [userId], references: [id])
+  host            Host               @relation(fields: [hostId], references: [id])
+  package         Package?           @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  packagePlan     PackagePlan?       @relation(fields: [packagePlanId], references: [id], onDelete: SetNull)
+  portMappings    PortMapping[]
+  snapshots       Snapshot[]
+  backups         Backup[]
+  backupPolicy    BackupPolicy?
+  snapshotPolicy  SnapshotPolicy?
+  trafficSnapshot TrafficSnapshot?
+  dailyTraffic    DailyTraffic[]
+  transfers       InstanceTransfer[]
+  ipAddresses     IpAddress[]
+  ipv6Subnets     Ipv6Subnet[]
+  proxySites       ProxySite[]
+  instanceTasks    InstanceTask[]
+  tickets          Ticket[]          @relation("InstanceTickets")
+  checkinRecords   CheckinRecord[]
+  redeemCodeUsages RedeemCodeUsage[]
+  billingRecords   InstanceBillingRecord[]  // 计费记录
+  affBinding       AffBinding?              // AFF优惠码绑定
+  resourcePoolLogs ResourcePoolLog[]        // 资源池应用记录
+  destroyRecords   UserDestroyRecord[]      // 销毁记录
+  appliedBadgeOwnerships UserBadgeOwnership[] @relation("InstanceAppliedBadgeOwnerships")
+  logs              Log[]
+  auditIgnores     InstanceAuditIgnore[]
+  auditScans       InstanceAuditScan[]
+  auditActions     InstanceAuditAction[]
+
+  @@index([userId])
+  @@index([hostId])
+  @@index([status])
+  @@index([hostId, status]) // 高可用优化：状态同步调度器使用
+  @@index([expiresAt])      // 计费调度器使用：查找即将到期的实例
+  @@index([userId, displayOrder, createdAt(sort: Desc)])
+  @@map("instances")
+}
+
+// IP 地址类型枚举
+enum IpType {
+  inet4
+  inet6
+}
+
+// IP 地址池模型 (支持多 IP)
+model IpAddress {
+  id        Int     @id @default(autoincrement())
+  address   String
+  type      IpType  @default(inet6)
+  isPrimary Boolean @default(false) @map("is_primary")
+  isCustom  Boolean @default(false) @map("is_custom") // 用户自定义 IP
+  device    String  @default("eth1") // 网卡名: eth0(NAT), eth1(routed IPv6)
+
+  hostId Int  @map("host_id")
+  host   Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  instanceId Int      @map("instance_id")
+  instance   Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([address])
+  @@index([hostId])
+  @@index([hostId, address])
+  @@index([instanceId])
+  @@map("ip_addresses")
+}
+
+// IPv6 网段分配模型
+model Ipv6Subnet {
+  id        Int    @id @default(autoincrement())
+  cidr      String @unique // 网段 CIDR，如 "2a01:4f9:c012:e7:aaaa::/112"
+  primaryIp String @map("primary_ip") // 网段主 IP (通常是 ::1)
+  device    String @default("eth1")
+
+  instanceId Int      @map("instance_id")
+  instance   Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([instanceId])
+  @@map("ipv6_subnets")
+}
+
+model PortMapping {
+  id          Int      @id @default(autoincrement())
+  instanceId  Int      @map("instance_id")
+  hostId      Int      @map("host_id")
+  protocol    Protocol @default(tcp)
+  publicPort  Int      @map("public_port")
+  privatePort Int      @map("private_port")
+  remark      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  host     Host     @relation(fields: [hostId], references: [id])
+
+  @@unique([hostId, protocol, publicPort])
+  @@index([instanceId])
+  @@map("port_mappings")
+}
+
+// ==================== 快照/备份相关模型 ====================
+
+model Snapshot {
+  id          Int      @id @default(autoincrement())
+  instanceId  Int      @map("instance_id")
+  incusName   String   @map("incus_name")
+  name        String
+  description String?
+  stateful    Boolean  @default(false)
+  size        Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@map("snapshots")
+}
+
+model Backup {
+  id          Int          @id @default(autoincrement())
+  instanceId  Int          @map("instance_id")
+  incusName   String       @map("incus_name")
+  name        String
+  description String?
+  size        Int          @default(0)
+  status      BackupStatus @default(creating)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  expiresAt   DateTime?    @map("expires_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@index([status])
+  @@map("backups")
+}
+
+model BackupPolicy {
+  id              Int       @id @default(autoincrement())
+  instanceId      Int       @unique @map("instance_id")
+  enabled         Boolean   @default(false)
+  intervalMinutes Int       @default(1440) @map("interval_minutes") // 默认24小时
+  lastRunAt       DateTime? @map("last_run_at")
+  nextRunAt       DateTime? @map("next_run_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([enabled, nextRunAt]) // 高可用优化：自动策略调度器使用
+  @@map("backup_policies")
+}
+
+model SnapshotPolicy {
+  id              Int       @id @default(autoincrement())
+  instanceId      Int       @unique @map("instance_id")
+  enabled         Boolean   @default(false)
+  intervalMinutes Int       @default(360) @map("interval_minutes") // 默认6小时
+  lastRunAt       DateTime? @map("last_run_at")
+  nextRunAt       DateTime? @map("next_run_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([enabled, nextRunAt]) // 高可用优化：自动策略调度器使用
+  @@map("snapshot_policies")
+}
+
+// ==================== 通知相关模型 ====================
+
+model NotificationChannel {
+  id        Int                     @id @default(autoincrement())
+  userId    Int                     @map("user_id")
+  type      NotificationChannelType
+  name      String
+  config    Json
+  enabled   Boolean                 @default(true)
+  isGlobal  Boolean                 @default(false) @map("is_global") // 管理员创建的全局渠道，对所有托管用户开放
+  createdAt DateTime                @default(now()) @map("created_at")
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs     NotificationLog[]
+  packages Package[]         @relation("PackageReleaseChannel") // 套餐资源释放通知
+
+  @@index([userId])
+  @@map("notification_channels")
+}
+
+model NotificationLog {
+  id        Int                   @id @default(autoincrement())
+  channelId Int                   @map("channel_id")
+  eventType String                @map("event_type")
+  message   String
+  status    NotificationLogStatus
+  error     String?
+  createdAt DateTime              @default(now()) @map("created_at")
+
+  channel NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("notification_logs")
+}
+
+// ==================== OAuth 相关模型 ====================
+
+model OAuthConfig {
+  id           Int           @id @default(autoincrement())
+  provider     OAuthProvider @unique
+  clientId     String        @map("client_id")
+  clientSecret String        @map("client_secret")
+  enabled      Boolean       @default(false)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("oauth_configs")
+}
+
+model UserOAuthBinding {
+  id               Int           @id @default(autoincrement())
+  userId           Int           @map("user_id")
+  provider         OAuthProvider
+  providerUserId   String        @map("provider_user_id")
+  providerUsername String?       @map("provider_username")
+  providerEmail    String?       @map("provider_email")
+  providerAvatar   String?       @map("provider_avatar")
+  accessToken      String?       @map("access_token")
+  refreshToken     String?       @map("refresh_token")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@index([provider, providerUserId])
+  @@map("user_oauth_bindings")
+}
+
+model UserTelegramBinding {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @unique @map("user_id")
+  telegramUserId   String   @unique @map("telegram_user_id")
+  telegramUsername String?  @map("telegram_username")
+  firstName        String?  @map("first_name")
+  lastName         String?  @map("last_name")
+  boundAt          DateTime @default(now()) @map("bound_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_telegram_bindings")
+}
+
+model TelegramBindToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("telegram_bind_tokens")
+}
+
+// ==================== 帮助文档模型 ====================
+
+model HelpArticle {
+  id        Int      @id @default(autoincrement())
+  title     String
+  slug      String   @unique
+  content   String
+  category  String   @default("general")
+  sortOrder Int      @default(0) @map("sort_order")
+  published Boolean  @default(true)
+  pinned    Boolean  @default(false) // 是否置顶，置顶文章会显示在用户后台首页
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  creator User? @relation("CreatedArticles", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@map("help_articles")
+}
+
+// ==================== 系统配置模型 ====================
+
+model SystemConfig {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  value       String
+  type        String   @default("string") // string, number, boolean, json
+  label       String?
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
+
+// ==================== 流量统计模型 ====================
+
+// 流量快照 (用于增量计算)
+model TrafficSnapshot {
+  id         Int      @id @default(autoincrement())
+  instanceId Int      @unique @map("instance_id")
+  rxRaw      BigInt   @map("rx_raw") // 上次采集的原始值
+  txRaw      BigInt   @map("tx_raw")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("traffic_snapshots")
+}
+
+// 每日流量聚合 (用于图表)
+model DailyTraffic {
+  id         Int      @id @default(autoincrement())
+  instanceId Int      @map("instance_id")
+  date       DateTime @db.Date // 只存日期
+  rxTotal    BigInt   @map("rx_total")
+  txTotal    BigInt   @map("tx_total")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, date])
+  @@index([instanceId, date])
+  @@map("daily_traffic")
+}
+
+// ==================== 远程存储配置模型 ====================
+
+model StorageConfig {
+  id     Int         @id @default(autoincrement())
+  userId Int         @map("user_id")
+  name   String // e.g. "我的群晖 NAS"
+  type   StorageType
+
+  // 连接信息
+  host     String
+  port     Int?
+  username String?
+  password String? // ★ 注意：写入前必须 AES 加密，读取时解密
+  basePath String? @map("base_path") // e.g. "/backups/"
+
+  // 扩展配置 (预留 S3 bucket/region/accessKey/secretKey 等)
+  extra Json?
+
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uploadTasks BackupUploadTask[]
+
+  @@index([userId])
+  @@map("storage_configs")
+}
+
+// ==================== 备份上传任务模型 ====================
+
+model BackupUploadTask {
+  id              Int                    @id @default(autoincrement())
+  userId          Int                    @map("user_id")
+  instanceId      Int                    @map("instance_id")
+  backupId        Int                    @map("backup_id")
+  hostId          Int                    @map("host_id")
+  storageConfigId Int                    @map("storage_config_id")
+  status          BackupUploadTaskStatus @default(PENDING)
+  progress        String? // 当前执行步骤: preparing, uploading, finalizing
+  retryCount      Int                    @default(0) @map("retry_count") // 重试次数
+
+  // 上传结果
+  remoteFileName String? @map("remote_file_name")
+  fileSize       BigInt? @map("file_size")
+  error          String?
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  startedAt  DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+
+  storageConfig StorageConfig @relation(fields: [storageConfigId], references: [id], onDelete: Cascade)
+
+  @@index([hostId, status])
+  @@index([userId])
+  @@index([instanceId])
+  @@index([storageConfigId, status])
+  @@map("backup_upload_tasks")
+}
+
+// ==================== 日志模型 ====================
+
+model Log {
+  id         Int      @id @default(autoincrement())
+  userId     Int?     @map("user_id")
+  instanceId Int?     @map("instance_id")
+  module     String
+  action     String
+  content    String
+  result     String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  instance Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([instanceId])
+  @@index([module])
+  @@index([createdAt])
+  @@map("logs")
+}
+
+model InstanceAuditRule {
+  id             Int      @id @default(autoincrement())
+  hostId         Int?     @map("host_id")
+  createdById    Int      @map("created_by_id")
+  name           String
+  description    String?
+  severity       String   @default("medium")
+  category       String   @default("custom")
+  targetTypes    Json     @default("[]") @map("target_types")
+  matchType      String   @default("contains") @map("match_type")
+  pattern        String   @db.Text
+  caseSensitive  Boolean  @default(false) @map("case_sensitive")
+  recommendation String?  @db.Text
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  host      Host? @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("InstanceAuditRuleCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([hostId, enabled])
+  @@index([createdById])
+  @@map("instance_audit_rules")
+}
+
+model InstanceAuditBuiltinRuleOverride {
+  id             Int      @id @default(autoincrement())
+  hostId         Int      @map("host_id")
+  builtinRuleId  String   @map("builtin_rule_id")
+  createdById    Int      @map("created_by_id")
+  name           String
+  description    String?
+  severity       String   @default("medium")
+  category       String   @default("custom")
+  targetTypes    Json     @default("[]") @map("target_types")
+  matchType      String   @default("contains") @map("match_type")
+  pattern        String   @db.Text
+  caseSensitive  Boolean  @default(false) @map("case_sensitive")
+  recommendation String?  @db.Text
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  host      Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  createdBy User @relation("InstanceAuditBuiltinRuleOverrideCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([hostId, builtinRuleId])
+  @@index([hostId, enabled])
+  @@index([createdById])
+  @@map("instance_audit_builtin_rule_overrides")
+}
+
+model InstanceAuditIgnore {
+  id          Int       @id @default(autoincrement())
+  hostId      Int       @map("host_id")
+  instanceId  Int?      @map("instance_id")
+  createdById Int       @map("created_by_id")
+  ruleId      String?   @map("rule_id")
+  targetType  String?   @map("target_type")
+  matchText   String?   @map("match_text")
+  scope       String    @default("instance")
+  reason      String?   @db.Text
+  enabled     Boolean   @default(true)
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  host      Host      @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  instance  Instance? @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("InstanceAuditIgnoreCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([hostId, enabled])
+  @@index([instanceId])
+  @@index([ruleId])
+  @@map("instance_audit_ignores")
+}
+
+model InstanceAuditScan {
+  id               Int      @id @default(autoincrement())
+  hostId           Int      @map("host_id")
+  instanceId       Int      @map("instance_id")
+  userId           Int      @map("user_id")
+  status           String   @default("success")
+  capability       String?
+  riskLevel        String   @map("risk_level")
+  findingCount     Int      @default(0) @map("finding_count")
+  ignoredCount     Int      @default(0) @map("ignored_count")
+  processCount     Int      @default(0) @map("process_count")
+  connectionCount  Int      @default(0) @map("connection_count")
+  listeningCount   Int      @default(0) @map("listening_count")
+  startupItemCount Int      @default(0) @map("startup_item_count")
+  findings         Json     @default("[]")
+  error            String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  host     Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user     User     @relation("InstanceAuditScanUser", fields: [userId], references: [id], onDelete: Cascade)
+  actions  InstanceAuditAction[]
+
+  @@index([hostId, createdAt(sort: Desc)])
+  @@index([instanceId, createdAt(sort: Desc)])
+  @@map("instance_audit_scans")
+}
+
+model InstanceAuditAction {
+  id             Int      @id @default(autoincrement())
+  scanId         Int?     @map("scan_id")
+  hostId         Int      @map("host_id")
+  instanceId     Int      @map("instance_id")
+  userId         Int      @map("user_id")
+  actionType     String   @map("action_type")
+  pid            Int?
+  signal         String?
+  processCommand String?  @map("process_command") @db.Text
+  reason         String   @db.Text
+  result         String
+  stdout         String?  @db.Text
+  stderr         String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  scan     InstanceAuditScan? @relation(fields: [scanId], references: [id], onDelete: SetNull)
+  host     Host      @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  instance Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user     User      @relation("InstanceAuditActionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([hostId, createdAt(sort: Desc)])
+  @@index([instanceId, createdAt(sort: Desc)])
+  @@map("instance_audit_actions")
+}
+
+// ==================== 邮件验证码模型 ====================
+
+model EmailVerificationCode {
+  id        Int      @id @default(autoincrement())
+  email     String
+  code      String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, code])
+  @@index([expiresAt])
+  @@map("email_verification_codes")
+}
+
+// ==================== 套餐共享模型 ====================
+
+model PackageShare {
+  id              Int      @id @default(autoincrement())
+  packageId       Int      @map("package_id") // 被共享的套餐
+  ownerId         Int      @map("owner_id") // 套餐所有者
+  sharedToId      Int      @map("shared_to_id") // 共享给谁（必须是好友）
+  quotaMultiplier Decimal? @map("quota_multiplier") @db.Decimal(3, 1) // 配额倍数限制，如 0.5, 1.0, 1.5, 2.0，null 表示无限制
+  maxInstances    Int?     @map("max_instances") // 最多可开实例数，null 表示无限制
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  package  Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  owner    User    @relation("PackageShareOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  sharedTo User    @relation("PackageShareReceiver", fields: [sharedToId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, sharedToId]) // 同一套餐不能重复共享给同一人
+  @@index([sharedToId])
+  @@index([ownerId])
+  @@index([packageId])
+  @@map("package_shares")
+}
+
+// ==================== 实例转移模型 ====================
+
+enum TransferStatus {
+  pending // 等待接收
+  processing // 处理中（临时锁定状态，防止并发）
+  accepted // 已接收
+  rejected // 已拒绝
+  cancelled // 已取消
+}
+
+model InstanceTransfer {
+  id           Int            @id @default(autoincrement())
+  instanceId   Int            @map("instance_id")
+  fromUserId   Int            @map("from_user_id")
+  toUserId     Int            @map("to_user_id")
+  status       TransferStatus @default(pending)
+  snapshot     Json // 转移时的实例快照信息
+  remark       String? // 转移备注
+  rejectReason String?        @map("reject_reason")
+  fee          Decimal?       @db.Decimal(10, 2) // 转移手续费（元），拒绝时退还
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at") // 状态变更时自动更新，用于超时检测
+  acceptedAt   DateTime?      @map("accepted_at")
+  rejectedAt   DateTime?      @map("rejected_at")
+  cancelledAt  DateTime?      @map("cancelled_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  fromUser User     @relation("TransferFrom", fields: [fromUserId], references: [id])
+  toUser   User     @relation("TransferTo", fields: [toUserId], references: [id])
+
+  @@index([fromUserId, status])
+  @@index([toUserId, status])
+  @@index([instanceId, status])
+  @@map("instance_transfers")
+}
+
+// ==================== 敏感操作二次验证模型 ====================
+
+enum OperationType {
+  // 账号相关操作（邮件验证）
+  change_password
+  disable_2fa
+  change_email
+  delete_account
+  // 资源相关操作（通知渠道验证）
+  delete_instance
+  reinstall_instance
+  recreate_instance  // 重建实例
+  transfer_instance
+  delete_snapshot
+  delete_backup
+}
+
+enum VerificationChannel {
+  email
+  telegram
+  discord
+  webhook
+}
+
+model OperationVerification {
+  id            Int                 @id @default(autoincrement())
+  userId        Int                 @map("user_id")
+  operationType OperationType       @map("operation_type")
+  code          String // 6位验证码
+  channel       VerificationChannel // 验证渠道
+  resourceId    Int?                @map("resource_id") // 资源ID（如实例ID、快照ID等）
+  resourceType  String?             @map("resource_type") // 资源类型（instance/snapshot/backup）
+  verified      Boolean             @default(false)
+  verifiedAt    DateTime?           @map("verified_at")
+  expiresAt     DateTime            @map("expires_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, operationType, code])
+  @@index([expiresAt])
+  @@map("operation_verifications")
+}
+
+// ==================== 分布式锁模型 ====================
+// LOGIC004: 支持多实例部署的分布式锁
+
+model DistributedLock {
+  id         Int      @id @default(autoincrement())
+  lockKey    String   @unique @map("lock_key") // 锁的唯一标识
+  ownerId    String   @map("owner_id") // 锁持有者ID（进程ID+随机字符串）
+  acquiredAt DateTime @map("acquired_at") // 获取时间
+  expiresAt  DateTime @map("expires_at") // 过期时间
+
+  @@index([expiresAt]) // 用于清理过期锁
+  @@map("distributed_locks")
+}
+
+// ==================== 系统镜像模型 ====================
+
+model SystemImage {
+  id           Int      @id @default(autoincrement())
+  name         String // 显示名称，如 "Ubuntu 24.04 LTS"
+  remoteAlias  String   @unique @map("remote_alias") // Incus 别名，如 "ubuntu/noble/cloud"
+  osType       String   @default("Linux") @map("os_type")
+  architecture String   @default("x86_64")
+  instanceType String   @default("both") @map("instance_type") // 支持的实例类型: container, vm, both
+  icon         String // 图标标识，如 "ubuntu"
+  sortOrder    Int      @default(0) @map("sort_order")
+  hidden       Boolean  @default(false) // 是否隐藏
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  allowedHosts HostAllowedImage[]
+
+  @@map("system_images")
+}
+
+model HostAllowedImage {
+  id        Int         @id @default(autoincrement())
+  hostId    Int         @map("host_id")
+  imageId   Int         @map("image_id")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  host      Host        @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  image     SystemImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@unique([hostId, imageId])
+  @@index([hostId])
+  @@index([imageId])
+  @@map("host_allowed_images")
+}
+
+// ==================== 公告/通知历史记录模型 ====================
+
+enum AnnouncementType {
+  system_broadcast // 管理员全站公告
+  host_broadcast   // 宿主机节点公告
+  admin_message    // 管理员私信
+  host_message     // 宿主机所有者私信
+}
+
+model Announcement {
+  id             Int              @id @default(autoincrement())
+  type           AnnouncementType // 公告类型
+  senderId       Int              @map("sender_id") // 发送者 ID
+  title          String           // 标题
+  content        String           // 内容
+  recipientCount Int              @map("recipient_count") // 发送人数
+
+  // 可选关联（根据类型）
+  hostId       Int? @map("host_id") // 节点公告时的节点 ID
+  targetUserId Int? @map("target_user_id") // 私信时的目标用户
+  instanceId   Int? @map("instance_id") // 实例私信时的实例 ID
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sender User @relation("AnnouncementSender", fields: [senderId], references: [id], onDelete: Cascade)
+  host   Host? @relation("HostAnnouncements", fields: [hostId], references: [id], onDelete: SetNull)
+
+  @@index([senderId, createdAt(sort: Desc)])
+  @@index([hostId, createdAt(sort: Desc)])
+  @@index([type, createdAt(sort: Desc)])
+  @@map("announcements")
+}
+
+// ==================== 站内信模型 ====================
+
+model InboxMessage {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  eventType String   @map("event_type") // 事件类型，与 notifier.ts 一致
+  title     String                       // 消息标题
+  content   String                       // 消息内容
+  isRead    Boolean  @default(false) @map("is_read")
+  data      Json?                        // 原始事件数据，用于前端跳转
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("inbox_messages")
+}
+
+model HostNotificationEmailTask {
+  id          Int                             @id @default(autoincrement())
+  userId      Int                             @map("user_id")
+  hostId      Int                             @map("host_id")
+  email       String
+  username    String
+  hostName    String                          @map("host_name")
+  title       String
+  content     String
+  status      HostNotificationEmailTaskStatus @default(PENDING)
+  retryCount  Int                             @default(0) @map("retry_count")
+  lastError   String?                         @map("last_error")
+  scheduledFor DateTime                       @map("scheduled_for")
+  createdAt   DateTime                        @default(now()) @map("created_at")
+  startedAt   DateTime?                       @map("started_at")
+  finishedAt  DateTime?                       @map("finished_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  host Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([userId])
+  @@index([hostId])
+  @@index([startedAt])
+  @@map("host_notification_email_tasks")
+}
+
+// ==================== 反代站点模型 ====================
+
+model ProxySite {
+  id           Int             @id @default(autoincrement())
+  instanceId   Int             @map("instance_id")
+  hostId       Int             @map("host_id") // 冗余存储，方便查询
+  domain       String // 域名（不允许泛域名）
+  targetPort   Int             @map("target_port") // 实例内部端口
+  httpsEnabled Boolean         @default(true) @map("https_enabled") // 是否启用 HTTPS（自动申请 Let's Encrypt 证书）
+  remark       String? // 站点备注
+  status       ProxySiteStatus @default(pending)
+  enabled      Boolean         @default(true)
+  error        String? // 错误信息
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  host     Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@unique([hostId, domain]) // 同一宿主机下域名唯一
+  @@index([instanceId])
+  @@index([hostId])
+  @@map("proxy_sites")
+}
+
+// ==================== 登录记录模型 ====================
+
+model LoginRecord {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  ip        String   // 登录 IP
+  country   String?  // 国家
+  region    String?  // 地区/省份
+  city      String?  // 城市
+  isp       String?  // ISP 服务商
+  timezone  String?  // 时区
+  userAgent String?  @map("user_agent") // 用户代理
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, ip])
+  @@map("login_records")
+}
+
+// ==================== 工单系统模型 ====================
+
+// 工单状态枚举
+enum TicketStatus {
+  open        // 待处理
+  in_progress // 处理中
+  resolved    // 已解决
+  closed      // 已关闭
+}
+
+// 工单优先级枚举
+enum TicketPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+// 工单主表
+model Ticket {
+  id          Int            @id @default(autoincrement())
+  userId      Int            @map("user_id")      // 发起工单的用户
+  hostId      Int?           @map("host_id")      // 可选：关联的宿主机（无实例时为null，工单直接发给管理员）
+  instanceId  Int?           @map("instance_id")  // 可选：关联的实例
+  
+  subject     String                              // 工单标题
+  category    String         @default("general")  // 分类：general/billing/technical/abuse
+  priority    TicketPriority @default(normal)
+  status      TicketStatus   @default(open)
+  
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  resolvedAt  DateTime?      @map("resolved_at")
+  closedAt    DateTime?      @map("closed_at")
+  
+  user        User           @relation("TicketCreator", fields: [userId], references: [id], onDelete: Cascade)
+  host        Host?          @relation("HostTickets", fields: [hostId], references: [id], onDelete: Cascade)
+  instance    Instance?      @relation("InstanceTickets", fields: [instanceId], references: [id], onDelete: SetNull)
+  messages    TicketMessage[]
+  attachments TicketMessageAttachment[]
+  
+  @@index([userId, status])
+  @@index([hostId, status])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("tickets")
+}
+
+// 工单消息表
+model TicketMessage {
+  id          Int      @id @default(autoincrement())
+  ticketId    Int      @map("ticket_id")
+  senderId    Int      @map("sender_id")    // 发送者（用户或宿主机所有者）
+  content     String                         // 消息内容
+  isFromOwner Boolean  @default(false) @map("is_from_owner") // 是否来自宿主机所有者
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender      User     @relation("TicketMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  attachments TicketMessageAttachment[]
+  
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+// 工单消息图片附件
+model TicketMessageAttachment {
+  id              Int      @id @default(autoincrement())
+  ticketId        Int      @map("ticket_id")
+  messageId       Int      @map("message_id")
+  uploaderId      Int      @map("uploader_id")
+  provider        String   @default("lsky")
+  providerVersion String   @default("v1") @map("provider_version")
+  providerFileId  String?  @map("provider_file_id")
+  filename        String
+  originalName    String   @map("original_name")
+  mimeType        String   @map("mime_type")
+  sizeBytes       Int      @map("size_bytes")
+  width           Int?
+  height          Int?
+  url             String
+  thumbnailUrl    String?  @map("thumbnail_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  ticket   Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message  TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader User          @relation("TicketAttachmentUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@index([messageId])
+  @@index([uploaderId])
+  @@map("ticket_message_attachments")
+}
+
+// ==================== 签到系统模型 ====================
+
+// 兑换码类型枚举
+enum RedeemCodeType {
+  c // CPU
+  r // 内存 (RAM)
+  d // 硬盘 (Disk)
+  t // 流量 (Traffic)
+  p // 积分 (Points)
+}
+
+// 签到记录表
+model CheckinRecord {
+  id         Int            @id @default(autoincrement())
+  userId     Int            @map("user_id")          // 签到用户（兑换码所有者）
+  redeemCode String         @unique @map("redeem_code") // 兑换码
+  codeType   RedeemCodeType @map("code_type")        // 兑换码类型
+  codeValue  Int            @map("code_value")       // 兑换码数值
+  expiresAt  DateTime       @map("expires_at")       // 过期时间（3小时）
+  usedAt     DateTime?      @map("used_at")          // 使用时间
+  usedBy     Int?           @map("used_by")          // 使用者ID
+  usedFor    Int?           @map("used_for")         // 使用的实例ID
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  user       User      @relation("CheckinRecords", fields: [userId], references: [id], onDelete: Cascade)
+  usedByUser User?     @relation("RedeemRecords", fields: [usedBy], references: [id], onDelete: SetNull)
+  instance   Instance? @relation(fields: [usedFor], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([usedBy])
+  @@index([expiresAt])
+  @@map("checkin_records")
+}
+
+// 用户签到统计表
+model CheckinStats {
+  id                   Int       @id @default(autoincrement())
+  userId               Int       @unique @map("user_id")
+  lastCheckinDate      DateTime? @map("last_checkin_date")       // 最后签到日期
+  lastRedeemDate       DateTime? @map("last_redeem_date")        // 最后兑换日期（签到码专用）
+  consecutiveOthersUse Int       @default(0) @map("consecutive_others_use") // 连续被他人使用天数
+  selfOnlyMode         Boolean   @default(false) @map("self_only_mode")     // 是否只能自己使用
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("checkin_stats")
+}
+
+// ==================== 系统兑换码模型 ====================
+
+// 系统兑换码（宿主机所有者生成）
+model RedeemCode {
+  id          Int            @id @default(autoincrement())
+  code        String         @unique                        // 兑换码，格式: h-{random18}
+  hostId      Int            @map("host_id")                // 关联的宿主机
+  createdById Int            @map("created_by_id")          // 创建者（宿主机所有者）
+  codeType    RedeemCodeType @map("code_type")              // 资源类型
+  codeValue   Int            @map("code_value")             // 资源数值
+  maxUses     Int            @default(1) @map("max_uses")   // 最大使用次数
+  usedCount   Int            @default(0) @map("used_count") // 已使用次数
+  expiresAt   DateTime?      @map("expires_at")             // 过期时间，null=永不过期
+  enabled     Boolean        @default(true)                 // 是否启用
+  remark      String?                                       // 备注
+  batchId     String?        @map("batch_id")               // 批次ID，同批次码每用户只能用一张
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  host        Host             @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  createdBy   User             @relation("RedeemCodesCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  usages      RedeemCodeUsage[]
+
+  @@index([hostId])
+  @@index([createdById])
+  @@index([enabled])
+  @@index([batchId])
+  @@map("redeem_codes")
+}
+
+// 系统兑换码使用记录
+model RedeemCodeUsage {
+  id           Int      @id @default(autoincrement())
+  redeemCodeId Int      @map("redeem_code_id")  // 兑换码 ID
+  userId       Int      @map("user_id")         // 使用者
+  instanceId   Int      @map("instance_id")     // 应用到的实例
+  batchId      String?  @map("batch_id")        // 批次ID（冗余存储，用于唯一约束）
+  usedAt       DateTime @default(now()) @map("used_at")
+
+  redeemCode RedeemCode @relation(fields: [redeemCodeId], references: [id], onDelete: Cascade)
+  user       User       @relation("RedeemCodeUsages", fields: [userId], references: [id], onDelete: Cascade)
+  instance   Instance   @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, batchId])  // 同批次每用户只能使用一次（NULL值不参与约束）
+  @@index([redeemCodeId])
+  @@index([userId])
+  @@index([instanceId])
+  @@map("redeem_code_usages")
+}
+
+// ==================== 用户自定义初始化命令模型 ====================
+
+model CustomInitCommand {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  name        String   // 模板名称
+  command     String   @db.Text // 命令内容（多行文本）
+  distros     String   // JSON数组，适配的发行版 ["ubuntu","alpine","all"]
+  description String?  // 备注说明
+  enabled     Boolean  @default(true) // 是否启用
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, enabled])
+  @@map("custom_init_commands")
+}
+
+model TerminalSavedCommand {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  name        String
+  command     String   @db.Text
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@map("terminal_saved_commands")
+}
+
+// ==================== 计费系统模型 ====================
+
+// 余额变动日志
+model BalanceLog {
+  id            Int            @id @default(autoincrement())
+  userId        Int            @map("user_id")
+  type          BalanceLogType
+  amount        Decimal        @db.Decimal(10, 2) // 正数=增加，负数=减少
+  balanceBefore Decimal        @map("balance_before") @db.Decimal(10, 2)
+  balanceAfter  Decimal        @map("balance_after") @db.Decimal(10, 2)
+
+  // 关联信息
+  orderId    String? @map("order_id")    // 充值订单号
+  instanceId Int?    @map("instance_id") // 关联实例
+  remark     String?                      // 备注
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([type])
+  @@map("balance_logs")
+}
+
+// 支付渠道配置
+model PaymentProvider {
+  id     Int                   @id @default(autoincrement())
+  name   String                // 显示名称，如"支付宝"、"微信支付"
+  type   PaymentProviderType
+  status PaymentProviderStatus @default(disabled)
+
+  // 通用配置（JSON，根据类型存储不同字段）
+  // 易支付: { pid, key, apiUrl, notifyUrl }
+  // Stripe: { publicKey, secretKey, webhookSecret }
+  config Json @default("{}")
+
+  // 支付方式支持（JSON数组）
+  // 如 ["alipay", "wxpay", "qqpay"] 或 ["card"]
+  methods Json @default("[]")
+
+  // 手续费设置
+  feeRate  Decimal @default(0) @map("fee_rate") @db.Decimal(5, 4) // 费率，如 0.006 = 0.6%
+  feeFixed Decimal @default(0) @map("fee_fixed") @db.Decimal(10, 2) // 固定手续费
+
+  // 限额设置
+  minAmount Decimal  @default(1) @map("min_amount") @db.Decimal(10, 2) // 最小充值金额
+  maxAmount Decimal? @map("max_amount") @db.Decimal(10, 2)              // 最大充值金额
+
+  sortOrder Int      @default(0) @map("sort_order") // 排序
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rechargeRecords RechargeRecord[]
+
+  @@map("payment_providers")
+}
+
+// 充值记录
+model RechargeRecord {
+  id         Int @id @default(autoincrement())
+  userId     Int @map("user_id")
+  providerId Int @map("provider_id")
+
+  // 订单信息
+  orderNo String  @unique @map("order_no") // 系统订单号
+  tradeNo String? @map("trade_no")          // 第三方交易号
+
+  // 金额
+  amount       Decimal  @db.Decimal(10, 2)                                // 充值金额
+  actualAmount Decimal? @map("actual_amount") @db.Decimal(10, 2)          // 实际到账金额
+  fee          Decimal  @default(0) @db.Decimal(10, 2)                    // 平台手续费
+
+  // 支付方式
+  paymentMethod String? @map("payment_method") // alipay/wxpay/card 等
+
+  status RechargeStatus @default(pending)
+
+  // 回调信息
+  callbackData Json?     @map("callback_data") // 支付回调原始数据
+  callbackAt   DateTime? @map("callback_at")
+  providerConfigSnapshot String? @map("provider_config_snapshot") // 订单创建时的支付渠道配置快照（加密）
+  paymentDetails        Json?    @map("payment_details")          // 结构化支付详情（币种/网络/txid等）
+
+  // 失败信息
+  failReason String? @map("fail_reason")
+
+  // IP 与设备
+  ip        String?
+  userAgent String? @map("user_agent")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  expiredAt   DateTime? @map("expired_at")   // 订单过期时间（按支付渠道发票有效期）
+  completedAt DateTime? @map("completed_at")
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider PaymentProvider @relation(fields: [providerId], references: [id])
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([orderNo])
+  @@index([tradeNo])
+  @@map("recharge_records")
+}
+
+// VIP 等级规则配置
+model VipLevelRule {
+  id                  Int                   @id @default(autoincrement())
+  type                VipLevelRuleType
+  level               Int
+  enabled             Boolean               @default(true)
+  conditionMode       VipLevelConditionMode @default(any) @map("condition_mode")
+  minRecharge         Decimal?              @map("min_recharge") @db.Decimal(10, 2)
+  minConsume          Decimal?              @map("min_consume") @db.Decimal(10, 2)
+  minHostingIncome    Decimal?              @map("min_hosting_income") @db.Decimal(10, 2)
+  minHostingInstances Int?                  @map("min_hosting_instances")
+  benefits            Json                  @default("{}")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+
+  @@unique([type, level])
+  @@index([type, enabled])
+  @@map("vip_level_rules")
+}
+
+model VipBenefitReward {
+  id          Int                  @id @default(autoincrement())
+  level       Int
+  type        VipBenefitRewardType
+  title       String
+  description String?
+  claimLimit  Int                  @default(1) @map("claim_limit")
+  sortOrder   Int                  @default(0) @map("sort_order")
+  enabled     Boolean              @default(true)
+  config      Json                 @default("{}")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  claims VipBenefitClaim[]
+
+  @@index([level, enabled, sortOrder])
+  @@index([type])
+  @@map("vip_benefit_rewards")
+}
+
+model VipBenefitClaim {
+  id          Int                   @id @default(autoincrement())
+  userId      Int                   @map("user_id")
+  rewardId    Int                   @map("reward_id")
+  level       Int
+  status      VipBenefitClaimStatus
+  claimNo     Int                   @map("claim_no")
+  snapshot    Json                  @default("{}")
+  deliveredAt DateTime?             @map("delivered_at")
+  createdAt   DateTime              @default(now()) @map("created_at")
+
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward VipBenefitReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, rewardId, claimNo])
+  @@index([userId, level])
+  @@index([rewardId])
+  @@index([status, createdAt])
+  @@map("vip_benefit_claims")
+}
+
+// 支付回调防重放记录
+model PaymentCallback {
+  id         Int      @id @default(autoincrement())
+  providerId Int      @map("provider_id")     // 支付渠道ID
+  orderNo    String   @map("order_no")        // 订单号
+  tradeNo    String?  @map("trade_no")        // 第三方交易号
+  callbackIp String?  @map("callback_ip")     // 回调IP
+  processed  Boolean  @default(true)          // 是否已处理
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([providerId, orderNo, tradeNo])    // 联合唯一索引防重放
+  @@index([createdAt])                        // 用于定期清理
+  @@map("payment_callbacks")
+}
+
+// 套餐方案（付费实例的核心）
+model PackagePlan {
+  id        Int @id @default(autoincrement())
+  packageId Int @map("package_id")
+
+  // 基本信息
+  name        String  // 方案名称，如"低配"、"高配"、"标准版"
+  description String? // 方案描述
+
+  // ========== 资源配置（预设固定值） ==========
+  cpu    Int // CPU 额度 (%)，如 50, 100, 200
+  memory Int // 内存 (MB)，如 512, 1024, 2048
+  disk   Int // 磁盘 (MB)，如 10240, 20480, 51200
+
+  // ========== 配额限制（方案级别独立配置） ==========
+  portLimit         Int    @map("port_limit")          // 端口映射数上限
+  snapshotLimit     Int    @map("snapshot_limit")      // 快照数上限
+  backupLimit       Int    @map("backup_limit")        // 备份数上限
+  siteLimit         Int    @map("site_limit")          // 反代站点数上限
+  swapSize          Int    @default(0) @map("swap_size") // SWAP 大小(MB)，0 表示不提供
+  trafficLimit      BigInt @map("traffic_limit")       // 月流量限额 (Bytes)
+  trafficLimitSpeed String @default("1Mbit") @map("traffic_limit_speed") // 流量超限后的限速值
+
+  // ========== 计费配置 ==========
+  price        Decimal @db.Decimal(10, 2)                             // 价格
+  billingCycle Int     @default(1) @map("billing_cycle")              // 计费周期（月）
+  setupFee     Decimal @default(0) @map("setup_fee") @db.Decimal(10, 2) // 开通费
+
+  // ========== 状态与排序 ==========
+  isActive  Boolean @default(true) @map("is_active") // 是否启用
+  isSoldOut Boolean @default(false) @map("is_sold_out") // 是否售罄：显示但不可新购/变更
+  sortOrder Int     @default(0) @map("sort_order")   // 排序
+
+  // ========== SLA保证（可选） ==========
+  slaGuarantee Decimal? @map("sla_guarantee") @db.Decimal(5, 2) // SLA保证百分比，1-100，两位小数，null=不显示
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关系
+  package   Package    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  instances Instance[]
+  affCodes  AffCode[]  // AFF优惠码
+
+  @@unique([packageId, name]) // 同一套餐下方案名称唯一
+  @@index([packageId, isActive])
+  @@map("package_plans")
+}
+
+// 实例计费记录
+model InstanceBillingRecord {
+  id         Int @id @default(autoincrement())
+  instanceId Int @map("instance_id")
+  userId     Int @map("user_id")
+
+  type   BillingRecordType
+  amount Decimal           @db.Decimal(10, 2) // 扣费金额（正数）
+  months Int               @default(1)        // 购买/续费月数
+
+  // 计费周期
+  periodStart DateTime @map("period_start") // 计费开始时间
+  periodEnd   DateTime @map("period_end")   // 计费结束时间
+
+  // 关联
+  balanceLogId Int? @map("balance_log_id") // 关联余额日志
+
+  remark    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("instance_billing_records")
+}
+
+// ==================== AFF推荐计划模型 ====================
+
+// AFF优惠码
+model AffCode {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique                                // 优惠码，如 AFF-123-A8K3M9
+  userId          Int      @map("user_id")                        // 创建者
+  packagePlanId   Int?     @map("package_plan_id")                // 绑定的方案（null表示全局码）
+  discountRate    Decimal  @default(0.05) @map("discount_rate") @db.Decimal(5, 4)   // 折扣率 5%
+  commissionRate  Decimal  @default(0.05) @map("commission_rate") @db.Decimal(5, 4) // 返利率 5%
+  enabled         Boolean  @default(true)
+  usedCount       Int      @default(0) @map("used_count")         // 使用次数
+  totalEarnings   Decimal  @default(0) @map("total_earnings") @db.Decimal(10, 2) // 总收益
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packagePlan PackagePlan? @relation(fields: [packagePlanId], references: [id], onDelete: Cascade)
+  bindings    AffBinding[]
+  mailSubscriptionBindings MailSubscriptionAffBinding[]
+  logs        AffLog[]
+
+  @@unique([userId, packagePlanId]) // 每用户每方案仅一个优惠码（包括全局码：packagePlanId=null时每用户最多一个）
+  @@index([userId])
+  @@index([packagePlanId])
+  @@map("aff_codes")
+}
+
+// 实例与优惠码永久绑定
+model AffBinding {
+  id          Int      @id @default(autoincrement())
+  instanceId  Int      @unique @map("instance_id")  // 一个实例只能绑定一个优惠码
+  affCodeId   Int      @map("aff_code_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  affCode  AffCode  @relation(fields: [affCodeId], references: [id], onDelete: Cascade)
+
+  @@index([affCodeId])
+  @@map("aff_bindings")
+}
+
+// 邮箱订阅与优惠码永久绑定
+model MailSubscriptionAffBinding {
+  id                 Int      @id @default(autoincrement())
+  mailSubscriptionId Int      @unique @map("mail_subscription_id")
+  affCodeId          Int      @map("aff_code_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  mailSubscription MailSubscription @relation(fields: [mailSubscriptionId], references: [id], onDelete: Cascade)
+  affCode          AffCode          @relation(fields: [affCodeId], references: [id], onDelete: Cascade)
+
+  @@index([affCodeId])
+  @@map("mail_subscription_aff_bindings")
+}
+
+// AFF余额变动日志
+model AffLog {
+  id                   Int        @id @default(autoincrement())
+  userId               Int        @map("user_id")                // 收益用户
+  affCodeId            Int?       @map("aff_code_id")            // 关联优惠码
+  instanceId           Int?       @map("instance_id")            // 关联实例
+  mailSubscriptionId   Int?       @map("mail_subscription_id")   // 关联邮箱订阅
+  type                 AffLogType
+  amount               Decimal    @db.Decimal(10, 2)             // 正数=收入，负数=转出
+  originalAmount       Decimal?   @map("original_amount") @db.Decimal(10, 2) // 原始订单金额
+  balanceBefore        Decimal    @map("balance_before") @db.Decimal(10, 2)
+  balanceAfter         Decimal    @map("balance_after") @db.Decimal(10, 2)
+  remark               String?
+  createdAt            DateTime   @default(now()) @map("created_at")
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  affCode          AffCode?          @relation(fields: [affCodeId], references: [id], onDelete: SetNull)
+  mailSubscription MailSubscription? @relation(fields: [mailSubscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([affCodeId])
+  @@index([mailSubscriptionId])
+  @@map("aff_logs")
+}
+
+// AFF余额转化申请
+model AffWithdrawal {
+  id            Int                 @id @default(autoincrement())
+  userId        Int                 @map("user_id")
+  amount        Decimal             @db.Decimal(10, 2)  // 申请转化金额
+  status        AffWithdrawalStatus @default(pending)
+  rejectReason  String?             @map("reject_reason")
+  reviewedBy    Int?                @map("reviewed_by")  // 审核管理员ID
+  reviewedAt    DateTime?           @map("reviewed_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("aff_withdrawals")
+}
+
+// ==================== 积分系统模型 ====================
+
+// 积分日志类型
+enum PointsLogType {
+  convert       // 消费兑换
+  lottery_win   // 抽奖获得
+  lottery_spend // 抽奖消耗
+  admin_adjust  // 管理员调整
+  checkin       // 签到奖励
+  badge_draw_spend   // 徽章随机抽取消耗
+  badge_select_spend // 徽章自选消耗
+  invite_generate    // 生成邀请码消耗
+  vip_benefit        // VIP福利领取
+}
+
+enum UserBadgeSource {
+  draw
+  lottery
+  select
+  admin_grant
+}
+
+enum BadgeApplicationTarget {
+  avatar
+  instance
+}
+
+// 用户积分表
+model UserPoints {
+  userId            Int       @id @map("user_id")              // user_id 是主键
+  points            Int       @default(0)                      // 当前积分
+  totalEarned       Int       @default(0) @map("total_earned") // 累计获得
+  totalSpent        Int       @default(0) @map("total_spent")  // 累计消耗
+  lastConvertedAt   DateTime? @map("last_converted_at")        // 上次兑换时间
+  convertedConsume  Decimal   @default(0) @db.Decimal(10, 2) @map("converted_consume") // 已兑换的消费金额
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_points")
+}
+
+// 积分变动日志
+model PointsLog {
+  id           Int           @id @default(autoincrement())
+  userId       Int           @map("user_id")
+  type         PointsLogType
+  amount       Int                                                   // 变动数量（正数为获得，负数为消耗）
+  pointsBefore Int           @map("points_before")
+  pointsAfter  Int           @map("points_after")
+  relatedId    Int?          @map("related_id")                      // 关联ID（抽奖记录ID等）
+  remark       String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("points_logs")
+}
+
+model BadgeSeries {
+  id            String   @id
+  title         String
+  nameZh        String   @map("name_zh")
+  nameEn        String?  @map("name_en")
+  description   String
+  sourceId      String?  @map("source_id")
+  sourceLabel   String?  @map("source_label")
+  displayOrder  Int      @default(0) @map("display_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  badges Badge[]
+
+  @@index([displayOrder])
+  @@index([isActive])
+  @@map("badge_series")
+}
+
+model Badge {
+  id            String   @id
+  name          String
+  nameEn        String?  @map("name_en")
+  fullLabel     String   @map("full_label")
+  seriesId      String   @map("series_id")
+  sourceId      String?  @map("source_id")
+  sourceLabel   String?  @map("source_label")
+  assetUrl      String   @map("asset_url")
+  assetUrlDark  String?  @map("asset_url_dark")
+  assetUrlLight String?  @map("asset_url_light")
+  displayOrder  Int      @default(0) @map("display_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  series             BadgeSeries          @relation(fields: [seriesId], references: [id], onDelete: Restrict)
+
+  @@index([seriesId, displayOrder])
+  @@index([isActive])
+  @@map("badges")
+}
+
+model UserBadgeOwnership {
+  id                Int                     @id @default(autoincrement())
+  userId            Int                     @map("user_id")
+  badgeId           String                  @map("badge_id")
+  source            UserBadgeSource         @default(draw)
+  applicationTarget BadgeApplicationTarget? @map("application_target")
+  appliedInstanceId Int?                    @map("applied_instance_id")
+  appliedAt         DateTime?               @map("applied_at")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appliedInstance Instance? @relation("InstanceAppliedBadgeOwnerships", fields: [appliedInstanceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, badgeId])
+  @@index([userId, applicationTarget])
+  @@index([appliedInstanceId])
+  @@map("user_badge_ownerships")
+}
+
+// ==================== 抽奖系统模型 ====================
+
+// 奖品类型
+enum LotteryPrizeType {
+  nothing   // 再接再历
+  points    // 积分奖励
+  balance   // 余额奖励
+  badge     // 随机徽章奖励
+  instance  // 实例奖励（需手动发放）
+  cpu       // CPU资源（存入资源池）
+  memory    // 内存资源（存入资源池）
+  disk      // 硬盘资源（存入资源池）
+  traffic   // 流量资源（存入资源池）
+}
+
+// 中奖记录状态
+enum LotteryRecordStatus {
+  pending   // 待发放（仅实例奖励）
+  delivered // 已发放
+  claimed   // 已领取（用户提交工单后）
+}
+
+// 抽奖活动
+model Lottery {
+  id              Int       @id @default(autoincrement())
+  name            String                                             // 抽奖名称
+  description     String?                                            // 描述
+  costPoints      Int       @map("cost_points")                      // 每次抽奖消耗积分
+  isActive        Boolean   @default(true) @map("is_active")         // 是否启用
+  startAt         DateTime? @map("start_at")                         // 开始时间（可选）
+  endAt           DateTime? @map("end_at")                           // 结束时间（可选）
+  totalDraws      Int       @default(0) @map("total_draws")          // 总抽奖次数
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdBy       Int       @map("created_by")                       // 创建者管理员ID
+
+  prizes             LotteryPrize[]
+  records            LotteryRecord[]
+  notificationConfig LotteryNotificationConfig?
+
+  @@map("lotteries")
+}
+
+// 抽奖奖品
+model LotteryPrize {
+  id              Int              @id @default(autoincrement())
+  lotteryId       Int              @map("lottery_id")
+  name            String                                             // 奖品名称
+  type            LotteryPrizeType                                   // 奖品类型
+  value           Int              @default(0)                       // 奖品值（积分数/余额分/实例配置ID）
+  probability     Decimal          @db.Decimal(5, 2)                 // 中奖概率（百分比，如 30.00 表示 30%）
+  totalQuantity   Int?             @map("total_quantity")            // 总数量（null表示无限）
+  remainQuantity  Int?             @map("remain_quantity")           // 剩余数量
+  displayOrder    Int              @default(0) @map("display_order") // 显示顺序
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  // 实例奖励专用字段
+  instanceDesc    String?          @map("instance_desc")             // 实例描述（如：1核1G 30天）
+
+  lottery         Lottery          @relation(fields: [lotteryId], references: [id], onDelete: Cascade)
+  records         LotteryRecord[]
+
+  @@index([lotteryId])
+  @@map("lottery_prizes")
+}
+
+// 中奖记录
+model LotteryRecord {
+  id               Int                 @id @default(autoincrement())
+  lotteryId        Int                 @map("lottery_id")
+  prizeId          Int                 @map("prize_id")
+  userId           Int                 @map("user_id")
+  prizeType        LotteryPrizeType    @map("prize_type")
+  prizeValue       Int                 @map("prize_value")            // 中奖时的奖品值（快照）
+  prizeName        String              @map("prize_name")             // 中奖时的奖品名称（快照）
+  status           LotteryRecordStatus @default(delivered)
+  pointsSpent      Int                 @map("points_spent")           // 消耗的积分
+  deliveredAt      DateTime?           @map("delivered_at")           // 发放时间
+  deliveredBy      Int?                @map("delivered_by")           // 发放管理员（实例奖励）
+  ticketId         Int?                @map("ticket_id")              // 关联工单ID（实例奖励）
+  notificationSent Boolean             @default(false) @map("notification_sent")
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  lottery Lottery      @relation(fields: [lotteryId], references: [id], onDelete: Cascade)
+  prize   LotteryPrize @relation(fields: [prizeId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([lotteryId])
+  @@index([status])
+  @@map("lottery_records")
+}
+
+// 抽奖通知配置（管理员为抽奖配置的通知渠道）
+model LotteryNotificationConfig {
+  id              Int      @id @default(autoincrement())
+  lotteryId       Int      @unique @map("lottery_id")
+  enabled         Boolean  @default(true)
+
+  // 通知方式配置（与现有通知渠道类型一致）
+  type            String                                             // telegram, discord, webhook
+  config          Json                                               // { botToken, chatId } 或 { webhookUrl } 等
+
+  // 通知条件
+  notifyBalance   Boolean  @default(true) @map("notify_balance")     // 余额中奖通知
+  notifyInstance  Boolean  @default(true) @map("notify_instance")    // 实例中奖通知
+  // 注意：积分中奖不通知
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  lottery         Lottery  @relation(fields: [lotteryId], references: [id], onDelete: Cascade)
+
+  @@map("lottery_notification_configs")
+}
+
+// ==================== 用户资源池系统 ====================
+
+// 资源池操作类型枚举
+enum ResourcePoolAction {
+  checkin       // 签到获得
+  redeem        // 兑换码兑换
+  admin_grant   // 管理员赠送
+  system_grant  // 系统活动奖励
+  lottery       // 抽奖获得
+  apply         // 应用到实例
+  system_redeem // 系统h-兑换码兑换
+}
+
+// 用户资源池
+model UserResourcePool {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique @map("user_id")
+  cpu       Int      @default(0)  // CPU额度 (%)
+  memory    Int      @default(0)  // 内存额度 (MB)
+  disk      Int      @default(0)  // 硬盘额度 (MB)
+  traffic   BigInt   @default(0)  // 流量额度 (GB)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_resource_pools")
+}
+
+// 资源池变动记录
+model ResourcePoolLog {
+  id           Int                @id @default(autoincrement())
+  userId       Int                @map("user_id")
+  action       ResourcePoolAction
+  resourceType RedeemCodeType     @map("resource_type") // c/r/d/t
+  amount       Int                // 正数=获得，负数=消耗
+  instanceId   Int?               @map("instance_id")   // 应用到的实例
+  remark       String?
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instance Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, action])
+  @@map("resource_pool_logs")
+}
+
+// 用户实例销毁记录
+model UserDestroyRecord {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  hostId       Int      @map("host_id")       // 节点ID（用于90天节点冷却期）
+  instanceId   Int      @map("instance_id")   // 被销毁的实例ID
+  instanceName String   @map("instance_name") // 实例名称（备份，因实例已删除）
+  destroyedAt  DateTime @default(now()) @map("destroyed_at")
+  refundAmount Decimal  @db.Decimal(10, 2) @map("refund_amount") // 实际退款金额
+  feeAmount    Decimal  @db.Decimal(10, 2) @map("fee_amount")    // 手续费金额
+  isFirstTime  Boolean  @map("is_first_time") // 是否首次销毁（首次免手续费）
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  host     Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId])
+  @@index([userId])
+  @@index([userId, hostId])
+  @@map("user_destroy_records")
+}
+
+// ==================== 托管余额系统模型 ====================
+
+enum HostingBalanceType {
+  income    // 收入（用户购买/续费）
+  unfreeze  // 解冻
+  withdraw  // 提现
+  deduction // 扣除（用户销毁托管实例）
+}
+
+// 托管收支操作类型（用于区分具体操作）
+enum HostingActionType {
+  purchase     // 用户开通实例
+  renew        // 用户续费实例
+  upgrade      // 用户升级方案
+  destroy      // 用户销毁实例
+  unfreeze     // 自动解冻
+  withdraw     // 提现
+  admin_adjust // 管理员调整
+}
+
+enum WithdrawalStatus {
+  pending   // 待审核
+  approved  // 已通过
+  rejected  // 已拒绝
+  completed // 已完成
+}
+
+enum WithdrawalTarget {
+  balance // 提现到面板余额
+  usdt    // 提现到USDT
+}
+
+// ==================== 域名邮箱模块 ====================
+
+// 域名验证状态
+enum MailDomainStatus {
+  pending   // 等待 DNS 验证
+  verified  // 已验证
+  suspended // 已暂停
+}
+
+// 邮箱订阅状态
+enum MailSubscriptionStatus {
+  active    // 正常
+  expired   // 已过期
+  suspended // 已暂停
+}
+
+// 计费周期
+enum MailBillingCycle {
+  monthly // 月付
+  yearly  // 年付
+}
+
+// 邮箱源（数据中心）
+model MailSource {
+  id            Int      @id @default(autoincrement())
+  name          String   // 名称，如"美国拉斯维加斯"
+  code          String   @unique // 地区代码，如"us"
+  apiUrl        String   @map("api_url")      // CraneMail Reseller API 地址
+  apiKey        String   @map("api_key")      // CraneMail Reseller API Key
+  smarterMailUrl String  @map("smartermail_url") // SmarterMail API 地址
+  enabled       Boolean  @default(true)
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  plans         MailPlan[]
+  subscriptions MailSubscription[]
+  domains       MailDomain[]
+
+  @@map("mail_sources")
+}
+
+// 套餐方案
+model MailPlan {
+  id            Int              @id @default(autoincrement())
+  sourceId      Int              @map("source_id")
+  name          String           // 方案名称，如"基础版"
+  description   String?          // 方案描述
+  domainLimit   Int              @map("domain_limit")  // 主域名数量限制
+  diskLimitGb   Int              @map("disk_limit_gb") // 存储空间 GB
+  billingCycle  MailBillingCycle @map("billing_cycle") // 计费周期
+  price         Decimal          @db.Decimal(10, 2)    // 价格
+  enabled       Boolean          @default(true)
+  sortOrder     Int              @default(0) @map("sort_order")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  source        MailSource       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  subscriptions MailSubscription[]
+
+  @@index([sourceId, enabled])
+  @@map("mail_plans")
+}
+
+// 用户订阅
+model MailSubscription {
+  id           Int                    @id @default(autoincrement())
+  userId       Int                    @map("user_id")
+  sourceId     Int                    @map("source_id")
+  planId       Int                    @map("plan_id")
+  status       MailSubscriptionStatus @default(active)
+  domainLimit  Int                    @map("domain_limit")  // 冗余存储购买时的限制
+  diskLimitGb  Int                    @map("disk_limit_gb") // 冗余存储购买时的限制
+  expiresAt    DateTime               @map("expires_at")
+  autoRenew    Boolean                @default(false) @map("auto_renew")
+  createdAt    DateTime               @default(now()) @map("created_at")
+  updatedAt    DateTime               @updatedAt @map("updated_at")
+
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source       MailSource             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  plan         MailPlan               @relation(fields: [planId], references: [id], onDelete: Cascade)
+  domains      MailDomain[]
+  affBinding   MailSubscriptionAffBinding?
+  affLogs      AffLog[]
+
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("mail_subscriptions")
+}
+
+// 域名
+model MailDomain {
+  id             Int              @id @default(autoincrement())
+  subscriptionId Int              @map("subscription_id")
+  sourceId       Int              @map("source_id")
+  domain         String           // 域名
+  status         MailDomainStatus @default(pending)
+  adminUsername  String?          @map("admin_username") // CraneMail 返回的管理员账号
+  adminPassword  String?          @map("admin_password") // CraneMail 返回的管理员密码（加密存储）
+  diskUsedMb     Int              @default(0) @map("disk_used_mb") // 已用空间 MB
+  verifiedAt     DateTime?        @map("verified_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  subscription   MailSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  source         MailSource       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  accounts       MailAccount[]
+
+  @@unique([domain, sourceId])
+  @@index([subscriptionId])
+  @@map("mail_domains")
+}
+
+// 邮箱账户
+model MailAccount {
+  id          Int         @id @default(autoincrement())
+  domainId    Int         @map("domain_id")
+  email       String      // 完整邮箱地址
+  username    String      // 用户名部分 (@ 前面)
+  displayName String?     @map("display_name") // 显示名称
+  diskLimitMb Int         @default(2048) @map("disk_limit_mb") // 邮箱容量 MB
+  diskUsedMb  Int         @default(0) @map("disk_used_mb")     // 已用空间 MB
+  isAdmin     Boolean     @default(false) @map("is_admin")     // 是否为域管理员
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  domain      MailDomain  @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, username])
+  @@index([domainId])
+  @@map("mail_accounts")
+}
+
+// 托管余额变动日志
+model HostingBalanceLog {
+  id         Int                 @id @default(autoincrement())
+  userId     Int                 @map("user_id")
+  type       HostingBalanceType
+  actionType HostingActionType?  @map("action_type") // 具体操作类型（开通/续费/升级/销毁等）
+  amount     Decimal             @db.Decimal(10, 2) // 金额（正数）
+  frozen     Boolean             @default(true)     // 是否冻结状态
+  unfreezeAt DateTime?           @map("unfreeze_at") // 解冻时间
+  relatedId  Int?                @map("related_id") // 关联ID（实例ID/提现ID）
+  remark     String?
+
+  // Snapshot fields for data persistence
+  snapshotBuyerName    String?   @map("snapshot_buyer_name")
+  snapshotBuyerEmail   String?   @map("snapshot_buyer_email")
+  snapshotBuyerAvatar  String?   @map("snapshot_buyer_avatar")
+  snapshotInstanceName String?   @map("snapshot_instance_name")
+  snapshotHostName     String?   @map("snapshot_host_name")
+  snapshotPackageName  String?   @map("snapshot_package_name")
+  snapshotPlanName     String?   @map("snapshot_plan_name")
+
+  createdAt  DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, frozen])
+  @@index([unfreezeAt])
+  @@map("hosting_balance_logs")
+}
+
+// 托管余额提现记录
+model HostingWithdrawal {
+  id           Int              @id @default(autoincrement())
+  userId       Int              @map("user_id")
+  amount       Decimal          @db.Decimal(10, 2) // 提现金额
+  feeRate      Decimal          @map("fee_rate") @db.Decimal(5, 4)  // 手续费率（如 0.1000 表示 10%）
+  feeAmount    Decimal          @map("fee_amount") @db.Decimal(10, 2) // 手续费金额
+  actualAmount Decimal          @map("actual_amount") @db.Decimal(10, 2) // 实际到账金额
+  target       WithdrawalTarget
+  usdtAddress  String?          @map("usdt_address") // USDT地址（仅USDT提现）
+  status       WithdrawalStatus @default(pending)
+  rejectReason String?          @map("reject_reason")
+  processedAt  DateTime?        @map("processed_at")
+  processedBy  Int?             @map("processed_by") // 处理的管理员ID
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("hosting_withdrawals")
+}
+
+// 托管用户拉黑关系
+model HostingUserBlock {
+  id            Int      @id @default(autoincrement())
+  blockerId     Int      @map("blocker_id") // 托管用户
+  blockedUserId Int      @map("blocked_user_id") // 被拉黑用户
+  remark        String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  blocker     User @relation("HostingBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedUser User @relation("HostingBlockedUser", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedUserId])
+  @@index([blockedUserId])
+  @@index([blockerId])
+  @@map("hosting_user_blocks")
+}
+
+// 托管专区机主
+model HostingZone {
+  id        Int      @id @default(autoincrement())
+  name      String
+  ownerId   Int      @unique @map("owner_id")
+  logoUrl   String   @map("logo_url") @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner User @relation("HostingZoneOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([active, sortOrder])
+  @@map("hosting_zones")
+}

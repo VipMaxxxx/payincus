@@ -1,0 +1,22 @@
+{
+  "name": "incudal",
+  "version": "1.0.0",
+  "description": "Incudal 容器虚拟化管理平台",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"server,client\" -c \"blue,green\" \"pnpm --filter server dev\" \"pnpm --filter client dev\"",
+    "build": "pnpm --filter client build && pnpm --filter server build",
+    "start": "pnpm --filter server start",
+    "lint": "pnpm -r lint",
+    "migrate:data": "pnpm --filter server migrate:data",
+    "test:prisma": "pnpm --filter server test:prisma"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.14.2"
+}

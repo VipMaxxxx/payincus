@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="精选全球多节点 LXC / KVM 套餐，配置丰富、方案齐全，持续提供高性价比 NAT VPS 选择。">
+  <meta name="keywords" content="Incus, NAT VPS, LXC, KVM, VPS 面板, 云服务器, NAT云主机">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta property="og:site_name" content="Incus">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="基于 Incus 的低价 NAT VPS 平台">
+  <meta property="og:description" content="精选全球多节点 LXC / KVM 套餐，配置丰富、方案齐全，持续提供高性价比 NAT VPS 选择。">
+  <meta property="og:image" content="/incudal_logo.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="基于 Incus 的低价 NAT VPS 平台">
+  <meta name="twitter:description" content="精选全球多节点 LXC / KVM 套餐，配置丰富、方案齐全，持续提供高性价比 NAT VPS 选择。">
+  <meta name="twitter:image" content="/incudal_logo.webp">
+  <link rel="icon" type="image/webp" href="/incudal_logo.webp">
+  <link rel="apple-touch-icon" href="/incudal_logo.webp">
+  <title>基于 Incus 的低价 NAT VPS 平台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    (function () {
+      const theme = localStorage.getItem('theme') || 'system';
+      let resolved = theme;
+      if (theme === 'system') {
+        resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.classList.add(resolved);
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', resolved === 'dark' ? '#0a0a0a' : '#ffffff');
+    })();
+  </script>
+  <style>
+    html.dark body {
+      background: #0a0a0a;
+    }
+
+    html.light body {
+      background: #ffffff;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="70 80 260 260" width="200" height="200">
+  <defs>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <filter id="glow-strong" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <linearGradient id="data-stream" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0" />
+      <stop offset="50%" stop-color="#00E5FF" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#00E5FF" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(0, 10)">
+    
+    <g id="base-platform">
+      <polygon points="200,275 90,220 90,245 200,300" fill="#282B30" />
+      <polygon points="200,275 310,220 310,245 200,300" fill="#1C1E22" />
+      <polygon points="200,275 90,220 200,165 310,220" fill="#3E434A" />
+      
+      <polygon points="200,274 91,220 200,166 309,220" fill="none" stroke="#00E5FF" stroke-width="2" filter="url(#glow)">
+        <animate attributeName="opacity" values="0.2; 0.8; 0.2" dur="3s" repeatCount="indefinite" />
+      </polygon>
+    </g>
+
+    <g transform="translate(200, 210)">
+      <polygon points="0,0 -40,-20 0,-40 40,-20" fill="rgba(0,0,0,0.5)">
+        <animate attributeName="opacity" values="0.6; 0.2; 0.6" dur="4s" repeatCount="indefinite" />
+      </polygon>
+    </g>
+    
+    <g id="node-back">
+      <animateTransform attributeName="transform" type="translate" values="200,210; 200,198; 200,210" dur="4s" repeatCount="indefinite" />
+      
+      <line x1="0" y1="0" x2="0" y2="40" stroke="url(#data-stream)" stroke-width="4" stroke-dasharray="8,4">
+        <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.3; 1; 0.3" dur="2s" repeatCount="indefinite" />
+      </line>
+
+      <polygon points="0,0 -40,-20 -40,-65 0,-45" fill="#E2E5E9" stroke="#111214" stroke-width="2" stroke-linejoin="round" />
+      <polygon points="0,0 40,-20 40,-65 0,-45" fill="#C9CDD3" stroke="#111214" stroke-width="2" stroke-linejoin="round" />
+      <polygon points="0,-45 -40,-65 0,-85 40,-65" fill="#FFFFFF" stroke="#111214" stroke-width="2" stroke-linejoin="round" />
+    </g>
+
+    <g transform="translate(154, 233)">
+      <polygon points="0,0 -40,-20 0,-40 40,-20" fill="rgba(0,0,0,0.4)">
+        <animate attributeName="opacity" values="0.5; 0.2; 0.5" dur="3.5s" repeatCount="indefinite" />
+      </polygon>
+    </g>
+
+    <g id="node-left">
+      <animateTransform attributeName="transform" type="translate" values="154,233; 154,225; 154,233" dur="3.5s" repeatCount="indefinite" />
+      <polygon points="0,0 -40,-20 -40,-65 0,-45" fill="#18191C" />
+      <polygon points="0,0 40,-20 40,-65 0,-45" fill="#0D0D10" />
+      <polygon points="0,-45 -40,-65 0,-85 40,-65" fill="#2A2B2F" />
+
+      <polyline points="-40,-20 -40,-65 0,-85" fill="none" stroke="#00E5FF" stroke-width="2.5" stroke-dasharray="15 80" filter="url(#glow)">
+        <animate attributeName="stroke-dashoffset" from="95" to="-95" dur="2.5s" repeatCount="indefinite" />
+      </polyline>
+    </g>
+
+    <g transform="translate(246, 233)">
+      <polygon points="0,0 -40,-20 0,-40 40,-20" fill="rgba(0,0,0,0.4)">
+        <animate attributeName="opacity" values="0.5; 0.2; 0.5" dur="4.2s" repeatCount="indefinite" />
+      </polygon>
+    </g>
+
+    <g id="node-right">
+      <animateTransform attributeName="transform" type="translate" values="246,233; 246,223; 246,233" dur="4.2s" repeatCount="indefinite" />
+      <polygon points="0,0 -40,-20 -40,-65 0,-45" fill="#18191C" />
+      <polygon points="0,0 40,-20 40,-65 0,-45" fill="#0D0D10" />
+      <polygon points="0,-45 -40,-65 0,-85 40,-65" fill="#2A2B2F" />
+
+      <polyline points="40,-20 40,-65 0,-85" fill="none" stroke="#00E5FF" stroke-width="2.5" stroke-dasharray="15 80" filter="url(#glow)">
+        <animate attributeName="stroke-dashoffset" from="-95" to="95" dur="3s" repeatCount="indefinite" />
+      </polyline>
+    </g>
+
+    <g transform="translate(200, 256)">
+      <polygon points="0,0 -40,-20 0,-40 40,-20" fill="rgba(0,0,0,0.3)">
+        <animate attributeName="opacity" values="0.4; 0.1; 0.4" dur="3.8s" repeatCount="indefinite" />
+      </polygon>
+    </g>
+
+    <g id="node-front">
+      <animateTransform attributeName="transform" type="translate" values="200,256; 200,246; 200,256" dur="3.8s" repeatCount="indefinite" />
+
+      <line x1="-40" y1="-20" x2="0" y2="-40" stroke="#111214" stroke-width="2" opacity="0.4" stroke-dasharray="3,3" />
+      <line x1="40" y1="-20" x2="0" y2="-40" stroke="#111214" stroke-width="2" opacity="0.4" stroke-dasharray="3,3" />
+      <line x1="0" y1="-40" x2="0" y2="-85" stroke="#111214" stroke-width="2" opacity="0.4" stroke-dasharray="3,3" />
+
+      <polygon points="0,0 -40,-20 -40,-65 0,-45" fill="rgba(200,200,200,0.1)" />
+      <polygon points="0,0 40,-20 40,-65 0,-45" fill="rgba(200,200,200,0.05)" />
+      <polygon points="0,-45 -40,-65 0,-85 40,-65" fill="rgba(200,200,200,0.15)" />
+
+      <g stroke="#3E434A" stroke-width="2" stroke-linejoin="round" fill="none" stroke-dasharray="6,4">
+        <animate attributeName="stroke-dashoffset" from="20" to="0" dur="1s" repeatCount="indefinite" />
+        <polygon points="0,0 -40,-20 -40,-65 0,-45" />
+        <polygon points="0,0 40,-20 40,-65 0,-45" />
+        <polygon points="0,-45 -40,-65 0,-85 40,-65" />
+      </g>
+
+      <polygon points="0,0 -40,-20 0,-40 40,-20" fill="#00E5FF" opacity="0.5" filter="url(#glow-strong)">
+        <animateTransform attributeName="transform" type="translate" values="0,-5; 0,-45; 0,-5" dur="2.5s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0; 0.6; 0.6; 0" keyTimes="0; 0.2; 0.8; 1" dur="2.5s" repeatCount="indefinite" />
+      </polygon>
+    </g>
+
+  </g>
+</svg>

@@ -1,0 +1,4 @@
+/incudal-agent
+/dist/*
+*.test
+coverage.out

@@ -1,0 +1,4 @@
+ALTER TABLE "hosts"
+ADD COLUMN "notify_purchase" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "notify_renew" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "notify_destroy" BOOLEAN NOT NULL DEFAULT false;

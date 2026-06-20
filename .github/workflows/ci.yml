@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate Prisma Client
+        run: pnpm --filter server exec prisma generate
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check (client)
+        run: pnpm --filter client type-check
+
+      - name: Type check (server)
+        run: pnpm --filter server type-check
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache-dependency-path: agent/go.mod
+
+      - name: Test Agent
+        working-directory: agent
+        run: go test ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate Prisma Client
+        run: pnpm --filter server exec prisma generate
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+
+      - name: Build
+        run: pnpm build
