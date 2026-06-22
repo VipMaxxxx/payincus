@@ -93,6 +93,9 @@ jobs:
           cp .env.example release/
           cp -r deploy/* release/deploy/
           cp scripts/init-env.sh release/scripts/
+          cp scripts/verify-log-header-exposure.sh release/scripts/
+          cp scripts/verify-live-acceptance.sh release/scripts/
+          cp scripts/verify-production-readiness.sh release/scripts/
           cp scripts/verify-split-host.sh release/scripts/
 
       # ===== 安装生产依赖 =====

@@ -22,7 +22,7 @@
     "smoke:recharge-callback": "tsx scripts/smoke-recharge-callback.ts",
     "smoke:agent-heartbeat": "tsx scripts/smoke-agent-heartbeat.ts",
     "smoke:agent-release": "tsx scripts/smoke-agent-release.ts",
-    "verify:production-db": "tsx scripts/verify-production-db-readiness.ts",
+    "verify:production-db": "node dist/scripts/verify-production-db-readiness.js",
     "test:accounting-route-id-guards": "tsx scripts/test-accounting-route-id-guards.ts",
     "test:agent-auth": "tsx scripts/test-agent-auth.ts",
     "test:agent-route-id-guards": "tsx scripts/test-agent-route-id-guards.ts",

@@ -60,7 +60,8 @@ const verifyLiveAcceptance = readRepoFile('scripts/verify-live-acceptance.sh')
 const rootPackage = readRepoFile('package.json')
 const serverPackage = readRepoFile('server/package.json')
 const serverEnvConfig = readRepoFile('server/src/config/env.ts')
-const verifyProductionDbReadiness = readRepoFile('server/scripts/verify-production-db-readiness.ts')
+const verifyProductionDbReadiness = readRepoFile('server/src/scripts/verify-production-db-readiness.ts')
+const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
 const splitAuthSmoke = readRepoFile('server/scripts/smoke-split-auth.ts')
 const agentReleaseSmoke = readRepoFile('server/scripts/smoke-agent-release.ts')
 const localNginxSplitSmoke = readRepoFile('scripts/smoke-local-nginx-split.sh')
@@ -233,7 +234,17 @@ assert.ok(
   rootPackage.includes('"verify:final-acceptance": "FINAL_ACCEPTANCE_MODE=1 RUN_PRODUCTION_PREFLIGHT=1 RUN_SPLIT_AUTH_SMOKE=1 RUN_AGENT_RELEASE_SMOKE=1 RUN_LOG_HEADER_CHECK=1 REQUIRE_LIVE_PROOF_REFS=1 bash scripts/verify-live-acceptance.sh"'),
   'root package must expose strict final acceptance verification'
 )
-assert.ok(serverPackage.includes('"verify:production-db": "tsx scripts/verify-production-db-readiness.ts"'), 'server package must expose production DB readiness verification')
+assert.ok(
+  serverPackage.includes('"verify:production-db": "node dist/scripts/verify-production-db-readiness.js"'),
+  'server package must run production DB readiness from compiled dist output so release installs do not need tsx/dev sources'
+)
+assert.ok(
+  releaseWorkflow.includes('cp scripts/verify-production-readiness.sh release/scripts/') &&
+    releaseWorkflow.includes('cp scripts/verify-log-header-exposure.sh release/scripts/') &&
+    releaseWorkflow.includes('cp scripts/verify-live-acceptance.sh release/scripts/') &&
+    releaseWorkflow.includes('cp scripts/verify-split-host.sh release/scripts/'),
+  'release workflow must package the root production verification scripts referenced by package.json and README'
+)
 assert.ok(
   readme.includes('pnpm verify:production') &&
     readme.includes('RUN_LIVE_CHECKS=0 pnpm verify:production') &&
