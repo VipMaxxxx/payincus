@@ -810,7 +810,7 @@ run_migrations() {
         source '${ENV_FILE}'
         set +a
         cd '${INSTALL_DIR}/server'
-        npx prisma migrate deploy
+        pnpm exec prisma migrate deploy
     "
 
     log "数据库迁移完成"
@@ -840,7 +840,7 @@ Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
 Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
 
 # 启动前自动执行数据库迁移
-ExecStartPre=/usr/bin/bash -c 'cd ${INSTALL_DIR}/server && npx prisma migrate deploy'
+ExecStartPre=/usr/bin/bash -c 'cd ${INSTALL_DIR}/server && pnpm exec prisma migrate deploy'
 
 # 启动主程序
 ExecStart=/usr/bin/node ${INSTALL_DIR}/server/dist/app.js

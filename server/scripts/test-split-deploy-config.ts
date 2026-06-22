@@ -60,6 +60,7 @@ const verifyLiveAcceptance = readRepoFile('scripts/verify-live-acceptance.sh')
 const rootPackage = readRepoFile('package.json')
 const serverPackage = readRepoFile('server/package.json')
 const serverEnvConfig = readRepoFile('server/src/config/env.ts')
+const prismaConfig = readRepoFile('server/prisma.config.ts')
 const verifyProductionDbReadiness = readRepoFile('server/src/scripts/verify-production-db-readiness.ts')
 const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
 const splitAuthSmoke = readRepoFile('server/scripts/smoke-split-auth.ts')
@@ -198,14 +199,18 @@ assert.ok(
 assert.ok(
   backendServiceExample.includes('Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm') &&
     backendServiceExample.includes('Environment=XDG_CACHE_HOME=/opt/incudal/.cache') &&
-    backendServiceExample.includes('ReadWritePaths=/opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache'),
-  'systemd backend example must keep runtime cache paths writable under ProtectSystem=strict'
+    backendServiceExample.includes('ReadWritePaths=/opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache') &&
+    backendServiceExample.includes('pnpm exec prisma migrate deploy') &&
+    !backendServiceExample.includes('npx prisma'),
+  'systemd backend example must keep runtime cache paths writable and run locked local Prisma migrations under ProtectSystem=strict'
 )
 assert.ok(
   installPanel.includes('Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm') &&
     installPanel.includes('Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache') &&
-    installPanel.includes('ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache'),
-  'install script systemd service must keep runtime cache paths writable under ProtectSystem=strict'
+    installPanel.includes('ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache') &&
+    installPanel.includes('pnpm exec prisma migrate deploy') &&
+    !installPanel.includes('npx prisma'),
+  'install script systemd service must keep runtime cache paths writable and run locked local Prisma migrations under ProtectSystem=strict'
 )
 
 assert.ok(viteConfig.includes('const devPort = Number(process.env.VITE_DEV_PORT || 3000)'), 'Vite dev server must default frontend port to 3000')
@@ -239,11 +244,21 @@ assert.ok(
   'server package must run production DB readiness from compiled dist output so release installs do not need tsx/dev sources'
 )
 assert.ok(
-  releaseWorkflow.includes('cp scripts/verify-production-readiness.sh release/scripts/') &&
+  serverPackage.includes('"prisma": "^7.1.0"') &&
+    serverPackage.indexOf('"prisma": "^7.1.0"') < serverPackage.indexOf('"devDependencies"'),
+  'server package must keep the Prisma CLI in production dependencies because release startup/migration uses prisma migrate deploy'
+)
+assert.ok(
+  releaseWorkflow.includes('cp pnpm-lock.yaml release/') &&
+    releaseWorkflow.includes('pnpm install --prod --frozen-lockfile --ignore-scripts --filter server') &&
+    releaseWorkflow.includes('pnpm --filter server exec prisma generate') &&
+    !releaseWorkflow.includes('npm install --omit=dev') &&
+    !releaseWorkflow.includes('npx prisma') &&
+    releaseWorkflow.includes('cp scripts/verify-production-readiness.sh release/scripts/') &&
     releaseWorkflow.includes('cp scripts/verify-log-header-exposure.sh release/scripts/') &&
     releaseWorkflow.includes('cp scripts/verify-live-acceptance.sh release/scripts/') &&
     releaseWorkflow.includes('cp scripts/verify-split-host.sh release/scripts/'),
-  'release workflow must package the root production verification scripts referenced by package.json and README'
+  'release workflow must package production verification scripts and install server production dependencies through the pnpm lockfile'
 )
 assert.ok(
   readme.includes('pnpm verify:production') &&
@@ -261,6 +276,13 @@ assert.ok(
   serverEnvConfig.includes("process.env.ENV_FILE ? resolve(process.env.ENV_FILE) : ''") &&
     serverEnvConfig.includes('candidateEnvFiles.filter(Boolean)'),
   'server env loader must honor ENV_FILE so production DB readiness can read the same env file as shell preflight'
+)
+assert.ok(
+  !prismaConfig.includes('./src/') &&
+    prismaConfig.includes('process.env.ENV_FILE ? resolve(process.env.ENV_FILE) : ""') &&
+    prismaConfig.includes('resolve(process.cwd(), "../.env")') &&
+    prismaConfig.includes('loadEnv({ path: envPath, override: false, quiet: true })'),
+  'Prisma config must load env files without depending on server/src so release packages can run prisma generate/migrate from compiled artifacts only'
 )
 assert.ok(
   verifyProductionReadiness.includes('require_equals NODE_ENV "$NODE_ENV_VALUE" production') &&

@@ -14,7 +14,7 @@ Environment=HOME=/opt/incudal
 Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm
 Environment=XDG_CACHE_HOME=/opt/incudal/.cache
 
-ExecStartPre=/usr/bin/bash -lc 'cd /opt/incudal/server && npx prisma migrate deploy'
+ExecStartPre=/usr/bin/bash -lc 'cd /opt/incudal/server && pnpm exec prisma migrate deploy'
 ExecStart=/usr/bin/node /opt/incudal/server/dist/app.js
 
 Restart=on-failure

@@ -89,6 +89,7 @@ jobs:
 
           # 复制根配置文件
           cp package.json release/
+          cp pnpm-lock.yaml release/
           cp pnpm-workspace.yaml release/
           cp .env.example release/
           cp -r deploy/* release/deploy/
@@ -100,13 +101,13 @@ jobs:
 
       # ===== 安装生产依赖 =====
       - name: 安装后端生产依赖
-        working-directory: release/server
+        working-directory: release
         run: |
-          # 在发行目录中只安装生产依赖
-          npm install --omit=dev --ignore-scripts
+          # 在发行目录中按锁文件只安装后端生产依赖
+          pnpm install --prod --frozen-lockfile --ignore-scripts --filter server
 
           # 在当前架构的 runner 上原生生成 Prisma Client
-          DATABASE_URL="postgresql://user:pass@localhost:5432/db" npx prisma generate
+          DATABASE_URL="postgresql://user:pass@localhost:5432/db" pnpm --filter server exec prisma generate
 
       # ===== 创建启动辅助脚本 =====
       - name: 创建管理脚本
@@ -121,14 +122,14 @@ jobs:
             start)
               echo "🚀 启动 Incudal..."
               cd "$APP_DIR/server"
-              npx prisma migrate deploy
+              pnpm exec prisma migrate deploy
               cd "$APP_DIR"
               exec node server/dist/app.js
               ;;
             migrate)
               echo "🔄 执行数据库迁移..."
               cd "$APP_DIR/server"
-              npx prisma migrate deploy
+              pnpm exec prisma migrate deploy
               echo "✅ 迁移完成"
               ;;
             version)
