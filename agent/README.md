@@ -113,7 +113,7 @@ assets:
 
 面板运行时不会读取本地 `agent/dist`。它会从 GitHub Release 查询最新 Agent 版本，动态生成 `/api/agent/manifest.json`，并通过 `/api/agent/binary/*` 代理下载对应 Release 资产。
 
-默认 GitHub Release 仓库为 `VipMaxxxx/incudal`。如果部署到 fork 或私有仓库，可设置：
+默认 GitHub Release 仓库为 `VipMaxxxx/payincus`。如果部署到 fork 或私有仓库，可设置：
 
 ```bash
 INCUDAL_AGENT_RELEASE_REPOSITORY="owner/repo"

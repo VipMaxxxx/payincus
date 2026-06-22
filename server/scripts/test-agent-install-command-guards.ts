@@ -13,7 +13,7 @@ const agentBuildReleaseScriptSource = readFileSync(resolve(__dirname, '../../age
 const agentReleaseWorkflowSource = readFileSync(resolve(__dirname, '../../.github/workflows/agent-release.yml'), 'utf8')
 
 assert.ok(
-  agentRouteSource.includes("const defaultAgentReleaseRepository = 'VipMaxxxx/incudal'"),
+  agentRouteSource.includes("const defaultAgentReleaseRepository = 'VipMaxxxx/payincus'"),
   'Agent release proxy must default to the current repository'
 )
 assert.ok(
