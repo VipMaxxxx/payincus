@@ -174,11 +174,11 @@ assert.ok(
     agentReleaseSmoke.includes('INVALID_AGENT_BINARY_NAME'),
   'Agent release smoke must cover install script serving and deterministic binary download rejection paths'
 )
-assert.ok(readme.includes('INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/incudal'), 'README must document the current Agent release repository')
-assert.ok(backendServiceExample.includes('Documentation=https://github.com/VipMaxxxx/incudal'), 'systemd backend example must point documentation to the current repository')
+assert.ok(readme.includes('INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus'), 'README must document the current Agent release repository')
+assert.ok(backendServiceExample.includes('Documentation=https://github.com/VipMaxxxx/payincus'), 'systemd backend example must point documentation to the current repository')
 assert.ok(
-  installPanel.includes('readonly GITHUB_REPO="VipMaxxxx/incudal"') &&
-    installPanel.includes('# 项目地址: https://github.com/VipMaxxxx/incudal'),
+  installPanel.includes('readonly GITHUB_REPO="VipMaxxxx/payincus"') &&
+    installPanel.includes('# 项目地址: https://github.com/VipMaxxxx/payincus'),
   'install script must download panel releases from the current repository'
 )
 assert.ok(verifySplitHost.includes('fetch_url "frontend proxied API" "$FRONTEND_URL/api/health"'), 'split verify script must verify frontend /api proxy')
