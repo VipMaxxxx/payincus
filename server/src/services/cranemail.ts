@@ -4,6 +4,12 @@
  */
 
 import type { MailSource } from '@prisma/client'
+import { sanitizeObject, sanitizeTokensInString } from '../lib/log-sanitizer.js'
+import { assertSafeHttpUrl } from '../lib/outbound-security.js'
+import { readLimitedTextResponse } from '../lib/http-response.js'
+
+const CRANEMAIL_API_TIMEOUT_MS = 30_000
+const CRANEMAIL_MAX_RESPONSE_BYTES = 1024 * 1024
 
 interface CraneMailResponse {
   // 新版 API 格式
@@ -22,26 +28,28 @@ interface CraneMailResponse {
  */
 async function callApi(source: MailSource, action: string, data: Record<string, any>): Promise<any> {
   // 构建 API URL： https://namecrane.com/index.php?m=cranemail&action=api/{action}
-  const baseUrl = source.apiUrl.replace(/\/$/, '') // 移除末尾斜杠
+  const safeBaseUrl = await assertSafeHttpUrl(source.apiUrl, 'CraneMail API URL')
+  const baseUrl = safeBaseUrl.toString().replace(/\/+$/, '') // 移除末尾斜杠
   const apiUrl = `${baseUrl}/index.php?m=cranemail&action=api/${action}`
   
   const bodyData = new URLSearchParams(data).toString()
   
   console.log(`[CraneMail] Calling API: ${apiUrl}`)
-  console.log(`[CraneMail] Request body: ${bodyData}`)
+  console.log('[CraneMail] Request payload:', sanitizeObject({ action, data }))
   
   const response = await fetch(apiUrl, {
     method: 'POST',
+    signal: AbortSignal.timeout(CRANEMAIL_API_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-API-KEY': source.apiKey
     },
-    body: bodyData
+    body: bodyData,
+    redirect: 'manual'
   })
 
-  const responseText = await response.text()
+  const responseText = await readLimitedTextResponse(response, 'CraneMail API response', CRANEMAIL_MAX_RESPONSE_BYTES)
   console.log(`[CraneMail] Response status: ${response.status}`)
-  console.log(`[CraneMail] Response body: ${responseText}`)
 
   if (!response.ok) {
     console.error(`[CraneMail] API error: ${response.status} ${response.statusText}`)
@@ -52,14 +60,20 @@ async function callApi(source: MailSource, action: string, data: Record<string, 
   try {
     result = JSON.parse(responseText) as CraneMailResponse
   } catch {
-    console.error(`[CraneMail] Invalid JSON response: ${responseText}`)
-    throw new Error(`CraneMail API returned invalid JSON: ${responseText.substring(0, 200)}`)
+    console.error('[CraneMail] Invalid JSON response', {
+      action,
+      status: response.status,
+      bodyLength: responseText.length
+    })
+    throw new Error('CraneMail API returned invalid JSON')
   }
+
+  console.log('[CraneMail] Response payload:', sanitizeObject({ action, result }))
   
   // 处理新版 API 格式 {status: boolean, errors?: {...}}
   if (result.status === false) {
     const errorMsg = result.errors 
-      ? Object.entries(result.errors).map(([k, v]) => `${k}: ${v}`).join('; ')
+      ? Object.entries(sanitizeObject(result.errors)).map(([k, v]) => `${k}: ${String(v)}`).join('; ')
       : 'Unknown error'
     console.error(`[CraneMail] API returned error: ${errorMsg}`)
     throw new Error(errorMsg)
@@ -67,8 +81,9 @@ async function callApi(source: MailSource, action: string, data: Record<string, 
   
   // 处理旧版 API 格式 {result: 'success'|'error', error?: string}
   if (result.result === 'error') {
-    console.error(`[CraneMail] API returned error: ${result.error}`)
-    throw new Error(result.error || 'Unknown CraneMail API error')
+    const sanitizedError = sanitizeTokensInString(result.error || 'Unknown CraneMail API error')
+    console.error(`[CraneMail] API returned error: ${sanitizedError}`)
+    throw new Error(sanitizedError)
   }
 
   // 新版 API 数据在 data 字段，旧版在 info 字段

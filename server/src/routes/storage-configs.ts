@@ -8,6 +8,7 @@ import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { encryptSensitiveData } from '../lib/security.js'
 import { StorageFactory } from '../storage/factory.js'
+import { normalizeStorageBasePath } from '../storage/path.js'
 import type { StorageType } from '@prisma/client'
 import { assertSafeStorageTarget, OutboundTargetValidationError } from '../lib/outbound-security.js'
 
@@ -33,6 +34,17 @@ interface UpdateStorageConfigBody {
     basePath?: string | null
     extra?: Record<string, unknown> | null
     isDefault?: boolean
+}
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveRouteId(value: string): number | null {
+    if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+        return null
+    }
+
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) ? parsed : null
 }
 
 export default async function storageConfigRoutes(fastify: FastifyInstance) {
@@ -103,6 +115,7 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
 
         try {
             await validateStorageTarget(type, host)
+            normalizeStorageBasePath(basePath)
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(err)
             return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, errorMessage))
@@ -111,6 +124,7 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
         try {
             // 加密密码
             const encryptedPassword = password ? encryptSensitiveData(password) : null
+            const normalizedBasePath = normalizeStorageBasePath(basePath)
 
             const config = await db.createStorageConfig({
                 userId: request.user.id,
@@ -120,7 +134,7 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
                 port,
                 username,
                 password: encryptedPassword,
-                basePath,
+                basePath: normalizedBasePath || null,
                 extra,
                 isDefault
             })
@@ -178,8 +192,8 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
         Params: { id: string }
         Body: UpdateStorageConfigBody
     }>, reply: FastifyReply) => {
-        const id = Number(request.params.id)
-        if (isNaN(id)) {
+        const id = parsePositiveRouteId(request.params.id)
+        if (!id) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 
@@ -200,18 +214,16 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
             return reply.code(400).send(apiError(ErrorCode.STORAGE_TYPE_NOT_SUPPORTED, 'S3 存储暂未实现'))
         }
 
+        let normalizedBasePathPatch: string | null | undefined
         try {
-            const updateData: Record<string, unknown> = { ...rest }
-            if (type) updateData.type = type
-
-            // 如果提供了新密码，加密它
-            if (password !== undefined) {
-                updateData.password = password ? encryptSensitiveData(password) : null
-            }
-
             const nextType = (type || existing.type) as 'WEBDAV' | 'FTP' | 'SFTP' | 'S3'
             const nextHost = request.body.host || existing.host
             await validateStorageTarget(nextType, nextHost)
+            if (request.body.basePath !== undefined) {
+                normalizedBasePathPatch = request.body.basePath === null
+                    ? null
+                    : normalizeStorageBasePath(request.body.basePath) || null
+            }
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(err)
             return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, errorMessage))
@@ -224,6 +236,9 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
             // 如果提供了新密码，加密它
             if (password !== undefined) {
                 updateData.password = password ? encryptSensitiveData(password) : null
+            }
+            if (normalizedBasePathPatch !== undefined) {
+                updateData.basePath = normalizedBasePathPatch
             }
 
             const config = await db.updateStorageConfig(id, updateData as Parameters<typeof db.updateStorageConfig>[1])
@@ -259,8 +274,8 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
     fastify.delete<{ Params: { id: string } }>('/:id', {
         onRequest: [fastify.authenticate]
     }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-        const id = Number(request.params.id)
-        if (isNaN(id)) {
+        const id = parsePositiveRouteId(request.params.id)
+        if (!id) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 
@@ -306,8 +321,8 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
     fastify.post<{ Params: { id: string } }>('/:id/test', {
         onRequest: [fastify.authenticate]
     }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-        const id = Number(request.params.id)
-        if (isNaN(id)) {
+        const id = parsePositiveRouteId(request.params.id)
+        if (!id) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 
@@ -340,8 +355,8 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
     fastify.post<{ Params: { id: string } }>('/:id/set-default', {
         onRequest: [fastify.authenticate]
     }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-        const id = Number(request.params.id)
-        if (isNaN(id)) {
+        const id = parsePositiveRouteId(request.params.id)
+        if (!id) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 

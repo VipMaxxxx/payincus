@@ -7,6 +7,105 @@ import * as db from '../db/index.js'
 import { createLog } from '../db/logs.js'
 import type { LotteryPrizeType, LotteryRecordStatus } from '@prisma/client'
 
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const LOTTERY_PRIZE_TYPES = new Set<LotteryPrizeType>([
+  'nothing',
+  'points',
+  'balance',
+  'badge',
+  'instance',
+  'cpu',
+  'memory',
+  'disk',
+  'traffic'
+])
+const LOTTERY_RECORD_STATUSES = new Set<LotteryRecordStatus>(['pending', 'delivered', 'claimed'])
+const NOTIFICATION_TYPES = new Set(['telegram', 'discord', 'webhook'])
+const USER_POINTS_ORDER_BY_FIELDS = new Set(['points', 'totalEarned', 'totalSpent'])
+const SORT_ORDERS = new Set(['asc', 'desc'])
+const MAX_POINTS_ADJUST_AMOUNT = 1_000_000
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number {
+  if (!value || !POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) {
+    return fallback
+  }
+
+  return Math.min(parsed, max)
+}
+
+function parseOptionalPositiveId(value: string | undefined): number | undefined | null {
+  if (!value) return undefined
+  return parsePositiveRouteId(value)
+}
+
+function parseOptionalPositiveBodyId(value: unknown): number | undefined | null {
+  if (value === undefined || value === null) return undefined
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
+function parseOptionalNonNegativeIntegerBody(value: unknown): number | undefined | null {
+  if (value === undefined || value === null) return undefined
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+}
+
+function parseIntegerBody(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : null
+}
+
+function parseOptionalIntegerBody(value: unknown, fallback: number): number {
+  if (value === undefined || value === null) return fallback
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : fallback
+}
+
+function parseOptionalFiniteNumber(value: unknown): number | undefined | null {
+  if (value === undefined || value === null) return undefined
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function parseLotteryPrizeType(value: unknown): LotteryPrizeType | null {
+  return typeof value === 'string' && LOTTERY_PRIZE_TYPES.has(value as LotteryPrizeType)
+    ? value as LotteryPrizeType
+    : null
+}
+
+function parseOptionalLotteryPrizeType(value: string | undefined): LotteryPrizeType | undefined | null {
+  if (!value) return undefined
+  return LOTTERY_PRIZE_TYPES.has(value as LotteryPrizeType) ? value as LotteryPrizeType : null
+}
+
+function parseOptionalLotteryRecordStatus(value: string | undefined): LotteryRecordStatus | undefined | null {
+  if (!value) return undefined
+  return LOTTERY_RECORD_STATUSES.has(value as LotteryRecordStatus) ? value as LotteryRecordStatus : null
+}
+
+function parseNotificationType(value: unknown): string | null {
+  return typeof value === 'string' && NOTIFICATION_TYPES.has(value) ? value : null
+}
+
+function parseUserPointsOrderBy(value: string | undefined): 'points' | 'totalEarned' | 'totalSpent' | null {
+  if (!value) return 'points'
+  return USER_POINTS_ORDER_BY_FIELDS.has(value) ? value as 'points' | 'totalEarned' | 'totalSpent' : null
+}
+
+function parseSortOrder(value: string | undefined): 'asc' | 'desc' | null {
+  if (!value) return 'desc'
+  return SORT_ORDERS.has(value) ? value as 'asc' | 'desc' : null
+}
+
 function normalizeOptionalText(value: unknown): string | null | undefined {
   if (value === undefined) return undefined
   if (value === null) return null
@@ -49,8 +148,8 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     const { page = '1', pageSize = '20', isActive } = request.query
 
     const result = await db.getAllLotteries({
-      page: Number(page),
-      pageSize: Number(pageSize),
+      page: parsePositiveIntegerQuery(page, 1, 100000),
+      pageSize: parsePositiveIntegerQuery(pageSize, 20, 100),
       isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined
     })
 
@@ -109,19 +208,20 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     }
   }>, reply: FastifyReply) => {
     const { name, description, costPoints, isActive, startAt, endAt } = request.body
+    const parsedCostPoints = parseIntegerBody(costPoints)
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return reply.code(400).send({ error: 'NAME_REQUIRED', message: 'Lottery name is required' })
     }
 
-    if (!costPoints || costPoints < 1) {
+    if (!parsedCostPoints || parsedCostPoints < 1) {
       return reply.code(400).send({ error: 'INVALID_COST', message: 'Cost points must be at least 1' })
     }
 
     const lottery = await db.createLottery({
       name: name.trim(),
       description: description?.trim(),
-      costPoints,
+      costPoints: parsedCostPoints,
       isActive,
       startAt: startAt ? new Date(startAt) : undefined,
       endAt: endAt ? new Date(endAt) : undefined,
@@ -165,9 +265,9 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       endAt?: string | null
     }
   }>, reply: FastifyReply) => {
-    const lotteryId = Number(request.params.id)
+    const lotteryId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(lotteryId)) {
+    if (!lotteryId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
     }
 
@@ -177,11 +277,16 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     }
 
     const { name, description, costPoints, isActive, startAt, endAt } = request.body
+    const parsedCostPoints = costPoints === undefined ? undefined : parseIntegerBody(costPoints)
+
+    if (parsedCostPoints !== undefined && (!parsedCostPoints || parsedCostPoints < 1)) {
+      return reply.code(400).send({ error: 'INVALID_COST', message: 'Cost points must be at least 1' })
+    }
 
     await db.updateLottery(lotteryId, {
       name: name?.trim(),
       description: description?.trim(),
-      costPoints,
+      costPoints: parsedCostPoints,
       isActive,
       startAt: startAt === null ? null : startAt ? new Date(startAt) : undefined,
       endAt: endAt === null ? null : endAt ? new Date(endAt) : undefined
@@ -204,9 +309,9 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
   fastify.delete<{ Params: { id: string } }>('/lotteries/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const lotteryId = Number(request.params.id)
+    const lotteryId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(lotteryId)) {
+    if (!lotteryId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
     }
 
@@ -234,9 +339,9 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
   fastify.get<{ Params: { id: string } }>('/lotteries/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const lotteryId = Number(request.params.id)
+    const lotteryId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(lotteryId)) {
+    if (!lotteryId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
     }
 
@@ -312,9 +417,9 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       instanceDesc?: string
     }
   }>, reply: FastifyReply) => {
-    const lotteryId = Number(request.params.id)
+    const lotteryId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(lotteryId)) {
+    if (!lotteryId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
     }
 
@@ -324,32 +429,48 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     }
 
     const { name, type, value, probability, totalQuantity, displayOrder, instanceDesc } = request.body
-    const normalizedValue = type === 'badge' || type === 'nothing' ? 0 : value
+    const prizeType = parseLotteryPrizeType(type)
+    const parsedProbability = parseOptionalFiniteNumber(probability)
+    const parsedValue = value === undefined ? undefined : parseIntegerBody(value)
+    const parsedTotalQuantity = totalQuantity === undefined ? undefined : parseOptionalPositiveBodyId(totalQuantity)
+    const parsedDisplayOrder = parseOptionalIntegerBody(displayOrder, 0)
 
     if (!name || typeof name !== 'string') {
       return reply.code(400).send({ error: 'NAME_REQUIRED', message: 'Prize name is required' })
     }
 
-    if (probability < 0 || probability > 100) {
+    if (!prizeType) {
+      return reply.code(400).send({ error: 'INVALID_PRIZE_TYPE', message: 'Invalid prize type' })
+    }
+
+    if (parsedProbability === null || parsedProbability === undefined || parsedProbability < 0 || parsedProbability > 100) {
       return reply.code(400).send({ error: 'INVALID_PROBABILITY', message: 'Probability must be between 0 and 100' })
     }
 
     // 只有 balance 和 instance 类型可以设置总数量，points 和 nothing 类型不能设置数量
-    if ((type === 'points' || type === 'nothing') && totalQuantity !== undefined && totalQuantity !== null) {
+    if ((prizeType === 'points' || prizeType === 'nothing') && parsedTotalQuantity !== undefined && parsedTotalQuantity !== null) {
       return reply.code(400).send({ 
         error: 'INVALID_QUANTITY', 
         message: 'Points and nothing prizes cannot have quantity limits' 
       })
     }
 
+    if (parsedTotalQuantity === null) {
+      return reply.code(400).send({ error: 'INVALID_QUANTITY', message: 'Quantity must be a positive integer' })
+    }
+
+    if (prizeType !== 'badge' && prizeType !== 'nothing' && prizeType !== 'instance' && (parsedValue === null || parsedValue === undefined || parsedValue < 0)) {
+      return reply.code(400).send({ error: 'INVALID_VALUE', message: 'Prize value must be a non-negative integer' })
+    }
+
     const prize = await db.createPrize({
       lotteryId,
       name: name.trim(),
-      type,
-      value: normalizedValue,
-      probability,
-      totalQuantity,
-      displayOrder,
+      type: prizeType,
+      value: prizeType === 'badge' || prizeType === 'nothing' || prizeType === 'instance' ? 0 : parsedValue ?? 0,
+      probability: parsedProbability,
+      totalQuantity: parsedTotalQuantity,
+      displayOrder: parsedDisplayOrder,
       instanceDesc: instanceDesc?.trim()
     })
 
@@ -394,9 +515,9 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       instanceDesc?: string | null
     }
   }>, reply: FastifyReply) => {
-    const prizeId = Number(request.params.id)
+    const prizeId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(prizeId)) {
+    if (!prizeId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid prize ID' })
     }
 
@@ -406,30 +527,51 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     }
 
     const { name, type, value, probability, totalQuantity, remainQuantity, displayOrder, instanceDesc } = request.body
+    const parsedType = type === undefined ? undefined : parseLotteryPrizeType(type)
+    const parsedProbability = parseOptionalFiniteNumber(probability)
+    const parsedValue = value === undefined ? undefined : parseIntegerBody(value)
+    const parsedTotalQuantity = totalQuantity === undefined || totalQuantity === null ? totalQuantity : parseOptionalPositiveBodyId(totalQuantity)
+    const parsedRemainQuantity = remainQuantity === undefined || remainQuantity === null ? remainQuantity : parseOptionalNonNegativeIntegerBody(remainQuantity)
+    const parsedDisplayOrder = displayOrder === undefined ? undefined : parseIntegerBody(displayOrder)
 
-    if (probability !== undefined && (probability < 0 || probability > 100)) {
+    if (parsedType === null) {
+      return reply.code(400).send({ error: 'INVALID_PRIZE_TYPE', message: 'Invalid prize type' })
+    }
+
+    if (parsedProbability === null || (parsedProbability !== undefined && (parsedProbability < 0 || parsedProbability > 100))) {
       return reply.code(400).send({ error: 'INVALID_PROBABILITY', message: 'Probability must be between 0 and 100' })
     }
 
     // 检查奖品类型与数量限制的匹配性
-    const prizeType = type ?? existing.type
-    const normalizedValue = prizeType === 'badge' || prizeType === 'nothing' ? 0 : value
+    const prizeType = parsedType ?? existing.type
     if ((prizeType === 'points' || prizeType === 'nothing') && 
-        (totalQuantity !== undefined && totalQuantity !== null)) {
+        (parsedTotalQuantity !== undefined && parsedTotalQuantity !== null)) {
       return reply.code(400).send({ 
         error: 'INVALID_QUANTITY', 
         message: 'Points and nothing prizes cannot have quantity limits' 
       })
     }
 
+    if (parsedTotalQuantity === null || parsedRemainQuantity === null) {
+      return reply.code(400).send({ error: 'INVALID_QUANTITY', message: 'Quantity must be a positive integer or null' })
+    }
+
+    if (value !== undefined && prizeType !== 'badge' && prizeType !== 'nothing' && (parsedValue === null || parsedValue === undefined || parsedValue < 0)) {
+      return reply.code(400).send({ error: 'INVALID_VALUE', message: 'Prize value must be a non-negative integer' })
+    }
+
+    if (parsedDisplayOrder === null) {
+      return reply.code(400).send({ error: 'INVALID_DISPLAY_ORDER', message: 'Display order must be an integer' })
+    }
+
     await db.updatePrize(prizeId, {
       name: name?.trim(),
-      type,
-      value: normalizedValue,
-      probability,
-      totalQuantity,
-      remainQuantity,
-      displayOrder,
+      type: parsedType ?? undefined,
+      value: prizeType === 'badge' || prizeType === 'nothing' ? 0 : parsedValue ?? undefined,
+      probability: parsedProbability ?? undefined,
+      totalQuantity: parsedTotalQuantity,
+      remainQuantity: parsedRemainQuantity,
+      displayOrder: parsedDisplayOrder ?? undefined,
       instanceDesc
     })
 
@@ -450,9 +592,9 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
   fastify.delete<{ Params: { id: string } }>('/prizes/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const prizeId = Number(request.params.id)
+    const prizeId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(prizeId)) {
+    if (!prizeId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid prize ID' })
     }
 
@@ -500,9 +642,9 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       notifyInstance: boolean
     }
   }>, reply: FastifyReply) => {
-    const lotteryId = Number(request.params.id)
+    const lotteryId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(lotteryId)) {
+    if (!lotteryId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
     }
 
@@ -513,13 +655,14 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
 
     const { enabled, type, config, notifyBalance, notifyInstance } = request.body
 
-    if (!['telegram', 'discord', 'webhook'].includes(type)) {
+    const notificationType = parseNotificationType(type)
+    if (!notificationType) {
       return reply.code(400).send({ error: 'INVALID_TYPE', message: 'Invalid notification type' })
     }
 
     await db.upsertLotteryNotificationConfig(lotteryId, {
       enabled,
-      type,
+      type: notificationType,
       config,
       notifyBalance,
       notifyInstance
@@ -561,15 +704,28 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       status?: string
       search?: string
     }
-  }>) => {
+  }>, reply: FastifyReply) => {
     const { page = '1', pageSize = '20', lotteryId, prizeType, status, search } = request.query
+    const filterLotteryId = parseOptionalPositiveId(lotteryId)
+    const filterPrizeType = parseOptionalLotteryPrizeType(prizeType)
+    const filterStatus = parseOptionalLotteryRecordStatus(status)
+
+    if (filterLotteryId === null) {
+      return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
+    }
+    if (filterPrizeType === null) {
+      return reply.code(400).send({ error: 'INVALID_PRIZE_TYPE', message: 'Invalid prize type' })
+    }
+    if (filterStatus === null) {
+      return reply.code(400).send({ error: 'INVALID_STATUS', message: 'Invalid record status' })
+    }
 
     const result = await db.getAllLotteryRecords({
-      page: Number(page),
-      pageSize: Number(pageSize),
-      lotteryId: lotteryId ? Number(lotteryId) : undefined,
-      prizeType: prizeType as LotteryPrizeType | undefined,
-      status: status as LotteryRecordStatus | undefined,
+      page: parsePositiveIntegerQuery(page, 1, 100000),
+      pageSize: parsePositiveIntegerQuery(pageSize, 20, 100),
+      lotteryId: filterLotteryId,
+      prizeType: filterPrizeType,
+      status: filterStatus,
       search
     })
 
@@ -612,10 +768,14 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     Params: { id: string }
     Body: { ticketId?: number }
   }>, reply: FastifyReply) => {
-    const recordId = Number(request.params.id)
+    const recordId = parsePositiveRouteId(request.params.id)
+    const ticketId = parseOptionalPositiveBodyId(request.body.ticketId)
 
-    if (isNaN(recordId)) {
+    if (!recordId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid record ID' })
+    }
+    if (ticketId === null) {
+      return reply.code(400).send({ error: 'INVALID_TICKET_ID', message: 'Invalid ticket ID' })
     }
 
     const record = await db.prisma.lotteryRecord.findUnique({
@@ -639,7 +799,7 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       recordId,
       'delivered',
       request.user.id,
-      request.body.ticketId
+      ticketId
     )
 
     await createLog(
@@ -676,15 +836,24 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       orderBy?: string
       order?: string
     }
-  }>) => {
+  }>, reply: FastifyReply) => {
     const { page = '1', pageSize = '20', search, orderBy = 'points', order = 'desc' } = request.query
+    const normalizedOrderBy = parseUserPointsOrderBy(orderBy)
+    const normalizedOrder = parseSortOrder(order)
+
+    if (!normalizedOrderBy) {
+      return reply.code(400).send({ error: 'INVALID_ORDER_BY', message: 'Invalid order by field' })
+    }
+    if (!normalizedOrder) {
+      return reply.code(400).send({ error: 'INVALID_ORDER', message: 'Invalid sort order' })
+    }
 
     const result = await db.getAllUserPoints({
-      page: Number(page),
-      pageSize: Number(pageSize),
+      page: parsePositiveIntegerQuery(page, 1, 100000),
+      pageSize: parsePositiveIntegerQuery(pageSize, 20, 100),
       search,
-      orderBy: orderBy as 'points' | 'totalEarned' | 'totalSpent',
-      order: order as 'asc' | 'desc'
+      orderBy: normalizedOrderBy,
+      order: normalizedOrder
     })
 
     return {
@@ -720,16 +889,17 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     Params: { userId: string }
     Body: { amount: number; remark: string }
   }>, reply: FastifyReply) => {
-    const userId = Number(request.params.userId)
+    const userId = parsePositiveRouteId(request.params.userId)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid user ID' })
     }
 
     const { amount, remark } = request.body
+    const parsedAmount = parseIntegerBody(amount)
 
-    if (!amount || amount === 0) {
-      return reply.code(400).send({ error: 'INVALID_AMOUNT', message: 'Amount must be non-zero' })
+    if (!parsedAmount || Math.abs(parsedAmount) > MAX_POINTS_ADJUST_AMOUNT) {
+      return reply.code(400).send({ error: 'INVALID_AMOUNT', message: 'Amount must be a non-zero safe integer within the allowed range' })
     }
 
     if (!remark || typeof remark !== 'string' || remark.trim().length === 0) {
@@ -747,7 +917,7 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
 
     const result = await db.adminAdjustPoints(
       userId,
-      amount,
+      parsedAmount,
       `[管理员${request.user.username}] ${remark.trim()}`
     )
 
@@ -759,7 +929,7 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       request.user.id,
       'admin',
       'lottery.points.adjust',
-      `Adjusted user "${user.username}" points by ${amount} (New: ${result.newPoints}): ${remark}`,
+      `Adjusted user "${user.username}" points by ${parsedAmount} (New: ${result.newPoints}): ${remark}`,
       'success'
     )
 
@@ -772,9 +942,9 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
   fastify.get<{ Params: { userId: string } }>('/user-points/:userId', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
-    const userId = Number(request.params.userId)
+    const userId = parsePositiveRouteId(request.params.userId)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid user ID' })
     }
 
@@ -821,17 +991,17 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     Params: { userId: string }
     Querystring: { page?: string; pageSize?: string }
   }>, reply: FastifyReply) => {
-    const userId = Number(request.params.userId)
+    const userId = parsePositiveRouteId(request.params.userId)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid user ID' })
     }
 
     const { page = '1', pageSize = '20' } = request.query
 
     const result = await db.getPointsLogs(userId, {
-      page: Number(page),
-      pageSize: Number(pageSize)
+      page: parsePositiveIntegerQuery(page, 1, 100000),
+      pageSize: parsePositiveIntegerQuery(pageSize, 20, 100)
     })
 
     return {
@@ -887,6 +1057,7 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     const title = requireText(request.body.title)
     const nameZh = requireText(request.body.nameZh)
     const description = requireText(request.body.description)
+    const displayOrder = parseOptionalIntegerBody(request.body.displayOrder, 0)
 
     if (!id || !isValidCatalogId(id)) {
       return reply.code(400).send({ error: 'INVALID_SERIES_ID', message: 'Invalid series ID' })
@@ -904,7 +1075,7 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
         description,
         sourceId: normalizeOptionalText(request.body.sourceId),
         sourceLabel: normalizeOptionalText(request.body.sourceLabel),
-        displayOrder: Number(request.body.displayOrder ?? 0),
+        displayOrder,
         isActive: request.body.isActive ?? true
       })
 
@@ -1040,6 +1211,7 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     const assetUrl = requireText(request.body.assetUrl)
     const assetUrlDark = normalizeOptionalText(request.body.assetUrlDark)
     const assetUrlLight = normalizeOptionalText(request.body.assetUrlLight)
+    const displayOrder = parseOptionalIntegerBody(request.body.displayOrder, 0)
 
     if (!id || !isValidCatalogId(id)) {
       return reply.code(400).send({ error: 'INVALID_BADGE_ID', message: 'Invalid badge ID' })
@@ -1063,7 +1235,7 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
         assetUrl,
         assetUrlDark,
         assetUrlLight,
-        displayOrder: Number(request.body.displayOrder ?? 0),
+        displayOrder,
         isActive: request.body.isActive ?? true
       })
 

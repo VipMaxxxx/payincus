@@ -6,6 +6,7 @@ import api from '@/api'
 import { useToast } from '@/stores/toast'
 import type { TelegramAdminBinding, TelegramAdminBindingsResponse } from '@/types/api'
 import { systemSettingsNavigationItems } from '@/constants/adminSettings'
+import { buildPublicApiUrl, getFrontendOrigin } from '@/utils/api-url'
 
 const route = useRoute()
 const toast = useToast()
@@ -124,19 +125,7 @@ const footerTelegramLinkKeys = ['footer_telegram_link']
 const maskedSecretPlaceholder = '********'
 const telegramWebhookSecretPattern = /^[A-Za-z0-9_-]{1,256}$/
 
-const currentSiteOrigin = computed(() => {
-  if (typeof window === 'undefined') {
-    return ''
-  }
-  return window.location.origin
-})
-
-const telegramWebhookUrl = computed(() => {
-  if (!currentSiteOrigin.value) {
-    return '/api/telegram/webhook'
-  }
-  return `${currentSiteOrigin.value}/api/telegram/webhook`
-})
+const telegramWebhookUrl = computed(() => buildPublicApiUrl('/telegram/webhook'))
 
 const telegramWebhookSecretError = computed(() => {
   const value = form.value.telegram_webhook_secret
@@ -340,7 +329,7 @@ async function setupTelegramWebhook() {
   settingTelegramWebhook.value = true
   try {
     const response = await api.telegram.setupWebhook({
-      baseUrl: currentSiteOrigin.value || undefined
+      baseUrl: getFrontendOrigin()
     })
     toast.success(response.commandsSynced ? 'Telegram Webhook 和机器人指令已设置' : 'Telegram Webhook 已设置')
     telegramWebhookInfo.value = {

@@ -11,7 +11,8 @@ import {
     getClientIP,
     checkIPConnectionLimit,
     checkUserConnectionLimit,
-    registerConnection
+    registerConnection,
+    validateWebSocketOrigin
 } from '../lib/websocket-security.js'
 import {
     createTerminalSession,
@@ -27,9 +28,20 @@ const TERMINAL_LIMITS = {
     maxPerInstance: 3,  // 单实例最多 3 个终端连接
 }
 
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
 // 注意：不再维护独立的 instanceTerminalCount 计数器
 // 统一使用 terminal-proxy.ts 的 getActiveSessionStats 来获取实时连接数
 // 这样可以避免 closeInstanceSessions 等操作导致的计数不同步问题
+
+function parsePositiveRouteId(value: string): number | null {
+    if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+        return null
+    }
+
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) ? parsed : null
+}
 
 /**
  * 安全发送 WebSocket 消息（捕获发送异常）
@@ -80,14 +92,36 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
     }>('/:id/terminal-ticket', {
         onRequest: [fastify.authenticate]
     }, async (request, reply) => {
-        const instanceId = Number(request.params.id)
-        if (isNaN(instanceId)) {
+        const instanceId = parsePositiveRouteId(request.params.id)
+        if (instanceId === null) {
             return reply.code(400).send({ error: 'Invalid instance ID', code: 'INVALID_ID' })
         }
 
         const issuedAt = request.user.iat
         if (!issuedAt) {
             return reply.code(401).send({ error: 'Unauthorized', code: 'UNAUTHORIZED' })
+        }
+
+        const dbUser = await db.findUserById(request.user.id)
+        if (!dbUser || dbUser.status === 'banned') {
+            return reply.code(401).send({ error: 'Unauthorized', code: 'UNAUTHORIZED' })
+        }
+
+        const instance = await db.getInstanceById(instanceId)
+        if (!instance) {
+            return reply.code(404).send({ error: 'Instance not found', code: 'INSTANCE_NOT_FOUND' })
+        }
+
+        const hasPermission = await checkTerminalPermission(
+            { id: dbUser.id, role: dbUser.role },
+            instance
+        )
+        if (!hasPermission) {
+            return reply.code(403).send({ error: 'Forbidden', code: 'FORBIDDEN' })
+        }
+
+        if (instance.status !== 'running') {
+            return reply.code(400).send({ error: 'Instance must be running to access terminal', code: 'INSTANCE_NOT_RUNNING' })
         }
 
         const ticket = generateTerminalAccessTicket(
@@ -114,17 +148,33 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
         Querystring: { ticket?: string }
     }>) => {
         const { id } = request.params
-        const instanceId = Number(id)
+        const instanceId = parsePositiveRouteId(id)
         const clientIP = getClientIP(request)
 
         // 1. 验证实例 ID
-        if (isNaN(instanceId)) {
+        if (instanceId === null) {
             safeSend(socket, JSON.stringify({ type: 'error', code: 'INVALID_ID', message: 'Invalid instance ID' }))
             socket.close(4000, 'Invalid instance ID')
             return
         }
 
-        // 2. IP 连接限制检查
+        // 2. WebSocket Origin 检查
+        const originCheck = validateWebSocketOrigin(request)
+        if (!originCheck.allowed) {
+            request.log.warn(
+                { origin: originCheck.origin || request.headers.origin || null, reason: originCheck.reason },
+                'Rejected terminal WebSocket origin'
+            )
+            safeSend(socket, JSON.stringify({
+                type: 'error',
+                code: 'ORIGIN_NOT_ALLOWED',
+                message: 'WebSocket origin is not allowed'
+            }))
+            socket.close(4003, 'Origin not allowed')
+            return
+        }
+
+        // 3. IP 连接限制检查
         const ipCheck = checkIPConnectionLimit(clientIP)
         if (!ipCheck.allowed) {
             safeSend(socket, JSON.stringify({
@@ -136,7 +186,7 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
             return
         }
 
-        // 3. 终端短期票据认证
+        // 4. 终端短期票据认证
         const ticket = request.query.ticket
         if (!ticket) {
             safeSend(socket, JSON.stringify({

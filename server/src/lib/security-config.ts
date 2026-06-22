@@ -3,7 +3,10 @@ const INSECURE_SECRET_PATTERNS = [
   'dev_secret',
   'development',
   'change-in-production',
+  'change_me',
   'changeme',
+  'replace',
+  'generateuniquevaluebeforedeploy',
   'secret',
   'password',
   '123456',
@@ -18,72 +21,104 @@ const INSECURE_SECRET_PATTERNS = [
  */
 export function checkJwtConfig(): { valid: boolean; warnings: string[] } {
   const warnings: string[] = []
-  const secret = process.env.JWT_SECRET
   const isProduction = process.env.NODE_ENV === 'production'
 
-  if (!secret) {
-    return { valid: false, warnings: ['JWT_SECRET not configured'] }
-  }
+  const jwtCheck = validateSecret({
+    name: 'JWT_SECRET',
+    value: process.env.JWT_SECRET,
+    isProduction,
+    missingProductionMessage: 'JWT_SECRET not configured',
+    missingDevelopmentMessage: 'JWT_SECRET not configured',
+    weakDevelopmentMessage: 'JWT_SECRET should be at least 32 characters',
+    weakProductionMessage: 'JWT_SECRET must be at least 32 characters in production',
+    complexityDevelopmentMessage: 'JWT_SECRET should contain uppercase, lowercase, numbers and special characters for better security',
+    complexityProductionMessage: 'JWT_SECRET in production should contain at least 3 types of characters (uppercase, lowercase, numbers, special)'
+  })
+  if (!jwtCheck.valid) return jwtCheck
+  warnings.push(...jwtCheck.warnings)
 
-  if (secret.length < 32) {
-    if (isProduction) {
-      return { valid: false, warnings: ['JWT_SECRET must be at least 32 characters in production'] }
+  const cookieCheck = validateSecret({
+    name: 'COOKIE_SECRET',
+    value: process.env.COOKIE_SECRET,
+    isProduction,
+    missingProductionMessage: 'COOKIE_SECRET must be configured in production',
+    missingDevelopmentMessage: 'COOKIE_SECRET not configured, will use fallback development value',
+    weakDevelopmentMessage: 'COOKIE_SECRET should be at least 32 characters',
+    weakProductionMessage: 'COOKIE_SECRET must be at least 32 characters in production',
+    complexityDevelopmentMessage: 'COOKIE_SECRET should contain uppercase, lowercase, numbers and special characters for better security',
+    complexityProductionMessage: 'COOKIE_SECRET in production should contain at least 3 types of characters (uppercase, lowercase, numbers, special)'
+  })
+  if (!cookieCheck.valid) return cookieCheck
+  warnings.push(...cookieCheck.warnings)
+
+  const encryptionCheck = validateSecret({
+    name: 'ENCRYPTION_KEY',
+    value: process.env.ENCRYPTION_KEY,
+    isProduction,
+    missingProductionMessage: 'ENCRYPTION_KEY must be configured in production',
+    missingDevelopmentMessage: 'ENCRYPTION_KEY not configured, will use JWT_SECRET as fallback',
+    weakDevelopmentMessage: 'ENCRYPTION_KEY should be at least 32 characters',
+    weakProductionMessage: 'ENCRYPTION_KEY must be at least 32 characters in production',
+    complexityDevelopmentMessage: 'ENCRYPTION_KEY should contain uppercase, lowercase, numbers and special characters for better security',
+    complexityProductionMessage: 'ENCRYPTION_KEY in production should contain at least 3 types of characters (uppercase, lowercase, numbers, special)'
+  })
+  if (!encryptionCheck.valid) return encryptionCheck
+  warnings.push(...encryptionCheck.warnings)
+
+  return { valid: true, warnings }
+}
+
+function validateSecret(input: {
+  name: string
+  value: string | undefined
+  isProduction: boolean
+  missingProductionMessage: string
+  missingDevelopmentMessage: string
+  weakDevelopmentMessage: string
+  weakProductionMessage: string
+  complexityDevelopmentMessage: string
+  complexityProductionMessage: string
+}): { valid: boolean; warnings: string[] } {
+  const warnings: string[] = []
+
+  if (!input.value) {
+    if (input.isProduction) {
+      return { valid: false, warnings: [input.missingProductionMessage] }
     }
-    warnings.push('JWT_SECRET should be at least 32 characters')
+    warnings.push(input.missingDevelopmentMessage)
+    return { valid: true, warnings }
   }
 
-  const secretLower = secret.toLowerCase()
-  const matchedPattern = INSECURE_SECRET_PATTERNS.find(pattern => secretLower.includes(pattern))
+  if (input.value.length < 32) {
+    if (input.isProduction) {
+      return { valid: false, warnings: [input.weakProductionMessage] }
+    }
+    warnings.push(input.weakDevelopmentMessage)
+  }
 
+  const secretLower = input.value.toLowerCase()
+  const matchedPattern = INSECURE_SECRET_PATTERNS.find(pattern => secretLower.includes(pattern))
   if (matchedPattern) {
-    if (isProduction) {
+    if (input.isProduction) {
       return {
         valid: false,
-        warnings: [`Cannot use insecure JWT_SECRET in production (contains '${matchedPattern}')`]
+        warnings: [`Cannot use insecure ${input.name} in production (contains '${matchedPattern}')`]
       }
     }
-    warnings.push(`Using development JWT_SECRET (contains '${matchedPattern}'), not suitable for production`)
+    warnings.push(`Using development ${input.name} (contains '${matchedPattern}'), not suitable for production`)
   }
 
-  const hasUpperCase = /[A-Z]/.test(secret)
-  const hasLowerCase = /[a-z]/.test(secret)
-  const hasNumber = /[0-9]/.test(secret)
-  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(secret)
+  const hasUpperCase = /[A-Z]/.test(input.value)
+  const hasLowerCase = /[a-z]/.test(input.value)
+  const hasNumber = /[0-9]/.test(input.value)
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(input.value)
   const charTypes = [hasUpperCase, hasLowerCase, hasNumber, hasSpecial].filter(Boolean).length
 
   if (charTypes < 3) {
-    if (isProduction) {
-      return {
-        valid: false,
-        warnings: ['JWT_SECRET in production should contain at least 3 types of characters (uppercase, lowercase, numbers, special)']
-      }
+    if (input.isProduction) {
+      return { valid: false, warnings: [input.complexityProductionMessage] }
     }
-    warnings.push('JWT_SECRET should contain uppercase, lowercase, numbers and special characters for better security')
-  }
-
-  const encryptionKey = process.env.ENCRYPTION_KEY
-  if (!encryptionKey) {
-    if (isProduction) {
-      return { valid: false, warnings: ['ENCRYPTION_KEY must be configured in production'] }
-    }
-    warnings.push('ENCRYPTION_KEY not configured, will use JWT_SECRET as fallback')
-  } else if (encryptionKey.length < 32) {
-    if (isProduction) {
-      return { valid: false, warnings: ['ENCRYPTION_KEY must be at least 32 characters in production'] }
-    }
-    warnings.push('ENCRYPTION_KEY should be at least 32 characters')
-  } else {
-    const encryptionKeyLower = encryptionKey.toLowerCase()
-    const encryptionMatchedPattern = INSECURE_SECRET_PATTERNS.find(pattern => encryptionKeyLower.includes(pattern))
-    if (encryptionMatchedPattern) {
-      if (isProduction) {
-        return {
-          valid: false,
-          warnings: [`Cannot use insecure ENCRYPTION_KEY in production (contains '${encryptionMatchedPattern}')`]
-        }
-      }
-      warnings.push(`Using development ENCRYPTION_KEY (contains '${encryptionMatchedPattern}'), not suitable for production`)
-    }
+    warnings.push(input.complexityDevelopmentMessage)
   }
 
   return { valid: true, warnings }

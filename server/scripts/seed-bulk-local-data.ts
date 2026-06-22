@@ -1,9 +1,9 @@
-import 'dotenv/config'
+import '../src/config/env.js'
 
 // @ts-ignore - bcryptjs ships its own types in this repo setup
 import bcrypt from 'bcryptjs'
 
-import { prisma } from '../src/db/prisma.js'
+import { closePrismaDatabase, prisma } from '../src/db/prisma.js'
 
 type SeedRole = 'admin' | 'user'
 type SeedUserStatus = 'active' | 'banned'
@@ -1686,5 +1686,5 @@ void main()
     process.exitCode = 1
   })
   .finally(async () => {
-    await prisma.$disconnect()
+    await closePrismaDatabase()
   })

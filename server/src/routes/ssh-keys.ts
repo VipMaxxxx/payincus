@@ -10,6 +10,55 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 import { validateName } from '../lib/security.js'
 import crypto from 'crypto'
 
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const MAX_SSH_KEY_NAME_LENGTH = 50
+const MIN_SSH_PUBLIC_KEY_LENGTH = 20
+const MAX_SSH_PUBLIC_KEY_LENGTH = 8192
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeSshKeyCreateInput(input: unknown): { name: string; publicKey: string } {
+  if (!isPlainRecord(input)) {
+    throw apiError(ErrorCode.INVALID_PARAMS, 'Invalid request body')
+  }
+  if (typeof input.name !== 'string' || typeof input.publicKey !== 'string') {
+    throw apiError(ErrorCode.INVALID_PARAMS, 'Invalid SSH key request')
+  }
+
+  const nameValidation = validateName(input.name, 'Key name', 1, MAX_SSH_KEY_NAME_LENGTH)
+  if (!nameValidation.valid || !nameValidation.sanitized) {
+    throw apiError(ErrorCode.INVALID_PARAMS, nameValidation.message)
+  }
+
+  const publicKey = input.publicKey
+    .replace(/\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (
+    publicKey.length < MIN_SSH_PUBLIC_KEY_LENGTH ||
+    publicKey.length > MAX_SSH_PUBLIC_KEY_LENGTH ||
+    /[\u0000-\u001F\u007F]/.test(publicKey)
+  ) {
+    throw apiError(ErrorCode.INVALID_SSH_KEY)
+  }
+
+  return {
+    name: nameValidation.sanitized,
+    publicKey
+  }
+}
+
 export default async function sshKeyRoutes(fastify: FastifyInstance) {
 
   // 获取用户的 SSH 公钥列表
@@ -35,9 +84,9 @@ export default async function sshKeyRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const keyId = Number(id)
+    const keyId = parsePositiveRouteId(id)
 
-    if (isNaN(keyId)) {
+    if (!keyId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -76,16 +125,16 @@ export default async function sshKeyRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Body: { name: string; publicKey: string } }>, reply: FastifyReply) => {
-    const { name, publicKey } = request.body
-
-    // 验证密钥名称（防止危险字符注入）
-    const nameValidation = validateName(name, 'Key name', 1, 50)
-    if (!nameValidation.valid) {
-      return reply.code(400).send({ error: nameValidation.message })
+    let normalizedInput: { name: string; publicKey: string }
+    try {
+      normalizedInput = normalizeSshKeyCreateInput(request.body)
+    } catch (error) {
+      return reply.code(400).send(error)
     }
+    const { name, publicKey } = normalizedInput
 
     // 验证并解析公钥
-    const parsed = parseSSHPublicKey(publicKey.trim())
+    const parsed = parseSSHPublicKey(publicKey)
     if (!parsed) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_SSH_KEY))
     }
@@ -103,7 +152,7 @@ export default async function sshKeyRoutes(fastify: FastifyInstance) {
     const keyId = await db.createSSHKey({
       userId: request.user.id,
       name,
-      publicKey: publicKey.trim(),
+      publicKey,
       fingerprint
     })
 
@@ -192,9 +241,9 @@ export default async function sshKeyRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const keyId = Number(id)
+    const keyId = parsePositiveRouteId(id)
 
-    if (isNaN(keyId)) {
+    if (!keyId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 

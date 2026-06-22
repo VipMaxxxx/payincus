@@ -668,15 +668,17 @@ export async function replaceVipRules(type: VipRuleType, inputs: VipRuleInput[],
 export async function getUserVipStats(userId: number, client: DbClient = prisma): Promise<UserVipStats> {
   const [consumeMap, rechargeResult] = await Promise.all([
     getUsersTotalConsumeMap([userId], client),
-    client.rechargeRecord.aggregate({
-      where: { userId, status: 'completed' },
-      _sum: { amount: true }
-    })
+    client.$queryRaw<Array<{ value: unknown }>>(Prisma.sql`
+      SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+      FROM recharge_records
+      WHERE user_id = ${userId}
+        AND status = 'completed'
+    `)
   ])
 
   return {
     totalConsume: consumeMap.get(userId) || 0,
-    totalRecharge: toNumber(rechargeResult._sum.amount)
+    totalRecharge: toNumber(rechargeResult[0]?.value)
   }
 }
 

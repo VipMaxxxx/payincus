@@ -11,8 +11,33 @@ import { getIncusClient } from '../lib/incus/index.js'
 import { createSnapshot, deleteSnapshot, restoreSnapshot } from '../lib/incus/incus-snapshots.js'
 import { sendNotification } from '../lib/notifier.js'
 import { checkSnapshotQuota } from '../db/quota-operations.js'
+import { acquireLock, releaseLock } from '../lib/distributed-lock.js'
 import type { CreateSnapshotRequest } from '../types/api.js'
 import { checkInstancePermission } from '../lib/permission.js'
+import {
+  claimOperationVerificationRequirement
+} from '../lib/operation-verification.js'
+
+const POSITIVE_INTEGER_ID_RE = /^[1-9]\d*$/
+const SNAPSHOT_CREATE_LOCK_EXPIRE_MS = 30 * 60 * 1000
+const SNAPSHOT_CREATE_LOCK_WAIT_MS = 5000
+
+function getSnapshotCreateLockKey(instanceId: number): string {
+  return `auto-policy:snapshot:${instanceId}`
+}
+
+function parsePositiveId(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? value : null
+  }
+
+  if (typeof value !== 'string' || !POSITIVE_INTEGER_ID_RE.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
 
 // 检查实例是否被转移锁定
 async function checkTransferLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
@@ -24,16 +49,32 @@ async function checkTransferLock(instanceId: number, reply: FastifyReply): Promi
   return false
 }
 
+async function requireVerifiedOperation(
+  reply: FastifyReply,
+  userId: number,
+  resourceId: number
+): Promise<boolean> {
+  const verification = await claimOperationVerificationRequirement(userId, 'delete_snapshot', resourceId)
+  if (!verification.verified) {
+    reply.code(403).send({
+      error: 'Sensitive operation requires verification',
+      code: 'VERIFICATION_REQUIRED',
+      required: verification.required
+    })
+    return false
+  }
+  return true
+}
+
 export default async function snapshotRoutes(fastify: FastifyInstance) {
 
   // 获取实例的快照列表
   fastify.get<{ Params: { instanceId: string } }>('/:instanceId/snapshots', {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { instanceId: string } }>, reply: FastifyReply) => {
-    const { instanceId } = request.params
-    const instanceIdNum = Number(instanceId)
+    const instanceIdNum = parsePositiveId(request.params.instanceId)
 
-    if (isNaN(instanceIdNum)) {
+    if (instanceIdNum === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -83,10 +124,9 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
     Params: { instanceId: string }
     Body: CreateSnapshotRequest
   }>, reply: FastifyReply) => {
-    const { instanceId } = request.params
-    const instanceIdNum = Number(instanceId)
+    const instanceIdNum = parsePositiveId(request.params.instanceId)
 
-    if (isNaN(instanceIdNum)) {
+    if (instanceIdNum === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -120,17 +160,27 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceIdNum, reply)) return
 
-    // 检查配额
-    const quotaCheck = await checkSnapshotQuota(instance.user_id, instanceIdNum)
-    if (!quotaCheck.allowed) {
-      return reply.code(400).send(apiError(ErrorCode.QUOTA_SNAPSHOT_EXCEEDED, quotaCheck.message))
-    }
-
     // 生成 Incus 快照名称
     const timestamp = Date.now()
     const incusName = `snap-${name.replace(/[^a-zA-Z0-9-_]/g, '-')}-${timestamp}`
+    const lockKey = getSnapshotCreateLockKey(instanceIdNum)
+    const lockResult = await acquireLock(lockKey, {
+      expireMs: SNAPSHOT_CREATE_LOCK_EXPIRE_MS,
+      waitTimeoutMs: SNAPSHOT_CREATE_LOCK_WAIT_MS,
+      retryIntervalMs: 100
+    })
+
+    if (!lockResult.success || !lockResult.ownerId) {
+      return reply.code(409).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'Snapshot operation is busy, please retry later'))
+    }
 
     try {
+      // 在实例级锁内重新检查配额，避免并发手动快照同时通过读前检查。
+      const quotaCheck = await checkSnapshotQuota(instance.user_id, instanceIdNum)
+      if (!quotaCheck.allowed) {
+        return reply.code(400).send(apiError(ErrorCode.QUOTA_SNAPSHOT_EXCEEDED, quotaCheck.message))
+      }
+
       // 获取宿主机信息并创建 Incus 客户端
       const host = await db.getHostById(instance.host_id)
       if (!host) {
@@ -142,20 +192,34 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
       await createSnapshot(client, instance.incus_id, incusName)
 
       // 保存到数据库
-      const snapshotId = await db.createSnapshot({
-        instanceId: instanceIdNum,
-        incusName,
-        name,
-        description,
-        stateful: false
-      })
+      let snapshotId: number
+      try {
+        snapshotId = await db.createSnapshot({
+          instanceId: instanceIdNum,
+          incusName,
+          name,
+          description,
+          stateful: false
+        })
+      } catch (dbErr) {
+        try {
+          await deleteSnapshot(client, instance.incus_id, incusName)
+        } catch (cleanupErr) {
+          fastify.log.error({ err: cleanupErr, instanceId: instanceIdNum, incusName }, 'Failed to clean up Incus snapshot after database create failure')
+        }
+        throw dbErr
+      }
 
       // 发送通知
-      await sendNotification(request.user.id, 'snapshot_created', {
-        instanceName: instance.name,
-        snapshotName: name,
-        hostName: host.name
-      })
+      try {
+        await sendNotification(request.user.id, 'snapshot_created', {
+          instanceName: instance.name,
+          snapshotName: name,
+          hostName: host.name
+        })
+      } catch (notifyErr) {
+        fastify.log.warn({ err: notifyErr, instanceId: instanceIdNum, snapshotId }, 'Failed to send snapshot created notification')
+      }
 
       await createLog(request.user.id, 'snapshot', 'snapshot.create', `Created snapshot "${name}" for instance "${instance.name}" [host: ${host.name}]`, 'success', { instanceId: instanceIdNum })
 
@@ -174,6 +238,8 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       await createLog(request.user.id, 'snapshot', 'snapshot.create', `Failed to create snapshot: ${errorMessage}`, 'failed', { instanceId: instanceIdNum })
       return reply.code(500).send({ error: 'Failed to create snapshot: ' + errorMessage, code: 'OPERATION_FAILED' })
+    } finally {
+      await releaseLock(lockKey, lockResult.ownerId)
     }
   })
 
@@ -181,11 +247,10 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
   fastify.delete<{ Params: { instanceId: string; snapshotId: string } }>('/:instanceId/snapshots/:snapshotId', {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { instanceId: string; snapshotId: string } }>, reply: FastifyReply) => {
-    const { instanceId, snapshotId } = request.params
-    const instanceIdNum = Number(instanceId)
-    const snapshotIdNum = Number(snapshotId)
+    const instanceIdNum = parsePositiveId(request.params.instanceId)
+    const snapshotIdNum = parsePositiveId(request.params.snapshotId)
 
-    if (isNaN(instanceIdNum) || isNaN(snapshotIdNum)) {
+    if (instanceIdNum === null || snapshotIdNum === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -210,7 +275,7 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceIdNum, reply)) return
 
-
+    if (!await requireVerifiedOperation(reply, request.user.id, snapshotIdNum)) return
 
     try {
       // 获取宿主机信息并创建 Incus 客户端
@@ -258,11 +323,10 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Params: { instanceId: string; snapshotId: string }; Body: Record<string, never> }>, reply: FastifyReply) => {
-    const { instanceId, snapshotId } = request.params
-    const instanceIdNum = Number(instanceId)
-    const snapshotIdNum = Number(snapshotId)
+    const instanceIdNum = parsePositiveId(request.params.instanceId)
+    const snapshotIdNum = parsePositiveId(request.params.snapshotId)
 
-    if (isNaN(instanceIdNum) || isNaN(snapshotIdNum)) {
+    if (instanceIdNum === null || snapshotIdNum === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -333,10 +397,9 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { instanceId: string } }>('/:instanceId/snapshot-policy', {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { instanceId: string } }>, reply: FastifyReply) => {
-    const { instanceId } = request.params
-    const instanceIdNum = Number(instanceId)
+    const instanceIdNum = parsePositiveId(request.params.instanceId)
 
-    if (isNaN(instanceIdNum)) {
+    if (instanceIdNum === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -387,10 +450,9 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
     Params: { instanceId: string }
     Body: { enabled: boolean; intervalMinutes?: number }
   }>, reply: FastifyReply) => {
-    const { instanceId } = request.params
-    const instanceIdNum = Number(instanceId)
+    const instanceIdNum = parsePositiveId(request.params.instanceId)
 
-    if (isNaN(instanceIdNum)) {
+    if (instanceIdNum === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -425,4 +487,3 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
     return { message: 'Auto snapshot policy updated' }
   })
 }
-

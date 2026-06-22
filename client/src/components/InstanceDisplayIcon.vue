@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import BadgeImage from '@/components/BadgeImage.vue'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   badgeId?: string | null
   fallbackIcon?: 'pro' | 'prime' | 'peer' | null
   size?: number

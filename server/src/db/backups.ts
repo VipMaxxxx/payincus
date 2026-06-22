@@ -5,6 +5,17 @@
 
 import { prisma } from './prisma.js'
 import type { Backup } from '../types/database.js'
+import { INSTANCE_OPERATION_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
+
+const DEFAULT_STALE_CREATING_BACKUP_AGE_MS = 24 * 60 * 60 * 1000
+
+export interface BackupQuotaReservationResult {
+  allowed: boolean
+  backupId?: number
+  current: number
+  limit: number
+  message?: string
+}
 
 /**
  * 获取实例的备份列表
@@ -80,6 +91,71 @@ export async function createBackup(data: {
   return backup.id
 }
 
+export async function createBackupWithQuotaReservation(data: {
+  instanceId: number
+  incusName: string
+  name: string
+  description?: string | null
+  expiresAt?: string | null
+}): Promise<BackupQuotaReservationResult> {
+  return prisma.$transaction(async tx => {
+    await advisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, data.instanceId)
+
+    const instance = await tx.instance.findUnique({
+      where: { id: data.instanceId },
+      select: { backupLimit: true }
+    })
+    if (!instance) {
+      return { allowed: false, current: 0, limit: 0, message: 'Instance not found' }
+    }
+
+    const limit = instance.backupLimit ?? 0
+    const current = await tx.backup.count({
+      where: {
+        instanceId: data.instanceId,
+        status: { in: ['creating', 'ready'] }
+      }
+    })
+
+    if (limit === 0) {
+      return {
+        allowed: false,
+        current,
+        limit: 0,
+        message: 'Backup quota not allocated for this instance'
+      }
+    }
+
+    if (current >= limit) {
+      return {
+        allowed: false,
+        current,
+        limit,
+        message: `Instance backup quota full (${current}/${limit})`
+      }
+    }
+
+    const backup = await tx.backup.create({
+      data: {
+        instanceId: data.instanceId,
+        incusName: data.incusName,
+        name: data.name,
+        description: data.description ?? null,
+        expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
+        status: 'creating'
+      },
+      select: { id: true }
+    })
+
+    return {
+      allowed: true,
+      backupId: backup.id,
+      current: current + 1,
+      limit
+    }
+  })
+}
+
 /**
  * 更新备份状态
  */
@@ -105,6 +181,23 @@ export async function updateBackupSize(id: number, size: number): Promise<void> 
     where: { id },
     data: { size }
   })
+}
+
+export async function cleanupStaleCreatingBackups(
+  maxAgeMs: number = DEFAULT_STALE_CREATING_BACKUP_AGE_MS
+): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeMs)
+  const result = await prisma.backup.updateMany({
+    where: {
+      status: 'creating',
+      createdAt: { lt: cutoff }
+    },
+    data: {
+      status: 'error'
+    }
+  })
+
+  return result.count
 }
 
 /**

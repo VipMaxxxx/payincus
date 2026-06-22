@@ -4,6 +4,28 @@
 
 import { prisma } from './prisma.js'
 import type { BackupUploadTask, BackupUploadTaskStatus } from '@prisma/client'
+import {
+    INSTANCE_OPERATION_LOCK_NAMESPACE,
+    USER_BACKUP_UPLOAD_LOCK_NAMESPACE,
+    tryAdvisoryTransactionLock
+} from './advisory-locks.js'
+
+const BACKUP_UPLOAD_TASK_STATUSES = new Set<BackupUploadTaskStatus>([
+    'PENDING',
+    'PROCESSING',
+    'COMPLETED',
+    'FAILED'
+])
+
+function normalizeBackupUploadTaskLimit(limit: number | undefined): number {
+    return Number.isInteger(limit) && limit !== undefined
+        ? Math.min(Math.max(limit, 1), 100)
+        : 50
+}
+
+function normalizeBackupUploadTaskStatus(status: BackupUploadTaskStatus | undefined): BackupUploadTaskStatus | undefined {
+    return status && BACKUP_UPLOAD_TASK_STATUSES.has(status) ? status : undefined
+}
 
 /**
  * 创建备份上传任务
@@ -14,16 +36,34 @@ export async function createBackupUploadTask(data: {
     backupId: number
     hostId: number
     storageConfigId: number
-}): Promise<BackupUploadTask> {
-    return prisma.backupUploadTask.create({
-        data: {
-            userId: data.userId,
-            instanceId: data.instanceId,
-            backupId: data.backupId,
-            hostId: data.hostId,
-            storageConfigId: data.storageConfigId,
-            status: 'PENDING'
+}): Promise<BackupUploadTask | null> {
+    return prisma.$transaction(async tx => {
+        const locked = await tryAdvisoryTransactionLock(tx, USER_BACKUP_UPLOAD_LOCK_NAMESPACE, data.userId)
+        if (!locked) {
+            return null
         }
+
+        const activeTask = await tx.backupUploadTask.findFirst({
+            where: {
+                userId: data.userId,
+                status: { in: ['PENDING', 'PROCESSING'] }
+            },
+            select: { id: true }
+        })
+        if (activeTask) {
+            return null
+        }
+
+        return tx.backupUploadTask.create({
+            data: {
+                userId: data.userId,
+                instanceId: data.instanceId,
+                backupId: data.backupId,
+                hostId: data.hostId,
+                storageConfigId: data.storageConfigId,
+                status: 'PENDING'
+            }
+        })
     })
 }
 
@@ -62,13 +102,16 @@ export async function getBackupUploadTasksByUserId(
     userId: number,
     options?: { limit?: number; status?: BackupUploadTaskStatus }
 ): Promise<BackupUploadTask[]> {
+    const limit = normalizeBackupUploadTaskLimit(options?.limit)
+    const status = normalizeBackupUploadTaskStatus(options?.status)
+
     return prisma.backupUploadTask.findMany({
         where: {
             userId,
-            ...(options?.status ? { status: options.status } : {})
+            ...(status ? { status } : {})
         },
         orderBy: { createdAt: 'desc' },
-        take: options?.limit || 50
+        take: limit
     })
 }
 
@@ -181,14 +224,40 @@ export async function getUploadTaskQueuePosition(taskId: number): Promise<number
 /**
  * 取消任务（仅 PENDING 状态）
  */
-export async function cancelBackupUploadTask(id: number): Promise<BackupUploadTask> {
-    return prisma.backupUploadTask.update({
-        where: { id },
-        data: {
-            status: 'FAILED',
-            error: '用户取消',
-            finishedAt: new Date()
+export async function cancelBackupUploadTask(id: number): Promise<BackupUploadTask | null> {
+    const task = await prisma.backupUploadTask.findUnique({
+        where: { id }
+    })
+
+    if (!task || task.status !== 'PENDING') {
+        return null
+    }
+
+    return prisma.$transaction(async tx => {
+        const locked = await tryAdvisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, task.instanceId)
+        if (!locked) {
+            return null
         }
+
+        const updateResult = await tx.backupUploadTask.updateMany({
+            where: {
+                id,
+                status: 'PENDING'
+            },
+            data: {
+                status: 'FAILED',
+                error: '用户取消',
+                finishedAt: new Date()
+            }
+        })
+
+        if (updateResult.count !== 1) {
+            return null
+        }
+
+        return tx.backupUploadTask.findUnique({
+            where: { id }
+        })
     })
 }
 

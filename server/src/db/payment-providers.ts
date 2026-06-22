@@ -40,6 +40,138 @@ export interface PaymentMethodFeeConfig {
 
 export type PaymentMethodFeeMap = Record<string, PaymentMethodFeeConfig>
 
+export interface PaymentProviderFinancialInput {
+  feeRate?: unknown
+  feeFixed?: unknown
+  minAmount?: unknown
+  maxAmount?: unknown
+}
+
+export interface NormalizedPaymentProviderFinancialInput {
+  feeRate?: number
+  feeFixed?: number
+  minAmount?: number
+  maxAmount?: number | null
+}
+
+export const MASKED_PAYMENT_SECRET_VALUE = '__SECRET_SET__'
+
+const PAYMENT_PROVIDER_SECRET_KEYS = new Set([
+  'key',
+  'api_key',
+  'secret_key',
+  'webhook_secret',
+  'merchant_private_key',
+  'private_key',
+  'signKey',
+  'sign_key'
+])
+
+function hasOwnField(input: PaymentProviderFinancialInput, field: keyof PaymentProviderFinancialInput): boolean {
+  return Object.prototype.hasOwnProperty.call(input, field)
+}
+
+function normalizeMoneyNumber(
+  value: unknown,
+  label: string,
+  options: { min: number; max?: number; allowEqualMin?: boolean; precision?: number }
+): number {
+  const amount = Number(value)
+  const minOk = options.allowEqualMin ? amount >= options.min : amount > options.min
+  const precision = options.precision ?? 2
+
+  if (!Number.isFinite(amount) || !minOk) {
+    throw new Error(`${label}不合法`)
+  }
+
+  if (options.max !== undefined && amount > options.max) {
+    throw new Error(`${label}不合法`)
+  }
+
+  const normalizedAmount = Number(amount.toFixed(precision))
+  const normalizedMinOk = options.allowEqualMin
+    ? normalizedAmount >= options.min
+    : normalizedAmount > options.min
+  if (!normalizedMinOk) {
+    throw new Error(`${label}不合法`)
+  }
+
+  return normalizedAmount
+}
+
+export function normalizePaymentProviderFinancialInput(
+  input: PaymentProviderFinancialInput,
+  options: { fillDefaults?: boolean; validateRange?: boolean } = {}
+): NormalizedPaymentProviderFinancialInput {
+  const data: NormalizedPaymentProviderFinancialInput = {}
+  const fillDefaults = options.fillDefaults === true
+  const validateRange = options.validateRange !== false
+
+  if (hasOwnField(input, 'feeRate') || fillDefaults) {
+    data.feeRate = normalizeMoneyNumber(input.feeRate ?? 0, '手续费费率', {
+      min: 0,
+      max: 1,
+      allowEqualMin: true,
+      precision: 4
+    })
+  }
+
+  if (hasOwnField(input, 'feeFixed') || fillDefaults) {
+    data.feeFixed = normalizeMoneyNumber(input.feeFixed ?? 0, '固定手续费', {
+      min: 0,
+      allowEqualMin: true
+    })
+  }
+
+  if (hasOwnField(input, 'minAmount') || fillDefaults) {
+    data.minAmount = normalizeMoneyNumber(input.minAmount ?? 1, '最小充值金额', {
+      min: 0
+    })
+  }
+
+  if (hasOwnField(input, 'maxAmount') || fillDefaults) {
+    const maxAmount = input.maxAmount
+    if (maxAmount === undefined || maxAmount === null || maxAmount === '') {
+      data.maxAmount = null
+    } else {
+      data.maxAmount = normalizeMoneyNumber(maxAmount, '最大充值金额', {
+        min: 0
+      })
+    }
+  }
+
+  const effectiveMinAmount = data.minAmount ?? (fillDefaults ? 1 : undefined)
+  if (
+    validateRange &&
+    data.maxAmount !== undefined &&
+    data.maxAmount !== null &&
+    effectiveMinAmount !== undefined &&
+    data.maxAmount < effectiveMinAmount
+  ) {
+    throw new Error('最大充值金额不能小于最小充值金额')
+  }
+
+  return data
+}
+
+export function validatePaymentProviderFinancialInput(
+  input: PaymentProviderFinancialInput,
+  options: { fillDefaults?: boolean; validateRange?: boolean } = {}
+): { valid: boolean; error?: string; data: NormalizedPaymentProviderFinancialInput } {
+  try {
+    return {
+      valid: true,
+      data: normalizePaymentProviderFinancialInput(input, options)
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : '支付渠道金额配置不合法',
+      data: {}
+    }
+  }
+}
+
 // ==================== 配置加密工具函数 ====================
 
 /**
@@ -94,6 +226,60 @@ function decryptProvider<T extends { config: unknown }>(provider: T): T & { conf
   return {
     ...provider,
     config: decryptProviderConfig(provider.config)
+  }
+}
+
+function hasExistingSecretValue(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function shouldPreserveSecretValue(value: unknown): boolean {
+  return value === undefined || value === null || value === '' || value === MASKED_PAYMENT_SECRET_VALUE
+}
+
+function maskProviderConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const masked: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(config)) {
+    if (PAYMENT_PROVIDER_SECRET_KEYS.has(key) && hasExistingSecretValue(value)) {
+      masked[key] = ''
+      masked[`${key}Configured`] = true
+      continue
+    }
+
+    masked[key] = value
+  }
+
+  return masked
+}
+
+export function mergePaymentProviderConfigForUpdate(
+  nextConfig: Record<string, unknown>,
+  existingConfig: Record<string, unknown>
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...nextConfig }
+
+  for (const key of PAYMENT_PROVIDER_SECRET_KEYS) {
+    if (shouldPreserveSecretValue(nextConfig[key]) && hasExistingSecretValue(existingConfig[key])) {
+      merged[key] = existingConfig[key]
+    }
+
+    delete merged[`${key}Configured`]
+  }
+
+  return merged
+}
+
+export function sanitizePaymentProviderForResponse<T extends { config: unknown }>(
+  provider: T
+): T & { config: Record<string, unknown> } {
+  const config = provider.config && typeof provider.config === 'object' && !Array.isArray(provider.config)
+    ? provider.config as Record<string, unknown>
+    : decryptProviderConfig(provider.config)
+
+  return {
+    ...provider,
+    config: maskProviderConfig(config)
   }
 }
 
@@ -153,6 +339,7 @@ export async function getPaymentProviderByType(type: PaymentProviderType): Promi
 export async function createPaymentProvider(input: CreatePaymentProviderInput): Promise<PaymentProvider> {
   // 加密配置
   const encryptedConfig = input.config ? encryptProviderConfig(input.config) : encryptProviderConfig({})
+  const financial = normalizePaymentProviderFinancialInput(input, { fillDefaults: true })
   
   const provider = await prisma.paymentProvider.create({
     data: {
@@ -161,10 +348,10 @@ export async function createPaymentProvider(input: CreatePaymentProviderInput): 
       status: input.status || 'disabled',
       config: encryptedConfig,
       methods: input.methods || [],
-      feeRate: input.feeRate || 0,
-      feeFixed: input.feeFixed || 0,
-      minAmount: input.minAmount || 1,
-      maxAmount: input.maxAmount,
+      feeRate: financial.feeRate ?? 0,
+      feeFixed: financial.feeFixed ?? 0,
+      minAmount: financial.minAmount ?? 1,
+      maxAmount: financial.maxAmount,
       sortOrder: input.sortOrder || 0
     }
   })
@@ -192,10 +379,11 @@ export async function updatePaymentProvider(
     data.config = encryptProviderConfig(input.config)
   }
   if (input.methods !== undefined) data.methods = input.methods
-  if (input.feeRate !== undefined) data.feeRate = input.feeRate
-  if (input.feeFixed !== undefined) data.feeFixed = input.feeFixed
-  if (input.minAmount !== undefined) data.minAmount = input.minAmount
-  if (input.maxAmount !== undefined) data.maxAmount = input.maxAmount
+  const financial = normalizePaymentProviderFinancialInput(input, { validateRange: false })
+  if (financial.feeRate !== undefined) data.feeRate = financial.feeRate
+  if (financial.feeFixed !== undefined) data.feeFixed = financial.feeFixed
+  if (financial.minAmount !== undefined) data.minAmount = financial.minAmount
+  if (financial.maxAmount !== undefined) data.maxAmount = financial.maxAmount
   if (input.sortOrder !== undefined) data.sortOrder = input.sortOrder
 
   const provider = await prisma.paymentProvider.update({

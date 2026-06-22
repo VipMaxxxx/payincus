@@ -9,6 +9,51 @@ import { createLog } from '../db/logs.js'
 import { testNotificationChannel } from '../lib/notifier.js'
 import type { NotificationChannel } from '../types/database.js'
 
+const telegramBotTokenPattern = /^[1-9]\d{5,19}:[A-Za-z0-9_-]{20,}$/
+const telegramChatIdPattern = /^-?\d{1,20}$|^@[A-Za-z0-9_]{5,32}$/
+const maskedTelegramBotTokenPattern = /^.{1,20}\.\.\..{1,20}$/
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function normalizeGlobalTelegramChannelInput(input: {
+  name?: string
+  botToken?: string
+  chatId?: string
+}): { valid: true; value: { name?: string; botToken?: string; chatId?: string } } | { valid: false; error: string } {
+  const value: { name?: string; botToken?: string; chatId?: string } = {}
+
+  if (input.name !== undefined) {
+    const name = input.name.trim()
+    if (!name || name.length > 50) {
+      return { valid: false, error: 'Channel name must be 1-50 characters' }
+    }
+    value.name = name
+  }
+
+  if (input.botToken !== undefined) {
+    const botToken = input.botToken.trim()
+    if (!botToken || maskedTelegramBotTokenPattern.test(botToken) || !telegramBotTokenPattern.test(botToken)) {
+      return { valid: false, error: 'Invalid Bot Token format' }
+    }
+    value.botToken = botToken
+  }
+
+  if (input.chatId !== undefined) {
+    const chatId = input.chatId.trim()
+    if (!telegramChatIdPattern.test(chatId)) {
+      return { valid: false, error: 'Invalid Telegram Chat ID format' }
+    }
+    value.chatId = chatId
+  }
+
+  return { valid: true, value }
+}
+
 export default async function adminNotificationChannelsRoutes(fastify: FastifyInstance) {
 
   // 获取所有全局通知渠道（管理员视角，含完整信息）
@@ -52,8 +97,8 @@ export default async function adminNotificationChannelsRoutes(fastify: FastifyIn
   fastify.get<{ Params: { id: string } }>('/:id', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const channelId = Number(request.params.id)
-    if (isNaN(channelId)) return reply.code(400).send({ error: 'Invalid ID' })
+    const channelId = parsePositiveRouteId(request.params.id)
+    if (!channelId) return reply.code(400).send({ error: 'Invalid ID' })
 
     const channel = await prisma.notificationChannel.findFirst({
       where: { id: channelId, isGlobal: true } as any
@@ -95,12 +140,12 @@ export default async function adminNotificationChannelsRoutes(fastify: FastifyIn
     request: FastifyRequest<{ Body: { name: string; botToken: string; chatId: string; enabled?: boolean } }>,
     reply: FastifyReply
   ) => {
-    const { name, botToken, chatId, enabled = true } = request.body
-
-    // 简单格式验证
-    if (!botToken.includes(':')) {
-      return reply.code(400).send({ error: 'Invalid Bot Token format (should contain a colon)' })
+    const { enabled = true } = request.body
+    const normalized = normalizeGlobalTelegramChannelInput(request.body)
+    if (!normalized.valid || !normalized.value.name || !normalized.value.botToken || !normalized.value.chatId) {
+      return reply.code(400).send({ error: normalized.valid ? 'Please provide channel name, Bot Token, and Chat ID' : normalized.error })
     }
+    const { name, botToken, chatId } = normalized.value
 
     const channel = await prisma.notificationChannel.create({
       data: {
@@ -143,15 +188,20 @@ export default async function adminNotificationChannelsRoutes(fastify: FastifyIn
     request: FastifyRequest<{ Params: { id: string }; Body: { name?: string; botToken?: string; chatId?: string; enabled?: boolean } }>,
     reply: FastifyReply
   ) => {
-    const channelId = Number(request.params.id)
-    if (isNaN(channelId)) return reply.code(400).send({ error: 'Invalid ID' })
+    const channelId = parsePositiveRouteId(request.params.id)
+    if (!channelId) return reply.code(400).send({ error: 'Invalid ID' })
 
     const existing = await prisma.notificationChannel.findFirst({
       where: { id: channelId, isGlobal: true } as any
     })
     if (!existing) return reply.code(404).send({ error: 'Channel not found' })
 
-    const { name, botToken, chatId, enabled } = request.body
+    const { enabled } = request.body
+    const normalized = normalizeGlobalTelegramChannelInput(request.body)
+    if (!normalized.valid) {
+      return reply.code(400).send({ error: normalized.error })
+    }
+    const { name, botToken, chatId } = normalized.value
     const existingConfig = typeof existing.config === 'string' ? JSON.parse(existing.config) : existing.config as Record<string, unknown>
 
     // Merge config
@@ -179,8 +229,8 @@ export default async function adminNotificationChannelsRoutes(fastify: FastifyIn
   fastify.delete<{ Params: { id: string } }>('/:id', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const channelId = Number(request.params.id)
-    if (isNaN(channelId)) return reply.code(400).send({ error: 'Invalid ID' })
+    const channelId = parsePositiveRouteId(request.params.id)
+    if (!channelId) return reply.code(400).send({ error: 'Invalid ID' })
 
     const channel = await prisma.notificationChannel.findFirst({
       where: { id: channelId, isGlobal: true } as any
@@ -199,8 +249,8 @@ export default async function adminNotificationChannelsRoutes(fastify: FastifyIn
   fastify.post<{ Params: { id: string } }>('/:id/test', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const channelId = Number(request.params.id)
-    if (isNaN(channelId)) return reply.code(400).send({ error: 'Invalid ID' })
+    const channelId = parsePositiveRouteId(request.params.id)
+    if (!channelId) return reply.code(400).send({ error: 'Invalid ID' })
 
     const channel = await prisma.notificationChannel.findFirst({
       where: { id: channelId, isGlobal: true } as any

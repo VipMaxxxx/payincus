@@ -6,6 +6,26 @@
 import { prisma } from './prisma.js'
 import type { NotificationChannel } from '../types/database.js'
 
+const notificationLogStatuses = new Set(['pending', 'sent', 'failed'])
+
+function clampNotificationLogPagination(page: number | undefined, pageSize: number | undefined): {
+  page: number
+  pageSize: number
+} {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), 100)
+      : 20
+  }
+}
+
+function normalizeNotificationLogStatus(status: string | undefined): 'pending' | 'sent' | 'failed' | undefined {
+  return status && notificationLogStatuses.has(status)
+    ? status as 'pending' | 'sent' | 'failed'
+    : undefined
+}
+
 /**
  * 获取用户的所有通知渠道
  */
@@ -179,7 +199,7 @@ export async function getNotificationLogsByUserId(
   options: {
     page?: number
     pageSize?: number
-    status?: 'pending' | 'sent' | 'failed'
+    status?: string
   } = {}
 ): Promise<{
   logs: Array<{
@@ -197,9 +217,9 @@ export async function getNotificationLogsByUserId(
   page: number
   pageSize: number
 }> {
-  const page = options.page || 1
-  const pageSize = options.pageSize || 20
+  const { page, pageSize } = clampNotificationLogPagination(options.page, options.pageSize)
   const skip = (page - 1) * pageSize
+  const status = normalizeNotificationLogStatus(options.status)
 
   const where: {
     channel: { userId: number }
@@ -208,8 +228,8 @@ export async function getNotificationLogsByUserId(
     channel: { userId }
   }
 
-  if (options.status) {
-    where.status = options.status
+  if (status) {
+    where.status = status
   }
 
   const [logs, total] = await Promise.all([

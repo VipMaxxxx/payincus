@@ -93,6 +93,8 @@ interface TelegramBotCommand {
 const bindTokenPrefix = 'bind_'
 const bindTokenTtlMs = 10 * 60 * 1000
 const telegramWebhookSecretPattern = /^[A-Za-z0-9_-]{1,256}$/
+const telegramApiTimeoutMs = 15_000
+const telegramWebhookBaseUrlMaxLength = 2048
 const telegramBotCommands: TelegramBotCommand[] = [
   { command: 'start', description: '绑定站内账号或查看使用说明' },
   { command: 'join', description: '申请加入普通用户群' },
@@ -233,6 +235,8 @@ async function getTelegramBotConfig(): Promise<TelegramBotConfig> {
 async function sendTelegramMessage(botToken: string, chatId: number, text: string): Promise<boolean> {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
+    redirect: 'manual',
+    signal: AbortSignal.timeout(telegramApiTimeoutMs),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
@@ -250,6 +254,8 @@ async function callTelegramApi<T>(
 ): Promise<TelegramApiResponse<T>> {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
     method: payload ? 'POST' : 'GET',
+    redirect: 'manual',
+    signal: AbortSignal.timeout(telegramApiTimeoutMs),
     headers: payload ? { 'Content-Type': 'application/json' } : undefined,
     body: payload ? JSON.stringify(payload) : undefined
   })
@@ -273,9 +279,17 @@ async function syncTelegramBotCommands(botToken: string): Promise<TelegramApiRes
 }
 
 function normalizeWebhookBaseUrl(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > telegramWebhookBaseUrlMaxLength) {
+    return null
+  }
+
   try {
-    const url = new URL(value)
+    const url = new URL(trimmed)
     if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return null
+    }
+    if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
       return null
     }
     return `${url.protocol}//${url.host}`
@@ -292,7 +306,7 @@ function firstHeaderValue(value: string | string[] | undefined): string | null {
 }
 
 function buildWebhookUrl(request: FastifyRequest, baseUrl?: string): string | null {
-  const explicitBaseUrl = baseUrl ? normalizeWebhookBaseUrl(baseUrl) : null
+  const explicitBaseUrl = typeof baseUrl === 'string' ? normalizeWebhookBaseUrl(baseUrl) : null
   if (explicitBaseUrl) {
     return `${explicitBaseUrl}/api/telegram/webhook`
   }
@@ -303,6 +317,10 @@ function buildWebhookUrl(request: FastifyRequest, baseUrl?: string): string | nu
     if (normalized) {
       return `${normalized}/api/telegram/webhook`
     }
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return null
   }
 
   const forwardedProto = firstHeaderValue(request.headers['x-forwarded-proto'])
@@ -654,9 +672,20 @@ export default async function telegramRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const webhookUrl = buildWebhookUrl(request, request.body?.baseUrl)
+    const baseUrlInput = request.body?.baseUrl
+    if (typeof baseUrlInput === 'string' && !normalizeWebhookBaseUrl(baseUrlInput)) {
+      return reply.code(400).send({
+        error: 'baseUrl must be a valid public HTTP(S) URL; production requires HTTPS',
+        code: 'INVALID_TELEGRAM_WEBHOOK_BASE_URL'
+      })
+    }
+
+    const webhookUrl = buildWebhookUrl(request, baseUrlInput)
     if (!webhookUrl) {
-      return reply.code(400).send({ error: 'Unable to build Telegram webhook URL' })
+      return reply.code(400).send({
+        error: 'SITE_URL or FRONTEND_URL must be configured before Telegram webhook setup in production',
+        code: 'TELEGRAM_WEBHOOK_BASE_URL_REQUIRED'
+      })
     }
 
     const telegramResponse = await callTelegramApi<boolean>(config.botToken, 'setWebhook', {
@@ -942,6 +971,19 @@ export default async function telegramRoutes(fastify: FastifyInstance) {
       return { ok: true }
     }
 
+    const consumeResult = await telegramBindTokenModel.updateMany({
+      where: {
+        id: bindToken.id,
+        usedAt: null,
+        expiresAt: { gt: now }
+      },
+      data: { usedAt: now }
+    })
+    if (consumeResult.count !== 1) {
+      await notifyTelegram(config.botToken, chatId, '绑定链接无效或已过期，请回到网站重新生成绑定链接。')
+      return { ok: true }
+    }
+
     await telegramBindingModel.upsert({
       where: { userId: bindToken.userId },
       update: {
@@ -959,11 +1001,6 @@ export default async function telegramRoutes(fastify: FastifyInstance) {
         lastName: from.last_name || null,
         boundAt: now
       }
-    })
-
-    await telegramBindTokenModel.update({
-      where: { id: bindToken.id },
-      data: { usedAt: now }
     })
 
     await notifyTelegram(

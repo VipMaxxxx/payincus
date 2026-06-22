@@ -6,7 +6,7 @@
  */
 
 // 导出 Prisma 客户端和初始化函数
-export { prisma } from './prisma.js'
+export { closePrismaDatabase, prisma } from './prisma.js'
 export { initPrismaDatabase } from './init-prisma.js'
 export { resetDatabase, resetDatabaseFast } from './reset-database.js'
 
@@ -93,6 +93,7 @@ export * from './storage-pools.js'
 
 // 导出实例操作任务相关操作
 export * from './instance-tasks.js'
+export * from './instance-provisioning-compensation.js'
 
 // 导出登录记录相关操作
 export * from './login-records.js'

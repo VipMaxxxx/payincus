@@ -130,7 +130,7 @@ download_binary() {
 
   if [ -n "${fallback_url}" ]; then
     echo "warning: failed to download ${binary_url}, fallback to ${fallback_url}" >&2
-    download_binary_once "${fallback_url}" "${target}"
+    download_binary_once "${fallback_url}" "${target}" "${expected_sha256}"
     return $?
   fi
 
@@ -313,7 +313,7 @@ if [ -z "${INCUDAL_AGENT_BINARY_URL:-}" ]; then
   BINARY_URL="${BINARY_BASE_URL}/${BINARY_NAME}"
   BINARY_URL="$(append_query_param "${BINARY_URL}" "v" "${BINARY_CACHE_BUSTER}")"
 elif [ -z "${BINARY_EXPECTED_SHA256}" ]; then
-  echo "warning: INCUDAL_AGENT_BINARY_URL is set without INCUDAL_AGENT_BINARY_SHA256, skip binary checksum verification" >&2
+  fail "INCUDAL_AGENT_BINARY_SHA256 is required when INCUDAL_AGENT_BINARY_URL is set"
 fi
 
 echo "Installing Incudal Agent"

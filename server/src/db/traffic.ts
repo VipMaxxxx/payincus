@@ -7,10 +7,24 @@
 import { prisma } from './prisma.js'
 import { applyTrafficMultiplier } from '../lib/traffic-multiplier.js'
 import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
+import { withLock } from '../lib/distributed-lock.js'
 import type { TrafficStatus } from '@prisma/client'
 
 // 批量更新分片大小（避免单次 SQL 语句过大，支持大规模实例）
 const BATCH_SIZE = 1000
+const TRAFFIC_RESET_LOCK_OPTIONS = {
+    expireMs: 30000,
+    waitTimeoutMs: 10000,
+    retryIntervalMs: 50
+}
+
+function getTrafficInstanceLockKey(instanceId: number): string {
+    return `traffic:instance:${instanceId}`
+}
+
+function getTrafficUserLockKey(userId: number): string {
+    return `traffic:user:${userId}`
+}
 
 /**
  * 验证并清理 SQL 值（防止 SQL 注入，虽然输入是受控的数字类型）
@@ -468,6 +482,23 @@ export async function updateInstanceTrafficStatus(instanceId: number, status: Tr
 }
 
 /**
+ * 将实例标记为已限速，并返回本次是否从非 LIMITED 状态抢占成功。
+ * 用于控制限速通知只发送一次，避免多副本流量调度器重复通知。
+ */
+export async function markInstanceTrafficLimitedIfNeeded(instanceId: number): Promise<boolean> {
+    const result = await prisma.instance.updateMany({
+        where: {
+            id: instanceId,
+            status: { not: 'deleted' },
+            trafficStatus: { not: 'LIMITED' }
+        },
+        data: { trafficStatus: 'LIMITED' }
+    })
+
+    return result.count > 0
+}
+
+/**
  * 更新用户流量状态
  */
 export async function updateUserTrafficStatus(userId: number, status: TrafficStatus) {
@@ -487,47 +518,102 @@ export async function updateUserTrafficWarningSentAt(userId: number, sentAt: Dat
     })
 }
 
+/**
+ * 标记用户本月流量预警已发送，并返回本次是否抢占成功。
+ * 调度器必须只在返回 true 时发送通知，避免多副本重复预警。
+ */
+export async function markUserTrafficWarningIfNeeded(userId: number, sentAt: Date): Promise<boolean> {
+    const currentMonthStart = new Date(sentAt.getFullYear(), sentAt.getMonth(), 1)
+    const result = await prisma.userQuota.updateMany({
+        where: {
+            userId,
+            OR: [
+                { trafficWarningSentAt: null },
+                { trafficWarningSentAt: { lt: currentMonthStart } }
+            ]
+        },
+        data: {
+            trafficStatus: 'WARNING',
+            trafficWarningSentAt: sentAt
+        }
+    })
+
+    return result.count > 0
+}
+
 // ==================== 月度重置操作 ====================
 
 /**
  * 重置所有用户的月度流量用量
  */
 export async function resetAllUserMonthlyTraffic() {
-    return prisma.userQuota.updateMany({
-        data: {
-            monthlyTrafficUsed: 0n,
-            trafficStatus: 'NORMAL',
-            trafficWarningSentAt: null
-        }
+    const quotas = await prisma.userQuota.findMany({
+        select: { userId: true }
     })
+
+    let count = 0
+    for (const quota of quotas) {
+        const result = await withLock(getTrafficUserLockKey(quota.userId), async () => {
+            const updated = await prisma.userQuota.updateMany({
+                where: { userId: quota.userId },
+                data: {
+                    monthlyTrafficUsed: 0n,
+                    trafficStatus: 'NORMAL',
+                    trafficWarningSentAt: null
+                }
+            })
+            return updated.count
+        }, TRAFFIC_RESET_LOCK_OPTIONS)
+
+        if (!result.success || result.result === undefined) {
+            throw new Error(result.error || `用户 ${quota.userId} 流量重置锁获取失败`)
+        }
+        count += result.result
+    }
+
+    return { count }
 }
 
 /**
  * 重置所有实例的月度流量用量
  */
 export async function resetAllInstanceMonthlyTraffic() {
-    return prisma.instance.updateMany({
+    const instances = await prisma.instance.findMany({
         where: {
             status: { not: 'deleted' }
         },
-        data: {
-            monthlyTrafficUsed: 0n,
-            trafficStatus: 'NORMAL'
-        }
+        select: { id: true }
     })
+
+    let count = 0
+    for (const instance of instances) {
+        const result = await resetInstanceMonthlyTraffic(instance.id)
+        count += result.count
+    }
+
+    return { count }
 }
 
 /**
  * 重置单个实例的月度流量用量
  */
 export async function resetInstanceMonthlyTraffic(instanceId: number) {
-    return prisma.instance.update({
-        where: { id: instanceId },
-        data: {
-            monthlyTrafficUsed: 0n,
-            trafficStatus: 'NORMAL'
-        }
-    })
+    const result = await withLock(getTrafficInstanceLockKey(instanceId), async () => prisma.instance.updateMany({
+            where: {
+                id: instanceId,
+                status: { not: 'deleted' }
+            },
+            data: {
+                monthlyTrafficUsed: 0n,
+                trafficStatus: 'NORMAL'
+            }
+        }), TRAFFIC_RESET_LOCK_OPTIONS)
+
+    if (!result.success || !result.result) {
+        throw new Error(result.error || `实例 ${instanceId} 流量重置锁获取失败`)
+    }
+
+    return result.result
 }
 
 /**
@@ -552,16 +638,21 @@ export async function updateInstanceBandwidthLimits(
  * @param hostIds 节点 ID 数组
  */
 export async function resetHostInstancesMonthlyTraffic(hostIds: number[]) {
-    return prisma.instance.updateMany({
+    const instances = await prisma.instance.findMany({
         where: {
             hostId: { in: hostIds },
             status: { not: 'deleted' }
         },
-        data: {
-            monthlyTrafficUsed: 0n,
-            trafficStatus: 'NORMAL'
-        }
+        select: { id: true }
     })
+
+    let count = 0
+    for (const instance of instances) {
+        const result = await resetInstanceMonthlyTraffic(instance.id)
+        count += result.count
+    }
+
+    return { count }
 }
 
 // ==================== 查询操作 ====================

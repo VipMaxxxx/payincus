@@ -110,7 +110,11 @@ export async function createPortMapping(data: {
 /**
  * 从宿主机端口池自动分配一个可用端口
  */
-export async function allocatePort(hostId: number, protocol: 'tcp' | 'udp' = 'tcp'): Promise<number | null> {
+export async function allocatePort(
+  hostId: number,
+  protocol: 'tcp' | 'udp' = 'tcp',
+  excludedPorts: number[] = []
+): Promise<number | null> {
   // 获取宿主机的端口范围
   const host = await getHostById(hostId)
   if (!host || !host.nat_port_start || !host.nat_port_end) {
@@ -131,6 +135,11 @@ export async function allocatePort(hostId: number, protocol: 'tcp' | 'udp' = 'tc
     }
   })
   const usedPorts = new Set(usedMappings.map(m => m.publicPort))
+  for (const port of excludedPorts) {
+    if (Number.isInteger(port)) {
+      usedPorts.add(port)
+    }
+  }
 
   // 收集所有可用端口
   const availablePorts: number[] = []

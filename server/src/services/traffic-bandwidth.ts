@@ -21,18 +21,38 @@ export interface ResolvedTrafficBandwidthLimits {
   dbEgress: string | null
 }
 
-export function normalizePlanTrafficLimitSpeed(trafficLimitSpeed: string | null | undefined): string | null {
-  if (!trafficLimitSpeed || trafficLimitSpeed === '0') {
+export function normalizePlanTrafficLimitSpeed(trafficLimitSpeed: unknown): string | null | undefined {
+  if (trafficLimitSpeed === null || trafficLimitSpeed === undefined || trafficLimitSpeed === '') {
     return null
   }
 
-  if (/^\d+$/.test(trafficLimitSpeed)) {
-    const bytes = BigInt(trafficLimitSpeed)
-    const mbps = Number(bytes / MB_IN_BYTES)
-    return mbps > 0 ? `${mbps}Mbit` : null
+  if (typeof trafficLimitSpeed !== 'string') {
+    return undefined
   }
 
-  return trafficLimitSpeed
+  const trimmed = trafficLimitSpeed.trim()
+  if (trimmed === '' || trimmed === '0') {
+    return null
+  }
+
+  const unitMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s*(Mbit|Gbit)$/i)
+  if (unitMatch) {
+    const numeric = Number(unitMatch[1])
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return undefined
+    }
+    const multiplier = unitMatch[2].toLowerCase() === 'gbit' ? 1000 : 1
+    const mbps = Math.round(numeric * multiplier)
+    return mbps > 0 ? `${mbps}Mbit` : undefined
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const bytes = BigInt(trimmed)
+    const mbps = bytes / MB_IN_BYTES
+    return mbps > 0n ? `${mbps.toString()}Mbit` : null
+  }
+
+  return undefined
 }
 
 export function resolveTrafficBandwidthLimits(

@@ -4,7 +4,7 @@
  */
 
 // 确保环境变量被加载
-import 'dotenv/config'
+import '../config/env.js'
 
 import { PrismaClient } from '@prisma/client'
 import { Pool } from 'pg'
@@ -49,7 +49,7 @@ const pool = new Pool({
   query_timeout: parseInt(process.env.DB_QUERY_TIMEOUT || '30000', 10),
 })
 
-async function normalizeLegacyNetworkModes(dbPool: Pool): Promise<void> {
+async function normalizeLegacyNetworkModesForPool(dbPool: Pool): Promise<void> {
   const enumValuesResult = await dbPool.query<{ enumlabel: string }>(`
     SELECT e.enumlabel
     FROM pg_type t
@@ -94,17 +94,21 @@ async function normalizeLegacyNetworkModes(dbPool: Pool): Promise<void> {
     column.column_name === 'network_mode'
   )
 
-  for (const mode of CURRENT_NETWORK_MODES) {
+  const missingEnumValues = CURRENT_NETWORK_MODES.filter(mode => !initialEnumValues.includes(mode))
+
+  for (const mode of missingEnumValues) {
     if (!initialEnumValues.includes(mode)) {
       await dbPool.query(`ALTER TYPE "NetworkMode" ADD VALUE IF NOT EXISTS '${mode}'`)
     }
   }
 
+  let updatedLegacyRows = false
+
   for (const column of dependentColumnsResult.rows) {
     const qualifiedColumn = `${quoteIdent(column.table_schema)}.${quoteIdent(column.table_name)}`
     const columnName = quoteIdent(column.column_name)
 
-    await dbPool.query(`
+    const updateResult = await dbPool.query(`
       UPDATE ${qualifiedColumn}
       SET ${columnName} = CASE ${columnName}::text
         WHEN 'ipv4' THEN 'nat'::"NetworkMode"
@@ -118,6 +122,9 @@ async function normalizeLegacyNetworkModes(dbPool: Pool): Promise<void> {
       END
       WHERE ${columnName}::text IN (${legacyModesSql})
     `)
+    if ((updateResult.rowCount || 0) > 0) {
+      updatedLegacyRows = true
+    }
   }
 
   if (hasPackagesNetworkModeColumn) {
@@ -127,32 +134,37 @@ async function normalizeLegacyNetworkModes(dbPool: Pool): Promise<void> {
     await dbPool.query(`ALTER TABLE "instances" ALTER COLUMN "network_mode" SET DEFAULT 'nat'`)
   }
 
-  const modeSnapshots = await Promise.all(
-    dependentColumnsResult.rows.map(async column => {
-      const qualifiedColumn = `${quoteIdent(column.table_schema)}.${quoteIdent(column.table_name)}`
-      const columnName = quoteIdent(column.column_name)
-      const result = await dbPool.query<{ network_mode: string; count: string }>(`
-        SELECT ${columnName}::text AS network_mode, COUNT(*)::text AS count
-        FROM ${qualifiedColumn}
-        GROUP BY ${columnName}::text
-        ORDER BY ${columnName}::text
-      `)
+  if (missingEnumValues.length > 0 || updatedLegacyRows) {
+    const modeSnapshots = await Promise.all(
+      dependentColumnsResult.rows.map(async column => {
+        const qualifiedColumn = `${quoteIdent(column.table_schema)}.${quoteIdent(column.table_name)}`
+        const columnName = quoteIdent(column.column_name)
+        const result = await dbPool.query<{ network_mode: string; count: string }>(`
+          SELECT ${columnName}::text AS network_mode, COUNT(*)::text AS count
+          FROM ${qualifiedColumn}
+          GROUP BY ${columnName}::text
+          ORDER BY ${columnName}::text
+        `)
 
-      return {
-        table: `${column.table_schema}.${column.table_name}.${column.column_name}`,
-        modes: result.rows.map(row => `${row.network_mode}(${row.count})`).join(', ') || 'none'
-      }
+        return {
+          table: `${column.table_schema}.${column.table_name}.${column.column_name}`,
+          modes: result.rows.map(row => `${row.network_mode}(${row.count})`).join(', ') || 'none'
+        }
+      })
+    )
+
+    console.warn('[Prisma] Normalized legacy NetworkMode values', {
+      enumValuesBefore: initialEnumValues,
+      missingEnumValues,
+      dependentColumns: modeSnapshots,
+      mapping: LEGACY_NETWORK_MODE_MAP
     })
-  )
-
-  console.warn('[Prisma] Normalized legacy NetworkMode values', {
-    enumValuesBefore: initialEnumValues,
-    dependentColumns: modeSnapshots,
-    mapping: LEGACY_NETWORK_MODE_MAP
-  })
+  }
 }
 
-await normalizeLegacyNetworkModes(pool)
+export async function normalizeLegacyNetworkModes(): Promise<void> {
+  await normalizeLegacyNetworkModesForPool(pool)
+}
 
 // 创建 Prisma PostgreSQL 适配器
 const adapter = new PrismaPg(pool)
@@ -182,5 +194,9 @@ export function getDbPoolStats(): {
   }
 }
 
-export default prisma
+export async function closePrismaDatabase(): Promise<void> {
+  await prisma.$disconnect()
+  await pool.end()
+}
 
+export default prisma

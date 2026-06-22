@@ -156,7 +156,7 @@ export default async function adminStatisticsRoutes(app: FastifyInstance): Promi
           }
         }),
         prisma.$queryRaw<ScalarRow[]>(Prisma.sql`
-          SELECT COALESCE(SUM(amount), 0)::numeric AS value
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
           FROM recharge_records
           WHERE status = 'completed'
         `),
@@ -204,7 +204,7 @@ export default async function adminStatisticsRoutes(app: FastifyInstance): Promi
         `),
         prisma.$queryRaw<BucketRow[]>(Prisma.sql`
           SELECT to_char(COALESCE(completed_at, created_at) + interval '8 hours', 'YYYY-MM-DD') AS bucket,
-                 COALESCE(SUM(amount), 0)::numeric AS value
+                 COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
           FROM recharge_records
           WHERE status = 'completed'
             AND COALESCE(completed_at, created_at) >= ${dailyWindow.start}
@@ -214,7 +214,7 @@ export default async function adminStatisticsRoutes(app: FastifyInstance): Promi
         `),
         prisma.$queryRaw<BucketRow[]>(Prisma.sql`
           SELECT to_char(COALESCE(completed_at, created_at) + interval '8 hours', 'YYYY-MM') AS bucket,
-                 COALESCE(SUM(amount), 0)::numeric AS value
+                 COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
           FROM recharge_records
           WHERE status = 'completed'
             AND COALESCE(completed_at, created_at) >= ${monthlyWindow.start}

@@ -1,5 +1,5 @@
 import * as db from '../src/db/index.js'
-import { prisma } from '../src/db/prisma.js'
+import { closePrismaDatabase, prisma } from '../src/db/prisma.js'
 import { getIncusClient, getInstance, getInstanceState } from '../src/lib/incus/index.js'
 import {
   persistResolvedInstanceNetworkAddresses,
@@ -160,5 +160,5 @@ main()
     process.exitCode = 1
   })
   .finally(async () => {
-    await prisma.$disconnect()
+    await closePrismaDatabase()
   })

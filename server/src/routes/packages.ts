@@ -12,6 +12,8 @@ import { removeDangerousChars, validateName, validateText } from '../lib/securit
 import { sendToChannel } from '../lib/notifier.js'
 import { prisma } from '../db/prisma.js'
 import { normalizeTrafficMultiplier } from '../lib/traffic-multiplier.js'
+import { parseNullablePostgresBigIntInput, parseRequiredPostgresBigIntInput } from '../lib/bigint-input.js'
+import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
 import { calculateVipLevel, getVipBadgeStyleForLevel, getVipRules } from '../services/vip-levels.js'
 
 const KVM_UNSUPPORTED_NETWORK_MODES = new Set(['nat_ipv6_nat', 'ipv6_nat'])
@@ -19,10 +21,89 @@ const MAX_PACKAGE_PLAN_NAME_LENGTH = 50
 const PUBLIC_PACKAGE_MAX_INSTANCES_MIN = 1
 const PUBLIC_PACKAGE_MAX_INSTANCES_MAX = 5
 const MAX_PACKAGE_PLAN_PRICE_CENTS = 99999999
-const MAX_PACKAGE_PLAN_PRICE_YUAN = (MAX_PACKAGE_PLAN_PRICE_CENTS / 100).toFixed(2)
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const POSTGRES_INT_MAX = 2147483647
+const MAX_PACKAGE_PLAN_BILLING_CYCLE_MONTHS = 120
+const MAX_PACKAGE_PLAN_SORT_ORDER = 1000000
+const MAX_PACKAGE_HOST_BINDINGS = 1000
+const MAX_PACKAGE_LIMIT_STRING_LENGTH = 64
+const MAX_PACKAGE_STORAGE_POOL_NAME_LENGTH = 64
 
-type PackagePrerequisiteRequestFields = {
+type NormalizedPackagePlanInput = {
+  name?: string
+  description?: string
+  cpu?: number
+  memory?: number
+  disk?: number
+  portLimit?: number
+  snapshotLimit?: number
+  backupLimit?: number
+  siteLimit?: number
+  swapSize?: number
+  trafficLimit?: unknown
+  trafficLimitSpeed?: unknown
+  price?: number
+  billingCycle?: number
+  isActive?: boolean
+  isSoldOut?: boolean
+  sortOrder?: number
+  slaGuarantee?: number | null
+}
+
+type NormalizedPackageInput = {
+  name?: string
+  description?: string
+  cpuMax?: number
+  memoryMax?: number
+  diskMax?: number
+  bandwidthMax?: number
+  networkMode?: CreatePackageRequest['networkMode']
+  instanceType?: CreatePackageRequest['instanceType']
+  hostIds?: number[]
+  hostStoragePools?: Record<string, string | null>
+  hostTrafficMultipliers?: Record<string, number>
+  privileged?: boolean
+  nested?: boolean
+  active?: boolean
+  monthlyTrafficLimit?: string | null
+  portLimit?: number
+  snapshotLimit?: number
+  backupLimit?: number
+  siteLimit?: number
+  ioLimitMode?: CreatePackageRequest['ioLimitMode']
+  limitsRead?: string
+  limitsWrite?: string
+  limitsReadIops?: number
+  limitsWriteIops?: number
+  limitsIngress?: string
+  limitsEgress?: string
+  limitsProcesses?: number
+  limitsCpuPriority?: number
+  bootAutostart?: boolean
+  bootAutostartPriority?: number
+  bootAutostartDelay?: number
+  bootHostShutdownTimeout?: number
+  globalShared?: boolean
+  globalQuotaMultiplier?: number | null
+  globalMaxInstances?: number | null
   requiredPackageId?: number | null
+}
+
+type NormalizedPackageShareInput = {
+  friendId?: number
+  quotaMultiplier?: number | null
+  maxInstances?: number | null
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parseOptionalPositiveQueryInteger(value: string | undefined): number | null | undefined {
+  if (value === undefined || value === '') return undefined
+  return parsePositiveRouteId(value)
 }
 
 function validatePackagePlanName(value: unknown): { valid: boolean; message?: string; sanitized?: string } {
@@ -54,24 +135,421 @@ function validatePackageNetworkModeForInstanceType(
   return null
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function requirePlanInteger(value: unknown, field: string, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须为整数`)
+  }
+  if (value < min || value > max) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须在 ${min}-${max} 之间`)
+  }
+  return value
+}
+
+function optionalPlanInteger(
+  input: Record<string, unknown>,
+  key: string,
+  field: string,
+  min: number,
+  max: number
+): number | undefined {
+  return input[key] === undefined
+    ? undefined
+    : requirePlanInteger(input[key], field, min, max)
+}
+
+function optionalPlanBoolean(input: Record<string, unknown>, key: string, field: string): boolean | undefined {
+  const value = input[key]
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须为布尔值`)
+  }
+  return value
+}
+
+function normalizePackagePlanDescription(value: unknown): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '方案描述无效')
+  }
+  const trimmed = value.trim()
+  if (Array.from(trimmed).length > 500) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '方案描述不能超过 500 个字符')
+  }
+  return trimmed
+}
+
+function normalizePackagePlanSlaGuarantee(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, 'SLA保证必须为数字')
+  }
+  if (value < 1 || value > 100) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, 'SLA保证必须在 1-100 之间')
+  }
+  const rounded = Math.round(value * 100) / 100
+  if (Math.abs(value - rounded) > 1e-8) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, 'SLA保证最多支持两位小数')
+  }
+  return rounded
+}
+
+function normalizePackagePlanInput(input: unknown, options: {
+  requireAll: boolean
+  isVm: boolean
+}): NormalizedPackagePlanInput {
+  if (!isPlainRecord(input)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  }
+
+  const normalized: NormalizedPackagePlanInput = {}
+
+  if (options.requireAll) {
+    for (const field of ['name', 'cpu', 'memory', 'disk', 'portLimit', 'snapshotLimit', 'backupLimit', 'siteLimit', 'trafficLimit', 'price'] as const) {
+      if (input[field] === undefined) {
+        throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
+      }
+    }
+    if (!options.isVm && input.swapSize === undefined) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
+    }
+  }
+
+  if (input.name !== undefined) {
+    const nameValidation = validatePackagePlanName(input.name)
+    if (!nameValidation.valid) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, nameValidation.message)
+    }
+    normalized.name = nameValidation.sanitized!
+  }
+
+  normalized.description = normalizePackagePlanDescription(input.description)
+  normalized.cpu = optionalPlanInteger(input, 'cpu', 'CPU', 15, 10000)
+  normalized.memory = optionalPlanInteger(input, 'memory', '内存', 128, 62144)
+  normalized.disk = optionalPlanInteger(input, 'disk', '磁盘', 512, 104857600)
+  normalized.portLimit = optionalPlanInteger(input, 'portLimit', '端口映射数', 0, POSTGRES_INT_MAX)
+  normalized.snapshotLimit = optionalPlanInteger(input, 'snapshotLimit', '快照数', 0, POSTGRES_INT_MAX)
+  normalized.backupLimit = optionalPlanInteger(input, 'backupLimit', '备份数', 0, POSTGRES_INT_MAX)
+  normalized.siteLimit = optionalPlanInteger(input, 'siteLimit', '反代站点数', 0, POSTGRES_INT_MAX)
+  normalized.swapSize = options.isVm
+    ? 0
+    : optionalPlanInteger(input, 'swapSize', 'SWAP', 0, 1048576)
+  normalized.price = optionalPlanInteger(input, 'price', '价格', 0, MAX_PACKAGE_PLAN_PRICE_CENTS)
+  normalized.billingCycle = optionalPlanInteger(input, 'billingCycle', '计费周期', 1, MAX_PACKAGE_PLAN_BILLING_CYCLE_MONTHS)
+  normalized.sortOrder = optionalPlanInteger(input, 'sortOrder', '排序值', -MAX_PACKAGE_PLAN_SORT_ORDER, MAX_PACKAGE_PLAN_SORT_ORDER)
+  normalized.isActive = optionalPlanBoolean(input, 'isActive', 'isActive')
+  normalized.isSoldOut = optionalPlanBoolean(input, 'isSoldOut', 'isSoldOut')
+  normalized.slaGuarantee = normalizePackagePlanSlaGuarantee(input.slaGuarantee)
+
+  if (input.trafficLimit !== undefined) {
+    normalized.trafficLimit = input.trafficLimit
+  }
+  if (input.trafficLimitSpeed !== undefined) {
+    normalized.trafficLimitSpeed = input.trafficLimitSpeed
+  }
+
+  return normalized
+}
+
+function requirePackageInteger(value: unknown, field: string, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须为整数`)
+  }
+  if (value < min || value > max) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须在 ${min}-${max} 之间`)
+  }
+  return value
+}
+
+function optionalPackageInteger(
+  input: Record<string, unknown>,
+  key: string,
+  field: string,
+  min: number,
+  max: number
+): number | undefined {
+  return input[key] === undefined
+    ? undefined
+    : requirePackageInteger(input[key], field, min, max)
+}
+
+function optionalPackageBoolean(input: Record<string, unknown>, key: string, field: string): boolean | undefined {
+  const value = input[key]
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须为布尔值`)
+  }
+  return value
+}
+
+function optionalPackageEnum<T extends string>(
+  input: Record<string, unknown>,
+  key: string,
+  field: string,
+  allowed: readonly T[]
+): T | undefined {
+  const value = input[key]
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || !allowed.includes(value as T)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+  }
+  return value as T
+}
+
+function optionalPackageText(
+  input: Record<string, unknown>,
+  key: string,
+  field: string,
+  maxLength: number
+): string | undefined {
+  const value = input[key]
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+  }
+  const trimmed = value.trim()
+  if (trimmed.length > maxLength || removeDangerousChars(trimmed) !== trimmed) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+  }
+  return trimmed
+}
+
+function optionalPackageNullableString(
+  input: Record<string, unknown>,
+  key: string,
+  field: string,
+  maxLength: number
+): string | null | undefined {
+  const value = input[key]
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'string') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+  }
+  const trimmed = value.trim()
+  if (trimmed.length > maxLength || removeDangerousChars(trimmed) !== trimmed) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+  }
+  return trimmed
+}
+
+function normalizePackageRequiredId(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  return requirePackageInteger(value, '前置套餐', 1, Number.MAX_SAFE_INTEGER)
+}
+
+function normalizePackageHostIds(input: Record<string, unknown>, requireHostIds: boolean): number[] | undefined {
+  const value = input.hostIds
+  if (value === undefined) {
+    if (requireHostIds) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'Package must bind at least one host')
+    }
+    return undefined
+  }
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_PACKAGE_HOST_BINDINGS) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, 'Package must bind at least one host')
+  }
+
+  const uniqueIds = new Set<number>()
+  for (const hostId of value) {
+    if (typeof hostId !== 'number' || !Number.isSafeInteger(hostId) || hostId <= 0 || uniqueIds.has(hostId)) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'Invalid package host IDs')
+    }
+    uniqueIds.add(hostId)
+  }
+  return [...uniqueIds]
+}
+
+function normalizePackageHostStoragePools(input: Record<string, unknown>): Record<string, string | null> | undefined {
+  const value = input.hostStoragePools
+  if (value === undefined) return undefined
+  if (!isPlainRecord(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, 'hostStoragePools 无效')
+  }
+
+  const normalized: Record<string, string | null> = {}
+  for (const [hostIdKey, poolName] of Object.entries(value)) {
+    if (!POSITIVE_ROUTE_ID_PATTERN.test(hostIdKey)) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'hostStoragePools 包含无效宿主机 ID')
+    }
+    const hostId = Number(hostIdKey)
+    if (!Number.isSafeInteger(hostId)) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'hostStoragePools 包含无效宿主机 ID')
+    }
+    if (poolName === null) {
+      normalized[String(hostId)] = null
+      continue
+    }
+    if (typeof poolName !== 'string') {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '存储池名称无效')
+    }
+    const trimmed = poolName.trim()
+    if (
+      trimmed.length > MAX_PACKAGE_STORAGE_POOL_NAME_LENGTH ||
+      removeDangerousChars(trimmed) !== trimmed
+    ) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '存储池名称无效')
+    }
+    normalized[String(hostId)] = trimmed || null
+  }
+  return normalized
+}
+
+function normalizePackageHostTrafficMultipliers(input: Record<string, unknown>): Record<string, number> | undefined {
+  const value = input.hostTrafficMultipliers
+  if (value === undefined) return undefined
+  if (!isPlainRecord(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, 'hostTrafficMultipliers 无效')
+  }
+
+  const normalized: Record<string, number> = {}
+  for (const [hostIdKey, multiplier] of Object.entries(value)) {
+    if (!POSITIVE_ROUTE_ID_PATTERN.test(hostIdKey)) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'hostTrafficMultipliers 包含无效宿主机 ID')
+    }
+    const hostId = Number(hostIdKey)
+    if (!Number.isSafeInteger(hostId)) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'hostTrafficMultipliers 包含无效宿主机 ID')
+    }
+    try {
+      normalized[String(hostId)] = normalizeTrafficMultiplier(multiplier)
+    } catch {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '流量倍率必须在 0.001-100 之间')
+    }
+  }
+  return normalized
+}
+
+function normalizePackageInput(input: unknown, options: { requireAll: boolean }): NormalizedPackageInput {
+  if (!isPlainRecord(input)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  }
+
+  if (options.requireAll) {
+    for (const field of ['name', 'cpuMax', 'memoryMax', 'diskMax'] as const) {
+      if (input[field] === undefined) {
+        throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
+      }
+    }
+  }
+
+  const normalized: NormalizedPackageInput = {}
+
+  if (input.name !== undefined) {
+    const nameValidation = validateName(input.name as string, 'Package name', 2, 64)
+    if (!nameValidation.valid) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, nameValidation.message)
+    }
+    normalized.name = nameValidation.sanitized!
+  }
+
+  if (input.description !== undefined) {
+    if (typeof input.description !== 'string') {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'Package description 无效')
+    }
+    const descValidation = validateText(input.description as string, 'Package description', 500)
+    if (!descValidation.valid) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, descValidation.message)
+    }
+    normalized.description = descValidation.sanitized ?? ''
+  }
+
+  normalized.cpuMax = optionalPackageInteger(input, 'cpuMax', 'CPU', 15, 10000)
+  normalized.memoryMax = optionalPackageInteger(input, 'memoryMax', '内存', 128, 1048576)
+  normalized.diskMax = optionalPackageInteger(input, 'diskMax', '磁盘', 512, 104857600)
+  normalized.bandwidthMax = optionalPackageInteger(input, 'bandwidthMax', '带宽', 0, POSTGRES_INT_MAX)
+  normalized.networkMode = optionalPackageEnum(input, 'networkMode', '网络模式', ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_only', 'ipv6_nat'])
+  normalized.instanceType = optionalPackageEnum(input, 'instanceType', '实例类型', ['container', 'vm'])
+  normalized.hostIds = normalizePackageHostIds(input, options.requireAll)
+  normalized.hostStoragePools = normalizePackageHostStoragePools(input)
+  normalized.hostTrafficMultipliers = normalizePackageHostTrafficMultipliers(input)
+  normalized.privileged = optionalPackageBoolean(input, 'privileged', 'privileged')
+  normalized.nested = optionalPackageBoolean(input, 'nested', 'nested')
+  normalized.active = optionalPackageBoolean(input, 'active', 'active')
+  normalized.monthlyTrafficLimit = optionalPackageNullableString(input, 'monthlyTrafficLimit', '月流量限制', 64)
+  normalized.portLimit = optionalPackageInteger(input, 'portLimit', '端口映射数', 1, POSTGRES_INT_MAX)
+  normalized.snapshotLimit = optionalPackageInteger(input, 'snapshotLimit', '快照数', 0, POSTGRES_INT_MAX)
+  normalized.backupLimit = optionalPackageInteger(input, 'backupLimit', '备份数', 0, POSTGRES_INT_MAX)
+  normalized.siteLimit = optionalPackageInteger(input, 'siteLimit', '反代站点数', 0, POSTGRES_INT_MAX)
+  normalized.ioLimitMode = optionalPackageEnum(input, 'ioLimitMode', 'I/O限制模式', ['throughput', 'iops'])
+  normalized.limitsRead = optionalPackageText(input, 'limitsRead', '读取限制', MAX_PACKAGE_LIMIT_STRING_LENGTH)
+  normalized.limitsWrite = optionalPackageText(input, 'limitsWrite', '写入限制', MAX_PACKAGE_LIMIT_STRING_LENGTH)
+  normalized.limitsReadIops = optionalPackageInteger(input, 'limitsReadIops', '读取 IOPS', 0, POSTGRES_INT_MAX)
+  normalized.limitsWriteIops = optionalPackageInteger(input, 'limitsWriteIops', '写入 IOPS', 0, POSTGRES_INT_MAX)
+  normalized.limitsIngress = optionalPackageText(input, 'limitsIngress', '入站带宽限制', MAX_PACKAGE_LIMIT_STRING_LENGTH)
+  normalized.limitsEgress = optionalPackageText(input, 'limitsEgress', '出站带宽限制', MAX_PACKAGE_LIMIT_STRING_LENGTH)
+  normalized.limitsProcesses = optionalPackageInteger(input, 'limitsProcesses', '进程限制', 0, POSTGRES_INT_MAX)
+  normalized.limitsCpuPriority = optionalPackageInteger(input, 'limitsCpuPriority', 'CPU优先级', 0, 10)
+  normalized.bootAutostart = optionalPackageBoolean(input, 'bootAutostart', 'bootAutostart')
+  normalized.bootAutostartPriority = optionalPackageInteger(input, 'bootAutostartPriority', '启动优先级', 0, 100)
+  normalized.bootAutostartDelay = optionalPackageInteger(input, 'bootAutostartDelay', '启动延迟', 5, 600)
+  normalized.bootHostShutdownTimeout = optionalPackageInteger(input, 'bootHostShutdownTimeout', '关机超时', 30, 600)
+  normalized.globalShared = optionalPackageBoolean(input, 'globalShared', 'globalShared')
+  if (input.globalQuotaMultiplier !== undefined) {
+    if (input.globalQuotaMultiplier !== null && typeof input.globalQuotaMultiplier !== 'number') {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '全局配额倍数无效')
+    }
+    normalized.globalQuotaMultiplier = null
+  }
+  normalized.globalMaxInstances = input.globalMaxInstances === undefined
+    ? undefined
+    : input.globalMaxInstances === null
+      ? null
+      : requirePackageInteger(input.globalMaxInstances, '公开套餐最大实例数', PUBLIC_PACKAGE_MAX_INSTANCES_MIN, PUBLIC_PACKAGE_MAX_INSTANCES_MAX)
+  normalized.requiredPackageId = normalizePackageRequiredId(input.requiredPackageId)
+
+  return normalized
+}
+
+function normalizePackageShareQuotaMultiplier(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '配额倍数必须为数字')
+  }
+  if (value < 0.1 || value > 99.9) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '配额倍数必须在 0.1-99.9 之间')
+  }
+  const rounded = Math.round(value * 10) / 10
+  if (Math.abs(value - rounded) > 1e-8) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '配额倍数最多支持一位小数')
+  }
+  return rounded
+}
+
+function normalizePackageShareMaxInstances(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  return requirePackageInteger(value, '共享最大实例数', 0, MAX_PACKAGE_HOST_BINDINGS)
+}
+
+function normalizePackageShareInput(input: unknown, options: { requireFriendId: boolean }): NormalizedPackageShareInput {
+  if (!isPlainRecord(input)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  }
+
+  const normalized: NormalizedPackageShareInput = {}
+  if (options.requireFriendId) {
+    normalized.friendId = requirePackageInteger(input.friendId, '好友 ID', 1, Number.MAX_SAFE_INTEGER)
+  } else if (input.friendId !== undefined) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  }
+
+  normalized.quotaMultiplier = normalizePackageShareQuotaMultiplier(input.quotaMultiplier)
+  normalized.maxInstances = normalizePackageShareMaxInstances(input.maxInstances)
+  return normalized
+}
+
 function validatePublicPackageMaxInstances(value: unknown): value is number {
   return typeof value === 'number' &&
     Number.isInteger(value) &&
     value >= PUBLIC_PACKAGE_MAX_INSTANCES_MIN &&
     value <= PUBLIC_PACKAGE_MAX_INSTANCES_MAX
-}
-
-function validatePackagePlanPrice(value: unknown): string | null {
-  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value)) {
-    return '价格必须是有效金额'
-  }
-  if (value < 0) {
-    return '价格不能为负数'
-  }
-  if (value > MAX_PACKAGE_PLAN_PRICE_CENTS) {
-    return `方案价格不能超过 ¥${MAX_PACKAGE_PLAN_PRICE_YUAN}`
-  }
-  return null
 }
 
 function normalizePublicPackageMaxInstances(value: unknown): number {
@@ -114,14 +592,14 @@ async function shouldSyncPackageTrafficLimitsAfterUpdate(
     host_traffic_multipliers?: Record<string, number>
   },
   updates: {
-    monthlyTrafficLimit?: string | null
+    monthlyTrafficLimit?: bigint | null
     hostIds?: number[]
     hostTrafficMultipliers?: Record<string, number | string | null>
   }
 ): Promise<boolean> {
   if (updates.monthlyTrafficLimit !== undefined) {
     const currentLimit = currentPackage.monthly_traffic_limit ? BigInt(currentPackage.monthly_traffic_limit) : null
-    const nextLimit = updates.monthlyTrafficLimit ? BigInt(updates.monthlyTrafficLimit) : null
+    const nextLimit = updates.monthlyTrafficLimit
     if (currentLimit !== nextLimit) {
       return true
     }
@@ -457,7 +935,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   // - userId: 管理员专用，筛选特定用户（仅 scope=hosted 时有效）
   fastify.get<{ Querystring: { all?: string; source?: string; zoneId?: string; scope?: string; userId?: string } }>('/', {
     onRequest: [fastify.authenticate]
-  }, async (request: FastifyRequest<{ Querystring: { all?: string; source?: string; zoneId?: string; scope?: string; userId?: string } }>) => {
+  }, async (request: FastifyRequest<{ Querystring: { all?: string; source?: string; zoneId?: string; scope?: string; userId?: string } }>, reply: FastifyReply) => {
     const { user } = request
     // all=true 时返回所有套餐（用于套餐管理页面），否则只返回启用的套餐（用于创建实例页面）
     const activeOnly = request.query.all !== 'true'
@@ -513,11 +991,12 @@ export default async function packageRoutes(fastify: FastifyInstance) {
           ownerRole: 'user'
         }
         
-        if (filterUserId) {
-          const filterUid = parseInt(filterUserId, 10)
-          if (!isNaN(filterUid) && filterUid !== user.id) {
-            queryOptions.userId = filterUid
-          }
+        const parsedFilterUserId = parseOptionalPositiveQueryInteger(filterUserId)
+        if (parsedFilterUserId === null) {
+          return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid package owner filter'))
+        }
+        if (parsedFilterUserId && parsedFilterUserId !== user.id) {
+          queryOptions.userId = parsedFilterUserId
         }
         
         const hostedPackages = await db.getAllPackages(activeOnly, queryOptions)
@@ -659,8 +1138,11 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     }
 
     if (source === 'zone') {
-      const zoneId = Number.parseInt(request.query.zoneId || '', 10)
-      if (!Number.isInteger(zoneId) || zoneId <= 0) {
+      const zoneId = parseOptionalPositiveQueryInteger(request.query.zoneId)
+      if (zoneId === null) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid hosting zone filter'))
+      }
+      if (zoneId === undefined) {
         return { packages: [], total: 0 }
       }
 
@@ -852,9 +1334,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
     const { user } = request
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1087,15 +1569,20 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Body: CreatePackageRequest }>, reply: FastifyReply) => {
+    let packageInput: NormalizedPackageInput
+    try {
+      packageInput = normalizePackageInput(request.body, { requireAll: true })
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
     const {
       name, description, cpuMax, memoryMax, diskMax, bandwidthMax, networkMode, instanceType, hostIds, privileged, nested, active,
       monthlyTrafficLimit, portLimit, snapshotLimit, backupLimit, siteLimit,
       ioLimitMode, limitsRead, limitsWrite, limitsReadIops, limitsWriteIops,
       limitsIngress, limitsEgress, limitsProcesses, limitsCpuPriority,
-      bootAutostart, bootAutostartPriority, bootAutostartDelay, bootHostShutdownTimeout,
-      globalShared, globalMaxInstances, hostStoragePools, hostTrafficMultipliers
-    } = request.body as CreatePackageRequest & PackagePrerequisiteRequestFields & { hostTrafficMultipliers?: Record<string, number | string | null> }
-    const { requiredPackageId } = request.body as PackagePrerequisiteRequestFields
+      bootAutostart, bootAutostartPriority, bootHostShutdownTimeout,
+      globalShared, globalMaxInstances, hostStoragePools, hostTrafficMultipliers, requiredPackageId
+    } = packageInput
 
     // 验证必须至少绑定一个宿主机
     if (!hostIds || hostIds.length === 0) {
@@ -1108,21 +1595,8 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: packageNetworkModeError, code: 'KVM_NETWORK_MODE_UNSUPPORTED' })
     }
 
-    const nameValidation = validateName(name, 'Package name', 2, 64)
-    if (!nameValidation.valid) {
-      return reply.code(400).send({ error: nameValidation.message })
-    }
-
-    // 验证描述（如果提供）
-    if (description) {
-      const descValidation = validateText(description, 'Package description', 500)
-      if (!descValidation.valid) {
-        return reply.code(400).send({ error: descValidation.message })
-      }
-    }
-
     // 检查名称是否已存在（同一用户下）
-    const existing = await db.getPackageByUserAndName(request.user.id, name)
+    const existing = await db.getPackageByUserAndName(request.user.id, name!)
     if (existing) {
       return reply.code(400).send({ error: 'Package name already exists', code: 'NAME_EXISTS' })
     }
@@ -1138,22 +1612,24 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       })
     }
 
-    // 转换流量限额为 BigInt
-    const trafficLimit = monthlyTrafficLimit ? BigInt(monthlyTrafficLimit) : null
+    const trafficLimit = parseNullablePostgresBigIntInput(monthlyTrafficLimit)
+    if (trafficLimit === undefined) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid monthly traffic limit'))
+    }
 
     let id: number
     try {
       id = await db.createPackage({
         userId: request.user.id,  // 所有者为当前用户
-        name,
+        name: name!,
         description,
-        cpuMax,
-        memoryMax,
-        diskMax,
+        cpuMax: cpuMax!,
+        memoryMax: memoryMax!,
+        diskMax: diskMax!,
         bandwidthMax,
         networkMode: networkMode || 'nat',
         instanceType: instanceType || 'container',
-        hostIds: hostIds!,
+        hostIds,
         hostStoragePools,
         hostTrafficMultipliers,
         privileged,
@@ -1179,7 +1655,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         // 启动配置
         bootAutostart,
         bootAutostartPriority,
-        bootAutostartDelay,
+        bootAutostartDelay: packageInput.bootAutostartDelay,
         bootHostShutdownTimeout,
         // 全局共享配置
         globalShared,
@@ -1200,11 +1676,11 @@ export default async function packageRoutes(fastify: FastifyInstance) {
 
     // 注意：已取消配额限制，不再更新 packageUsed
 
-    await createLog(request.user.id, 'package', 'package.create', `Created package "${name}" [CPU: ${cpuMax}%, Memory: ${memoryMax}MB, Disk: ${diskMax}MB, instanceType: ${instanceType || 'container'}, network: ${request.body.networkMode || 'nat'}, hosts: ${hostIds!.join(',')}]`, 'success')
+    await createLog(request.user.id, 'package', 'package.create', `Created package "${name}" [CPU: ${cpuMax}%, Memory: ${memoryMax}MB, Disk: ${diskMax}MB, instanceType: ${instanceType || 'container'}, network: ${networkMode || 'nat'}, hosts: ${hostIds.join(',')}]`, 'success')
 
     reply.code(201).send({
       message: 'Package created',
-      package: { id, name }
+      package: { id, name: name! }
     })
   })
 
@@ -1276,9 +1752,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     Body: UpdatePackageRequest
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1292,25 +1768,16 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 验证套餐名称（如果提供）
-    if (request.body.name) {
-      const nameValidation = validateName(request.body.name, 'Package name', 2, 64)
-      if (!nameValidation.valid) {
-        return reply.code(400).send({ error: nameValidation.message })
-      }
-    }
-
-    // 验证描述（如果提供）
-    if (request.body.description) {
-      const descValidation = validateText(request.body.description, 'Package description', 500)
-      if (!descValidation.valid) {
-        return reply.code(400).send({ error: descValidation.message })
-      }
+    let packageInput: NormalizedPackageInput
+    try {
+      packageInput = normalizePackageInput(request.body, { requireAll: false })
+    } catch (error) {
+      return reply.code(400).send(error)
     }
 
     // 如果更新名称，检查是否冲突（同一用户下）
-    if (request.body.name && request.body.name !== pkg.name) {
-      const existing = await db.getPackageByUserAndName(pkg.user_id!, request.body.name)
+    if (packageInput.name && packageInput.name !== pkg.name) {
+      const existing = await db.getPackageByUserAndName(pkg.user_id!, packageInput.name)
       if (existing) {
         return reply.code(400).send({ error: 'Package name already exists', code: 'NAME_EXISTS' })
       }
@@ -1323,14 +1790,23 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       limitsIngress, limitsEgress, limitsProcesses, limitsCpuPriority,
       bootAutostart, bootAutostartPriority, bootAutostartDelay, bootHostShutdownTimeout,
       globalShared, globalQuotaMultiplier, globalMaxInstances,
-      ...restBody
-    } = request.body as UpdatePackageRequest & PackagePrerequisiteRequestFields & { hostTrafficMultipliers?: Record<string, number | string | null> }
-    const { requiredPackageId } = request.body as PackagePrerequisiteRequestFields
-    const updateData: Parameters<typeof db.updatePackage>[1] = { ...restBody }
-    delete (updateData as any).allowInstanceDeletion
+      requiredPackageId
+    } = packageInput
+    const updateData: Parameters<typeof db.updatePackage>[1] = {}
+    if (packageInput.name !== undefined) updateData.name = packageInput.name
+    if (packageInput.description !== undefined) updateData.description = packageInput.description
+    if (packageInput.cpuMax !== undefined) updateData.cpuMax = packageInput.cpuMax
+    if (packageInput.memoryMax !== undefined) updateData.memoryMax = packageInput.memoryMax
+    if (packageInput.diskMax !== undefined) updateData.diskMax = packageInput.diskMax
+    if (packageInput.bandwidthMax !== undefined) updateData.bandwidthMax = packageInput.bandwidthMax
+    if (packageInput.networkMode !== undefined) updateData.networkMode = packageInput.networkMode
+    if (packageInput.instanceType !== undefined) updateData.instanceType = packageInput.instanceType
+    if (packageInput.privileged !== undefined) updateData.privileged = packageInput.privileged
+    if (packageInput.nested !== undefined) updateData.nested = packageInput.nested
+    if (packageInput.active !== undefined) updateData.active = packageInput.active
     updateData.allowInstanceDeletion = true
-    const nextInstanceType = request.body.instanceType ?? pkg.instance_type ?? 'container'
-    const nextNetworkMode = request.body.networkMode ?? pkg.network_mode ?? 'nat'
+    const nextInstanceType = packageInput.instanceType ?? pkg.instance_type ?? 'container'
+    const nextNetworkMode = packageInput.networkMode ?? pkg.network_mode ?? 'nat'
 
     const packageNetworkModeError = validatePackageNetworkModeForInstanceType(nextInstanceType, nextNetworkMode)
     if (packageNetworkModeError) {
@@ -1347,8 +1823,13 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     if (hostStoragePools !== undefined) updateData.hostStoragePools = hostStoragePools
     if (hostTrafficMultipliers !== undefined) updateData.hostTrafficMultipliers = hostTrafficMultipliers
 
+    let parsedMonthlyTrafficLimit: bigint | null | undefined
     if (monthlyTrafficLimit !== undefined) {
-      updateData.monthlyTrafficLimit = monthlyTrafficLimit ? BigInt(monthlyTrafficLimit) : null
+      parsedMonthlyTrafficLimit = parseNullablePostgresBigIntInput(monthlyTrafficLimit)
+      if (parsedMonthlyTrafficLimit === undefined) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid monthly traffic limit'))
+      }
+      updateData.monthlyTrafficLimit = parsedMonthlyTrafficLimit
     }
     if (portLimit !== undefined) updateData.portLimit = portLimit
     if (snapshotLimit !== undefined) updateData.snapshotLimit = snapshotLimit
@@ -1420,7 +1901,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
 
     try {
       const shouldSyncTrafficLimits = await shouldSyncPackageTrafficLimitsAfterUpdate(packageId, pkg, {
-        monthlyTrafficLimit,
+        monthlyTrafficLimit: parsedMonthlyTrafficLimit,
         hostIds,
         hostTrafficMultipliers
       })
@@ -1448,12 +1929,12 @@ export default async function packageRoutes(fastify: FastifyInstance) {
 
     // 构建变更详情
     const pkgChanges: string[] = []
-    if (request.body.name && request.body.name !== pkg.name) pkgChanges.push(`name -> "${request.body.name}"`)
-    if (request.body.cpuMax !== undefined) pkgChanges.push(`cpuMax -> ${request.body.cpuMax}%`)
-    if (request.body.memoryMax !== undefined) pkgChanges.push(`memoryMax -> ${request.body.memoryMax}MB`)
-    if (request.body.diskMax !== undefined) pkgChanges.push(`diskMax -> ${request.body.diskMax}MB`)
-    if (request.body.instanceType) pkgChanges.push(`instanceType -> ${request.body.instanceType}`)
-    if (request.body.active !== undefined) pkgChanges.push(`active -> ${request.body.active}`)
+    if (packageInput.name && packageInput.name !== pkg.name) pkgChanges.push(`name -> "${packageInput.name}"`)
+    if (packageInput.cpuMax !== undefined) pkgChanges.push(`cpuMax -> ${packageInput.cpuMax}%`)
+    if (packageInput.memoryMax !== undefined) pkgChanges.push(`memoryMax -> ${packageInput.memoryMax}MB`)
+    if (packageInput.diskMax !== undefined) pkgChanges.push(`diskMax -> ${packageInput.diskMax}MB`)
+    if (packageInput.instanceType) pkgChanges.push(`instanceType -> ${packageInput.instanceType}`)
+    if (packageInput.active !== undefined) pkgChanges.push(`active -> ${packageInput.active}`)
     if (hostIds !== undefined) pkgChanges.push(`hosts -> [${hostIds.join(',')}]`)
 
     await createLog(request.user.id, 'package', 'package.update', `Updated package "${pkg.name}" [${pkgChanges.length > 0 ? pkgChanges.join(', ') : 'minor changes'}]`, 'success')
@@ -1467,9 +1948,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } }  // 高危操作，更严格限制
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1520,11 +2001,17 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request, reply: FastifyReply) => {
     const { id } = request.params
-    const { friendId, quotaMultiplier, maxInstances } = request.body
     const { user } = request
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
+    let shareInput: NormalizedPackageShareInput
+    try {
+      shareInput = normalizePackageShareInput(request.body, { requireFriendId: true })
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
+    const { friendId, quotaMultiplier, maxInstances } = shareInput
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1538,19 +2025,19 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     }
 
     // 验证好友关系
-    const areFriends = await db.areFriends(user.id, friendId)
+    const areFriends = await db.areFriends(user.id, friendId!)
     if (!areFriends) {
       return reply.code(400).send(apiError(ErrorCode.NOT_FRIENDS))
     }
 
     // 检查是否已共享
-    const existingShare = await packageShares.getPackageShareForUser(packageId, friendId)
+    const existingShare = await packageShares.isPackageSharedTo(packageId, friendId!)
     if (existingShare) {
       return reply.code(400).send(apiError(ErrorCode.PACKAGE_ALREADY_SHARED))
     }
 
     // 创建共享
-    const shareId = await packageShares.sharePackage(packageId, user.id, friendId, quotaMultiplier, maxInstances)
+    const shareId = await packageShares.sharePackage(packageId, user.id, friendId!, quotaMultiplier, maxInstances)
     return { success: true, shareId }
   })
 
@@ -1562,10 +2049,10 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request, reply: FastifyReply) => {
     const { id, userId } = request.params
     const { user } = request
-    const packageId = Number(id)
-    const targetUserId = Number(userId)
+    const packageId = parsePositiveRouteId(id)
+    const targetUserId = parsePositiveRouteId(userId)
 
-    if (isNaN(packageId) || isNaN(targetUserId)) {
+    if (!packageId || !targetUserId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1591,12 +2078,18 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request, reply: FastifyReply) => {
     const { id, shareId } = request.params
-    const { quotaMultiplier, maxInstances } = request.body
     const { user } = request
-    const packageId = Number(id)
-    const shareIdNum = Number(shareId)
+    const packageId = parsePositiveRouteId(id)
+    const shareIdNum = parsePositiveRouteId(shareId)
+    let shareInput: NormalizedPackageShareInput
+    try {
+      shareInput = normalizePackageShareInput(request.body, { requireFriendId: false })
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
+    const { quotaMultiplier, maxInstances } = shareInput
 
-    if (isNaN(packageId) || isNaN(shareIdNum)) {
+    if (!packageId || !shareIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1623,9 +2116,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request, reply: FastifyReply) => {
     const { id } = request.params
     const { user } = request
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1660,9 +2153,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
     const { user } = request
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1690,9 +2183,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
     const { user } = request
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1813,9 +2306,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     const { id } = request.params
     const { hostIds, cpuAdd, memoryAdd, notify } = request.body
     const { user } = request
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1925,10 +2418,10 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string }; Querystring: { activeOnly?: string } }>, reply: FastifyReply) => {
     const { id } = request.params
     const { user } = request
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
     const activeOnly = request.query.activeOnly === 'true'
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2003,9 +2496,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params
     const { user } = request
-    const packageId = Number(id)
+    const packageId = parsePositiveRouteId(id)
 
-    if (isNaN(packageId)) {
+    if (!packageId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2018,22 +2511,16 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    const { name, description, cpu, memory, disk, portLimit, snapshotLimit, backupLimit, siteLimit, swapSize, trafficLimit, trafficLimitSpeed, price, billingCycle, isActive, isSoldOut, sortOrder, slaGuarantee } = request.body
-    const normalizedSwapSize = pkg.instance_type === 'vm' ? 0 : swapSize
-
-    if (isActive !== undefined && typeof isActive !== 'boolean') {
-      return reply.code(400).send({ error: 'isActive 必须为布尔值' })
+    let planInput: NormalizedPackagePlanInput
+    try {
+      planInput = normalizePackagePlanInput(request.body, {
+        requireAll: true,
+        isVm: pkg.instance_type === 'vm'
+      })
+    } catch (error) {
+      return reply.code(400).send(error)
     }
-    if (isSoldOut !== undefined && typeof isSoldOut !== 'boolean') {
-      return reply.code(400).send({ error: 'isSoldOut 必须为布尔值' })
-    }
-
-    // 验证方案名称：允许 emoji，但仍禁止危险字符
-    const nameValidation = validatePackagePlanName(name)
-    if (!nameValidation.valid) {
-      return reply.code(400).send({ error: nameValidation.message })
-    }
-    const planName = nameValidation.sanitized!
+    const planName = planInput.name!
 
     // 验证名称唯一性
     const isUnique = await db.isPlanNameUnique(packageId, planName)
@@ -2041,34 +2528,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '该套餐下已存在同名方案' })
     }
 
-    // 验证资源配置
-    if (cpu < 15 || cpu > 10000) {
-      return reply.code(400).send({ error: 'CPU 必须在 15-10000 之间' })
-    }
-    if (memory < 128 || memory > 62144) {
-      return reply.code(400).send({ error: '内存必须在 128-62144 MB 之间' })
-    }
-    if (disk < 512 || disk > 104857600) {
-      return reply.code(400).send({ error: '磁盘必须在 512 MB - 100 TB 之间' })
-    }
-    if (normalizedSwapSize < 0 || normalizedSwapSize > 1048576) {
-      return reply.code(400).send({ error: 'SWAP 必须在 0-1048576 MB 之间' })
-    }
-    const priceError = validatePackagePlanPrice(price)
-    if (priceError) {
-      return reply.code(400).send({ error: priceError })
-    }
-
-    // 验证 SLA 保证值
-    if (slaGuarantee !== undefined && slaGuarantee !== null) {
-      if (slaGuarantee < 1 || slaGuarantee > 100) {
-        return reply.code(400).send({ error: 'SLA保证必须在 1-100 之间' })
-      }
-    }
-
     // 用户托管节点的方案只能按月计费
     if (user.role !== 'admin') {
-      const actualBillingCycle = billingCycle ?? 1
+      const actualBillingCycle = planInput.billingCycle ?? 1
       if (actualBillingCycle !== 1) {
         return reply.code(400).send({
           error: '用户托管节点的方案仅支持按月计费',
@@ -2078,27 +2540,40 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      const parsedTrafficLimit = parseRequiredPostgresBigIntInput(planInput.trafficLimit)
+      if (parsedTrafficLimit === undefined) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid plan traffic limit'))
+      }
+      let normalizedTrafficLimitSpeed: string | undefined
+      if (planInput.trafficLimitSpeed !== undefined) {
+        const parsedTrafficLimitSpeed = normalizePlanTrafficLimitSpeed(planInput.trafficLimitSpeed)
+        if (parsedTrafficLimitSpeed === undefined) {
+          return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid plan traffic limit speed'))
+        }
+        normalizedTrafficLimitSpeed = parsedTrafficLimitSpeed ?? '0'
+      }
+
       const plan = await db.createPlan({
         packageId,
         name: planName,
-        description,
-        cpu,
-        memory,
-        disk,
-        portLimit,
-        snapshotLimit,
-        backupLimit,
-        siteLimit,
-        swapSize: normalizedSwapSize,
-        trafficLimit: BigInt(trafficLimit),
-        trafficLimitSpeed,
-        price,
-        billingCycle,
+        description: planInput.description,
+        cpu: planInput.cpu!,
+        memory: planInput.memory!,
+        disk: planInput.disk!,
+        portLimit: planInput.portLimit!,
+        snapshotLimit: planInput.snapshotLimit!,
+        backupLimit: planInput.backupLimit!,
+        siteLimit: planInput.siteLimit!,
+        swapSize: planInput.swapSize!,
+        trafficLimit: parsedTrafficLimit,
+        trafficLimitSpeed: normalizedTrafficLimitSpeed,
+        price: planInput.price!,
+        billingCycle: planInput.billingCycle,
         setupFee: 0,  // 开通费固定为0
-        isActive,
-        isSoldOut,
-        sortOrder,
-        slaGuarantee
+        isActive: planInput.isActive,
+        isSoldOut: planInput.isSoldOut,
+        sortOrder: planInput.sortOrder,
+        slaGuarantee: planInput.slaGuarantee
       })
 
       await createLog(
@@ -2149,10 +2624,10 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { id, planId } = request.params
     const { user } = request
-    const packageId = Number(id)
-    const planIdNum = Number(planId)
+    const packageId = parsePositiveRouteId(id)
+    const planIdNum = parsePositiveRouteId(planId)
 
-    if (isNaN(packageId) || isNaN(planIdNum)) {
+    if (!packageId || !planIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2171,24 +2646,16 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: '方案不存在' })
     }
 
-    const { name, description, cpu, memory, disk, portLimit, snapshotLimit, backupLimit, siteLimit, swapSize, trafficLimit, trafficLimitSpeed, price, billingCycle, isActive, isSoldOut, sortOrder, slaGuarantee } = request.body
-    const normalizedSwapSize = pkg.instance_type === 'vm' ? 0 : swapSize
-
-    if (isActive !== undefined && typeof isActive !== 'boolean') {
-      return reply.code(400).send({ error: 'isActive 必须为布尔值' })
+    let planInput: NormalizedPackagePlanInput
+    try {
+      planInput = normalizePackagePlanInput(request.body, {
+        requireAll: false,
+        isVm: pkg.instance_type === 'vm'
+      })
+    } catch (error) {
+      return reply.code(400).send(error)
     }
-    if (isSoldOut !== undefined && typeof isSoldOut !== 'boolean') {
-      return reply.code(400).send({ error: 'isSoldOut 必须为布尔值' })
-    }
-
-    let planName: string | undefined
-    if (name !== undefined) {
-      const nameValidation = validatePackagePlanName(name)
-      if (!nameValidation.valid) {
-        return reply.code(400).send({ error: nameValidation.message })
-      }
-      planName = nameValidation.sanitized!
-    }
+    const planName = planInput.name
 
     // 如果修改了名称，验证唯一性
     if (planName !== undefined && planName !== existingPlan.name) {
@@ -2198,35 +2665,8 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       }
     }
 
-    // 验证资源配置
-    if (cpu !== undefined && (cpu < 15 || cpu > 10000)) {
-      return reply.code(400).send({ error: 'CPU 必须在 15-10000 之间' })
-    }
-    if (memory !== undefined && (memory < 128 || memory > 62144)) {
-      return reply.code(400).send({ error: '内存必须在 128-62144 MB 之间' })
-    }
-    if (disk !== undefined && (disk < 512 || disk > 104857600)) {
-      return reply.code(400).send({ error: '磁盘必须在 512 MB - 100 TB 之间' })
-    }
-    if (normalizedSwapSize !== undefined && (normalizedSwapSize < 0 || normalizedSwapSize > 1048576)) {
-      return reply.code(400).send({ error: 'SWAP 必须在 0-1048576 MB 之间' })
-    }
-    if (price !== undefined) {
-      const priceError = validatePackagePlanPrice(price)
-      if (priceError) {
-        return reply.code(400).send({ error: priceError })
-      }
-    }
-
-    // 验证 SLA 保证值
-    if (slaGuarantee !== undefined && slaGuarantee !== null) {
-      if (slaGuarantee < 1 || slaGuarantee > 100) {
-        return reply.code(400).send({ error: 'SLA保证必须在 1-100 之间' })
-      }
-    }
-
     // 用户托管节点的方案只能按月计费
-    if (user.role !== 'admin' && billingCycle !== undefined && billingCycle !== 1) {
+    if (user.role !== 'admin' && planInput.billingCycle !== undefined && planInput.billingCycle !== 1) {
       return reply.code(400).send({
         error: '用户托管节点的方案仅支持按月计费',
         code: 'HOSTING_MONTHLY_ONLY'
@@ -2236,28 +2676,40 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     try {
       const updateData: any = {}
       if (planName !== undefined) updateData.name = planName
-      if (description !== undefined) updateData.description = description
-      if (cpu !== undefined) updateData.cpu = cpu
-      if (memory !== undefined) updateData.memory = memory
-      if (disk !== undefined) updateData.disk = disk
-      if (portLimit !== undefined) updateData.portLimit = portLimit
-      if (snapshotLimit !== undefined) updateData.snapshotLimit = snapshotLimit
-      if (backupLimit !== undefined) updateData.backupLimit = backupLimit
-      if (siteLimit !== undefined) updateData.siteLimit = siteLimit
+      if (planInput.description !== undefined) updateData.description = planInput.description
+      if (planInput.cpu !== undefined) updateData.cpu = planInput.cpu
+      if (planInput.memory !== undefined) updateData.memory = planInput.memory
+      if (planInput.disk !== undefined) updateData.disk = planInput.disk
+      if (planInput.portLimit !== undefined) updateData.portLimit = planInput.portLimit
+      if (planInput.snapshotLimit !== undefined) updateData.snapshotLimit = planInput.snapshotLimit
+      if (planInput.backupLimit !== undefined) updateData.backupLimit = planInput.backupLimit
+      if (planInput.siteLimit !== undefined) updateData.siteLimit = planInput.siteLimit
       if (pkg.instance_type === 'vm') {
         updateData.swapSize = 0
-      } else if (normalizedSwapSize !== undefined) {
-        updateData.swapSize = normalizedSwapSize
+      } else if (planInput.swapSize !== undefined) {
+        updateData.swapSize = planInput.swapSize
       }
-      if (trafficLimit !== undefined) updateData.trafficLimit = BigInt(trafficLimit)
-      if (trafficLimitSpeed !== undefined) updateData.trafficLimitSpeed = trafficLimitSpeed
-      if (price !== undefined) updateData.price = price
-      if (billingCycle !== undefined) updateData.billingCycle = billingCycle
+      if (planInput.trafficLimit !== undefined) {
+        const parsedTrafficLimit = parseRequiredPostgresBigIntInput(planInput.trafficLimit)
+        if (parsedTrafficLimit === undefined) {
+          return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid plan traffic limit'))
+        }
+        updateData.trafficLimit = parsedTrafficLimit
+      }
+      if (planInput.trafficLimitSpeed !== undefined) {
+        const parsedTrafficLimitSpeed = normalizePlanTrafficLimitSpeed(planInput.trafficLimitSpeed)
+        if (parsedTrafficLimitSpeed === undefined) {
+          return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid plan traffic limit speed'))
+        }
+        updateData.trafficLimitSpeed = parsedTrafficLimitSpeed ?? '0'
+      }
+      if (planInput.price !== undefined) updateData.price = planInput.price
+      if (planInput.billingCycle !== undefined) updateData.billingCycle = planInput.billingCycle
       // setupFee 已废弃，不再接受更新
-      if (isActive !== undefined) updateData.isActive = isActive
-      if (isSoldOut !== undefined) updateData.isSoldOut = isSoldOut
-      if (sortOrder !== undefined) updateData.sortOrder = sortOrder
-      if (slaGuarantee !== undefined) updateData.slaGuarantee = slaGuarantee
+      if (planInput.isActive !== undefined) updateData.isActive = planInput.isActive
+      if (planInput.isSoldOut !== undefined) updateData.isSoldOut = planInput.isSoldOut
+      if (planInput.sortOrder !== undefined) updateData.sortOrder = planInput.sortOrder
+      if (planInput.slaGuarantee !== undefined) updateData.slaGuarantee = planInput.slaGuarantee
 
       const updatedPlan = await db.updatePlan(planIdNum, updateData)
 
@@ -2310,10 +2762,10 @@ export default async function packageRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { id, planId } = request.params
     const { user } = request
-    const packageId = Number(id)
-    const planIdNum = Number(planId)
+    const packageId = parsePositiveRouteId(id)
+    const planIdNum = parsePositiveRouteId(planId)
 
-    if (isNaN(packageId) || isNaN(planIdNum)) {
+    if (!packageId || !planIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2360,7 +2812,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     Querystring: { source?: 'official' | 'market' | 'friends' | 'zone'; zoneId?: string }
   }>('/regions', {
     onRequest: [fastify.authenticate]
-  }, async (request) => {
+  }, async (request, reply) => {
     const { source = 'official' } = request.query
     const user = request.user
     
@@ -2442,8 +2894,11 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         whereCondition.userId = { notIn: excludedOwnerIds }
       }
     } else if (source === 'zone') {
-      const zoneId = Number.parseInt(request.query.zoneId || '', 10)
-      if (!Number.isInteger(zoneId) || zoneId <= 0) {
+      const zoneId = parseOptionalPositiveQueryInteger(request.query.zoneId)
+      if (zoneId === null) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid hosting zone filter'))
+      }
+      if (zoneId === undefined) {
         return { regions: [] }
       }
 

@@ -5,8 +5,11 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production'
+  const devPort = Number(process.env.VITE_DEV_PORT || 3000)
+  const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'http://127.0.0.1:3001'
 
   return {
+    envDir: '..',
     // 使用绝对路径根路径，在生产环境中静态资源需要从根路径加载
     base: '/',
     
@@ -40,10 +43,10 @@ export default defineConfig(({ mode }) => {
     },
     
     server: {
-      port: 43173,
+      port: devPort,
       proxy: {
         '/api': {
-          target: 'http://localhost:8888',
+          target: devProxyTarget,
           changeOrigin: true,
           ws: true,
           timeout: 10000,
@@ -80,13 +83,38 @@ export default defineConfig(({ mode }) => {
           entryFileNames: 'assets/[hash].js',
           assetFileNames: 'assets/[hash].[ext]',
           // 手动分割代码块，优化缓存和加载
-          manualChunks: {
-            // 核心 Vue 库（基础库，缓存利用率高）
-            'vue-core': ['vue', 'vue-router', 'pinia'],
-            // 国际化库
-            'vue-i18n': ['vue-i18n'],
-            // 网络请求库
-            'axios': ['axios'],
+          manualChunks(id) {
+            const normalizedId = id.replace(/\\/g, '/')
+
+            if (normalizedId.includes('/node_modules/vue/') ||
+              normalizedId.includes('/node_modules/vue-router/') ||
+              normalizedId.includes('/node_modules/pinia/')) {
+              return 'vue-core'
+            }
+            if (normalizedId.includes('/node_modules/vue-i18n/')) {
+              return 'vue-i18n'
+            }
+            if (normalizedId.includes('/node_modules/axios/')) {
+              return 'axios'
+            }
+            if (normalizedId.includes('/node_modules/@xterm/xterm/')) {
+              return 'xterm-core'
+            }
+            if (normalizedId.includes('/node_modules/@xterm/addon-')) {
+              return 'xterm-addons'
+            }
+            if (normalizedId.includes('/src/api/index.ts')) {
+              return 'api-client'
+            }
+            if (normalizedId.includes('/src/locales/zh-CN.ts')) {
+              return 'locale-zh-cn'
+            }
+            if (normalizedId.includes('/src/locales/zh-TW.ts')) {
+              return 'locale-zh-tw'
+            }
+            if (normalizedId.includes('/src/locales/en.ts')) {
+              return 'locale-en'
+            }
           },
         },
         onwarn(warning, warn) {

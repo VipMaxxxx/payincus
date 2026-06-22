@@ -3,10 +3,72 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import type { AffLogType, AffWithdrawalStatus } from '@prisma/client'
 import * as db from '../db/index.js'
 import { createLog } from '../db/logs.js'
 import { createInboxMessage } from '../db/inbox.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const AFF_ROUTE_MAX_PAGE_SIZE = 100
+const AFF_REJECT_REASON_MAX_LENGTH = 500
+const AFF_LOG_TYPES = new Set<AffLogType>(['new_purchase', 'renew', 'convert'])
+const AFF_WITHDRAWAL_STATUSES = new Set<AffWithdrawalStatus>(['pending', 'approved', 'rejected'])
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parseOptionalPositiveQueryInteger(value: string | undefined): number | null | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  return parsePositiveRouteId(value)
+}
+
+function parseClampedPositiveQueryInteger(value: string | undefined, fallback: number, max: number): number | null {
+  const parsed = parseOptionalPositiveQueryInteger(value)
+  if (parsed === null) {
+    return null
+  }
+
+  return Math.min(parsed ?? fallback, max)
+}
+
+function parseOptionalAffLogType(value: string | undefined): AffLogType | null | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  return AFF_LOG_TYPES.has(value as AffLogType) ? value as AffLogType : null
+}
+
+function parseOptionalAffWithdrawalStatus(value: string | undefined): AffWithdrawalStatus | null | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  return AFF_WITHDRAWAL_STATUSES.has(value as AffWithdrawalStatus) ? value as AffWithdrawalStatus : null
+}
+
+function normalizeRequiredText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > maxLength) {
+    return null
+  }
+
+  return trimmed
+}
 
 export default async function affRoutes(fastify: FastifyInstance) {
   // ==================== 用户 AFF API ====================
@@ -135,9 +197,9 @@ export default async function affRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
   }, async (request: FastifyRequest<{ Params: { codeId: string } }>, reply: FastifyReply) => {
     const { user } = request
-    const codeId = Number(request.params.codeId)
+    const codeId = parsePositiveRouteId(request.params.codeId)
 
-    if (isNaN(codeId)) {
+    if (!codeId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -167,14 +229,21 @@ export default async function affRoutes(fastify: FastifyInstance) {
     }
   }>('/me/logs', {
     onRequest: [fastify.authenticate]
-  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; type?: string } }>) => {
+  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; type?: string } }>, reply: FastifyReply) => {
     const { user } = request
     const { page = '1', pageSize = '20', type } = request.query
+    const parsedPage = parseClampedPositiveQueryInteger(page, 1, Number.MAX_SAFE_INTEGER)
+    const parsedPageSize = parseClampedPositiveQueryInteger(pageSize, 20, AFF_ROUTE_MAX_PAGE_SIZE)
+    const parsedType = parseOptionalAffLogType(type)
+
+    if (parsedPage === null || parsedPageSize === null || parsedType === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
+    }
 
     const result = await db.getAffLogs(user.id, {
-      page: Number(page),
-      pageSize: Number(pageSize),
-      type: type as any
+      page: parsedPage,
+      pageSize: parsedPageSize,
+      type: parsedType
     })
 
     return {
@@ -253,7 +322,7 @@ export default async function affRoutes(fastify: FastifyInstance) {
     const { user } = request
     const { amount } = request.body
 
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
+    if (!amount || typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
       return reply.code(400).send({ error: '请输入有效的转化金额' })
     }
 
@@ -294,14 +363,21 @@ export default async function affRoutes(fastify: FastifyInstance) {
     }
   }>('/me/withdrawals', {
     onRequest: [fastify.authenticate]
-  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; status?: string } }>) => {
+  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; status?: string } }>, reply: FastifyReply) => {
     const { user } = request
     const { page = '1', pageSize = '20', status } = request.query
+    const parsedPage = parseClampedPositiveQueryInteger(page, 1, Number.MAX_SAFE_INTEGER)
+    const parsedPageSize = parseClampedPositiveQueryInteger(pageSize, 20, AFF_ROUTE_MAX_PAGE_SIZE)
+    const parsedStatus = parseOptionalAffWithdrawalStatus(status)
+
+    if (parsedPage === null || parsedPageSize === null || parsedStatus === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
+    }
 
     const result = await db.getUserAffWithdrawals(user.id, {
-      page: Number(page),
-      pageSize: Number(pageSize),
-      status: status as any
+      page: parsedPage,
+      pageSize: parsedPageSize,
+      status: parsedStatus
     })
 
     return {
@@ -330,13 +406,20 @@ export default async function affRoutes(fastify: FastifyInstance) {
     }
   }>('/admin/withdrawals', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
-  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; status?: string } }>) => {
+  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; status?: string } }>, reply: FastifyReply) => {
     const { page = '1', pageSize = '20', status } = request.query
+    const parsedPage = parseClampedPositiveQueryInteger(page, 1, Number.MAX_SAFE_INTEGER)
+    const parsedPageSize = parseClampedPositiveQueryInteger(pageSize, 20, AFF_ROUTE_MAX_PAGE_SIZE)
+    const parsedStatus = parseOptionalAffWithdrawalStatus(status)
+
+    if (parsedPage === null || parsedPageSize === null || parsedStatus === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
+    }
 
     const result = await db.getPendingAffWithdrawals({
-      page: Number(page),
-      pageSize: Number(pageSize),
-      status: status as any
+      page: parsedPage,
+      pageSize: parsedPageSize,
+      status: parsedStatus
     })
 
     return {
@@ -366,9 +449,9 @@ export default async function affRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } }
   }, async (request: FastifyRequest<{ Params: { withdrawalId: string } }>, reply: FastifyReply) => {
     const { user } = request
-    const withdrawalId = Number(request.params.withdrawalId)
+    const withdrawalId = parsePositiveRouteId(request.params.withdrawalId)
 
-    if (isNaN(withdrawalId)) {
+    if (!withdrawalId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -413,14 +496,15 @@ export default async function affRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } }
   }, async (request: FastifyRequest<{ Params: { withdrawalId: string }; Body: { reason: string } }>, reply: FastifyReply) => {
     const { user } = request
-    const withdrawalId = Number(request.params.withdrawalId)
-    const { reason } = request.body
+    const withdrawalId = parsePositiveRouteId(request.params.withdrawalId)
+    const { reason: rawReason } = request.body
+    const reason = normalizeRequiredText(rawReason, AFF_REJECT_REASON_MAX_LENGTH)
 
-    if (isNaN(withdrawalId)) {
+    if (!withdrawalId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
-    if (!reason || !reason.trim()) {
+    if (!reason) {
       return reply.code(400).send({ error: '请填写拒绝原因' })
     }
 
@@ -430,7 +514,7 @@ export default async function affRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '申请不存在' })
     }
 
-    const result = await db.rejectAffWithdrawal(withdrawalId, user.id, reason.trim())
+    const result = await db.rejectAffWithdrawal(withdrawalId, user.id, reason)
 
     if (!result.success) {
       return reply.code(400).send({ error: result.error })
@@ -449,8 +533,8 @@ export default async function affRoutes(fastify: FastifyInstance) {
       userId: withdrawal.userId,
       eventType: 'aff_convert_rejected',
       title: 'AFF 转化申请被拒绝',
-      content: `您的 AFF 余额转化申请（¥${Number(withdrawal.amount).toFixed(2)}）已被拒绝。\n拒绝原因：${reason.trim()}`,
-      data: { withdrawalId, amount: Number(withdrawal.amount), reason: reason.trim() }
+      content: `您的 AFF 余额转化申请（¥${Number(withdrawal.amount).toFixed(2)}）已被拒绝。\n拒绝原因：${reason}`,
+      data: { withdrawalId, amount: Number(withdrawal.amount), reason }
     })
 
     return { message: '已拒绝' }

@@ -1,6 +1,9 @@
 package report
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 func TestHeartbeatPayloadIncludesHostMetrics(t *testing.T) {
 	payload := HeartbeatPayload("test-version", 30)
@@ -45,20 +48,28 @@ func TestHeartbeatPayloadIncludesHostMetrics(t *testing.T) {
 	}
 	for _, key := range []string{
 		"cpuTotal",
-		"cpuUsagePercent",
-		"memoryTotalMb",
-		"memoryUsedMb",
-		"memoryUsagePercent",
 		"swapTotalMb",
 		"swapUsedMb",
 		"swapUsagePercent",
 		"diskTotalBytes",
 		"diskUsedBytes",
 		"diskUsagePercent",
-		"processCount",
 	} {
 		if _, ok := resources[key]; !ok {
 			t.Fatalf("resource key %s missing: %#v", key, resources)
+		}
+	}
+	if runtime.GOOS == "linux" {
+		for _, key := range []string{
+			"cpuUsagePercent",
+			"memoryTotalMb",
+			"memoryUsedMb",
+			"memoryUsagePercent",
+			"processCount",
+		} {
+			if _, ok := resources[key]; !ok {
+				t.Fatalf("linux resource key %s missing: %#v", key, resources)
+			}
 		}
 	}
 
@@ -66,9 +77,16 @@ func TestHeartbeatPayloadIncludesHostMetrics(t *testing.T) {
 	if !ok {
 		t.Fatalf("metrics missing or invalid: %#v", payload["metrics"])
 	}
-	for _, key := range []string{"reportedAt", "heartbeatIntervalSeconds", "uptimeSeconds", "load1", "load5", "load15"} {
+	for _, key := range []string{"reportedAt", "heartbeatIntervalSeconds"} {
 		if _, ok := metrics[key]; !ok {
 			t.Fatalf("metric key %s missing: %#v", key, metrics)
+		}
+	}
+	if runtime.GOOS == "linux" {
+		for _, key := range []string{"uptimeSeconds", "load1", "load5", "load15"} {
+			if _, ok := metrics[key]; !ok {
+				t.Fatalf("linux metric key %s missing: %#v", key, metrics)
+			}
 		}
 	}
 	if metrics["heartbeatIntervalSeconds"] != 30 {

@@ -680,6 +680,7 @@ export default {
         usernameOrEmailPlaceholder: '输入用户名或邮箱',
         password: '密码',
         passwordPlaceholder: '输入密码',
+        newPassword: '新密码',
         confirmPassword: '确认密码',
         confirmPasswordPlaceholder: '再次输入密码',
         email: '邮箱',
@@ -724,7 +725,7 @@ export default {
           codeSent: '验证码已发送，请查收邮件',
           codeHint: '请输入发送到您邮箱的6位验证码',
           resetPassword: '重置密码',
-          resetSuccess: '密码重置成功！新密码已发送到您的邮箱，请查收。',
+          resetSuccess: '密码重置成功！请使用新密码登录。',
           twoFactorDisabled: '您的双因素验证（2FA）已被自动禁用，建议重新启用以确保账户安全。'
         },
         oauthNotBound: '请先在个人设置中绑定 {provider} 账号后再使用快捷登录',
@@ -3198,7 +3199,7 @@ export default {
             // 重置密码
             resetPassword: '重置密码',
             resetPasswordConfirm: '确定要重置用户 "{name}" 的密码吗？',
-            resetPasswordHint: '系统将自动生成新密码，用户的所有会话将被撤销，需要使用新密码重新登录。',
+            resetPasswordHint: '请设置新密码。用户的所有会话将被撤销，需要使用新密码重新登录。新密码不会在保存后回显。',
             confirmResetPassword: '确认重置',
             resetting: '重置中...',
             passwordResetSuccess: '密码重置成功',
@@ -4272,6 +4273,8 @@ export default {
                 yipayMethodsHint: '选择该渠道支持的支付方式，至少选择一种。',
                 yipayMethodFeeHint: '手续费按用户选择的支付方式加到应付金额中，充值本金仍按原金额入账。',
                 yipayFeeFieldHint: '易支付手续费请在上方每个支付方式中设置。',
+                secretKeepPlaceholder: '留空保留当前密钥',
+                secretKeepHint: '已配置密钥，留空保存将保留原值。',
                 heleketMethods: '常见币种展示',
                 heleketMethodsPlaceholder: 'USDT@TRON\nUSDT@BSC\nBTC\nETH',
                 heleketMethodsHint: '仅作为后台展示与记录参考，不会限制用户在 Heleket 支付页最终选择的币种和网络。',
@@ -4778,6 +4781,7 @@ export default {
         CANNOT_BAN_ADMIN: '不能封禁管理员账户',
         CANNOT_DELETE_ADMIN: '不能删除管理员账户',
         USER_HAS_INSTANCES: '该用户还有实例，请先删除实例',
+        USER_HAS_RESOURCES: '该用户仍拥有实例、宿主机、套餐或托管专区，请先转移或删除相关资源',
         // 认证错误
         INVALID_CREDENTIALS: '用户名或密码错误',
         ACCOUNT_BANNED: '账户已被禁用',

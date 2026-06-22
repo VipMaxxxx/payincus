@@ -6,6 +6,7 @@ import { createClient, WebDAVClient } from 'webdav'
 import { Readable } from 'stream'
 import type { IStorageProvider, StorageConfigData } from '../types.js'
 import { assertSafeStorageTarget } from '../../lib/outbound-security.js'
+import { joinStorageRemoteDirectory, joinStorageRemotePath, normalizeStorageBasePath } from '../path.js'
 
 export class WebDavProvider implements IStorageProvider {
     private client: WebDAVClient
@@ -21,9 +22,7 @@ export class WebDavProvider implements IStorageProvider {
 
         this.rawHost = config.host
 
-        this.basePath = config.basePath?.endsWith('/')
-            ? config.basePath
-            : `${config.basePath || ''}/`
+        this.basePath = normalizeStorageBasePath(config.basePath)
 
         this.client = createClient(baseUrl, {
             username: config.username || undefined,
@@ -36,7 +35,7 @@ export class WebDavProvider implements IStorageProvider {
 
     async uploadStream(fileStream: Readable, filename: string): Promise<void> {
         await assertSafeStorageTarget('WEBDAV', this.rawHost)
-        const remotePath = this.basePath + filename
+        const remotePath = joinStorageRemotePath(this.basePath, filename)
 
         // 确保目录存在
         try {
@@ -72,7 +71,7 @@ export class WebDavProvider implements IStorageProvider {
 
     async deleteFile(filename: string): Promise<void> {
         await assertSafeStorageTarget('WEBDAV', this.rawHost)
-        const remotePath = this.basePath + filename
+        const remotePath = joinStorageRemotePath(this.basePath, filename)
         try {
             await this.client.deleteFile(remotePath)
         } catch (err) {
@@ -83,7 +82,7 @@ export class WebDavProvider implements IStorageProvider {
 
     async listFiles(path?: string): Promise<string[]> {
         await assertSafeStorageTarget('WEBDAV', this.rawHost)
-        const targetPath = path || this.basePath
+        const targetPath = joinStorageRemoteDirectory(this.basePath, path)
         try {
             const contents = await this.client.getDirectoryContents(targetPath)
             if (Array.isArray(contents)) {

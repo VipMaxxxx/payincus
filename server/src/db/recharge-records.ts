@@ -6,6 +6,7 @@ import { prisma } from './prisma.js'
 import type { RechargeRecord, RechargeStatus } from '@prisma/client'
 import { nanoid } from 'nanoid'
 import { getTodayRange } from '../lib/timezone.js'
+import { USER_BALANCE_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
 
 // ==================== 类型定义 ====================
 
@@ -24,12 +25,59 @@ export interface CreateRechargeOrderInput {
   paymentDetails?: Record<string, unknown> | null
 }
 
+export interface UpdateRechargePaymentSelectionInput {
+  paymentMethod?: string | null
+  fee: number
+  actualAmount: number
+  paymentDetails: Record<string, unknown> | null
+}
+
 export interface RechargeRecordWithProvider extends RechargeRecord {
   provider: {
     id: number
     name: string
     type: string
   }
+}
+
+export type CompleteRechargeResult = RechargeRecord & {
+  completedNow: boolean
+}
+
+interface MoneySumRow {
+  value: unknown
+}
+
+const RECHARGE_STATUSES = new Set<RechargeStatus>([
+  'pending',
+  'paid',
+  'completed',
+  'failed',
+  'cancelled',
+  'refunded'
+])
+
+function toMoney(value: unknown): number {
+  if (value === null || value === undefined) return 0
+  return parseFloat(String(value)) || 0
+}
+
+function clampPagination(
+  page: number | undefined,
+  pageSize: number | undefined,
+  fallbackPageSize: number = 20,
+  maxPageSize: number = 50
+): { page: number; pageSize: number } {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), maxPageSize)
+      : fallbackPageSize
+  }
+}
+
+function normalizeRechargeStatus(status: RechargeStatus | undefined): RechargeStatus | undefined {
+  return status && RECHARGE_STATUSES.has(status) ? status : undefined
 }
 
 // ==================== 订单号生成 ====================
@@ -89,13 +137,13 @@ export async function getUserRechargeRecords(
   userId: number,
   options: { page?: number; pageSize?: number; status?: RechargeStatus } = {}
 ): Promise<{ records: RechargeRecordWithProvider[]; total: number; page: number; pageSize: number }> {
-  const page = options.page || 1
-  const pageSize = Math.min(options.pageSize || 20, 50)
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
   const skip = (page - 1) * pageSize
+  const status = normalizeRechargeStatus(options.status)
 
   const where: Record<string, unknown> = { userId }
-  if (options.status) {
-    where.status = options.status
+  if (status) {
+    where.status = status
   }
 
   const [records, total] = await Promise.all([
@@ -127,13 +175,15 @@ export async function getUserRechargeRecords(
 export async function getAllRechargeRecords(
   options: { page?: number; pageSize?: number; status?: RechargeStatus; userId?: number } = {}
 ): Promise<{ records: RechargeRecordWithProvider[]; total: number; page: number; pageSize: number }> {
-  const page = options.page || 1
-  const pageSize = Math.min(options.pageSize || 20, 50)
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
   const skip = (page - 1) * pageSize
+  const status = normalizeRechargeStatus(options.status)
 
   const where: Record<string, unknown> = {}
-  if (options.status) where.status = options.status
-  if (options.userId) where.userId = options.userId
+  if (status) where.status = status
+  if (Number.isInteger(options.userId) && options.userId !== undefined && options.userId > 0) {
+    where.userId = options.userId
+  }
 
   const [records, total] = await Promise.all([
     prisma.rechargeRecord.findMany({
@@ -192,22 +242,6 @@ export async function createRechargeOrder(input: CreateRechargeOrderInput): Prom
 // ==================== 更新操作 ====================
 
 /**
- * 更新订单状态为已支付（处理中）
- */
-export async function markRechargePaid(
-  orderNo: string,
-  tradeNo?: string
-): Promise<RechargeRecord> {
-  return prisma.rechargeRecord.update({
-    where: { orderNo },
-    data: {
-      status: 'paid',
-      tradeNo
-    }
-  })
-}
-
-/**
  * 更新充值订单的支付元数据，不改变订单状态
  */
 export async function updateRechargeOrderMetadata(
@@ -233,10 +267,23 @@ export async function updateRechargeOrderMetadata(
     updateData.paymentDetails = data.paymentDetails as any
   }
 
-  return prisma.rechargeRecord.update({
-    where: { orderNo },
+  await prisma.rechargeRecord.updateMany({
+    where: {
+      orderNo,
+      status: { in: ['pending', 'paid'] }
+    },
     data: updateData
   })
+
+  const record = await prisma.rechargeRecord.findUnique({
+    where: { orderNo }
+  })
+
+  if (!record) {
+    throw new Error('订单不存在')
+  }
+
+  return record
 }
 
 /**
@@ -251,7 +298,7 @@ export async function completeRecharge(
     actualAmount?: number
     paymentDetails?: Record<string, unknown>
   }
-): Promise<RechargeRecord> {
+): Promise<CompleteRechargeResult> {
   const record = await prisma.rechargeRecord.findUnique({
     where: { orderNo }
   })
@@ -262,7 +309,7 @@ export async function completeRecharge(
 
   // 幂等性处理：已完成的订单直接返回，不重复处理
   if (record.status === 'completed') {
-    return record
+    return { ...record, completedNow: false }
   }
 
   // 已取消或失败的订单不能再完成
@@ -270,8 +317,15 @@ export async function completeRecharge(
     throw new Error(`订单状态异常：${record.status}`)
   }
 
+  const creditAmount = Number(data.actualAmount ?? record.actualAmount ?? record.amount)
+  if (!Number.isFinite(creditAmount) || creditAmount <= 0) {
+    throw new Error('充值入账金额无效')
+  }
+
   // 使用事务确保原子性
   const result = await prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, record.userId)
+
     // 1. 使用条件更新确保并发安全（只有 pending 或 paid 状态可以变为 completed）
     const updateResult = await tx.rechargeRecord.updateMany({
       where: {
@@ -284,7 +338,7 @@ export async function completeRecharge(
         callbackData: data.callbackData as any,
         callbackAt: new Date(),
         completedAt: new Date(),
-        actualAmount: data.actualAmount ?? record.actualAmount,  // 使用 ?? 避免 0 值被误判
+        actualAmount: creditAmount,
         paymentDetails: (data.paymentDetails as any) ?? record.paymentDetails
       }
     })
@@ -297,7 +351,7 @@ export async function completeRecharge(
       })
       // 如果已经是 completed，说明是并发完成，返回成功（幂等）
       if (currentRecord && currentRecord.status === 'completed') {
-        return currentRecord
+        return { ...currentRecord, completedNow: false }
       }
       throw new Error('订单状态已变更，无法完成')
     }
@@ -312,25 +366,21 @@ export async function completeRecharge(
     }
 
     // 2. 增加用户余额（使用 ?? 避免 0 值被误判为 falsy）
-    const actualAmount = Number(data.actualAmount ?? record.actualAmount ?? record.amount)
-    await tx.user.update({
+    const updatedUser = await tx.user.update({
       where: { id: record.userId },
-      data: { balance: { increment: actualAmount } }
-    })
-
-    // 3. 记录余额日志
-    const user = await tx.user.findUnique({
-      where: { id: record.userId },
+      data: { balance: { increment: creditAmount } },
       select: { balance: true }
     })
+    const balanceAfter = Number(updatedUser.balance)
 
+    // 3. 记录余额日志
     await tx.balanceLog.create({
       data: {
         userId: record.userId,
         type: 'recharge',
-        amount: actualAmount,
-        balanceBefore: Number(user!.balance) - actualAmount,
-        balanceAfter: Number(user!.balance),
+        amount: creditAmount,
+        balanceBefore: Number((balanceAfter - creditAmount).toFixed(2)),
+        balanceAfter,
         orderId: record.orderNo,
         remark: `充值：${Number(record.amount)} 元`
       }
@@ -349,7 +399,7 @@ export async function completeRecharge(
     //   })
     // }
 
-    return updatedRecord
+    return { ...updatedRecord, completedNow: true }
   })
 
   return result
@@ -364,8 +414,11 @@ export async function failRecharge(
   callbackData?: Record<string, unknown>,
   paymentDetails?: Record<string, unknown>
 ): Promise<RechargeRecord> {
-  return prisma.rechargeRecord.update({
-    where: { orderNo },
+  await prisma.rechargeRecord.updateMany({
+    where: {
+      orderNo,
+      status: { in: ['pending', 'paid'] }
+    },
     data: {
       status: 'failed',
       failReason,
@@ -374,6 +427,16 @@ export async function failRecharge(
       paymentDetails: paymentDetails as any
     }
   })
+
+  const record = await prisma.rechargeRecord.findUnique({
+    where: { orderNo }
+  })
+
+  if (!record) {
+    throw new Error('订单不存在')
+  }
+
+  return record
 }
 
 /**
@@ -384,8 +447,11 @@ export async function cancelRecharge(
   callbackData?: Record<string, unknown>,
   paymentDetails?: Record<string, unknown>
 ): Promise<RechargeRecord> {
-  return prisma.rechargeRecord.update({
-    where: { orderNo },
+  await prisma.rechargeRecord.updateMany({
+    where: {
+      orderNo,
+      status: { in: ['pending', 'paid'] }
+    },
     data: {
       status: 'cancelled',
       paymentDetails: paymentDetails as any,
@@ -397,18 +463,44 @@ export async function cancelRecharge(
         : {})
     }
   })
+
+  const record = await prisma.rechargeRecord.findUnique({
+    where: { orderNo }
+  })
+
+  if (!record) {
+    throw new Error('订单不存在')
+  }
+
+  return record
 }
 
 /**
  * 更新订单支付方式
  */
-export async function updateRechargePaymentMethod(
+export async function updatePendingRechargePaymentSelection(
   orderNo: string,
-  paymentMethod: string
-): Promise<RechargeRecord> {
-  return prisma.rechargeRecord.update({
-    where: { orderNo },
-    data: { paymentMethod }
+  data: UpdateRechargePaymentSelectionInput
+): Promise<RechargeRecord | null> {
+  const result = await prisma.rechargeRecord.updateMany({
+    where: {
+      orderNo,
+      status: 'pending'
+    },
+    data: {
+      paymentMethod: data.paymentMethod || null,
+      fee: data.fee,
+      actualAmount: data.actualAmount,
+      paymentDetails: data.paymentDetails as any
+    }
+  })
+
+  if (result.count === 0) {
+    return null
+  }
+
+  return prisma.rechargeRecord.findUnique({
+    where: { orderNo }
   })
 }
 
@@ -453,10 +545,12 @@ export async function getUserRechargeStats(userId: number): Promise<{
   pendingCount: number
 }> {
   const [totalResult, totalCount, pendingCount] = await Promise.all([
-    prisma.rechargeRecord.aggregate({
-      where: { userId, status: 'completed' },
-      _sum: { amount: true }
-    }),
+    prisma.$queryRaw<MoneySumRow[]>`
+      SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+      FROM recharge_records
+      WHERE user_id = ${userId}
+        AND status = 'completed'
+    `,
     prisma.rechargeRecord.count({
       where: { userId, status: 'completed' }
     }),
@@ -466,10 +560,7 @@ export async function getUserRechargeStats(userId: number): Promise<{
   ])
 
   return {
-    // 注意：Prisma aggregate 返回的 Decimal 类型需要先转为字符串再转数字
-    totalRecharge: totalResult._sum?.amount !== null && totalResult._sum?.amount !== undefined
-      ? parseFloat(String(totalResult._sum.amount))
-      : 0,
+    totalRecharge: toMoney(totalResult[0]?.value),
     totalCount,
     pendingCount
   }
@@ -495,38 +586,45 @@ export async function getSystemRechargeStats(dateRange?: { start: Date; end: Dat
   }
 
   const [totalResult, totalCount, pendingResult, pendingCount, todayResult, todayCount] = await Promise.all([
-    prisma.rechargeRecord.aggregate({
-      where: whereCompleted,
-      _sum: { amount: true }
-    }),
+    dateRange
+      ? prisma.$queryRaw<MoneySumRow[]>`
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+          FROM recharge_records
+          WHERE status = 'completed'
+            AND completed_at >= ${dateRange.start}
+            AND completed_at <= ${dateRange.end}
+        `
+      : prisma.$queryRaw<MoneySumRow[]>`
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+          FROM recharge_records
+          WHERE status = 'completed'
+        `,
     prisma.rechargeRecord.count({ where: whereCompleted }),
     prisma.rechargeRecord.aggregate({
       where: { status: 'pending' },
       _sum: { amount: true }
     }),
     prisma.rechargeRecord.count({ where: { status: 'pending' } }),
-    prisma.rechargeRecord.aggregate({
-      where: { status: 'completed', completedAt: { gte: today, lt: tomorrow } },
-      _sum: { amount: true }
-    }),
+    prisma.$queryRaw<MoneySumRow[]>`
+      SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+      FROM recharge_records
+      WHERE status = 'completed'
+        AND completed_at >= ${today}
+        AND completed_at < ${tomorrow}
+    `,
     prisma.rechargeRecord.count({
       where: { status: 'completed', completedAt: { gte: today, lt: tomorrow } }
     })
   ])
 
   return {
-    // 注意：Prisma aggregate 返回的 Decimal 类型需要先转为字符串再转数字
-    totalRecharge: totalResult._sum?.amount !== null && totalResult._sum?.amount !== undefined
-      ? parseFloat(String(totalResult._sum.amount))
-      : 0,
+    totalRecharge: toMoney(totalResult[0]?.value),
     totalCount,
     pendingAmount: pendingResult._sum?.amount !== null && pendingResult._sum?.amount !== undefined
       ? parseFloat(String(pendingResult._sum.amount))
       : 0,
     pendingCount,
-    todayRecharge: todayResult._sum?.amount !== null && todayResult._sum?.amount !== undefined
-      ? parseFloat(String(todayResult._sum.amount))
-      : 0,
+    todayRecharge: toMoney(todayResult[0]?.value),
     todayCount
   }
 }

@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { assertSafeHttpUrl } from './outbound-security.js'
 
 export interface HeleketConfig {
   apiurl: string
@@ -305,7 +306,8 @@ async function heleketRequest<T>(
   payload: Record<string, unknown>
 ): Promise<T> {
   const body = serializeHeleketPayload(payload)
-  const response = await fetch(`${normalizeApiUrl(config.apiurl)}${path}`, {
+  const safeBaseUrl = await assertSafeHttpUrl(config.apiurl, 'Heleket API URL')
+  const response = await fetch(`${normalizeApiUrl(safeBaseUrl.toString())}${path}`, {
     method: 'POST',
     headers: {
       merchant: config.merchant_uuid,
@@ -314,7 +316,8 @@ async function heleketRequest<T>(
       Accept: 'application/json'
     },
     body,
-    signal: AbortSignal.timeout(15000)
+    signal: AbortSignal.timeout(15000),
+    redirect: 'manual'
   })
 
   let data: HeleketApiResponse<T>

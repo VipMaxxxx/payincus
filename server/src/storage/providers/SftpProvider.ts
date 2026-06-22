@@ -6,6 +6,7 @@ import SftpClient from 'ssh2-sftp-client'
 import { Readable } from 'stream'
 import type { IStorageProvider, StorageConfigData } from '../types.js'
 import { assertSafeStorageTarget } from '../../lib/outbound-security.js'
+import { joinStorageRemoteDirectory, joinStorageRemotePath, normalizeStorageBasePath } from '../path.js'
 
 // SFTP 超时配置（6小时，适合大型备份）
 const SFTP_TIMEOUT = 6 * 60 * 60 * 1000
@@ -16,9 +17,7 @@ export class SftpProvider implements IStorageProvider {
 
     constructor(config: StorageConfigData) {
         this.config = config
-        this.basePath = config.basePath?.endsWith('/')
-            ? config.basePath
-            : `${config.basePath || ''}/`
+        this.basePath = normalizeStorageBasePath(config.basePath)
     }
 
     private async getClient(): Promise<SftpClient> {
@@ -53,7 +52,7 @@ export class SftpProvider implements IStorageProvider {
             }
 
             // 上传文件
-            const remotePath = this.basePath + filename
+            const remotePath = joinStorageRemotePath(this.basePath, filename)
             await client.put(fileStream, remotePath)
         } finally {
             await client.end()
@@ -78,7 +77,7 @@ export class SftpProvider implements IStorageProvider {
         const client = await this.getClient()
 
         try {
-            const remotePath = this.basePath + filename
+            const remotePath = joinStorageRemotePath(this.basePath, filename)
             await client.delete(remotePath)
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
@@ -92,7 +91,7 @@ export class SftpProvider implements IStorageProvider {
         const client = await this.getClient()
 
         try {
-            const targetPath = path || this.basePath
+            const targetPath = joinStorageRemoteDirectory(this.basePath, path)
             const list = await client.list(targetPath)
             return list.map(item => item.name)
         } catch {

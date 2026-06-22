@@ -9,6 +9,30 @@ import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { sendNotification } from '../lib/notifier.js'
 
+type FriendHistoryFilter = 'accepted' | 'rejected' | 'removed' | 'all'
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const friendHistoryFilters = new Set<FriendHistoryFilter>(['accepted', 'rejected', 'removed', 'all'])
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parseFriendHistoryFilter(value: string | undefined): FriendHistoryFilter | undefined | null {
+  if (!value) {
+    return undefined
+  }
+
+  return friendHistoryFilters.has(value as FriendHistoryFilter)
+    ? value as FriendHistoryFilter
+    : null
+}
+
 export default async function friendsRoutes(fastify: FastifyInstance) {
   // ==================== 好友列表 ====================
 
@@ -169,9 +193,9 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const requestId = Number(request.params.id)
+    const requestId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(requestId)) {
+    if (!requestId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -219,9 +243,9 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const requestId = Number(request.params.id)
+    const requestId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(requestId)) {
+    if (!requestId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -279,9 +303,9 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const requestId = Number(request.params.id)
+    const requestId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(requestId)) {
+    if (!requestId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -340,9 +364,9 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const friendshipId = Number(request.params.id)
+    const friendshipId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(friendshipId)) {
+    if (!friendshipId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -402,7 +426,11 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
     Querystring: { filter?: 'accepted' | 'rejected' | 'removed' | 'all' }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const { filter } = request.query
+    const filter = parseFriendHistoryFilter(request.query.filter)
+
+    if (filter === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid history filter'))
+    }
 
     try {
       const history = await db.getRequestHistory(user.id, filter)
@@ -473,9 +501,9 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const friendshipId = Number(request.params.id)
+    const friendshipId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(friendshipId)) {
+    if (!friendshipId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 

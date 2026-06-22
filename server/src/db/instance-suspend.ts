@@ -13,15 +13,30 @@ import type { Instance } from '@prisma/client'
  */
 export async function suspendInstanceByExpiry(
   instanceId: number
-): Promise<Instance> {
-  return prisma.instance.update({
-    where: { id: instanceId },
+): Promise<Instance | null> {
+  const result = await prisma.instance.updateMany({
+    where: {
+      id: instanceId,
+      packagePlanId: { not: null },
+      expiresAt: {
+        not: null,
+        lt: new Date()
+      },
+      status: { notIn: ['suspended', 'deleted'] }
+    },
     data: {
       status: 'suspended',
       suspendedAt: new Date(),
       suspendedBy: null, // null 表示系统自动
-      suspendReason: 'expired'
+      suspendReason: 'expired',
+      version: { increment: 1 }
     }
+  })
+
+  if (result.count === 0) return null
+
+  return prisma.instance.findUnique({
+    where: { id: instanceId }
   })
 }
 
@@ -186,11 +201,38 @@ export async function getExpiredUnsuspendedInstances(): Promise<Instance[]> {
 /**
  * 更新到期通知时间
  */
-export async function updateExpiryNotifiedAt(instanceId: number): Promise<void> {
-  await prisma.instance.update({
-    where: { id: instanceId },
+type ExpiryNotificationClaimGuard = {
+  minExpiresAt: Date
+  maxExpiresAt: Date
+  recentNotificationCutoff: Date
+}
+
+export async function updateExpiryNotifiedAt(
+  instanceId: number,
+  guard?: ExpiryNotificationClaimGuard
+): Promise<boolean> {
+  const result = await prisma.instance.updateMany({
+    where: {
+      id: instanceId,
+      ...(guard
+        ? {
+            expiresAt: {
+              not: null,
+              gte: guard.minExpiresAt,
+              lt: guard.maxExpiresAt
+            },
+            autoRenew: false,
+            status: { notIn: ['suspended', 'deleted'] },
+            OR: [
+              { expiryNotifiedAt: null },
+              { expiryNotifiedAt: { lt: guard.recentNotificationCutoff } }
+            ]
+          }
+        : {})
+    },
     data: { expiryNotifiedAt: new Date() }
   })
+  return result.count > 0
 }
 
 /**
@@ -219,19 +261,43 @@ export async function getAutoRenewInstances(
 /**
  * 更新自动续费尝试记录
  */
+type AutoRenewAttemptGuard = {
+  now: Date
+  expiryThreshold: Date
+  version: number
+  currentAttempts: number
+}
+
 export async function updateAutoRenewAttempt(
   instanceId: number,
   attempt: number,
-  disableAutoRenew: boolean = false
-): Promise<void> {
-  await prisma.instance.update({
-    where: { id: instanceId },
+  disableAutoRenew: boolean = false,
+  guard?: AutoRenewAttemptGuard
+): Promise<boolean> {
+  const result = await prisma.instance.updateMany({
+    where: {
+      id: instanceId,
+      ...(guard
+        ? {
+            autoRenew: true,
+            expiresAt: {
+              not: null,
+              gt: guard.now,
+              lte: guard.expiryThreshold
+            },
+            status: { notIn: ['suspended', 'deleted'] },
+            version: guard.version,
+            autoRenewAttempts: guard.currentAttempts
+          }
+        : {})
+    },
     data: {
       autoRenewAttempts: attempt,
       lastAutoRenewAttemptAt: new Date(),
       ...(disableAutoRenew ? { autoRenew: false } : {})
     }
   })
+  return result.count > 0
 }
 
 /**

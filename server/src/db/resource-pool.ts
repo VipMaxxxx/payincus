@@ -4,6 +4,7 @@
 
 import { prisma } from './prisma.js'
 import type { RedeemCodeType, ResourcePoolAction } from '@prisma/client'
+import { INSTANCE_OPERATION_LOCK_NAMESPACE, USER_RESOURCE_POOL_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
 
 // 资源类型到字段的映射
 const RESOURCE_FIELD_MAP: Record<string, 'cpu' | 'memory' | 'disk' | 'traffic'> = {
@@ -47,9 +48,11 @@ export async function addToResourcePool(
     throw new Error(`Invalid resource type: ${resourceType}`)
   }
 
-  await prisma.$transaction([
+  await prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, USER_RESOURCE_POOL_LOCK_NAMESPACE, userId)
+
     // 更新资源池
-    prisma.userResourcePool.upsert({
+    await tx.userResourcePool.upsert({
       where: { userId },
       update: {
         [field]: field === 'traffic'
@@ -60,9 +63,10 @@ export async function addToResourcePool(
         userId,
         [field]: field === 'traffic' ? BigInt(amount) : amount
       }
-    }),
+    })
+
     // 记录日志
-    prisma.resourcePoolLog.create({
+    await tx.resourcePoolLog.create({
       data: {
         userId,
         action,
@@ -71,7 +75,7 @@ export async function addToResourcePool(
         remark
       }
     })
-  ])
+  })
 }
 
 /**
@@ -89,32 +93,46 @@ export async function deductFromResourcePool(
     throw new Error(`Invalid resource type: ${resourceType}`)
   }
 
-  // 获取当前资源池
-  const pool = await prisma.userResourcePool.findUnique({
-    where: { userId }
-  })
+  return prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, USER_RESOURCE_POOL_LOCK_NAMESPACE, userId)
 
-  if (!pool) {
-    return false
-  }
+    let decrementResult = 0
+    if (field === 'cpu') {
+      decrementResult = await tx.$executeRaw`
+        UPDATE "user_resource_pools"
+        SET "cpu" = "cpu" - ${amount}
+        WHERE "user_id" = ${userId}
+          AND "cpu" >= ${amount}
+      `
+    } else if (field === 'memory') {
+      decrementResult = await tx.$executeRaw`
+        UPDATE "user_resource_pools"
+        SET "memory" = "memory" - ${amount}
+        WHERE "user_id" = ${userId}
+          AND "memory" >= ${amount}
+      `
+    } else if (field === 'disk') {
+      decrementResult = await tx.$executeRaw`
+        UPDATE "user_resource_pools"
+        SET "disk" = "disk" - ${amount}
+        WHERE "user_id" = ${userId}
+          AND "disk" >= ${amount}
+      `
+    } else {
+      const trafficAmount = BigInt(amount)
+      decrementResult = await tx.$executeRaw`
+        UPDATE "user_resource_pools"
+        SET "traffic" = "traffic" - ${trafficAmount}
+        WHERE "user_id" = ${userId}
+          AND "traffic" >= ${trafficAmount}
+      `
+    }
 
-  // 检查余额是否足够
-  const currentAmount = field === 'traffic' ? Number(pool.traffic) : pool[field]
-  if (currentAmount < amount) {
-    return false
-  }
+    if (decrementResult === 0) {
+      return false
+    }
 
-  // 扣减资源并记录日志
-  await prisma.$transaction([
-    prisma.userResourcePool.update({
-      where: { userId },
-      data: {
-        [field]: field === 'traffic'
-          ? { decrement: BigInt(amount) }
-          : { decrement: amount }
-      }
-    }),
-    prisma.resourcePoolLog.create({
+    await tx.resourcePoolLog.create({
       data: {
         userId,
         action: 'apply',
@@ -124,9 +142,114 @@ export async function deductFromResourcePool(
         remark
       }
     })
-  ])
 
-  return true
+    return true
+  })
+}
+
+export async function applyResourcePoolToInstance(data: {
+  userId: number
+  instanceId: number
+  hostId: number
+  resourceType: RedeemCodeType
+  amount: number
+  remark?: string
+  instanceResources?: {
+    cpu?: number
+    memory?: number
+    disk?: number
+  }
+  hostResourceDelta?: {
+    cpuUsed?: number
+    memoryUsed?: number
+    diskUsed?: number
+  }
+  monthlyTrafficDelta?: bigint
+}): Promise<boolean> {
+  const field = RESOURCE_FIELD_MAP[data.resourceType]
+  if (!field) {
+    throw new Error(`Invalid resource type: ${data.resourceType}`)
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, USER_RESOURCE_POOL_LOCK_NAMESPACE, data.userId)
+    await advisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, data.instanceId)
+
+    let decrementResult = 0
+    if (field === 'cpu') {
+      decrementResult = await tx.$executeRaw`
+        UPDATE "user_resource_pools"
+        SET "cpu" = "cpu" - ${data.amount}
+        WHERE "user_id" = ${data.userId}
+          AND "cpu" >= ${data.amount}
+      `
+    } else if (field === 'memory') {
+      decrementResult = await tx.$executeRaw`
+        UPDATE "user_resource_pools"
+        SET "memory" = "memory" - ${data.amount}
+        WHERE "user_id" = ${data.userId}
+          AND "memory" >= ${data.amount}
+      `
+    } else if (field === 'disk') {
+      decrementResult = await tx.$executeRaw`
+        UPDATE "user_resource_pools"
+        SET "disk" = "disk" - ${data.amount}
+        WHERE "user_id" = ${data.userId}
+          AND "disk" >= ${data.amount}
+      `
+    } else {
+      const amount = BigInt(data.amount)
+      decrementResult = await tx.$executeRaw`
+        UPDATE "user_resource_pools"
+        SET "traffic" = "traffic" - ${amount}
+        WHERE "user_id" = ${data.userId}
+          AND "traffic" >= ${amount}
+      `
+    }
+
+    if (decrementResult === 0) {
+      return false
+    }
+
+    await tx.resourcePoolLog.create({
+      data: {
+        userId: data.userId,
+        action: 'apply',
+        resourceType: data.resourceType,
+        amount: -data.amount,
+        instanceId: data.instanceId,
+        remark: data.remark
+      }
+    })
+
+    if (data.hostResourceDelta) {
+      await tx.host.update({
+        where: { id: data.hostId },
+        data: {
+          ...(data.hostResourceDelta.cpuUsed !== undefined ? { cpuUsed: { increment: data.hostResourceDelta.cpuUsed } } : {}),
+          ...(data.hostResourceDelta.memoryUsed !== undefined ? { memoryUsed: { increment: data.hostResourceDelta.memoryUsed } } : {}),
+          ...(data.hostResourceDelta.diskUsed !== undefined ? { diskUsed: { increment: data.hostResourceDelta.diskUsed } } : {})
+        }
+      })
+    }
+
+    if (data.instanceResources) {
+      await tx.instance.update({
+        where: { id: data.instanceId },
+        data: data.instanceResources
+      })
+    }
+
+    if (data.monthlyTrafficDelta !== undefined) {
+      await tx.$executeRaw`
+        UPDATE "instances"
+        SET "monthly_traffic_limit" = COALESCE("monthly_traffic_limit", 0) + ${data.monthlyTrafficDelta}
+        WHERE "id" = ${data.instanceId}
+      `
+    }
+
+    return true
+  })
 }
 
 /**

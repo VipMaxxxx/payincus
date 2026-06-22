@@ -28,6 +28,41 @@ const VALID_OPERATION_TYPES: OperationType[] = [
     'delete_backup'
 ]
 
+const POSITIVE_RESOURCE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveResourceIdString(value: string): number | null {
+    if (!POSITIVE_RESOURCE_ID_PATTERN.test(value)) {
+        return null
+    }
+
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveResourceIdNumber(value: unknown): number | null {
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+        return null
+    }
+
+    return value
+}
+
+function normalizeResourceIdForOperation(
+    operationType: OperationType,
+    value: unknown
+): { valid: true; resourceId?: number } | { valid: false } {
+    if (isResourceOperation(operationType)) {
+        const resourceId = typeof value === 'string'
+            ? parsePositiveResourceIdString(value)
+            : parsePositiveResourceIdNumber(value)
+        return resourceId === null ? { valid: false } : { valid: true, resourceId }
+    }
+
+    return value === undefined || value === null
+        ? { valid: true }
+        : { valid: false }
+}
+
 export default async function verificationRoutes(fastify: FastifyInstance) {
     /**
      * 请求二次验证码
@@ -49,7 +84,7 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
                     required: ['operationType'],
                     properties: {
                         operationType: { type: 'string', enum: VALID_OPERATION_TYPES },
-                        resourceId: { type: 'number' },
+                        resourceId: { type: 'integer', minimum: 1 },
                         resourceType: { type: 'string' }
                     }
                 }
@@ -64,6 +99,15 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
         }>, reply: FastifyReply) => {
             const user = request.user!
             const { operationType, resourceId, resourceType } = request.body
+            const normalizedResource = normalizeResourceIdForOperation(operationType, resourceId)
+            if (!normalizedResource.valid) {
+                return reply.code(400).send({
+                    error: isResourceOperation(operationType)
+                        ? 'Resource ID is required for this operation'
+                        : 'Resource ID is not allowed for this operation',
+                    code: 'INVALID_RESOURCE_ID'
+                })
+            }
 
             // 资源操作：检查是否需要二次验证
             if (isResourceOperation(operationType)) {
@@ -81,7 +125,7 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
             const result = await requestOperationVerification(
                 user.id,
                 operationType,
-                resourceId,
+                normalizedResource.resourceId,
                 resourceType
             )
 
@@ -135,7 +179,7 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
                     properties: {
                         operationType: { type: 'string', enum: VALID_OPERATION_TYPES },
                         code: { type: 'string', minLength: 6, maxLength: 6 },
-                        resourceId: { type: 'number' }
+                        resourceId: { type: 'integer', minimum: 1 }
                     }
                 }
             }
@@ -149,12 +193,21 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
         }>, reply: FastifyReply) => {
             const user = request.user!
             const { operationType, code, resourceId } = request.body
+            const normalizedResource = normalizeResourceIdForOperation(operationType, resourceId)
+            if (!normalizedResource.valid) {
+                return reply.code(400).send({
+                    error: isResourceOperation(operationType)
+                        ? 'Resource ID is required for this operation'
+                        : 'Resource ID is not allowed for this operation',
+                    code: 'INVALID_RESOURCE_ID'
+                })
+            }
 
             const result = await verifyOperationCode(
                 user.id,
                 operationType,
                 code,
-                resourceId
+                normalizedResource.resourceId
             )
 
             if (!result.success || !result.verified) {
@@ -201,9 +254,18 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
                 operationType: OperationType
                 resourceId?: string
             }
-        }>, _reply: FastifyReply) => {
+        }>, reply: FastifyReply) => {
             const user = request.user!
             const { operationType, resourceId } = request.query
+            const normalizedResource = normalizeResourceIdForOperation(operationType, resourceId)
+            if (!normalizedResource.valid) {
+                return reply.code(400).send({
+                    error: isResourceOperation(operationType)
+                        ? 'Resource ID is required for this operation'
+                        : 'Resource ID is not allowed for this operation',
+                    code: 'INVALID_RESOURCE_ID'
+                })
+            }
 
             // 资源操作：检查是否需要二次验证
             if (isResourceOperation(operationType)) {
@@ -219,7 +281,7 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
             const verified = await isOperationVerified(
                 user.id,
                 operationType,
-                resourceId ? parseInt(resourceId, 10) : undefined
+                normalizedResource.resourceId
             )
 
             return {

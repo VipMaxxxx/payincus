@@ -4,7 +4,110 @@
  */
 
 import { prisma } from './prisma.js'
-import type { MailSource, MailPlan, MailSubscription, MailDomain, MailAccount, MailBillingCycle, MailDomainStatus, MailSubscriptionStatus } from '@prisma/client'
+import type { MailSource, MailPlan, MailSubscription, MailDomain, MailAccount, MailBillingCycle, MailDomainStatus, MailSubscriptionStatus, Prisma } from '@prisma/client'
+import { decryptSensitiveData, encryptSensitiveData, isEncrypted } from '../lib/security.js'
+
+export const MASKED_MAIL_SOURCE_API_KEY_VALUE = '__SECRET_SET__'
+
+const MAIL_LIST_SEARCH_MAX_LENGTH = 128
+const MAIL_LIST_MAX_PAGE_SIZE = 100
+const MAIL_SUBSCRIPTION_STATUSES = new Set<MailSubscriptionStatus>(['active', 'expired', 'suspended'])
+const MAIL_DOMAIN_STATUSES = new Set<MailDomainStatus>(['pending', 'verified', 'suspended'])
+
+function clampMailListPagination(page: number | undefined, pageSize: number | undefined): {
+  page: number
+  pageSize: number
+} {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), MAIL_LIST_MAX_PAGE_SIZE)
+      : 20
+  }
+}
+
+function normalizeMailListSearch(search: string | undefined): string | undefined {
+  const trimmed = search?.trim()
+  return trimmed ? trimmed.slice(0, MAIL_LIST_SEARCH_MAX_LENGTH) : undefined
+}
+
+function parseMailSearchUserId(searchTerm: string | undefined): number | undefined {
+  if (!searchTerm || !/^\d+$/.test(searchTerm)) {
+    return undefined
+  }
+
+  const id = Number(searchTerm)
+  return Number.isSafeInteger(id) && id > 0 ? id : undefined
+}
+
+function normalizePositiveMailSourceId(sourceId: number | undefined): number | undefined {
+  return Number.isSafeInteger(sourceId) && sourceId !== undefined && sourceId > 0
+    ? sourceId
+    : undefined
+}
+
+function normalizeMailSubscriptionStatus(status: MailSubscriptionStatus | string | undefined): MailSubscriptionStatus | undefined {
+  return MAIL_SUBSCRIPTION_STATUSES.has(status as MailSubscriptionStatus)
+    ? status as MailSubscriptionStatus
+    : undefined
+}
+
+function normalizeMailDomainStatus(status: MailDomainStatus | string | undefined): MailDomainStatus | undefined {
+  return MAIL_DOMAIN_STATUSES.has(status as MailDomainStatus)
+    ? status as MailDomainStatus
+    : undefined
+}
+
+function decryptMailSecret(value: string): string {
+  if (!value) return value
+  return isEncrypted(value) ? (decryptSensitiveData(value) || value) : value
+}
+
+function encryptMailSecret(value: string): string {
+  return isEncrypted(value) ? value : encryptSensitiveData(value)
+}
+
+function decryptMailSource<T extends MailSource>(source: T): T {
+  return { ...source, apiKey: decryptMailSecret(source.apiKey) }
+}
+
+function decryptMailDomainAdminPassword<T extends { adminPassword: string | null }>(domain: T): T {
+  return {
+    ...domain,
+    adminPassword: domain.adminPassword ? decryptMailSecret(domain.adminPassword) : domain.adminPassword
+  }
+}
+
+function withDecryptedSource<T extends { source: MailSource }>(record: T): T {
+  return { ...record, source: decryptMailSource(record.source) }
+}
+
+function withDecryptedDomainSource<T extends { source: MailSource; adminPassword: string | null }>(record: T): T {
+  return withDecryptedSource(decryptMailDomainAdminPassword(record))
+}
+
+export function sanitizeMailSourceForResponse<T extends MailSource>(
+  source: T
+): Omit<T, 'apiKey'> & { apiKey: string; apiKeyConfigured: boolean } {
+  return {
+    ...source,
+    apiKey: '',
+    apiKeyConfigured: Boolean(source.apiKey)
+  }
+}
+
+export function mergeMailSourceApiKeyForUpdate(nextApiKey: string | null | undefined): string | undefined {
+  if (
+    nextApiKey === undefined ||
+    nextApiKey === null ||
+    nextApiKey === '' ||
+    nextApiKey === MASKED_MAIL_SOURCE_API_KEY_VALUE ||
+    nextApiKey.startsWith('***')
+  ) {
+    return undefined
+  }
+  return nextApiKey
+}
 
 // ==================== 邮箱源 (MailSource) ====================
 
@@ -12,24 +115,27 @@ import type { MailSource, MailPlan, MailSubscription, MailDomain, MailAccount, M
  * 获取所有邮箱源
  */
 export async function getAllMailSources(includeDisabled = false): Promise<MailSource[]> {
-  return prisma.mailSource.findMany({
+  const sources = await prisma.mailSource.findMany({
     where: includeDisabled ? {} : { enabled: true },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }]
   })
+  return sources.map(decryptMailSource)
 }
 
 /**
  * 根据 ID 获取邮箱源
  */
 export async function getMailSourceById(id: number): Promise<MailSource | null> {
-  return prisma.mailSource.findUnique({ where: { id } })
+  const source = await prisma.mailSource.findUnique({ where: { id } })
+  return source ? decryptMailSource(source) : null
 }
 
 /**
  * 根据代码获取邮箱源
  */
 export async function getMailSourceByCode(code: string): Promise<MailSource | null> {
-  return prisma.mailSource.findUnique({ where: { code } })
+  const source = await prisma.mailSource.findUnique({ where: { code } })
+  return source ? decryptMailSource(source) : null
 }
 
 /**
@@ -44,7 +150,10 @@ export async function createMailSource(data: {
   enabled?: boolean
   sortOrder?: number
 }): Promise<MailSource> {
-  return prisma.mailSource.create({ data })
+  const source = await prisma.mailSource.create({
+    data: { ...data, apiKey: encryptMailSecret(data.apiKey) }
+  })
+  return decryptMailSource(source)
 }
 
 /**
@@ -59,7 +168,14 @@ export async function updateMailSource(id: number, data: {
   enabled?: boolean
   sortOrder?: number
 }): Promise<MailSource> {
-  return prisma.mailSource.update({ where: { id }, data })
+  const source = await prisma.mailSource.update({
+    where: { id },
+    data: {
+      ...data,
+      ...(data.apiKey !== undefined ? { apiKey: encryptMailSecret(data.apiKey) } : {})
+    }
+  })
+  return decryptMailSource(source)
 }
 
 /**
@@ -119,20 +235,22 @@ export async function hasAvailableMailOffering(): Promise<boolean> {
  * 获取所有方案（管理员用）
  */
 export async function getAllMailPlans(): Promise<(MailPlan & { source: MailSource })[]> {
-  return prisma.mailPlan.findMany({
+  const plans = await prisma.mailPlan.findMany({
     include: { source: true },
     orderBy: [{ sourceId: 'asc' }, { sortOrder: 'asc' }, { price: 'asc' }]
   })
+  return plans.map(withDecryptedSource)
 }
 
 /**
  * 根据 ID 获取方案
  */
 export async function getMailPlanById(id: number): Promise<(MailPlan & { source: MailSource }) | null> {
-  return prisma.mailPlan.findUnique({
+  const plan = await prisma.mailPlan.findUnique({
     where: { id },
     include: { source: true }
   })
+  return plan ? withDecryptedSource(plan) : null
 }
 
 /**
@@ -185,7 +303,7 @@ export async function getUserMailSubscription(userId: number): Promise<(MailSubs
   plan: MailPlan
   domains: MailDomain[]
 }) | null> {
-  return prisma.mailSubscription.findFirst({
+  const subscription = await prisma.mailSubscription.findFirst({
     where: { userId, status: 'active' },
     include: {
       source: true,
@@ -195,6 +313,7 @@ export async function getUserMailSubscription(userId: number): Promise<(MailSubs
       }
     }
   })
+  return subscription ? withDecryptedSource(subscription) : null
 }
 
 /**
@@ -202,7 +321,7 @@ export async function getUserMailSubscription(userId: number): Promise<(MailSubs
  */
 export async function getAllMailSubscriptions(options?: {
   sourceId?: number
-  status?: MailSubscriptionStatus
+  status?: MailSubscriptionStatus | string
   search?: string
   page?: number
   pageSize?: number
@@ -210,22 +329,23 @@ export async function getAllMailSubscriptions(options?: {
   subscriptions: (MailSubscription & { user: { id: number; username: string; email: string | null; avatarStyle: string | null; avatarBadgeId: string | null }; source: MailSource; plan: MailPlan })[]
   total: number
 }> {
-  const page = options?.page || 1
-  const pageSize = options?.pageSize || 20
+  const { page, pageSize } = clampMailListPagination(options?.page, options?.pageSize)
+  const sourceId = normalizePositiveMailSourceId(options?.sourceId)
+  const status = normalizeMailSubscriptionStatus(options?.status)
+  const searchTerm = normalizeMailListSearch(options?.search)
+  const searchUserId = parseMailSearchUserId(searchTerm)
   
   const where: any = {
-    ...(options?.sourceId ? { sourceId: options.sourceId } : {}),
-    ...(options?.status ? { status: options.status } : {})
+    ...(sourceId ? { sourceId } : {}),
+    ...(status ? { status } : {})
   }
   
   // 搜索条件：用户名、邮箱、用户ID
-  if (options?.search) {
-    const searchTerm = options.search.trim()
-    const searchId = parseInt(searchTerm)
+  if (searchTerm) {
     where.OR = [
       { user: { username: { contains: searchTerm, mode: 'insensitive' } } },
       { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
-      ...(isNaN(searchId) ? [] : [{ userId: searchId }])
+      ...(searchUserId ? [{ userId: searchUserId }] : [])
     ]
   }
   
@@ -244,7 +364,7 @@ export async function getAllMailSubscriptions(options?: {
     prisma.mailSubscription.count({ where })
   ])
   
-  return { subscriptions, total }
+  return { subscriptions: subscriptions.map(withDecryptedSource), total }
 }
 
 /**
@@ -255,7 +375,7 @@ export async function getMailSubscriptionById(id: number): Promise<(MailSubscrip
   plan: MailPlan
   domains: (MailDomain & { accounts: MailAccount[] })[]
 }) | null> {
-  return prisma.mailSubscription.findUnique({
+  const subscription = await prisma.mailSubscription.findUnique({
     where: { id },
     include: {
       source: true,
@@ -265,6 +385,7 @@ export async function getMailSubscriptionById(id: number): Promise<(MailSubscrip
       }
     }
   })
+  return subscription ? withDecryptedSource(subscription) : null
 }
 
 /**
@@ -297,6 +418,10 @@ export async function updateMailSubscription(id: number, data: {
  * 续费订阅
  */
 export async function renewMailSubscription(id: number, months: number): Promise<MailSubscription> {
+  if (!Number.isSafeInteger(months) || months < 1 || months > 12) {
+    throw new Error('Invalid mail renewal months')
+  }
+
   const subscription = await prisma.mailSubscription.findUnique({ where: { id } })
   if (!subscription) throw new Error('Subscription not found')
   
@@ -316,11 +441,12 @@ export async function renewMailSubscription(id: number, months: number): Promise
  * 获取订阅下的所有域名
  */
 export async function getMailDomainsBySubscription(subscriptionId: number): Promise<(MailDomain & { accounts: MailAccount[] })[]> {
-  return prisma.mailDomain.findMany({
+  const domains = await prisma.mailDomain.findMany({
     where: { subscriptionId },
     include: { accounts: true },
     orderBy: { createdAt: 'desc' }
   })
+  return domains.map(decryptMailDomainAdminPassword)
 }
 
 /**
@@ -331,7 +457,7 @@ export async function getMailDomainById(id: number): Promise<(MailDomain & {
   source: MailSource
   accounts: MailAccount[]
 }) | null> {
-  return prisma.mailDomain.findUnique({
+  const domain = await prisma.mailDomain.findUnique({
     where: { id },
     include: {
       subscription: {
@@ -341,6 +467,7 @@ export async function getMailDomainById(id: number): Promise<(MailDomain & {
       accounts: true
     }
   })
+  return domain ? withDecryptedDomainSource(domain) : null
 }
 
 /**
@@ -363,7 +490,36 @@ export async function createMailDomain(data: {
   adminUsername?: string
   adminPassword?: string
 }): Promise<MailDomain> {
-  return prisma.mailDomain.create({ data })
+  const domain = await prisma.mailDomain.create({
+    data: {
+      ...data,
+      ...(data.adminPassword !== undefined
+        ? { adminPassword: data.adminPassword ? encryptMailSecret(data.adminPassword) : data.adminPassword }
+        : {})
+    }
+  })
+  return decryptMailDomainAdminPassword(domain)
+}
+
+/**
+ * 在调用方事务中创建域名
+ */
+export async function createMailDomainWithTx(tx: Prisma.TransactionClient, data: {
+  subscriptionId: number
+  sourceId: number
+  domain: string
+  adminUsername?: string
+  adminPassword?: string
+}): Promise<MailDomain> {
+  const domain = await tx.mailDomain.create({
+    data: {
+      ...data,
+      ...(data.adminPassword !== undefined
+        ? { adminPassword: data.adminPassword ? encryptMailSecret(data.adminPassword) : data.adminPassword }
+        : {})
+    }
+  })
+  return decryptMailDomainAdminPassword(domain)
 }
 
 /**
@@ -376,7 +532,16 @@ export async function updateMailDomain(id: number, data: {
   diskUsedMb?: number
   verifiedAt?: Date
 }): Promise<MailDomain> {
-  return prisma.mailDomain.update({ where: { id }, data })
+  const domain = await prisma.mailDomain.update({
+    where: { id },
+    data: {
+      ...data,
+      ...(data.adminPassword !== undefined
+        ? { adminPassword: data.adminPassword ? encryptMailSecret(data.adminPassword) : data.adminPassword }
+        : {})
+    }
+  })
+  return decryptMailDomainAdminPassword(domain)
 }
 
 /**
@@ -391,7 +556,7 @@ export async function deleteMailDomain(id: number): Promise<void> {
  */
 export async function getAllMailDomains(options?: {
   sourceId?: number
-  status?: MailDomainStatus
+  status?: MailDomainStatus | string
   search?: string
   page?: number
   pageSize?: number
@@ -403,23 +568,24 @@ export async function getAllMailDomains(options?: {
   })[]
   total: number
 }> {
-  const page = options?.page || 1
-  const pageSize = options?.pageSize || 20
+  const { page, pageSize } = clampMailListPagination(options?.page, options?.pageSize)
+  const sourceId = normalizePositiveMailSourceId(options?.sourceId)
+  const status = normalizeMailDomainStatus(options?.status)
+  const searchTerm = normalizeMailListSearch(options?.search)
+  const searchUserId = parseMailSearchUserId(searchTerm)
   
   const where: any = {
-    ...(options?.sourceId ? { sourceId: options.sourceId } : {}),
-    ...(options?.status ? { status: options.status } : {})
+    ...(sourceId ? { sourceId } : {}),
+    ...(status ? { status } : {})
   }
   
   // 搜索条件：域名、用户名、邮箱、用户ID
-  if (options?.search) {
-    const searchTerm = options.search.trim()
-    const searchId = parseInt(searchTerm)
+  if (searchTerm) {
     where.OR = [
       { domain: { contains: searchTerm, mode: 'insensitive' } },
       { subscription: { user: { username: { contains: searchTerm, mode: 'insensitive' } } } },
       { subscription: { user: { email: { contains: searchTerm, mode: 'insensitive' } } } },
-      ...(isNaN(searchId) ? [] : [{ subscription: { userId: searchId } }])
+      ...(searchUserId ? [{ subscription: { userId: searchUserId } }] : [])
     ]
   }
   
@@ -440,7 +606,7 @@ export async function getAllMailDomains(options?: {
     prisma.mailDomain.count({ where })
   ])
   
-  return { domains, total }
+  return { domains: domains.map(withDecryptedDomainSource), total }
 }
 
 // ==================== 邮箱账户 (MailAccount) ====================

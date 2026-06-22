@@ -548,6 +548,24 @@ export interface SessionInfo {
 const REFRESH_TOKEN_CONFIG = {
     expiresInSeconds: 30 * 24 * 60 * 60,  // 30天
 }
+const REFRESH_TOKEN_STORAGE_PREFIX = 'sha256:'
+
+export function getRefreshTokenStorageKey(token: string): string {
+    if (token.startsWith(REFRESH_TOKEN_STORAGE_PREFIX) && token.length === REFRESH_TOKEN_STORAGE_PREFIX.length + 64) {
+        return token
+    }
+    return `${REFRESH_TOKEN_STORAGE_PREFIX}${crypto.createHash('sha256').update(token).digest('hex')}`
+}
+
+export function getRefreshTokenSessionId(token: string): string {
+    const storageKey = getRefreshTokenStorageKey(token)
+    return storageKey.slice(REFRESH_TOKEN_STORAGE_PREFIX.length, REFRESH_TOKEN_STORAGE_PREFIX.length + 32)
+}
+
+function getRefreshTokenLookupKeys(token: string): string[] {
+    const storageKey = getRefreshTokenStorageKey(token)
+    return storageKey === token ? [storageKey] : [storageKey, token]
+}
 
 // 导出任务内存存储（替代 Redis）
 const exportTaskStore = new Map<string, ExportTaskData>()
@@ -606,13 +624,14 @@ export async function generateRefreshToken(
     userAgent?: string
 ): Promise<string> {
     const token = `rt_${crypto.randomBytes(32).toString('base64url')}`
+    const tokenHash = getRefreshTokenStorageKey(token)
     const now = new Date()
     const expiresAt = new Date(now.getTime() + REFRESH_TOKEN_CONFIG.expiresInSeconds * 1000)
 
     // 存储到数据库
     await prisma.refreshToken.create({
         data: {
-            token,
+            token: tokenHash,
             userId,
             username,
             role,
@@ -714,9 +733,16 @@ export async function verifyRefreshToken(
     _currentUserAgent?: string
 ): Promise<RefreshTokenData | null> {
     try {
-        const record = await prisma.refreshToken.findUnique({
-            where: { token }
+        const storageKey = getRefreshTokenStorageKey(token)
+        let record = await prisma.refreshToken.findUnique({
+            where: { token: storageKey }
         })
+
+        if (!record && storageKey !== token) {
+            record = await prisma.refreshToken.findUnique({
+                where: { token }
+            })
+        }
 
         if (!record) {
             return null
@@ -728,12 +754,18 @@ export async function verifyRefreshToken(
         if (now > expiresAt) {
             // 自动清理过期 token
             await prisma.refreshToken.delete({
-                where: { token }
+                where: { id: record.id }
             })
             return null
         }
 
         // 注意：已移除设备绑定校验 (AUTH002)，简化会话机制
+        if (record.token === token && storageKey !== token) {
+            await prisma.refreshToken.update({
+                where: { id: record.id },
+                data: { token: storageKey }
+            }).catch(() => undefined)
+        }
 
         return {
             userId: record.userId,
@@ -755,10 +787,10 @@ export async function verifyRefreshToken(
  */
 export async function revokeRefreshToken(token: string): Promise<boolean> {
     try {
-        await prisma.refreshToken.delete({
-            where: { token }
+        const result = await prisma.refreshToken.deleteMany({
+            where: { token: { in: getRefreshTokenLookupKeys(token) } }
         })
-        return true
+        return result.count > 0
     } catch {
         return false
     }
@@ -791,13 +823,15 @@ export async function getUserSessions(userId: number, currentToken?: string): Pr
         }
     })
 
+    const currentTokenKeys = currentToken ? new Set(getRefreshTokenLookupKeys(currentToken)) : new Set<string>()
+
     return tokens.map(token => ({
-        token: token.token.substring(0, 20) + '...', // 只返回部分 token 用于标识
+        token: getRefreshTokenSessionId(token.token) + '...',
         ip: token.ip || 'unknown',
         userAgent: token.userAgent || 'unknown',
         createdAt: token.createdAt.getTime(),
         lastActiveAt: token.lastActiveAt.getTime(),
-        isCurrent: currentToken === token.token
+        isCurrent: currentTokenKeys.has(token.token)
     }))
 }
 
@@ -808,18 +842,21 @@ export async function revokeSessionByTokenPrefix(userId: number, tokenPrefix: st
     // 移除 '...' 后缀（如果有）
     const prefix = tokenPrefix.replace('...', '')
     
-    // 查找匹配的 token
-    const token = await prisma.refreshToken.findFirst({
+    // 查找匹配的 token/session id，兼容旧明文行和新 sha256 摘要行
+    const tokens = await prisma.refreshToken.findMany({
         where: {
-            userId,
-            token: {
-                startsWith: prefix
-            }
+            userId
         }
     })
+    const token = tokens.find(item =>
+        item.token.startsWith(`${REFRESH_TOKEN_STORAGE_PREFIX}${prefix}`) ||
+        item.token.startsWith(prefix) ||
+        getRefreshTokenSessionId(item.token).startsWith(prefix)
+    )
 
     if (token) {
-        return await revokeRefreshToken(token.token)
+        await prisma.refreshToken.delete({ where: { id: token.id } })
+        return true
     }
 
     return false
@@ -835,7 +872,7 @@ export async function updateSessionActivity(token: string): Promise<{ expiresAt:
         const newExpiresAt = new Date(now.getTime() + REFRESH_TOKEN_CONFIG.expiresInSeconds * 1000)
         
         await prisma.refreshToken.updateMany({
-            where: { token },
+            where: { token: { in: getRefreshTokenLookupKeys(token) } },
             data: { 
                 lastActiveAt: now,
                 expiresAt: newExpiresAt  // 延长会话有效期
@@ -967,6 +1004,19 @@ export async function isAccessTokenInvalidated(userId: number, tokenIssuedAt: nu
 // ==================== 敏感数据加密 ====================
 
 import crypto from 'crypto'
+
+export function getJwtSigningSecret(purpose = 'token signing'): string {
+    const secret = process.env.JWT_SECRET
+    if (secret) {
+        return secret
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error(`JWT_SECRET is required in production for ${purpose}`)
+    }
+
+    return 'dev-secret-change-in-production'
+}
 
 // 加密配置
 const ENCRYPTION_CONFIG = {
@@ -1213,17 +1263,23 @@ export interface OAuthStateData {
     timestamp: number
     nonce: string  // 防止重放攻击
     userId?: number  // 绑定模式下的用户 ID
+    userIssuedAt?: number  // 绑定模式下发起绑定的 Access Token 签发时间
+    userSessionId?: string  // 绑定模式下发起绑定的会话 ID
 }
 
 // 用于签名 OAuth State 的密钥（使用 JWT_SECRET）
 function getOAuthStateSecret(): string {
-    return process.env.JWT_SECRET || 'fallback-secret-key'
+    return getJwtSigningSecret('OAuth state and login-code signing')
 }
 
 /**
  * 生成 OAuth State（使用 JWT 签名，无需存储）
  */
-export async function generateOAuthState(mode: 'login' | 'bind', redirect: string, userId?: number): Promise<string> {
+export async function generateOAuthState(
+    mode: 'login' | 'bind',
+    redirect: string,
+    bindSession?: { userId: number; issuedAt: number; sessionId?: string }
+): Promise<string> {
     const nonce = crypto.randomBytes(16).toString('hex')
     const timestamp = Date.now()
 
@@ -1232,7 +1288,9 @@ export async function generateOAuthState(mode: 'login' | 'bind', redirect: strin
         redirect,
         timestamp,
         nonce,
-        userId
+        userId: bindSession?.userId,
+        userIssuedAt: bindSession?.issuedAt,
+        userSessionId: bindSession?.sessionId
     }
 
     // 将数据编码为 Base64

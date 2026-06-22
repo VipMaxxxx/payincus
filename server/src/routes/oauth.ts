@@ -7,12 +7,29 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import * as db from '../db/index.js'
+import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
-import { generateOAuthState, verifyAndConsumeOAuthState, logSecurityEvent, SecurityEventType, generateRefreshToken, detectNewLoginLocation, generateOAuthLoginCode, verifyAndConsumeOAuthLoginCode, isAccessTokenInvalidated } from '../lib/security.js'
+import {
+  generateOAuthState,
+  verifyAndConsumeOAuthState,
+  logSecurityEvent,
+  SecurityEventType,
+  generateRefreshToken,
+  getRefreshTokenSessionId,
+  detectNewLoginLocation,
+  generateOAuthLoginCode,
+  verifyAndConsumeOAuthLoginCode,
+  isAccessTokenInvalidated,
+  revokeAllUserRefreshTokens,
+  invalidateUserAccessTokens
+} from '../lib/security.js'
 import { sendLoginAlertEmail } from '../lib/mailer.js'
 import { getRefreshTokenCookieOptions } from '../lib/cookie-config.js'
 import { getSafeRedirectUrl } from '../lib/redirect-validator.js'
 import { consumeOAuthBindTicket, generateOAuthBindTicket } from '../lib/action-ticket.js'
+import { sanitizeObject, sanitizeTokensInString } from '../lib/log-sanitizer.js'
+import { readLimitedTextResponse } from '../lib/http-response.js'
+import { closeUserSessions } from '../lib/terminal-proxy.js'
 
 
 // OAuth 提供商配置
@@ -32,6 +49,59 @@ const OAUTH_PROVIDERS = {
 } as const
 
 type OAuthProvider = keyof typeof OAUTH_PROVIDERS
+const OAUTH_SECRET_UNCHANGED_PLACEHOLDER = 'UNCHANGED'
+const OAUTH_PROVIDER_FETCH_TIMEOUT_MS = 15_000
+const OAUTH_PROVIDER_MAX_RESPONSE_BYTES = 128 * 1024
+
+function normalizePublicBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, '')
+}
+
+function getConfiguredPublicBaseUrl(): string | null {
+  const configured = process.env.SITE_URL?.trim()
+    || process.env.FRONTEND_URL?.split(',')[0]?.trim()
+
+  if (!configured) {
+    return null
+  }
+
+  const normalized = normalizePublicBaseUrl(configured)
+  try {
+    const parsed = new URL(normalized)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null
+    }
+    return `${parsed.protocol}//${parsed.host}`
+  } catch {
+    return null
+  }
+}
+
+function getOAuthCallbackBaseUrl(request: FastifyRequest): string {
+  const configured = getConfiguredPublicBaseUrl()
+  if (configured) {
+    return configured
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SITE_URL or FRONTEND_URL must be configured before OAuth can be used in production')
+  }
+
+  return `${request.protocol}://${request.hostname}`
+}
+
+function buildOAuthCallbackUrl(request: FastifyRequest, provider: OAuthProvider): string {
+  return `${getOAuthCallbackBaseUrl(request)}/api/oauth/callback/${provider}`
+}
+
+async function readOAuthJsonResponse<T>(response: Response, label: string): Promise<T> {
+  const text = await readLimitedTextResponse(response, label, OAUTH_PROVIDER_MAX_RESPONSE_BYTES)
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error(`${label} returned invalid JSON`)
+  }
+}
 
 export default async function oauthRoutes(fastify: FastifyInstance) {
 
@@ -62,7 +132,7 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
    */
   fastify.put<{
     Params: { provider: OAuthProvider }
-    Body: { clientId: string; clientSecret: string; enabled?: boolean }
+    Body: { clientId: string; clientSecret?: string; enabled?: boolean }
   }>('/configs/:provider', {
     onRequest: [fastify.authenticateAdmin],
     schema: {
@@ -75,22 +145,36 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
       },
       body: {
         type: 'object',
-        required: ['clientId', 'clientSecret'],
+        required: ['clientId'],
         properties: {
           clientId: { type: 'string', minLength: 1 },
-          clientSecret: { type: 'string', minLength: 1 },
+          clientSecret: { type: 'string' },
           enabled: { type: 'boolean' }
         }
       }
     }
   }, async (request: FastifyRequest<{
     Params: { provider: OAuthProvider }
-    Body: { clientId: string; clientSecret: string; enabled?: boolean }
+    Body: { clientId: string; clientSecret?: string; enabled?: boolean }
   }>, _reply: FastifyReply) => {
     const { provider } = request.params
     const { clientId, clientSecret, enabled = false } = request.body
+    const existingConfig = await db.getOAuthConfig(provider)
+    const shouldKeepExistingSecret = existingConfig && (
+      clientSecret === undefined ||
+      clientSecret === '' ||
+      clientSecret === OAUTH_SECRET_UNCHANGED_PLACEHOLDER
+    )
 
-    await db.upsertOAuthConfig(provider, { clientId, clientSecret, enabled })
+    if (!existingConfig && !clientSecret) {
+      return _reply.code(400).send({ error: 'Client Secret is required', code: 'OAUTH_CLIENT_SECRET_REQUIRED' })
+    }
+
+    await db.upsertOAuthConfig(provider, {
+      clientId,
+      clientSecret: shouldKeepExistingSecret ? existingConfig.client_secret : clientSecret!,
+      enabled
+    })
 
     return { message: `${provider} OAuth 配置已更新` }
   })
@@ -170,7 +254,7 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
     const validMode = mode === 'bind' ? 'bind' : 'login'
 
     // 绑定模式下需要验证短期票据
-    let userId: number | undefined
+    let bindSession: { userId: number; issuedAt: number; sessionId?: string } | undefined
     if (validMode === 'bind') {
       if (!bindTicket) {
         return reply.redirect(`/profile?error=not_logged_in`)
@@ -195,13 +279,23 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
         return reply.redirect(`/profile?error=invalid_session`)
       }
 
-      userId = bindUser.id
+      bindSession = {
+        userId: bindUser.id,
+        issuedAt: ticketData.issuedAt,
+        sessionId: ticketData.sessionId
+      }
     }
 
-    const state = await generateOAuthState(validMode, getSafeRedirectUrl(redirect, '/'), userId)
+    const state = await generateOAuthState(validMode, getSafeRedirectUrl(redirect, '/'), bindSession)
 
     // 构建回调 URL
-    const callbackUrl = `${request.protocol}://${request.hostname}/api/oauth/callback/${provider}`
+    let callbackUrl: string
+    try {
+      callbackUrl = buildOAuthCallbackUrl(request, provider)
+    } catch (error) {
+      request.log.error({ err: error, provider }, 'OAuth public callback URL is not configured')
+      return reply.code(500).send({ error: 'OAuth callback URL is not configured', code: 'OAUTH_CALLBACK_URL_NOT_CONFIGURED' })
+    }
 
     // 构建授权 URL
     const params = new URLSearchParams({
@@ -285,11 +379,13 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
       }
 
       const providerConfig = OAUTH_PROVIDERS[provider]
-      const callbackUrl = `${request.protocol}://${request.hostname}/api/oauth/callback/${provider}`
+      const callbackUrl = buildOAuthCallbackUrl(request, provider)
 
       // 1. 获取 access_token
       const tokenRes = await fetch(providerConfig.tokenUrl, {
         method: 'POST',
+        signal: AbortSignal.timeout(OAUTH_PROVIDER_FETCH_TIMEOUT_MS),
+        redirect: 'manual',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json'
@@ -303,33 +399,62 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
         })
       })
 
-      const tokenData = await tokenRes.json() as { access_token?: string; refresh_token?: string; error?: string; error_description?: string }
+      const tokenData = await readOAuthJsonResponse<{ access_token?: string; refresh_token?: string; error?: string; error_description?: string }>(
+        tokenRes,
+        `${provider} OAuth token response`
+      )
 
-      if (!tokenData.access_token) {
+      if (!tokenRes.ok || !tokenData.access_token) {
         // 记录详细错误信息便于调试
-        fastify.log.error({ tokenData, provider }, 'OAuth token exchange failed')
+        fastify.log.error({ statusCode: tokenRes.status, tokenData: sanitizeObject(tokenData), provider }, 'OAuth token exchange failed')
         return reply.redirect(`${errorRedirectBase}?error=token_error`)
       }
 
       // 2. 获取用户信息
       const userRes = await fetch(providerConfig.userUrl, {
+        signal: AbortSignal.timeout(OAUTH_PROVIDER_FETCH_TIMEOUT_MS),
+        redirect: 'manual',
         headers: {
           'Authorization': `Bearer ${tokenData.access_token}`,
           'Accept': 'application/json'
         }
       })
 
-      const userData = await userRes.json() as Record<string, unknown>
+      const userData = await readOAuthJsonResponse<Record<string, unknown>>(
+        userRes,
+        `${provider} OAuth userinfo response`
+      )
+
+      if (!userRes.ok) {
+        throw new Error(`OAuth userinfo failed with status ${userRes.status}: ${sanitizeTokensInString(JSON.stringify(userData).slice(0, 2048))}`)
+      }
 
       // 解析用户信息（不同提供商格式不同）
       const oauthUser = parseOAuthUser(provider, userData)
+      if (!oauthUser.id) {
+        throw new Error('OAuth userinfo response did not include a provider user id')
+      }
 
       // 3. 根据 mode 处理
       if (stateData.mode === 'bind') {
         // 绑定模式：从 state 中获取用户 ID
         const userId = stateData.userId
-        if (!userId) {
+        if (!userId || !stateData.userIssuedAt) {
           return reply.redirect(`/profile?error=not_logged_in`)
+        }
+
+        const bindSessionInvalidated = await isAccessTokenInvalidated(
+          userId,
+          stateData.userIssuedAt,
+          stateData.userSessionId
+        )
+        if (bindSessionInvalidated) {
+          return reply.redirect(`/profile?error=invalid_session`)
+        }
+
+        const bindUser = await db.findUserById(userId)
+        if (!bindUser || bindUser.status !== 'active') {
+          return reply.redirect(`/profile?error=invalid_session`)
         }
 
         // 检查是否已有其他用户绑定了这个 OAuth 账号
@@ -464,6 +589,17 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
     }
 
     await db.deleteOAuthBinding(request.user.id, provider)
+    await revokeAllUserRefreshTokens(request.user.id)
+    await invalidateUserAccessTokens(request.user.id)
+    closeUserSessions(request.user.id, `${provider} OAuth unbound`)
+
+    await createLog(
+      request.user.id,
+      'security',
+      'oauth.unbind',
+      `Unbound ${provider} OAuth account`,
+      'success'
+    )
 
     return { message: `已解除 ${provider} 绑定` }
   })
@@ -531,7 +667,7 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
     reply.setCookie('refreshToken', refreshToken, getRefreshTokenCookieOptions())
 
     // 提取会话标识
-    const sessionId = refreshToken.substring(0, 20)
+    const sessionId = getRefreshTokenSessionId(refreshToken)
 
     // 生成 Access Token（简化版：7天有效期）
     const accessToken = fastify.jwt.sign({
@@ -582,4 +718,3 @@ function parseOAuthUser(
 
   return { id: String(data.id || ''), username: null, email: null, avatar: null }
 }
-

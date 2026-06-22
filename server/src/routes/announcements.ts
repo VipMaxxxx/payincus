@@ -5,6 +5,55 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import * as announcementsDb from '../db/announcements.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
+import type { AnnouncementType } from '@prisma/client'
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const announcementTypes = new Set<AnnouncementType>([
+  'system_broadcast',
+  'host_broadcast',
+  'admin_message',
+  'host_message'
+])
+
+function parsePositiveInteger(value: string | undefined, fallback: number, max: number): number {
+  if (value === undefined) {
+    return fallback
+  }
+
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) {
+    return fallback
+  }
+
+  return Math.min(parsed, max)
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parseOptionalPositiveId(value: string | undefined): number | null | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  return parsePositiveRouteId(value)
+}
+
+function parseAnnouncementType(value: string | undefined): AnnouncementType | null | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  return announcementTypes.has(value as AnnouncementType) ? value as AnnouncementType : null
+}
 
 export default async function announcementsRoutes(fastify: FastifyInstance) {
   // 所有路由都需要认证
@@ -32,12 +81,16 @@ export default async function announcementsRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    const { page = '1', pageSize = '20', type } = request.query
+    const { type } = request.query
+    const parsedType = parseAnnouncementType(type)
+    if (parsedType === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid announcement type'))
+    }
 
     const result = await announcementsDb.getAnnouncementList({
-      page: parseInt(page, 10) || 1,
-      pageSize: parseInt(pageSize, 10) || 20,
-      type: type as any,
+      page: parsePositiveInteger(request.query.page, 1, 100000),
+      pageSize: parsePositiveInteger(request.query.pageSize, 20, 100),
+      type: parsedType,
     })
 
     return result
@@ -59,15 +112,18 @@ export default async function announcementsRoutes(fastify: FastifyInstance) {
       pageSize?: string
       hostId?: string
     }
-  }>) => {
-    const { page = '1', pageSize = '20', hostId } = request.query
+  }>, reply: FastifyReply) => {
+    const hostId = parseOptionalPositiveId(request.query.hostId)
+    if (hostId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
 
     const result = await announcementsDb.getHostOwnerAnnouncementList(
       request.user.id,
       {
-        page: parseInt(page, 10) || 1,
-        pageSize: parseInt(pageSize, 10) || 20,
-        hostId: hostId ? parseInt(hostId, 10) : undefined,
+        page: parsePositiveInteger(request.query.page, 1, 100000),
+        pageSize: parsePositiveInteger(request.query.pageSize, 20, 100),
+        hostId,
       }
     )
 
@@ -84,9 +140,9 @@ export default async function announcementsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const announcementId = Number(id)
+    const announcementId = parsePositiveRouteId(id)
 
-    if (isNaN(announcementId)) {
+    if (!announcementId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 

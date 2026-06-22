@@ -1,6 +1,10 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import type { IncusInstance } from '../types/incus.js'
+import {
+  IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE,
+  advisoryTransactionLockString
+} from '../db/advisory-locks.js'
 
 type InstanceNetworkMode = 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
 
@@ -237,6 +241,10 @@ async function syncPrimaryIpAddress(
 
   if (!hostId) {
     throw new Error(`Unable to resolve host scope for instance ${instance.id}`)
+  }
+
+  if (type === 'inet6') {
+    await advisoryTransactionLockString(tx, IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE, address)
   }
 
   const existingByAddress = await tx.instance.findFirst({

@@ -3,7 +3,7 @@
  */
 
 import { FastifyInstance } from 'fastify'
-import type { InstanceStatus, Prisma } from '@prisma/client'
+import { Prisma, type InstanceStatus } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import * as db from '../db/index.js'
 import { createLog } from '../db/logs.js'
@@ -38,16 +38,67 @@ import { sendAdminInstanceCreatedEmail, sendInstanceDestroyRefundEmail } from '.
 import { generateRandomIPv4, generateRandomIPv6 } from '../lib/ip-calculator.js'
 import { validateCommandsOwnership, mergeCommandContents, getImageDistroFromAlias } from '../db/custom-init-commands.js'
 import { customAlphabet } from 'nanoid'
-import { buildInstanceConfig, getIncusClient, createInstance, startInstance, getInstanceState } from '../lib/incus/index.js'
+import { buildInstanceConfig, getIncusClient, createInstance, deleteInstance, startInstance, stopInstance, getInstanceState } from '../lib/incus/index.js'
 import { calculateCreateBilling, getMaxRefundable } from '../db/billing-operations.js'
 import { shouldSyncInstanceSwapSizeWithPlan } from '../lib/instance-swap.js'
 import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
+import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
 import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
 import type { Host } from '../types/database.js'
-import { INSTANCE_OPERATION_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import { INSTANCE_OPERATION_LOCK_NAMESPACE, USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import { sanitizeObject } from '../lib/log-sanitizer.js'
 
 // 自定义 nanoid，只使用小写字母和数字
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+const BILLING_RECORD_TYPES = new Set(['newPurchase', 'renew', 'upgrade', 'downgrade', 'refund', 'transfer_fee'])
+const INSTANCE_STATUSES = new Set(['creating', 'running', 'stopped', 'suspended', 'error', 'deleted'])
+const RECHARGE_STATUSES = new Set(['pending', 'paid', 'completed', 'failed', 'cancelled', 'refunded'])
+
+interface RechargeAggregateRow {
+  amount: unknown
+  count: unknown
+}
+
+function getRechargeAggregate(row: RechargeAggregateRow[] | undefined): { amount: number; count: number } {
+  const first = row?.[0]
+  return {
+    amount: first?.amount === null || first?.amount === undefined ? 0 : parseFloat(String(first.amount)) || 0,
+    count: first?.count === null || first?.count === undefined ? 0 : Number(first.count) || 0
+  }
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number, max?: number): number {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return max === undefined ? parsed : Math.min(parsed, max)
+}
+
+function parseOptionalPositiveInteger(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function normalizeStringFilter(value: string | undefined, allowedValues: Set<string>): string | undefined {
+  return value !== undefined && allowedValues.has(value) ? value : undefined
+}
 
 async function claimInstanceForAdminDelete(instanceId: number, currentStatus: InstanceStatus): Promise<boolean> {
   return prisma.$transaction(async (tx) => {
@@ -122,12 +173,13 @@ function buildEpayConfig(config: Record<string, unknown>): { epayConfig: EpayCon
 
 /**
  * 生成唯一的 tradeNo 标识（用于联合索引）
+ * 当 tradeNo 为空时，使用基于订单号的确定性标识，确保重复同步能命中同一唯一索引
  */
 function getTradeNoForIndex(orderNo: string, tradeNo: string | null | undefined): string {
   if (tradeNo && tradeNo.trim()) {
     return tradeNo.trim()
   }
-  return `__NO_TRADE_NO__${orderNo}__${Date.now()}`
+  return `__NO_TRADE_NO__${orderNo}`
 }
 
 function resolveRechargeProviderConfig(
@@ -672,27 +724,27 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
             status: { notIn: ['deleted', 'suspended'] }
           }
         }),
-        prisma.rechargeRecord.aggregate({
-          where: { status: 'completed' },
-          _sum: { amount: true },
-          _count: { id: true }
-        }),
-        prisma.rechargeRecord.aggregate({
-          where: {
-            status: 'completed',
-            createdAt: { gte: thisMonthStart }
-          },
-          _sum: { amount: true },
-          _count: { id: true }
-        }),
-        prisma.rechargeRecord.aggregate({
-          where: {
-            status: 'completed',
-            createdAt: { gte: today, lt: tomorrow }
-          },
-          _sum: { amount: true },
-          _count: { id: true }
-        }),
+        prisma.$queryRaw<RechargeAggregateRow[]>(Prisma.sql`
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS amount,
+                 COUNT(*)::int AS count
+          FROM recharge_records
+          WHERE status = 'completed'
+        `),
+        prisma.$queryRaw<RechargeAggregateRow[]>(Prisma.sql`
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS amount,
+                 COUNT(*)::int AS count
+          FROM recharge_records
+          WHERE status = 'completed'
+            AND created_at >= ${thisMonthStart}
+        `),
+        prisma.$queryRaw<RechargeAggregateRow[]>(Prisma.sql`
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS amount,
+                 COUNT(*)::int AS count
+          FROM recharge_records
+          WHERE status = 'completed'
+            AND created_at >= ${today}
+            AND created_at < ${tomorrow}
+        `),
         prisma.affLog.aggregate({
           where: { type: { in: ['new_purchase', 'renew'] } },
           _sum: { amount: true },
@@ -720,6 +772,10 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return parseFloat(String(val))
       }
 
+      const rechargeTotal = getRechargeAggregate(rechargeStats)
+      const rechargeThisMonth = getRechargeAggregate(thisMonthRecharge)
+      const rechargeToday = getRechargeAggregate(todayRecharge)
+
       return {
         overview: {
           totalRevenue: toNumber(totalRevenue._sum?.amount),
@@ -746,12 +802,12 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           },
           // 充值统计
           recharge: {
-            totalAmount: toNumber(rechargeStats._sum?.amount),
-            totalCount: rechargeStats._count?.id || 0,
-            thisMonthAmount: toNumber(thisMonthRecharge._sum?.amount),
-            thisMonthCount: thisMonthRecharge._count?.id || 0,
-            todayAmount: toNumber(todayRecharge._sum?.amount),
-            todayCount: todayRecharge._count?.id || 0
+            totalAmount: rechargeTotal.amount,
+            totalCount: rechargeTotal.count,
+            thisMonthAmount: rechargeThisMonth.amount,
+            thisMonthCount: rechargeThisMonth.count,
+            todayAmount: rechargeToday.amount,
+            todayCount: rechargeToday.count
           },
           // AFF 返利统计
           aff: {
@@ -782,14 +838,17 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         instanceId?: string
       }
 
-      const pageNum = page ? parseInt(page, 10) : 1
-      const size = Math.min(pageSize ? parseInt(pageSize, 10) : 20, 100)
+      const pageNum = parsePositiveInteger(page, 1)
+      const size = parsePositiveInteger(pageSize, 20, 100)
       const skip = (pageNum - 1) * size
 
       const where: Record<string, unknown> = {}
-      if (type) where.type = type
-      if (userId) where.userId = parseInt(userId, 10)
-      if (instanceId) where.instanceId = parseInt(instanceId, 10)
+      const normalizedType = normalizeStringFilter(type, BILLING_RECORD_TYPES)
+      if (normalizedType) where.type = normalizedType
+      const parsedUserId = parseOptionalPositiveInteger(userId)
+      const parsedInstanceId = parseOptionalPositiveInteger(instanceId)
+      if (parsedUserId !== undefined) where.userId = parsedUserId
+      if (parsedInstanceId !== undefined) where.instanceId = parsedInstanceId
 
       const [records, total] = await Promise.all([
         prisma.instanceBillingRecord.findMany({
@@ -847,8 +906,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       const { id } = request.params as { id: string }
       const { reason } = request.body as { reason?: string }
 
-      const instanceId = parseInt(id, 10)
-      if (isNaN(instanceId)) {
+      const instanceId = parsePositiveRouteId(id)
+      if (!instanceId) {
         return reply.status(400).send({ error: '无效的实例ID' })
       }
 
@@ -917,8 +976,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       const admin = request.user!
       const { id } = request.params as { id: string }
 
-      const instanceId = parseInt(id, 10)
-      if (isNaN(instanceId)) {
+      const instanceId = parsePositiveRouteId(id)
+      if (!instanceId) {
         return reply.status(400).send({ error: '无效的实例ID' })
       }
 
@@ -975,8 +1034,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         freeExtend?: boolean  // 是否免费延期
       }
 
-      const instanceId = parseInt(id, 10)
-      if (isNaN(instanceId) || !days || days < 1 || days > 365) {
+      const instanceId = parsePositiveRouteId(id)
+      if (!instanceId || !Number.isInteger(days) || days < 1 || days > 365) {
         return reply.status(400).send({ error: '参数无效，延期天数必须在 1-365 之间' })
       }
 
@@ -1017,14 +1076,33 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
         // 扣费并延期
         await prisma.$transaction(async (tx) => {
-          const oldBalance = Number(instance.user!.balance)
-          const newBalance = oldBalance - extendAmount
+          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)
+          if (!balanceLocked) {
+            throw new Error('BALANCE_CONFLICT: 用户余额正在处理，请稍后重试')
+          }
+
+          const currentUser = await tx.user.findUnique({
+            where: { id: instance.userId },
+            select: { balance: true }
+          })
+          if (!currentUser) {
+            throw new Error('USER_NOT_FOUND: 用户不存在')
+          }
+          const oldBalance = Number(currentUser.balance)
 
           // 扣除余额
-          await tx.user.update({
-            where: { id: instance.userId },
+          const userUpdateResult = await tx.user.updateMany({
+            where: { id: instance.userId, balance: { gte: extendAmount } },
             data: { balance: { decrement: extendAmount } }
           })
+          if (userUpdateResult.count !== 1) {
+            throw new Error('BALANCE_INSUFFICIENT: 用户余额不足')
+          }
+          const updatedUser = await tx.user.findUnique({
+            where: { id: instance.userId },
+            select: { balance: true }
+          })
+          const newBalance = Number(updatedUser?.balance || 0)
 
           // 记录余额日志
           const balanceLog = await tx.balanceLog.create({
@@ -1127,6 +1205,13 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         newExpiresAt: newExpiresAt.toISOString()
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('BALANCE_CONFLICT')) {
+        return reply.status(409).send({ error: '用户余额正在处理，请稍后重试' })
+      }
+      if (errorMessage.includes('BALANCE_INSUFFICIENT')) {
+        return reply.status(400).send({ error: '用户余额不足' })
+      }
       request.log.error(error, '延期实例失败')
       return reply.status(500).send({ error: '延期实例失败' })
     }
@@ -1147,8 +1232,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         reason: string
       }
 
-      const instanceId = parseInt(id, 10)
-      if (isNaN(instanceId)) {
+      const instanceId = parsePositiveRouteId(id)
+      if (!instanceId) {
         return reply.status(400).send({ error: '无效的实例ID' })
       }
 
@@ -1180,14 +1265,27 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
       // 执行退款
       await prisma.$transaction(async (tx) => {
-        const oldBalance = Number(instance.user!.balance)
-        const newBalance = oldBalance + amount
+        const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)
+        if (!balanceLocked) {
+          throw new Error('BALANCE_CONFLICT: 用户余额正在处理，请稍后重试')
+        }
+
+        const currentUser = await tx.user.findUnique({
+          where: { id: instance.userId },
+          select: { balance: true }
+        })
+        if (!currentUser) {
+          throw new Error('USER_NOT_FOUND: 用户不存在')
+        }
+        const oldBalance = Number(currentUser.balance)
 
         // 增加用户余额
-        await tx.user.update({
+        const updatedUser = await tx.user.update({
           where: { id: instance.userId },
-          data: { balance: { increment: amount } }
+          data: { balance: { increment: amount } },
+          select: { balance: true }
         })
+        const newBalance = Number(updatedUser.balance)
 
         // 记录余额变动
         const balanceLog = await tx.balanceLog.create({
@@ -1241,6 +1339,10 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         maxRefundable: maxRefundable - amount
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('BALANCE_CONFLICT')) {
+        return reply.status(409).send({ error: '用户余额正在处理，请稍后重试' })
+      }
       request.log.error(error, '退款失败')
       return reply.status(500).send({ error: '退款失败' })
     }
@@ -1261,8 +1363,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       databaseOnly?: boolean  // 仅数据库删除，跳过 Incus 操作
     }
 
-    const instanceId = parseInt(id, 10)
-    if (isNaN(instanceId)) {
+    const instanceId = parsePositiveRouteId(id)
+    if (!instanceId) {
       return reply.status(400).send({ error: '无效的实例ID' })
     }
 
@@ -1320,17 +1422,23 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       if (refundAmount > 0) {
         try {
           await prisma.$transaction(async (tx) => {
+            const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)
+            if (!balanceLocked) {
+              throw new Error('BALANCE_CONFLICT: 用户余额正在处理，请稍后重试')
+            }
+
             const currentUser = await tx.user.findUnique({
               where: { id: instance.userId },
               select: { balance: true }
             })
             const oldBalance = Number(currentUser?.balance || 0)
-            const newBalance = oldBalance + refundAmount
 
-            await tx.user.update({
+            const updatedUser = await tx.user.update({
               where: { id: instance.userId },
-              data: { balance: { increment: refundAmount } }
+              data: { balance: { increment: refundAmount } },
+              select: { balance: true }
             })
+            const newBalance = Number(updatedUser.balance)
 
             const balanceLog = await tx.balanceLog.create({
               data: {
@@ -1492,6 +1600,10 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         refundType
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('BALANCE_CONFLICT')) {
+        return reply.status(409).send({ error: '用户余额正在处理，请稍后重试' })
+      }
       request.log.error(error, '删除并退款失败')
       return reply.status(500).send({ error: '删除并退款失败' })
     }
@@ -1508,8 +1620,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
     const { id } = request.params as { id: string }
     const { affCode: affCodeInput } = request.body as { affCode: string }
 
-    const instanceId = parseInt(id, 10)
-    if (isNaN(instanceId)) {
+    const instanceId = parsePositiveRouteId(id)
+    if (!instanceId) {
       return reply.status(400).send({ error: '无效的实例ID' })
     }
 
@@ -1611,8 +1723,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       expectedVersion?: number
     }
 
-    const instanceId = parseInt(id, 10)
-    if (isNaN(instanceId)) {
+    const instanceId = parsePositiveRouteId(id)
+    if (!instanceId) {
       return reply.status(400).send({ error: '无效的实例ID' })
     }
 
@@ -1724,6 +1836,11 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
         // 如果需要结算差价
         if (settleBalance && priceDiff !== 0) {
+          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, currentInstance.userId)
+          if (!balanceLocked) {
+            throw new BatchPriceUpdateError('用户余额正在处理，请稍后重试', 409)
+          }
+
           let balanceBefore = userBalance
           let balanceAfter = balanceBefore - priceDiff
 
@@ -1849,8 +1966,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       settleBalance: boolean
     }
 
-    const instanceId = parseInt(id, 10)
-    if (isNaN(instanceId)) {
+    const instanceId = parsePositiveRouteId(id)
+    if (!instanceId) {
       return reply.status(400).send({ error: '无效的实例ID' })
     }
 
@@ -1990,6 +2107,11 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
           for (const item of settlementItems) {
             const user = item.user!
+            const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, user.id)
+            if (!balanceLocked) {
+              throw new BatchPriceUpdateError(`用户 ${user.username} 余额正在处理，请稍后重试`, 409, currentPreview)
+            }
+
             let balanceAfter = 0
             let balanceBefore = 0
 
@@ -2118,16 +2240,17 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         search?: string    // 搜索关键词（用户名/节点/实例名/方案/套餐）
       }
 
-      const pageNum = page ? parseInt(page, 10) : 1
-      const size = Math.min(pageSize ? parseInt(pageSize, 10) : 20, 100)
+      const pageNum = parsePositiveInteger(page, 1)
+      const size = parsePositiveInteger(pageSize, 20, 100)
       const skip = (pageNum - 1) * size
 
       const where: Record<string, unknown> = {
         packagePlanId: { not: null }
       }
 
-      if (status) {
-        where.status = status
+      const normalizedStatus = normalizeStringFilter(status, INSTANCE_STATUSES)
+      if (normalizedStatus) {
+        where.status = normalizedStatus
       } else {
         where.status = { notIn: ['deleted'] }
       }
@@ -2142,15 +2265,15 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
       // 宿主机筛选
       if (hostId) {
-        const hostIdNum = parseInt(hostId, 10)
-        if (!isNaN(hostIdNum)) {
+        const hostIdNum = parseOptionalPositiveInteger(hostId)
+        if (hostIdNum !== undefined) {
           where.hostId = hostIdNum
         }
       }
 
       // 搜索关键词（用户名/节点/实例名/方案/套餐）
       if (search && search.trim()) {
-        const keyword = search.trim()
+        const keyword = search.trim().slice(0, 128)
         where.OR = [
           { name: { contains: keyword, mode: 'insensitive' } },
           { user: { username: { contains: keyword, mode: 'insensitive' } } },
@@ -2294,13 +2417,15 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         userId?: string
       }
 
-      const pageNum = page ? parseInt(page, 10) : 1
-      const size = Math.min(pageSize ? parseInt(pageSize, 10) : 20, 100)
+      const pageNum = parsePositiveInteger(page, 1)
+      const size = parsePositiveInteger(pageSize, 20, 100)
       const skip = (pageNum - 1) * size
 
       const where: Record<string, unknown> = {}
-      if (status) where.status = status
-      if (userId) where.userId = parseInt(userId, 10)
+      const normalizedStatus = normalizeStringFilter(status, RECHARGE_STATUSES)
+      if (normalizedStatus) where.status = normalizedStatus
+      const parsedUserId = parseOptionalPositiveInteger(userId)
+      if (parsedUserId !== undefined) where.userId = parsedUserId
 
       // 分开查询避免类型推断问题
       const records = await prisma.rechargeRecord.findMany({
@@ -2371,9 +2496,9 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
   }, async (request, reply) => {
     const admin = request.user!
     const { id } = request.params as { id: string }
-    const recordId = parseInt(id, 10)
+    const recordId = parsePositiveRouteId(id)
 
-    if (isNaN(recordId)) {
+    if (!recordId) {
       return reply.status(400).send({ error: '无效的记录ID' })
     }
 
@@ -2482,7 +2607,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         }
 
         actualAmount = creditedAmount
-        callbackPayload = { source: 'admin_sync', queryResult: queryResult.rawData as Record<string, unknown>, adminId: admin.id }
+        callbackPayload = { source: 'admin_sync', queryResult: sanitizeObject(queryResult.rawData) as Record<string, unknown>, adminId: admin.id }
       } else {
         const { heleketConfig, valid, error: configError } = buildHeleketConfig(effectiveConfig)
         if (!valid) {
@@ -2504,7 +2629,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         callbackPayload = {
           source: 'admin_sync',
           heleketStatus: status,
-          queryResult: queryResult as Record<string, unknown>,
+          queryResult: sanitizeObject(queryResult) as Record<string, unknown>,
           adminId: admin.id
         }
         paymentDetails = mergeHeleketPaymentDetails(
@@ -2568,7 +2693,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
         const invoiceAmount = getHeleketInvoiceAmount(queryResult)
         if (invoiceAmount === undefined || !Number.isFinite(invoiceAmount) || invoiceAmount <= 0) {
-          request.log.warn({ orderNo: record.orderNo, queryResult }, '管理员同步-Heleket 支付金额无效')
+          request.log.warn({ orderNo: record.orderNo, queryResult: sanitizeObject(queryResult) }, '管理员同步-Heleket 支付金额无效')
           return {
             success: true,
             synced: false,
@@ -2615,7 +2740,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       }
 
       // 11. 完成充值
-      await db.completeRecharge(record.orderNo, {
+      const completion = await db.completeRecharge(record.orderNo, {
         tradeNo,
         actualAmount,
         callbackData: callbackPayload,
@@ -2632,6 +2757,15 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           processed: true
         }
       }).catch(() => { })
+
+      if (!completion.completedNow) {
+        return {
+          success: true,
+          synced: false,
+          status: 'completed',
+          message: '订单已处理过'
+        }
+      }
 
       // 记录日志
       await createLog(
@@ -2879,6 +3013,12 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       const { Prisma } = await import('@prisma/client')
       let instanceId: number
       let host: Awaited<ReturnType<typeof db.selectAndReserveHostWithLock>>
+      const normalizedPlanTrafficLimitSpeed = selectedPlan
+        ? normalizePlanTrafficLimitSpeed(selectedPlan.trafficLimitSpeed)
+        : null
+      if (normalizedPlanTrafficLimitSpeed === undefined) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid plan traffic limit speed'))
+      }
 
       const result = await prisma.$transaction(async (tx) => {
         // 使用行锁选择并预占宿主机资源
@@ -2897,17 +3037,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           throw new Error('HOST_RESOURCES_INSUFFICIENT')
         }
 
-        // 配额配置：付费实例使用方案配额，免费实例使用套餐配额
-        // 带宽限制：付费方案优先使用方案的 trafficLimitSpeed
-        let planBandwidthLimit: string | null = null
-        if (selectedPlan?.trafficLimitSpeed && selectedPlan.trafficLimitSpeed !== '0') {
-          const bytes = BigInt(selectedPlan.trafficLimitSpeed)
-          const MB = BigInt(1024 * 1024)
-          const mbps = Number(bytes / MB)
-          if (mbps > 0) {
-            planBandwidthLimit = `${mbps}Mbit`
-          }
-        }
+        const planBandwidthLimit = normalizedPlanTrafficLimitSpeed
 
         const baseMonthlyTrafficLimit = selectedPlan ? selectedPlan.trafficLimit : packageTrafficLimit
         const effectiveMonthlyTrafficLimit = await resolveInstanceTrafficLimitForHost(tx as any, {
@@ -2960,6 +3090,11 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         // 如果是付费实例且需要扣除首月费用，执行扣款
         let txBalanceLogId: number | null = null
         if (selectedPlan && billing && chargeFirstMonth) {
+          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, targetUser.id)
+          if (!balanceLocked) {
+            throw new Error('BALANCE_CONFLICT: 余额正在处理，请稍后重试')
+          }
+
           // 获取用户当前余额（事务内再次检查）
           const userRecord = await tx.user.findUnique({
             where: { id: targetUser.id },
@@ -2971,17 +3106,32 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           }
 
           const balanceBefore = Number(userRecord.balance)
-          const balanceAfter = balanceBefore - billing.totalPrice
 
-          if (balanceAfter < 0) {
+          if (balanceBefore < billing.totalPrice) {
             throw new Error('BALANCE_INSUFFICIENT: 余额不足')
           }
 
           // 扣除余额
-          await tx.user.update({
-            where: { id: targetUser.id },
-            data: { balance: balanceAfter }
+          const balanceUpdateResult = await tx.user.updateMany({
+            where: {
+              id: targetUser.id,
+              balance: { gte: billing.totalPrice }
+            },
+            data: { balance: { decrement: billing.totalPrice } }
           })
+
+          if (balanceUpdateResult.count === 0) {
+            throw new Error('BALANCE_INSUFFICIENT: 余额不足或并发冲突')
+          }
+
+          const updatedUserRecord = await tx.user.findUnique({
+            where: { id: targetUser.id },
+            select: { balance: true }
+          })
+          if (!updatedUserRecord) {
+            throw new Error('USER_NOT_FOUND: 用户不存在')
+          }
+          const balanceAfter = Number(updatedUserRecord.balance)
 
           // 记录余额日志
           const balanceLog = await tx.balanceLog.create({
@@ -3352,6 +3502,10 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '用户余额不足' })
       }
 
+      if (error.message?.includes('BALANCE_CONFLICT')) {
+        return reply.status(409).send({ error: '用户余额正在处理，请稍后重试' })
+      }
+
       if (error.message?.includes('USER_NOT_FOUND')) {
         return reply.status(400).send({ error: '用户不存在' })
       }
@@ -3368,8 +3522,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
   }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const instanceId = parseInt(id, 10)
-      if (isNaN(instanceId)) {
+      const instanceId = parsePositiveRouteId(id)
+      if (!instanceId) {
         return reply.status(400).send({ error: '无效的实例ID' })
       }
 
@@ -3482,12 +3636,12 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       const { id } = request.params as { id: string }
       const { newPlanId } = request.body as { newPlanId: number }
 
-      const instanceId = parseInt(id, 10)
-      if (isNaN(instanceId)) {
+      const instanceId = parsePositiveRouteId(id)
+      if (!instanceId) {
         return reply.status(400).send({ error: '无效的实例ID' })
       }
 
-      if (!newPlanId || isNaN(newPlanId)) {
+      if (!Number.isSafeInteger(newPlanId) || newPlanId <= 0) {
         return reply.status(400).send({ error: '无效的新方案ID' })
       }
 
@@ -3569,8 +3723,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
       // 10. 执行事务：扣款 + 更新数据库
       await prisma.$transaction(async (tx) => {
-        const balanceBefore = userBalance
-        const balanceAfter = balanceBefore - priceDifference
+        let balanceBefore = userBalance
+        let balanceAfter = balanceBefore
         const monthlyTrafficLimit = await resolveInstanceTrafficLimitForHost(tx as any, {
           packageId: instance.packageId,
           hostId: instance.hostId,
@@ -3579,10 +3733,24 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
         // 扣除用户余额
         if (priceDifference > 0) {
-          await tx.user.update({
-            where: { id: instance.userId },
+          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)
+          if (!balanceLocked) {
+            throw new Error('BALANCE_CONFLICT: 用户余额正在处理，请稍后重试')
+          }
+
+          const userUpdateResult = await tx.user.updateMany({
+            where: { id: instance.userId, balance: { gte: priceDifference } },
             data: { balance: { decrement: priceDifference } }
           })
+          if (userUpdateResult.count !== 1) {
+            throw new Error('BALANCE_INSUFFICIENT: 用户余额不足')
+          }
+          const updatedUser = await tx.user.findUnique({
+            where: { id: instance.userId },
+            select: { balance: true }
+          })
+          balanceAfter = Number(updatedUser?.balance || 0)
+          balanceBefore = roundMoney(balanceAfter + priceDifference)
         }
 
         // 记录余额变动日志
@@ -3705,6 +3873,13 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         resourcesSynced: resourcesChanged
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('BALANCE_CONFLICT')) {
+        return reply.status(409).send({ error: '用户余额正在处理，请稍后重试' })
+      }
+      if (errorMessage.includes('BALANCE_INSUFFICIENT')) {
+        return reply.status(400).send({ error: '用户余额不足' })
+      }
       request.log.error(error, '升级方案失败')
       return reply.status(500).send({ error: '升级方案失败' })
     }
@@ -3748,8 +3923,8 @@ async function createInstanceAsync(
     bootAutostartDelay?: number | null
     bootHostShutdownTimeout?: number | null
   },
-  _userId: number,
-  _resources: { cpu: number; memory: number; disk: number }
+  userId: number,
+  resources: { cpu: number; memory: number; disk: number }
 ): Promise<void> {
   try {
     console.log(`\n[Admin Provisioning] ===== 开始创建实例流程 =====`)
@@ -3854,8 +4029,8 @@ async function createInstanceAsync(
     }
 
     // 更新数据库
-    await prisma.instance.update({
-      where: { id: instanceId },
+    const updateResult = await prisma.instance.updateMany({
+      where: { id: instanceId, status: 'creating' },
       data: {
         status: 'running',
         ipv4,
@@ -3864,15 +4039,55 @@ async function createInstanceAsync(
       }
     })
 
+    if (updateResult.count === 0) {
+      console.log(`[Admin Provisioning] 实例 ${instanceId} 已被超时清理任务处理，清理已创建的 Incus 实例`)
+      try {
+        await stopInstance(client, config.name, true)
+        await deleteInstance(client, config.name)
+      } catch (cleanupErr) {
+        console.error(`[Admin Provisioning] 清理超时实例失败:`, cleanupErr)
+      }
+      return
+    }
+
     console.log(`[Admin Provisioning] 实例 ${instanceId} 创建成功`)
 
   } catch (error) {
     console.error(`[Admin Provisioning] 实例 ${instanceId} 创建失败:`, error)
 
-    await prisma.instance.update({
-      where: { id: instanceId },
+    const updateResult = await prisma.instance.updateMany({
+      where: { id: instanceId, status: 'creating' },
       data: { status: 'error' }
-    }).catch(() => { })
+    }).catch(() => ({ count: 0 }))
+
+    if (updateResult.count > 0) {
+      try {
+        await db.rollbackResources({
+          hostId: host.id,
+          cpu: resources.cpu,
+          memory: resources.memory,
+          disk: resources.disk,
+          portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(config.networkMode)
+            ? (config.portLimit || 0)
+            : 0
+        })
+      } catch (rollbackErr) {
+        console.error(`[Admin Provisioning] 资源回滚失败:`, rollbackErr)
+      }
+
+      try {
+        await db.compensateFailedInstancePurchase(instanceId, userId, host.id)
+      } catch (compensationErr) {
+        console.error(`[Admin Provisioning] 创建失败后的账务补偿失败:`, compensationErr)
+      }
+    }
+
+    try {
+      const client = await getIncusClient(host)
+      await deleteInstance(client, config.name)
+    } catch {
+      // 实例可能尚未创建或已被超时清理流程删除。
+    }
 
     throw error
   }

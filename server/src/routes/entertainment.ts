@@ -3,9 +3,72 @@
  * 积分兑换、抽奖等功能
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import type { LotteryPrizeType, PointsLogType } from '@prisma/client'
 import * as db from '../db/index.js'
 import { sendLotteryWinNotification } from '../lib/lottery-notifier.js'
 import type { BadgeOwnershipView } from '../db/badges.js'
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const POINTS_LOG_TYPES = new Set<PointsLogType>([
+  'convert',
+  'lottery_win',
+  'lottery_spend',
+  'admin_adjust',
+  'checkin',
+  'badge_draw_spend',
+  'badge_select_spend',
+  'invite_generate',
+  'vip_benefit'
+])
+const LOTTERY_PRIZE_TYPES = new Set<LotteryPrizeType>([
+  'nothing',
+  'points',
+  'balance',
+  'badge',
+  'instance',
+  'cpu',
+  'memory',
+  'disk',
+  'traffic'
+])
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number {
+  if (!value || !POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) {
+    return fallback
+  }
+
+  return Math.min(parsed, max)
+}
+
+function parsePositiveBodyId(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : null
+}
+
+function parsePointsLogType(value: string | undefined): PointsLogType | undefined | null {
+  if (!value) return undefined
+  return POINTS_LOG_TYPES.has(value as PointsLogType) ? value as PointsLogType : null
+}
+
+function parseLotteryPrizeType(value: string | undefined): LotteryPrizeType | undefined | null {
+  if (!value) return undefined
+  return LOTTERY_PRIZE_TYPES.has(value as LotteryPrizeType) ? value as LotteryPrizeType : null
+}
 
 export default async function entertainmentRoutes(fastify: FastifyInstance) {
   function sendBadgeError(reply: FastifyReply, error: unknown) {
@@ -94,14 +157,19 @@ export default async function entertainmentRoutes(fastify: FastifyInstance) {
     }
   }>('/points/logs', {
     onRequest: [fastify.authenticate]
-  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; type?: string } }>) => {
+  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; type?: string } }>, reply: FastifyReply) => {
     const userId = request.user.id
     const { page = '1', pageSize = '20', type } = request.query
+    const logType = parsePointsLogType(type)
+
+    if (logType === null) {
+      return reply.code(400).send({ error: 'INVALID_POINTS_LOG_TYPE', message: 'Invalid points log type' })
+    }
 
     const result = await db.getPointsLogs(userId, {
-      page: Number(page),
-      pageSize: Number(pageSize),
-      type: type as any
+      page: parsePositiveIntegerQuery(page, 1, 100000),
+      pageSize: parsePositiveIntegerQuery(pageSize, 20, 100),
+      type: logType
     })
 
     return {
@@ -159,9 +227,9 @@ export default async function entertainmentRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>('/lotteries/:id', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const lotteryId = Number(request.params.id)
+    const lotteryId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(lotteryId)) {
+    if (!lotteryId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
     }
 
@@ -205,9 +273,9 @@ export default async function entertainmentRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const userId = request.user.id
-    const lotteryId = Number(request.params.id)
+    const lotteryId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(lotteryId)) {
+    if (!lotteryId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
     }
 
@@ -306,10 +374,10 @@ export default async function entertainmentRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const userId = request.user.id
-    const lotteryId = Number(request.params.id)
+    const lotteryId = parsePositiveRouteId(request.params.id)
     const drawCount = 10  // 固定 10 连抽
 
-    if (isNaN(lotteryId)) {
+    if (!lotteryId) {
       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
     }
 
@@ -478,14 +546,19 @@ export default async function entertainmentRoutes(fastify: FastifyInstance) {
     }
   }>('/lottery-records', {
     onRequest: [fastify.authenticate]
-  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; prizeType?: string } }>) => {
+  }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string; prizeType?: string } }>, reply: FastifyReply) => {
     const userId = request.user.id
     const { page = '1', pageSize = '20', prizeType } = request.query
+    const normalizedPrizeType = parseLotteryPrizeType(prizeType)
+
+    if (normalizedPrizeType === null) {
+      return reply.code(400).send({ error: 'INVALID_PRIZE_TYPE', message: 'Invalid prize type' })
+    }
 
     const result = await db.getUserLotteryRecords(userId, {
-      page: Number(page),
-      pageSize: Number(pageSize),
-      prizeType: prizeType || undefined
+      page: parsePositiveIntegerQuery(page, 1, 100000),
+      pageSize: parsePositiveIntegerQuery(pageSize, 20, 100),
+      prizeType: normalizedPrizeType
     })
 
     return {
@@ -624,8 +697,8 @@ export default async function entertainmentRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Body: { ownershipId?: number } }>, reply: FastifyReply) => {
-    const ownershipId = Number(request.body.ownershipId)
-    if (isNaN(ownershipId) || ownershipId <= 0) {
+    const ownershipId = parsePositiveBodyId(request.body.ownershipId)
+    if (!ownershipId) {
       return reply.code(400).send({
         error: 'INVALID_OWNERSHIP_ID',
         message: 'Invalid ownershipId'
@@ -656,9 +729,9 @@ export default async function entertainmentRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Body: { ownershipId?: number; instanceId?: number } }>, reply: FastifyReply) => {
-    const ownershipId = Number(request.body.ownershipId)
-    const instanceId = Number(request.body.instanceId)
-    if (isNaN(ownershipId) || ownershipId <= 0 || isNaN(instanceId) || instanceId <= 0) {
+    const ownershipId = parsePositiveBodyId(request.body.ownershipId)
+    const instanceId = parsePositiveBodyId(request.body.instanceId)
+    if (!ownershipId || !instanceId) {
       return reply.code(400).send({
         error: 'INVALID_PARAMS',
         message: 'Invalid ownershipId or instanceId'
@@ -688,8 +761,8 @@ export default async function entertainmentRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Body: { ownershipId?: number } }>, reply: FastifyReply) => {
-    const ownershipId = Number(request.body.ownershipId)
-    if (isNaN(ownershipId) || ownershipId <= 0) {
+    const ownershipId = parsePositiveBodyId(request.body.ownershipId)
+    if (!ownershipId) {
       return reply.code(400).send({
         error: 'INVALID_OWNERSHIP_ID',
         message: 'Invalid ownershipId'

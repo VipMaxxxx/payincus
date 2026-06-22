@@ -9,6 +9,59 @@ import * as announcementsDb from '../db/announcements.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { isSmtpEnabled, sendHostAnnouncementEmail } from '../lib/mailer.js'
 
+const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+  if (!value || !POSITIVE_INTEGER_PATTERN.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : fallback
+}
+
+function parsePositiveId(value: string): number | null {
+  if (!POSITIVE_INTEGER_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveIdArray(value: number[] | undefined): number[] | undefined | null {
+  if (value === undefined) return undefined
+  const ids: number[] = []
+  const seenIds = new Set<number>()
+  for (const item of value) {
+    if (!Number.isSafeInteger(item) || item <= 0) return null
+    if (!seenIds.has(item)) {
+      seenIds.add(item)
+      ids.push(item)
+    }
+  }
+  return ids
+}
+
+function normalizeInboxMessageInput(body: unknown): { title: string; content: string } | { error: { error: string; message: string } } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { error: { error: 'TITLE_REQUIRED', message: 'Title is required' } }
+  }
+
+  const { title, content } = body as { title?: unknown; content?: unknown }
+  if (typeof title !== 'string' || title.trim().length === 0) {
+    return { error: { error: 'TITLE_REQUIRED', message: 'Title is required' } }
+  }
+  if (typeof content !== 'string' || content.trim().length === 0) {
+    return { error: { error: 'CONTENT_REQUIRED', message: 'Content is required' } }
+  }
+
+  const trimmedTitle = title.trim()
+  const trimmedContent = content.trim()
+  if (trimmedTitle.length > 200) {
+    return { error: { error: 'TITLE_TOO_LONG', message: 'Title is too long' } }
+  }
+  if (trimmedContent.length > 5000) {
+    return { error: { error: 'CONTENT_TOO_LONG', message: 'Content is too long' } }
+  }
+
+  return { title: trimmedTitle, content: trimmedContent }
+}
+
 export default async function inboxRoutes(fastify: FastifyInstance) {
 
   // 所有路由都需要认证
@@ -30,7 +83,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       isRead?: string
     }
   }>) => {
-    const { page = '1', pageSize = '20', isRead } = request.query
+    const { isRead } = request.query
     const userId = request.user.id
 
     // 解析 isRead 参数
@@ -42,8 +95,8 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     }
 
     const result = await inboxDb.getInboxMessages(userId, {
-      page: parseInt(page, 10) || 1,
-      pageSize: parseInt(pageSize, 10) || 20,
+      page: parsePositiveInteger(request.query.page, 1),
+      pageSize: Math.min(100, parsePositiveInteger(request.query.pageSize, 20)),
       isRead: isReadFilter
     })
 
@@ -68,10 +121,10 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const messageId = Number(id)
+    const messageId = parsePositiveId(id)
     const userId = request.user.id
 
-    if (isNaN(messageId)) {
+    if (messageId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -101,10 +154,10 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const messageId = Number(id)
+    const messageId = parsePositiveId(id)
     const userId = request.user.id
 
-    if (isNaN(messageId)) {
+    if (messageId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -144,20 +197,9 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    const { title, content } = request.body
-
-    // 参数验证
-    if (!title || typeof title !== 'string' || title.trim().length === 0) {
-      return reply.code(400).send({ error: 'TITLE_REQUIRED', message: 'Title is required' })
-    }
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      return reply.code(400).send({ error: 'CONTENT_REQUIRED', message: 'Content is required' })
-    }
-    if (title.length > 200) {
-      return reply.code(400).send({ error: 'TITLE_TOO_LONG', message: 'Title is too long' })
-    }
-    if (content.length > 5000) {
-      return reply.code(400).send({ error: 'CONTENT_TOO_LONG', message: 'Content is too long' })
+    const messageInput = normalizeInboxMessageInput(request.body)
+    if ('error' in messageInput) {
+      return reply.code(400).send(messageInput.error)
     }
 
     // 获取所有活跃用户
@@ -171,8 +213,8 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     const count = await inboxDb.createBulkMessages({
       userIds,
       eventType: 'system_announcement',
-      title: title.trim(),
-      content: content.trim(),
+      title: messageInput.title,
+      content: messageInput.content,
       data: { senderId: request.user.id }
     })
 
@@ -180,8 +222,8 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     await announcementsDb.createAnnouncement({
       type: 'system_broadcast',
       senderId: request.user.id,
-      title: title.trim(),
-      content: content.trim(),
+      title: messageInput.title,
+      content: messageInput.content,
       recipientCount: count,
     })
 
@@ -209,7 +251,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
           content: { type: 'string', minLength: 1, maxLength: 5000 },
           instanceIds: {
             type: 'array',
-            items: { type: 'integer' },
+            items: { type: 'integer', minimum: 1 },
             minItems: 1,
             maxItems: 100
           },
@@ -226,11 +268,15 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       sendEmail?: boolean
     }
   }>, reply: FastifyReply) => {
-    const hostId = Number(request.params.hostId)
+    const hostId = parsePositiveId(request.params.hostId)
     const userId = request.user.id
-    const { title, content, instanceIds, sendEmail = false } = request.body
+    const { instanceIds, sendEmail = false } = request.body
 
-    if (isNaN(hostId)) {
+    if (hostId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+    const normalizedInstanceIds = parsePositiveIdArray(instanceIds)
+    if (normalizedInstanceIds === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -245,25 +291,16 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 参数验证
-    if (!title || typeof title !== 'string' || title.trim().length === 0) {
-      return reply.code(400).send({ error: 'TITLE_REQUIRED', message: 'Title is required' })
-    }
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      return reply.code(400).send({ error: 'CONTENT_REQUIRED', message: 'Content is required' })
-    }
-    if (title.length > 200) {
-      return reply.code(400).send({ error: 'TITLE_TOO_LONG', message: 'Title is too long' })
-    }
-    if (content.length > 5000) {
-      return reply.code(400).send({ error: 'CONTENT_TOO_LONG', message: 'Content is too long' })
+    const messageInput = normalizeInboxMessageInput(request.body)
+    if ('error' in messageInput) {
+      return reply.code(400).send(messageInput.error)
     }
 
-    const trimmedTitle = title.trim()
-    const trimmedContent = content.trim()
+    const trimmedTitle = messageInput.title
+    const trimmedContent = messageInput.content
 
     // 获取目标用户（去重）：如果指定了 instanceIds 则只通知这些实例的用户，否则通知全部
-    const recipients = await inboxDb.getUniqueRecipientsByHostId(hostId, instanceIds)
+    const recipients = await inboxDb.getUniqueRecipientsByHostId(hostId, normalizedInstanceIds)
     const userIds = recipients.map(recipient => recipient.userId)
     const emailRecipients = sendEmail
       ? recipients.filter(recipient => typeof recipient.email === 'string' && recipient.email.trim().length > 0)
@@ -400,8 +437,8 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    const targetUserId = Number(request.params.userId)
-    if (isNaN(targetUserId)) {
+    const targetUserId = parsePositiveId(request.params.userId)
+    if (targetUserId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -416,28 +453,17 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'CANNOT_MESSAGE_SELF', message: 'Cannot send message to yourself' })
     }
 
-    const { title, content } = request.body
-
-    // 参数验证
-    if (!title || typeof title !== 'string' || title.trim().length === 0) {
-      return reply.code(400).send({ error: 'TITLE_REQUIRED', message: 'Title is required' })
-    }
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      return reply.code(400).send({ error: 'CONTENT_REQUIRED', message: 'Content is required' })
-    }
-    if (title.length > 200) {
-      return reply.code(400).send({ error: 'TITLE_TOO_LONG', message: 'Title is too long' })
-    }
-    if (content.length > 5000) {
-      return reply.code(400).send({ error: 'CONTENT_TOO_LONG', message: 'Content is too long' })
+    const messageInput = normalizeInboxMessageInput(request.body)
+    if ('error' in messageInput) {
+      return reply.code(400).send(messageInput.error)
     }
 
     // 创建消息
     await inboxDb.createInboxMessage({
       userId: targetUserId,
       eventType: 'admin_message',
-      title: title.trim(),
-      content: content.trim(),
+      title: messageInput.title,
+      content: messageInput.content,
       data: { senderId: request.user.id }
     })
 
@@ -445,8 +471,8 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     await announcementsDb.createAnnouncement({
       type: 'admin_message',
       senderId: request.user.id,
-      title: title.trim(),
-      content: content.trim(),
+      title: messageInput.title,
+      content: messageInput.content,
       recipientCount: 1,
       targetUserId,
     })
@@ -470,10 +496,10 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       content: string
     }
   }>, reply: FastifyReply) => {
-    const instanceId = Number(request.params.instanceId)
+    const instanceId = parsePositiveId(request.params.instanceId)
     const userId = request.user.id
 
-    if (isNaN(instanceId)) {
+    if (instanceId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -504,30 +530,19 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'CANNOT_MESSAGE_SELF', message: 'Cannot send message to yourself' })
     }
 
-    const { title, content } = request.body
-
-    // 参数验证
-    if (!title || typeof title !== 'string' || title.trim().length === 0) {
-      return reply.code(400).send({ error: 'TITLE_REQUIRED', message: 'Title is required' })
-    }
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      return reply.code(400).send({ error: 'CONTENT_REQUIRED', message: 'Content is required' })
-    }
-    if (title.length > 200) {
-      return reply.code(400).send({ error: 'TITLE_TOO_LONG', message: 'Title is too long' })
-    }
-    if (content.length > 5000) {
-      return reply.code(400).send({ error: 'CONTENT_TOO_LONG', message: 'Content is too long' })
+    const messageInput = normalizeInboxMessageInput(request.body)
+    if ('error' in messageInput) {
+      return reply.code(400).send(messageInput.error)
     }
 
     // 构建带节点署名的消息内容
-    const messageContent = `${content.trim()}\n\n来自节点：${host.name}`
+    const messageContent = `${messageInput.content}\n\n来自节点：${host.name}`
 
     // 创建消息给实例用户
     await inboxDb.createInboxMessage({
       userId: instance.user_id,
       eventType: 'host_message',
-      title: title.trim(),
+      title: messageInput.title,
       content: messageContent,
       data: {
         hostId: host.id,
@@ -542,8 +557,8 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     await announcementsDb.createAnnouncement({
       type: 'host_message',
       senderId: userId,
-      title: title.trim(),
-      content: content.trim(),
+      title: messageInput.title,
+      content: messageInput.content,
       recipientCount: 1,
       hostId: host.id,
       targetUserId: instance.user_id,

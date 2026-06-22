@@ -9,6 +9,7 @@
 
 import pLimit from 'p-limit'
 import type { InstanceStatus } from '@prisma/client'
+import { isIP } from 'node:net'
 import { prisma } from '../db/prisma.js'
 import { withLock } from '../lib/distributed-lock.js'
 import { mapInstanceStatus } from '../lib/incus/incus-utils.js'
@@ -46,6 +47,10 @@ const trafficLockOptions = {
   expireMs: 30000,
   waitTimeoutMs: 3000,
   retryIntervalMs: 50
+}
+
+function getUserTrafficLockKey(userId: number): string {
+  return `traffic:user:${userId}`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,12 +98,29 @@ function normalizeStatus(value: unknown): InstanceStatus | null {
   return null
 }
 
-function normalizeNetworkAddress(value: unknown): string | null | undefined {
+function normalizeNetworkAddress(value: unknown, family: 4 | 6): string | null | undefined {
   if (value === undefined) {
     return undefined
   }
-  const address = sanitizeShortString(value, 128)
-  return address ?? null
+
+  if (value === null) {
+    return null
+  }
+
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const address = value.trim()
+  if (!address) {
+    return null
+  }
+
+  if (address.length > 128 || isIP(address) !== family) {
+    return undefined
+  }
+
+  return address
 }
 
 function normalizeAgentInstanceItems(payload: unknown): NormalizedAgentInstanceItem[] {
@@ -124,8 +146,8 @@ function normalizeAgentInstanceItems(payload: unknown): NormalizedAgentInstanceI
       status: normalizeStatus(rawItem.status),
       rxBytes: parseCounter(traffic.rxBytes),
       txBytes: parseCounter(traffic.txBytes),
-      ipv4: normalizeNetworkAddress(network.ipv4),
-      ipv6: normalizeNetworkAddress(network.ipv6)
+      ipv4: normalizeNetworkAddress(network.ipv4, 4),
+      ipv6: normalizeNetworkAddress(network.ipv6, 6)
     })
   }
 
@@ -137,8 +159,8 @@ function shouldSyncStatus(currentStatus: InstanceStatus, reportedStatus: Instanc
     return false
   }
 
-  // 不让只读 Agent 心跳改动封停、删除和创建中实例，避免绕过业务流程。
-  return currentStatus === 'running' || currentStatus === 'stopped' || currentStatus === 'error'
+  // 不让只读 Agent 心跳改动创建失败、封停、删除和创建中实例，避免绕过业务流程。
+  return currentStatus === 'running' || currentStatus === 'stopped'
 }
 
 function shouldApplyTraffic(currentStatus: InstanceStatus, item: NormalizedAgentInstanceItem): boolean {
@@ -146,8 +168,8 @@ function shouldApplyTraffic(currentStatus: InstanceStatus, item: NormalizedAgent
     return false
   }
 
-  // 流量属于计费数据，不处理创建中、封停和已删除实例，避免绕过业务状态。
-  return currentStatus === 'running' || currentStatus === 'stopped' || currentStatus === 'error'
+  // 流量属于计费数据，只允许当前业务状态为 running 的实例写入。
+  return currentStatus === 'running'
 }
 
 function buildStatusUpdateData(item: NormalizedAgentInstanceItem, now: Date): {
@@ -193,7 +215,7 @@ async function applyReportedTrafficCounters(
   const lockResult = await withLock(lockKey, async () => {
     const normalizedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-    return prisma.$transaction(async (tx) => {
+    const userLockResult = await withLock(getUserTrafficLockKey(instance.userId), async () => prisma.$transaction(async (tx) => {
       const currentInstance = await tx.instance.findUnique({
         where: { id: instance.id },
         select: { status: true }
@@ -269,7 +291,13 @@ async function applyReportedTrafficCounters(
         updated: true,
         delta: totalDelta
       }
-    })
+    }), trafficLockOptions)
+
+    if (!userLockResult.success || !userLockResult.result) {
+      throw new Error(userLockResult.error || 'Agent user traffic lock acquisition failed')
+    }
+
+    return userLockResult.result
   }, trafficLockOptions)
 
   if (!lockResult.success || !lockResult.result) {
@@ -291,23 +319,30 @@ async function processOneAgentInstanceReport(
   let errors = 0
 
   try {
+    let trafficInstance = instance
     if (shouldSyncStatus(instance.status, item.status)) {
       const updateData = buildStatusUpdateData(item, now)
       if (updateData) {
         const updateResult = await prisma.instance.updateMany({
           where: {
             id: instance.id,
-            status: { not: 'deleted' }
+            status: { in: ['running', 'stopped'] }
           },
           data: updateData
         })
         statusUpdated = updateResult.count
+        if (statusUpdated > 0) {
+          trafficInstance = {
+            ...instance,
+            status: updateData.status
+          }
+        }
       }
     } else {
       skipped += 1
     }
 
-    const trafficResult = await applyReportedTrafficCounters(instance, item, now)
+    const trafficResult = await applyReportedTrafficCounters(trafficInstance, item, now)
     if (trafficResult.updated) {
       trafficUpdated = 1
       trafficDelta = trafficResult.delta

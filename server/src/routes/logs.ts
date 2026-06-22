@@ -6,6 +6,30 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { getLogsPaginated, getLogModules } from '../db/logs.js'
 import { ErrorCode, apiError } from '../lib/errors.js'
 
+const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/
+const LOG_MODULE_FILTER_MAX_LENGTH = 64
+const LOG_SEARCH_FILTER_MAX_LENGTH = 128
+const LOG_INSTANCE_NAME_FILTER_MAX_LENGTH = 128
+
+function parsePositiveInteger(value: string | null | undefined): number | null {
+  if (!value || !POSITIVE_INTEGER_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveIntegerQuery(value: string | undefined, fallback: number): number {
+  return parsePositiveInteger(value) ?? fallback
+}
+
+function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number {
+  return Math.min(parsePositiveIntegerQuery(value, fallback), max)
+}
+
+function normalizeLogFilter(value: string | null | undefined, maxLength: number): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed.slice(0, maxLength) : undefined
+}
+
 export default async function logRoutes(fastify: FastifyInstance) {
   /**
    * 获取日志列表（分页、筛选、搜索）
@@ -33,20 +57,20 @@ export default async function logRoutes(fastify: FastifyInstance) {
   }>, reply: FastifyReply) => {
     const { page = '1', pageSize = '20', module = null, search = null, instanceId = null, instanceName = null } = request.query
     const userId = request.user.role === 'admin' ? null : request.user.id
-    const instanceIdNum = instanceId ? Number(instanceId) : undefined
+    const instanceIdNum = parsePositiveInteger(instanceId)
 
-    if (instanceId !== null && (!Number.isInteger(instanceIdNum) || instanceIdNum! <= 0)) {
+    if (instanceId !== null && !instanceIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
     const result = await getLogsPaginated({
       userId: userId || undefined,
-      module: module || undefined,
-      page: parseInt(page, 10),
-      pageSize: parseInt(pageSize, 10),
-      search: search || undefined,
-      instanceId: instanceIdNum,
-      instanceName: instanceName || undefined
+      module: normalizeLogFilter(module, LOG_MODULE_FILTER_MAX_LENGTH),
+      page: parsePositiveIntegerQuery(page, 1),
+      pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100),
+      search: normalizeLogFilter(search, LOG_SEARCH_FILTER_MAX_LENGTH),
+      instanceId: instanceIdNum ?? undefined,
+      instanceName: normalizeLogFilter(instanceName, LOG_INSTANCE_NAME_FILTER_MAX_LENGTH)
     })
 
     return {
@@ -86,4 +110,3 @@ export default async function logRoutes(fastify: FastifyInstance) {
     return { success: true, modules: userModules }
   })
 }
-

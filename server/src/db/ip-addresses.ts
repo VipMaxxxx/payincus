@@ -2,7 +2,11 @@
  * IP 地址数据库操作
  */
 import { prisma } from './prisma.js'
-import type { IpType } from '@prisma/client'
+import type { IpAddress, IpType, Prisma } from '@prisma/client'
+import {
+    IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE,
+    advisoryTransactionLockString
+} from './advisory-locks.js'
 
 export interface CreateIpAddressData {
     address: string
@@ -12,6 +16,18 @@ export interface CreateIpAddressData {
     device: string
     hostId?: number
     instanceId: number
+}
+
+export interface UpdateIpAddressAddressData {
+    id: number
+    address: string
+    isCustom?: boolean
+}
+
+const IP_ADDRESS_ALREADY_EXISTS_ERROR = 'IP_ADDRESS_ALREADY_EXISTS'
+
+export function isIpAddressAlreadyExistsError(error: unknown): boolean {
+    return error instanceof Error && error.message === IP_ADDRESS_ALREADY_EXISTS_ERROR
 }
 
 async function resolveInstanceHostId(instanceId: number): Promise<number> {
@@ -27,11 +43,81 @@ async function resolveInstanceHostId(instanceId: number): Promise<number> {
     return instance.hostId
 }
 
+async function assertIpAddressAvailable(
+    tx: Prisma.TransactionClient,
+    input: {
+        address: string
+        type: IpType
+        instanceId: number
+        isPrimary: boolean
+        excludeIpAddressId?: number
+    }
+): Promise<void> {
+    if (input.type !== 'inet6') {
+        return
+    }
+
+    const existingIp = await tx.ipAddress.findFirst({
+        where: {
+            address: input.address,
+            type: input.type,
+            ...(input.excludeIpAddressId ? { id: { not: input.excludeIpAddressId } } : {}),
+            instance: {
+                status: { not: 'deleted' }
+            }
+        },
+        select: { id: true }
+    })
+    if (existingIp) {
+        throw new Error(IP_ADDRESS_ALREADY_EXISTS_ERROR)
+    }
+
+    const existingInstance = await tx.instance.findFirst({
+        where: {
+            ipv6: input.address,
+            status: { not: 'deleted' },
+            ...(input.isPrimary ? { id: { not: input.instanceId } } : {})
+        },
+        select: { id: true }
+    })
+    if (existingInstance) {
+        throw new Error(IP_ADDRESS_ALREADY_EXISTS_ERROR)
+    }
+}
+
 /**
  * 创建 IP 地址记录
  */
-export async function createIpAddress(data: CreateIpAddressData) {
+export async function createIpAddress(data: CreateIpAddressData): Promise<IpAddress> {
     const hostId = data.hostId ?? await resolveInstanceHostId(data.instanceId)
+
+    if (data.type === 'inet6') {
+        return prisma.$transaction(async (tx) => {
+            await advisoryTransactionLockString(tx, IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE, data.address)
+            await assertIpAddressAvailable(tx, {
+                address: data.address,
+                type: data.type,
+                instanceId: data.instanceId,
+                isPrimary: data.isPrimary
+            })
+
+            return tx.ipAddress.create({
+                data: {
+                    address: data.address,
+                    type: data.type,
+                    isPrimary: data.isPrimary,
+                    isCustom: data.isCustom ?? false,
+                    device: data.device,
+                    host: {
+                        connect: { id: hostId }
+                    },
+                    instance: {
+                        connect: { id: data.instanceId }
+                    }
+                }
+            })
+        })
+    }
 
     return prisma.ipAddress.create({
         data: {
@@ -47,6 +133,56 @@ export async function createIpAddress(data: CreateIpAddressData) {
                 connect: { id: data.instanceId }
             }
         }
+    })
+}
+
+/**
+ * 更新 IP 地址。主 IPv6 地址必须同时同步 Instance.ipv6，避免列表字段和
+ * ip_addresses 表出现不同步。
+ */
+export async function updateIpAddressAddress(data: UpdateIpAddressAddressData): Promise<IpAddress> {
+    return prisma.$transaction(async (tx) => {
+        const record = await tx.ipAddress.findUnique({
+            where: { id: data.id },
+            select: {
+                id: true,
+                type: true,
+                instanceId: true,
+                isPrimary: true
+            }
+        })
+
+        if (!record) {
+            throw new Error('IP_ADDRESS_NOT_FOUND')
+        }
+
+        if (record.type === 'inet6') {
+            await advisoryTransactionLockString(tx, IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE, data.address)
+            await assertIpAddressAvailable(tx, {
+                address: data.address,
+                type: record.type,
+                instanceId: record.instanceId,
+                isPrimary: record.isPrimary,
+                excludeIpAddressId: record.id
+            })
+        }
+
+        const updated = await tx.ipAddress.update({
+            where: { id: data.id },
+            data: {
+                address: data.address,
+                ...(data.isCustom !== undefined ? { isCustom: data.isCustom } : {})
+            }
+        })
+
+        if (record.type === 'inet6' && record.isPrimary) {
+            await tx.instance.update({
+                where: { id: record.instanceId },
+                data: { ipv6: data.address }
+            })
+        }
+
+        return updated
     })
 }
 

@@ -41,10 +41,17 @@ export function isProductionEnv(): boolean {
 
 /**
  * 获取 Cookie Secure 属性
- * 生产环境或显式配置时使用 HTTPS
+ * 生产环境默认使用 HTTPS；内网 HTTP 反代验证可显式设置 COOKIE_SECURE=false。
  */
 export function getCookieSecure(): boolean {
-  return isProductionEnv() || process.env.COOKIE_SECURE === 'true'
+  if (process.env.COOKIE_SECURE) {
+    const value = process.env.COOKIE_SECURE.toLowerCase()
+    if (value === 'true') return true
+    if (value === 'false') return false
+    console.warn(`[Cookie Config] Invalid COOKIE_SECURE value: ${process.env.COOKIE_SECURE}, using default`)
+  }
+
+  return isProductionEnv()
 }
 
 /**

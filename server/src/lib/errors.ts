@@ -20,6 +20,7 @@ export const ErrorCode = {
     CANNOT_BAN_ADMIN: 'CANNOT_BAN_ADMIN',
     CANNOT_DELETE_ADMIN: 'CANNOT_DELETE_ADMIN',
     USER_HAS_INSTANCES: 'USER_HAS_INSTANCES',
+    USER_HAS_RESOURCES: 'USER_HAS_RESOURCES',
 
     // Auth errors
     INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
@@ -351,6 +352,7 @@ export const ErrorMessages: Record<ErrorCodeType, string> = {
     [ErrorCode.CANNOT_BAN_ADMIN]: 'Cannot ban admin account',
     [ErrorCode.CANNOT_DELETE_ADMIN]: 'Cannot delete admin account',
     [ErrorCode.USER_HAS_INSTANCES]: 'User has instances, please delete them first',
+    [ErrorCode.USER_HAS_RESOURCES]: 'User owns resources, please transfer or remove them first',
 
     // Auth errors
     [ErrorCode.INVALID_CREDENTIALS]: 'Invalid username or password',

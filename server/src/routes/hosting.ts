@@ -4,6 +4,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { HostingActionType, WithdrawalStatus } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import { createLog } from '../db/logs.js'
 import { checkHostingAccess } from '../lib/hosting-access.js'
@@ -13,13 +14,63 @@ import {
   listHostingUserBlocks,
   removeHostingUserBlock
 } from '../db/hosting-blocks.js'
-import { HOSTING_BALANCE_LOG_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import { HOSTING_BALANCE_LOG_LOCK_NAMESPACE, USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
 import { calculateVipLevel, getVipBadgeStyleForLevel, getVipRules } from '../services/vip-levels.js'
 
 // 提现配置常量
 const WITHDRAWAL_CONFIG = {
   minAmount: 10,              // 最低提现金额（元）
   feeRateBalance: 0.05        // 提现到面板余额手续费率 5%
+}
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const HOSTING_ACTION_TYPES = new Set<HostingActionType>([
+  'purchase',
+  'renew',
+  'upgrade',
+  'destroy',
+  'unfreeze',
+  'withdraw',
+  'admin_adjust'
+])
+const WITHDRAWAL_STATUSES = new Set<WithdrawalStatus>([
+  'pending',
+  'approved',
+  'rejected',
+  'completed'
+])
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveIntegerQuery(value: string | undefined, fallback: number): number {
+  if (!value || !POSITIVE_ROUTE_ID_PATTERN.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : fallback
+}
+
+function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number {
+  return Math.min(parsePositiveIntegerQuery(value, fallback), max)
+}
+
+function normalizeHostingActionType(value: string | undefined): HostingActionType | undefined {
+  return value && HOSTING_ACTION_TYPES.has(value as HostingActionType)
+    ? value as HostingActionType
+    : undefined
+}
+
+function normalizeWithdrawalStatus(value: string | undefined): WithdrawalStatus | undefined {
+  return value && WITHDRAWAL_STATUSES.has(value as WithdrawalStatus)
+    ? value as WithdrawalStatus
+    : undefined
+}
+
+function normalizeSearch(value: string | undefined, maxLength: number): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed.slice(0, maxLength) : undefined
 }
 
 export default async function hostingRoutes(fastify: FastifyInstance) {
@@ -189,11 +240,11 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply) => {
     const { user } = request
-    const blockedUserId = Number(request.params.userId)
+    const blockedUserId = parsePositiveRouteId(request.params.userId)
     if (!await ensureCanManageHostingBlocks(user.id, user.role)) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
-    if (Number.isNaN(blockedUserId)) {
+    if (!blockedUserId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -285,14 +336,15 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
     const { user } = request
     const { page = '1', pageSize = '30', actionType, frozen, search } = request.query
 
-    const safePageSize = Math.min(Number(pageSize) || 30, 100)
-    const pageNum = Number(page) || 1
+    const safePageSize = parseClampedPositiveIntegerQuery(pageSize, 30, 100)
+    const pageNum = parsePositiveIntegerQuery(page, 1)
     const skip = (pageNum - 1) * safePageSize
 
     // 构建基础查询条件
     const baseWhere: any = { userId: user.id }
-    if (actionType) {
-      baseWhere.actionType = actionType
+    const safeActionType = normalizeHostingActionType(actionType)
+    if (safeActionType) {
+      baseWhere.actionType = safeActionType
     }
     if (frozen === 'true') {
       baseWhere.frozen = true
@@ -303,8 +355,8 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
     // 搜索条件处理：在数据库层面进行搜索，而非内存过滤
     let where: any = baseWhere
 
-    if (search && search.trim()) {
-      const searchTerm = search.trim()
+    const searchTerm = normalizeSearch(search, 128)
+    if (searchTerm) {
 
       // 查找匹配搜索条件的实例 ID（限制在当前托管商的宿主机上）
       const matchedInstances = await prisma.instance.findMany({
@@ -540,6 +592,10 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
         if (!locked) {
           throw new Error('托管余额正在处理，请稍后重试')
         }
+        const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, user.id)
+        if (!balanceLocked) {
+          throw new Error('用户余额正在处理，请稍后重试')
+        }
 
         // 扣减托管余额
         const deductResult = await tx.user.updateMany({
@@ -573,12 +629,13 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
           select: { balance: true }
         })
         const oldBalance = Number(currentUser?.balance || 0)
-        const newBalance = oldBalance + actualAmount
 
-        await tx.user.update({
+        const updatedUser = await tx.user.update({
           where: { id: user.id },
-          data: { balance: { increment: actualAmount } }
+          data: { balance: { increment: actualAmount } },
+          select: { balance: true }
         })
+        const newBalance = Number(updatedUser.balance)
 
         // 记录面板余额日志
         await tx.balanceLog.create({
@@ -654,13 +711,14 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
     const { user } = request
     const { page = '1', pageSize = '20', status } = request.query
 
-    const safePageSize = Math.min(Number(pageSize) || 20, 100)
-    const pageNum = Number(page) || 1
+    const safePageSize = parseClampedPositiveIntegerQuery(pageSize, 20, 100)
+    const pageNum = parsePositiveIntegerQuery(page, 1)
     const skip = (pageNum - 1) * safePageSize
 
     const where: any = { userId: user.id }
-    if (status) {
-      where.status = status
+    const safeStatus = normalizeWithdrawalStatus(status)
+    if (safeStatus) {
+      where.status = safeStatus
     }
 
     const [records, total] = await Promise.all([

@@ -6,6 +6,39 @@
 import { prisma } from './prisma.js'
 import type { HelpArticle } from '../types/database.js'
 
+function clampHelpPagination(page: number | undefined, pageSize: number | undefined): {
+  page: number
+  pageSize: number
+} {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), 100)
+      : 20
+  }
+}
+
+function normalizeHelpCategory(value: string | null | undefined): string | null {
+  const category = value?.trim()
+  return category ? category.slice(0, 80) : null
+}
+
+function articleToHelpArticle(article: NonNullable<Awaited<ReturnType<typeof prisma.helpArticle.findFirst>>>): HelpArticle {
+  return {
+    id: article.id,
+    title: article.title,
+    slug: article.slug,
+    content: article.content,
+    category: article.category,
+    sort_order: article.sortOrder,
+    published: article.published ? 1 : 0,
+    pinned: article.pinned ? 1 : 0,
+    created_by: article.createdBy,
+    created_at: article.createdAt.toISOString(),
+    updated_at: article.updatedAt.toISOString()
+  }
+}
+
 /**
  * 获取帮助文档列表（分页）
  */
@@ -22,7 +55,10 @@ export async function getHelpArticles(options: {
   pageSize: number
   totalPages: number
 }> {
-  const { page = 1, pageSize = 20, publishedOnly = true, category = null, pinnedOnly = false } = options
+  const { page, pageSize } = clampHelpPagination(options.page, options.pageSize)
+  const publishedOnly = options.publishedOnly ?? true
+  const category = normalizeHelpCategory(options.category)
+  const pinnedOnly = options.pinnedOnly ?? false
 
   const where: any = {}
 
@@ -90,6 +126,7 @@ export async function getHelpArticles(options: {
  * 获取置顶的帮助文档（用于首页显示）
  */
 export async function getPinnedHelpArticles(limit: number = 6): Promise<Array<Pick<HelpArticle, 'id' | 'title' | 'slug' | 'category'>>> {
+  const safeLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 20) : 6
   const articles = await prisma.helpArticle.findMany({
     where: {
       published: true,
@@ -106,7 +143,7 @@ export async function getPinnedHelpArticles(limit: number = 6): Promise<Array<Pi
       { sortOrder: 'asc' },
       { createdAt: 'desc' }
     ],
-    take: limit
+    take: safeLimit
   })
 
   return articles.map(a => ({
@@ -127,19 +164,7 @@ export async function getHelpArticleById(id: number): Promise<HelpArticle | null
 
   if (!article) return null
 
-  return {
-    id: article.id,
-    title: article.title,
-    slug: article.slug,
-    content: article.content,
-    category: article.category,
-    sort_order: article.sortOrder,
-    published: article.published ? 1 : 0,
-    pinned: article.pinned ? 1 : 0,
-    created_by: article.createdBy,
-    created_at: article.createdAt.toISOString(),
-    updated_at: article.updatedAt.toISOString()
-  }
+  return articleToHelpArticle(article)
 }
 
 /**
@@ -155,19 +180,22 @@ export async function getHelpArticleBySlug(slug: string): Promise<HelpArticle | 
 
   if (!article) return null
 
-  return {
-    id: article.id,
-    title: article.title,
-    slug: article.slug,
-    content: article.content,
-    category: article.category,
-    sort_order: article.sortOrder,
-    published: article.published ? 1 : 0,
-    pinned: article.pinned ? 1 : 0,
-    created_by: article.createdBy,
-    created_at: article.createdAt.toISOString(),
-    updated_at: article.updatedAt.toISOString()
-  }
+  return articleToHelpArticle(article)
+}
+
+/**
+ * 通过 slug 获取任意帮助文档（管理员唯一性检查使用，包含未发布）
+ */
+export async function getAnyHelpArticleBySlug(slug: string): Promise<HelpArticle | null> {
+  const article = await prisma.helpArticle.findUnique({
+    where: {
+      slug
+    }
+  })
+
+  if (!article) return null
+
+  return articleToHelpArticle(article)
 }
 
 /**

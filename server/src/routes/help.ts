@@ -19,6 +19,112 @@ const DEFAULT_CATEGORIES = [
   { id: 'billing', name: '计费相关', color: '#f59e0b' },
   { id: 'faq', name: '常见问题', color: '#ef4444' }
 ]
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const HELP_SLUG_PATTERN = /^[a-z0-9-]+$/
+const MAX_HELP_TITLE_LENGTH = 200
+const MAX_HELP_SLUG_LENGTH = 120
+const MAX_HELP_CATEGORY_LENGTH = 80
+const MAX_HELP_CONTENT_LENGTH = 100000
+const MAX_HELP_SORT_ORDER = 1000000
+const MAX_HELP_CATEGORY_CONFIG_ITEMS = 50
+const MAX_HELP_CATEGORY_NAME_LENGTH = 80
+
+function getBodyRecord(body: unknown): Record<string, unknown> | null {
+  return body && typeof body === 'object' && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : null
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number, max: number): number {
+  if (value === undefined) {
+    return fallback
+  }
+
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) {
+    return fallback
+  }
+
+  return Math.min(parsed, max)
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function normalizeRequiredText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed && trimmed.length <= maxLength ? trimmed : null
+}
+
+function normalizeOptionalText(value: unknown, maxLength: number): string | undefined | null {
+  if (value === undefined) return undefined
+  return normalizeRequiredText(value, maxLength)
+}
+
+function normalizeSlug(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const slug = value.trim()
+  return slug.length > 0 && slug.length <= MAX_HELP_SLUG_LENGTH && HELP_SLUG_PATTERN.test(slug) ? slug : null
+}
+
+function normalizeCategoryId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const id = value.trim()
+  return id.length > 0 && id.length <= MAX_HELP_CATEGORY_LENGTH && HELP_SLUG_PATTERN.test(id) ? id : null
+}
+
+function normalizeOptionalSlug(value: unknown): string | undefined | null {
+  if (value === undefined) return undefined
+  return normalizeSlug(value)
+}
+
+function normalizeSortOrder(value: unknown): number {
+  if (value === undefined) return 0
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= MAX_HELP_SORT_ORDER ? value : NaN
+}
+
+function normalizeOptionalBoolean(value: unknown): boolean | undefined | null {
+  if (value === undefined) return undefined
+  return typeof value === 'boolean' ? value : null
+}
+
+function normalizeHelpCategoryConfigInput(body: unknown): Array<{ id: string; name: string; color: string }> | null {
+  const record = getBodyRecord(body)
+  if (!record || !Array.isArray(record.categories) || record.categories.length > MAX_HELP_CATEGORY_CONFIG_ITEMS) {
+    return null
+  }
+
+  const categories: Array<{ id: string; name: string; color: string }> = []
+  const categoryIds = new Set<string>()
+
+  for (const item of record.categories) {
+    const category = getBodyRecord(item)
+    if (!category) return null
+
+    const id = normalizeCategoryId(category.id)
+    const name = normalizeRequiredText(category.name, MAX_HELP_CATEGORY_NAME_LENGTH)
+    const color = typeof category.color === 'string' ? category.color.trim() : ''
+    if (!id || !name || !/^#[0-9a-fA-F]{6}$/.test(color) || categoryIds.has(id)) {
+      return null
+    }
+
+    categoryIds.add(id)
+    categories.push({ id, name, color })
+  }
+
+  return categories
+}
 
 export default async function helpRoutes(fastify: FastifyInstance) {
 
@@ -40,11 +146,11 @@ export default async function helpRoutes(fastify: FastifyInstance) {
       category?: string
     }
   }>) => {
-    const { page = '1', pageSize = '20', category } = request.query
+    const { category } = request.query
 
     const result = await db.getHelpArticles({
-      page: parseInt(page, 10),
-      pageSize: parseInt(pageSize, 10),
+      page: parsePositiveInteger(request.query.page, 1, 100000),
+      pageSize: parsePositiveInteger(request.query.pageSize, 20, 100),
       publishedOnly: true,
       category: category || undefined
     })
@@ -73,8 +179,7 @@ export default async function helpRoutes(fastify: FastifyInstance) {
       limit?: string
     }
   }>) => {
-    const { limit = '6' } = request.query
-    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 6, 1), 20) // 限制在 1-20 之间
+    const limitNum = parsePositiveInteger(request.query.limit, 6, 20)
 
     const articles = await db.getPinnedHelpArticles(limitNum)
     return { articles }
@@ -141,12 +246,13 @@ export default async function helpRoutes(fastify: FastifyInstance) {
         properties: {
           categories: {
             type: 'array',
+            maxItems: MAX_HELP_CATEGORY_CONFIG_ITEMS,
             items: {
               type: 'object',
               required: ['id', 'name', 'color'],
               properties: {
-                id: { type: 'string', pattern: '^[a-z0-9-]+$' },
-                name: { type: 'string', minLength: 1 },
+                id: { type: 'string', minLength: 1, maxLength: MAX_HELP_CATEGORY_LENGTH, pattern: '^[a-z0-9-]+$' },
+                name: { type: 'string', minLength: 1, maxLength: MAX_HELP_CATEGORY_NAME_LENGTH },
                 color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' }
               }
             }
@@ -154,8 +260,11 @@ export default async function helpRoutes(fastify: FastifyInstance) {
         }
       }
     }
-  }, async (request: FastifyRequest<{ Body: { categories: Array<{ id: string; name: string; color: string }> } }>) => {
-    const { categories } = request.body
+  }, async (request: FastifyRequest<{ Body: { categories: Array<{ id: string; name: string; color: string }> } }>, reply: FastifyReply) => {
+    const categories = normalizeHelpCategoryConfigInput(request.body)
+    if (!categories) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
+    }
     
     // 检查配置是否已存在
     const existing = await prisma.systemConfig.findUnique({ where: { key: 'help_categories' } })
@@ -206,11 +315,11 @@ export default async function helpRoutes(fastify: FastifyInstance) {
       category?: string
     }
   }>, _reply: FastifyReply) => {
-    const { page = '1', pageSize = '20', category } = request.query
+    const { category } = request.query
 
     const result = await db.getHelpArticles({
-      page: parseInt(page, 10),
-      pageSize: parseInt(pageSize, 10),
+      page: parsePositiveInteger(request.query.page, 1, 100000),
+      pageSize: parsePositiveInteger(request.query.pageSize, 20, 100),
       publishedOnly: false,
       category: category || undefined
     })
@@ -241,9 +350,9 @@ export default async function helpRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const articleId = Number(id)
+    const articleId = parsePositiveRouteId(id)
 
-    if (isNaN(articleId)) {
+    if (!articleId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -279,31 +388,44 @@ export default async function helpRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['title', 'slug', 'content'],
         properties: {
-          title: { type: 'string', minLength: 1 },
-          slug: { type: 'string', minLength: 1, pattern: '^[a-z0-9-]+$' },
-          content: { type: 'string' },
-          category: { type: 'string' },
-          sortOrder: { type: 'integer' },
+          title: { type: 'string', minLength: 1, maxLength: MAX_HELP_TITLE_LENGTH },
+          slug: { type: 'string', minLength: 1, maxLength: MAX_HELP_SLUG_LENGTH, pattern: '^[a-z0-9-]+$' },
+          content: { type: 'string', maxLength: MAX_HELP_CONTENT_LENGTH },
+          category: { type: 'string', minLength: 1, maxLength: MAX_HELP_CATEGORY_LENGTH },
+          sortOrder: { type: 'integer', minimum: 0, maximum: MAX_HELP_SORT_ORDER },
           published: { type: 'boolean' },
           pinned: { type: 'boolean' }
         }
       }
     }
   }, async (request: FastifyRequest<{ Body: { title: string; slug: string; content: string; category?: string; sortOrder?: number; published?: boolean; pinned?: boolean } }>, reply: FastifyReply) => {
-    const { title, slug, content, category, sortOrder, published, pinned } = request.body
+    const body = getBodyRecord(request.body)
+    if (!body) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
+    }
+    const normalizedTitle = normalizeRequiredText(body.title, MAX_HELP_TITLE_LENGTH)
+    const normalizedSlug = normalizeSlug(body.slug)
+    const normalizedContent = normalizeRequiredText(body.content, MAX_HELP_CONTENT_LENGTH)
+    const normalizedCategory = normalizeOptionalText(body.category, MAX_HELP_CATEGORY_LENGTH) ?? 'general'
+    const normalizedSortOrder = normalizeSortOrder(body.sortOrder)
+    const published = normalizeOptionalBoolean(body.published)
+    const pinned = normalizeOptionalBoolean(body.pinned)
+    if (!normalizedTitle || !normalizedSlug || !normalizedContent || normalizedCategory === null || Number.isNaN(normalizedSortOrder) || published === null || pinned === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
+    }
 
     // Check slug uniqueness
-    const existing = await db.getHelpArticleBySlug(slug)
+    const existing = await db.getAnyHelpArticleBySlug(normalizedSlug)
     if (existing) {
       return reply.code(400).send(apiError(ErrorCode.SLUG_EXISTS))
     }
 
     const articleId = await db.createHelpArticle({
-      title,
-      slug,
-      content,
-      category: category || 'general',
-      sortOrder: sortOrder || 0,
+      title: normalizedTitle,
+      slug: normalizedSlug,
+      content: normalizedContent,
+      category: normalizedCategory,
+      sortOrder: normalizedSortOrder,
       published: published !== false,
       pinned: pinned === true,
       createdBy: request.user.id
@@ -313,13 +435,13 @@ export default async function helpRoutes(fastify: FastifyInstance) {
       request.user.id,
       'system',
       'help.create',
-      `Created help article "${title}" (ID: ${articleId})`,
+      `Created help article "${normalizedTitle}" (ID: ${articleId})`,
       'success'
     )
 
     return {
       message: 'Article created',
-      article: { id: articleId, title, slug }
+      article: { id: articleId, title: normalizedTitle, slug: normalizedSlug }
     }
   })
 
@@ -335,11 +457,11 @@ export default async function helpRoutes(fastify: FastifyInstance) {
       body: {
         type: 'object',
         properties: {
-          title: { type: 'string', minLength: 1 },
-          slug: { type: 'string', minLength: 1, pattern: '^[a-z0-9-]+$' },
-          content: { type: 'string' },
-          category: { type: 'string' },
-          sortOrder: { type: 'integer' },
+          title: { type: 'string', minLength: 1, maxLength: MAX_HELP_TITLE_LENGTH },
+          slug: { type: 'string', minLength: 1, maxLength: MAX_HELP_SLUG_LENGTH, pattern: '^[a-z0-9-]+$' },
+          content: { type: 'string', maxLength: MAX_HELP_CONTENT_LENGTH },
+          category: { type: 'string', minLength: 1, maxLength: MAX_HELP_CATEGORY_LENGTH },
+          sortOrder: { type: 'integer', minimum: 0, maximum: MAX_HELP_SORT_ORDER },
           published: { type: 'boolean' },
           pinned: { type: 'boolean' }
         }
@@ -350,13 +472,34 @@ export default async function helpRoutes(fastify: FastifyInstance) {
     Body: { title?: string; slug?: string; content?: string; category?: string; sortOrder?: number; published?: boolean; pinned?: boolean }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const articleId = Number(id)
+    const articleId = parsePositiveRouteId(id)
 
-    if (isNaN(articleId)) {
+    if (!articleId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
-    const { title, slug, content, category, sortOrder, published, pinned } = request.body
+    const body = getBodyRecord(request.body)
+    if (!body) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
+    }
+    const normalizedTitle = normalizeOptionalText(body.title, MAX_HELP_TITLE_LENGTH)
+    const normalizedSlug = normalizeOptionalSlug(body.slug)
+    const normalizedContent = normalizeOptionalText(body.content, MAX_HELP_CONTENT_LENGTH)
+    const normalizedCategory = normalizeOptionalText(body.category, MAX_HELP_CATEGORY_LENGTH)
+    const normalizedSortOrder = body.sortOrder === undefined ? undefined : normalizeSortOrder(body.sortOrder)
+    const published = normalizeOptionalBoolean(body.published)
+    const pinned = normalizeOptionalBoolean(body.pinned)
+    if (
+      normalizedTitle === null ||
+      normalizedSlug === null ||
+      normalizedContent === null ||
+      normalizedCategory === null ||
+      Number.isNaN(normalizedSortOrder) ||
+      published === null ||
+      pinned === null
+    ) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
+    }
 
     const article = await db.getHelpArticleById(articleId)
     if (!article) {
@@ -364,14 +507,22 @@ export default async function helpRoutes(fastify: FastifyInstance) {
     }
 
     // Check slug uniqueness if changed
-    if (slug && slug !== article.slug) {
-      const existing = await db.getHelpArticleBySlug(slug)
+    if (normalizedSlug && normalizedSlug !== article.slug) {
+      const existing = await db.getAnyHelpArticleBySlug(normalizedSlug)
       if (existing) {
         return reply.code(400).send(apiError(ErrorCode.SLUG_EXISTS))
       }
     }
 
-    await db.updateHelpArticle(articleId, { title, slug, content, category, sortOrder, published, pinned })
+    await db.updateHelpArticle(articleId, {
+      title: normalizedTitle ?? undefined,
+      slug: normalizedSlug ?? undefined,
+      content: normalizedContent ?? undefined,
+      category: normalizedCategory ?? undefined,
+      sortOrder: normalizedSortOrder,
+      published,
+      pinned
+    })
 
     await createLog(
       request.user.id,
@@ -391,9 +542,9 @@ export default async function helpRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const articleId = Number(id)
+    const articleId = parsePositiveRouteId(id)
 
-    if (isNaN(articleId)) {
+    if (!articleId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -415,4 +566,3 @@ export default async function helpRoutes(fastify: FastifyInstance) {
     return { message: 'Article deleted' }
   })
 }
-

@@ -10,6 +10,7 @@
 import { schedule } from 'node-cron'
 import { getDbPoolStats, prisma } from '../db/prisma.js'
 import { getPoolStatus } from '../lib/incus/incus-pool.js'
+import { assertSafeWebhookUrl } from '../lib/outbound-security.js'
 
 // 系统启动时间
 const systemStartTime = Date.now()
@@ -19,6 +20,7 @@ const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL || ''
 const ALERT_COOLDOWN_MS = 10 * 60 * 1000  // 10分钟告警冷却
 const ALERT_TIMEOUT_MS = 10 * 1000  // 10秒请求超时
 let lastAlertTime = 0
+let schedulerStarted = false
 
 // 监控指标
 interface SystemMetrics {
@@ -145,13 +147,15 @@ async function sendAlert(alerts: string[]): Promise<void> {
     const timeoutId = setTimeout(() => controller.abort(), ALERT_TIMEOUT_MS)
     
     try {
-      const response = await fetch(ALERT_WEBHOOK_URL, {
+      const webhookUrl = await assertSafeWebhookUrl(ALERT_WEBHOOK_URL)
+      const response = await fetch(webhookUrl.toString(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload),
-        signal: controller.signal
+        signal: controller.signal,
+        redirect: 'manual'
       })
       
       if (response.ok) {
@@ -225,6 +229,12 @@ async function reportHealth(): Promise<void> {
  * 启动系统监控
  */
 export function startSystemMonitor(): void {
+  if (schedulerStarted) {
+    return
+  }
+
+  schedulerStarted = true
+
   // 启动时输出一次
   setTimeout(() => {
     reportHealth().catch(console.error)

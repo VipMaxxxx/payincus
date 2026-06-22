@@ -3,8 +3,10 @@
  */
 
 import { FastifyInstance } from 'fastify'
+import type { RechargeStatus } from '@prisma/client'
 import * as db from '../db/index.js'
 import * as crypto from 'crypto'
+import { isIP } from 'net'
 import { createEpayClient, type EpayConfig, type EpayConfigV1, type EpayConfigV2, type CallbackData, type EpayVersion, type VerifyResult } from '../lib/epay.js'
 import {
   buildHeleketConfig,
@@ -30,11 +32,81 @@ import { createLog } from '../db/logs.js'
 import { prisma } from '../db/prisma.js'
 import { createInboxMessage } from '../db/inbox.js'
 import { sendRechargeSuccessEmail } from '../lib/mailer.js'
+import { sanitizeObject } from '../lib/log-sanitizer.js'
+import { isRechargeGatewayOrderNoMatch } from '../lib/recharge-order-guard.js'
+import { assertSafeHttpUrl, isIpPrivateOrReserved } from '../lib/outbound-security.js'
 
 // 金额一致性检查容差（分）
 const AMOUNT_TOLERANCE_CENTS = 1
 const SUPPORTED_RECHARGE_PROVIDER_TYPES = new Set(['yipay', 'heleket'])
 const HELEKET_CALLBACK_IPS = ['31.133.220.8']
+const POSITIVE_ID_PATTERN = /^[1-9]\d*$/
+const RECHARGE_STATUSES = new Set(['pending', 'paid', 'completed', 'failed', 'cancelled', 'refunded'])
+const MAX_RECHARGE_TRADE_NO_LENGTH = 128
+const MAX_RECHARGE_ADMIN_REASON_LENGTH = 500
+
+function parsePositiveId(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? value : null
+  }
+
+  if (typeof value !== 'string' || !POSITIVE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveJsonMoney(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null
+  }
+
+  return value
+}
+
+function parseOptionalPositiveInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined) {
+    return fallback
+  }
+
+  const parsed = parsePositiveId(value)
+  return parsed ?? fallback
+}
+
+function parseOptionalRechargeStatus(value: string | undefined): RechargeStatus | undefined {
+  if (!value || !RECHARGE_STATUSES.has(value)) {
+    return undefined
+  }
+
+  return value as RechargeStatus
+}
+
+function normalizeOptionalTrimmedString(value: unknown, maxLength: number): string | null | undefined {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  return trimmed.length <= maxLength ? trimmed : null
+}
+
+function normalizePaymentCallbackPayload(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  return value as Record<string, unknown>
+}
 
 function isRechargeProviderTypeSupported(type: string): boolean {
   return SUPPORTED_RECHARGE_PROVIDER_TYPES.has(type)
@@ -67,14 +139,13 @@ async function isCallbackProcessed(providerId: number, orderNo: string, tradeNo:
 
 /**
  * 生成唯一的 tradeNo 标识（用于联合索引）
- * 当 tradeNo 为空时，生成基于 orderNo 的唯一标识，避免空字符串导致联合索引冲突
+ * 当 tradeNo 为空时，使用基于订单号的确定性标识，确保重复回调能命中同一唯一索引
  */
 function getTradeNoForIndex(orderNo: string, tradeNo: string | null | undefined): string {
   if (tradeNo && tradeNo.trim()) {
     return tradeNo.trim()
   }
-  // 使用 orderNo + 时间戳生成唯一标识，确保不同回调不会冲突
-  return `__NO_TRADE_NO__${orderNo}__${Date.now()}`
+  return `__NO_TRADE_NO__${orderNo}`
 }
 
 /**
@@ -223,18 +294,67 @@ function normalizePublicBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, '')
 }
 
-function getRechargeFrontendUrl(): string {
-  const frontendUrl = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',')[0].trim()
-    : 'http://localhost:3000'
+function isLocalOrPrivateHostname(hostname: string): boolean {
+  const normalizedHost = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
 
-  return normalizePublicBaseUrl(frontendUrl)
+  if (
+    !normalizedHost ||
+    normalizedHost === 'localhost' ||
+    normalizedHost.endsWith('.localhost') ||
+    normalizedHost.endsWith('.local') ||
+    normalizedHost.endsWith('.internal')
+  ) {
+    return true
+  }
+
+  if (isIP(normalizedHost) !== 0 && isIpPrivateOrReserved(normalizedHost)) {
+    return true
+  }
+
+  return !normalizedHost.includes('.')
+}
+
+function validatePublicBaseUrl(url: string, configName: string): string {
+  const normalized = normalizePublicBaseUrl(url)
+  let parsed: URL
+
+  try {
+    parsed = new URL(normalized)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('invalid protocol')
+    }
+  } catch {
+    throw new Error(`${configName} must be a valid http(s) URL`)
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (parsed.protocol !== 'https:') {
+      throw new Error(`${configName} must use HTTPS in production`)
+    }
+
+    if (isLocalOrPrivateHostname(parsed.hostname)) {
+      throw new Error(`${configName} must use a public frontend hostname in production`)
+    }
+  }
+
+  return normalized
+}
+
+function getRechargeFrontendUrl(): string {
+  const configuredUrl = process.env.FRONTEND_URL?.split(',')[0]?.trim()
+  const frontendUrl = configuredUrl || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000')
+
+  if (!frontendUrl) {
+    throw new Error('FRONTEND_URL must be configured in production before creating recharge orders')
+  }
+
+  return validatePublicBaseUrl(frontendUrl, 'FRONTEND_URL')
 }
 
 function getRechargeCallbackBaseUrl(): string {
   const callbackUrl = process.env.PAYMENT_CALLBACK_BASE_URL?.trim()
   if (callbackUrl) {
-    return normalizePublicBaseUrl(callbackUrl)
+    return validatePublicBaseUrl(callbackUrl, 'PAYMENT_CALLBACK_BASE_URL')
   }
 
   return getRechargeFrontendUrl()
@@ -367,7 +487,12 @@ async function createRechargePayUrl(
       throw new Error(error || '支付渠道配置不完整')
     }
 
-    const epay = createEpayClient(epayConfig)
+    const safeApiUrl = await assertSafeHttpUrl(epayConfig.apiurl, 'Epay API URL')
+    const safeEpayConfig = {
+      ...epayConfig,
+      apiurl: safeApiUrl.toString().replace(/\/+$/, '')
+    } as EpayConfig
+    const epay = createEpayClient(safeEpayConfig)
     return epay.getPayLink({
       type: paymentMethod || 'alipay',
       out_trade_no: orderNo,
@@ -421,37 +546,77 @@ function validateActiveRechargeProvider(
   return { valid: false, error: getUnsupportedProviderError(provider.type) }
 }
 
-function validatePaymentProviderAdminInput(
+async function validatePaymentProviderApiUrl(
+  providerType: string,
+  config: Record<string, unknown>
+): Promise<{ valid: boolean; error?: string; config: Record<string, unknown> }> {
+  if (providerType !== 'yipay' && providerType !== 'heleket') {
+    return { valid: true, config }
+  }
+
+  if (typeof config.apiurl !== 'string' || !config.apiurl.trim()) {
+    return { valid: true, config }
+  }
+
+  try {
+    const safeApiUrl = await assertSafeHttpUrl(
+      config.apiurl,
+      providerType === 'heleket' ? 'Heleket API URL' : 'Epay API URL'
+    )
+    return {
+      valid: true,
+      config: {
+        ...config,
+        apiurl: safeApiUrl.toString().replace(/\/+$/, '')
+      }
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : '支付渠道接口地址不合法',
+      config
+    }
+  }
+}
+
+async function validatePaymentProviderAdminInput(
   providerType: string,
   config: Record<string, unknown>,
   status: 'active' | 'disabled' | 'testing'
-): { valid: boolean; error?: string } {
+): Promise<{ valid: boolean; error?: string; config: Record<string, unknown> }> {
+  const apiUrlValidation = await validatePaymentProviderApiUrl(providerType, config)
+  if (!apiUrlValidation.valid) {
+    return apiUrlValidation
+  }
+  const normalizedConfig = apiUrlValidation.config
+
   if (providerType === 'yipay') {
-    const methodFeesValidation = validateYipayMethodFees(config)
+    const methodFeesValidation = validateYipayMethodFees(normalizedConfig)
     if (!methodFeesValidation.valid) {
-      return methodFeesValidation
+      return { ...methodFeesValidation, config: normalizedConfig }
     }
   }
 
   if (providerType === 'yipay') {
-    const { valid, error } = buildEpayConfig(config)
+    const { valid, error } = buildEpayConfig(normalizedConfig)
     if (!valid) {
-      return { valid: false, error }
+      return { valid: false, error, config: normalizedConfig }
     }
   }
 
   if (providerType === 'heleket') {
-    const { valid, error } = buildHeleketConfig(config)
+    const { valid, error } = buildHeleketConfig(normalizedConfig)
     if (!valid) {
-      return { valid: false, error }
+      return { valid: false, error, config: normalizedConfig }
     }
   }
 
   if (status === 'active') {
-    return validateActiveRechargeProvider({ type: providerType, config })
+    const activeValidation = validateActiveRechargeProvider({ type: providerType, config: normalizedConfig })
+    return { ...activeValidation, config: normalizedConfig }
   }
 
-  return { valid: true }
+  return { valid: true, config: normalizedConfig }
 }
 
 function validateYipayMethodFees(config: Record<string, unknown>): { valid: boolean; error?: string } {
@@ -604,25 +769,31 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
 
       const user = request.user!
       const { providerId, amount, paymentMethod } = request.body as {
-        providerId: number
-        amount: number
+        providerId: unknown
+        amount: unknown
         paymentMethod?: string  // 支付方式：alipay, wxpay 等
       }
 
+      const providerIdNum = parsePositiveId(providerId)
+      const rechargeAmount = parsePositiveJsonMoney(amount)
+
       // 参数验证
-      if (!providerId || !amount) {
+      if (!providerIdNum || amount === undefined) {
         return reply.status(400).send({ error: '参数不完整' })
       }
 
-      if (amount <= 0 || !Number.isFinite(amount)) {
+      if (rechargeAmount === null) {
         return reply.status(400).send({ error: '充值金额无效' })
       }
 
       // 规范化金额为两位小数（避免浮点数精度问题）
-      const normalizedAmount = Math.round(amount * 100) / 100
+      const normalizedAmount = Math.round(rechargeAmount * 100) / 100
+      if (normalizedAmount <= 0) {
+        return reply.status(400).send({ error: '充值金额无效' })
+      }
 
       // 获取支付渠道
-      const provider = await db.getPaymentProviderById(providerId)
+      const provider = await db.getPaymentProviderById(providerIdNum)
       if (!provider || provider.status !== 'active') {
         return reply.status(400).send({ error: '支付渠道不可用' })
       }
@@ -632,7 +803,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         : (provider.config || {}) as Record<string, unknown>
       const providerValidation = validateActiveRechargeProvider({ type: provider.type, config: providerConfig })
       if (!providerValidation.valid) {
-        request.log.warn({ providerId, type: provider.type, error: providerValidation.error }, '拒绝使用未安全实现的支付渠道创建订单')
+        request.log.warn({ providerId: providerIdNum, type: provider.type, error: providerValidation.error }, '拒绝使用未安全实现的支付渠道创建订单')
         return reply.status(400).send({ error: providerValidation.error || '支付渠道不可用' })
       }
 
@@ -651,6 +822,13 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       const fee = db.calculatePaymentFee(provider, normalizedAmount, selectedPaymentMethod)
       const payableAmount = db.calculatePayableAmount(provider, normalizedAmount, selectedPaymentMethod)
       const actualAmount = db.calculateActualAmount(provider, normalizedAmount)
+      if (!Number.isFinite(actualAmount) || actualAmount <= 0) {
+        request.log.warn(
+          { providerId, amount: normalizedAmount, fee, actualAmount },
+          '拒绝创建实际到账金额无效的充值订单'
+        )
+        return reply.status(400).send({ error: '充值金额扣除手续费后必须大于 0 元' })
+      }
       const expiredAt = getRechargeOrderExpiryAt(provider.type, providerConfig)
       const orderNo = db.generateOrderNo()
       const providerConfigSnapshot = buildRechargeProviderConfigSnapshot(provider.type, providerConfig)
@@ -671,7 +849,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       const order = await db.createRechargeOrder({
         orderNo,
         userId: user.id,
-        providerId,
+        providerId: providerIdNum,
         amount: normalizedAmount,
         actualAmount,
         paymentMethod: selectedPaymentMethod,
@@ -697,7 +875,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           urls
         )
       } catch (payError) {
-        request.log.warn({ providerId, orderNo: order.orderNo, error: payError }, '生成支付链接失败')
+        request.log.warn({ providerId: providerIdNum, orderNo: order.orderNo, error: payError }, '生成支付链接失败')
         throw payError
       }
 
@@ -743,9 +921,9 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       }
 
       const result = await db.getUserRechargeRecords(user.id, {
-        page: page ? parseInt(page, 10) : 1,
-        pageSize: pageSize ? parseInt(pageSize, 10) : 20,
-        status: status as any
+        page: parseOptionalPositiveInteger(page, 1),
+        pageSize: parseOptionalPositiveInteger(pageSize, 20),
+        status: parseOptionalRechargeStatus(status)
       })
 
       return {
@@ -915,6 +1093,56 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         getProviderMethods(provider.methods),
         paymentMethod || record.paymentMethod
       )
+      const rechargeAmount = Number(record.amount)
+      const paymentMethodChanged = selectedPaymentMethod !== (record.paymentMethod || undefined)
+      let fee = Number(record.fee)
+      let payableAmount = getRechargePayableAmount({
+        amount: record.amount,
+        fee: record.fee,
+        paymentDetails: (record as any).paymentDetails
+      })
+      let actualAmount = record.actualAmount !== null && record.actualAmount !== undefined
+        ? Number(record.actualAmount)
+        : rechargeAmount
+      let paymentDetails = (record as any).paymentDetails as Record<string, unknown> | null
+      const existingPaymentDetails = readRechargePaymentDetails((record as any).paymentDetails)
+
+      if (paymentMethodChanged) {
+        const pricingProvider = {
+          ...provider,
+          config: effectiveProviderConfig,
+          feeRate: existingPaymentDetails.recharge?.feeRate ?? provider.feeRate,
+          feeFixed: existingPaymentDetails.recharge?.feeFixed ?? provider.feeFixed
+        } as typeof provider
+        const feeConfig = db.getPaymentFeeConfig(pricingProvider, selectedPaymentMethod)
+        fee = db.calculatePaymentFee(pricingProvider, rechargeAmount, selectedPaymentMethod)
+        payableAmount = db.calculatePayableAmount(pricingProvider, rechargeAmount, selectedPaymentMethod)
+        actualAmount = db.calculateActualAmount(pricingProvider, rechargeAmount)
+        if (!Number.isFinite(actualAmount) || actualAmount <= 0) {
+          request.log.warn(
+            { orderNo, providerId: provider.id, amount: rechargeAmount, fee, actualAmount },
+            '拒绝重新支付实际到账金额无效的充值订单'
+          )
+          return reply.status(400).send({ error: '充值金额扣除手续费后必须大于 0 元' })
+        }
+        const providerPaymentDetails = provider.type === 'heleket'
+          ? buildHeleketInvoicePaymentDetails(
+              record.orderNo,
+              payableAmount,
+              buildHeleketConfig(effectiveProviderConfig).heleketConfig
+            )
+          : ((record as any).paymentDetails || { kind: provider.type })
+        paymentDetails = mergeRechargeAmountDetails(providerPaymentDetails, {
+          amount: rechargeAmount,
+          payableAmount,
+          fee,
+          feeRate: feeConfig.feeRate,
+          feeFixed: feeConfig.feeFixed,
+          feeMode: provider.type === 'yipay' ? 'surcharge' : 'deduct',
+          paymentMethod: selectedPaymentMethod || null
+        }) as Record<string, unknown>
+      }
+
       let payUrl: string | null = null
       const urls = buildRechargeUrls(provider.id, record.orderNo)
 
@@ -923,11 +1151,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           provider,
           effectiveProviderConfig,
           record.orderNo,
-          getRechargePayableAmount({
-            amount: record.amount,
-            fee: record.fee,
-            paymentDetails: (record as any).paymentDetails
-          }),
+          payableAmount,
           selectedPaymentMethod,
           urls
         )
@@ -936,24 +1160,30 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         throw payError
       }
 
-      if (selectedPaymentMethod && selectedPaymentMethod !== record.paymentMethod) {
-        await db.updateRechargePaymentMethod(orderNo, selectedPaymentMethod)
-      }
-
       if (!payUrl) {
         return reply.status(400).send({ error: '不支持的支付渠道类型' })
+      }
+
+      if (paymentMethodChanged) {
+        const updatedRecord = await db.updatePendingRechargePaymentSelection(orderNo, {
+          paymentMethod: selectedPaymentMethod || null,
+          fee,
+          actualAmount,
+          paymentDetails
+        })
+        if (!updatedRecord) {
+          return reply.status(409).send({ error: '订单状态已变化，请刷新后重试' })
+        }
       }
 
       return {
         order: {
           orderNo: record.orderNo,
-          amount: Number(record.amount),
-          payableAmount: getRechargePayableAmount({
-            amount: record.amount,
-            fee: record.fee,
-            paymentDetails: (record as any).paymentDetails
-          }),
-          actualAmount: record.actualAmount !== null && record.actualAmount !== undefined ? Number(record.actualAmount) : null,
+          amount: rechargeAmount,
+          payableAmount,
+          actualAmount,
+          fee,
+          paymentMethod: selectedPaymentMethod || null,
           status: record.status,
           expiredAt: record.expiredAt?.toISOString() || null
         },
@@ -1144,6 +1374,24 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           }
         }
 
+        if (!isRechargeGatewayOrderNoMatch(orderNo, queryResult.out_trade_no)) {
+          request.log.warn(
+            { orderNo, gatewayOrderNo: queryResult.out_trade_no },
+            '易支付订单查询返回订单号不匹配，拒绝主动完成充值'
+          )
+          return {
+            success: false,
+            verified: false,
+            status: 'pending',
+            message: '支付订单号校验失败，请等待异步回调或联系客服',
+            order: {
+              orderNo: record.orderNo,
+              amount: rechargeAmount,
+              status: record.status
+            }
+          }
+        }
+
         tradeNo = queryResult.trade_no || ''
         tradeNoForIndex = getTradeNoForIndex(orderNo, tradeNo)
 
@@ -1167,7 +1415,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         }
 
         actualAmount = creditedAmount
-        callbackPayload = { source: 'verify_api', queryResult: queryResult.rawData as Record<string, unknown> }
+        callbackPayload = { source: 'verify_api', queryResult: sanitizeObject(queryResult.rawData) as Record<string, unknown> }
       } else {
         const { heleketConfig, valid, error: configError } = buildHeleketConfig(effectiveConfig)
         if (!valid) {
@@ -1196,10 +1444,28 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           'Heleket 订单查询结果'
         )
 
+        if (!isRechargeGatewayOrderNoMatch(orderNo, queryResult.order_id)) {
+          request.log.warn(
+            { orderNo, gatewayOrderNo: queryResult.order_id },
+            'Heleket 订单查询返回订单号不匹配，拒绝主动完成充值'
+          )
+          return {
+            success: false,
+            verified: false,
+            status: record.status,
+            message: '支付订单号校验失败，请等待异步回调或联系客服',
+            order: {
+              orderNo: record.orderNo,
+              amount: rechargeAmount,
+              status: record.status
+            }
+          }
+        }
+
         callbackPayload = {
           source: 'verify_api',
           heleketStatus: status,
-          queryResult: queryResult as Record<string, unknown>
+          queryResult: sanitizeObject(queryResult) as Record<string, unknown>
         }
         paymentDetails = mergeHeleketPaymentDetails(
           (record as any).paymentDetails,
@@ -1310,7 +1576,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
 
         const invoiceAmount = getHeleketInvoiceAmount(queryResult)
         if (invoiceAmount === undefined || !Number.isFinite(invoiceAmount) || invoiceAmount <= 0) {
-          request.log.warn({ orderNo, queryResult }, 'Heleket 返回的支付金额无效')
+          request.log.warn({ orderNo, queryResult: sanitizeObject(queryResult) }, 'Heleket 返回的支付金额无效')
           return {
             success: true,
             verified: false,
@@ -1376,7 +1642,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
 
       // 10. 完成充值
       try {
-        await db.completeRecharge(orderNo, {
+        const completion = await db.completeRecharge(orderNo, {
           tradeNo,
           actualAmount,
           callbackData: callbackPayload,
@@ -1386,51 +1652,53 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         // 记录已处理
         await markCallbackProcessed(provider.id, orderNo, tradeNoForIndex, request.ip)
 
-        // 记录充值成功日志
-        await createLog(
-          record.userId,
-          'user',
-          'recharge.completed',
-          `Recharge completed via verify API: order ${orderNo}, amount ${displayAmount}, tradeNo: ${tradeNo || 'N/A'}`,
-          'success'
-        )
+        if (completion.completedNow) {
+          // 记录充值成功日志
+          await createLog(
+            record.userId,
+            'user',
+            'recharge.completed',
+            `Recharge completed via verify API: order ${orderNo}, amount ${displayAmount}, tradeNo: ${tradeNo || 'N/A'}`,
+            'success'
+          )
 
-        // 发送充值成功通知（站内信）
-        try {
-          await createInboxMessage({
-            userId: record.userId,
-            eventType: 'recharge_success',
-            title: '充值到账通知',
-            content: `您的充值已到账！\n充值金额：￥${displayAmount.toFixed(2)}\n订单号：${orderNo}\n交易号：${tradeNo || 'N/A'}`,
-            data: {
-              orderNo,
-              amount: displayAmount,
-              tradeNo
-            }
-          })
-
-          // 发送充值成功邮件通知
+          // 发送充值成功通知（站内信）
           try {
-            const user = await db.findUserById(record.userId)
-            if (user && user.email) {
-              const balance = await db.getUserBalance(record.userId)
-              await sendRechargeSuccessEmail(user.email, {
-                username: user.username,
-                amount: displayAmount,
+            await createInboxMessage({
+              userId: record.userId,
+              eventType: 'recharge_success',
+              title: '充值到账通知',
+              content: `您的充值已到账！\n充值金额：￥${displayAmount.toFixed(2)}\n订单号：${orderNo}\n交易号：${tradeNo || 'N/A'}`,
+              data: {
                 orderNo,
-                tradeNo: tradeNo || null,
-                newBalance: balance,
-                time: new Date()
-              })
+                amount: displayAmount,
+                tradeNo
+              }
+            })
+
+            // 发送充值成功邮件通知
+            try {
+              const user = await db.findUserById(record.userId)
+              if (user && user.email) {
+                const balance = await db.getUserBalance(record.userId)
+                await sendRechargeSuccessEmail(user.email, {
+                  username: user.username,
+                  amount: displayAmount,
+                  orderNo,
+                  tradeNo: tradeNo || null,
+                  newBalance: balance,
+                  time: new Date()
+                })
+              }
+            } catch (emailErr) {
+              request.log.warn({ orderNo, error: emailErr }, '发送充值成功邮件失败')
             }
-          } catch (emailErr) {
-            request.log.warn({ orderNo, error: emailErr }, '发送充值成功邮件失败')
+          } catch (notifyError) {
+            request.log.warn({ orderNo, error: notifyError }, '发送充值成功通知失败')
           }
-        } catch (notifyError) {
-          request.log.warn({ orderNo, error: notifyError }, '发送充值成功通知失败')
         }
 
-        request.log.info({ orderNo, tradeNo }, '通过 verify API 完成充值')
+        request.log.info({ orderNo, tradeNo, completedNow: completion.completedNow }, '通过 verify API 完成充值')
 
         return {
           success: true,
@@ -1498,7 +1766,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
   }, async (request, reply) => {
     try {
       const providers = await db.getAllPaymentProviders()
-      return { providers }
+      return { providers: providers.map(provider => db.sanitizePaymentProviderForResponse(provider)) }
     } catch (error) {
       request.log.error(error, '获取支付渠道列表失败')
       return reply.status(500).send({ error: '获取支付渠道列表失败' })
@@ -1519,13 +1787,21 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
 
       const inputConfig = input.config || {}
       const inputStatus = input.status || 'disabled'
-      const validation = validatePaymentProviderAdminInput(input.type, inputConfig, inputStatus)
+      const validation = await validatePaymentProviderAdminInput(input.type, inputConfig, inputStatus)
       if (!validation.valid) {
         return reply.status(400).send({ error: validation.error || '支付渠道配置不合法' })
       }
+      const financialValidation = db.validatePaymentProviderFinancialInput(input, { fillDefaults: true })
+      if (!financialValidation.valid) {
+        return reply.status(400).send({ error: financialValidation.error || '支付渠道金额配置不合法' })
+      }
 
-      const provider = await db.createPaymentProvider(input)
-      return { provider }
+      const provider = await db.createPaymentProvider({
+        ...input,
+        ...financialValidation.data,
+        config: validation.config
+      })
+      return { provider: db.sanitizePaymentProviderForResponse(provider) }
     } catch (error) {
       request.log.error(error, '创建支付渠道失败')
       return reply.status(500).send({ error: '创建支付渠道失败' })
@@ -1541,8 +1817,8 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       const { id } = request.params as { id: string }
       const input = request.body as db.UpdatePaymentProviderInput
 
-      const providerId = parseInt(id, 10)
-      if (isNaN(providerId)) {
+      const providerId = parsePositiveId(id)
+      if (!providerId) {
         return reply.status(400).send({ error: '无效的渠道ID' })
       }
 
@@ -1551,15 +1827,37 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         return reply.status(404).send({ error: '支付渠道不存在' })
       }
 
-      const mergedConfig = (input.config ?? (existing.config as Record<string, unknown>) ?? {}) as Record<string, unknown>
+      const existingConfig = (existing.config as Record<string, unknown>) ?? {}
+      const mergedConfig = input.config !== undefined
+        ? db.mergePaymentProviderConfigForUpdate(input.config, existingConfig)
+        : existingConfig
       const mergedStatus = (input.status ?? existing.status) as 'active' | 'disabled' | 'testing'
-      const validation = validatePaymentProviderAdminInput(existing.type, mergedConfig, mergedStatus)
+      const validation = await validatePaymentProviderAdminInput(existing.type, mergedConfig, mergedStatus)
       if (!validation.valid) {
         return reply.status(400).send({ error: validation.error || '支付渠道配置不合法' })
       }
+      const mergedFinancialValidation = db.validatePaymentProviderFinancialInput({
+        feeRate: input.feeRate ?? Number(existing.feeRate),
+        feeFixed: input.feeFixed ?? Number(existing.feeFixed),
+        minAmount: input.minAmount ?? Number(existing.minAmount),
+        maxAmount: input.maxAmount !== undefined
+          ? input.maxAmount
+          : (existing.maxAmount === null ? null : Number(existing.maxAmount))
+      }, { fillDefaults: true })
+      if (!mergedFinancialValidation.valid) {
+        return reply.status(400).send({ error: mergedFinancialValidation.error || '支付渠道金额配置不合法' })
+      }
+      const patchFinancialValidation = db.validatePaymentProviderFinancialInput(input, { validateRange: false })
+      if (!patchFinancialValidation.valid) {
+        return reply.status(400).send({ error: patchFinancialValidation.error || '支付渠道金额配置不合法' })
+      }
 
-      const provider = await db.updatePaymentProvider(providerId, input)
-      return { provider }
+      const provider = await db.updatePaymentProvider(providerId, {
+        ...input,
+        ...patchFinancialValidation.data,
+        ...(input.config !== undefined ? { config: validation.config } : {})
+      })
+      return { provider: db.sanitizePaymentProviderForResponse(provider) }
     } catch (error) {
       request.log.error(error, '更新支付渠道失败')
       return reply.status(500).send({ error: '更新支付渠道失败' })
@@ -1575,8 +1873,8 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       const { id } = request.params as { id: string }
       const { status } = request.body as { status: 'active' | 'disabled' | 'testing' }
 
-      const providerId = parseInt(id, 10)
-      if (isNaN(providerId)) {
+      const providerId = parsePositiveId(id)
+      if (!providerId) {
         return reply.status(400).send({ error: '无效的渠道ID' })
       }
 
@@ -1589,8 +1887,17 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       if (!existing) {
         return reply.status(404).send({ error: '支付渠道不存在' })
       }
+      const financialValidation = db.validatePaymentProviderFinancialInput({
+        feeRate: Number(existing.feeRate),
+        feeFixed: Number(existing.feeFixed),
+        minAmount: Number(existing.minAmount),
+        maxAmount: existing.maxAmount === null ? null : Number(existing.maxAmount)
+      }, { fillDefaults: true })
+      if (!financialValidation.valid) {
+        return reply.status(400).send({ error: financialValidation.error || '支付渠道金额配置不合法' })
+      }
 
-      const validation = validatePaymentProviderAdminInput(
+      const validation = await validatePaymentProviderAdminInput(
         existing.type,
         (existing.config as Record<string, unknown>) ?? {},
         status
@@ -1601,7 +1908,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
 
       const provider = await db.updatePaymentProvider(providerId, { status })
 
-      return { provider }
+      return { provider: db.sanitizePaymentProviderForResponse(provider) }
     } catch (error) {
       request.log.error(error, '更新支付渠道状态失败')
       return reply.status(500).send({ error: '更新支付渠道状态失败' })
@@ -1616,8 +1923,8 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     try {
       const { id } = request.params as { id: string }
 
-      const providerId = parseInt(id, 10)
-      if (isNaN(providerId)) {
+      const providerId = parsePositiveId(id)
+      if (!providerId) {
         return reply.status(400).send({ error: '无效的渠道ID' })
       }
 
@@ -1647,10 +1954,10 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       }
 
       const result = await db.getAllRechargeRecords({
-        page: page ? parseInt(page, 10) : 1,
-        pageSize: pageSize ? parseInt(pageSize, 10) : 20,
-        status: status as any,
-        userId: userId ? parseInt(userId, 10) : undefined
+        page: parseOptionalPositiveInteger(page, 1),
+        pageSize: parseOptionalPositiveInteger(pageSize, 20),
+        status: parseOptionalRechargeStatus(status),
+        userId: userId ? parsePositiveId(userId) ?? undefined : undefined
       })
 
       return {
@@ -1702,9 +2009,20 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
   }, async (request, reply) => {
     try {
       const { orderNo } = request.params as { orderNo: string }
-      const { tradeNo, actualAmount } = request.body as {
-        tradeNo?: string
-        actualAmount?: number
+      const { tradeNo: rawTradeNo, actualAmount: rawActualAmount } = request.body as {
+        tradeNo?: unknown
+        actualAmount?: unknown
+      }
+      const tradeNo = normalizeOptionalTrimmedString(rawTradeNo, MAX_RECHARGE_TRADE_NO_LENGTH)
+      if (tradeNo === null) {
+        return reply.status(400).send({ error: '交易号格式无效或过长' })
+      }
+      let actualAmount: number | undefined
+      if (rawActualAmount !== undefined) {
+        actualAmount = parsePositiveJsonMoney(rawActualAmount) ?? undefined
+        if (actualAmount === undefined) {
+          return reply.status(400).send({ error: '入账金额必须大于 0' })
+        }
       }
 
       const record = await db.getRechargeRecordByOrderNo(orderNo)
@@ -1716,15 +2034,19 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         return reply.status(400).send({ error: '订单已完成' })
       }
 
-      if (record.status === 'cancelled' || record.status === 'refunded') {
-        return reply.status(400).send({ error: '订单已取消或已退款' })
+      if (record.status === 'cancelled' || record.status === 'failed' || record.status === 'refunded') {
+        return reply.status(400).send({ error: '订单已取消、失败或已退款' })
       }
 
-      await db.completeRecharge(orderNo, {
+      const completion = await db.completeRecharge(orderNo, {
         tradeNo,
         actualAmount,
         callbackData: { manual: true, operator: request.user!.username }
       })
+
+      if (!completion.completedNow) {
+        return { success: true, message: '订单已完成，无需重复处理' }
+      }
 
       // 记录管理员操作日志
       await createLog(
@@ -1749,7 +2071,12 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
   }, async (request, reply) => {
     try {
       const { orderNo } = request.params as { orderNo: string }
-      const { reason } = request.body as { reason: string }
+      const { reason: rawReason } = request.body as { reason?: unknown }
+      const reason = normalizeOptionalTrimmedString(rawReason, MAX_RECHARGE_ADMIN_REASON_LENGTH)
+      if (reason === null) {
+        return reply.status(400).send({ error: '失败原因格式无效或过长' })
+      }
+      const failReason = reason || '管理员标记失败'
 
       const record = await db.getRechargeRecordByOrderNo(orderNo)
       if (!record) {
@@ -1760,7 +2087,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         return reply.status(400).send({ error: '当前订单状态不允许标记失败' })
       }
 
-      await db.failRecharge(orderNo, reason || '管理员标记失败', {
+      await db.failRecharge(orderNo, failReason, {
         manual: true,
         operator: request.user!.username
       })
@@ -1770,7 +2097,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         request.user!.id,
         'admin',
         'recharge.manual_fail',
-        `Admin marked recharge order ${orderNo} as failed: ${reason || '管理员标记失败'}`,
+        `Admin marked recharge order ${orderNo} as failed: ${failReason}`,
         'success'
       )
 
@@ -1792,12 +2119,17 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     request: any,
     reply: any,
     providerId: string,
-    callbackData: Record<string, unknown>
+    rawCallbackData: unknown
   ) {
     const clientIp = request.ip
+    const callbackData = normalizePaymentCallbackPayload(rawCallbackData)
+    if (!callbackData) {
+      request.log.warn({ providerId }, '支付回调 payload 格式不合法')
+      return reply.status(400).send({ error: '回调数据格式不合法' })
+    }
 
-    const providerIdNum = parseInt(providerId, 10)
-    if (isNaN(providerIdNum)) {
+    const providerIdNum = parsePositiveId(providerId)
+    if (!providerIdNum) {
       request.log.warn({ providerId }, '无效的支付渠道 ID')
       return reply.status(400).send({ error: '无效的支付渠道' })
     }
@@ -1920,16 +2252,9 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     }
 
     if (!orderNo) {
-      request.log.warn({ providerId, data: callbackData }, '回调数据缺少订单号')
+      request.log.warn({ providerId, data: sanitizeObject(callbackData) }, '回调数据缺少订单号')
       return reply.status(400).send({ error: '缺少订单号' })
     }
-
-    const shouldValidatePaidAmount = !(provider.type === 'heleket' && heleketPaymentState !== 'paid')
-    if (shouldValidatePaidAmount && (actualAmount === undefined || !Number.isFinite(actualAmount) || actualAmount <= 0)) {
-      request.log.warn({ providerId, orderNo, actualAmount }, '回调数据缺少有效支付金额')
-      return reply.status(400).send({ error: '缺少有效支付金额' })
-    }
-    const paidActualAmount = actualAmount as number
 
     // 5. 防重放攻击检查（数据库持久化，使用处理后的 tradeNo）
     const tradeNoForIndex = getTradeNoForIndex(orderNo, tradeNo)
@@ -1955,6 +2280,19 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     }
 
     let paymentDetails = (record as any).paymentDetails as Record<string, unknown> | undefined
+
+    if (record.status === 'completed') {
+      await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)
+      request.log.info({ orderNo }, '订单已完成，幂等返回')
+      return provider.type === 'yipay' && epayVersion === 'v1' ? 'success' : { code: 'SUCCESS', message: 'OK' }
+    }
+
+    const shouldValidatePaidAmount = !(provider.type === 'heleket' && heleketPaymentState !== 'paid')
+    if (shouldValidatePaidAmount && (actualAmount === undefined || !Number.isFinite(actualAmount) || actualAmount <= 0)) {
+      request.log.warn({ providerId, orderNo, actualAmount }, '回调数据缺少有效支付金额')
+      return reply.status(400).send({ error: '缺少有效支付金额' })
+    }
+    const paidActualAmount = actualAmount as number
 
     if (provider.type === 'heleket' && heleketPaymentState !== 'paid') {
       paymentDetails = mergeHeleketPaymentDetails(
@@ -1982,12 +2320,6 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           paymentDetails
         })
         request.log.info({ orderNo, heleketPaymentStatus }, 'Heleket 待处理回调已记录到本地订单')
-        return { code: 'SUCCESS', message: 'OK' }
-      }
-
-      if (record.status === 'completed') {
-        await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)
-        request.log.info({ orderNo, heleketPaymentStatus }, 'Heleket 终态回调到达时订单已完成，按幂等忽略')
         return { code: 'SUCCESS', message: 'OK' }
       }
 
@@ -2060,18 +2392,12 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     // 9. 检查订单是否已过期
     if (record.expiredAt && new Date(record.expiredAt) < new Date()) {
       request.log.warn({ orderNo, expiredAt: record.expiredAt }, '订单已过期，拒绝处理回调')
+      await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)
       // 过期订单不处理，但返回成功避免支付平台重试
       return provider.type === 'yipay' && epayVersion === 'v1' ? 'success' : { code: 'SUCCESS', message: 'OK' }
     }
 
     // 10. 检查订单状态（幂等性处理）
-    if (record.status === 'completed') {
-      // 已完成，记录并返回成功
-      await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)
-      request.log.info({ orderNo }, '订单已完成，幂等返回')
-      return provider.type === 'yipay' && epayVersion === 'v1' ? 'success' : { code: 'SUCCESS', message: 'OK' }
-    }
-
     if (record.status !== 'pending' && record.status !== 'paid') {
       request.log.warn({ orderNo, status: record.status }, '订单状态不允许完成')
       return reply.status(400).send({ error: '订单状态异常' })
@@ -2079,7 +2405,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
 
     // 11. 完成充值（带幂等性保护）
     try {
-      await db.completeRecharge(orderNo, {
+      const completion = await db.completeRecharge(orderNo, {
         tradeNo,
         actualAmount: creditedAmount,
         callbackData: callbackData,
@@ -2089,52 +2415,54 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       // 记录已处理
       await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)
 
-      // 记录充值成功日志
-      await createLog(
-        record.userId,
-        'user',
-        'recharge.completed',
-        `Recharge completed: order ${orderNo}, amount ${creditedAmount}, tradeNo: ${tradeNo || 'N/A'}`,
-        'success'
-      )
+      if (completion.completedNow) {
+        // 记录充值成功日志
+        await createLog(
+          record.userId,
+          'user',
+          'recharge.completed',
+          `Recharge completed: order ${orderNo}, amount ${creditedAmount}, tradeNo: ${tradeNo || 'N/A'}`,
+          'success'
+        )
 
-      // 发送充值成功通知（站内信）
-      try {
-        await createInboxMessage({
-          userId: record.userId,
-          eventType: 'recharge_success',
-          title: '充值到账通知',
-          content: `您的充值已到账！\n充值金额：￥${creditedAmount.toFixed(2)}\n订单号：${orderNo}\n交易号：${tradeNo || 'N/A'}`,
-          data: {
-            orderNo,
-            amount: creditedAmount,
-            tradeNo
-          }
-        })
-
-        // 发送充值成功邮件通知
+        // 发送充值成功通知（站内信）
         try {
-          const user = await db.findUserById(record.userId)
-          if (user && user.email) {
-            const balance = await db.getUserBalance(record.userId)
-            await sendRechargeSuccessEmail(user.email, {
-              username: user.username,
-              amount: creditedAmount,
+          await createInboxMessage({
+            userId: record.userId,
+            eventType: 'recharge_success',
+            title: '充值到账通知',
+            content: `您的充值已到账！\n充值金额：￥${creditedAmount.toFixed(2)}\n订单号：${orderNo}\n交易号：${tradeNo || 'N/A'}`,
+            data: {
               orderNo,
-              tradeNo: tradeNo || null,
-              newBalance: balance,
-              time: new Date()
-            })
+              amount: creditedAmount,
+              tradeNo
+            }
+          })
+
+          // 发送充值成功邮件通知
+          try {
+            const user = await db.findUserById(record.userId)
+            if (user && user.email) {
+              const balance = await db.getUserBalance(record.userId)
+              await sendRechargeSuccessEmail(user.email, {
+                username: user.username,
+                amount: creditedAmount,
+                orderNo,
+                tradeNo: tradeNo || null,
+                newBalance: balance,
+                time: new Date()
+              })
+            }
+          } catch (emailErr) {
+            request.log.warn({ orderNo, error: emailErr }, '发送充值成功邮件失败')
           }
-        } catch (emailErr) {
-          request.log.warn({ orderNo, error: emailErr }, '发送充值成功邮件失败')
+        } catch (notifyError) {
+          // 通知失败不影响主流程
+          request.log.warn({ orderNo, error: notifyError }, '发送充值成功通知失败')
         }
-      } catch (notifyError) {
-        // 通知失败不影响主流程
-        request.log.warn({ orderNo, error: notifyError }, '发送充值成功通知失败')
       }
 
-      request.log.info({ orderNo, tradeNo }, '支付回调处理成功')
+      request.log.info({ orderNo, tradeNo, completedNow: completion.completedNow }, '支付回调处理成功')
       
       // 根据不同支付渠道返回不同格式的成功响应
       if (provider.type === 'yipay') {
@@ -2166,8 +2494,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
   }, async (request, reply) => {
     try {
       const { providerId } = request.params as { providerId: string }
-      const callbackData = request.body as Record<string, unknown>
-      return await handlePaymentCallback(request, reply, providerId, callbackData)
+      return await handlePaymentCallback(request, reply, providerId, request.body)
     } catch (error) {
       request.log.error(error, '支付回调处理失败')
       return reply.status(500).send({ error: '回调处理失败' })
@@ -2182,8 +2509,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
   }, async (request, reply) => {
     try {
       const { providerId } = request.params as { providerId: string }
-      const callbackData = request.query as Record<string, unknown>
-      return await handlePaymentCallback(request, reply, providerId, callbackData)
+      return await handlePaymentCallback(request, reply, providerId, request.query)
     } catch (error) {
       request.log.error(error, '支付回调处理失败')
       return reply.status(500).send({ error: '回调处理失败' })

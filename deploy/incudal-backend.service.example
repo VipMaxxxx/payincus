@@ -1,0 +1,38 @@
+[Unit]
+Description=Incudal backend API
+Documentation=https://github.com/VipMaxxxx/payincus
+After=network.target postgresql.service redis-server.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=incudal
+Group=incudal
+WorkingDirectory=/opt/incudal
+EnvironmentFile=/opt/incudal/.env
+Environment=HOME=/opt/incudal
+Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm
+Environment=XDG_CACHE_HOME=/opt/incudal/.cache
+
+ExecStartPre=/usr/bin/bash -lc 'cd /opt/incudal/server && npx prisma migrate deploy'
+ExecStart=/usr/bin/node /opt/incudal/server/dist/app.js
+
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache
+PrivateTmp=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=incudal-backend
+
+[Install]
+WantedBy=multi-user.target

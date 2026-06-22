@@ -10,6 +10,8 @@ import {
   tryAdvisoryTransactionLock
 } from '../db/advisory-locks.js'
 
+let schedulerStarted = false
+
 // ==================== 解冻任务 ====================
 
 /**
@@ -75,7 +77,7 @@ async function unfreezeHostingBalance(): Promise<void> {
         lockedRecordIds.push(record.id)
       }
 
-      for (const userId of lockedAmounts.keys()) {
+      for (const userId of [...lockedAmounts.keys()].sort((a, b) => a - b)) {
         const locked = await tryAdvisoryTransactionLock(tx, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, userId)
         if (!locked) {
           throw new Error('托管余额正在处理，请稍后重试解冻')
@@ -120,6 +122,12 @@ async function unfreezeHostingBalance(): Promise<void> {
  * 启动托管余额调度器
  */
 export function startHostingScheduler(): void {
+  if (schedulerStarted) {
+    return
+  }
+
+  schedulerStarted = true
+
   console.log('[Hosting] Starting hosting scheduler...')
 
   // 每小时执行一次解冻任务（每小时第0分钟）

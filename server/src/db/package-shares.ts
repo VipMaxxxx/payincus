@@ -195,6 +195,35 @@ export async function getPackageShareForUser(
         }
     }
 
+    if (pkg && pkg.userId !== userId) {
+        if (await isUserBlockedByHoster(pkg.userId, userId, client)) {
+            return null
+        }
+
+        const share = await client.packageShare.findUnique({
+            where: {
+                packageId_sharedToId: {
+                    packageId,
+                    sharedToId: userId
+                }
+            },
+            select: {
+                id: true,
+                quotaMultiplier: true,
+                maxInstances: true
+            }
+        })
+
+        if (share) {
+            return {
+                id: share.id,
+                quotaMultiplier: share.quotaMultiplier ? Number(share.quotaMultiplier) : null,
+                maxInstances: share.maxInstances,
+                isGlobalShared: false
+            }
+        }
+    }
+
     return null
 }
 

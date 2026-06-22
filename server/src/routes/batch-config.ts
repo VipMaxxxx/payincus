@@ -12,10 +12,12 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 import { getIncusClient } from '../lib/incus/incus-pool.js'
 import { patchInstanceResources, getInstance, updateInstance } from '../lib/incus/incus-instances.js'
 import { resolveEffectiveSwapSize, resolveIncusSwapValue } from '../lib/instance-swap.js'
+import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'
 import pLimit from 'p-limit'
 
 // 每宿主机并发限制
 const BATCH_CONFIG_CONCURRENCY = 10
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
 
 // 可重试的错误类型
 const RETRYABLE_ERRORS = [
@@ -28,6 +30,31 @@ const RETRYABLE_ERRORS = [
 
 function isRetryableError(error: string): boolean {
   return RETRYABLE_ERRORS.some(e => error.toLowerCase().includes(e.toLowerCase()))
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function normalizeBatchInstanceIds(instanceIds: number[]): number[] | null {
+  if (!Array.isArray(instanceIds) || instanceIds.length === 0) {
+    return null
+  }
+
+  const uniqueIds = new Set<number>()
+  for (const instanceId of instanceIds) {
+    if (!Number.isSafeInteger(instanceId) || instanceId <= 0 || uniqueIds.has(instanceId)) {
+      return null
+    }
+    uniqueIds.add(instanceId)
+  }
+
+  return [...uniqueIds]
 }
 
 // 批量配置修改请求体类型
@@ -98,9 +125,10 @@ export default async function batchConfigRoutes(fastify: FastifyInstance) {
         properties: {
           instanceIds: {
             type: 'array',
-            items: { type: 'integer' },
+            items: { type: 'integer', minimum: 1 },
             minItems: 1,
-            maxItems: 1000
+            maxItems: 1000,
+            uniqueItems: true
           },
           config: {
             type: 'object',
@@ -145,10 +173,15 @@ export default async function batchConfigRoutes(fastify: FastifyInstance) {
     const { user } = request
     const { id } = request.params
     const { instanceIds, config } = request.body
-    const hostId = Number(id)
+    const hostId = parsePositiveRouteId(id)
 
-    if (isNaN(hostId)) {
+    if (!hostId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const normalizedInstanceIds = normalizeBatchInstanceIds(instanceIds)
+    if (!normalizedInstanceIds) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid instance IDs'))
     }
 
     // 验证宿主机存在且属于当前用户
@@ -167,10 +200,18 @@ export default async function batchConfigRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.CONFIG_NO_CHANGES))
     }
 
+    let parsedMonthlyTrafficLimit: bigint | null | undefined
+    if (config.monthlyTrafficLimit !== undefined) {
+      parsedMonthlyTrafficLimit = parseNullablePostgresBigIntInput(config.monthlyTrafficLimit)
+      if (parsedMonthlyTrafficLimit === undefined) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid monthly traffic limit'))
+      }
+    }
+
     // 获取所有目标实例并验证它们属于该宿主机
     const instances = await prisma.instance.findMany({
       where: {
-        id: { in: instanceIds },
+        id: { in: normalizedInstanceIds },
         hostId: hostId,
         status: { notIn: ['deleted', 'creating'] }
       },
@@ -188,8 +229,8 @@ export default async function batchConfigRoutes(fastify: FastifyInstance) {
       }
     })
 
-    if (instances.length === 0) {
-      return reply.code(400).send({ error: '没有找到可修改的实例' })
+    if (instances.length !== normalizedInstanceIds.length) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Some instances are not available on this host'))
     }
 
     // 判断是否需要连接 Incus
@@ -220,6 +261,7 @@ export default async function batchConfigRoutes(fastify: FastifyInstance) {
           const result = await updateSingleInstance(
             instance,
             config,
+            parsedMonthlyTrafficLimit,
             client
           )
           results.push(result)
@@ -237,6 +279,7 @@ export default async function batchConfigRoutes(fastify: FastifyInstance) {
             const retryResult = await updateSingleInstance(
               instance,
               config,
+              parsedMonthlyTrafficLimit,
               client
             )
             // 更新结果
@@ -329,6 +372,7 @@ async function updateSingleInstance(
     } | null
   },
   config: BatchConfigBody['config'],
+  parsedMonthlyTrafficLimit: bigint | null | undefined,
   client: Awaited<ReturnType<typeof getIncusClient>> | null
 ): Promise<ResultItem> {
   try {
@@ -514,20 +558,11 @@ async function updateSingleInstance(
 
     // 3. 更新数据库中的资源配置
     if (config.cpu !== undefined || config.memory !== undefined || config.disk !== undefined || config.monthlyTrafficLimit !== undefined) {
-      let trafficLimit: bigint | null | undefined = undefined
-      if (config.monthlyTrafficLimit !== undefined) {
-        if (config.monthlyTrafficLimit === null || config.monthlyTrafficLimit === '') {
-          trafficLimit = null
-        } else {
-          trafficLimit = BigInt(config.monthlyTrafficLimit)
-        }
-      }
-
       await db.updateInstanceResources(instance.id, {
         cpu: config.cpu,
         memory: config.memory,
         disk: config.disk !== undefined ? Math.round(config.disk) : undefined,
-        monthlyTrafficLimit: trafficLimit
+        monthlyTrafficLimit: parsedMonthlyTrafficLimit
       })
       // 注意：宿主机资源使用量在批量处理完成后统一更新，避免并发问题
     }

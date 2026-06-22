@@ -6,6 +6,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { ClipboardAddon } from '@xterm/addon-clipboard'
+import { buildApiWebSocketUrl } from '@/utils/api-url'
 
 export interface TerminalControlMessage {
   type: string
@@ -47,9 +48,7 @@ export function shouldRetryTerminalClose(code: number): boolean {
 }
 
 export function buildTerminalWebSocketUrl(instanceId: number, ticket: string): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.host
-  return `${protocol}//${host}/api/ws/instances/${instanceId}/terminal?ticket=${encodeURIComponent(ticket)}`
+  return buildApiWebSocketUrl(`/ws/instances/${instanceId}/terminal?ticket=${encodeURIComponent(ticket)}`)
 }
 
 export function isTerminalControlMessage(parsed: unknown): parsed is TerminalControlMessage {

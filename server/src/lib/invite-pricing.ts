@@ -1,5 +1,10 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
+import {
+  USER_BALANCE_LOCK_NAMESPACE,
+  USER_POINTS_LOCK_NAMESPACE,
+  advisoryTransactionLock
+} from '../db/advisory-locks.js'
 import { getSystemConfig, getSystemConfigNumber } from '../db/system-config.js'
 
 export type InviteCostResource = 'balance' | 'points' | (string & {})
@@ -53,6 +58,8 @@ const inviteCostResourceHandlers: Record<string, InviteCostResourceHandler> = {
     async charge(tx, userId, amount, inviteCode) {
       if (amount <= 0) return
 
+      await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+
       const rows = await tx.$queryRaw<Array<{ balanceBefore: unknown; balanceAfter: unknown }>>(Prisma.sql`
         UPDATE users
         SET balance = balance - ${amount}
@@ -98,6 +105,8 @@ const inviteCostResourceHandlers: Record<string, InviteCostResourceHandler> = {
     },
     async charge(tx, userId, amount, inviteCode) {
       if (amount <= 0) return
+
+      await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)
 
       await tx.userPoints.upsert({
         where: { userId },

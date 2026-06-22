@@ -8,6 +8,7 @@ import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { getIncusClient } from '../lib/incus/index.js'
 import { patchInstanceResources } from '../lib/incus/incus-instances.js'
+import { acquireLock, releaseLock } from '../lib/distributed-lock.js'
 
 // 资源类型名称映射
 const CODE_TYPE_NAMES: Record<string, { zh: string; en: string }> = {
@@ -29,6 +30,39 @@ const CODE_TYPE_UNITS: Record<string, string> = {
 
 function isDailyCheckinEnabled(): boolean {
   return false
+}
+
+async function withSystemRedeemLocks<T>(
+  redeemCodeId: number,
+  userId: number,
+  batchId: string | null,
+  fn: () => Promise<T>
+): Promise<T> {
+  const lockKeys = [
+    `redeem-code:${redeemCodeId}`,
+    ...(batchId ? [`redeem-batch:${batchId}:user:${userId}`] : [])
+  ]
+  const acquired: Array<{ lockKey: string; ownerId: string }> = []
+
+  try {
+    for (const lockKey of lockKeys) {
+      const lock = await acquireLock(lockKey, {
+        expireMs: 120_000,
+        waitTimeoutMs: 10_000,
+        retryIntervalMs: 100
+      })
+      if (!lock.success || !lock.ownerId) {
+        throw new Error('REDEEM_CODE_BUSY')
+      }
+      acquired.push({ lockKey, ownerId: lock.ownerId })
+    }
+
+    return await fn()
+  } finally {
+    for (const lock of acquired.reverse()) {
+      await releaseLock(lock.lockKey, lock.ownerId)
+    }
+  }
 }
 
 export default async function checkinRoutes(fastify: FastifyInstance) {
@@ -99,6 +133,9 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage === 'CHECKIN_ALREADY_TODAY') {
+        return reply.code(400).send(apiError(ErrorCode.CHECKIN_ALREADY_TODAY))
+      }
       await createLog(
         user.id,
         'checkin',
@@ -206,83 +243,182 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
     let actualAdded = codeValue
 
     try {
-      // 先执行原子操作确认可用
-      await db.useSystemRedeemCode(systemCodeRecord.id, user.id, instanceId, systemCodeRecord.batchId)
-
-      // 资源应用逻辑（不再截断到套餐上限）
-      if (codeType === 'c') {
-        const newCpu = instance.cpu + codeValue
-        const host = await db.getHostById(instance.host_id)
-        if (!host) {
-          return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
+      const response = await withSystemRedeemLocks(systemCodeRecord.id, user.id, systemCodeRecord.batchId, async () => {
+        const currentCodeRecord = await db.getRedeemCodeByCode(trimmedCode)
+        if (!currentCodeRecord) {
+          throw new Error('REDEEM_CODE_NOT_FOUND')
         }
-        await db.updateHostResources(instance.host_id, { cpuUsed: host.cpu_used + actualAdded })
-        const client = await getIncusClient(host)
-        await patchInstanceResources(client, instance.incus_id, { cpu: newCpu })
-        await db.updateInstanceResources(instanceId, { cpu: newCpu })
-      } else if (codeType === 'r') {
-        const newMemory = instance.memory + codeValue
-        const host = await db.getHostById(instance.host_id)
-        if (!host) {
-          return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
+        if (!currentCodeRecord.enabled) {
+          throw new Error('REDEEM_CODE_DISABLED')
         }
-        await db.updateHostResources(instance.host_id, { memoryUsed: host.memory_used + actualAdded })
-        const client = await getIncusClient(host)
-        await patchInstanceResources(client, instance.incus_id, { memory: newMemory })
-        await db.updateInstanceResources(instanceId, { memory: newMemory })
-      } else if (codeType === 'd') {
-        const newDisk = instance.disk + codeValue
-        const host = await db.getHostById(instance.host_id)
-        if (!host) {
-          return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
+        if (currentCodeRecord.expiresAt && currentCodeRecord.expiresAt < new Date()) {
+          throw new Error('REDEEM_CODE_EXPIRED')
         }
-        await db.updateHostResources(instance.host_id, { diskUsed: host.disk_used + actualAdded })
-        const client = await getIncusClient(host)
-        await patchInstanceResources(client, instance.incus_id, { disk: newDisk })
-        await db.updateInstanceResources(instanceId, { disk: newDisk })
-      } else if (codeType === 't') {
-        const trafficBytes = BigInt(codeValue) * BigInt(1024 * 1024 * 1024)
-        const currentLimit = instance.monthly_traffic_limit ? BigInt(instance.monthly_traffic_limit) : BigInt(0)
-        const newLimit = currentLimit + trafficBytes
-        await db.updateInstanceResources(instanceId, { monthlyTrafficLimit: newLimit })
-      } else if (codeType === 'p') {
-        await db.addPoints(user.id, codeValue, 'checkin', undefined, '兑换码奖励')
-      }
+        if (currentCodeRecord.usedCount >= currentCodeRecord.maxUses) {
+          throw new Error('REDEEM_CODE_EXHAUSTED')
+        }
+        if (await db.hasUserUsedCode(currentCodeRecord.id, user.id)) {
+          throw new Error('REDEEM_CODE_ALREADY_USED_BY_USER')
+        }
+        if (currentCodeRecord.batchId && await db.hasUserUsedBatch(currentCodeRecord.batchId, user.id)) {
+          throw new Error('REDEEM_CODE_BATCH_LIMIT')
+        }
 
-      const typeName = CODE_TYPE_NAMES[codeType]?.en || codeType
-      const unit = CODE_TYPE_UNITS[codeType] || ''
-      await createLog(
-        user.id,
-        'checkin',
-        'redeem.success',
-        `Redeemed system code ${trimmedCode} for instance "${instance.name}": ${typeName} +${actualAdded}${unit}`,
-        'success',
-        { instanceId }
-      )
+        const currentInstance = await db.getInstanceById(instanceId)
+        if (!currentInstance) {
+          throw new Error('INSTANCE_NOT_FOUND')
+        }
+        if (currentInstance.user_id !== user.id) {
+          throw new Error('FORBIDDEN')
+        }
+        if (currentInstance.status !== 'running' && currentInstance.status !== 'stopped') {
+          throw new Error('INSTANCE_STATUS_INVALID')
+        }
+        if (currentInstance.host_id !== currentCodeRecord.hostId) {
+          throw new Error('REDEEM_CODE_HOST_MISMATCH')
+        }
 
-      // 记录到资源池日志（不加资源池，因为资源直接应用到实例）
-      if (codeType !== 'p') {
-        await db.logSystemRedeemToInstance(
+        codeType = currentCodeRecord.codeType
+        codeValue = currentCodeRecord.codeValue
+        actualAdded = codeValue
+        if (!['c', 'r', 'd', 't'].includes(codeType)) {
+          throw new Error('REDEEM_CODE_INVALID_FORMAT')
+        }
+
+        let patchedRollback: (() => Promise<void>) | null = null
+
+        try {
+          if (codeType === 'c') {
+            const newCpu = currentInstance.cpu + codeValue
+            const host = await db.getHostById(currentInstance.host_id)
+            if (!host) {
+              throw new Error('HOST_NOT_FOUND')
+            }
+            const client = await getIncusClient(host)
+            await patchInstanceResources(client, currentInstance.incus_id, { cpu: newCpu })
+            patchedRollback = async () => {
+              await patchInstanceResources(client, currentInstance.incus_id, { cpu: currentInstance.cpu })
+            }
+            await db.applySystemRedeemCodeToInstance({
+              redeemCodeId: currentCodeRecord.id,
+              userId: user.id,
+              instanceId,
+              hostId: currentInstance.host_id,
+              batchId: currentCodeRecord.batchId,
+              instanceResources: { cpu: newCpu },
+              hostResourceDelta: { cpuUsed: actualAdded }
+            })
+          } else if (codeType === 'r') {
+            const newMemory = currentInstance.memory + codeValue
+            const host = await db.getHostById(currentInstance.host_id)
+            if (!host) {
+              throw new Error('HOST_NOT_FOUND')
+            }
+            const client = await getIncusClient(host)
+            await patchInstanceResources(client, currentInstance.incus_id, { memory: newMemory })
+            patchedRollback = async () => {
+              await patchInstanceResources(client, currentInstance.incus_id, { memory: currentInstance.memory })
+            }
+            await db.applySystemRedeemCodeToInstance({
+              redeemCodeId: currentCodeRecord.id,
+              userId: user.id,
+              instanceId,
+              hostId: currentInstance.host_id,
+              batchId: currentCodeRecord.batchId,
+              instanceResources: { memory: newMemory },
+              hostResourceDelta: { memoryUsed: actualAdded }
+            })
+          } else if (codeType === 'd') {
+            const newDisk = currentInstance.disk + codeValue
+            const host = await db.getHostById(currentInstance.host_id)
+            if (!host) {
+              throw new Error('HOST_NOT_FOUND')
+            }
+            const client = await getIncusClient(host)
+            await patchInstanceResources(client, currentInstance.incus_id, { disk: newDisk })
+            patchedRollback = async () => {
+              await patchInstanceResources(client, currentInstance.incus_id, { disk: currentInstance.disk })
+            }
+            await db.applySystemRedeemCodeToInstance({
+              redeemCodeId: currentCodeRecord.id,
+              userId: user.id,
+              instanceId,
+              hostId: currentInstance.host_id,
+              batchId: currentCodeRecord.batchId,
+              instanceResources: { disk: newDisk },
+              hostResourceDelta: { diskUsed: actualAdded }
+            })
+          } else if (codeType === 't') {
+            const trafficBytes = BigInt(codeValue) * BigInt(1024 * 1024 * 1024)
+            await db.applySystemRedeemCodeToInstance({
+              redeemCodeId: currentCodeRecord.id,
+              userId: user.id,
+              instanceId,
+              hostId: currentInstance.host_id,
+              batchId: currentCodeRecord.batchId,
+              monthlyTrafficDelta: trafficBytes
+            })
+          }
+        } catch (error) {
+          if (patchedRollback) {
+            try {
+              await patchedRollback()
+            } catch (rollbackError) {
+              request.log.error({ err: rollbackError, instanceId }, 'Failed to roll back Incus resource patch after redeem DB failure')
+            }
+          }
+          throw error
+        }
+
+        const typeName = CODE_TYPE_NAMES[codeType]?.en || codeType
+        const unit = CODE_TYPE_UNITS[codeType] || ''
+        await createLog(
           user.id,
-          codeType as any,
+          'checkin',
+          'redeem.success',
+          `Redeemed system code ${trimmedCode} for instance "${currentInstance.name}": ${typeName} +${actualAdded}${unit}`,
+          'success',
+          { instanceId }
+        )
+
+        // 记录到资源池日志（不加资源池，因为资源直接应用到实例）
+        if (codeType !== 'p') {
+          await db.logSystemRedeemToInstance(
+            user.id,
+            codeType as any,
+            actualAdded,
+            instanceId,
+            `系统兑换码 ${trimmedCode} 应用到 ${currentInstance.name}`
+          )
+        }
+
+        return {
+          message: 'Redeem successful',
+          codeType,
+          codeValue,
           actualAdded,
           instanceId,
-          `系统兑换码 ${trimmedCode} 应用到 ${instance.name}`
-        )
-      }
+          instanceName: currentInstance.name,
+          isSystemCode: true,
+          toResourcePool: false
+        }
+      })
 
-      return {
-        message: 'Redeem successful',
-        codeType,
-        codeValue,
-        actualAdded,
-        instanceId,
-        instanceName: instance.name,
-        isSystemCode: true,
-        toResourcePool: false
-      }
+      return response
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage === 'REDEEM_CODE_NOT_FOUND') {
+        return reply.code(404).send(apiError(ErrorCode.REDEEM_CODE_NOT_FOUND))
+      }
+      if (errorMessage === 'REDEEM_CODE_DISABLED') {
+        return reply.code(400).send(apiError(ErrorCode.REDEEM_CODE_DISABLED))
+      }
+      if (errorMessage === 'REDEEM_CODE_EXPIRED') {
+        return reply.code(400).send(apiError(ErrorCode.REDEEM_CODE_EXPIRED))
+      }
+      if (errorMessage === 'REDEEM_CODE_INVALID_FORMAT') {
+        return reply.code(400).send(apiError(ErrorCode.REDEEM_CODE_INVALID_FORMAT))
+      }
       if (errorMessage === 'REDEEM_CODE_EXHAUSTED') {
         return reply.code(400).send(apiError(ErrorCode.REDEEM_CODE_EXHAUSTED))
       }
@@ -297,6 +433,21 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
           error: 'REDEEM_CODE_BUSY',
           message: 'Redeem code is busy, please retry'
         })
+      }
+      if (errorMessage === 'INSTANCE_NOT_FOUND') {
+        return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+      }
+      if (errorMessage === 'FORBIDDEN') {
+        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+      }
+      if (errorMessage === 'INSTANCE_STATUS_INVALID') {
+        return reply.code(400).send(apiError(ErrorCode.INSTANCE_STATUS_INVALID))
+      }
+      if (errorMessage === 'REDEEM_CODE_HOST_MISMATCH') {
+        return reply.code(400).send(apiError(ErrorCode.REDEEM_CODE_HOST_MISMATCH))
+      }
+      if (errorMessage === 'HOST_NOT_FOUND') {
+        return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
       }
       await createLog(user.id, 'checkin', 'redeem.failed', `Failed to redeem code ${trimmedCode}: ${errorMessage}`, 'failed', { instanceId })
       return reply.code(500).send(apiError(ErrorCode.INTERNAL_ERROR, errorMessage))

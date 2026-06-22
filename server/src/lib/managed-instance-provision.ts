@@ -1,5 +1,6 @@
 import { prisma } from '../db/prisma.js'
-import { buildInstanceConfig, createInstance, getIncusClient, getInstanceState, startInstance } from '../lib/incus/index.js'
+import * as db from '../db/index.js'
+import { buildInstanceConfig, createInstance, deleteInstance, getIncusClient, getInstanceState, startInstance, stopInstance } from '../lib/incus/index.js'
 import type { Host } from '../types/database.js'
 
 export interface ManagedInstanceProvisionConfig {
@@ -134,8 +135,8 @@ export async function provisionManagedInstanceAsync(
       // keep pre-allocated addresses
     }
 
-    await prisma.instance.update({
-      where: { id: instanceId },
+    const updateResult = await prisma.instance.updateMany({
+      where: { id: instanceId, status: 'creating' },
       data: {
         status: 'running',
         ipv4,
@@ -143,13 +144,68 @@ export async function provisionManagedInstanceAsync(
         storagePoolName: config.storagePool || 'default'
       }
     })
+
+    if (updateResult.count === 0) {
+      console.log(`[Managed Provisioning] instance ${instanceId} was already finalized, cleaning created Incus instance`)
+      try {
+        await stopInstance(client, config.name, true)
+        await deleteInstance(client, config.name)
+      } catch (cleanupError) {
+        console.error(`[Managed Provisioning] failed to clean finalized instance ${config.name}:`, cleanupError)
+      }
+      return
+    }
   } catch (error) {
     console.error(`[Managed Provisioning] instance ${instanceId} failed:`, error)
 
-    await prisma.instance.update({
-      where: { id: instanceId },
+    const updateResult = await prisma.instance.updateMany({
+      where: { id: instanceId, status: 'creating' },
       data: { status: 'error' }
-    }).catch(() => {})
+    }).catch(() => ({ count: 0 }))
+
+    if (updateResult.count > 0) {
+      const instance = await prisma.instance.findUnique({
+        where: { id: instanceId },
+        select: {
+          userId: true,
+          hostId: true,
+          cpu: true,
+          memory: true,
+          disk: true,
+          networkMode: true,
+          portLimit: true
+        }
+      }).catch(() => null)
+
+      if (instance) {
+        try {
+          await db.rollbackResources({
+            hostId: instance.hostId,
+            cpu: instance.cpu,
+            memory: instance.memory,
+            disk: instance.disk,
+            portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(instance.networkMode)
+              ? (instance.portLimit || 0)
+              : 0
+          })
+        } catch (rollbackError) {
+          console.error(`[Managed Provisioning] failed to roll back resources for instance ${instanceId}:`, rollbackError)
+        }
+
+        try {
+          await db.compensateFailedInstancePurchase(instanceId, instance.userId, instance.hostId)
+        } catch (compensationError) {
+          console.error(`[Managed Provisioning] failed to compensate billing for instance ${instanceId}:`, compensationError)
+        }
+      }
+    }
+
+    try {
+      const client = await getIncusClient(host)
+      await deleteInstance(client, config.name)
+    } catch {
+      // Instance may not exist or may already have been cleaned by timeout handling.
+    }
 
     throw error
   }

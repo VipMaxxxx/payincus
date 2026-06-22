@@ -23,7 +23,7 @@ import { listSnapshots, deleteSnapshot as deleteIncusSnapshot } from '../lib/inc
 import { sendNotification } from '../lib/notifier.js'
 import { createLog } from '../db/logs.js'
 import * as db from '../db/index.js'
-import { updateInstanceTaskProgress, updateInstanceTaskStatus } from '../db/instance-tasks.js'
+import { updateInstanceTaskProgress } from '../db/instance-tasks.js'
 import { closeInstanceSessions } from '../lib/terminal-proxy.js'
 import { generateIncusConfig, generateRandomPassword } from '../lib/incus-config-generator.js'
 import { encryptSensitiveData, decryptSensitiveData } from '../lib/security.js'
@@ -36,7 +36,9 @@ import { getCommandsByIds, mergeCommandContents, getImageDistroFromAlias } from 
 import { collectTrafficForRunningInstance } from '../services/instance-traffic-collector.js'
 import {
   HOST_TASK_CLAIM_LOCK_NAMESPACE,
+  IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE,
   INSTANCE_OPERATION_LOCK_NAMESPACE,
+  advisoryTransactionLockString,
   tryAdvisoryTransactionLock
 } from '../db/advisory-locks.js'
 import { createWorkerDbBackoff } from './db-failure-backoff.js'
@@ -74,6 +76,7 @@ const ALPINE_BUSY_UPDATE_CANCEL_AFTER_MS = 10_000
 
 let workerInterval: ReturnType<typeof setInterval> | null = null
 let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null
+const runningTaskIds = new Set<number>()
 const dbBackoff = createWorkerDbBackoff('InstanceTaskWorker')
 
 function isAlpineImageAlias(imageAlias?: string | null): boolean {
@@ -121,15 +124,66 @@ function extractIPv6(state: { network?: Record<string, { addresses?: Array<{ fam
   return null
 }
 
+async function cleanupRecreatedInstanceRecords(instanceId: number, hostId: number): Promise<{ deletedPortMappingsCount: number }> {
+  return prisma.$transaction(async (tx) => {
+    const deletedPortMappings = await tx.portMapping.deleteMany({ where: { instanceId } })
+
+    if (deletedPortMappings.count > 0) {
+      const updatedHost = await tx.host.updateMany({
+        where: {
+          id: hostId,
+          natPortsUsedCount: { gte: deletedPortMappings.count }
+        },
+        data: {
+          natPortsUsedCount: { decrement: deletedPortMappings.count }
+        }
+      })
+      if (updatedHost.count === 0) {
+        await tx.host.update({
+          where: { id: hostId },
+          data: { natPortsUsedCount: 0 }
+        })
+      }
+    }
+
+    await tx.snapshot.deleteMany({ where: { instanceId } })
+    await tx.backup.deleteMany({ where: { instanceId } })
+    await tx.proxySite.deleteMany({ where: { instanceId } })
+    await tx.backupPolicy.deleteMany({ where: { instanceId } })
+    await tx.snapshotPolicy.deleteMany({ where: { instanceId } })
+    await tx.trafficSnapshot.deleteMany({ where: { instanceId } })
+
+    return { deletedPortMappingsCount: deletedPortMappings.count }
+  })
+}
+
 /**
  * 服务启动时清理僵尸任务
  */
 export async function cleanupStaleTasks(): Promise<void> {
+  const lightTimeoutThreshold = new Date(Date.now() - LIGHT_TASK_TIMEOUT)
+  const heavyTimeoutThreshold = new Date(Date.now() - HEAVY_TASK_TIMEOUT)
+
   const result = await prisma.instanceTask.updateMany({
-    where: { status: 'PROCESSING' },
+    where: {
+      status: 'PROCESSING',
+      OR: [
+        {
+          taskType: { in: HEAVY_TASK_TYPES },
+          startedAt: { lt: heavyTimeoutThreshold }
+        },
+        {
+          taskType: { notIn: HEAVY_TASK_TYPES },
+          startedAt: { lt: lightTimeoutThreshold }
+        },
+        {
+          startedAt: null
+        }
+      ]
+    },
     data: {
       status: 'FAILED',
-      error: '系统重启，任务中断',
+      error: '系统启动清理超时任务',
       finishedAt: new Date()
     }
   })
@@ -146,7 +200,7 @@ async function cleanupTimeoutTasks(): Promise<void> {
   const lightTimeoutThreshold = new Date(Date.now() - LIGHT_TASK_TIMEOUT)
   const heavyTimeoutThreshold = new Date(Date.now() - HEAVY_TASK_TIMEOUT)
 
-  const result = await prisma.instanceTask.updateMany({
+  const timedOutTasks = await prisma.instanceTask.findMany({
     where: {
       status: 'PROCESSING',
       OR: [
@@ -159,6 +213,21 @@ async function cleanupTimeoutTasks(): Promise<void> {
           startedAt: { lt: lightTimeoutThreshold }
         }
       ]
+    },
+    select: { id: true }
+  })
+  const timedOutTaskIds = timedOutTasks
+    .map(task => task.id)
+    .filter(taskId => !runningTaskIds.has(taskId))
+
+  if (timedOutTaskIds.length === 0) {
+    return
+  }
+
+  const result = await prisma.instanceTask.updateMany({
+    where: {
+      id: { in: timedOutTaskIds },
+      status: 'PROCESSING'
     },
     data: {
       status: 'FAILED',
@@ -397,19 +466,21 @@ async function claimNextTask(hostId: number) {
  */
 async function executeTask(taskId: number): Promise<void> {
   const taskStartTime = Date.now()
-
-  const task = await prisma.instanceTask.findUnique({
-    where: { id: taskId }
-  })
-
-  if (!task) {
-    console.error(`[InstanceTaskWorker] Task ${taskId} not found`)
-    return
-  }
-
-  console.log(`[InstanceTaskWorker] 开始执行任务 ${taskId} (${task.taskType})`)
+  runningTaskIds.add(taskId)
+  let task: Awaited<ReturnType<typeof prisma.instanceTask.findUnique>> = null
 
   try {
+    task = await prisma.instanceTask.findUnique({
+      where: { id: taskId }
+    })
+
+    if (!task) {
+      console.error(`[InstanceTaskWorker] Task ${taskId} not found`)
+      return
+    }
+
+    console.log(`[InstanceTaskWorker] 开始执行任务 ${taskId} (${task.taskType})`)
+
     const instance = await db.getInstanceById(task.instanceId)
     if (!instance) throw new Error('实例不存在')
     if (instance.status === 'deleted') {
@@ -467,9 +538,16 @@ async function executeTask(taskId: number): Promise<void> {
     }
 
     // 任务完成
-    await updateInstanceTaskStatus(taskId, 'COMPLETED', {
-      finishedAt: new Date()
+    const completeResult = await prisma.instanceTask.updateMany({
+      where: { id: taskId, status: 'PROCESSING' },
+      data: {
+        status: 'COMPLETED',
+        finishedAt: new Date()
+      }
     })
+    if (completeResult.count === 0) {
+      console.warn(`[InstanceTaskWorker] 任务 ${taskId} 已不处于 PROCESSING，跳过完成状态覆盖`)
+    }
 
     const taskDuration = Date.now() - taskStartTime
     console.log(`[InstanceTaskWorker] 任务 ${taskId} (${task.taskType}) 完成，耗时 ${taskDuration}ms`)
@@ -478,10 +556,21 @@ async function executeTask(taskId: number): Promise<void> {
     const errorMessage = err instanceof Error ? err.message : String(err)
     console.error(`[InstanceTaskWorker] 任务 ${taskId} 失败:`, errorMessage)
 
-    await updateInstanceTaskStatus(taskId, 'FAILED', {
-      error: errorMessage,
-      finishedAt: new Date()
+    const failResult = await prisma.instanceTask.updateMany({
+      where: { id: taskId, status: 'PROCESSING' },
+      data: {
+        status: 'FAILED',
+        error: errorMessage,
+        finishedAt: new Date()
+      }
     })
+    if (failResult.count === 0) {
+      console.warn(`[InstanceTaskWorker] 任务 ${taskId} 已不处于 PROCESSING，跳过失败状态覆盖`)
+    }
+
+    if (!task) {
+      return
+    }
 
     // 记录连接池错误
     recordClientError(task.hostId)
@@ -513,6 +602,8 @@ async function executeTask(taskId: number): Promise<void> {
     } catch (notifyErr) {
       console.error('[InstanceTaskWorker] 发送失败通知/记录日志失败:', notifyErr)
     }
+  } finally {
+    runningTaskIds.delete(taskId)
   }
 }
 
@@ -1226,41 +1317,7 @@ async function executeRecreateTask(
     console.warn('[Recreate] 删除快照失败，继续执行')
   }
 
-  // 3. 删除端口映射、备份、反代站点等关联数据（重建不保留任何数据）
-  try {
-    const deletedPorts = await prisma.portMapping.deleteMany({ where: { instanceId: task.instanceId } })
-    if (deletedPorts.count > 0) {
-      console.log(`[Recreate] 删除 ${deletedPorts.count} 个端口映射记录`)
-    }
-    const deletedBackups = await prisma.backup.deleteMany({ where: { instanceId: task.instanceId } })
-    if (deletedBackups.count > 0) {
-      console.log(`[Recreate] 删除 ${deletedBackups.count} 个备份记录`)
-    }
-    // 删除反代站点
-    const deletedSites = await prisma.proxySite.deleteMany({ where: { instanceId: task.instanceId } })
-    if (deletedSites.count > 0) {
-      console.log(`[Recreate] 删除 ${deletedSites.count} 个反代站点记录`)
-    }
-    // 删除备份策略
-    const deletedBackupPolicy = await prisma.backupPolicy.deleteMany({ where: { instanceId: task.instanceId } })
-    if (deletedBackupPolicy.count > 0) {
-      console.log(`[Recreate] 删除备份策略记录`)
-    }
-    // 删除快照策略
-    const deletedSnapshotPolicy = await prisma.snapshotPolicy.deleteMany({ where: { instanceId: task.instanceId } })
-    if (deletedSnapshotPolicy.count > 0) {
-      console.log(`[Recreate] 删除快照策略记录`)
-    }
-    // 删除流量统计基准（新实例应该重新统计）
-    const deletedTrafficSnapshot = await prisma.trafficSnapshot.deleteMany({ where: { instanceId: task.instanceId } })
-    if (deletedTrafficSnapshot.count > 0) {
-      console.log(`[Recreate] 删除流量统计基准记录`)
-    }
-  } catch (err) {
-    console.warn('[Recreate] 删除关联数据失败，继续执行:', err)
-  }
-
-  // 4. 获取实例类型
+  // 3. 获取实例类型
   let instanceType: 'container' | 'virtual-machine' = 'container'
   let pkg: Awaited<ReturnType<typeof db.getPackageById>> | null = null
   if (instance.package_id) {
@@ -1358,30 +1415,34 @@ async function executeRecreateTask(
   const shortId = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)()
   const newIncusId = `u${task.userId}-${shortId}`
   console.log(`[Recreate] 新实例 ID: ${newIncusId}`)
+  let oldInstanceDeleted = false
+  let newInstanceCreated = false
+  let databaseSwitched = false
 
-  // VM 需要 network-config（使用新分配的 IP）
-  if (instanceType === 'virtual-machine') {
-    const { generateVmConfig } = await import('../lib/incus-config-vm.js')
-    const vmResult = generateVmConfig({
-      instanceName: instance.name,
-      instanceIdSeed: newIncusId,
-      imageAlias,
-      rootPassword: newPassword,
-      sshKey,
-      network: {
-        ipAddress: `${newIPv4}/22`,
-        gateway: '10.10.0.1',
-        dns: ['10.10.0.1'],
-        ipv6Address: instance.ipv6 ? `${instance.ipv6}` : undefined,
-        ipv6Gateway: instance.ipv6 ? (host.ipv6_gateway || undefined) : undefined
-      },
-      extraShellCommands
-    })
-    configPayload = vmResult.configPayload
-    console.log(`[Recreate] VM network-config 已更新: IPv4=${newIPv4}, IPv6=${instance.ipv6 || 'none'}`)
-  } else {
-    console.log(`[Recreate] Container network-config 已更新: IPv4=${newIPv4}, IPv6=${instance.ipv6 || 'none'}`)
-  }
+  try {
+    // VM 需要 network-config（使用新分配的 IP）
+    if (instanceType === 'virtual-machine') {
+      const { generateVmConfig } = await import('../lib/incus-config-vm.js')
+      const vmResult = generateVmConfig({
+        instanceName: instance.name,
+        instanceIdSeed: newIncusId,
+        imageAlias,
+        rootPassword: newPassword,
+        sshKey,
+        network: {
+          ipAddress: `${newIPv4}/22`,
+          gateway: '10.10.0.1',
+          dns: ['10.10.0.1'],
+          ipv6Address: instance.ipv6 ? `${instance.ipv6}` : undefined,
+          ipv6Gateway: instance.ipv6 ? (host.ipv6_gateway || undefined) : undefined
+        },
+        extraShellCommands
+      })
+      configPayload = vmResult.configPayload
+      console.log(`[Recreate] VM network-config 已更新: IPv4=${newIPv4}, IPv6=${instance.ipv6 || 'none'}`)
+    } else {
+      console.log(`[Recreate] Container network-config 已更新: IPv4=${newIPv4}, IPv6=${instance.ipv6 || 'none'}`)
+    }
 
   // 10. 选择存储池
   let storagePool = await db.resolveStoragePoolForExistingInstance(task.instanceId, host.id, { packageId: instance.package_id })
@@ -1433,11 +1494,13 @@ async function executeRecreateTask(
   try {
     await deleteInstance(client, oldIncusId)
     console.log(`[Recreate] 旧实例 ${oldIncusId} 删除成功`)
+    oldInstanceDeleted = true
   } catch (err) {
     // 检查是否是实例不存在的错误
     const errMsg = err instanceof Error ? err.message : String(err)
     if (errMsg.includes('not found') || errMsg.includes('Instance not found')) {
       console.log(`[Recreate] 旧实例 ${oldIncusId} 已不存在，继续执行`)
+      oldInstanceDeleted = true
     } else {
       // 其他错误则抛出，不继续执行
       console.error(`[Recreate] 删除旧实例失败:`, err)
@@ -1448,6 +1511,7 @@ async function executeRecreateTask(
   // 12. 创建新实例
   console.log(`[Recreate] 创建新实例 ${newIncusId}...`)
   await createInstance(client, incusConfig)
+  newInstanceCreated = true
 
   if (instanceType === 'container') {
     await updateInstance(client, newIncusId, {
@@ -1490,6 +1554,11 @@ async function executeRecreateTask(
   // 15. 更新数据库（使用新分配的 IP）
   await updateInstanceTaskProgress(task.id, 'updating_database')
 
+  const cleanupResult = await cleanupRecreatedInstanceRecords(task.instanceId, instance.host_id)
+  if (cleanupResult.deletedPortMappingsCount > 0) {
+    console.log(`[Recreate] 删除 ${cleanupResult.deletedPortMappingsCount} 个端口映射记录并释放 NAT 端口计数`)
+  }
+
   // 更新 IpAddress 表（删除旧的 IPv4 记录，创建新的）
   if (instance.ipv4 && instance.ipv4 !== newIPv4) {
     // 删除旧的 IPv4 地址记录
@@ -1527,6 +1596,7 @@ async function executeRecreateTask(
       // 保留计费字段：packagePlanId, billingPrice, billingCycle, expiresAt, autoRenew 等
     }
   })
+  databaseSwitched = true
 
   // 同步流量限速状态
   const { reconcileTrafficStateForInstanceIds } = await import('../services/traffic-scheduler.js')
@@ -1541,6 +1611,42 @@ async function executeRecreateTask(
   })
 
   await createLog(task.userId, 'instance', 'instance.recreate', `Recreated instance "${instance.name}" with image ${imageAlias} (${oldIncusId} -> ${newIncusId})`, 'success', { instanceId: task.instanceId })
+  } catch (err) {
+    if (!databaseSwitched && newInstanceCreated) {
+      try {
+        try {
+          await stopInstance(client, newIncusId, true)
+        } catch {
+          // The replacement may not have reached running state; deletion can still proceed.
+        }
+        await deleteInstance(client, newIncusId)
+        console.log(`[Recreate] 已清理失败的新实例 ${newIncusId}`)
+      } catch (cleanupErr) {
+        console.warn(`[Recreate] 清理失败的新实例 ${newIncusId} 失败:`, cleanupErr)
+      }
+    }
+
+    if (!databaseSwitched && oldInstanceDeleted) {
+      try {
+        await cleanupRecreatedInstanceRecords(task.instanceId, instance.host_id)
+        await prisma.ipAddress.deleteMany({ where: { instanceId: task.instanceId } })
+        await prisma.ipv6Subnet.deleteMany({ where: { instanceId: task.instanceId } })
+        await prisma.instance.update({
+          where: { id: task.instanceId },
+          data: {
+            status: 'error',
+            ipv4: null,
+            ipv6: null
+          }
+        })
+        console.warn(`[Recreate] 旧实例 ${oldIncusId} 已删除但新实例未成功交付，数据库实例已标记为 error`)
+      } catch (dbErr) {
+        console.warn(`[Recreate] 标记重建失败实例为 error 失败:`, dbErr)
+      }
+    }
+
+    throw err
+  }
 }
 
 /**
@@ -1851,6 +1957,31 @@ async function executeChangeHostTask(
       await tx.ipAddress.deleteMany({ where: { instanceId: task.instanceId } })
       await tx.ipv6Subnet.deleteMany({ where: { instanceId: task.instanceId } })
 
+      if (actualIpv6) {
+        await advisoryTransactionLockString(tx, IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE, actualIpv6)
+        const existingIpv6 = await tx.instance.findFirst({
+          where: {
+            id: { not: task.instanceId },
+            status: { not: 'deleted' },
+            OR: [
+              { ipv6: actualIpv6 },
+              {
+                ipAddresses: {
+                  some: {
+                    address: actualIpv6,
+                    type: 'inet6'
+                  }
+                }
+              }
+            ]
+          },
+          select: { id: true }
+        })
+        if (existingIpv6) {
+          throw new Error(`IP address ${actualIpv6} is already assigned to instance ${existingIpv6.id}`)
+        }
+      }
+
       await tx.instance.update({
         where: { id: task.instanceId },
         data: {
@@ -2140,6 +2271,10 @@ async function executeCloneTask(
     // 查找所有 proxy 设备并更新端口
     const updatedDevices: Record<string, unknown> = {}
     const newPortMappings: Array<{ protocol: 'tcp' | 'udp'; publicPort: number; privatePort: number; remark: string | null }> = []
+    const selectedClonePortsByProtocol: Record<'tcp' | 'udp', Set<number>> = {
+      tcp: new Set<number>(),
+      udp: new Set<number>()
+    }
 
     for (const [deviceName, device] of Object.entries(devices)) {
       if (device.type === 'proxy' && device.listen) {
@@ -2160,10 +2295,15 @@ async function executeCloneTask(
           const privatePort = connectMatch ? parseInt(connectMatch[3]) : (sourceMapping?.private_port || 80)
 
           // 分配新端口
-          const newPublicPort = await db.allocatePort(host.id, protocol)
+          const newPublicPort = await db.allocatePort(
+            host.id,
+            protocol,
+            Array.from(selectedClonePortsByProtocol[protocol])
+          )
           if (!newPublicPort) {
             throw new Error('No available port for clone operation')
           }
+          selectedClonePortsByProtocol[protocol].add(newPublicPort)
 
           // 根据网络模式决定 listen 地址
           let cloneListenAddr: string
@@ -2499,43 +2639,65 @@ async function executeCloneTask(
     // 如果创建失败，尝试清理已创建的资源
 
     // 1. 清理 Incus 中的实例
+    let incusCloneReleased = false
     try {
       await deleteInstance(client, newIncusId)
       console.log(`[Clone] 已清理失败的 Incus 实例: ${newIncusId}`)
+      incusCloneReleased = true
     } catch (cleanupErr) {
-      console.warn(`[Clone] 清理失败 Incus 实例失败（可能不存在）: ${newIncusId}`, cleanupErr)
+      const cleanupMessage = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+      if (cleanupMessage.includes('not found') || cleanupMessage.includes('Instance not found')) {
+        incusCloneReleased = true
+      } else {
+        console.warn(`[Clone] 清理失败 Incus 实例失败，保留数据库记录和资源占用以便人工处理: ${newIncusId}`, cleanupErr)
+      }
     }
 
-    // 2. 清理数据库中的 Instance 记录（如果已创建）
-    // Instance 删除后会级联删除 PortMapping、IpAddress 等记录
+    // 2. 只有确认 Incus 克隆实例已清理，才删除数据库记录；否则保留为 error 供人工处理。
+    let cloneDbRecordRemoved = false
+    let cloneDbRecordExists = false
     try {
       // 检查是否存在具有该 incusId 的实例记录
       const existingInstance = await prisma.instance.findFirst({
         where: { incusId: newIncusId }
       })
       if (existingInstance) {
-        await prisma.instance.delete({
-          where: { id: existingInstance.id }
-        })
-        console.log(`[Clone] 已清理失败的 Instance 记录: ${existingInstance.id}`)
+        cloneDbRecordExists = true
+        if (incusCloneReleased) {
+          await prisma.instance.delete({
+            where: { id: existingInstance.id }
+          })
+          cloneDbRecordRemoved = true
+          console.log(`[Clone] 已清理失败的 Instance 记录: ${existingInstance.id}`)
+        } else {
+          await prisma.instance.update({
+            where: { id: existingInstance.id },
+            data: { status: 'error' }
+          })
+          console.warn(`[Clone] Incus 克隆实例 ${newIncusId} 未确认清理，数据库实例 ${existingInstance.id} 已标记为 error`)
+        }
       }
     } catch (dbCleanupErr) {
       console.warn(`[Clone] 清理 Instance 记录失败:`, dbCleanupErr)
     }
 
-    // 3. 回滚已预占的宿主机资源（如果已预占）
+    // 3. 只有确认远端和数据库记录都清理后，才释放已预占宿主机资源。
     if (resourcesReserved) {
-      try {
-        await db.rollbackResources({
-          hostId: sourceInstance.host_id,
-          cpu: sourceInstance.cpu,
-          memory: sourceInstance.memory,
-          disk: sourceInstance.disk,
-          portCount: newPortMappingsCount
-        })
-        console.log(`[Clone] 已回滚宿主机资源`)
-      } catch (rollbackErr) {
-        console.error(`[Clone] 回滚资源失败:`, rollbackErr)
+      if (incusCloneReleased && (!cloneDbRecordExists || cloneDbRecordRemoved)) {
+        try {
+          await db.rollbackResources({
+            hostId: sourceInstance.host_id,
+            cpu: sourceInstance.cpu,
+            memory: sourceInstance.memory,
+            disk: sourceInstance.disk,
+            portCount: newPortMappingsCount
+          })
+          console.log(`[Clone] 已回滚宿主机资源`)
+        } catch (rollbackErr) {
+          console.error(`[Clone] 回滚资源失败:`, rollbackErr)
+        }
+      } else {
+        console.warn(`[Clone] 克隆实例 ${newIncusId} 未确认完全清理，暂不释放宿主机资源占用`)
       }
     }
 

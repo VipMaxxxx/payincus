@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { buildApiUrl } from '@/utils/api-url'
 import type {
   LoginRequest,
   LoginResponse,
@@ -295,9 +296,12 @@ function buildTicketFormData(
   return formData
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+
 // 创建 axios 实例
 const http: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
+  withCredentials: true,
   timeout: TIMEOUT.DEFAULT,
   headers: {
     'Content-Type': 'application/json'
@@ -385,7 +389,7 @@ async function proactiveRefreshToken(): Promise<string | null> {
   lastRefreshAttempt = now
 
   try {
-    const refreshResponse = await fetch('/api/auth/refresh', {
+    const refreshResponse = await fetch(buildApiUrl('/auth/refresh'), {
       method: 'POST',
       credentials: 'include', // 重要：发送 Cookie（包含 refreshToken）
       headers: {
@@ -539,7 +543,7 @@ http.interceptors.response.use(
 
       try {
         // 尝试刷新 token（使用 fetch API，避免触发拦截器循环）
-        const refreshResponse = await fetch('/api/auth/refresh', {
+        const refreshResponse = await fetch(buildApiUrl('/auth/refresh'), {
           method: 'POST',
           credentials: 'include', // 重要：发送 Cookie（包含 refreshToken）
           headers: {
@@ -641,8 +645,8 @@ const api = {
       http.post('/auth/send-verification-code', { email, turnstileToken }),
     sendForgotPasswordCode: (email: string, turnstileToken?: string): Promise<{ message: string; expiresAt: string }> =>
       http.post('/auth/forgot-password/send-code', { email, turnstileToken }),
-    resetPassword: (email: string, code: string, turnstileToken?: string): Promise<{ message: string; twoFactorDisabled: boolean }> =>
-      http.post('/auth/forgot-password/reset', { email, code, turnstileToken }),
+    resetPassword: (email: string, code: string, password: string, turnstileToken?: string): Promise<{ message: string; twoFactorDisabled: boolean }> =>
+      http.post('/auth/forgot-password/reset', { email, code, password, turnstileToken }),
     me: (): Promise<{ user: User }> => http.get('/auth/me'),
     logout: (): Promise<void> => http.post('/auth/logout'),
     generateInvite: (data: GenerateInviteRequest = {}): Promise<{ code: string; codes?: string[]; count?: number; expiresAt?: string; url?: string }> =>
@@ -715,9 +719,9 @@ const api = {
     recalculateQuota: (id: number): Promise<UserQuota> =>
       http.post(`/users/${id}/quota/recalculate`),
     delete: (id: number): Promise<void> => http.delete(`/users/${id}`),
-    // 管理员重置用户密码（自动生成）
-    resetPassword: (id: number): Promise<{ message: string; newPassword: string; username: string }> =>
-      http.post(`/users/${id}/reset-password`),
+    // 管理员重置用户密码
+    resetPassword: (id: number, password: string): Promise<{ message: string; username: string }> =>
+      http.post(`/users/${id}/reset-password`, { password }),
     // 管理员取消用户 2FA
     disable2FA: (id: number): Promise<{ message: string }> =>
       http.post(`/users/${id}/disable-2fa`),
@@ -919,7 +923,7 @@ const api = {
     // 已废弃：直接获取下载 URL（不安全，保留用于向后兼容）
     // @deprecated 使用 getDownloadToken 替代
     getExportDownloadUrl: (id: number, taskId: string): string =>
-      `/api/instances/${id}/backups/export/${taskId}/download`,
+      buildApiUrl(`/instances/${id}/backups/export/${taskId}/download`),
     // 备份恢复
     restoreBackup: (id: number, backupId: number): Promise<{ taskId: string; status: string; message: string }> =>
       http.post(`/instances/${id}/restore/${backupId}`, {}, { timeout: TIMEOUT.SNAPSHOT }),

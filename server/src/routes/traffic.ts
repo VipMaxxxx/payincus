@@ -13,12 +13,22 @@ import {
     getTrafficPeriod
 } from '../services/traffic-utils.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
+import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'
 
 /**
  * BigInt 序列化为字符串
  */
 function serializeBigInt(value: bigint | null): string | null {
     return value === null ? null : value.toString()
+}
+
+function parsePositiveId(value: string): number | null {
+    if (!/^\d+$/.test(value)) {
+        return null
+    }
+
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 }
 
 /**
@@ -70,8 +80,8 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
     fastify.get<{ Params: { userId: string } }>('/users/:userId/traffic', {
         onRequest: [fastify.authenticateAdmin]
     }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
-        const userId = parseInt(request.params.userId, 10)
-        if (isNaN(userId)) {
+        const userId = parsePositiveId(request.params.userId)
+        if (userId === null) {
             return reply.code(400).send({ error: 'Invalid user ID' })
         }
 
@@ -100,20 +110,23 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
      */
     fastify.put<{
         Params: { userId: string }
-        Body: { monthlyLimit: string | null }
+        Body: { monthlyLimit: unknown }
     }>('/users/:userId/traffic/limit', {
         onRequest: [fastify.authenticateAdmin]
     }, async (request: FastifyRequest<{
         Params: { userId: string }
-        Body: { monthlyLimit: string | null }
+        Body: { monthlyLimit: unknown }
     }>, reply: FastifyReply) => {
-        const userId = parseInt(request.params.userId, 10)
-        if (isNaN(userId)) {
+        const userId = parsePositiveId(request.params.userId)
+        if (userId === null) {
             return reply.code(400).send({ error: 'Invalid user ID' })
         }
 
         const { monthlyLimit } = request.body
-        const limit = monthlyLimit ? BigInt(monthlyLimit) : null
+        const limit = parseNullablePostgresBigIntInput(monthlyLimit)
+        if (limit === undefined) {
+            return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid monthly traffic limit'))
+        }
 
         await trafficDb.updateUserTrafficLimit(userId, limit)
         const quota = await trafficDb.getUserTrafficQuota(userId)
@@ -138,8 +151,8 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
     fastify.get<{ Params: { instanceId: string } }>('/instances/:instanceId/traffic', {
         onRequest: [fastify.authenticate]
     }, async (request: FastifyRequest<{ Params: { instanceId: string } }>, reply: FastifyReply) => {
-        const instanceId = parseInt(request.params.instanceId, 10)
-        if (isNaN(instanceId)) {
+        const instanceId = parsePositiveId(request.params.instanceId)
+        if (instanceId === null) {
             return reply.code(400).send({ error: 'Invalid instance ID' })
         }
 
@@ -201,8 +214,8 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
         Params: { instanceId: string }
         Querystring: { days?: string }
     }>, reply: FastifyReply) => {
-        const instanceId = parseInt(request.params.instanceId, 10)
-        if (isNaN(instanceId)) {
+        const instanceId = parsePositiveId(request.params.instanceId)
+        if (instanceId === null) {
             return reply.code(400).send({ error: 'Invalid instance ID' })
         }
 
@@ -261,20 +274,23 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
      */
     fastify.put<{
         Params: { instanceId: string }
-        Body: { monthlyLimit: string | null }
+        Body: { monthlyLimit: unknown }
     }>('/instances/:instanceId/traffic/limit', {
         onRequest: [fastify.authenticateAdmin]
     }, async (request: FastifyRequest<{
         Params: { instanceId: string }
-        Body: { monthlyLimit: string | null }
+        Body: { monthlyLimit: unknown }
     }>, reply: FastifyReply) => {
-        const instanceId = parseInt(request.params.instanceId, 10)
-        if (isNaN(instanceId)) {
+        const instanceId = parsePositiveId(request.params.instanceId)
+        if (instanceId === null) {
             return reply.code(400).send({ error: 'Invalid instance ID' })
         }
 
         const { monthlyLimit } = request.body
-        const limit = monthlyLimit ? BigInt(monthlyLimit) : null
+        const limit = parseNullablePostgresBigIntInput(monthlyLimit)
+        if (limit === undefined) {
+            return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid monthly traffic limit'))
+        }
 
         await trafficDb.updateInstanceTrafficLimit(instanceId, limit)
         const instance = await trafficDb.getInstanceTrafficInfo(instanceId)
@@ -298,8 +314,8 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
     }, async (request: FastifyRequest<{
         Params: { instanceId: string }
     }>, reply: FastifyReply) => {
-        const instanceId = parseInt(request.params.instanceId, 10)
-        if (isNaN(instanceId)) {
+        const instanceId = parsePositiveId(request.params.instanceId)
+        if (instanceId === null) {
             return reply.code(400).send({ error: 'Invalid instance ID' })
         }
 
@@ -343,8 +359,8 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
         Params: { hostId: string }
     }>, reply: FastifyReply) => {
         const { user } = request as any
-        const hostId = parseInt(request.params.hostId, 10)
-        if (isNaN(hostId)) {
+        const hostId = parsePositiveId(request.params.hostId)
+        if (hostId === null) {
             return reply.code(400).send({ error: 'Invalid host ID' })
         }
 

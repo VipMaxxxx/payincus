@@ -18,9 +18,81 @@ import { renameInstance as renameIncusInstance } from '../lib/incus/incus-restor
 import { getProxySitesByInstanceId, deleteProxySite } from '../db/proxy-sites.js'
 import { createCaddyClient } from '../lib/caddy-client.js'
 import { prisma } from '../db/prisma.js'
+import {
+    claimOperationVerificationRequirement
+} from '../lib/operation-verification.js'
 
 // 自定义 nanoid，只使用小写字母和数字（Incus 不允许下划线）
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+const TRANSFER_TARGET_USERNAME_MAX_LENGTH = 64
+const TRANSFER_REMARK_MAX_LENGTH = 200
+
+type TransferCreateInput = {
+    targetUsername: string
+    remark?: string
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeTransferCreateInput(input: unknown): TransferCreateInput {
+    if (!isPlainRecord(input)) {
+        throw { error: 'Invalid request body' }
+    }
+
+    if (typeof input.targetUsername !== 'string') {
+        throw { error: 'Target username is required' }
+    }
+    const targetUsername = input.targetUsername.trim()
+    if (targetUsername.length < 2 || targetUsername.length > TRANSFER_TARGET_USERNAME_MAX_LENGTH) {
+        throw { error: `Target username must be 2-${TRANSFER_TARGET_USERNAME_MAX_LENGTH} characters` }
+    }
+
+    let remark: string | undefined
+    if (input.remark !== undefined && input.remark !== null) {
+        if (typeof input.remark !== 'string') {
+            throw { error: 'Remark must be a string' }
+        }
+        const normalizedRemark = input.remark.trim()
+        if (normalizedRemark.length > TRANSFER_REMARK_MAX_LENGTH) {
+            throw { error: `Remark must be no longer than ${TRANSFER_REMARK_MAX_LENGTH} characters` }
+        }
+        remark = normalizedRemark || undefined
+    }
+
+    return { targetUsername, remark }
+}
+
+async function requireVerifiedOperation(
+    reply: FastifyReply,
+    userId: number,
+    resourceId: number
+): Promise<boolean> {
+    const verification = await claimOperationVerificationRequirement(userId, 'transfer_instance', resourceId)
+    if (!verification.verified) {
+        reply.code(403).send({
+            error: 'Sensitive operation requires verification',
+            code: 'VERIFICATION_REQUIRED',
+            required: verification.required
+        })
+        return false
+    }
+    return true
+}
+
+function parsePositiveInteger(value: string | undefined, fallback?: number, max = Number.MAX_SAFE_INTEGER): number | null {
+    if (!value) {
+        return fallback ?? null
+    }
+
+    const parsed = Number(value)
+    if (!Number.isInteger(parsed) || parsed <= 0 || parsed > max) {
+        return fallback ?? null
+    }
+
+    return parsed
+}
 
 export default async function transferRoutes(fastify: FastifyInstance) {
     // 搜索用户（用于转移时选择接收方）
@@ -83,11 +155,17 @@ export default async function transferRoutes(fastify: FastifyInstance) {
         Params: { instanceId: string }
         Body: { targetUsername: string; remark?: string }
     }>, reply: FastifyReply) => {
-        const instanceId = parseInt(request.params.instanceId, 10)
-        const { targetUsername, remark } = request.body
+        const instanceId = parsePositiveInteger(request.params.instanceId)
+        let transferInput: TransferCreateInput
+        try {
+            transferInput = normalizeTransferCreateInput(request.body)
+        } catch (error) {
+            return reply.code(400).send(error)
+        }
+        const { targetUsername, remark } = transferInput
         const { user } = request
 
-        if (isNaN(instanceId)) {
+        if (instanceId === null) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 
@@ -128,7 +206,7 @@ export default async function transferRoutes(fastify: FastifyInstance) {
             return reply.code(400).send(apiError(ErrorCode.TRANSFER_ALREADY_PENDING))
         }
 
-
+        if (!await requireVerifiedOperation(reply, user.id, instanceId)) return
 
         // 查找目标用户
         const targetUser = await db.findUserByUsername(targetUsername)
@@ -202,6 +280,9 @@ export default async function transferRoutes(fastify: FastifyInstance) {
             if (errorMsg === 'INSUFFICIENT_BALANCE') {
                 return reply.code(400).send(apiError(ErrorCode.TRANSFER_INSUFFICIENT_BALANCE))
             }
+            if (errorMsg === 'BALANCE_CONFLICT') {
+                return reply.code(409).send(apiError(ErrorCode.TRANSFER_INSUFFICIENT_BALANCE, '余额正在处理，请稍后重试'))
+            }
             if (errorMsg === 'TRANSFER_ALREADY_PENDING') {
                 return reply.code(400).send(apiError(ErrorCode.TRANSFER_ALREADY_PENDING))
             }
@@ -257,9 +338,9 @@ export default async function transferRoutes(fastify: FastifyInstance) {
         }
 
         const options = {
-            page: parseInt(page, 10),
-            pageSize: parseInt(pageSize, 10),
-            status: status as any,
+            page: parsePositiveInteger(page, 1) ?? 1,
+            pageSize: parsePositiveInteger(pageSize, 20, 100) ?? 20,
+            status,
             search: search as string | undefined
         }
 
@@ -312,10 +393,10 @@ export default async function transferRoutes(fastify: FastifyInstance) {
     fastify.get<{ Params: { id: string } }>('/:id', {
         onRequest: [fastify.authenticateUser]
     }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-        const transferId = parseInt(request.params.id, 10)
+        const transferId = parsePositiveInteger(request.params.id)
         const { user } = request
 
-        if (isNaN(transferId)) {
+        if (transferId === null) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 
@@ -353,10 +434,10 @@ export default async function transferRoutes(fastify: FastifyInstance) {
     fastify.post<{ Params: { id: string } }>('/:id/accept', {
         onRequest: [fastify.authenticateUser]
     }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-        const transferId = parseInt(request.params.id, 10)
+        const transferId = parsePositiveInteger(request.params.id)
         const { user } = request
 
-        if (isNaN(transferId)) {
+        if (transferId === null) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 
@@ -650,11 +731,11 @@ export default async function transferRoutes(fastify: FastifyInstance) {
         Params: { id: string }
         Body: { reason?: string }
     }>, reply: FastifyReply) => {
-        const transferId = parseInt(request.params.id, 10)
+        const transferId = parsePositiveInteger(request.params.id)
         const { reason } = request.body
         const { user } = request
 
-        if (isNaN(transferId)) {
+        if (transferId === null) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 
@@ -730,10 +811,10 @@ export default async function transferRoutes(fastify: FastifyInstance) {
     fastify.post<{ Params: { id: string } }>('/:id/cancel', {
         onRequest: [fastify.authenticateUser]
     }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-        const transferId = parseInt(request.params.id, 10)
+        const transferId = parsePositiveInteger(request.params.id)
         const { user } = request
 
-        if (isNaN(transferId)) {
+        if (transferId === null) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 
@@ -808,10 +889,10 @@ export default async function transferRoutes(fastify: FastifyInstance) {
     fastify.post<{ Params: { id: string } }>('/:id/push', {
         onRequest: [fastify.authenticateUser]
     }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-        const transferId = parseInt(request.params.id, 10)
+        const transferId = parsePositiveInteger(request.params.id)
         const { user } = request
 
-        if (isNaN(transferId)) {
+        if (transferId === null) {
             return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
         }
 

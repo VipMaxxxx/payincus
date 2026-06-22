@@ -29,6 +29,17 @@ import {
 const dnsResolve4 = promisify(dns.resolve4)
 const dnsResolve6 = promisify(dns.resolve6)
 
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
 export default async function proxySitesRoutes(fastify: FastifyInstance) {
   /**
    * 获取实例的反代站点列表
@@ -42,9 +53,9 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = parseInt(request.params.id, 10)
+    const instanceId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -132,10 +143,10 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = parseInt(request.params.id, 10)
+    const instanceId = parsePositiveRouteId(request.params.id)
     const { domain, targetPort, httpsEnabled = true, remark } = request.body
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -249,10 +260,10 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     Params: { id: string; siteId: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = parseInt(request.params.id, 10)
-    const siteId = parseInt(request.params.siteId, 10)
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const siteId = parsePositiveRouteId(request.params.siteId)
 
-    if (isNaN(instanceId) || isNaN(siteId)) {
+    if (!instanceId || !siteId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -328,10 +339,10 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     Params: { id: string; siteId: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = parseInt(request.params.id, 10)
-    const siteId = parseInt(request.params.siteId, 10)
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const siteId = parsePositiveRouteId(request.params.siteId)
 
-    if (isNaN(instanceId) || isNaN(siteId)) {
+    if (!instanceId || !siteId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -491,10 +502,10 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     Params: { id: string; siteId: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = parseInt(request.params.id, 10)
-    const siteId = parseInt(request.params.siteId, 10)
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const siteId = parsePositiveRouteId(request.params.siteId)
 
-    if (isNaN(instanceId) || isNaN(siteId)) {
+    if (!instanceId || !siteId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -613,11 +624,11 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = parseInt(request.params.id, 10)
-    const siteId = parseInt(request.params.siteId, 10)
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const siteId = parsePositiveRouteId(request.params.siteId)
     const { targetPort, httpsEnabled, remark } = request.body
 
-    if (isNaN(instanceId) || isNaN(siteId)) {
+    if (!instanceId || !siteId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -775,10 +786,10 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     Params: { id: string; siteId: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = parseInt(request.params.id, 10)
-    const siteId = parseInt(request.params.siteId, 10)
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const siteId = parsePositiveRouteId(request.params.siteId)
 
-    if (isNaN(instanceId) || isNaN(siteId)) {
+    if (!instanceId || !siteId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -876,10 +887,10 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     Params: { id: string; siteId: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = parseInt(request.params.id, 10)
-    const siteId = parseInt(request.params.siteId, 10)
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const siteId = parsePositiveRouteId(request.params.siteId)
 
-    if (isNaN(instanceId) || isNaN(siteId)) {
+    if (!instanceId || !siteId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 

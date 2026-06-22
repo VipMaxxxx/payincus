@@ -28,13 +28,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-export async function cleanupStaleHostNotificationEmailTasks(): Promise<number> {
+export async function cleanupStaleHostNotificationEmailTasks(
+  timeoutMs: number = HOST_NOTIFICATION_EMAIL_PROCESSING_TIMEOUT_MS
+): Promise<number> {
+  const timeoutThreshold = new Date(Date.now() - timeoutMs)
+
   const result = await prisma.hostNotificationEmailTask.updateMany({
-    where: { status: 'PROCESSING' },
+    where: {
+      status: 'PROCESSING',
+      OR: [
+        { startedAt: null },
+        { startedAt: { lt: timeoutThreshold } }
+      ]
+    },
     data: {
       status: 'PENDING',
       scheduledFor: new Date(),
-      lastError: '系统重启，邮件任务已重新入队',
+      lastError: '邮件任务处理超时，已重新入队',
       startedAt: null,
       finishedAt: null
     }
@@ -199,8 +209,11 @@ export async function claimNextHostNotificationEmailTask(): Promise<HostNotifica
 }
 
 export async function markHostNotificationEmailTaskSent(taskId: number): Promise<void> {
-  await prisma.hostNotificationEmailTask.update({
-    where: { id: taskId },
+  await prisma.hostNotificationEmailTask.updateMany({
+    where: {
+      id: taskId,
+      status: 'PROCESSING'
+    },
     data: {
       status: 'SENT',
       lastError: null,
@@ -215,8 +228,12 @@ export async function retryOrFailHostNotificationEmailTask(
   errorMessage: string
 ): Promise<void> {
   if (currentRetryCount >= HOST_NOTIFICATION_EMAIL_MAX_RETRIES) {
-    await prisma.hostNotificationEmailTask.update({
-      where: { id: taskId },
+    await prisma.hostNotificationEmailTask.updateMany({
+      where: {
+        id: taskId,
+        status: 'PROCESSING',
+        retryCount: currentRetryCount
+      },
       data: {
         status: 'FAILED',
         lastError: errorMessage,
@@ -226,8 +243,12 @@ export async function retryOrFailHostNotificationEmailTask(
     return
   }
 
-  await prisma.hostNotificationEmailTask.update({
-    where: { id: taskId },
+  await prisma.hostNotificationEmailTask.updateMany({
+    where: {
+      id: taskId,
+      status: 'PROCESSING',
+      retryCount: currentRetryCount
+    },
     data: {
       status: 'PENDING',
       retryCount: { increment: 1 },

@@ -2,7 +2,7 @@
 import BadgeImage from '@/components/BadgeImage.vue'
 import type { BadgeOwnership } from '@/types/api'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   visible: boolean
   badges: BadgeOwnership[]
   title: string

@@ -29,6 +29,17 @@ const bodyB = {
 assert.equal(stableStringifyAgentBody(bodyA), stableStringifyAgentBody(bodyB))
 assert.equal(createAgentBodyHash(bodyA), createAgentBodyHash(bodyB))
 
+const bodyWithHtmlSensitiveChars = {
+  metrics: {
+    label: '<tag>&value',
+    load1: 1.23
+  }
+}
+assert.equal(
+  stableStringifyAgentBody(bodyWithHtmlSensitiveChars),
+  '{"metrics":{"label":"<tag>&value","load1":1.23}}'
+)
+
 const secret = generateAgentSecret()
 const payload = {
   method: 'POST',

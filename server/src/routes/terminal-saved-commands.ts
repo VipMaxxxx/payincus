@@ -8,6 +8,17 @@ import {
 import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
 export default async function terminalSavedCommandRoutes(fastify: FastifyInstance) {
   fastify.get('/', {
     onRequest: [fastify.authenticate]
@@ -104,8 +115,8 @@ export default async function terminalSavedCommandRoutes(fastify: FastifyInstanc
       description?: string | null
     }
   }>, reply: FastifyReply) => {
-    const commandId = Number(request.params.id)
-    if (Number.isNaN(commandId)) {
+    const commandId = parsePositiveRouteId(request.params.id)
+    if (!commandId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -140,8 +151,8 @@ export default async function terminalSavedCommandRoutes(fastify: FastifyInstanc
   }>('/:id', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const commandId = Number(request.params.id)
-    if (Number.isNaN(commandId)) {
+    const commandId = parsePositiveRouteId(request.params.id)
+    if (!commandId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 

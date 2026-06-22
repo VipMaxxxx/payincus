@@ -6,7 +6,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { createHash } from 'crypto'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync, statSync } from 'fs'
 import { isIP } from 'net'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
@@ -42,6 +42,7 @@ interface AgentInstallCommandBody {
   enabled?: boolean
   baseUrl?: string
   binaryUrl?: string
+  binarySha256?: string
 }
 
 interface AgentHeartbeatBody {
@@ -56,6 +57,11 @@ interface AgentHeartbeatBody {
 
 interface AgentBinaryParams {
   name: string
+}
+
+interface AgentBinaryQuery {
+  v?: string
+  sha256?: string
 }
 
 interface AgentInstallTokenParams {
@@ -102,13 +108,15 @@ const agentModel = prisma.hostAgent
 const nonceModel = prisma.hostAgentNonce
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const agentBinaryNamePattern = /^incudal-agent-linux-(amd64|arm64)$/
+const agentBinaryNamePattern = /^incudal-agent-linux-(amd64|arm64)(?:\.gz)?$/
 const agentReleaseBinaryNamePattern = /^incudal-agent-(x86_64|aarch64)-v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/
-const defaultAgentReleaseRepository = 'retired-release-repository'
+const defaultAgentReleaseRepository = 'VipMaxxxx/incudal'
 const githubApiBaseUrl = 'https://api.github.com'
 const githubDownloadBaseUrl = 'https://github.com'
 const agentReleaseCacheTtlMs = 5 * 60 * 1000
 const agentBinaryDownloadLimitBytes = 64 * 1024 * 1024
+const agentReleaseFetchTimeoutMs = 15 * 1000
+const maxAgentInstallUrlLength = 2048
 const defaultAgentHeartbeatIntervalSeconds = 30
 const minAgentHeartbeatIntervalSeconds = 5
 const maxAgentHeartbeatIntervalSeconds = 3600
@@ -116,9 +124,13 @@ const minAgentOfflineThresholdSeconds = 120
 let agentReleaseManifestCache: { expiresAt: number; manifest: AgentUpgradeManifest } | null = null
 let agentReleaseAssetCache: { expiresAt: number; assets: Map<string, GitHubReleaseAsset> } | null = null
 let agentReleaseBinaryCache: { expiresAt: number; binaries: Map<string, Buffer> } | null = null
+const positiveRouteIdPattern = /^[1-9]\d*$/
 
 function parsePositiveId(value: string): number | null {
-  const id = Number.parseInt(value, 10)
+  if (!positiveRouteIdPattern.test(value)) {
+    return null
+  }
+  const id = Number(value)
   return Number.isSafeInteger(id) && id > 0 ? id : null
 }
 
@@ -278,6 +290,9 @@ function normalizeBaseUrl(value: string | null | undefined): string | null {
   if (!trimmed) {
     return null
   }
+  if (trimmed.length > maxAgentInstallUrlLength) {
+    return null
+  }
 
   try {
     const parsed = new URL(trimmed)
@@ -285,6 +300,23 @@ function normalizeBaseUrl(value: string | null | undefined): string | null {
       return null
     }
     return `${parsed.protocol}//${parsed.host}`
+  } catch {
+    return null
+  }
+}
+
+function normalizeAgentBinaryUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed || trimmed.length > maxAgentInstallUrlLength) {
+    return null
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null
+    }
+    return parsed.toString()
   } catch {
     return null
   }
@@ -329,6 +361,7 @@ function buildAgentInstallCommand(input: {
   panelUrl: string
   installToken: string
   binaryUrl?: string | null
+  binarySha256?: string | null
 }): string {
   const envParts = [
     `INCUDAL_PANEL_URL=${shellEscape(input.panelUrl)}`,
@@ -338,6 +371,7 @@ function buildAgentInstallCommand(input: {
   const binaryUrl = input.binaryUrl?.trim()
   if (binaryUrl) {
     envParts.push(`INCUDAL_AGENT_BINARY_URL=${shellEscape(binaryUrl)}`)
+    envParts.push(`INCUDAL_AGENT_BINARY_SHA256=${shellEscape(input.binarySha256 || '')}`)
   }
 
   return `curl -fsSL ${shellEscape(`${input.panelUrl}/api/agent/install.sh`)} | sudo env ${envParts.join(' ')} bash`
@@ -357,6 +391,78 @@ function getAgentReleaseRepository(): string {
   const configured = process.env.INCUDAL_AGENT_RELEASE_REPOSITORY?.trim() || process.env.GITHUB_REPOSITORY?.trim()
   const repository = configured || defaultAgentReleaseRepository
   return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? repository : defaultAgentReleaseRepository
+}
+
+function getLocalAgentReleaseDir(): string | null {
+  const dir = process.env.INCUDAL_AGENT_RELEASE_DIR?.trim()
+  return dir && dir.startsWith('/') && !dir.includes('\0') ? dir : null
+}
+
+function hashLocalFile(path: string): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
+}
+
+function normalizeLocalAgentManifest(raw: unknown, releaseDir: string): AgentUpgradeManifest | null {
+  if (!isRecord(raw)) {
+    return null
+  }
+  const version = normalizeAgentBinaryVersion(raw.version)
+  const files = isRecord(raw.files) ? raw.files : null
+  if (!version || !files) {
+    return null
+  }
+
+  const manifest: AgentUpgradeManifest = {
+    version,
+    generatedAt: sanitizeShortString(raw.generatedAt, 80) ?? new Date().toISOString(),
+    files: {}
+  }
+
+  for (const platform of ['linux-amd64', 'linux-arm64'] as const) {
+    const file = isRecord(files[platform]) ? files[platform] : null
+    const name = sanitizeShortString(file?.name, 128)
+    const sha256 = sanitizeShortString(file?.sha256, 128)?.toLowerCase()
+    if (!file || !name || !agentBinaryNamePattern.test(name) || !isSha256(sha256)) {
+      return null
+    }
+
+    const path = join(releaseDir, name)
+    if (!existsSync(path)) {
+      return null
+    }
+    const stat = statSync(path)
+    if (!stat.isFile() || stat.size <= 0 || stat.size > agentBinaryDownloadLimitBytes) {
+      return null
+    }
+    if (hashLocalFile(path) !== sha256) {
+      return null
+    }
+
+    manifest.files![platform] = {
+      name,
+      sha256,
+      size: stat.size,
+      gzip: typeof file.gzip === 'boolean' ? file.gzip : name.endsWith('.gz')
+    }
+  }
+
+  return manifest
+}
+
+async function readLocalAgentUpgradeManifest(): Promise<AgentUpgradeManifest | null> {
+  const releaseDir = getLocalAgentReleaseDir()
+  if (!releaseDir) {
+    return null
+  }
+
+  try {
+    const manifestPath = join(releaseDir, 'manifest.json')
+    const raw = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    return normalizeLocalAgentManifest(raw, releaseDir)
+  } catch (error) {
+    console.warn('[AgentRelease] Failed to read local Agent release manifest', error)
+    return null
+  }
 }
 
 function getAgentReleaseApiUrl(): string {
@@ -380,6 +486,35 @@ function getAgentReleaseAssetUrl(tag: string, assetName: string): string {
   return `${githubDownloadBaseUrl}/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(assetName)}`
 }
 
+function assertTrustedAgentReleaseDownloadUrl(rawUrl: string): void {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    throw new Error('Agent release download URL is invalid')
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Agent release download URL must use HTTPS')
+  }
+
+  const repository = getAgentReleaseRepository()
+  const encodedRepositoryPath = `/${repository}/`
+  if (parsed.hostname === 'api.github.com') {
+    if (!parsed.pathname.startsWith(`/repos${encodedRepositoryPath}`)) {
+      throw new Error('Agent release API URL repository is not trusted')
+    }
+    return
+  }
+  if (parsed.hostname === 'github.com') {
+    if (!parsed.pathname.startsWith(encodedRepositoryPath)) {
+      throw new Error('Agent release download URL repository is not trusted')
+    }
+    return
+  }
+
+  throw new Error('Agent release download URL host is not trusted')
+}
+
 function normalizeAgentReleaseVersion(tagName: string | undefined): string | null {
   const tag = sanitizeShortString(tagName, 128)
   if (!tag?.startsWith('agent-')) {
@@ -387,6 +522,11 @@ function normalizeAgentReleaseVersion(tagName: string | undefined): string | nul
   }
   const version = tag.slice('agent-'.length)
   return /^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(version) ? version : null
+}
+
+function normalizeAgentBinaryVersion(value: unknown): string | null {
+  const version = sanitizeShortString(value, 128)
+  return version && /^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(version) ? version : null
 }
 
 function agentApiBinaryNameToReleaseAssetName(name: string, version: string): string | null {
@@ -411,7 +551,8 @@ function releaseAssetNameToAgentPlatform(name: string): 'linux-amd64' | 'linux-a
 
 async function fetchJsonFromGitHub<T>(url: string): Promise<T> {
   const response = await fetch(url, {
-    headers: getGitHubHeaders('application/vnd.github+json')
+    headers: getGitHubHeaders('application/vnd.github+json'),
+    signal: AbortSignal.timeout(agentReleaseFetchTimeoutMs)
   })
   if (!response.ok) {
     throw new Error(`GitHub request failed: ${response.status} ${response.statusText}`)
@@ -443,9 +584,11 @@ async function fetchAgentReleaseAssetSha256(asset: GitHubReleaseAsset): Promise<
   if (!downloadUrl) {
     return null
   }
+  assertTrustedAgentReleaseDownloadUrl(downloadUrl)
 
   const response = await fetch(downloadUrl, {
-    headers: getGitHubHeaders('application/octet-stream')
+    headers: getGitHubHeaders('application/octet-stream'),
+    signal: AbortSignal.timeout(agentReleaseFetchTimeoutMs)
   })
   if (!response.ok || !response.body) {
     throw new Error(`Agent release asset download failed: ${response.status} ${response.statusText}`)
@@ -467,6 +610,15 @@ async function fetchAgentReleaseAssetSha256(asset: GitHubReleaseAsset): Promise<
 async function readAgentUpgradeManifest(): Promise<AgentUpgradeManifest | null> {
   if (agentReleaseManifestCache && agentReleaseManifestCache.expiresAt > Date.now()) {
     return agentReleaseManifestCache.manifest
+  }
+
+  const localManifest = await readLocalAgentUpgradeManifest()
+  if (localManifest) {
+    agentReleaseManifestCache = {
+      expiresAt: Date.now() + agentReleaseCacheTtlMs,
+      manifest: localManifest
+    }
+    return localManifest
   }
 
   let release: GitHubRelease | null = null
@@ -566,6 +718,30 @@ async function downloadAgentReleaseBinary(input: {
     return cachedBinary
   }
 
+  const localReleaseDir = getLocalAgentReleaseDir()
+  if (localReleaseDir && agentBinaryNamePattern.test(input.name)) {
+    const localPath = join(localReleaseDir, input.name)
+    if (existsSync(localPath)) {
+      const stat = statSync(localPath)
+      if (!stat.isFile() || stat.size <= 0 || stat.size > agentBinaryDownloadLimitBytes) {
+        return null
+      }
+      const binary = readFileSync(localPath)
+      const actualSha256 = createHash('sha256').update(binary).digest('hex')
+      if (!isSha256(input.expectedSha256) || actualSha256 !== input.expectedSha256.toLowerCase()) {
+        throw new Error(`Local Agent release binary sha256 mismatch: expected=${input.expectedSha256} actual=${actualSha256}`)
+      }
+      if (!agentReleaseBinaryCache || agentReleaseBinaryCache.expiresAt <= Date.now()) {
+        agentReleaseBinaryCache = {
+          expiresAt: Date.now() + agentReleaseCacheTtlMs,
+          binaries: new Map()
+        }
+      }
+      agentReleaseBinaryCache.binaries.set(cacheKey, binary)
+      return binary
+    }
+  }
+
   const asset = await getAgentReleaseAsset(input.name, input.version)
   const assetName = sanitizeShortString(asset?.name, 256)
   if (!assetName || !agentReleaseBinaryNamePattern.test(assetName)) {
@@ -573,8 +749,10 @@ async function downloadAgentReleaseBinary(input: {
   }
 
   const downloadUrl = sanitizeShortString(asset?.url, 2048) ?? getAgentReleaseAssetUrl(`agent-${input.version}`, assetName)
+  assertTrustedAgentReleaseDownloadUrl(downloadUrl)
   const response = await fetch(downloadUrl, {
-    headers: getGitHubHeaders('application/octet-stream')
+    headers: getGitHubHeaders('application/octet-stream'),
+    signal: AbortSignal.timeout(agentReleaseFetchTimeoutMs)
   })
   if (!response.ok || !response.body) {
     throw new Error(`Agent release binary download failed: ${response.status} ${response.statusText}`)
@@ -704,7 +882,6 @@ async function serializeAgent(agent: HostAgentRecord) {
     id: agent.id,
     hostId: agent.hostId,
     agentId: agent.agentId,
-    secretHash: agent.secretHash,
     enabled: agent.enabled,
     status: deriveAgentStatus(agent),
     version: agent.version,
@@ -896,8 +1073,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     }
   })
 
-  fastify.get<{ Params: AgentBinaryParams }>('/binary/:name', async (
-    request: FastifyRequest<{ Params: AgentBinaryParams }>,
+  fastify.get<{ Params: AgentBinaryParams; Querystring: AgentBinaryQuery }>('/binary/:name', async (
+    request: FastifyRequest<{ Params: AgentBinaryParams; Querystring: AgentBinaryQuery }>,
     reply: FastifyReply
   ) => {
     const { name } = request.params
@@ -905,23 +1082,47 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid Agent binary name', code: 'INVALID_AGENT_BINARY_NAME' })
     }
 
-    const manifest = await readAgentUpgradeManifest()
-    const version = sanitizeShortString(manifest?.version, 128)
+    const requestedVersion = typeof request.query?.v === 'string' ? normalizeAgentBinaryVersion(request.query.v) : null
+    const requestedSha256 = typeof request.query?.sha256 === 'string' && isSha256(request.query.sha256)
+      ? request.query.sha256.toLowerCase()
+      : null
+    if (
+      (request.query?.v !== undefined || request.query?.sha256 !== undefined) &&
+      (!requestedVersion || !requestedSha256)
+    ) {
+      return reply.code(400).send({
+        error: 'Agent binary version and sha256 must be provided together',
+        code: 'AGENT_BINARY_QUERY_INCOMPLETE'
+      })
+    }
+
+    let version = requestedVersion
+    let expectedSha256 = requestedSha256
+    let binaryName = name
     const platform = name.includes('amd64') ? 'linux-amd64' : 'linux-arm64'
-    const file = manifest?.files?.[platform]
-    if (!manifest || !version || !file || !isSha256(file.sha256)) {
-      return reply.code(404).send({ error: 'Agent binary not found', code: 'AGENT_BINARY_NOT_FOUND' })
+    if (!version || !expectedSha256) {
+      const manifest = await readAgentUpgradeManifest()
+      version = sanitizeShortString(manifest?.version, 128)
+      const file = manifest?.files?.[platform]
+      if (!manifest || !version || !file || !isSha256(file.sha256)) {
+        return reply.code(404).send({ error: 'Agent binary not found', code: 'AGENT_BINARY_NOT_FOUND' })
+      }
+      const manifestName = sanitizeShortString(file.name, 128)
+      if (manifestName && agentBinaryNamePattern.test(manifestName)) {
+        binaryName = manifestName
+      }
+      expectedSha256 = file.sha256.toLowerCase()
     }
 
     let binary: Buffer | null = null
     try {
       binary = await downloadAgentReleaseBinary({
-        name,
+        name: binaryName,
         version,
-        expectedSha256: file.sha256
+        expectedSha256
       })
     } catch (error) {
-      request.log.warn({ error, name, version }, 'Failed to download Agent release binary')
+      request.log.warn({ error, name: binaryName, version }, 'Failed to download Agent release binary')
       return reply.code(502).send({ error: 'Agent binary download failed', code: 'AGENT_BINARY_DOWNLOAD_FAILED' })
     }
 
@@ -931,7 +1132,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
 
     return reply
       .header('Content-Type', 'application/octet-stream')
-      .header('Content-Disposition', `attachment; filename="${name}"`)
+      .header('Content-Disposition', `attachment; filename="${binaryName}"`)
       .header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
       .header('Pragma', 'no-cache')
       .header('Expires', '0')
@@ -1191,7 +1392,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
         properties: {
           enabled: { type: 'boolean' },
           baseUrl: { type: 'string', minLength: 1 },
-          binaryUrl: { type: 'string', minLength: 1 }
+          binaryUrl: { type: 'string', minLength: 1 },
+          binarySha256: { type: 'string', minLength: 64, maxLength: 64 }
         }
       }
     }
@@ -1202,6 +1404,28 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     const hostId = parsePositiveId(request.params.hostId)
     if (!hostId) {
       return reply.code(400).send({ error: 'Invalid host ID', code: 'INVALID_HOST_ID' })
+    }
+    const baseUrlInput = request.body?.baseUrl
+    if (typeof baseUrlInput === 'string' && !normalizeBaseUrl(baseUrlInput)) {
+      return reply.code(400).send({
+        error: 'baseUrl must be a valid HTTP(S) URL',
+        code: 'INVALID_AGENT_BASE_URL'
+      })
+    }
+
+    const binaryUrlInput = request.body?.binaryUrl
+    const binaryUrl = typeof binaryUrlInput === 'string' ? normalizeAgentBinaryUrl(binaryUrlInput) : null
+    if (typeof binaryUrlInput === 'string' && !binaryUrl) {
+      return reply.code(400).send({
+        error: 'binaryUrl must be a valid HTTP(S) URL',
+        code: 'INVALID_AGENT_BINARY_URL'
+      })
+    }
+    if (binaryUrl && !isSha256(request.body.binarySha256)) {
+      return reply.code(400).send({
+        error: 'binarySha256 is required when binaryUrl is provided',
+        code: 'AGENT_BINARY_SHA256_REQUIRED'
+      })
     }
 
     const panelUrl = derivePanelUrl(request, request.body?.baseUrl)
@@ -1218,7 +1442,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     const installCommand = buildAgentInstallCommand({
       panelUrl,
       installToken: result.installToken,
-      binaryUrl: request.body?.binaryUrl
+      binaryUrl,
+      binarySha256: request.body?.binarySha256
     })
 
     await createLog(

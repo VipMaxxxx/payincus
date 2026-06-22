@@ -27,6 +27,7 @@ import {
 
 // 任务超时时间（15分钟，大规模实例需要更长时间）
 const JOB_TIMEOUT_MS = 15 * 60 * 1000
+let schedulerStarted = false
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
     const parsed = Number.parseInt(value || '', 10)
@@ -138,15 +139,14 @@ async function checkAndThrottle(
         const remoteThrottled = await isThrottled(client, instance.incusId)
 
         if (instance.trafficStatus !== 'LIMITED' || !remoteThrottled) {
-            const wasMarkedLimited = instance.trafficStatus === 'LIMITED'
             try {
                 await applyThrottle(client, instance.incusId)
-                await trafficDb.updateInstanceTrafficStatus(instance.id, 'LIMITED')
+                const shouldNotifyThrottled = await trafficDb.markInstanceTrafficLimitedIfNeeded(instance.id)
                 if (userOverLimit && userQuota.trafficStatus !== 'LIMITED') {
                     await trafficDb.updateUserTrafficStatus(instance.userId, 'LIMITED')
                 }
 
-                if (!wasMarkedLimited) {
+                if (shouldNotifyThrottled) {
                     await sendTrafficThrottledNotification(instance.userId, instance.name, instance.host.name)
                 }
 
@@ -161,14 +161,15 @@ async function checkAndThrottle(
         // 检查预警
         const userWarning = isWarningThreshold(userQuota.monthlyTrafficUsed, userEffectiveLimit)
         if (userWarning && !isWarningSentThisMonth(userQuota.trafficWarningSentAt)) {
-            await trafficDb.updateUserTrafficStatus(instance.userId, 'WARNING')
-            await trafficDb.updateUserTrafficWarningSentAt(instance.userId, new Date())
-            await sendTrafficWarningNotification(
-                instance.userId,
-                userQuota.monthlyTrafficUsed,
-                userEffectiveLimit!
-            )
-            console.log(`[Traffic] Sent warning to user ${instance.userId}`)
+            const shouldNotifyWarning = await trafficDb.markUserTrafficWarningIfNeeded(instance.userId, new Date())
+            if (shouldNotifyWarning) {
+                await sendTrafficWarningNotification(
+                    instance.userId,
+                    userQuota.monthlyTrafficUsed,
+                    userEffectiveLimit!
+                )
+                console.log(`[Traffic] Sent warning to user ${instance.userId}`)
+            }
         }
     }
 }
@@ -656,6 +657,12 @@ export async function runSystemCleanupJob(): Promise<void> {
  * 启动流量调度器
  */
 export function startTrafficScheduler(): void {
+    if (schedulerStarted) {
+        return
+    }
+
+    schedulerStarted = true
+
     // 每 3 分钟采集流量
     schedule('*/3 * * * *', () => {
         runTrafficJob().catch(console.error)

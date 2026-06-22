@@ -9,6 +9,28 @@ import type { Prisma } from '@prisma/client'
 
 // ==================== 日志模块常量 ====================
 
+const LOG_MODULE_FILTER_MAX_LENGTH = 64
+const LOG_SEARCH_FILTER_MAX_LENGTH = 128
+const LOG_INSTANCE_NAME_FILTER_MAX_LENGTH = 128
+
+function normalizeLogFilterValue(value: string | undefined, maxLength: number): string | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  return trimmed.slice(0, maxLength)
+}
+
+function parseValidDateFilter(value: string | undefined): Date | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date
+}
+
 export const LogModule = {
   SECURITY: 'security',
   INSTANCE: 'instance',
@@ -282,36 +304,41 @@ export async function getLogsPaginated(options: {
   } = options
   const safePage = Number.isInteger(page) && page > 0 ? page : 1
   const safePageSize = Number.isInteger(pageSize) ? Math.min(Math.max(pageSize, 1), 100) : 20
+  const safeModule = normalizeLogFilterValue(module, LOG_MODULE_FILTER_MAX_LENGTH)
+  const safeSearch = normalizeLogFilterValue(search, LOG_SEARCH_FILTER_MAX_LENGTH)
+  const safeInstanceName = normalizeLogFilterValue(instanceName, LOG_INSTANCE_NAME_FILTER_MAX_LENGTH)
+  const safeStartDate = parseValidDateFilter(startDate)
+  const safeEndDate = parseValidDateFilter(endDate)
 
   const where: Prisma.LogWhereInput = {}
 
-  if (module) {
-    where.module = module
+  if (safeModule) {
+    where.module = safeModule
   }
 
   if (userId !== undefined) {
     where.userId = userId
   }
 
-  if (startDate || endDate) {
+  if (safeStartDate || safeEndDate) {
     where.createdAt = {
-      ...(startDate ? { gte: new Date(startDate) } : {}),
-      ...(endDate ? { lte: new Date(endDate) } : {})
+      ...(safeStartDate ? { gte: safeStartDate } : {}),
+      ...(safeEndDate ? { lte: safeEndDate } : {})
     }
   }
 
-  if (search) {
+  if (safeSearch) {
     where.OR = [
-      { content: { contains: search, mode: 'insensitive' } },
-      { action: { contains: search, mode: 'insensitive' } },
-      { user: { username: { contains: search, mode: 'insensitive' } } }
+      { content: { contains: safeSearch, mode: 'insensitive' } },
+      { action: { contains: safeSearch, mode: 'insensitive' } },
+      { user: { username: { contains: safeSearch, mode: 'insensitive' } } }
     ]
   }
 
   if (instanceId !== undefined) {
     combineWhereWithAnd(where, { instanceId })
-  } else if (instanceName) {
-    combineWhereWithAnd(where, { content: { contains: `instance "${instanceName}"`, mode: 'insensitive' } })
+  } else if (safeInstanceName) {
+    combineWhereWithAnd(where, { content: { contains: `instance "${safeInstanceName}"`, mode: 'insensitive' } })
   }
 
   // 获取总数

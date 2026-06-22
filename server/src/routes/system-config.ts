@@ -10,6 +10,7 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 import { testSmtpConnection, sendTestEmail, clearTransporterCache } from '../lib/mailer.js'
 import { logAdminAction } from '../lib/security.js'
 import { isSupportedInviteCostResource, serializeInviteCostOptions, type InviteCostOption } from '../lib/invite-pricing.js'
+import { assertSafeHttpUrl } from '../lib/outbound-security.js'
 
 interface UpdateConfigsBody {
     configs: Array<{ key: string; value: string }>
@@ -43,6 +44,8 @@ const maxRegisterGiftBalance = 99999999.99
 const maxRegisterGiftPoints = 2147483647
 const maxTransferFee = 100
 const decimalMoneyPattern = /^\d+(?:\.\d{1,2})?$/
+const positiveIntegerConfigPattern = /^[1-9]\d*$/
+const nonNegativeIntegerConfigPattern = /^(?:0|[1-9]\d*)$/
 
 function isHttpImageUrl(value: string): boolean {
     try {
@@ -51,6 +54,27 @@ function isHttpImageUrl(value: string): boolean {
     } catch {
         return false
     }
+}
+
+function parsePositiveConfigInteger(value: string, max = Number.MAX_SAFE_INTEGER): number | null {
+    const trimmed = value.trim()
+    if (!positiveIntegerConfigPattern.test(trimmed)) return null
+    const parsed = Number(trimmed)
+    return Number.isSafeInteger(parsed) && parsed <= max ? parsed : null
+}
+
+function parseNonNegativeConfigInteger(value: string, max = Number.MAX_SAFE_INTEGER): number | null {
+    const trimmed = value.trim()
+    if (!nonNegativeIntegerConfigPattern.test(trimmed)) return null
+    const parsed = Number(trimmed)
+    return Number.isSafeInteger(parsed) && parsed <= max ? parsed : null
+}
+
+function parseDecimalMoneyConfig(value: string, max: number): number | null {
+    const trimmed = value.trim()
+    if (!decimalMoneyPattern.test(trimmed)) return null
+    const parsed = Number(trimmed)
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= max ? parsed : null
 }
 
 export default async function systemConfigRoutes(fastify: FastifyInstance) {
@@ -100,8 +124,8 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
         let popupPromoPackage: PublicPromoPackage | null = null
 
         if (popupPromoImageUrl && isHttpImageUrl(popupPromoImageUrl) && popupPromoPackageId) {
-            const packageId = Number(popupPromoPackageId)
-            if (Number.isInteger(packageId) && packageId > 0) {
+            const packageId = parsePositiveConfigInteger(popupPromoPackageId, 2147483647)
+            if (packageId) {
                 const pkg = await db.prisma.package.findFirst({
                     where: {
                         id: packageId,
@@ -402,10 +426,11 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                     config.value = config.value.trim()
                 }
                 if (config.key === 'popup_promo_package_id' && config.value) {
-                    const packageId = Number(config.value)
-                    if (!Number.isInteger(packageId) || packageId <= 0) {
+                    const packageId = parsePositiveConfigInteger(config.value, 2147483647)
+                    if (!packageId) {
                         return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                     }
+                    config.value = packageId.toString()
                     const pkg = await db.prisma.package.findFirst({
                         where: { id: packageId, active: true, globalShared: true },
                         select: { id: true }
@@ -416,6 +441,19 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                 }
                 if (config.key === 'ticket_image_lsky_api_version' && !['v1', 'v2'].includes(config.value)) {
                     return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
+                }
+                if (config.key === 'ticket_image_lsky_base_url') {
+                    config.value = config.value.trim()
+                    if (config.value && config.value.length > 1000) {
+                        return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
+                    }
+                    if (config.value) {
+                        try {
+                            await assertSafeHttpUrl(config.value, 'Lsky base URL')
+                        } catch {
+                            return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
+                        }
+                    }
                 }
                 if ((config.key === 'telegram_group_join_mode' || config.key === 'telegram_vip_group_join_mode') && !telegramGroupJoinModes.has(config.value)) {
                     return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
@@ -455,14 +493,14 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                         if (!isSupportedInviteCostResource(resource)) {
                             return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                         }
-                        const amount = Number((item as { amount?: unknown }).amount)
-                        if (!Number.isFinite(amount) || amount < 0) {
+                        const amount = (item as { amount?: unknown }).amount
+                        if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
                             return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                         }
                         if (resource === 'balance' && amount > maxRegisterGiftBalance) {
                             return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                         }
-                        if (resource === 'points' && (!Number.isInteger(amount) || amount > maxRegisterGiftPoints)) {
+                        if (resource === 'points' && (!Number.isSafeInteger(amount) || amount > maxRegisterGiftPoints)) {
                             return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                         }
                         options.push({
@@ -477,11 +515,8 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                 continue
             }
             if (decimalKeys.includes(config.key)) {
-                const num = Number(config.value)
-                if (isNaN(num) || num < 0) {
-                    return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
-                }
-                if (config.key === 'free_site_register_gift_balance' && num > maxRegisterGiftBalance) {
+                const num = parseDecimalMoneyConfig(config.value, maxRegisterGiftBalance)
+                if (num === null) {
                     return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                 }
                 config.value = (Math.round(num * 100) / 100).toString()
@@ -502,11 +537,13 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
             }
             // 数字类型配置（smtp_port 等）
             if (numberKeys.includes(config.key)) {
-                const num = Number(config.value)
-                if (!Number.isInteger(num) || num < 0) {
-                    return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
-                }
-                if (config.key === 'free_site_register_gift_points' && num > maxRegisterGiftPoints) {
+                const max = config.key === 'free_site_register_gift_points'
+                    ? maxRegisterGiftPoints
+                    : config.key === 'smtp_port'
+                        ? 65535
+                        : Number.MAX_SAFE_INTEGER
+                const num = parseNonNegativeConfigInteger(config.value, max)
+                if (num === null) {
                     return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                 }
                 if ((config.key === 'telegram_group_invite_expire_minutes' || config.key === 'telegram_vip_group_invite_expire_minutes') && (num < 1 || num > 10080)) {
@@ -519,10 +556,11 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                 continue
             }
             // 验证数值类型（默认配额等）
-            const num = parseInt(config.value, 10)
-            if (isNaN(num) || num < 0) {
+            const num = parseNonNegativeConfigInteger(config.value)
+            if (num === null) {
                 return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
             }
+            config.value = num.toString()
         }
 
         const freeSiteConfig = requestConfigMap.get('free_site_mode')
@@ -578,6 +616,8 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
             'smtp_password',
             'ticket_image_lsky_token',
             'telegram_bot_token',
+            'telegram_group_chat_id',
+            'telegram_vip_group_chat_id',
             'telegram_webhook_secret'
         ]
         const safeConfigs = configs.map(c => ({

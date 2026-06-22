@@ -15,6 +15,7 @@ import { getAllAdminUserIds } from '../db/users.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { deleteTicketImageFromLsky, uploadTicketImageToLsky } from '../lib/lsky.js'
 import { sendNotification } from '../lib/notifier.js'
+import { assertSafeHttpUrl } from '../lib/outbound-security.js'
 
 // 工单状态类型
 type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
@@ -63,6 +64,7 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/gif',
   'image/avif'
 ])
+const POSITIVE_INTEGER_ID_RE = /^[1-9]\d*$/
 
 interface ParsedTicketPayload {
   fields: Record<string, string>
@@ -79,17 +81,91 @@ function isMultipartRequest(request: FastifyRequest): boolean {
     && (request as FastifyRequest & { isMultipart: () => boolean }).isMultipart()
 }
 
-function parseInteger(value: string | undefined): number | null {
-  if (!value || !value.trim()) {
+function parsePositiveId(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? value : null
+  }
+
+  if (typeof value !== 'string' || !POSITIVE_INTEGER_ID_RE.test(value)) {
     return null
   }
 
   const parsed = Number(value)
-  return Number.isInteger(parsed) ? parsed : null
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parseOptionalPositiveId(value: unknown): number | undefined | null {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+
+  return parsePositiveId(value)
+}
+
+function parsePositiveInteger(value: unknown, fallback: number, max?: number): number {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return max === undefined ? parsed : Math.min(parsed, max)
 }
 
 function sanitizeContent(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeTicketStatusBody(body: unknown): TicketStatus | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null
+  }
+
+  const { status } = body as { status?: unknown }
+  return typeof status === 'string' && VALID_STATUSES.includes(status as TicketStatus)
+    ? status as TicketStatus
+    : null
+}
+
+function normalizeAllowedImageMimeType(value: string | null | undefined): string | null {
+  const normalized = value?.split(';')[0]?.trim().toLowerCase()
+  return normalized && ALLOWED_IMAGE_MIME_TYPES.has(normalized) ? normalized : null
+}
+
+async function readRemoteImageBody(response: Response): Promise<Buffer> {
+  const contentLength = Number(response.headers.get('content-length') || '0')
+  if (Number.isFinite(contentLength) && contentLength > MAX_TICKET_IMAGE_SIZE) {
+    throw new Error('Remote image is too large')
+  }
+
+  if (!response.body) {
+    const buffer = Buffer.from(await response.arrayBuffer())
+    if (buffer.length > MAX_TICKET_IMAGE_SIZE) {
+      throw new Error('Remote image is too large')
+    }
+    return buffer
+  }
+
+  const reader = response.body.getReader()
+  const chunks: Buffer[] = []
+  let totalBytes = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = Buffer.from(value)
+      totalBytes += chunk.length
+      if (totalBytes > MAX_TICKET_IMAGE_SIZE) {
+        throw new Error('Remote image is too large')
+      }
+      chunks.push(chunk)
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined)
+    throw error
+  }
+
+  return Buffer.concat(chunks, totalBytes)
 }
 
 async function readTicketPayload(request: FastifyRequest): Promise<ParsedTicketPayload> {
@@ -201,7 +277,12 @@ function isHandledTicketPayloadError(error: unknown): error is Error {
     'A ticket message can contain at most',
     'Each image must be no larger than',
     'Lsky',
-    'image bed'
+    'image bed',
+    'Cannot reply to a closed ticket',
+    'must use http or https',
+    'Private or',
+    'Unable to resolve hostname',
+    'Targets resolving'
   ].some(fragment => error.message.includes(fragment))
 }
 
@@ -227,11 +308,15 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       }
 
       const payload = await readTicketPayload(request)
-      const instanceId = parseInteger(payload.fields.instanceId)
+      const instanceId = parseOptionalPositiveId(payload.fields.instanceId)
       const subject = sanitizeContent(payload.fields.subject)
       const category = sanitizeContent(payload.fields.category)
       const priority = sanitizeContent(payload.fields.priority) as TicketPriority
       const content = sanitizeContent(payload.fields.content)
+
+      if (instanceId === null) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+      }
 
       // 输入验证
       if (!subject || subject.length < 2 || subject.length > 200) {
@@ -255,7 +340,7 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       let host: Awaited<ReturnType<typeof getTicketHostOwnership>> | null = null
 
       // 如果选择了实例，验证实例存在且属于该用户
-      if (instanceId && typeof instanceId === 'number') {
+      if (instanceId !== undefined) {
         instance = await db.getInstanceById(instanceId)
         if (!instance || instance.user_id !== user.id) {
           return reply.code(400).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
@@ -277,7 +362,7 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       const result = await ticketDb.createTicket({
         userId: user.id,
         hostId,
-        instanceId: instanceId || null,
+        instanceId: instanceId ?? null,
         subject,
         category: category || 'general',
         priority: priority || 'normal',
@@ -362,8 +447,8 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     const result = await ticketDb.getUserTickets(user.id, {
       status: status as TicketStatus | 'active' | undefined,
       search,
-      page: page ? Number(page) : 1,
-      pageSize: pageSize ? Math.min(Number(pageSize), 100) : 10
+      page: parsePositiveInteger(page, 1),
+      pageSize: parsePositiveInteger(pageSize, 10, 100)
     })
 
     return reply.send(result)
@@ -381,9 +466,9 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     Params: { attachmentId: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const attachmentId = Number(request.params.attachmentId)
+    const attachmentId = parsePositiveId(request.params.attachmentId)
 
-    if (isNaN(attachmentId)) {
+    if (attachmentId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -399,7 +484,9 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
 
     let upstream: Response
     try {
-      upstream = await fetch(attachment.url, {
+      const safeImageUrl = await assertSafeHttpUrl(attachment.url, 'Ticket attachment image URL')
+      upstream = await fetch(safeImageUrl.toString(), {
+        redirect: 'manual',
         signal: AbortSignal.timeout(TICKET_PROXY_FETCH_TIMEOUT_MS)
       })
     } catch {
@@ -410,10 +497,26 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       return reply.code(502).send(apiError(ErrorCode.INTERNAL_ERROR, 'Failed to load remote image'))
     }
 
-    const imageBuffer = Buffer.from(await upstream.arrayBuffer())
+    const upstreamMimeType = normalizeAllowedImageMimeType(upstream.headers.get('content-type'))
+    const storedMimeType = normalizeAllowedImageMimeType(attachment.mimeType)
+    if (upstream.headers.get('content-type') && !upstreamMimeType) {
+      return reply.code(502).send(apiError(ErrorCode.INTERNAL_ERROR, 'Remote file is not an allowed image type'))
+    }
+    const responseMimeType = upstreamMimeType ?? storedMimeType
+    if (!responseMimeType) {
+      return reply.code(502).send(apiError(ErrorCode.INTERNAL_ERROR, 'Attachment image type is not allowed'))
+    }
+
+    let imageBuffer: Buffer
+    try {
+      imageBuffer = await readRemoteImageBody(upstream)
+    } catch {
+      return reply.code(502).send(apiError(ErrorCode.INTERNAL_ERROR, 'Remote image is too large'))
+    }
 
     reply.header('Cache-Control', 'private, max-age=300')
-    reply.header('Content-Type', attachment.mimeType)
+    reply.header('X-Content-Type-Options', 'nosniff')
+    reply.header('Content-Type', responseMimeType)
     return reply.send(imageBuffer)
   })
 
@@ -429,9 +532,9 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const ticketId = Number(request.params.id)
+    const ticketId = parsePositiveId(request.params.id)
 
-    if (isNaN(ticketId)) {
+    if (ticketId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -467,10 +570,10 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     Querystring: { page?: number; pageSize?: number }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const ticketId = Number(request.params.id)
+    const ticketId = parsePositiveId(request.params.id)
     const { page, pageSize } = request.query
 
-    if (isNaN(ticketId)) {
+    if (ticketId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -481,8 +584,8 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     }
 
     const result = await ticketDb.getTicketMessages(ticketId, {
-      page: page ? Number(page) : 1,
-      pageSize: pageSize ? Math.min(Number(pageSize), 100) : 50
+      page: parsePositiveInteger(page, 1),
+      pageSize: parsePositiveInteger(pageSize, 50, 100)
     })
 
     return reply.send(result)
@@ -501,9 +604,9 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const ticketId = Number(request.params.id)
+    const ticketId = parsePositiveId(request.params.id)
 
-    if (isNaN(ticketId)) {
+    if (ticketId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -615,10 +718,10 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{
     Params: { id: string; messageId: string }
   }>, reply: FastifyReply) => {
-    const ticketId = Number(request.params.id)
-    const messageId = Number(request.params.messageId)
+    const ticketId = parsePositiveId(request.params.id)
+    const messageId = parsePositiveId(request.params.messageId)
 
-    if (isNaN(ticketId) || isNaN(messageId)) {
+    if (ticketId === null || messageId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -656,15 +759,15 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     Body: { status: TicketStatus }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const ticketId = Number(request.params.id)
-    const { status } = request.body
+    const ticketId = parsePositiveId(request.params.id)
+    const status = normalizeTicketStatusBody(request.body)
 
-    if (isNaN(ticketId)) {
+    if (ticketId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
     // 验证状态
-    if (!status || !VALID_STATUSES.includes(status)) {
+    if (!status) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid status'))
     }
 
@@ -712,9 +815,9 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const ticketId = Number(request.params.id)
+    const ticketId = parsePositiveId(request.params.id)
 
-    if (isNaN(ticketId)) {
+    if (ticketId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -807,10 +910,10 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const hostId = Number(request.params.hostId)
+    const hostId = parsePositiveId(request.params.hostId)
     const { status, search, page, pageSize } = request.query
 
-    if (isNaN(hostId)) {
+    if (hostId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -828,8 +931,8 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     const result = await ticketDb.getHostTickets(hostId, {
       status: status as TicketStatus | 'active' | undefined,
       search,
-      page: page ? Number(page) : 1,
-      pageSize: pageSize ? Math.min(Number(pageSize), 100) : 10
+      page: parsePositiveInteger(page, 1),
+      pageSize: parsePositiveInteger(pageSize, 10, 100)
     })
 
     return reply.send(result)
@@ -864,10 +967,15 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     const { user } = request
     const { status, hostId, sourceType, search, page, pageSize } = request.query
     const isAdmin = user.role === 'admin'
+    const parsedHostId = parseOptionalPositiveId(hostId)
 
     // 验证状态
     if (status && status !== 'active' && !VALID_STATUSES.includes(status as TicketStatus)) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid status'))
+    }
+
+    if (parsedHostId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
     if (sourceType && !['all', 'user', 'official', 'hosted'].includes(sourceType)) {
@@ -878,13 +986,13 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    if (hostId && sourceType === 'user') {
+    if (parsedHostId !== undefined && sourceType === 'user') {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'User tickets cannot be filtered by host'))
     }
 
     // 如果指定了 hostId，验证所有权（管理员跳过验证）
-    if (hostId && !isAdmin) {
-      const host = await db.getHostById(Number(hostId))
+    if (parsedHostId !== undefined && !isAdmin) {
+      const host = await db.getHostById(parsedHostId)
       if (!host || host.user_id !== user.id) {
         return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
       }
@@ -893,11 +1001,11 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     // 管理员查看所有工单，普通用户只查看自己节点的工单
     const result = await ticketDb.getOwnerAllTickets(isAdmin ? undefined : user.id, {
       status: status as TicketStatus | 'active' | undefined,
-      hostId: hostId ? Number(hostId) : undefined,
+      hostId: parsedHostId,
       sourceType: sourceType && sourceType !== 'all' ? sourceType : undefined,
       search,
-      page: page ? Number(page) : 1,
-      pageSize: pageSize ? Math.min(Number(pageSize), 100) : 10
+      page: parsePositiveInteger(page, 1),
+      pageSize: parsePositiveInteger(pageSize, 10, 100)
     })
 
     return reply.send(result)

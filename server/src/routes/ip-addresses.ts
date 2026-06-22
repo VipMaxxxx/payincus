@@ -10,7 +10,7 @@ import * as db from '../db/index.js'
 import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { getIncusClient } from '../lib/incus/index.js'
-import { generateRandomIPv6, generateRandomSubnet, isIpv6InSubnet, isStrictValidIpv6 } from '../lib/ip-calculator.js'
+import { generateRandomIPv6, generateRandomSubnet, isIpv6InSubnet, isIpv6SubnetWithinSubnet, isStrictValidIpv6 } from '../lib/ip-calculator.js'
 import { syncInstanceNetwork, isValidIpv6Subnet } from '../lib/network-payload-builder.js'
 import type { IPv6Config } from '../types/incus.js'
 import * as ipv6Subnets from '../db/ipv6-subnets.js'
@@ -36,6 +36,21 @@ interface Ipv6SubnetRecord {
     createdAt: Date
 }
 
+const POSITIVE_INTEGER_ID_RE = /^[1-9]\d*$/
+
+function parsePositiveId(value: unknown): number | null {
+    if (typeof value === 'number') {
+        return Number.isSafeInteger(value) && value > 0 ? value : null
+    }
+
+    if (typeof value !== 'string' || !POSITIVE_INTEGER_ID_RE.test(value)) {
+        return null
+    }
+
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) ? parsed : null
+}
+
 export default async function ipAddressRoutes(fastify: FastifyInstance) {
     /**
      * 获取实例的所有 IP 地址
@@ -45,9 +60,9 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
         { onRequest: [fastify.authenticateUser] },
         async (request: FastifyRequest<{ Params: { instanceId: string } }>, reply: FastifyReply) => {
             const user = request.user!
-            const instanceId = parseInt(request.params.instanceId, 10)
+            const instanceId = parsePositiveId(request.params.instanceId)
 
-            if (isNaN(instanceId)) {
+            if (instanceId === null) {
                 return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
             }
 
@@ -101,10 +116,10 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
         },
         async (request: FastifyRequest<{ Params: { instanceId: string }; Body: { customAddress?: string } }>, reply: FastifyReply) => {
             const user = request.user!
-            const instanceId = parseInt(request.params.instanceId, 10)
+            const instanceId = parsePositiveId(request.params.instanceId)
             const { customAddress } = request.body || {}
 
-            if (isNaN(instanceId)) {
+            if (instanceId === null) {
                 return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
             }
 
@@ -209,14 +224,25 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
             const deviceName = 'eth1'
 
             // 创建 IP 记录（校验已通过，可以安全创建）
-            const ipRecord = await db.createIpAddress({
-                address: newIPv6,
-                type: 'inet6',
-                isPrimary: false,
-                device: deviceName,
-                instanceId,
-                isCustom
-            })
+            let ipRecord: Awaited<ReturnType<typeof db.createIpAddress>>
+            try {
+                ipRecord = await db.createIpAddress({
+                    address: newIPv6,
+                    type: 'inet6',
+                    isPrimary: false,
+                    device: deviceName,
+                    instanceId,
+                    isCustom
+                })
+            } catch (error) {
+                if (db.isIpAddressAlreadyExistsError(error)) {
+                    return reply.code(409).send({
+                        error: 'IPv6 address already in use',
+                        code: 'IPV6_ALREADY_EXISTS'
+                    })
+                }
+                throw error
+            }
 
             try {
                 // 新架构: 使用 syncInstanceNetwork 同步 eth1 配置
@@ -291,10 +317,10 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
             reply: FastifyReply
         ) => {
             const user = request.user!
-            const instanceId = parseInt(request.params.instanceId, 10)
-            const ipId = parseInt(request.params.ipId, 10)
+            const instanceId = parsePositiveId(request.params.instanceId)
+            const ipId = parsePositiveId(request.params.ipId)
 
-            if (isNaN(instanceId) || isNaN(ipId)) {
+            if (instanceId === null || ipId === null) {
                 return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
             }
 
@@ -366,7 +392,7 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
                     }
                 } catch (err) {
                     console.warn(`Failed to remove IP ${ipRecord.address} from eth1:`, err)
-                    // 继续删除数据库记录
+                    return reply.code(500).send({ error: 'Failed to remove IP from instance network', code: 'OPERATION_FAILED' })
                 }
             }
 
@@ -397,11 +423,11 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
             reply: FastifyReply
         ) => {
             const user = request.user!
-            const instanceId = parseInt(request.params.instanceId, 10)
-            const ipId = parseInt(request.params.ipId, 10)
-            const { address } = request.body
+            const instanceId = parsePositiveId(request.params.instanceId)
+            const ipId = parsePositiveId(request.params.ipId)
+            const address = request.body.address?.trim()
 
-            if (isNaN(instanceId) || isNaN(ipId)) {
+            if (instanceId === null || ipId === null) {
                 return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
             }
 
@@ -460,25 +486,35 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
             }
 
             const oldAddress = ipRecord.address
+            const oldIsCustom = ipRecord.isCustom || false
 
-            // 更新数据库记录
-            await db.prisma.ipAddress.update({
-                where: { id: ipId },
-                data: { 
-                    address, 
-                    isCustom: true 
+            // 先通过 DB 锁预留新地址，避免并发请求在 Incus 同步后才发现重复。
+            try {
+                await db.updateIpAddressAddress({
+                    id: ipId,
+                    address,
+                    isCustom: true
+                })
+            } catch (error) {
+                if (db.isIpAddressAlreadyExistsError(error)) {
+                    return reply.code(409).send({
+                        error: 'IPv6 address already exists',
+                        code: 'IPV6_ALREADY_EXISTS'
+                    })
                 }
-            })
+                throw error
+            }
 
-            // 同步到 Incus
+            // 同步到 Incus。失败时回滚 DB 预留，保持面板状态和真实网络一致。
             if (instance.status === 'running' || instance.status === 'stopped') {
                 try {
                     const client = await getIncusClient(instance.host)
 
                     // 获取实例所有 IPv6 地址
                     const allIpRecords = await db.getIpAddressesByInstanceId(instanceId) as IpAddressRecord[]
-                    const ipv6Records = allIpRecords.filter((ip: IpAddressRecord) => ip.type === 'inet6')
-                    
+                    const ipv6Records = allIpRecords
+                        .filter((ip: IpAddressRecord) => ip.type === 'inet6')
+
                     const primaryIp = ipv6Records.find((ip: IpAddressRecord) => ip.isPrimary)
                     if (primaryIp) {
                         const extraIps = ipv6Records
@@ -504,6 +540,16 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
                     }
                 } catch (err) {
                     console.warn(`Failed to update custom IP in Incus:`, err)
+                    try {
+                        await db.updateIpAddressAddress({
+                            id: ipId,
+                            address: oldAddress,
+                            isCustom: oldIsCustom
+                        })
+                    } catch (rollbackError) {
+                        request.log.error({ ipId, oldAddress, rollbackError }, '回滚自定义 IPv6 地址失败')
+                    }
+                    return reply.code(500).send({ error: 'Failed to update IP in instance network', code: 'OPERATION_FAILED' })
                 }
             }
 
@@ -534,10 +580,10 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
             reply: FastifyReply
         ) => {
             const user = request.user!
-            const instanceId = parseInt(request.params.instanceId, 10)
+            const instanceId = parsePositiveId(request.params.instanceId)
             const { cidr: inputCidr, prefix, primaryIp } = request.body
 
-            if (isNaN(instanceId)) {
+            if (instanceId === null) {
                 return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
             }
 
@@ -575,6 +621,15 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
                 // 直接使用用户提供的 CIDR
                 if (!isValidIpv6Subnet(inputCidr)) {
                     return reply.code(400).send({ error: 'Invalid IPv6 subnet CIDR format' })
+                }
+                if (!hostWithIpv6.ipv6_subnet) {
+                    return reply.code(400).send({ error: 'Host does not have IPv6 subnet configured' })
+                }
+                if (!isIpv6SubnetWithinSubnet(inputCidr, hostWithIpv6.ipv6_subnet)) {
+                    return reply.code(400).send({
+                        error: `IPv6 subnet must be within host subnet range (${hostWithIpv6.ipv6_subnet})`,
+                        code: 'IPV6_SUBNET_NOT_IN_HOST_SUBNET'
+                    })
                 }
                 cidr = inputCidr
             } else if (prefix) {
@@ -690,10 +745,10 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
             reply: FastifyReply
         ) => {
             const user = request.user!
-            const instanceId = parseInt(request.params.instanceId, 10)
-            const subnetId = parseInt(request.params.subnetId, 10)
+            const instanceId = parsePositiveId(request.params.instanceId)
+            const subnetId = parsePositiveId(request.params.subnetId)
 
-            if (isNaN(instanceId) || isNaN(subnetId)) {
+            if (instanceId === null || subnetId === null) {
                 return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
             }
 
@@ -752,6 +807,7 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
                     }
                 } catch (err) {
                     console.warn(`Failed to remove subnet from Incus:`, err)
+                    return reply.code(500).send({ error: 'Failed to remove subnet from instance network', code: 'OPERATION_FAILED' })
                 }
             }
 
@@ -779,9 +835,9 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
         { onRequest: [fastify.authenticateUser] },
         async (request: FastifyRequest<{ Params: { instanceId: string } }>, reply: FastifyReply) => {
             const user = request.user!
-            const instanceId = parseInt(request.params.instanceId, 10)
+            const instanceId = parsePositiveId(request.params.instanceId)
 
-            if (isNaN(instanceId)) {
+            if (instanceId === null) {
                 return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))
             }
 

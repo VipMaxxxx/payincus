@@ -4,6 +4,7 @@
 
 import { prisma } from './prisma.js'
 import type { InstanceTaskType, InstanceTaskStatus, Prisma } from '@prisma/client'
+import { INSTANCE_OPERATION_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from './advisory-locks.js'
 
 export interface CreateInstanceTaskData {
   instanceId: number
@@ -40,25 +41,84 @@ export interface InstanceTaskWithDetails {
   finishedAt: Date | null
 }
 
+export class InstanceTaskConflictError extends Error {
+  activeTask: InstanceTaskWithDetails | null
+
+  constructor(activeTask: InstanceTaskWithDetails | null = null) {
+    super('Instance has an active task')
+    this.name = 'InstanceTaskConflictError'
+    this.activeTask = activeTask
+  }
+}
+
+const INSTANCE_TASK_STATUSES = new Set<InstanceTaskStatus>([
+  'PENDING',
+  'PROCESSING',
+  'COMPLETED',
+  'FAILED'
+])
+
+function clampInstanceTaskPagination(
+  page: number | undefined,
+  pageSize: number | undefined
+): { page: number; pageSize: number } {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), 100)
+      : 20
+  }
+}
+
+function normalizeInstanceTaskStatuses(status?: InstanceTaskStatus[]): InstanceTaskStatus[] | undefined {
+  if (!Array.isArray(status)) {
+    return undefined
+  }
+
+  const normalized = status.filter((value): value is InstanceTaskStatus => INSTANCE_TASK_STATUSES.has(value))
+  return normalized.length > 0 ? normalized : undefined
+}
+
 /**
  * 创建实例操作任务
  */
 export async function createInstanceTask(data: CreateInstanceTaskData): Promise<InstanceTaskWithDetails> {
-  // 注：使用 as any 绕过 Prisma 类型检查，因为 customInitCommandIds 字段在迁移后才会生成类型
-  const result = await prisma.instanceTask.create({
-    data: {
-      instanceId: data.instanceId,
-      hostId: data.hostId,
-      userId: data.userId,
-      taskType: data.taskType,
-      imageAlias: data.imageAlias || null,
-      sshKeyId: data.sshKeyId || null,
-      customInitCommandIds: data.customInitCommandIds ? JSON.stringify(data.customInitCommandIds) : null,
-      targetName: data.targetName || null,
-      targetHostId: data.targetHostId || null,
-      snapshotName: data.snapshotName || null,
-      status: 'PENDING'
-    } as any
+  const result = await prisma.$transaction(async tx => {
+    const locked = await tryAdvisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, data.instanceId)
+    if (!locked) {
+      throw new InstanceTaskConflictError()
+    }
+
+    const activeTask = await tx.instanceTask.findFirst({
+      where: {
+        instanceId: data.instanceId,
+        status: { in: ['PENDING', 'PROCESSING'] }
+      },
+      orderBy: [
+        { createdAt: 'asc' },
+        { id: 'asc' }
+      ]
+    })
+    if (activeTask) {
+      throw new InstanceTaskConflictError(activeTask as unknown as InstanceTaskWithDetails)
+    }
+
+    // 注：使用 as any 绕过 Prisma 类型检查，因为 customInitCommandIds 字段在迁移后才会生成类型
+    return tx.instanceTask.create({
+      data: {
+        instanceId: data.instanceId,
+        hostId: data.hostId,
+        userId: data.userId,
+        taskType: data.taskType,
+        imageAlias: data.imageAlias || null,
+        sshKeyId: data.sshKeyId || null,
+        customInitCommandIds: data.customInitCommandIds ? JSON.stringify(data.customInitCommandIds) : null,
+        targetName: data.targetName || null,
+        targetHostId: data.targetHostId || null,
+        snapshotName: data.snapshotName || null,
+        status: 'PENDING'
+      } as any
+    })
   })
   return result as unknown as InstanceTaskWithDetails
 }
@@ -94,7 +154,8 @@ export async function getUserInstanceTasks(
   userId: number,
   options: { page?: number; pageSize?: number; status?: InstanceTaskStatus[] } = {}
 ): Promise<{ items: InstanceTaskWithDetails[]; total: number }> {
-  const { page = 1, pageSize = 20, status } = options
+  const { page, pageSize } = clampInstanceTaskPagination(options.page, options.pageSize)
+  const status = normalizeInstanceTaskStatuses(options.status)
 
   const where: Prisma.InstanceTaskWhereInput = { userId }
   if (status && status.length > 0) {
@@ -198,13 +259,31 @@ export async function cancelInstanceTask(taskId: number): Promise<InstanceTaskWi
     return null
   }
 
-  const result = await prisma.instanceTask.update({
-    where: { id: taskId },
-    data: {
-      status: 'FAILED',
-      error: '用户取消',
-      finishedAt: new Date()
+  const result = await prisma.$transaction(async tx => {
+    const locked = await tryAdvisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, task.instanceId)
+    if (!locked) {
+      return null
     }
+
+    const updateResult = await tx.instanceTask.updateMany({
+      where: {
+        id: taskId,
+        status: 'PENDING'
+      },
+      data: {
+        status: 'FAILED',
+        error: '用户取消',
+        finishedAt: new Date()
+      }
+    })
+
+    if (updateResult.count !== 1) {
+      return null
+    }
+
+    return tx.instanceTask.findUnique({
+      where: { id: taskId }
+    })
   })
   return result as unknown as InstanceTaskWithDetails
 }

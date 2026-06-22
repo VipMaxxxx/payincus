@@ -34,6 +34,7 @@ const TIMEOUT_CHECK_INTERVAL = 60000
 
 let workerInterval: ReturnType<typeof setInterval> | null = null
 let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null
+const runningUploadTaskIds = new Set<number>()
 const dbBackoff = createWorkerDbBackoff('UploadWorker')
 
 /**
@@ -60,10 +61,25 @@ async function cleanupTimeoutUploadTasks(): Promise<void> {
     if (dbBackoff.shouldSkip()) return
     const timeoutThreshold = new Date(Date.now() - UPLOAD_TIMEOUT)
     
-    const result = await prisma.backupUploadTask.updateMany({
+    const timedOutTasks = await prisma.backupUploadTask.findMany({
         where: {
             status: 'PROCESSING',
             startedAt: { lt: timeoutThreshold }
+        },
+        select: { id: true }
+    })
+    const timedOutTaskIds = timedOutTasks
+        .map(task => task.id)
+        .filter(taskId => !runningUploadTaskIds.has(taskId))
+
+    if (timedOutTaskIds.length === 0) {
+        return
+    }
+
+    const result = await prisma.backupUploadTask.updateMany({
+        where: {
+            id: { in: timedOutTaskIds },
+            status: 'PROCESSING'
         },
         data: {
             status: 'FAILED',
@@ -182,8 +198,8 @@ function isRetryableError(error: Error): boolean {
  * 更新上传任务进度
  */
 async function updateUploadProgress(taskId: number, progress: string): Promise<void> {
-    await prisma.backupUploadTask.update({
-        where: { id: taskId },
+    await prisma.backupUploadTask.updateMany({
+        where: { id: taskId, status: 'PROCESSING' },
         data: { progress }
     })
 }
@@ -194,6 +210,7 @@ async function updateUploadProgress(taskId: number, progress: string): Promise<v
  */
 async function executeUploadTask(taskId: number): Promise<void> {
     const startTime = Date.now()
+    runningUploadTaskIds.add(taskId)
     
     // 获取任务信息（已在事务中标记为 PROCESSING）
     const task = await prisma.backupUploadTask.findUnique({
@@ -280,8 +297,8 @@ async function executeUploadTask(taskId: number): Promise<void> {
         await updateUploadProgress(taskId, 'finalizing')
 
         // 9. 标记成功
-        await prisma.backupUploadTask.update({
-            where: { id: taskId },
+        const completeResult = await prisma.backupUploadTask.updateMany({
+            where: { id: taskId, status: 'PROCESSING' },
             data: {
                 status: 'COMPLETED',
                 remoteFileName,
@@ -289,6 +306,10 @@ async function executeUploadTask(taskId: number): Promise<void> {
                 finishedAt: new Date()
             }
         })
+        if (completeResult.count === 0) {
+            console.warn(`[UploadWorker] Task ${taskId}: 已不处于 PROCESSING，跳过完成状态覆盖`)
+            return
+        }
 
         console.log(`[UploadWorker] Task ${taskId}: 上传完成`)
 
@@ -331,8 +352,8 @@ async function executeUploadTask(taskId: number): Promise<void> {
             // 重试：增加重试计数，重置为 PENDING 等待下一轮执行
             console.log(`[UploadWorker] Task ${taskId}: 可重试错误，将在 ${RETRY_DELAY / 1000} 秒后重试 (第 ${task.retryCount + 1}/${MAX_RETRY_COUNT} 次)`)
             
-            await prisma.backupUploadTask.update({
-                where: { id: taskId },
+            const retryResult = await prisma.backupUploadTask.updateMany({
+                where: { id: taskId, status: 'PROCESSING' },
                 data: {
                     status: 'PENDING',
                     retryCount: task.retryCount + 1,
@@ -340,6 +361,10 @@ async function executeUploadTask(taskId: number): Promise<void> {
                     startedAt: null
                 }
             })
+            if (retryResult.count === 0) {
+                console.warn(`[UploadWorker] Task ${taskId}: 已不处于 PROCESSING，跳过重试状态覆盖`)
+                return
+            }
             
             // 记录重试日志
             await createLog(
@@ -352,14 +377,18 @@ async function executeUploadTask(taskId: number): Promise<void> {
             )
         } else {
             // 最终失败
-            await prisma.backupUploadTask.update({
-                where: { id: taskId },
+            const failResult = await prisma.backupUploadTask.updateMany({
+                where: { id: taskId, status: 'PROCESSING' },
                 data: {
                     status: 'FAILED',
                     error: errorMessage,
                     finishedAt: new Date()
                 }
             })
+            if (failResult.count === 0) {
+                console.warn(`[UploadWorker] Task ${taskId}: 已不处于 PROCESSING，跳过失败状态覆盖`)
+                return
+            }
 
             await createLog(
                 task.userId,
@@ -370,6 +399,8 @@ async function executeUploadTask(taskId: number): Promise<void> {
                 { instanceId: task.instanceId }
             )
         }
+    } finally {
+        runningUploadTaskIds.delete(taskId)
     }
 }
 

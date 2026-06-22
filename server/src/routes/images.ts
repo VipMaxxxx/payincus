@@ -15,6 +15,25 @@ import {
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { logSuccess } from '../db/logs.js'
 
+const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveInteger(value: string | undefined): number | null | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!POSITIVE_INTEGER_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  return parsePositiveInteger(value) ?? null
+}
+
 export default async function imageRoutes(fastify: FastifyInstance) {
   /**
    * 获取系统镜像列表（用户端 - 只返回未隐藏的）
@@ -28,10 +47,10 @@ export default async function imageRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
     const { type, memory, hostId } = request.query
-    const memoryNum = memory ? parseInt(memory, 10) : undefined
-    const hostIdNum = hostId ? parseInt(hostId, 10) : undefined
+    const memoryNum = parsePositiveInteger(memory)
+    const hostIdNum = parsePositiveInteger(hostId)
 
-    if (hostId && (!hostIdNum || Number.isNaN(hostIdNum))) {
+    if (memoryNum === null || hostIdNum === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -129,8 +148,12 @@ export default async function imageRoutes(fastify: FastifyInstance) {
   }>('/admin/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request, reply) => {
-    const id = parseInt(request.params.id)
+    const id = parsePositiveRouteId(request.params.id)
     const { name, remoteAlias, osType, architecture, instanceType, icon, sortOrder, hidden } = request.body
+
+    if (!id) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
 
     const existing = await getSystemImageById(id)
     if (!existing) {
@@ -173,7 +196,11 @@ export default async function imageRoutes(fastify: FastifyInstance) {
   }>('/admin/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request, reply) => {
-    const id = parseInt(request.params.id)
+    const id = parsePositiveRouteId(request.params.id)
+
+    if (!id) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
 
     const existing = await getSystemImageById(id)
     if (!existing) {

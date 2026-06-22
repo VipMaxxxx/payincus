@@ -7,10 +7,23 @@ import { prisma } from './prisma.js'
 import type { RedeemCodeType } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import crypto from 'crypto'
-import { REDEEM_CODE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from './advisory-locks.js'
+import { INSTANCE_OPERATION_LOCK_NAMESPACE, REDEEM_CODE_LOCK_NAMESPACE, advisoryTransactionLock, tryAdvisoryTransactionLock } from './advisory-locks.js'
 
 // 系统兑换码前缀
 const SYSTEM_CODE_PREFIX = 'h'
+const REDEEM_CODE_LIST_MAX_LIMIT = 100
+
+function clampRedeemCodeListBounds(limit: number | undefined, offset: number | undefined, defaultLimit: number): {
+  limit: number
+  offset: number
+} {
+  return {
+    limit: Number.isInteger(limit) && limit !== undefined
+      ? Math.min(Math.max(limit, 1), REDEEM_CODE_LIST_MAX_LIMIT)
+      : defaultLimit,
+    offset: Number.isInteger(offset) && offset !== undefined && offset >= 0 ? offset : 0
+  }
+}
 
 // 签到系统使用的固定可选数值（不要修改）
 export const CODE_VALUES: Record<RedeemCodeType, number[]> = {
@@ -130,7 +143,8 @@ export async function getRedeemCodesByHost(
     enabled?: boolean
   } = {}
 ) {
-  const { limit = 50, offset = 0, enabled } = options
+  const { limit, offset } = clampRedeemCodeListBounds(options.limit, options.offset, 50)
+  const { enabled } = options
 
   const where = {
     hostId,
@@ -308,9 +322,112 @@ export async function useSystemRedeemCode(
 }
 
 /**
- * 更新兑换码
+ * 记录系统兑换码应用结果。
+ *
+ * 外部 Incus 资源变更成功后调用；兑换码消费、实例资源和宿主机用量必须在同一事务中提交，
+ * 避免出现兑换码已消耗但面板资源状态未落库的半成功状态。
  */
-export async function updateRedeemCode(
+export async function applySystemRedeemCodeToInstance(data: {
+  redeemCodeId: number
+  userId: number
+  instanceId: number
+  hostId: number
+  batchId: string | null
+  instanceResources?: {
+    cpu?: number
+    memory?: number
+    disk?: number
+  }
+  hostResourceDelta?: {
+    cpuUsed?: number
+    memoryUsed?: number
+    diskUsed?: number
+  }
+  monthlyTrafficDelta?: bigint
+}): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, REDEEM_CODE_LOCK_NAMESPACE, data.redeemCodeId)
+    await advisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, data.instanceId)
+
+    const existingUsage = await tx.redeemCodeUsage.findFirst({
+      where: { redeemCodeId: data.redeemCodeId, userId: data.userId }
+    })
+    if (existingUsage) {
+      throw new Error('REDEEM_CODE_ALREADY_USED_BY_USER')
+    }
+
+    if (data.batchId) {
+      const existingBatchUsage = await tx.redeemCodeUsage.findFirst({
+        where: { userId: data.userId, batchId: data.batchId }
+      })
+      if (existingBatchUsage) {
+        throw new Error('REDEEM_CODE_BATCH_LIMIT')
+      }
+    }
+
+    const now = new Date()
+    const result = await tx.$executeRaw`
+      UPDATE "redeem_codes"
+      SET "used_count" = "used_count" + 1
+      WHERE "id" = ${data.redeemCodeId}
+        AND "enabled" = true
+        AND ("expires_at" IS NULL OR "expires_at" > ${now})
+        AND "used_count" < "max_uses"
+    `
+
+    if (result === 0) {
+      throw new Error('REDEEM_CODE_EXHAUSTED')
+    }
+
+    if (data.hostResourceDelta) {
+      await tx.host.update({
+        where: { id: data.hostId },
+        data: {
+          ...(data.hostResourceDelta.cpuUsed !== undefined ? { cpuUsed: { increment: data.hostResourceDelta.cpuUsed } } : {}),
+          ...(data.hostResourceDelta.memoryUsed !== undefined ? { memoryUsed: { increment: data.hostResourceDelta.memoryUsed } } : {}),
+          ...(data.hostResourceDelta.diskUsed !== undefined ? { diskUsed: { increment: data.hostResourceDelta.diskUsed } } : {})
+        }
+      })
+    }
+
+    if (data.instanceResources) {
+      await tx.instance.update({
+        where: { id: data.instanceId },
+        data: data.instanceResources
+      })
+    }
+
+    if (data.monthlyTrafficDelta !== undefined) {
+      await tx.$executeRaw`
+        UPDATE "instances"
+        SET "monthly_traffic_limit" = COALESCE("monthly_traffic_limit", 0) + ${data.monthlyTrafficDelta}
+        WHERE "id" = ${data.instanceId}
+      `
+    }
+
+    try {
+      await tx.redeemCodeUsage.create({
+        data: {
+          redeemCodeId: data.redeemCodeId,
+          userId: data.userId,
+          instanceId: data.instanceId,
+          batchId: data.batchId
+        }
+      })
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && data.batchId) {
+        throw new Error('REDEEM_CODE_BATCH_LIMIT')
+      }
+      throw error
+    }
+  })
+}
+
+/**
+ * 更新指定宿主机下的兑换码。
+ */
+export async function updateRedeemCodeForHost(
+  hostId: number,
   id: number,
   data: {
     enabled?: boolean
@@ -318,43 +435,55 @@ export async function updateRedeemCode(
     maxUses?: number
     expiresAt?: Date | null
   }
-) {
-  return prisma.redeemCode.update({
-    where: { id },
+): Promise<boolean> {
+  const result = await prisma.redeemCode.updateMany({
+    where: { id, hostId },
     data
   })
+
+  return result.count > 0
 }
 
 /**
- * 删除兑换码
+ * 删除指定宿主机下的兑换码。
  */
-export async function deleteRedeemCode(id: number) {
-  return prisma.redeemCode.delete({
-    where: { id }
+export async function deleteRedeemCodeForHost(hostId: number, id: number): Promise<boolean> {
+  const result = await prisma.redeemCode.deleteMany({
+    where: { id, hostId }
   })
+
+  return result.count > 0
 }
 
 /**
- * 批量删除兑换码
+ * 批量删除指定宿主机下的兑换码。
  */
-export async function deleteRedeemCodeBatch(ids: number[]) {
-  return prisma.redeemCode.deleteMany({
-    where: { id: { in: ids } }
+export async function deleteRedeemCodeBatchForHost(hostId: number, ids: number[]): Promise<number> {
+  if (ids.length === 0) {
+    return 0
+  }
+
+  const result = await prisma.redeemCode.deleteMany({
+    where: { id: { in: ids }, hostId }
   })
+
+  return result.count
 }
 
 /**
- * 获取兑换码使用记录
+ * 获取指定宿主机下某个兑换码的使用记录。
  */
-export async function getRedeemCodeUsages(
+export async function getRedeemCodeUsagesForHost(
+  hostId: number,
   redeemCodeId: number,
   options: { limit?: number; offset?: number } = {}
 ) {
-  const { limit = 20, offset = 0 } = options
+  const { limit, offset } = clampRedeemCodeListBounds(options.limit, options.offset, 20)
+  const where = { redeemCodeId, redeemCode: { hostId } }
 
   const [usages, total] = await Promise.all([
     prisma.redeemCodeUsage.findMany({
-      where: { redeemCodeId },
+      where,
       orderBy: { usedAt: 'desc' },
       take: limit,
       skip: offset,
@@ -367,7 +496,7 @@ export async function getRedeemCodeUsages(
         }
       }
     }),
-    prisma.redeemCodeUsage.count({ where: { redeemCodeId } })
+    prisma.redeemCodeUsage.count({ where })
   ])
 
   return {
@@ -379,6 +508,16 @@ export async function getRedeemCodeUsages(
     })),
     total
   }
+}
+
+/**
+ * 检查兑换码是否属于指定宿主机。
+ */
+export async function isRedeemCodeBelongsToHost(redeemCodeId: number, hostId: number): Promise<boolean> {
+  const count = await prisma.redeemCode.count({
+    where: { id: redeemCodeId, hostId }
+  })
+  return count > 0
 }
 
 /**

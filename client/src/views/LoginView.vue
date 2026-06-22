@@ -8,6 +8,7 @@ import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { getSafeRedirectUrl } from '@/utils/validation'
 import api from '@/api'
 import { useBrand } from '@/composables/useBrand'
+import { buildApiUrl } from '@/utils/api-url'
 
 const router = useRouter()
 const route = useRoute()
@@ -140,7 +141,7 @@ function loginWithOAuth(provider: string): void {
   // 默认跳转到根路径，路由守卫会根据用户角色自动跳转
   const defaultRedirect = '/'
   const safeRedirect = getSafeRedirectUrl(route.query.redirect as string, defaultRedirect)
-  window.location.href = `/api/oauth/authorize/${provider}?mode=login&redirect=${encodeURIComponent(safeRedirect)}`
+  window.location.href = buildApiUrl(`/oauth/authorize/${provider}?mode=login&redirect=${encodeURIComponent(safeRedirect)}`)
 }
 
 interface ProviderInfo {

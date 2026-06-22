@@ -3,6 +3,7 @@ import type { BadgeApplicationTarget, PointsLogType, UserBadgeSource } from '@pr
 
 import { BADGE_RANDOM_DRAW_COST, BADGE_SELECT_COST, DEFAULT_BADGE_CATALOG } from '../config/badges.js'
 import type { BadgeCatalogItem } from '../config/badges.js'
+import { USER_POINTS_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
 import { prisma } from './prisma.js'
 
 type BadgeClient = typeof prisma | Prisma.TransactionClient
@@ -300,6 +301,8 @@ async function spendBadgePoints(
   logType: PointsLogType,
   remark: string
 ) {
+  await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)
+
   await tx.userPoints.upsert({
     where: { userId },
     update: {},

@@ -8,6 +8,7 @@ import pLimit from 'p-limit'
 import { prisma } from '../db/prisma.js'
 import { IncusClient } from '../lib/incus/incus-client.js'
 import { createSnapshot as createIncusSnapshot } from '../lib/incus/incus-snapshots.js'
+import { acquireLock, releaseLock } from '../lib/distributed-lock.js'
 import * as db from '../db/index.js'
 import { sendNotification } from '../lib/notifier.js'
 import { createLog } from '../db/logs.js'
@@ -19,6 +20,13 @@ const limit = pLimit(5)
 const MAX_RETRIES = 3
 // 重试延迟（毫秒）
 const RETRY_DELAY = 5000
+const AUTO_POLICY_LOCK_EXPIRE_MS = 30 * 60 * 1000
+const AUTO_POLICY_LOCK_WAIT_MS = 100
+let schedulerStarted = false
+
+function getAutoSnapshotPolicyLockKey(instanceId: number): string {
+    return `auto-policy:snapshot:${instanceId}`
+}
 
 /**
  * 延迟函数
@@ -216,6 +224,67 @@ async function executeAutoSnapshot(
     )
 }
 
+async function executeLockedAutoSnapshot(candidate: { instanceId: number }): Promise<void> {
+    const lockKey = getAutoSnapshotPolicyLockKey(candidate.instanceId)
+    const lockResult = await acquireLock(lockKey, {
+        expireMs: AUTO_POLICY_LOCK_EXPIRE_MS,
+        waitTimeoutMs: AUTO_POLICY_LOCK_WAIT_MS,
+        retryIntervalMs: 50
+    })
+
+    if (!lockResult.success || !lockResult.ownerId) {
+        console.log(`[AutoPolicy] Skip auto snapshot for instance ${candidate.instanceId}: lock already held`)
+        return
+    }
+
+    try {
+        const now = new Date()
+        const policy = await prisma.snapshotPolicy.findUnique({
+            where: { instanceId: candidate.instanceId },
+            include: {
+                instance: {
+                    include: {
+                        host: true
+                    }
+                }
+            }
+        })
+
+        if (!policy?.enabled || (policy.nextRunAt !== null && policy.nextRunAt > now)) {
+            console.log(`[AutoPolicy] Skip auto snapshot for instance ${candidate.instanceId}: policy no longer due`)
+            return
+        }
+
+        if (
+            !policy.instance ||
+            !['running', 'stopped'].includes(policy.instance.status) ||
+            policy.instance.host.status !== 'online'
+        ) {
+            console.log(`[AutoPolicy] Skip auto snapshot for instance ${candidate.instanceId}: instance or host no longer eligible`)
+            return
+        }
+
+        await executeAutoSnapshot({
+            instanceId: policy.instanceId,
+            instance: {
+                id: policy.instance.id,
+                incusId: policy.instance.incusId,
+                name: policy.instance.name,
+                userId: policy.instance.userId,
+                snapshotLimit: policy.instance.snapshotLimit,
+                host: {
+                    url: policy.instance.host.url,
+                    name: policy.instance.host.name,
+                    certPath: policy.instance.host.certPath,
+                    keyPath: policy.instance.host.keyPath
+                }
+            }
+        })
+    } finally {
+        await releaseLock(lockKey, lockResult.ownerId)
+    }
+}
+
 /**
  * 运行自动快照任务
  */
@@ -256,22 +325,7 @@ export async function runAutoSnapshotJob(): Promise<void> {
         // 并发执行（允许 running 和 stopped 状态）
         await Promise.all(
             validPolicies.map(policy =>
-                limit(() => executeAutoSnapshot({
-                    instanceId: policy.instanceId,
-                    instance: {
-                        id: policy.instance.id,
-                        incusId: policy.instance.incusId,
-                        name: policy.instance.name,
-                        userId: policy.instance.userId,
-                        snapshotLimit: policy.instance.snapshotLimit,
-                        host: {
-                            url: policy.instance.host.url,
-                            name: policy.instance.host.name,
-                            certPath: policy.instance.host.certPath,
-                            keyPath: policy.instance.host.keyPath
-                        }
-                    }
-                }))
+                limit(() => executeLockedAutoSnapshot(policy))
             )
         )
 
@@ -286,6 +340,12 @@ export async function runAutoSnapshotJob(): Promise<void> {
  * 启动自动策略调度器
  */
 export function startAutoPolicyScheduler(): void {
+    if (schedulerStarted) {
+        return
+    }
+
+    schedulerStarted = true
+
     // 每 5 分钟检查一次快照策略（支持10分钟频率）
     schedule('*/5 * * * *', () => {
         runAutoSnapshotJob().catch(console.error)

@@ -5,13 +5,58 @@
 
 import { prisma } from './prisma.js'
 import { Prisma, type BalanceLog, type BalanceLogType } from '@prisma/client'
+import { USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from './advisory-locks.js'
 
 type BalanceQueryClient = typeof prisma | Prisma.TransactionClient
+const BALANCE_LOG_TYPES = new Set<BalanceLogType>([
+  'recharge',
+  'consume',
+  'refund',
+  'admin_adjust',
+  'gift',
+  'transfer_fee',
+  'transfer_refund',
+  'hosting_withdraw',
+  'hosting_deduction',
+  'invite_generate'
+])
+const MAX_BALANCE_AMOUNT = 99999999.99
 
 function toNumber(value: unknown): number {
   if (value === null || value === undefined) return 0
   const numberValue = Number(value)
   return Number.isFinite(numberValue) ? numberValue : 0
+}
+
+function normalizeBalanceAmount(value: number): number {
+  if (!Number.isFinite(value)) {
+    throw new Error('余额变动金额无效')
+  }
+
+  const normalized = Number(value.toFixed(2))
+  if (normalized === 0 || Math.abs(normalized) > MAX_BALANCE_AMOUNT) {
+    throw new Error('余额变动金额无效')
+  }
+
+  return normalized
+}
+
+function clampPagination(
+  page: number | undefined,
+  pageSize: number | undefined,
+  fallbackPageSize: number = 20,
+  maxPageSize: number = 100
+): { page: number; pageSize: number } {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), maxPageSize)
+      : fallbackPageSize
+  }
+}
+
+function normalizeBalanceLogType(type: BalanceLogType | undefined): BalanceLogType | undefined {
+  return type && BALANCE_LOG_TYPES.has(type) ? type : undefined
 }
 
 // ==================== 余额查询 ====================
@@ -51,7 +96,9 @@ export async function getBalanceLogs(
   page: number
   pageSize: number
 }> {
-  const { page = 1, pageSize = 20, type, lotteryGift } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const type = normalizeBalanceLogType(options.type)
+  const { lotteryGift } = options
   const skip = (page - 1) * pageSize
 
   // 构建查询条件
@@ -130,7 +177,14 @@ export async function changeBalance(
   const { userId, type, amount, orderId, instanceId, remark } = input
 
   try {
+    const normalizedAmount = normalizeBalanceAmount(amount)
+
     const result = await prisma.$transaction(async (tx) => {
+      const locked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+      if (!locked) {
+        throw new Error('余额正在处理，请稍后重试')
+      }
+
       // 1. 获取当前余额（加锁）
       const user = await tx.user.findUnique({
         where: { id: userId },
@@ -142,34 +196,56 @@ export async function changeBalance(
       }
 
       const balanceBefore = Number(user.balance)
-      const balanceAfter = balanceBefore + amount
+      const balanceAfter = Number((balanceBefore + normalizedAmount).toFixed(2))
 
       // 2. 检查余额是否足够（如果是扣款）
-      if (amount < 0 && balanceAfter < 0) {
+      if (normalizedAmount < 0 && balanceAfter < 0) {
         throw new Error('余额不足')
       }
 
-      // 3. 更新用户余额
-      await tx.user.update({
-        where: { id: userId },
-        data: { balance: balanceAfter }
+      if (Math.abs(balanceAfter) > MAX_BALANCE_AMOUNT) {
+        throw new Error('余额超出系统允许范围')
+      }
+
+      // 3. 更新用户余额。扣款使用条件更新，防止并发下绕过余额检查。
+      const updateResult = await tx.user.updateMany({
+        where: {
+          id: userId,
+          ...(normalizedAmount < 0 ? { balance: { gte: Math.abs(normalizedAmount) } } : {})
+        },
+        data: { balance: { increment: normalizedAmount } }
       })
+
+      if (updateResult.count === 0) {
+        throw new Error('余额不足或并发冲突')
+      }
+
+      const updatedUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { balance: true }
+      })
+
+      if (!updatedUser) {
+        throw new Error('用户不存在')
+      }
+
+      const persistedBalanceAfter = Number(updatedUser.balance)
 
       // 4. 创建余额变动日志
       const balanceLog = await tx.balanceLog.create({
         data: {
           userId,
           type,
-          amount,
+          amount: normalizedAmount,
           balanceBefore,
-          balanceAfter,
+          balanceAfter: persistedBalanceAfter,
           orderId,
           instanceId,
           remark
         }
       })
 
-      return { balanceLog, newBalance: balanceAfter }
+      return { balanceLog, newBalance: persistedBalanceAfter }
     })
 
     return {

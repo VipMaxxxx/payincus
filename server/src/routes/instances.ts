@@ -7,7 +7,7 @@ import * as db from '../db/index.js'
 import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { prisma } from '../db/prisma.js'
-import type { InstanceStatus } from '@prisma/client'
+import { Prisma, type InstanceStatus } from '@prisma/client'
 import { getIncusClient } from '../lib/incus/index.js'
 import {
   buildInstanceConfig,
@@ -27,13 +27,15 @@ import { deleteSnapshot } from '../lib/incus/incus-snapshots.js'
 import { generateIncusConfig, generateRandomPassword } from '../lib/incus-config-generator.js'
 import { encryptSensitiveData, decryptSensitiveData, validateName } from '../lib/security.js'
 import {
-  consumeOperationVerification
+  claimOperationVerificationRequirement
 } from '../lib/operation-verification.js'
 import {
   detectCloudInitStatus,
   getCachedCloudInitStatus,
   persistCloudInitStatus
 } from '../lib/cloud-init-status.js'
+import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'
+import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
 import { customAlphabet } from 'nanoid'
 
 // 自定义 nanoid，只使用小写字母和数字（Incus 不允许下划线）
@@ -52,7 +54,15 @@ import { calculateVipLevel, getVipBadgeStyleForLevel, getVipRules } from '../ser
 import { ProxyStrategyFactory } from '../lib/proxy/index.js'
 import { createCaddyClient } from '../lib/caddy-client.js'
 import { sendHostManagedInstanceNotification, sendNotification } from '../lib/notifier.js'
-import { createInstanceTask, getInstanceTaskById, getActiveTaskForInstance, getTaskQueuePosition, cancelInstanceTask } from '../db/instance-tasks.js'
+import {
+  createInstanceTask,
+  InstanceTaskConflictError,
+  getInstanceTaskById,
+  getActiveTaskForInstance,
+  getTaskQueuePosition,
+  cancelInstanceTask
+} from '../db/instance-tasks.js'
+import type { CreateInstanceTaskData, InstanceTaskWithDetails } from '../db/instance-tasks.js'
 import { closeInstanceSessions } from '../lib/terminal-proxy.js'
 import { calculateDiscountAmount } from '../lib/billing-calc.js'
 import { validateCommandsOwnership, mergeCommandContents, getImageDistroFromAlias } from '../db/custom-init-commands.js'
@@ -65,9 +75,77 @@ import {
   persistResolvedInstanceNetworkAddresses,
   resolveInstanceNetworkAddresses
 } from '../lib/instance-network-sync.js'
-import { INSTANCE_OPERATION_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import {
+  INSTANCE_OPERATION_LOCK_NAMESPACE,
+  USER_BALANCE_LOCK_NAMESPACE,
+  advisoryTransactionLock,
+  tryAdvisoryTransactionLock
+} from '../db/advisory-locks.js'
+import { acquireLock, releaseLock } from '../lib/distributed-lock.js'
 
 import { resolveEffectiveSwapSize, resolveIncusSwapValue } from '../lib/instance-swap.js'
+
+const PORT_MAPPING_LOCK_OPTIONS = {
+  expireMs: 120000,
+  waitTimeoutMs: 5000,
+  retryIntervalMs: 100
+}
+
+function getInstancePortMappingLockKey(instanceId: number): string {
+  return `instance:${instanceId}:port-mappings`
+}
+
+class PortMappingValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PortMappingValidationError'
+  }
+}
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const INSTANCE_LIST_MAX_PAGE_SIZE = 100
+const INSTANCE_LIST_STATUSES = new Set<InstanceStatus>([
+  'creating',
+  'running',
+  'stopped',
+  'suspended',
+  'error',
+  'deleted'
+])
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parseOptionalPositiveQueryInteger(value: string | undefined): number | null | undefined {
+  if (value === undefined || value === '') {
+    return undefined
+  }
+
+  return parsePositiveRouteId(value)
+}
+
+function parseInstanceListPageSize(value: string | undefined): number | null | undefined {
+  const parsed = parseOptionalPositiveQueryInteger(value)
+  if (parsed === null || parsed === undefined) {
+    return parsed
+  }
+
+  return Math.min(parsed, INSTANCE_LIST_MAX_PAGE_SIZE)
+}
+
+function parseOptionalInstanceStatus(value: string | undefined): InstanceStatus | null | undefined {
+  if (value === undefined || value === '') {
+    return undefined
+  }
+
+  return INSTANCE_LIST_STATUSES.has(value as InstanceStatus) ? value as InstanceStatus : null
+}
 
 // 检查实例是否被转移锁定
 async function checkTransferLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
@@ -77,6 +155,104 @@ async function checkTransferLock(instanceId: number, reply: FastifyReply): Promi
     return true
   }
   return false
+}
+
+async function requireVerifiedOperation(
+  reply: FastifyReply,
+  userId: number,
+  operationType: 'delete_instance' | 'reinstall_instance' | 'recreate_instance',
+  resourceId: number
+): Promise<boolean> {
+  const verification = await claimOperationVerificationRequirement(userId, operationType, resourceId)
+  if (!verification.verified) {
+    reply.code(403).send({
+      error: 'Sensitive operation requires verification',
+      code: 'VERIFICATION_REQUIRED',
+      required: verification.required
+    })
+    return false
+  }
+  return true
+}
+
+function sendActiveTaskConflict(reply: FastifyReply, activeTask?: Pick<InstanceTaskWithDetails, 'id' | 'taskType' | 'status'> | null) {
+  return reply.code(409).send({
+    error: 'Instance has an active task',
+    code: 'TASK_IN_PROGRESS',
+    ...(activeTask
+      ? {
+          taskId: activeTask.id,
+          taskType: activeTask.taskType,
+          status: activeTask.status
+        }
+      : {})
+  })
+}
+
+async function rejectActiveInstanceWorkflowConflict(reply: FastifyReply, instanceId: number): Promise<boolean> {
+  const [activeRestoreTask, activeUploadTask, activeInstanceTask] = await Promise.all([
+    prisma.restoreTask.findFirst({
+      where: {
+        instanceId,
+        status: { in: ['PENDING', 'PROCESSING'] }
+      },
+      select: { id: true, status: true }
+    }),
+    prisma.backupUploadTask.findFirst({
+      where: {
+        instanceId,
+        status: { in: ['PENDING', 'PROCESSING'] }
+      },
+      select: { id: true, status: true }
+    }),
+    getActiveTaskForInstance(instanceId)
+  ])
+
+  if (activeRestoreTask) {
+    reply.code(409).send({
+      error: 'Instance has an active restore task',
+      code: 'RESTORE_IN_PROGRESS',
+      taskId: activeRestoreTask.id,
+      status: activeRestoreTask.status
+    })
+    return true
+  }
+
+  if (activeUploadTask) {
+    reply.code(409).send({
+      error: 'Instance has an active backup upload task',
+      code: 'UPLOAD_IN_PROGRESS',
+      taskId: activeUploadTask.id,
+      status: activeUploadTask.status
+    })
+    return true
+  }
+
+  if (activeInstanceTask) {
+    sendActiveTaskConflict(reply, activeInstanceTask)
+    return true
+  }
+
+  return false
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+}
+
+async function createInstanceTaskOrConflict(
+  reply: FastifyReply,
+  data: CreateInstanceTaskData
+): Promise<InstanceTaskWithDetails | null> {
+  try {
+    return await createInstanceTask(data)
+  } catch (error) {
+    if (error instanceof InstanceTaskConflictError) {
+      sendActiveTaskConflict(reply, error.activeTask)
+      return null
+    }
+    throw error
+  }
 }
 
 async function claimInstanceForDelete(instanceId: number, currentStatus: InstanceStatus): Promise<boolean> {
@@ -110,6 +286,32 @@ async function claimInstanceForDelete(instanceId: number, currentStatus: Instanc
 
     return result.count === 1
   })
+}
+
+async function restoreClaimedInstanceForDelete(instanceId: number, originalStatus: InstanceStatus): Promise<void> {
+  await prisma.instance.updateMany({
+    where: {
+      id: instanceId,
+      status: 'deleted'
+    },
+    data: { status: originalStatus }
+  })
+}
+
+async function deleteIncusInstanceForDelete(
+  client: Awaited<ReturnType<typeof getIncusClient>>,
+  instance: { incus_id: string; status: string },
+  logger: { warn: (...args: any[]) => void }
+): Promise<void> {
+  if (instance.status === 'running') {
+    try {
+      await stopInstance(client, instance.incus_id, true)
+    } catch (err) {
+      logger.warn(err, '停止实例失败，继续尝试删除')
+    }
+  }
+
+  await deleteInstance(client, instance.incus_id)
 }
 
 /**
@@ -408,25 +610,42 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       sortBy?: string
       sortOrder?: string
     }
-  }>) => {
+  }>, reply: FastifyReply) => {
     const { user } = request
-    const { page = '1', pageSize = '20', search = '', hostId, countryCode, status, sortBy, sortOrder } = request.query
+    const { page, pageSize, search = '', hostId, countryCode, status, sortBy, sortOrder } = request.query
+
+    const parsedPage = parseOptionalPositiveQueryInteger(page)
+    const parsedPageSize = parseInstanceListPageSize(pageSize)
+    const parsedHostId = parseOptionalPositiveQueryInteger(hostId)
+    const parsedStatus = parseOptionalInstanceStatus(status)
+    const { userId: queryUserId } = request.query
+    const parsedQueryUserId = parseOptionalPositiveQueryInteger(queryUserId)
+
+    if (
+      parsedPage === null ||
+      parsedPageSize === null ||
+      parsedHostId === null ||
+      parsedQueryUserId === null ||
+      parsedStatus === null
+    ) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid instance list query'))
+    }
 
     const options: {
       page: number
       pageSize: number
       search: string
-      status?: string
+      status?: InstanceStatus
       userId?: number
       hostId?: number
       countryCode?: string
       sortBy?: string
       sortOrder?: 'asc' | 'desc'
     } = {
-      page: parseInt(page, 10),
-      pageSize: parseInt(pageSize, 10),
+      page: parsedPage ?? 1,
+      pageSize: parsedPageSize ?? 20,
       search,
-      status,
+      status: parsedStatus,
       sortBy,
       sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : undefined
     }
@@ -435,25 +654,22 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       options.countryCode = countryCode.toLowerCase()
     }
 
-    // 检查查询权限
-    const { userId: queryUserId } = request.query
-
     // 标记是否应该显示用户信息（节点所有者或管理员查询时）
     let showUserInfo = false
 
     // 管理员可以查看所有实例
     if (user.role === 'admin') {
       showUserInfo = true
-      if (queryUserId) {
-        options.userId = parseInt(queryUserId, 10)
+      if (parsedQueryUserId) {
+        options.userId = parsedQueryUserId
       }
-      if (hostId) {
-        options.hostId = parseInt(hostId, 10)
+      if (parsedHostId) {
+        options.hostId = parsedHostId
       }
       // 管理员不指定 userId 和 hostId 时可以看所有实例
-    } else if (hostId) {
+    } else if (parsedHostId) {
       // 检查是否是节点所有者查看自己节点上的实例
-      options.hostId = parseInt(hostId, 10)
+      options.hostId = parsedHostId
       const host = await db.getHostById(options.hostId)
       if (host && host.user_id === user.id) {
         // 节点所有者可以看到该节点上所有实例，不限制 userId
@@ -630,7 +846,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['id'],
         properties: {
-          id: { type: 'string', pattern: '^[0-9]+$' }
+          id: { type: 'string', pattern: '^[1-9]\\d*$' }
         },
         additionalProperties: false
       },
@@ -644,8 +860,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    const instanceId = parseInt(request.params.id, 10)
-    if (!Number.isInteger(instanceId) || instanceId <= 0) {
+    const instanceId = parsePositiveRouteId(request.params.id)
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1285,10 +1501,38 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     let staticIPv4: string | null = null
     let staticIPv6: string | null = null
     let selectedStoragePool: string | null = null
+    const normalizedPlanTrafficLimitSpeed = selectedPlan
+      ? normalizePlanTrafficLimitSpeed(selectedPlan.trafficLimitSpeed)
+      : null
+    if (normalizedPlanTrafficLimitSpeed === undefined) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid plan traffic limit speed'))
+    }
     let planBandwidthLimit: string | null = null  // 方案带宽限制（事务中计算）
 
     try {
       const result = await prisma.$transaction(async (tx) => {
+        let lockedBalanceBefore: number | null = null
+
+        if (selectedPlan && billing) {
+          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, user.id)
+          if (!balanceLocked) {
+            throw new Error('BALANCE_CONFLICT: 余额正在处理，请稍后重试')
+          }
+
+          const userRecord = await tx.user.findUnique({
+            where: { id: user.id },
+            select: { balance: true }
+          })
+          if (!userRecord) {
+            throw new Error('USER_NOT_FOUND: 用户不存在')
+          }
+
+          lockedBalanceBefore = Number(userRecord.balance)
+          if (lockedBalanceBefore < actualPrice) {
+            throw new Error('BALANCE_INSUFFICIENT: 余额不足')
+          }
+        }
+
         // →→→ 第一步：在事务中使用行锁选择并预占宿主机资源 ←←←
         const lockedHost = await db.selectAndReserveHostWithLock(tx, {
           packageHostIds: packageHostIds.length > 0 ? packageHostIds : undefined,
@@ -1350,28 +1594,29 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         // →→→ 第三步：如果是付费方案，扣除余额并记录日志 ←←←
         let balanceLogId: number | undefined
         if (selectedPlan && billing) {
-          // 获取当前余额
-          const userRecord = await tx.user.findUnique({
+          const balanceBefore = lockedBalanceBefore ?? 0
+
+          // 扣除余额。使用条件更新和增量扣减，防止并发创建实例绕过余额检查。
+          const balanceUpdateResult = await tx.user.updateMany({
+            where: {
+              id: user.id,
+              balance: { gte: actualPrice }
+            },
+            data: { balance: { decrement: actualPrice } }
+          })
+
+          if (balanceUpdateResult.count === 0) {
+            throw new Error('BALANCE_INSUFFICIENT: 余额不足或并发冲突')
+          }
+
+          const updatedUserRecord = await tx.user.findUnique({
             where: { id: user.id },
             select: { balance: true }
           })
-          if (!userRecord) {
+          if (!updatedUserRecord) {
             throw new Error('USER_NOT_FOUND: 用户不存在')
           }
-
-          const balanceBefore = Number(userRecord.balance)
-          const balanceAfter = Number((balanceBefore - actualPrice).toFixed(2))
-
-          // 再次检查余额（事务内双重检查）
-          if (balanceAfter < 0) {
-            throw new Error('BALANCE_INSUFFICIENT: 余额不足')
-          }
-
-          // 扣除余额
-          await tx.user.update({
-            where: { id: user.id },
-            data: { balance: balanceAfter }
-          })
+          const balanceAfter = Number(updatedUserRecord.balance)
 
           // 记录余额日志
           const remarkText = discountAmount > 0
@@ -1393,16 +1638,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
         // →→→ 第四步：创建实例记录 ←←←
         // 如果是付费方案，使用方案的配额限制；否则使用套餐配额
-        // 带宽限制：付费方案优先使用方案的 trafficLimitSpeed
-        let planBandwidthLimit: string | null = null
-        if (selectedPlan?.trafficLimitSpeed && selectedPlan.trafficLimitSpeed !== '0') {
-          const bytes = BigInt(selectedPlan.trafficLimitSpeed)
-          const MB = BigInt(1024 * 1024)
-          const mbps = Number(bytes / MB)
-          if (mbps > 0) {
-            planBandwidthLimit = `${mbps}Mbit`
-          }
-        }
+        const planBandwidthLimit = normalizedPlanTrafficLimitSpeed
 
         const baseMonthlyTrafficLimit = selectedPlan ? selectedPlan.trafficLimit : packageTrafficLimit
         const effectiveMonthlyTrafficLimit = await resolveInstanceTrafficLimitForHost(tx as any, {
@@ -1606,6 +1842,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       // 处理余额不足错误
       if (errorMessage.includes('BALANCE_INSUFFICIENT')) {
         return reply.code(400).send(apiError(ErrorCode.BALANCE_INSUFFICIENT, '余额不足'))
+      }
+
+      if (errorMessage.includes('BALANCE_CONFLICT')) {
+        return reply.code(409).send(apiError(ErrorCode.BALANCE_INSUFFICIENT,
+          '余额正在处理，请稍后重试'))
       }
 
       // 处理用户不存在错误
@@ -1842,9 +2083,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2254,9 +2495,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2290,9 +2531,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2404,9 +2645,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2439,25 +2680,16 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceId, reply)) return
 
-    // 检查是否已有活跃任务
-    const activeTask = await getActiveTaskForInstance(instanceId)
-    if (activeTask) {
-      return reply.code(409).send({
-        error: 'Instance has an active task',
-        code: 'TASK_IN_PROGRESS',
-        taskId: activeTask.id,
-        taskType: activeTask.taskType,
-        status: activeTask.status
-      })
-    }
+    if (await rejectActiveInstanceWorkflowConflict(reply, instanceId)) return
 
     // 创建异步任务
-    const task = await createInstanceTask({
+    const task = await createInstanceTaskOrConflict(reply, {
       instanceId,
       hostId: instance.host_id,
       userId: user.id,
       taskType: 'start'
     })
+    if (!task) return
 
     await createLog(user.id, 'instance', 'instance.start', `Queued start task for instance "${instance.name}"`, 'success', { instanceId })
 
@@ -2473,9 +2705,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2512,25 +2744,16 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceId, reply)) return
 
-    // 检查是否已有活跃任务
-    const activeTask = await getActiveTaskForInstance(instanceId)
-    if (activeTask) {
-      return reply.code(409).send({
-        error: 'Instance has an active task',
-        code: 'TASK_IN_PROGRESS',
-        taskId: activeTask.id,
-        taskType: activeTask.taskType,
-        status: activeTask.status
-      })
-    }
+    if (await rejectActiveInstanceWorkflowConflict(reply, instanceId)) return
 
     // 创建异步任务
-    const task = await createInstanceTask({
+    const task = await createInstanceTaskOrConflict(reply, {
       instanceId,
       hostId: instance.host_id,
       userId: user.id,
       taskType: 'stop'
     })
+    if (!task) return
 
     await createLog(user.id, 'instance', 'instance.stop', `Queued stop task for instance "${instance.name}"`, 'success', { instanceId })
 
@@ -2546,9 +2769,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2576,25 +2799,16 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceId, reply)) return
 
-    // 检查是否已有活跃任务
-    const activeTask = await getActiveTaskForInstance(instanceId)
-    if (activeTask) {
-      return reply.code(409).send({
-        error: 'Instance has an active task',
-        code: 'TASK_IN_PROGRESS',
-        taskId: activeTask.id,
-        taskType: activeTask.taskType,
-        status: activeTask.status
-      })
-    }
+    if (await rejectActiveInstanceWorkflowConflict(reply, instanceId)) return
 
     // 创建异步任务
-    const task = await createInstanceTask({
+    const task = await createInstanceTaskOrConflict(reply, {
       instanceId,
       hostId: instance.host_id,
       userId: user.id,
       taskType: 'restart'
     })
+    if (!task) return
 
     await createLog(user.id, 'instance', 'instance.restart', `Queued restart task for instance "${instance.name}"`, 'success', { instanceId })
 
@@ -2618,9 +2832,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Params: { id: string }; Body: { reason?: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2692,9 +2906,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2751,9 +2965,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2922,8 +3136,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>('/:id/change-host-options', {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const instanceId = Number(request.params.id)
-    if (isNaN(instanceId)) {
+    const instanceId = parsePositiveRouteId(request.params.id)
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -2960,8 +3174,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Body: { targetHostId: number; sshKeyId: number }
   }>, reply: FastifyReply) => {
-    const instanceId = Number(request.params.id)
-    if (isNaN(instanceId)) {
+    const instanceId = parsePositiveRouteId(request.params.id)
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -3075,7 +3289,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
     }
 
-    const task = await createInstanceTask({
+    const task = await createInstanceTaskOrConflict(reply, {
       instanceId,
       hostId: targetHostId,
       userId: user.id,
@@ -3083,6 +3297,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       targetHostId,
       sshKeyId
     })
+    if (!task) return
 
     await createLog(
       user.id,
@@ -3122,9 +3337,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     Body: { image: string; sshKeyId?: number; imageAlias?: string; customInitCommandIds?: number[] }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -3162,19 +3377,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceId, reply)) return
 
-    // 检查是否已有活跃任务
-    const activeTask = await getActiveTaskForInstance(instanceId)
-    if (activeTask) {
-      return reply.code(409).send({
-        error: 'Instance has an active task',
-        code: 'TASK_IN_PROGRESS',
-        taskId: activeTask.id,
-        taskType: activeTask.taskType,
-        status: activeTask.status
-      })
-    }
+    if (await rejectActiveInstanceWorkflowConflict(reply, instanceId)) return
 
 
+
+    if (!await requireVerifiedOperation(reply, user.id, 'reinstall_instance', instanceId)) return
 
     // 验证镜像是否在预设列表中
     if (!await isValidSystemImage(imageAlias)) {
@@ -3227,7 +3434,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     // 创建异步任务
-    const task = await createInstanceTask({
+    const task = await createInstanceTaskOrConflict(reply, {
       instanceId,
       hostId: instance.host_id,
       userId: user.id,
@@ -3236,11 +3443,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       sshKeyId,
       customInitCommandIds
     })
+    if (!task) return
 
     await createLog(user.id, 'instance', 'instance.rebuild', `Queued rebuild task for instance "${instance.name}" with image ${imageAlias}`, 'success', { instanceId })
-
-    // 清理已使用的验证记录（在任务中会重新验证）
-    await consumeOperationVerification(user.id, 'reinstall_instance', instanceId)
 
     reply.code(202).send({
       message: 'Instance rebuild task queued',
@@ -3271,9 +3476,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     Body: { image: string; sshKeyId?: number; imageAlias?: string; customInitCommandIds?: number[] }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -3309,19 +3514,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceId, reply)) return
 
-    // 检查是否已有活跃任务
-    const activeTask = await getActiveTaskForInstance(instanceId)
-    if (activeTask) {
-      return reply.code(409).send({
-        error: 'Instance has an active task',
-        code: 'TASK_IN_PROGRESS',
-        taskId: activeTask.id,
-        taskType: activeTask.taskType,
-        status: activeTask.status
-      })
-    }
+    if (await rejectActiveInstanceWorkflowConflict(reply, instanceId)) return
 
 
+
+    if (!await requireVerifiedOperation(reply, user.id, 'recreate_instance', instanceId)) return
 
     // 验证镜像是否在预设列表中
     if (!await isValidSystemImage(imageAlias)) {
@@ -3374,7 +3571,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     // 创建异步任务
-    const task = await createInstanceTask({
+    const task = await createInstanceTaskOrConflict(reply, {
       instanceId,
       hostId: instance.host_id,
       userId: user.id,
@@ -3383,11 +3580,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       sshKeyId,
       customInitCommandIds
     })
+    if (!task) return
 
     await createLog(user.id, 'instance', 'instance.recreate', `Queued recreate task for instance "${instance.name}" with image ${imageAlias}`, 'success', { instanceId })
-
-    // 清理已使用的验证记录
-    await consumeOperationVerification(user.id, 'recreate_instance', instanceId)
 
     reply.code(202).send({
       message: 'Instance recreate task queued',
@@ -3410,9 +3605,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string }; Body: { reason?: string } }>, reply: FastifyReply) => {
     const { id } = request.params
     const { reason } = request.body || {}
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -3469,6 +3664,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     if (await checkTransferLock(instanceId, reply)) return
 
 
+
+    if (!await requireVerifiedOperation(reply, user.id, 'delete_instance', instanceId)) return
 
     try {
       // 复用上面已获取的host
@@ -3534,82 +3731,15 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         })
       }
 
-      // ===== 0.1 处理退款（节点所有者/管理员删除他人的付费实例时）=====
       let hostOwnerRefundAmount = 0
-      if (isPrivilegedDeleter && instance.user_id !== user.id) {
-        const instanceBilling = await prisma.instance.findUnique({
-          where: { id: instance.id },
-          select: {
-            billingPrice: true,
-            billingCycle: true,
-            expiresAt: true,
-            packagePlanId: true
-          }
-        })
-
-        const refundInfo = instanceBilling
-          ? await db.calculateInstanceRefund({
-              id: instance.id,
-              billingPrice: instanceBilling.billingPrice ? Number(instanceBilling.billingPrice) : null,
-              billingCycle: instanceBilling.billingCycle,
-              expiresAt: instanceBilling.expiresAt,
-              packagePlanId: instanceBilling.packagePlanId
-            })
-          : { isPaid: false, refundAmount: 0 }
-
-        if (refundInfo.isPaid && refundInfo.refundAmount > 0) {
-          hostOwnerRefundAmount = refundInfo.refundAmount
-
-          try {
-            await prisma.$transaction(async (tx) => {
-              const instanceOwner = await tx.user.findUnique({
-                where: { id: instance.user_id },
-                select: { balance: true }
-              })
-              const oldBalance = Number(instanceOwner?.balance || 0)
-              const newBalance = oldBalance + hostOwnerRefundAmount
-
-              await tx.user.update({
-                where: { id: instance.user_id },
-                data: { balance: { increment: hostOwnerRefundAmount } }
-              })
-
-              await tx.balanceLog.create({
-                data: {
-                  userId: instance.user_id,
-                  type: 'refund',
-                  amount: hostOwnerRefundAmount,
-                  balanceBefore: oldBalance,
-                  balanceAfter: newBalance,
-                  instanceId: instance.id,
-                  remark: `托管实例被删除退款：${instance.name}`
-                }
-              })
-
-              await db.deductHostingBalance(
-                instance.host_id,
-                hostOwnerRefundAmount,
-                instance.id,
-                `删除托管实例退款扣除：${instance.name}`,
-                tx
-              )
-            })
-          } catch (refundError) {
-            await prisma.instance.updateMany({
-              where: { id: instanceId, status: 'deleted' },
-              data: { status: instance.status as InstanceStatus }
-            })
-            throw refundError
-          }
-        }
-      }
 
       let client = null
       try {
         client = await getIncusClient(host)
       } catch (clientError) {
         const errorMessage = clientError instanceof Error ? clientError.message : String(clientError)
-        console.error('获取 Incus 客户端失败:', errorMessage)
+        await restoreClaimedInstanceForDelete(instanceId, instance.status as InstanceStatus)
+        throw new Error(`获取 Incus 客户端失败: ${errorMessage}`)
       }
 
       // ===== 1. 删除反代站点（Caddy 远程 + 数据库）=====
@@ -3636,10 +3766,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
             }
           }
         }
-        // 始终删除数据库记录（无论 Caddy 是否启用）
-        for (const site of proxySites) {
-          await deleteProxySite(site.id)
-        }
       }
 
       // ===== 2. 删除端口映射（Incus 设备 + 数据库）=====
@@ -3657,8 +3783,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
               console.error(`删除端口映射设备失败 (${deviceName}):`, errorMessage)
             }
           }
-          // 始终删除数据库记录
-          await db.deletePortMapping(map.id)
         }
       }
 
@@ -3675,8 +3799,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
               console.error(`删除 Incus 快照失败 (${snapshot.name}):`, errorMessage)
             }
           }
-          // 始终删除数据库记录
-          await db.deleteSnapshot(snapshot.id)
         }
       }
 
@@ -3693,12 +3815,95 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
               console.error(`删除 Incus 备份失败 (${backup.name}):`, errorMessage)
             }
           }
-          // 始终软删除数据库记录
-          await db.deleteBackup(backup.id)
         }
       }
 
-      // ===== 5. 删除快照策略和备份策略 =====
+      // ===== 6. 停止并删除 Incus 实例 =====
+      try {
+        await deleteIncusInstanceForDelete(client, instance, request.log)
+      } catch (incusError) {
+        await restoreClaimedInstanceForDelete(instanceId, instance.status as InstanceStatus)
+        throw incusError
+      }
+
+      // ===== 7. 处理退款（节点所有者/管理员删除他人的付费实例时）=====
+      if (isPrivilegedDeleter && instance.user_id !== user.id) {
+        const instanceBilling = await prisma.instance.findUnique({
+          where: { id: instance.id },
+          select: {
+            billingPrice: true,
+            billingCycle: true,
+            expiresAt: true,
+            packagePlanId: true
+          }
+        })
+
+        const refundInfo = instanceBilling
+          ? await db.calculateInstanceRefund({
+              id: instance.id,
+              billingPrice: instanceBilling.billingPrice ? Number(instanceBilling.billingPrice) : null,
+              billingCycle: instanceBilling.billingCycle,
+              expiresAt: instanceBilling.expiresAt,
+              packagePlanId: instanceBilling.packagePlanId
+            })
+          : { isPaid: false, refundAmount: 0 }
+
+        if (refundInfo.isPaid && refundInfo.refundAmount > 0) {
+          hostOwnerRefundAmount = refundInfo.refundAmount
+
+          await prisma.$transaction(async (tx) => {
+            await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.user_id)
+
+            const instanceOwner = await tx.user.findUnique({
+              where: { id: instance.user_id },
+              select: { balance: true }
+            })
+            const oldBalance = Number(instanceOwner?.balance || 0)
+
+            const updatedUser = await tx.user.update({
+              where: { id: instance.user_id },
+              data: { balance: { increment: hostOwnerRefundAmount } },
+              select: { balance: true }
+            })
+            const newBalance = Number(updatedUser.balance)
+
+            await tx.balanceLog.create({
+              data: {
+                userId: instance.user_id,
+                type: 'refund',
+                amount: hostOwnerRefundAmount,
+                balanceBefore: oldBalance,
+                balanceAfter: newBalance,
+                instanceId: instance.id,
+                remark: `托管实例被删除退款：${instance.name}`
+              }
+            })
+
+            await db.deductHostingBalance(
+              instance.host_id,
+              hostOwnerRefundAmount,
+              instance.id,
+              `删除托管实例退款扣除：${instance.name}`,
+              tx
+            )
+          })
+        }
+      }
+
+      // ===== 7.1 删除数据库附属记录 =====
+      for (const site of proxySites) {
+        await deleteProxySite(site.id)
+      }
+      for (const mapping of portMappings || []) {
+        await db.deletePortMapping((mapping as { id: number }).id)
+      }
+      for (const snapshot of snapshots) {
+        await db.deleteSnapshot(snapshot.id)
+      }
+      for (const backup of backups) {
+        await db.deleteBackup(backup.id)
+      }
+
       try {
         await prisma.snapshotPolicy.deleteMany({ where: { instanceId } })
         await prisma.backupPolicy.deleteMany({ where: { instanceId } })
@@ -3707,7 +3912,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         console.error('删除策略失败:', errorMessage)
       }
 
-      // ===== 5.1 删除流量相关记录 =====
       try {
         await prisma.trafficSnapshot.deleteMany({ where: { instanceId } })
         await prisma.dailyTraffic.deleteMany({ where: { instanceId } })
@@ -3716,7 +3920,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         console.error('删除流量记录失败:', errorMessage)
       }
 
-      // ===== 5.2 删除 IP 地址和 IPv6 网段记录 =====
       try {
         await prisma.ipAddress.deleteMany({ where: { instanceId } })
         await prisma.ipv6Subnet.deleteMany({ where: { instanceId } })
@@ -3725,7 +3928,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         console.error('删除 IP 记录失败:', errorMessage)
       }
 
-      // ===== 5.3 删除历史任务记录（已完成/失败的恢复任务、上传任务和实例任务）=====
       try {
         await prisma.restoreTask.deleteMany({
           where: { instanceId, status: { in: ['COMPLETED', 'FAILED'] } }
@@ -3741,7 +3943,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         console.error('删除历史任务记录失败:', errorMessage)
       }
 
-      // ===== 5.4 取消待处理的转移请求 =====
       try {
         await prisma.instanceTransfer.updateMany({
           where: { instanceId, status: 'pending' },
@@ -3750,19 +3951,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       } catch (transferError) {
         const errorMessage = transferError instanceof Error ? transferError.message : String(transferError)
         console.error('取消转移请求失败:', errorMessage)
-      }
-
-      // ===== 6. 停止并删除 Incus 实例 =====
-      if (client) {
-        try {
-          if (instance.status === 'running') {
-            await stopInstance(client, instance.incus_id, true)
-          }
-          await deleteInstance(client, instance.incus_id)
-        } catch (incusError) {
-          const errorMessage = incusError instanceof Error ? incusError.message : String(incusError)
-          console.error('Incus 删除实例失败:', errorMessage)
-        }
       }
 
       // ===== 8. 释放用户配额和宿主机资源 =====
@@ -3844,9 +4032,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         { instanceId }
       )
 
-      // 清理已使用的验证记录
-      await consumeOperationVerification(user.id, 'delete_instance', instanceId)
-
       return {
         message: 'Instance deleted',
         refundAmount: hostOwnerRefundAmount > 0 ? hostOwnerRefundAmount : undefined
@@ -3890,9 +4075,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -3923,6 +4108,13 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceId, reply)) return
 
+    const portLockKey = getInstancePortMappingLockKey(instanceId)
+    const portLock = await acquireLock(portLockKey, PORT_MAPPING_LOCK_OPTIONS)
+    if (!portLock.success || !portLock.ownerId) {
+      return reply.code(409).send(apiError(ErrorCode.PORT_CONFLICT, 'Port mapping operation is busy, please retry later'))
+    }
+
+    try {
     const quotaCheck = await db.checkPortQuota(instance.user_id, instanceId)
     if (!quotaCheck.allowed) {
       return reply.code(400).send(apiError(ErrorCode.QUOTA_PORT_EXCEEDED, quotaCheck.message))
@@ -3954,6 +4146,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     const createdDeviceNames: string[] = []
+    let reservedMappingId: number | null = null
     try {
       const client = await getIncusClient(host)
 
@@ -4000,13 +4193,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, proxyDeviceRes.errorMessage || '底层代理生成异常被工厂截断'));
       }
 
-      for (const deviceEntry of deviceConfigs) {
-        const resolvedDeviceName = `${deviceName}${deviceEntry.nameSuffix || ''}`
-        await addDevice(client, instance.incus_id, resolvedDeviceName, deviceEntry.deviceConfig as Record<string, string>)
-        createdDeviceNames.push(resolvedDeviceName)
-      }
-
-      const mappingId = await db.createPortMapping({
+      reservedMappingId = await db.createPortMapping({
         instanceId: instanceId,
         hostId: instance.host_id,
         protocol,
@@ -4015,11 +4202,17 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         remark: remark?.trim()
       })
 
+      for (const deviceEntry of deviceConfigs) {
+        const resolvedDeviceName = `${deviceName}${deviceEntry.nameSuffix || ''}`
+        await addDevice(client, instance.incus_id, resolvedDeviceName, deviceEntry.deviceConfig as Record<string, string>)
+        createdDeviceNames.push(resolvedDeviceName)
+      }
+
       await createLog(user.id, 'instance', 'port.add', `Added port mapping for instance "${instance.name}" [host: ${host?.name || 'unknown'}, ${protocol.toUpperCase()} ${allocatedPort}:${privatePort}${remark ? `, remark: ${remark}` : ''}]`, 'success', { instanceId })
 
       return {
         message: 'Port mapping added',
-        mapping: { id: mappingId, protocol, publicPort: allocatedPort, privatePort, remark: remark?.trim() || null }
+        mapping: { id: reservedMappingId, protocol, publicPort: allocatedPort, privatePort, remark: remark?.trim() || null }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -4027,15 +4220,24 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         const host = await db.getHostById(instance.host_id)
         if (host) {
           const client = await getIncusClient(host)
-          const deviceName = `proxy-${protocol}-${allocatedPort}`
-          await removeDevice(client, instance.incus_id, deviceName)
-          await removeDevice(client, instance.incus_id, `${deviceName}-v6`)
+          for (const createdDeviceName of createdDeviceNames) {
+            await removeDevice(client, instance.incus_id, createdDeviceName)
+          }
+        }
+        if (reservedMappingId !== null) {
+          await db.deletePortMapping(reservedMappingId)
         }
       } catch {
         // 忽略回滚失败，保留原始错误
       }
       await createLog(user.id, 'instance', 'port.add', `Failed to add port mapping: ${errorMessage}`, 'failed', { instanceId })
+      if (isUniqueConstraintError(error)) {
+        return reply.code(400).send(apiError(ErrorCode.PORT_IN_USE))
+      }
       return reply.code(500).send({ error: errorMessage })
+    }
+    } finally {
+      await releaseLock(portLockKey, portLock.ownerId)
     }
   })
 
@@ -4044,10 +4246,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { id: string; portId: string } }>, reply: FastifyReply) => {
     const { id, portId } = request.params
-    const instanceId = Number(id)
-    const portMappingId = Number(portId)
+    const instanceId = parsePositiveRouteId(id)
+    const portMappingId = parsePositiveRouteId(portId)
 
-    if (isNaN(instanceId) || isNaN(portMappingId)) {
+    if (!instanceId || !portMappingId) {
       return reply.code(400).send(apiError(ErrorCode.PORT_MAPPING_INVALID_ID))
     }
 
@@ -4078,6 +4280,12 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceId, reply)) return
 
+    const portLockKey = getInstancePortMappingLockKey(instanceId)
+    const portLock = await acquireLock(portLockKey, PORT_MAPPING_LOCK_OPTIONS)
+    if (!portLock.success || !portLock.ownerId) {
+      return reply.code(409).send(apiError(ErrorCode.PORT_CONFLICT, 'Port mapping operation is busy, please retry later'))
+    }
+
     try {
       const host = await db.getHostById(instance.host_id)
       if (!host) {
@@ -4098,6 +4306,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       await createLog(user.id, 'instance', 'port.delete', `Failed to delete port mapping: ${errorMessage}`, 'failed', { instanceId })
       return reply.code(500).send({ error: errorMessage })
+    } finally {
+      await releaseLock(portLockKey, portLock.ownerId)
     }
   })
 
@@ -4154,9 +4364,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -4188,6 +4398,13 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceId, reply)) return
 
+    const portLockKey = getInstancePortMappingLockKey(instanceId)
+    const portLock = await acquireLock(portLockKey, PORT_MAPPING_LOCK_OPTIONS)
+    if (!portLock.success || !portLock.ownerId) {
+      return reply.code(409).send(apiError(ErrorCode.PORT_CONFLICT, 'Port mapping operation is busy, please retry later'))
+    }
+
+    try {
     // 2. 计算端口数量
     const privatePortCount = privatePortEnd - privatePortStart + 1
     if (privatePortCount <= 0 || privatePortCount > 100) {
@@ -4371,13 +4588,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
             || (proxyDeviceRes.deviceConfig ? [{ deviceConfig: proxyDeviceRes.deviceConfig }] : [])
 
           if (!proxyDeviceRes.success || deviceConfigs.length === 0) {
-            return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, proxyDeviceRes.errorMessage || '代理对象工厂拦截异常'));
-          }
-
-          for (const deviceEntry of deviceConfigs) {
-            const resolvedDeviceName = `${deviceName}${deviceEntry.nameSuffix || ''}`
-            await addDevice(client, instance.incus_id, resolvedDeviceName, deviceEntry.deviceConfig as Record<string, string>)
-            createdDeviceNames.push(resolvedDeviceName)
+            throw new PortMappingValidationError(proxyDeviceRes.errorMessage || '代理对象工厂拦截异常');
           }
 
           const mappingId = await db.createPortMapping({
@@ -4395,6 +4606,12 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
             publicPort: mapping.publicPort,
             privatePort: mapping.privatePort
           })
+
+          for (const deviceEntry of deviceConfigs) {
+            const resolvedDeviceName = `${deviceName}${deviceEntry.nameSuffix || ''}`
+            await addDevice(client, instance.incus_id, resolvedDeviceName, deviceEntry.deviceConfig as Record<string, string>)
+            createdDeviceNames.push(resolvedDeviceName)
+          }
         }
       }
 
@@ -4426,7 +4643,16 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         // 忽略回滚失败，保留原始错误
       }
       await createLog(user.id, 'instance', 'port.batch_add', `Failed to batch add port mappings: ${errorMessage}`, 'failed', { instanceId })
+      if (error instanceof PortMappingValidationError) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, errorMessage))
+      }
+      if (isUniqueConstraintError(error)) {
+        return reply.code(400).send(apiError(ErrorCode.PORT_IN_USE))
+      }
       return reply.code(500).send({ error: errorMessage })
+    }
+    } finally {
+      await releaseLock(portLockKey, portLock.ownerId)
     }
   })
 
@@ -4462,9 +4688,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -4485,11 +4711,12 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 新配额系统：实例级别的端口/快照/备份/站点限制独立存储，不再与用户配额关联
-    const newPortLimit = portLimit !== undefined ? (portLimit || null) : instance.port_limit
-    const newSnapshotLimit = snapshotLimit !== undefined ? (snapshotLimit || null) : instance.snapshot_limit
-    const newBackupLimit = backupLimit !== undefined ? (backupLimit || null) : instance.backup_limit
-    const newSiteLimit = siteLimit !== undefined ? (siteLimit === 0 ? 0 : (siteLimit || null)) : instance.site_limit
+    // 新配额系统：实例级别的端口/快照/备份/站点限制独立存储，不再与用户配额关联。
+    // 这里必须保留显式 0：0 表示无配额，null 表示继承/未单独设置。
+    const newPortLimit = portLimit !== undefined ? portLimit : instance.port_limit
+    const newSnapshotLimit = snapshotLimit !== undefined ? snapshotLimit : instance.snapshot_limit
+    const newBackupLimit = backupLimit !== undefined ? backupLimit : instance.backup_limit
+    const newSiteLimit = siteLimit !== undefined ? siteLimit : instance.site_limit
 
     const portMappings = await db.getPortMappings(instanceId)
     const currentPortUsed = portMappings.length
@@ -4519,17 +4746,17 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.QUOTA_BACKUP_BELOW_USED, `used: ${currentBackupUsed}, set: ${newBackupLimit}`))
     }
 
-    // 验证：端口数、快照数、备份数必须在 1-1000 范围内（null 表示不限制）
+    // 验证：端口必须在 1-1000 范围内；快照/备份/站点允许 0 表示无配额。
     if (newPortLimit !== null && (newPortLimit < 1 || newPortLimit > 1000)) {
       return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, 'Port limit must be between 1 and 1000'))
     }
 
-    if (newSnapshotLimit !== null && (newSnapshotLimit < 1 || newSnapshotLimit > 1000)) {
-      return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, 'Snapshot limit must be between 1 and 1000'))
+    if (newSnapshotLimit !== null && (newSnapshotLimit < 0 || newSnapshotLimit > 1000)) {
+      return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, 'Snapshot limit must be between 0 and 1000 (0 = no quota)'))
     }
 
-    if (newBackupLimit !== null && (newBackupLimit < 1 || newBackupLimit > 1000)) {
-      return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, 'Backup limit must be between 1 and 1000'))
+    if (newBackupLimit !== null && (newBackupLimit < 0 || newBackupLimit > 1000)) {
+      return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, 'Backup limit must be between 0 and 1000 (0 = no quota)'))
     }
 
     // 验证站点限制：0 表示无配额，null 表示继承套餐
@@ -4599,9 +4826,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -4644,21 +4871,13 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     const newCpu = cpu ?? instance.cpu
     const newMemory = memory ?? instance.memory
     const newDisk = disk !== undefined ? Math.round(disk) : instance.disk
-    // 流量限制：如果传入null则清空，如果传入字符串则转换为BigInt
     let newTrafficLimit: bigint | null = null
     if (monthlyTrafficLimit !== undefined) {
-      if (monthlyTrafficLimit === null || monthlyTrafficLimit === '') {
-        newTrafficLimit = null
-      } else {
-        try {
-          newTrafficLimit = BigInt(monthlyTrafficLimit)
-          if (newTrafficLimit < 0n) {
-            return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Traffic limit must be non-negative'))
-          }
-        } catch {
-          return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid traffic limit format'))
-        }
+      const parsedMonthlyTrafficLimit = parseNullablePostgresBigIntInput(monthlyTrafficLimit)
+      if (parsedMonthlyTrafficLimit === undefined) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid monthly traffic limit'))
       }
+      newTrafficLimit = parsedMonthlyTrafficLimit
     } else {
       // 未修改时保持原值
       newTrafficLimit = instance.monthly_traffic_limit ? BigInt(instance.monthly_traffic_limit) : null
@@ -4826,10 +5045,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
     const { user } = request
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -4866,17 +5085,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.INSTANCE_STOP_REQUIRED))
     }
 
-    // 检查是否已有活跃任务
-    const activeTask = await getActiveTaskForInstance(instanceId)
-    if (activeTask) {
-      return reply.code(409).send({
-        error: 'Instance has an active task',
-        code: 'TASK_IN_PROGRESS',
-        taskId: activeTask.id,
-        taskType: activeTask.taskType,
-        status: activeTask.status
-      })
-    }
+    if (await rejectActiveInstanceWorkflowConflict(reply, instanceId)) return
 
     // 检查宿主机资源是否足够（克隆会消耗与源实例相同的资源）
     const hostWithQuota = host as typeof host & { cpu_allowance_max?: number; memory_max?: number; storage_size?: number }
@@ -4904,12 +5113,13 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     // 创建异步任务
-    const task = await createInstanceTask({
+    const task = await createInstanceTaskOrConflict(reply, {
       instanceId,
       hostId: sourceInstance.host_id,
       userId: user.id,
       taskType: 'clone'
     })
+    if (!task) return
 
     await createLog(
       user.id,
@@ -4948,10 +5158,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
     const user = request.user
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -4997,9 +5207,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5127,9 +5337,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } }
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5233,9 +5443,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } }
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5405,9 +5615,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     Params: { id: string }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5489,9 +5699,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5536,9 +5746,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { taskId: string } }>, reply: FastifyReply) => {
     const { taskId } = request.params
-    const taskIdNum = Number(taskId)
+    const taskIdNum = parsePositiveRouteId(taskId)
 
-    if (isNaN(taskIdNum)) {
+    if (!taskIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5593,9 +5803,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { taskId: string } }>, reply: FastifyReply) => {
     const { taskId } = request.params
-    const taskIdNum = Number(taskId)
+    const taskIdNum = parsePositiveRouteId(taskId)
 
-    if (isNaN(taskIdNum)) {
+    if (!taskIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5656,9 +5866,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5740,9 +5950,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -5817,9 +6027,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const instanceId = Number(id)
+    const instanceId = parsePositiveRouteId(id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -6332,6 +6542,17 @@ async function createInstanceAsync(
         console.log(`[Provisioning] 用户 ${userId} 资源已回滚 (CPU=${resources.cpu}, Mem=${resources.memory}MB, Disk=${resources.disk}MB)`)
       } catch (rollbackErr) {
         console.error(`[Provisioning] 资源回滚失败:`, rollbackErr)
+      }
+
+      try {
+        const compensation = await db.compensateFailedInstancePurchase(instanceId, userId, host.id)
+        if (compensation.refunded) {
+          console.log(`[Provisioning] 实例 ${instanceId} 创建失败已自动退款 ¥${compensation.refundAmount.toFixed(2)}`)
+        } else if (compensation.reason !== 'not_paid_purchase') {
+          console.log(`[Provisioning] 实例 ${instanceId} 创建失败无需退款: ${compensation.reason || 'unknown'}`)
+        }
+      } catch (compensationErr) {
+        console.error(`[Provisioning] 实例 ${instanceId} 创建失败后的账务补偿失败:`, compensationErr)
       }
     } else if (updateResult.count === 0) {
       console.log(`[Provisioning] 实例 ${instanceId} 已被超时清理任务处理，跳过资源回滚`)

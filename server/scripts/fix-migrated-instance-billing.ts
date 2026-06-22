@@ -1,6 +1,6 @@
-import 'dotenv/config'
+import '../src/config/env.js'
 
-import { prisma } from '../src/db/prisma.js'
+import { closePrismaDatabase, prisma } from '../src/db/prisma.js'
 import { getInstanceBillingLineageIds, reassignInstanceBillingRecords } from '../src/db/billing-records.js'
 
 type MigrationMessageData = {
@@ -112,11 +112,11 @@ async function main(): Promise<void> {
 
   console.log(`[Summary] scanned=${scanned}, eligible=${eligible}, movedRecords=${movedRecords}, unresolved=${unresolved}, skipped=${skipped}`)
 
-  await prisma.$disconnect()
+  await closePrismaDatabase()
 }
 
 void main().catch(async error => {
   console.error('[FixMigratedInstanceBilling] failed:', error)
-  await prisma.$disconnect()
+  await closePrismaDatabase()
   process.exit(1)
 })

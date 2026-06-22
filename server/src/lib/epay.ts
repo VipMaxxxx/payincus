@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto'
+import { assertSafeHttpUrl } from './outbound-security.js'
 
 // SDK 版本类型
 export type EpayVersion = 'v1' | 'v2'
@@ -197,11 +198,14 @@ export class EpayCoreV1 implements IEpayClient {
    */
   async queryOrder(outTradeNo: string): Promise<OrderQueryResult> {
     try {
-      const url = `${this.apiurl}api.php?act=order&pid=${encodeURIComponent(this.pid)}&key=${encodeURIComponent(this.key)}&out_trade_no=${encodeURIComponent(outTradeNo)}`
+      const safeBaseUrl = await assertSafeHttpUrl(this.apiurl, 'Epay API URL')
+      const apiurl = safeBaseUrl.toString().replace(/\/+$/, '') + '/'
+      const url = `${apiurl}api.php?act=order&pid=${encodeURIComponent(this.pid)}&key=${encodeURIComponent(this.key)}&out_trade_no=${encodeURIComponent(outTradeNo)}`
       
       const response = await fetch(url, {
         method: 'GET',
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Accept': 'application/json' },
+        redirect: 'manual'
       })
       
       if (!response.ok) {

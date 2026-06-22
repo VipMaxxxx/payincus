@@ -6,6 +6,13 @@
 import { prisma } from './prisma.js'
 import type { InviteCode } from '../types/database.js'
 
+function clampInvitePagination(page: number, pageSize: number): { page: number; pageSize: number } {
+  return {
+    page: Number.isInteger(page) && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) ? Math.min(Math.max(pageSize, 1), 100) : 20
+  }
+}
+
 /**
  * 查找邀请码
  */
@@ -109,13 +116,14 @@ export async function getInviteCodesWithUsers(
     : status === 'unused'
       ? { usedBy: null }
       : undefined
+  const pagination = clampInvitePagination(page, pageSize)
 
   const [total, inviteCodes] = await Promise.all([
     prisma.inviteCode.count({ where }),
     prisma.inviteCode.findMany({
       where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
       include: {
         user: {
           select: {
@@ -178,6 +186,8 @@ export async function getUserInviteCodesWithUsers(
   }>
   total: number
 }> {
+  const pagination = clampInvitePagination(page, pageSize)
+
   const [total, inviteCodes] = await Promise.all([
     prisma.inviteCode.count({
       where: {
@@ -188,8 +198,8 @@ export async function getUserInviteCodesWithUsers(
       where: {
         createdBy: userId
       },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
       include: {
         user: {
           select: {

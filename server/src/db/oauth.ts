@@ -5,7 +5,16 @@
 
 import { prisma } from './prisma.js'
 import type { OAuthConfig, UserOAuthBinding } from '../types/database.js'
-import { encryptSensitiveData } from '../lib/security.js'
+import { decryptSensitiveData, encryptSensitiveData, isEncrypted } from '../lib/security.js'
+
+function decryptOAuthSecret(value: string): string {
+  if (!value) return value
+  return isEncrypted(value) ? (decryptSensitiveData(value) || value) : value
+}
+
+function encryptOAuthSecret(value: string): string {
+  return isEncrypted(value) ? value : encryptSensitiveData(value)
+}
 
 /**
  * 获取所有 OAuth 配置
@@ -21,7 +30,7 @@ export async function getOAuthConfigs(): Promise<OAuthConfig[]> {
     id: c.id,
     provider: c.provider,
     client_id: c.clientId,
-    client_secret: c.clientSecret,
+    client_secret: decryptOAuthSecret(c.clientSecret),
     enabled: c.enabled ? 1 : 0,
     created_at: c.createdAt.toISOString(),
     updated_at: c.updatedAt.toISOString()
@@ -42,7 +51,7 @@ export async function getOAuthConfig(provider: 'github' | 'google'): Promise<OAu
     id: config.id,
     provider: config.provider,
     client_id: config.clientId,
-    client_secret: config.clientSecret,
+    client_secret: decryptOAuthSecret(config.clientSecret),
     enabled: config.enabled ? 1 : 0,
     created_at: config.createdAt.toISOString(),
     updated_at: config.updatedAt.toISOString()
@@ -78,17 +87,18 @@ export async function upsertOAuthConfig(
     enabled: boolean
   }
 ): Promise<number> {
+  const clientSecret = encryptOAuthSecret(data.clientSecret)
   const config = await prisma.oAuthConfig.upsert({
     where: { provider },
     create: {
       provider,
       clientId: data.clientId,
-      clientSecret: data.clientSecret,
+      clientSecret,
       enabled: data.enabled
     },
     update: {
       clientId: data.clientId,
-      clientSecret: data.clientSecret,
+      clientSecret,
       enabled: data.enabled
     }
   })

@@ -14,19 +14,19 @@
 #   升级：  sudo bash install-panel.sh --upgrade
 #   卸载：  sudo bash install-panel.sh --uninstall
 #
-# 项目地址: https://github.com/0xdabiaoge/incudal
+# 项目地址: https://github.com/VipMaxxxx/payincus
 # ============================================================================
 set -euo pipefail
 
 # ========================== 全局常量 ==========================
 readonly SCRIPT_VERSION="3.0.0"
-readonly GITHUB_REPO="0xdabiaoge/incudal"
+readonly GITHUB_REPO="VipMaxxxx/payincus"
 readonly INSTALL_DIR="/opt/incudal"
 readonly SERVICE_NAME="incudal"
 readonly SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly ENV_FILE="${INSTALL_DIR}/.env"
 readonly RUN_USER="incudal"
-readonly DEFAULT_PORT=3000
+readonly DEFAULT_PORT=3001
 readonly NODE_MAJOR=22
 readonly PG_VERSION=16
 
@@ -100,15 +100,81 @@ set_env_if_missing() {
     log "已自动补充 ${label}: ${key}"
 }
 
+set_env_value() {
+    local key="$1"
+    local value="$2"
+    local label="$3"
+
+    if grep -qE "^${key}=" "$ENV_FILE" 2>/dev/null; then
+        local tmp_file
+        tmp_file="$(mktemp)"
+        awk -v key="$key" -v value="$value" '
+            BEGIN { replaced = 0 }
+            $0 ~ "^" key "=" && replaced == 0 {
+                print key "=" value
+                replaced = 1
+                next
+            }
+            { print }
+        ' "$ENV_FILE" > "$tmp_file"
+        cat "$tmp_file" > "$ENV_FILE"
+        rm -f "$tmp_file"
+    else
+        printf '\n%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+    fi
+
+    log "已更新 ${label}: ${key}"
+}
+
+set_env_if_value() {
+    local key="$1"
+    local expected_current="$2"
+    local new_value="$3"
+    local label="$4"
+    local current
+    current="$(get_env_value "$key")"
+
+    if [[ "$current" == "$expected_current" ]]; then
+        set_env_value "$key" "$new_value" "$label"
+    fi
+}
+
 ensure_env_keys() {
     if [[ ! -f "$ENV_FILE" ]]; then
         return 0
     fi
 
+    set_env_if_missing "NODE_ENV" "production" "运行环境"
+    set_env_if_missing "HOST" "127.0.0.1" "后端监听地址"
+    set_env_if_missing "PORT" "${DEFAULT_PORT}" "后端监听端口"
+    set_env_if_value "PORT" "3000" "${DEFAULT_PORT}" "后端监听端口（迁移旧版前端端口）"
+    set_env_if_missing "TRUST_PROXY" "true" "信任本机 Nginx 代理头"
     set_env_if_missing "JWT_SECRET" "$(gen_secret 48)" "JWT 密钥"
     set_env_if_missing "COOKIE_SECRET" "$(gen_secret 48)" "Cookie 密钥"
     set_env_if_missing "ENCRYPTION_KEY" "$(openssl rand -base64 32)" "敏感数据加密密钥"
     set_env_if_missing "ADMIN_PASSWORD" "$(gen_password 16)" "管理员初始密码"
+    local current_admin_password
+    current_admin_password="$(get_env_value "ADMIN_PASSWORD")"
+    if [[ -z "$current_admin_password" || "$current_admin_password" == "admin123" ]]; then
+        set_env_value "ADMIN_PASSWORD" "$(gen_password 16)" "管理员初始密码"
+    fi
+    set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"
+    set_env_if_missing "VITE_API_BASE_URL" "/api" "前端 API 基础路径"
+    set_env_if_missing "INCUDAL_AGENT_RELEASE_REPOSITORY" "" "Agent GitHub Release 仓库"
+    set_env_if_missing "INCUDAL_AGENT_RELEASE_TOKEN" "" "Agent GitHub Release Token"
+    set_env_if_missing "INCUDAL_AGENT_RELEASE_DIR" "" "Agent 本地 Release 目录"
+    set_env_if_missing "INCUDAL_AGENT_BINARY_URL" "" "Agent 自定义二进制地址"
+    set_env_if_missing "INCUDAL_AGENT_BINARY_SHA256" "" "Agent 自定义二进制 SHA256"
+    set_env_if_missing "COOKIE_SAME_SITE" "" "Cookie SameSite 策略"
+    set_env_if_missing "COOKIE_SECURE" "" "Cookie Secure 开关"
+    set_env_if_missing "COOKIE_DOMAIN" "" "Cookie 共享域"
+
+    local frontend_url
+    frontend_url="$(get_env_value "FRONTEND_URL")"
+    if [[ -n "$frontend_url" ]]; then
+        set_env_if_missing "SITE_URL" "$frontend_url" "站点公网地址"
+        set_env_if_missing "PAYMENT_CALLBACK_BASE_URL" "$frontend_url" "支付回调公网地址"
+    fi
 
     chmod 600 "$ENV_FILE"
     chown "${RUN_USER}:${RUN_USER}" "$ENV_FILE" 2>/dev/null || true
@@ -624,7 +690,7 @@ setup_database() {
 generate_env() {
     local db_password="$1"
     local redis_password="$2"
-    local admin_password="${3:-admin123}"
+    local admin_password="${3:-$(gen_password 16)}"
 
     step "生成环境配置..."
 
@@ -651,9 +717,12 @@ generate_env() {
 NODE_ENV=production
 HOST=127.0.0.1
 PORT=${DEFAULT_PORT}
+TRUST_PROXY=true
 
 # ============ 数据库配置 ============
 DATABASE_URL=postgresql://incudal:${db_password}@127.0.0.1:5432/incudal
+# 生产环境不要设置 RESET_DATABASE；真要清库还必须设置
+# ALLOW_PRODUCTION_DATABASE_RESET=RESET_PRODUCTION_DATABASE
 
 # ============ Redis 配置 ============
 REDIS_URL=redis://:${redis_password}@127.0.0.1:6379
@@ -664,14 +733,35 @@ COOKIE_SECRET=${cookie_secret}
 ENCRYPTION_KEY=${encryption_key}
 
 # ============ 应用配置 ============
-APP_PORT=${DEFAULT_PORT}
 ADMIN_PASSWORD=${admin_password}
+SERVE_STATIC_CLIENT=false
+VITE_API_BASE_URL=/api
 LOG_LEVEL=info
 DISABLE_REQUEST_LOG=true
+
+# ============ Agent Release 配置 ============
+# 可使用 GitHub Release 仓库、本地 release 目录，或自定义二进制 URL+SHA256。
+INCUDAL_AGENT_RELEASE_REPOSITORY=
+INCUDAL_AGENT_RELEASE_TOKEN=
+INCUDAL_AGENT_RELEASE_DIR=
+INCUDAL_AGENT_BINARY_URL=
+INCUDAL_AGENT_BINARY_SHA256=
 
 # ============ CORS 配置（必须修改为实际域名！）============
 # 支付回调地址也会使用这个域名，必须是公网可访问的地址
 FRONTEND_URL=
+SITE_URL=
+PAYMENT_CALLBACK_BASE_URL=
+
+# ============ Cookie 配置 ============
+# HTTPS 同域 /api 反代部署保持留空即可。仅 HTTP 内网验证时可设置 COOKIE_SECURE=false。
+# 若 API 与前端跨站，请设置：
+# COOKIE_SAME_SITE=none
+# COOKIE_SECURE=true
+# COOKIE_DOMAIN=.example.com  # 仅跨子域共享 Cookie 时需要
+COOKIE_SAME_SITE=
+COOKIE_SECURE=
+COOKIE_DOMAIN=
 
 # ============ 监控告警（可选）============
 # ALERT_WEBHOOK_URL=https://your-webhook-url
@@ -747,6 +837,7 @@ EnvironmentFile=${ENV_FILE}
 # 确保 npm 缓存目录可写
 Environment=HOME=${INSTALL_DIR}
 Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
+Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
 
 # 启动前自动执行数据库迁移
 ExecStartPre=/usr/bin/bash -c 'cd ${INSTALL_DIR}/server && npx prisma migrate deploy'
@@ -769,7 +860,7 @@ StartLimitIntervalSec=300
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${INSTALL_DIR}/server/certs
+ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache
 PrivateTmp=true
 
 # 资源限制
@@ -793,6 +884,14 @@ EOF
 # ========================== Nginx + Certbot ==========================
 setup_nginx_certbot() {
     info "准备配置 Nginx 反代及 Let's Encrypt SSL 自动证书"
+    local client_dist="${INSTALL_DIR}/client/dist"
+
+    if [[ ! -d "$client_dist" ]]; then
+        error "未找到前端构建目录: $client_dist"
+        error "请确认安装包包含 client/dist，或先完成前端构建后再配置 Nginx。"
+        return 1
+    fi
+
     echo -ne "  ${BOLD}请输入你要绑定的域名 (例如 panel.yourdomain.com): ${NC}"
     read -r DOMAIN
 
@@ -807,34 +906,75 @@ setup_nginx_certbot() {
     info "安装 Nginx 与 Certbot..."
     apt-get install -y -qq nginx certbot python3-certbot-nginx >/dev/null 2>&1
 
-    # 更新 FRONTEND_URL
-    sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://${DOMAIN}|" "$ENV_FILE"
+    # 更新公网 URL：CORS、页面链接、支付回调都应使用浏览器可访问的前端域名
+    set_env_value "FRONTEND_URL" "https://${DOMAIN}" "前端公网地址"
+    set_env_value "SITE_URL" "https://${DOMAIN}" "站点公网地址"
+    set_env_value "PAYMENT_CALLBACK_BASE_URL" "https://${DOMAIN}" "支付回调公网地址"
 
     log "配置 Nginx 站点..."
     cat > /etc/nginx/sites-available/incudal.conf <<NGINX
+map \$http_x_forwarded_proto \$incudal_forwarded_proto {
+    default \$http_x_forwarded_proto;
+    "" \$scheme;
+}
+
+map \$http_x_forwarded_host \$incudal_forwarded_host {
+    default \$http_x_forwarded_host;
+    "" \$host;
+}
+
 server {
     listen 80;
     listen [::]:80;
     server_name ${DOMAIN};
 
-    # 安全头
-    add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options DENY;
+    root ${client_dist};
+    index index.html;
+    client_max_body_size 100m;
 
-    location / {
+    # 安全头
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: http: https: https://kkksr.com https://api.dicebear.com https://dicebear.incudal.com https://*.githubusercontent.com https://avatars.githubusercontent.com https://lh3.googleusercontent.com; connect-src 'self' ws: wss: https://challenges.cloudflare.com https://cloudflareinsights.com https://api.dicebear.com https://dicebear.incudal.com; frame-src 'self' https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location = /healthz {
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    location /api/ws/ {
         proxy_pass http://127.0.0.1:${DEFAULT_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$incudal_forwarded_host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
         proxy_cache_bypass \$http_upgrade;
 
         # WebSocket 超时
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:${DEFAULT_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$incudal_forwarded_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
     }
 }
 NGINX
@@ -859,7 +999,8 @@ NGINX
 setup_cf_tunnel() {
     info "准备配置 Cloudflare Tunnel 内网穿透"
     echo -e "  ${DIM}请先在 Cloudflare Zero Trust 管理后台创建 Tunnel${NC}"
-    echo -e "  ${DIM}并将 Public Hostname 的目标路由设置为 http://localhost:${DEFAULT_PORT}${NC}"
+    echo -e "  ${DIM}当前部署为前后端分离，脚本会在本机配置 Nginx 托管前端并反代 /api 到后端${NC}"
+    echo -e "  ${DIM}请将 Cloudflare Public Hostname 的目标路由设置为 http://localhost:80${NC}"
     echo ""
     echo -ne "  ${BOLD}请输入 Cloudflare Tunnel Token: ${NC}"
     read -r CF_TOKEN
@@ -872,9 +1013,96 @@ setup_cf_tunnel() {
     echo -ne "  ${BOLD}请输入绑定的域名 (例: panel.yourdomain.com): ${NC}"
     read -r DOMAIN
 
-    if [[ -n "$DOMAIN" ]]; then
-        sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://${DOMAIN}|" "$ENV_FILE"
+    if [[ -z "$DOMAIN" ]]; then
+        error "域名不能为空！Cloudflare Tunnel 生产部署必须配置浏览器访问域名。"
+        error "FRONTEND_URL/SITE_URL/PAYMENT_CALLBACK_BASE_URL 会用于 WebSocket Origin、OAuth 和支付回调。"
+        return 1
     fi
+
+    set_env_value "FRONTEND_URL" "https://${DOMAIN}" "前端公网地址"
+    set_env_value "SITE_URL" "https://${DOMAIN}" "站点公网地址"
+    set_env_value "PAYMENT_CALLBACK_BASE_URL" "https://${DOMAIN}" "支付回调公网地址"
+
+    local client_dist="${INSTALL_DIR}/client/dist"
+    if [[ ! -d "$client_dist" ]]; then
+        error "未找到前端构建目录: $client_dist"
+        error "请确认安装包包含 client/dist，或先完成前端构建后再配置 Cloudflare Tunnel。"
+        return 1
+    fi
+
+    local server_name="${DOMAIN}"
+    info "安装并配置本机 Nginx 静态前端与 /api 反代..."
+    apt-get install -y -qq nginx >/dev/null 2>&1
+
+    cat > /etc/nginx/sites-available/incudal.conf <<NGINX
+map \$http_x_forwarded_proto \$incudal_forwarded_proto {
+    default \$http_x_forwarded_proto;
+    "" \$scheme;
+}
+
+map \$http_x_forwarded_host \$incudal_forwarded_host {
+    default \$http_x_forwarded_host;
+    "" \$host;
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name ${server_name};
+
+    root ${client_dist};
+    index index.html;
+    client_max_body_size 100m;
+
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: http: https: https://kkksr.com https://api.dicebear.com https://dicebear.incudal.com https://*.githubusercontent.com https://avatars.githubusercontent.com https://lh3.googleusercontent.com; connect-src 'self' ws: wss: https://challenges.cloudflare.com https://cloudflareinsights.com https://api.dicebear.com https://dicebear.incudal.com; frame-src 'self' https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location = /healthz {
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    location /api/ws/ {
+        proxy_pass http://127.0.0.1:${DEFAULT_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$incudal_forwarded_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:${DEFAULT_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$incudal_forwarded_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+}
+NGINX
+
+    ln -sf /etc/nginx/sites-available/incudal.conf /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+    nginx -t >/dev/null 2>&1
+    systemctl enable nginx >/dev/null 2>&1
+    systemctl restart nginx
 
     # 安装 cloudflared
     if ! command -v cloudflared &>/dev/null; then
@@ -888,9 +1116,7 @@ setup_cf_tunnel() {
     cloudflared service install "$CF_TOKEN" 2>/dev/null || true
 
     log "Cloudflare Tunnel 配置完成！"
-    if [[ -n "$DOMAIN" ]]; then
-        echo -e "  访问地址: ${GREEN}https://${DOMAIN}${NC}"
-    fi
+    echo -e "  访问地址: ${GREEN}https://${DOMAIN}${NC}"
 }
 
 # ========================== 启动服务 ==========================
@@ -913,6 +1139,9 @@ start_service() {
 
 # ========================== 显示安装结果 ==========================
 show_result() {
+    local admin_password
+    admin_password="$(get_env_value "ADMIN_PASSWORD")"
+
     echo ""
     divider
     echo -e "  ${GREEN}${BOLD}✅ Incudal 面板部署成功！${NC}"
@@ -926,7 +1155,11 @@ show_result() {
     echo ""
     echo -e "  ${BOLD}默认账号${NC}"
     echo -e "  用户名    :  ${GREEN}admin${NC}"
-    echo -e "  密码      :  ${GREEN}admin123${NC}  ${YELLOW}（请在首次登录后立即修改！）${NC}"
+    if [[ -n "$admin_password" ]]; then
+        echo -e "  密码      :  ${GREEN}${admin_password}${NC}  ${YELLOW}（请在首次登录后立即修改！）${NC}"
+    else
+        echo -e "  密码      :  ${YELLOW}请查看 ${ENV_FILE} 中的 ADMIN_PASSWORD${NC}"
+    fi
     echo ""
     echo -e "  ${BOLD}常用命令${NC}"
     echo -e "  启动服务  :  ${CYAN}systemctl start ${SERVICE_NAME}${NC}"

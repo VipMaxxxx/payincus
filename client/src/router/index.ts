@@ -90,7 +90,9 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
-    redirect: { name: 'dashboard' }
+    name: 'portal',
+    component: () => import('@/views/PortalView.vue'),
+    meta: { titleKey: 'publicSite.nav.overview', title: '首页' }
   },
   {
     path: '/dashboard',
@@ -100,10 +102,9 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/market',
-    redirect: (to) => ({
-      name: 'instance-create',
-      query: to.query
-    })
+    name: 'market',
+    component: () => import('@/views/MarketView.vue'),
+    meta: { titleKey: 'publicSite.market.title', title: '产品市场' }
   },
   {
     path: '/instances',

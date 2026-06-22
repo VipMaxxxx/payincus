@@ -39,6 +39,18 @@ export interface HostNotificationRecipient {
   email: string | null
 }
 
+function clampInboxPagination(page: number | undefined, pageSize: number | undefined): {
+  page: number
+  pageSize: number
+} {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), 100)
+      : 20
+  }
+}
+
 /**
  * 创建站内信
  */
@@ -67,9 +79,7 @@ export async function getInboxMessages(
     isRead?: boolean
   } = {}
 ): Promise<PaginatedInboxMessages> {
-  // 分页参数边界验证
-  const page = Math.max(1, options.page ?? 1)
-  const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 20))
+  const { page, pageSize } = clampInboxPagination(options.page, options.pageSize)
   const skip = (page - 1) * pageSize
 
   const where = {

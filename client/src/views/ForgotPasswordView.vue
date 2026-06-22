@@ -16,6 +16,8 @@ const brand = useBrand()
 
 const email = ref<string>('')
 const code = ref<string>('')
+const password = ref<string>('')
+const confirmPassword = ref<string>('')
 const loading = ref<boolean>(false)
 const sendingCode = ref<boolean>(false)
 const error = ref<string>('')
@@ -84,6 +86,31 @@ async function resetPassword(): Promise<void> {
     return
   }
 
+  if (password.value !== confirmPassword.value) {
+    error.value = t('auth.passwordMismatch')
+    return
+  }
+
+  if (password.value.length < 8) {
+    error.value = t('auth.passwordTooShort')
+    return
+  }
+
+  if (!/[A-Z]/.test(password.value)) {
+    error.value = t('auth.passwordNeedsUppercase')
+    return
+  }
+
+  if (!/[a-z]/.test(password.value)) {
+    error.value = t('auth.passwordNeedsLowercase')
+    return
+  }
+
+  if (!/[0-9]/.test(password.value)) {
+    error.value = t('auth.passwordNeedsNumber')
+    return
+  }
+
   if (turnstileEnabled.value && !turnstileToken.value) {
     error.value = t('auth.turnstileRequired')
     return
@@ -97,6 +124,7 @@ async function resetPassword(): Promise<void> {
     const response = await api.auth.resetPassword(
       email.value,
       code.value,
+      password.value,
       turnstileEnabled.value ? turnstileToken.value : undefined
     )
     
@@ -126,6 +154,8 @@ async function resetPassword(): Promise<void> {
 function backToEmail() {
   step.value = 'email'
   code.value = ''
+  password.value = ''
+  confirmPassword.value = ''
   error.value = ''
   success.value = ''
   if (turnstileRef.value) {
@@ -167,7 +197,7 @@ function backToEmail() {
         <!-- 步骤1：输入邮箱 -->
         <form v-if="step === 'email'" class="space-y-4" @submit.prevent="sendVerificationCode">
           <div>
-            <label 
+            <label
               class="block text-sm mb-1.5"
               :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
             >{{ $t('auth.email') }}</label>
@@ -221,7 +251,7 @@ function backToEmail() {
         <!-- 步骤2：验证码验证 -->
         <form v-else class="space-y-4" @submit.prevent="resetPassword">
           <div>
-            <label 
+            <label
               class="block text-sm mb-1.5"
               :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
             >{{ $t('auth.email') }}</label>
@@ -234,7 +264,7 @@ function backToEmail() {
           </div>
 
           <div>
-            <label 
+            <label
               class="block text-sm mb-1.5"
               :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
             >{{ $t('auth.verificationCode') }}</label>
@@ -250,6 +280,36 @@ function backToEmail() {
             <p class="text-xs mt-1" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
               {{ $t('auth.forgotPassword.codeHint') }}
             </p>
+          </div>
+
+          <div>
+            <label
+              class="block text-sm mb-1.5"
+              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+            >{{ $t('auth.newPassword') }}</label>
+            <input
+              v-model="password"
+              type="password"
+              class="input"
+              :placeholder="$t('auth.passwordHint')"
+              autocomplete="new-password"
+              required
+            />
+          </div>
+
+          <div>
+            <label
+              class="block text-sm mb-1.5"
+              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+            >{{ $t('auth.confirmPassword') }}</label>
+            <input
+              v-model="confirmPassword"
+              type="password"
+              class="input"
+              :placeholder="$t('auth.confirmPasswordPlaceholder')"
+              autocomplete="new-password"
+              required
+            />
           </div>
 
           <!-- Turnstile 验证 -->

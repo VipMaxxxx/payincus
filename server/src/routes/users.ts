@@ -13,7 +13,7 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 import { containsDangerousChars, revokeAllUserRefreshTokens, getUserSessions, logAdminAction, validatePassword, invalidateUserAccessTokens } from '../lib/security.js'
 import {
     isOperationVerified,
-    consumeOperationVerification
+    claimOperationVerificationRequirement
 } from '../lib/operation-verification.js'
 import { isSmtpEnabled, sendBanNotificationEmail, sendVerificationEmail } from '../lib/mailer.js'
 import { sendNotification } from '../lib/notifier.js'
@@ -23,7 +23,38 @@ import { validateEmailDomain } from '../lib/email-domain.js'
 import { HOSTING_BALANCE_LOG_LOCK_NAMESPACE, USER_ADMIN_ROLE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
 
 const USER_SEARCH_FIELDS = ['username', 'id', 'email'] as const
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const MAX_HOSTING_BALANCE_ADJUST_AMOUNT = 99999999.99
+const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500
 type UserSearchField = (typeof USER_SEARCH_FIELDS)[number]
+type UserDeletionBlockers = {
+  instances: number
+  hosts: number
+  packages: number
+  hostingZones: number
+}
+
+async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+  const [instances, hosts, packages, hostingZones] = await Promise.all([
+    // Count every instance state, including deleted history, because the required User relation
+    // still blocks hard deletion and the history should not be orphaned by admin actions.
+    prisma.instance.count({ where: { userId } }),
+    prisma.host.count({ where: { userId } }),
+    prisma.package.count({ where: { userId } }),
+    prisma.hostingZone.count({ where: { ownerId: userId } })
+  ])
+
+  return {
+    instances,
+    hosts,
+    packages,
+    hostingZones
+  }
+}
+
+function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+  return Object.values(blockers).some(count => count > 0)
+}
 
 function parseUserSearchFields(rawValue?: string): UserSearchField[] {
   if (!rawValue) {
@@ -47,6 +78,22 @@ function parseBooleanQuery(rawValue?: string): boolean {
   }
 
   return ['1', 'true', 'yes', 'on'].includes(rawValue.toLowerCase())
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveIntegerQuery(value: string | undefined, fallback: number): number {
+  if (!value || !POSITIVE_ROUTE_ID_PATTERN.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : fallback
+}
+
+function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number {
+  return Math.min(parsePositiveIntegerQuery(value, fallback), max)
 }
 
 export default async function userRoutes(fastify: FastifyInstance) {
@@ -107,8 +154,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
     const { page = '1', pageSize = '20', search = '', searchFields, exact } = request.query
 
     const result = await db.getUsersPaginated({
-      page: parseInt(page, 10),
-      pageSize: parseInt(pageSize, 10),
+      page: parsePositiveIntegerQuery(page, 1),
+      pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100),
       search,
       searchFields: parseUserSearchFields(searchFields),
       exactMatch: parseBooleanQuery(exact)
@@ -298,9 +345,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const userId = Number(id)
+    const userId = parsePositiveRouteId(id)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -366,9 +413,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
     Body: { email: string }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const userId = Number(id)
+    const userId = parsePositiveRouteId(id)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -402,7 +449,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(validationResult.error)
     }
 
-    const result = await createVerificationCode(validationResult.normalizedEmail)
+    const result = await createVerificationCode(validationResult.normalizedEmail, 'change_email')
     if (!result) {
       return reply.code(429).send(apiError(ErrorCode.TOO_MANY_VERIFICATION_REQUESTS))
     }
@@ -456,9 +503,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
     Body: UpdateUserRequest & { password?: string; currentPassword?: string; avatarStyle?: string; emailCode?: string }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const userId = Number(id)
+    const userId = parsePositiveRouteId(id)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -473,6 +520,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
     }
 
     const { email, password, avatarStyle, currentPassword, emailCode } = request.body
+    const shouldClaimPasswordVerification = request.user.id === userId && Boolean(password)
+    const shouldClaimEmailVerification = request.user.id === userId && email !== undefined && email !== user.email && Boolean(user.email)
 
     // 敏感操作二次验证：修改密码或邮箱时需要验证（管理员修改他人时跳过）
     if (request.user.id === userId) {
@@ -526,7 +575,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       }
 
       if (request.user.id === userId && email !== user.email) {
-        const verified = await verifyCode(validationResult.normalizedEmail, emailCode!)
+        const verified = await verifyCode(validationResult.normalizedEmail, emailCode!, 'change_email')
         if (!verified) {
           return reply.code(400).send(apiError(ErrorCode.INVALID_EMAIL_CODE))
         }
@@ -550,6 +599,28 @@ export default async function userRoutes(fastify: FastifyInstance) {
     }
 
     if (Object.keys(updates).length > 0) {
+      if (shouldClaimPasswordVerification) {
+        const verification = await claimOperationVerificationRequirement(request.user.id, 'change_password')
+        if (!verification.verified) {
+          return reply.code(403).send({
+            error: 'Sensitive operation requires verification',
+            code: 'VERIFICATION_REQUIRED',
+            operationType: 'change_password'
+          })
+        }
+      }
+
+      if (shouldClaimEmailVerification) {
+        const verification = await claimOperationVerificationRequirement(request.user.id, 'change_email')
+        if (!verification.verified) {
+          return reply.code(403).send({
+            error: 'Sensitive operation requires verification',
+            code: 'VERIFICATION_REQUIRED',
+            operationType: 'change_email'
+          })
+        }
+      }
+
       await db.updateUser(userId, updates)
 
       if (password) {
@@ -571,19 +642,24 @@ export default async function userRoutes(fastify: FastifyInstance) {
         'success'
       )
 
-      // 清理已使用的验证记录
+      if (request.user.role === 'admin' && request.user.id !== userId) {
+        await logAdminAction(request.user.id, 'user.profile.update', {
+          ip: request.ip,
+          userAgent: request.headers['user-agent'],
+          targetUserId: userId,
+          targetUsername: user.username,
+          resourceType: 'user',
+          metadata: { fields: updateActions },
+          reason: `Admin updated user profile fields: ${updateActions.join(', ')}`
+        })
+      }
+
       if (request.user.id === userId) {
         if (password) {
-          await consumeOperationVerification(request.user.id, 'change_password')
           // 发送密码修改通知
           await sendNotification(userId, 'password_changed', {
             instanceName: ''
           })
-        }
-        if (email !== undefined && email !== user.email) {
-          if (user.email) {
-            await consumeOperationVerification(request.user.id, 'change_email')
-          }
         }
       }
     }
@@ -613,8 +689,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Body: { role: 'admin' | 'user' }
   }>, reply: FastifyReply) => {
-    const userId = Number(request.params.id)
-    if (isNaN(userId)) {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -787,9 +863,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const userId = Number(id)
+    const userId = parsePositiveRouteId(id)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -934,9 +1010,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
     Body: { status: 'active' | 'banned'; reason?: string }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const userId = Number(id)
+    const userId = parsePositiveRouteId(id)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -973,7 +1049,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       request.user.id,
       'user',
       status === 'banned' ? 'user.ban' : 'user.unban',
-      `${status === 'banned' ? 'Banned' : 'Unbanned'} user "${user.username}" (ID: ${userId}, email: ${user.email || 'N/A'})${reason ? ` - Reason: ${reason}` : ''}`,
+      `${status === 'banned' ? 'Banned' : 'Unbanned'} user "${user.username}" (ID: ${userId})${reason ? ` - Reason: ${reason}` : ''}`,
       'success'
     )
 
@@ -993,9 +1069,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         username: user.username,
         reason: reason
       }).then(result => {
-        if (result.success) {
-          console.log(`[Ban] Sent ban notification email to ${user.email}`)
-        } else {
+        if (!result.success) {
           console.error(`[Ban] Failed to send ban notification email:`, result.error)
         }
       }).catch(err => {
@@ -1011,9 +1085,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const userId = Number(id)
+    const userId = parsePositiveRouteId(id)
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1032,10 +1106,12 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.CANNOT_DELETE_ADMIN))
     }
 
-    // 检查是否有实例
-    const instances = await db.getInstancesByUserId(userId)
-    if (instances.length > 0) {
-      return reply.code(400).send(apiError(ErrorCode.USER_HAS_INSTANCES, `${instances.length}`))
+    const blockers = await getUserDeletionBlockers(userId)
+    if (hasUserDeletionBlockers(blockers)) {
+      return reply.code(400).send(apiError(
+        ErrorCode.USER_HAS_RESOURCES,
+        `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+      ))
     }
 
     await db.deleteUser(userId)
@@ -1044,7 +1120,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       request.user.id,
       'user',
       'user.delete',
-      `Deleted user "${user.username}" (ID: ${userId}, email: ${user.email || 'N/A'}, role: ${user.role})`,
+      `Deleted user "${user.username}" (ID: ${userId}, role: ${user.role})`,
       'success'
     )
 
@@ -1065,8 +1141,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>('/:id/sessions', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const userId = parseInt(request.params.id, 10)
-    if (isNaN(userId)) {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1083,8 +1159,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>('/:id/revoke-sessions', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const userId = parseInt(request.params.id, 10)
-    if (isNaN(userId)) {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1123,16 +1199,27 @@ export default async function userRoutes(fastify: FastifyInstance) {
     return { message: `已撤销 ${count} 个会话` }
   })
 
-  // 管理员重置用户密码（自动生成随机密码）
+  // 管理员重置用户密码（由管理员输入新密码，不在响应中回显明文）
   fastify.post<{
     Params: { id: string }
+    Body: { password: string }
   }>('/:id/reset-password', {
-    onRequest: [fastify.authenticateAdmin]
+    onRequest: [fastify.authenticateAdmin],
+    schema: {
+      body: {
+        type: 'object',
+        required: ['password'],
+        properties: {
+          password: { type: 'string', minLength: 6 }
+        }
+      }
+    }
   }, async (request: FastifyRequest<{
     Params: { id: string }
+    Body: { password: string }
   }>, reply: FastifyReply) => {
-    const userId = parseInt(request.params.id, 10)
-    if (isNaN(userId)) {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1141,12 +1228,16 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.USER_NOT_FOUND))
     }
 
-    // 生成随机密码：12位，包含大小写字母和数字
-    // 使用密码学安全的随机数生成器
-    const { generateRandomPassword } = await import('../lib/incus-config-generator.js')
-    const newPassword = generateRandomPassword(12)
+    if (request.user.id === userId) {
+      return reply.code(400).send(apiError(ErrorCode.CANNOT_MODIFY_SELF))
+    }
 
-    const passwordHash = await bcrypt.hash(newPassword, 12)
+    const passwordCheck = validatePassword(request.body.password)
+    if (!passwordCheck.valid) {
+      return reply.code(400).send(apiError(ErrorCode.PASSWORD_TOO_WEAK, passwordCheck.message))
+    }
+
+    const passwordHash = await bcrypt.hash(request.body.password, 12)
     await db.updateUser(userId, { passwordHash })
 
     // 撤销用户所有会话，强制重新登录
@@ -1158,7 +1249,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       request.user.id,
       'user',
       'user.reset_password',
-      `Admin reset password for user "${user.username}" (ID: ${userId}) - new password generated`,
+      `Admin reset password for user "${user.username}" (ID: ${userId})`,
       'success'
     )
 
@@ -1174,7 +1265,6 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
     return {
       message: 'Password reset successfully',
-      newPassword,
       username: user.username
     }
   })
@@ -1183,14 +1273,18 @@ export default async function userRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>('/:id/disable-2fa', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const userId = parseInt(request.params.id, 10)
-    if (isNaN(userId)) {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
     const user = await db.findUserById(userId)
     if (!user) {
       return reply.code(404).send(apiError(ErrorCode.USER_NOT_FOUND))
+    }
+
+    if (request.user.id === userId) {
+      return reply.code(400).send(apiError(ErrorCode.CANNOT_MODIFY_SELF))
     }
 
     // 检查用户是否启用了 2FA
@@ -1201,6 +1295,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
     // 禁用 2FA（清除所有 2FA 数据）
     await db.disable2FAComplete(userId)
+
+    await revokeAllUserRefreshTokens(userId)
+    await invalidateUserAccessTokens(userId)
+    closeUserSessions(userId, '2FA disabled by admin')
 
     await createLog(
       request.user.id,
@@ -1231,10 +1329,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{
     Params: { id: string; provider: string }
   }>, reply: FastifyReply) => {
-    const userId = parseInt(request.params.id, 10)
+    const userId = parsePositiveRouteId(request.params.id)
     const { provider } = request.params
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1248,6 +1346,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.USER_NOT_FOUND))
     }
 
+    if (request.user.id === userId) {
+      return reply.code(400).send(apiError(ErrorCode.CANNOT_MODIFY_SELF))
+    }
+
     // 检查用户是否绑定了该 OAuth
     const hasBound = await db.hasOAuthBinding(userId, provider as 'github' | 'google')
     if (!hasBound) {
@@ -1256,6 +1358,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
     // 删除 OAuth 绑定
     await db.deleteOAuthBinding(userId, provider as 'github' | 'google')
+
+    await revokeAllUserRefreshTokens(userId)
+    await invalidateUserAccessTokens(userId)
+    closeUserSessions(userId, `${provider} OAuth unbound by admin`)
 
     await createLog(
       request.user.id,
@@ -1289,8 +1395,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Querystring: { page?: string; pageSize?: string }
   }>, reply: FastifyReply) => {
-    const userId = parseInt(request.params.id, 10)
-    if (isNaN(userId)) {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1299,13 +1405,13 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.USER_NOT_FOUND))
     }
 
-    const page = parseInt(request.query.page || '1', 10)
-    const pageSize = parseInt(request.query.pageSize || '20', 10)
+    const page = parsePositiveIntegerQuery(request.query.page, 1)
+    const pageSize = parseClampedPositiveIntegerQuery(request.query.pageSize, 20, 50)
 
-    const { records, total } = await db.getUserLoginRecords(userId, page, pageSize)
+    const loginRecordsResult = await db.getUserLoginRecords(userId, page, pageSize)
 
     return {
-      records: records.map(r => ({
+      records: loginRecordsResult.records.map(r => ({
         id: r.id,
         ip: r.ip,
         country: r.country,
@@ -1316,32 +1422,33 @@ export default async function userRoutes(fastify: FastifyInstance) {
         userAgent: r.userAgent,
         createdAt: r.createdAt.toISOString()
       })),
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize)
+      total: loginRecordsResult.total,
+      page: loginRecordsResult.page,
+      pageSize: loginRecordsResult.pageSize,
+      totalPages: loginRecordsResult.totalPages
     }
   })
 
   // 管理员检测关联账号
   // 安全：仅管理员可访问，使用 authenticateAdmin 中间件
   fastify.get<{
-    Querystring: { days?: string }
+    Querystring: { days?: string; limit?: string }
   }>('/detect-linked-accounts', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{
-    Querystring: { days?: string }
+    Querystring: { days?: string; limit?: string }
   }>, _reply: FastifyReply) => {
     const startTime = Date.now()
     // 参数校验：限制检测范围在 1-365 天之间，防止查询性能问题
-    const rawDays = parseInt(request.query.days || '90', 10)
-    const days = Math.min(365, Math.max(1, isNaN(rawDays) ? 90 : rawDays))
+    const days = parseClampedPositiveIntegerQuery(request.query.days, 90, 365)
+    const limit = parseClampedPositiveIntegerQuery(request.query.limit, 50, 100)
+    const maxUsersPerGroup = 20
 
     // 并行执行三种检测
     const [ipGroups, emailGroups, usernameGroups] = await Promise.all([
-      db.getSharedIPGroups(days, 2),
-      db.getSimilarEmailGroups(),
-      db.getSimilarUsernameGroups()
+      db.getSharedIPGroups(days, 2, limit, maxUsersPerGroup),
+      db.getSimilarEmailGroups(limit, maxUsersPerGroup),
+      db.getSimilarUsernameGroups(limit, maxUsersPerGroup)
     ])
 
     const durationMs = Date.now() - startTime
@@ -1351,7 +1458,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       request.user.id,
       'user',
       'admin.detect_linked_accounts',
-      `Admin detected linked accounts: ${ipGroups.length} IP groups, ${emailGroups.length} email groups, ${usernameGroups.length} username groups (${durationMs}ms)`,
+      `Admin detected linked accounts: ${ipGroups.length} IP groups, ${emailGroups.length} email groups, ${usernameGroups.length} username groups, limit ${limit}, max users per group ${maxUsersPerGroup} (${durationMs}ms)`,
       'success'
     )
 
@@ -1359,6 +1466,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
       detectedAt: new Date().toISOString(),
       durationMs,
       days,
+      limit,
+      maxUsersPerGroup,
       summary: {
         ipGroups: ipGroups.length,
         emailGroups: emailGroups.length,
@@ -1409,14 +1518,14 @@ export default async function userRoutes(fastify: FastifyInstance) {
   }>('/:id/hosting-balance/logs', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request, reply) => {
-    const userId = parseInt(request.params.id, 10)
-    if (isNaN(userId)) {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid user ID'))
     }
 
     const { page = '1', pageSize = '20' } = request.query
-    const pageNum = parseInt(page, 10)
-    const size = Math.min(parseInt(pageSize, 10), 100)
+    const pageNum = parsePositiveIntegerQuery(page, 1)
+    const size = parseClampedPositiveIntegerQuery(pageSize, 20, 100)
     const skip = (pageNum - 1) * size
 
     // 检查用户是否存在
@@ -1476,8 +1585,8 @@ export default async function userRoutes(fastify: FastifyInstance) {
   }>('/:id/hosting-balance/adjust', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request, reply) => {
-    const userId = parseInt(request.params.id, 10)
-    if (isNaN(userId)) {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid user ID'))
     }
 
@@ -1485,11 +1594,18 @@ export default async function userRoutes(fastify: FastifyInstance) {
     if (!type || !['available', 'frozen'].includes(type)) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid type, must be "available" or "frozen"'))
     }
-    if (typeof amount !== 'number' || amount === 0) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Amount must be a non-zero number'))
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount === 0) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Amount must be a finite non-zero number'))
     }
-    if (!reason || !reason.trim()) {
+    if (Math.abs(amount) > MAX_HOSTING_BALANCE_ADJUST_AMOUNT) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, `Amount cannot exceed ${MAX_HOSTING_BALANCE_ADJUST_AMOUNT}`))
+    }
+    const normalizedReason = typeof reason === 'string' ? reason.trim() : ''
+    if (!normalizedReason) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Reason is required'))
+    }
+    if (normalizedReason.length > MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, `Reason cannot exceed ${MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH} characters`))
     }
 
     // 检查用户是否存在
@@ -1536,7 +1652,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
               actionType: 'admin_adjust',
               amount: absAmount,
               frozen: false,
-              remark: `[Admin] ${reason.trim()}`
+              remark: `[Admin] ${normalizedReason}`
             }
           })
         })
@@ -1558,7 +1674,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
                 amount: absAmount,
                 frozen: true,
                 unfreezeAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30天后解冻
-                remark: `[Admin Frozen] ${reason.trim()}`
+                remark: `[Admin Frozen] ${normalizedReason}`
               }
             })
           })
@@ -1606,7 +1722,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
                 actionType: 'admin_adjust',
                 amount: 0, // 不计入实际余额，仅作为记录
                 frozen: false,
-                remark: `[Admin Frozen Deduct] ${reason.trim()} (¥${absAmount.toFixed(2)})`
+                remark: `[Admin Frozen Deduct] ${normalizedReason} (¥${absAmount.toFixed(2)})`
               }
             })
           })
@@ -1631,7 +1747,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       request.user.id,
       'user',
       'admin.adjust_hosting_balance',
-      `Admin adjusted user #${userId} hosting balance: type=${type}, amount=${amount}, reason=${reason}`,
+      `Admin adjusted user #${userId} hosting balance: type=${type}, amount=${amount}, reason=${normalizedReason}`,
       'success'
     )
 
@@ -1652,4 +1768,3 @@ export default async function userRoutes(fastify: FastifyInstance) {
     }
   })
 }
-

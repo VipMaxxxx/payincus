@@ -113,7 +113,7 @@ assets:
 
 面板运行时不会读取本地 `agent/dist`。它会从 GitHub Release 查询最新 Agent 版本，动态生成 `/api/agent/manifest.json`，并通过 `/api/agent/binary/*` 代理下载对应 Release 资产。
 
-默认 GitHub Release 仓库为 `retired-release-repository`。如果部署到 fork 或私有仓库，可设置：
+默认 GitHub Release 仓库为 `VipMaxxxx/incudal`。如果部署到 fork 或私有仓库，可设置：
 
 ```bash
 INCUDAL_AGENT_RELEASE_REPOSITORY="owner/repo"
@@ -159,7 +159,7 @@ https://<panel>/api/agent/manifest.json
 
 安装脚本会按当前 OS/ARCH 取出文件名和 SHA-256，下载后先校验摘要，再解包安装。
 
-如果手动传入 `INCUDAL_AGENT_BINARY_URL`，可同时传入 `INCUDAL_AGENT_BINARY_SHA256` 开启校验；未传 SHA-256 时仍保留兼容安装，但会输出 warning。
+如果手动传入 `INCUDAL_AGENT_BINARY_URL`，必须同时传入 `INCUDAL_AGENT_BINARY_SHA256`。安装脚本会先校验 SHA-256，缺少或不匹配时会直接失败，不会安装自定义二进制。
 
 安装脚本会先下载到临时文件，再原子替换 `/usr/local/bin/incudal-agent`。
 重复安装或升级时，会执行 `systemctl restart incudal-agent` 确保立即切换到最新二进制。
@@ -168,7 +168,7 @@ dry-run 验证：
 
 ```bash
 INCUDAL_AGENT_DRY_RUN=1 \
-INCUDAL_PANEL_URL="http://127.0.0.1:8888" \
+INCUDAL_PANEL_URL="http://127.0.0.1:3001" \
 INCUDAL_AGENT_INSTALL_TOKEN="ait_testtoken_abcdefghijklmnopqrstuvwxyz123456" \
 bash server/templates/agent-install.sh
 ```

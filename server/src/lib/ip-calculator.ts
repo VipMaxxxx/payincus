@@ -243,6 +243,31 @@ export function isIpv6InSubnet(address: string, subnetStr: string): boolean {
 }
 
 /**
+ * 验证一个 IPv6 CIDR 是否完全包含在另一个 IPv6 CIDR 内
+ * @param candidateSubnetStr 待分配的 IPv6 子网 CIDR
+ * @param parentSubnetStr 宿主机授权的 IPv6 子网 CIDR
+ */
+export function isIpv6SubnetWithinSubnet(candidateSubnetStr: string, parentSubnetStr: string): boolean {
+    try {
+        if (!Address6.isValid(candidateSubnetStr) || !Address6.isValid(parentSubnetStr)) {
+            return false
+        }
+
+        const candidate = new Address6(candidateSubnetStr)
+        const parent = new Address6(parentSubnetStr)
+
+        const candidateStart = candidate.startAddress().bigInt()
+        const candidateEnd = candidate.endAddress().bigInt()
+        const parentStart = parent.startAddress().bigInt()
+        const parentEnd = parent.endAddress().bigInt()
+
+        return candidateStart >= parentStart && candidateEnd <= parentEnd
+    } catch {
+        return false
+    }
+}
+
+/**
  * 严格验证 IPv6 地址格式
  * 使用 ip-address 库进行精确验证
  */

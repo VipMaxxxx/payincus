@@ -5,6 +5,7 @@
 
 import { prisma } from './prisma.js'
 import type { RedeemCodeType } from '@prisma/client'
+import { USER_RESOURCE_POOL_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
 
 // 各类型可选数值
 const CODE_VALUES: Record<RedeemCodeType, number[]> = {
@@ -136,9 +137,23 @@ export async function performCheckin(userId: number): Promise<{
   }
   const field = fieldMap[type]
 
-  await prisma.$transaction([
+  await prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, USER_RESOURCE_POOL_LOCK_NAMESPACE, userId)
+
+    const currentStats = await tx.checkinStats.findUnique({
+      where: { userId },
+      select: { lastCheckinDate: true }
+    })
+    if (currentStats?.lastCheckinDate) {
+      const todayMidnight = getBeijingMidnight()
+      const lastCheckinMidnight = toBeijingMidnight(currentStats.lastCheckinDate)
+      if (lastCheckinMidnight.getTime() >= todayMidnight.getTime()) {
+        throw new Error('CHECKIN_ALREADY_TODAY')
+      }
+    }
+
     // 更新资源池
-    prisma.userResourcePool.upsert({
+    await tx.userResourcePool.upsert({
       where: { userId },
       update: {
         [field]: field === 'traffic'
@@ -149,9 +164,10 @@ export async function performCheckin(userId: number): Promise<{
         userId,
         [field]: field === 'traffic' ? BigInt(value) : value
       }
-    }),
+    })
+
     // 记录资源池日志
-    prisma.resourcePoolLog.create({
+    await tx.resourcePoolLog.create({
       data: {
         userId,
         action: 'checkin',
@@ -159,9 +175,10 @@ export async function performCheckin(userId: number): Promise<{
         amount: value,
         remark: '签到获得'
       }
-    }),
+    })
+
     // 更新签到统计
-    prisma.checkinStats.upsert({
+    await tx.checkinStats.upsert({
       where: { userId },
       update: { lastCheckinDate: now },
       create: {
@@ -169,7 +186,7 @@ export async function performCheckin(userId: number): Promise<{
         lastCheckinDate: now
       }
     })
-  ])
+  })
 
   return { codeType: type, codeValue: value }
 }

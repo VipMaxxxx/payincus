@@ -9,6 +9,8 @@
 
 import type { FastifyRequest } from 'fastify'
 import type { WebSocket } from 'ws'
+import { getAllowedWebSocketOrigins, normalizeOrigin } from './origin-config.js'
+export { getAllowedWebSocketOrigins } from './origin-config.js'
 
 // 连接限制配置
 const WS_LIMITS = {
@@ -24,6 +26,33 @@ const ipConnections = new Map<string, Set<WebSocket>>()
 
 // 用户连接计数器
 const userConnections = new Map<number, Set<WebSocket>>()
+
+export function validateWebSocketOrigin(request: FastifyRequest): {
+    allowed: boolean
+    origin?: string
+    reason?: string
+} {
+    const rawOrigin = request.headers.origin
+
+    if (!rawOrigin) {
+        if (process.env.NODE_ENV === 'production') {
+            return { allowed: false, reason: 'Missing Origin header' }
+        }
+        return { allowed: true }
+    }
+
+    const origin = normalizeOrigin(rawOrigin)
+    if (!origin) {
+        return { allowed: false, reason: 'Invalid Origin header' }
+    }
+
+    const allowedOrigins = getAllowedWebSocketOrigins()
+    if (!allowedOrigins.includes(origin)) {
+        return { allowed: false, origin, reason: 'Origin is not allowed' }
+    }
+
+    return { allowed: true, origin }
+}
 
 /**
  * 获取客户端 IP

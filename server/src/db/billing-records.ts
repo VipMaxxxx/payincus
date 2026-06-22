@@ -7,6 +7,14 @@ import { prisma } from './prisma.js'
 import type { InstanceBillingRecord, BillingRecordType, Prisma } from '@prisma/client'
 
 type BillingRecordDbClient = Prisma.TransactionClient | typeof prisma
+const BILLING_RECORD_TYPES = new Set<BillingRecordType>([
+  'newPurchase',
+  'renew',
+  'upgrade',
+  'downgrade',
+  'refund',
+  'transfer_fee'
+])
 
 interface BillingLineageSeed {
   id: number
@@ -31,6 +39,24 @@ function isInteger(value: unknown): value is number {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function clampPagination(
+  page: number | undefined,
+  pageSize: number | undefined,
+  fallbackPageSize: number = 20,
+  maxPageSize: number = 100
+): { page: number; pageSize: number } {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), maxPageSize)
+      : fallbackPageSize
+  }
+}
+
+function normalizeBillingRecordType(type: BillingRecordType | undefined): BillingRecordType | undefined {
+  return type && BILLING_RECORD_TYPES.has(type) ? type : undefined
 }
 
 function sameDate(a: Date | null, b: Date | null): boolean {
@@ -186,7 +212,8 @@ export async function getInstanceBillingRecords(
   page: number
   pageSize: number
 }> {
-  const { page = 1, pageSize = 20, type } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const type = normalizeBillingRecordType(options.type)
   const skip = (page - 1) * pageSize
   const billingLineageInstanceIds = await getInstanceBillingLineageIds(instanceId)
 
@@ -224,7 +251,8 @@ export async function getUserBillingRecords(
   page: number
   pageSize: number
 }> {
-  const { page = 1, pageSize = 20, type } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const type = normalizeBillingRecordType(options.type)
   const skip = (page - 1) * pageSize
 
   const where: Prisma.InstanceBillingRecordWhereInput = {

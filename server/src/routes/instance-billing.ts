@@ -12,6 +12,7 @@ import { sendHostManagedInstanceNotification, sendNotification } from '../lib/no
 import { getIncusClient, patchInstanceResources } from '../lib/incus/index.js'
 import { sendRenewSuccessEmail } from '../lib/mailer.js'
 import { calculateDailyPrice } from '../lib/billing-calc.js'
+import type { BillingRecordType } from '@prisma/client'
 
 interface BatchRenewPreviewItem {
   id: number
@@ -40,6 +41,42 @@ interface BatchRenewResultItem {
 }
 
 const BATCH_HIDDEN_REASON = '实例不存在或无权操作'
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const BILLING_RECORD_TYPES = new Set<BillingRecordType>([
+  'newPurchase',
+  'renew',
+  'upgrade',
+  'downgrade',
+  'refund',
+  'transfer_fee'
+])
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveIntegerQuery(value: string | undefined, fallback: number): number {
+  if (!value || !POSITIVE_ROUTE_ID_PATTERN.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : fallback
+}
+
+function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number {
+  return Math.min(parsePositiveIntegerQuery(value, fallback), max)
+}
+
+function normalizeBillingRecordType(value: string | undefined): BillingRecordType | undefined {
+  return value && BILLING_RECORD_TYPES.has(value as BillingRecordType)
+    ? value as BillingRecordType
+    : undefined
+}
+
+function parsePositiveIntegerInput(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) return null
+  return value
+}
 
 async function buildBatchRenewPreviewItem(userId: number, instanceId: number): Promise<BatchRenewPreviewItem> {
   const instance = await prisma.instance.findUnique({
@@ -252,9 +289,9 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { user } = request
-    const instanceId = Number(request.params.id)
+    const instanceId = parsePositiveRouteId(request.params.id)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -328,10 +365,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     const { user } = request
-    const instanceId = Number(request.params.id)
+    const instanceId = parsePositiveRouteId(request.params.id)
     const affCodeInput = request.body.affCode?.trim()
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -439,10 +476,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     const { user } = request
-    const instanceId = Number(request.params.id)
+    const instanceId = parsePositiveRouteId(request.params.id)
     const { months } = request.body
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -660,10 +697,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request, reply) => {
     const { user } = request
-    const instanceId = Number(request.params.id)
-    const newPlanId = Number(request.query.newPlanId)
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const newPlanId = parsePositiveRouteId(request.query.newPlanId)
 
-    if (isNaN(instanceId) || isNaN(newPlanId)) {
+    if (!instanceId || !newPlanId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -784,10 +821,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     const { user } = request
-    const instanceId = Number(request.params.id)
-    const { newPlanId } = request.body
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const newPlanId = parsePositiveIntegerInput(request.body.newPlanId)
 
-    if (isNaN(instanceId)) {
+    if (!instanceId || !newPlanId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -958,10 +995,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     const { user } = request
-    const instanceId = Number(request.params.id)
+    const instanceId = parsePositiveRouteId(request.params.id)
     const { autoRenew } = request.body
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1104,10 +1141,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
     const { user } = request
-    const instanceId = Number(request.params.id)
+    const instanceId = parsePositiveRouteId(request.params.id)
     const { page = '1', pageSize = '20', type } = request.query
 
-    if (isNaN(instanceId)) {
+    if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1126,9 +1163,9 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     }
 
     const result = await db.getInstanceBillingRecords(instanceId, {
-      page: Number(page),
-      pageSize: Number(pageSize),
-      type: type as any
+      page: parsePositiveIntegerQuery(page, 1),
+      pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100),
+      type: normalizeBillingRecordType(type)
     })
 
     return {

@@ -50,6 +50,20 @@ function escapeSqlLike(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&')
 }
 
+function clampPagination(
+  page: number | undefined,
+  pageSize: number | undefined,
+  fallbackPageSize: number = 20,
+  maxPageSize: number = 100
+): { page: number; pageSize: number } {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), maxPageSize)
+      : fallbackPageSize
+  }
+}
+
 function joinSqlFragments(fragments: Prisma.Sql[], operator: 'AND' | 'OR'): Prisma.Sql {
   if (fragments.length === 0) {
     return Prisma.empty
@@ -125,7 +139,8 @@ function buildUserSearchWhereClause(
  * 获取用户分页列表
  */
 export async function getUsersPaginated(options: PaginationOptions = {}): Promise<PaginatedResponse<User>> {
-  const { page = 1, pageSize = 20, search = '', searchFields, exactMatch = false } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const { search = '', searchFields, exactMatch = false } = options
   const searchWhereClause = buildUserSearchWhereClause(search, searchFields, exactMatch)
 
   let total = 0
@@ -218,7 +233,8 @@ export async function getUsersPaginated(options: PaginationOptions = {}): Promis
  * @param options.includeOwner - 是否包含所有者信息
  */
 export async function getHostsPaginated(options: PaginationOptions = {}): Promise<PaginatedResponse<Host>> {
-  const { page = 1, pageSize = 20, search = '', userId = null, excludeUserId = null, ownerRole = null, includeOwner = false } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const { search = '', userId = null, excludeUserId = null, ownerRole = null, includeOwner = false } = options
 
   const where: any = {}
 
@@ -352,7 +368,8 @@ export async function getHostsPaginated(options: PaginationOptions = {}): Promis
  * 获取实例分页列表
  */
 export async function getInstancesPaginated(options: PaginationOptions = {}): Promise<PaginatedInstancesResponse<Instance>> {
-  const { page = 1, pageSize = 20, search = '', userId = null, hostId = null, countryCode = null, status = null, sortBy = null, sortOrder = null } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const { search = '', userId = null, hostId = null, countryCode = null, status = null, sortBy = null, sortOrder = null } = options
 
   const baseWhere: any = {}
 

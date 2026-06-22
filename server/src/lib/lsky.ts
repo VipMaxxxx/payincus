@@ -1,4 +1,6 @@
 import { getSystemConfig } from '../db/system-config.js'
+import { sanitizeTokensInString } from './log-sanitizer.js'
+import { assertSafeHttpUrl } from './outbound-security.js'
 
 export type LskyApiVersion = 'v1' | 'v2'
 const LSKY_UPLOAD_TIMEOUT_MS = 60_000
@@ -6,6 +8,13 @@ const LSKY_DELETE_TIMEOUT_MS = 15_000
 const LSKY_GROUP_TIMEOUT_MS = 15_000
 const LSKY_STORAGE_CACHE_TTL_MS = 5 * 60_000
 const lskyStorageIdCache = new Map<string, { storageId: string; fetchedAt: number }>()
+const ALLOWED_LSKY_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif'
+])
 
 export interface TicketImageLskyConfig {
   baseUrl: string
@@ -86,6 +95,11 @@ function pickNumber(...values: unknown[]): number | null {
   return null
 }
 
+function normalizeAllowedImageMimeType(value: string | null | undefined): string | null {
+  const normalized = value?.split(';')[0]?.trim().toLowerCase()
+  return normalized && ALLOWED_LSKY_IMAGE_MIME_TYPES.has(normalized) ? normalized : null
+}
+
 function parseJsonResponse(text: string): unknown {
   const normalizedText = text.replace(/^\uFEFF/, '')
   if (!normalizedText.trim()) {
@@ -97,6 +111,10 @@ function parseJsonResponse(text: string): unknown {
   } catch {
     return null
   }
+}
+
+function sanitizeResponsePreview(text: string): string {
+  return sanitizeTokensInString(text.slice(0, 500))
 }
 
 function extractUrlFromHtmlSnippet(html: string | null): string | null {
@@ -169,6 +187,7 @@ async function fetchLskyDefaultStorageId(config: TicketImageLskyConfig): Promise
   const groupUrl = `${apiBase}/group`
   const response = await fetch(groupUrl, {
     method: 'GET',
+    redirect: 'manual',
     signal: AbortSignal.timeout(LSKY_GROUP_TIMEOUT_MS),
     headers: buildLskyAuthHeaders(config.token)
   })
@@ -188,7 +207,7 @@ async function fetchLskyDefaultStorageId(config: TicketImageLskyConfig): Promise
     console.error('[Lsky] Unable to determine default storage_id from /group response', {
       groupUrl,
       status: response.status,
-      bodyPreview: responseText.slice(0, 500)
+      bodyPreview: sanitizeResponsePreview(responseText)
     })
     throw new Error('Unable to determine Lsky storage_id automatically from /group')
   }
@@ -216,9 +235,10 @@ export async function getTicketImageLskyConfig(): Promise<TicketImageLskyConfig 
   }
 
   const apiVersion: LskyApiVersion = apiVersionValue === 'v2' ? 'v2' : 'v1'
+  const safeBaseUrl = await assertSafeHttpUrl(normalizedBaseUrl, 'Lsky base URL')
 
   return {
-    baseUrl: normalizeBaseUrl(normalizedBaseUrl),
+    baseUrl: normalizeBaseUrl(safeBaseUrl.toString()),
     token: normalizedToken,
     apiVersion,
     targetId: asNullableString(targetId)
@@ -256,6 +276,7 @@ export async function uploadTicketImageToLsky(
 
   const response = await fetch(uploadUrl, {
     method: 'POST',
+    redirect: 'manual',
     signal: AbortSignal.timeout(LSKY_UPLOAD_TIMEOUT_MS),
     headers: buildLskyAuthHeaders(config.token),
     body: formData
@@ -269,7 +290,7 @@ export async function uploadTicketImageToLsky(
       uploadUrl,
       status: response.status,
       contentType: response.headers.get('content-type'),
-      bodyPreview: responseText.slice(0, 500)
+      bodyPreview: sanitizeResponsePreview(responseText)
     })
   }
 
@@ -311,14 +332,24 @@ export async function uploadTicketImageToLsky(
       uploadUrl,
       status: response.status,
       contentType: response.headers.get('content-type'),
-      bodyPreview: responseText.slice(0, 500),
+      bodyPreview: sanitizeResponsePreview(responseText),
       responseKeys: payload && typeof payload === 'object' ? Object.keys(payload as Record<string, unknown>) : [],
       dataCandidateKeys: dataCandidates.map(candidate => Object.keys(candidate as Record<string, unknown>))
     })
     throw new Error('Lsky upload succeeded but no image URL was returned')
   }
 
+  const safeImageUrl = await assertSafeHttpUrl(url, 'Lsky image URL')
+  const safeThumbnailUrl = thumbnailUrl
+    ? (await assertSafeHttpUrl(thumbnailUrl, 'Lsky thumbnail URL')).toString()
+    : null
+
   const data = resolvedData ?? dataCandidates[0] ?? {}
+  const mimeType = normalizeAllowedImageMimeType(pickString(data?.mimetype, data?.mime_type, input.contentType))
+    ?? normalizeAllowedImageMimeType(input.contentType)
+  if (!mimeType) {
+    throw new Error('Lsky upload returned unsupported image MIME type')
+  }
 
   return {
     provider: 'lsky',
@@ -328,12 +359,12 @@ export async function uploadTicketImageToLsky(
       : pickString(data?.key, data?.id, data?.hash),
     filename: pickString(data?.name, data?.filename, input.filename) || input.filename,
     originalName: input.filename,
-    mimeType: pickString(data?.mimetype, data?.mime_type, input.contentType) || input.contentType,
+    mimeType,
     sizeBytes: pickNumber(data?.size, data?.file_size, input.sizeBytes) || input.sizeBytes,
     width: pickNumber(data?.width),
     height: pickNumber(data?.height),
-    url,
-    thumbnailUrl
+    url: safeImageUrl.toString(),
+    thumbnailUrl: safeThumbnailUrl
   }
 }
 
@@ -353,6 +384,7 @@ export async function deleteTicketImageFromLsky(providerVersion: string, provide
     : `${apiBase}/images/${encodeURIComponent(providerFileId)}`
   const response = await fetch(deleteUrl, {
     method: 'DELETE',
+    redirect: 'manual',
     signal: AbortSignal.timeout(LSKY_DELETE_TIMEOUT_MS),
     headers: buildLskyAuthHeaders(config.token)
   })

@@ -74,6 +74,8 @@ jobs:
         run: |
           mkdir -p release/client/dist
           mkdir -p release/server
+          mkdir -p release/deploy
+          mkdir -p release/scripts
 
           # 复制前端构建产物
           cp -r client/dist/* release/client/dist/
@@ -88,6 +90,10 @@ jobs:
           # 复制根配置文件
           cp package.json release/
           cp pnpm-workspace.yaml release/
+          cp .env.example release/
+          cp -r deploy/* release/deploy/
+          cp scripts/init-env.sh release/scripts/
+          cp scripts/verify-split-host.sh release/scripts/
 
       # ===== 安装生产依赖 =====
       - name: 安装后端生产依赖
@@ -203,55 +209,3 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
-
-  # ===== 构建并推送 Docker 镜像（多架构） =====
-  docker:
-    name: 构建 Docker 镜像
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      # 设置 QEMU（用于跨架构构建 arm64）
-      - name: 设置 QEMU
-        uses: docker/setup-qemu-action@v3
-
-      # 设置 Docker Buildx（多架构构建引擎）
-      - name: 设置 Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # 登录 GitHub Container Registry
-      - name: 登录 GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # 提取版本号和元数据
-      - name: 提取 Docker 元数据
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
-
-      # 构建并推送多架构镜像
-      - name: 构建并推送 Docker 镜像
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

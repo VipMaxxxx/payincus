@@ -217,6 +217,15 @@ function bytesToGB(bytes: string | null | undefined): number {
 function bytesToMbps(bytes: string | null | undefined): number {
   if (!bytes || bytes === '0') return 10
   try {
+    const mbitMatch = bytes.match(/^(\d+(?:\.\d+)?)\s*Mbit$/i)
+    if (mbitMatch) {
+      return Math.round(Number(mbitMatch[1])) || 10
+    }
+    const gbitMatch = bytes.match(/^(\d+(?:\.\d+)?)\s*Gbit$/i)
+    if (gbitMatch) {
+      return Math.round(Number(gbitMatch[1]) * 1000) || 10
+    }
+
     const b = Number(bytes)
     if (isNaN(b) || b <= 0) return 10
     // 后端计算: bytes / (1024 * 1024) = Mbit

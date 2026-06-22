@@ -39,6 +39,7 @@ const SYNC_INTERVAL_STOPPED_MS = 10 * 60 * 1000
 
 // 任务运行状态标志
 let isJobRunning = false
+let schedulerStarted = false
 
 // ==================== 性能监控 ====================
 
@@ -366,6 +367,12 @@ export async function runStatusSyncJob(): Promise<void> {
  * 启动状态同步调度器
  */
 export function startStatusScheduler(): void {
+    if (schedulerStarted) {
+        return
+    }
+
+    schedulerStarted = true
+
     // 每 1 分钟检查一次（实际同步间隔由 getInstancesToSync 控制）
     schedule('*/1 * * * *', () => {
         runStatusSyncJob().catch(console.error)

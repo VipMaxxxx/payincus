@@ -16,6 +16,7 @@ import {
   logSecurityEvent,
   SecurityEventType,
   generateRefreshToken,
+  getRefreshTokenSessionId,
   verifyRefreshToken,
   revokeRefreshToken,
   revokeAllUserRefreshTokens,
@@ -35,12 +36,11 @@ import {
 import type { LoginRequest, RegisterRequest } from '../types/api.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { turnstileVerifier } from '../lib/turnstile.js'
-import { isSmtpEnabled, sendVerificationEmail, sendLoginAlertEmail, sendPasswordResetEmail, sendFreeSiteRegisterGiftEmail } from '../lib/mailer.js'
+import { isSmtpEnabled, sendVerificationEmail, sendLoginAlertEmail, sendFreeSiteRegisterGiftEmail } from '../lib/mailer.js'
 import { createVerificationCode, verifyCode } from '../db/email-verification.js'
 import { validateEmailDomain } from '../lib/email-domain.js'
 import {
-    isOperationVerified,
-    consumeOperationVerification
+    claimOperationVerificationRequirement
 } from '../lib/operation-verification.js'
 import {
     getRefreshTokenCookieOptions,
@@ -53,6 +53,27 @@ import { getUserLoginRecords } from '../db/login-records.js'
 import { closeSessionTerminalSessions, closeUserSessions } from '../lib/terminal-proxy.js'
 import { revokeActionTicketsForSession } from '../lib/action-ticket.js'
 import { getUserHostingFeatureStatus } from '../lib/hosting-access.js'
+
+const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/
+const LOGIN_IDENTIFIER_MAX_LENGTH = 254
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+  if (!value || !POSITIVE_INTEGER_PATTERN.test(value)) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_INTEGER_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
 
 interface LoginWith2FARequest extends LoginRequest {
   totpCode?: string
@@ -100,7 +121,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['username'],
         properties: {
-          username: { type: 'string', minLength: 3, maxLength: 32 }
+          username: { type: 'string', minLength: 3, maxLength: LOGIN_IDENTIFIER_MAX_LENGTH }
         }
       }
     }
@@ -111,6 +132,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const user = await db.findUserByUsernameOrEmail(username)
     if (!user) {
       // 为了安全，不透露用户是否存在，统一返回不需要2FA
+      return { requires2FA: false }
+    }
+
+    if (user.status === 'banned') {
+      // 封禁账号也不暴露 2FA 配置，真正登录时会返回封禁错误。
       return { requires2FA: false }
     }
 
@@ -127,7 +153,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['username', 'password'],
         properties: {
-          username: { type: 'string', minLength: 3, maxLength: 32 },
+          username: { type: 'string', minLength: 3, maxLength: LOGIN_IDENTIFIER_MAX_LENGTH },
           password: { type: 'string', minLength: 6, maxLength: 128 },
           totpCode: { type: 'string', minLength: 6, maxLength: 6 },
           recoveryCode: { type: 'string', minLength: 8, maxLength: 20 },
@@ -297,7 +323,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const refreshToken = await generateRefreshToken(user.id, user.username, user.role, clientIp, userAgent)
 
     // 提取会话标识（Refresh Token 的前20个字符）
-    const sessionId = refreshToken.substring(0, 20)
+    const sessionId = getRefreshTokenSessionId(refreshToken)
 
     // 生成 Access Token (简化版：延长有效期到 7 天)
     const accessToken = fastify.jwt.sign({
@@ -353,8 +379,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
         loginTime: new Date(),
         isNewIp: loginAlertInfo.isNewIp,
         isNewDevice: loginAlertInfo.isNewDevice
-      }).then(() => {
-        console.log(`[Login Alert] Sent login alert email to ${user.email} (newIp: ${loginAlertInfo!.isNewIp}, newDevice: ${loginAlertInfo!.isNewDevice})`)
       }).catch(err => {
         console.error('[Login Alert] Failed to send login alert email:', err)
       })
@@ -389,7 +413,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Body: { email: string; turnstileToken?: string } }>, reply: FastifyReply) => {
     const { email } = request.body
-    console.log('[send-verification-code] Request received for email:', email)
 
     if (!await ensureRegistrationEnabled(reply)) {
       return
@@ -397,7 +420,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     // Check if email verification is enabled
     const smtpEnabled = await isSmtpEnabled()
-    console.log('[send-verification-code] SMTP enabled:', smtpEnabled)
     if (!smtpEnabled) {
       return reply.code(400).send(apiError(ErrorCode.EMAIL_VERIFICATION_DISABLED))
     }
@@ -414,36 +436,29 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }
 
     // Check if email is already registered
-    console.log('[send-verification-code] Checking if email exists...')
     const existingUser = await db.findUserByEmail(email)
     if (existingUser) {
       return reply.code(400).send(apiError(ErrorCode.EMAIL_ALREADY_REGISTERED))
     }
 
     // Check email domain whitelist
-    console.log('[send-verification-code] Validating email domain...')
     const domainValidation = await validateEmailDomain(email)
     if (!domainValidation.valid) {
-      console.log('[send-verification-code] Domain not allowed:', domainValidation.domain)
       return reply.code(400).send(apiError(ErrorCode.EMAIL_DOMAIN_NOT_ALLOWED, domainValidation.domain))
     }
 
     // Create verification code
-    console.log('[send-verification-code] Creating verification code...')
-    const result = await createVerificationCode(email)
+    const result = await createVerificationCode(email, 'register')
     if (!result) {
       return reply.code(429).send(apiError(ErrorCode.TOO_MANY_VERIFICATION_REQUESTS))
     }
 
     // Send email
-    console.log('[send-verification-code] Sending email...')
     const sendResult = await sendVerificationEmail(email, result.code, 10)
-    console.log('[send-verification-code] Email send result:', sendResult)
     if (!sendResult.success) {
       return reply.code(500).send(apiError(ErrorCode.EMAIL_SEND_FAILED))
     }
 
-    console.log('[send-verification-code] Success!')
     return { message: 'Verification code sent', expiresAt: result.expiresAt.toISOString() }
   })
 
@@ -517,7 +532,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       if (!emailCode) {
         return reply.code(400).send(apiError(ErrorCode.EMAIL_CODE_REQUIRED))
       }
-      const isValid = await verifyCode(email, emailCode)
+      const isValid = await verifyCode(email, emailCode, 'register')
       if (!isValid) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_EMAIL_CODE))
       }
@@ -580,8 +595,16 @@ export default async function authRoutes(fastify: FastifyInstance) {
       userId = created.userId
       registerGift = created.registerGift
     } catch (createErr) {
-      if (createErr instanceof Error && createErr.message === 'INVITE_CODE_UNAVAILABLE') {
-        return reply.code(400).send(apiError(ErrorCode.INVALID_INVITE_CODE))
+      if (createErr instanceof Error) {
+        if (createErr.message === 'INVITE_CODE_UNAVAILABLE') {
+          return reply.code(400).send(apiError(ErrorCode.INVALID_INVITE_CODE))
+        }
+        if (createErr.message === 'USER_EXISTS') {
+          return reply.code(400).send(apiError(ErrorCode.USER_EXISTS))
+        }
+        if (createErr.message === 'EMAIL_ALREADY_REGISTERED') {
+          return reply.code(400).send(apiError(ErrorCode.EMAIL_ALREADY_REGISTERED))
+        }
       }
       throw createErr
     }
@@ -624,7 +647,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const refreshToken = await generateRefreshToken(newUser.id, newUser.username, newUser.role, clientIp, userAgent)
 
     // 提取会话标识（Refresh Token 的前20个字符）
-    const sessionId = refreshToken.substring(0, 20)
+    const sessionId = getRefreshTokenSessionId(refreshToken)
 
     // 生成 Access Token (简化版：延长有效期到 7 天)
     const accessToken = fastify.jwt.sign({
@@ -698,18 +721,33 @@ export default async function authRoutes(fastify: FastifyInstance) {
   })
 
   // 用户登出
-  fastify.post('/logout', {
-    onRequest: [fastify.authenticate]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const currentSessionId = request.user.sid
+  fastify.post('/logout', async (request: FastifyRequest, reply: FastifyReply) => {
     const refreshToken = request.cookies.refreshToken
     const sessionIdsToInvalidate = new Set<string>()
+    let userId: number | null = null
+    let username: string | undefined
+
+    try {
+      await request.jwtVerify()
+      const jwtUser = request.user as { id?: number; username?: string; sid?: string }
+      if (jwtUser?.id) {
+        userId = jwtUser.id
+        username = jwtUser.username
+      }
+      if (jwtUser?.sid) {
+        sessionIdsToInvalidate.add(jwtUser.sid)
+      }
+    } catch {
+      // Logout must still clear the HttpOnly refresh cookie when the access token is expired or invalid.
+    }
 
     if (refreshToken) {
-      sessionIdsToInvalidate.add(refreshToken.substring(0, 20))
-    }
-    if (currentSessionId) {
-      sessionIdsToInvalidate.add(currentSessionId)
+      sessionIdsToInvalidate.add(getRefreshTokenSessionId(refreshToken))
+      const tokenData = await verifyRefreshToken(refreshToken)
+      if (tokenData) {
+        userId = tokenData.userId
+        username = tokenData.username
+      }
     }
 
     // 撤销 Refresh Token (从 Redis 删除)
@@ -717,18 +755,22 @@ export default async function authRoutes(fastify: FastifyInstance) {
       await revokeRefreshToken(refreshToken)
     }
 
-    for (const sessionId of sessionIdsToInvalidate) {
-      await invalidateSessionAccessToken(request.user.id, sessionId)
-      revokeActionTicketsForSession(sessionId)
-      closeSessionTerminalSessions(sessionId, 'Session logged out')
+    if (userId) {
+      for (const sessionId of sessionIdsToInvalidate) {
+        await invalidateSessionAccessToken(userId, sessionId)
+        revokeActionTicketsForSession(sessionId)
+        closeSessionTerminalSessions(sessionId, 'Session logged out')
+      }
     }
 
     // 清除 Cookie - SEC005: 使用统一配置
     reply.clearCookie('refreshToken', getClearCookieOptions())
 
-    await logSecurityEvent(SecurityEventType.LOGOUT, request.user.id, {
-      username: request.user.username
-    })
+    if (userId) {
+      await logSecurityEvent(SecurityEventType.LOGOUT, userId, {
+        username
+      })
+    }
     return { message: 'Logged out' }
   })
 
@@ -784,7 +826,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       }
 
       // 提取会话标识
-      const sessionId = refreshToken.substring(0, 20)
+      const sessionId = getRefreshTokenSessionId(refreshToken)
 
       // 更新会话活跃时间并延长过期时间
       const sessionUpdate = await updateSessionActivity(refreshToken)
@@ -880,8 +922,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.ADMIN_REQUIRED))
     }
 
-    const page = Math.max(1, parseInt(request.query.page || '1', 10))
-    const pageSize = Math.min(100, Math.max(1, parseInt(request.query.pageSize || '20', 10)))
+    const page = parsePositiveInteger(request.query.page, 1)
+    const pageSize = Math.min(100, parsePositiveInteger(request.query.pageSize, 20))
     const status = request.query.status === 'used' || request.query.status === 'unused'
       ? request.query.status
       : undefined
@@ -921,10 +963,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.ADMIN_REQUIRED))
     }
 
-    const { id } = request.params
-    const inviteId = Number(id)
-
-    if (isNaN(inviteId)) {
+    const inviteId = parsePositiveRouteId(request.params.id)
+    if (inviteId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -1013,6 +1053,10 @@ export default async function authRoutes(fastify: FastifyInstance) {
     // 启用 2FA
     await db.enable2FA(request.user.id)
 
+    await revokeAllUserRefreshTokens(request.user.id)
+    await invalidateUserAccessTokens(request.user.id)
+    closeUserSessions(request.user.id, '2FA enabled')
+
     await createLog(request.user.id, 'security', '2fa.enable', 'Enabled two-factor authentication', 'success')
 
     // 发送通知
@@ -1039,16 +1083,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Body: { password: string; code: string } }>, reply: FastifyReply) => {
     const { password, code } = request.body
 
-    // 敏感操作二次验证
-    const verified = await isOperationVerified(request.user.id, 'disable_2fa')
-    if (!verified) {
-      return reply.code(403).send({
-        error: 'Sensitive operation requires verification',
-        code: 'VERIFICATION_REQUIRED',
-        operationType: 'disable_2fa'
-      })
-    }
-
     // 获取用户信息验证密码
     const user = await db.findUserById(request.user.id)
     if (!user) {
@@ -1070,8 +1104,22 @@ export default async function authRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // 敏感操作二次验证：在密码和 TOTP 通过后原子领取，避免错误输入消耗验证码。
+    const verification = await claimOperationVerificationRequirement(request.user.id, 'disable_2fa')
+    if (!verification.verified) {
+      return reply.code(403).send({
+        error: 'Sensitive operation requires verification',
+        code: 'VERIFICATION_REQUIRED',
+        operationType: 'disable_2fa'
+      })
+    }
+
     // 禁用 2FA（清除所有 2FA 数据包括恢复码）
     await db.disable2FAComplete(request.user.id)
+
+    await revokeAllUserRefreshTokens(request.user.id)
+    await invalidateUserAccessTokens(request.user.id)
+    closeUserSessions(request.user.id, '2FA disabled')
 
     await createLog(request.user.id, 'security', '2fa.disable', 'Disabled two-factor authentication', 'success')
 
@@ -1079,9 +1127,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     await sendNotification(request.user.id, '2fa_disabled', {
       instanceName: ''
     })
-
-    // 清理已使用的验证记录
-    await consumeOperationVerification(request.user.id, 'disable_2fa')
 
     return { message: '2FA disabled' }
   })
@@ -1206,9 +1251,18 @@ export default async function authRoutes(fastify: FastifyInstance) {
       // 但实际不发送邮件
       return { message: 'If the email is registered, a verification code will be sent', expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() }
     }
+    if (user.status === 'banned') {
+      if (user.ban_reason) {
+        return reply.code(403).send({
+          error: user.ban_reason,
+          code: ErrorCode.ACCOUNT_BANNED
+        })
+      }
+      return reply.code(403).send(apiError(ErrorCode.ACCOUNT_BANNED))
+    }
 
     // 创建验证码
-    const result = await createVerificationCode(email)
+    const result = await createVerificationCode(email, 'password_reset')
     if (!result) {
       return reply.code(429).send(apiError(ErrorCode.TOO_MANY_VERIFICATION_REQUESTS))
     }
@@ -1223,21 +1277,22 @@ export default async function authRoutes(fastify: FastifyInstance) {
   })
 
   // 重置密码
-  fastify.post<{ Body: { email: string; code: string; turnstileToken?: string } }>('/forgot-password/reset', {
+  fastify.post<{ Body: { email: string; code: string; password: string; turnstileToken?: string } }>('/forgot-password/reset', {
     preHandler: [turnstileVerifier],
     schema: {
       body: {
         type: 'object',
-        required: ['email', 'code'],
+        required: ['email', 'code', 'password'],
         properties: {
           email: { type: 'string', format: 'email' },
           code: { type: 'string', minLength: 6, maxLength: 6 },
+          password: { type: 'string', minLength: 8, maxLength: 128 },
           turnstileToken: { type: 'string' }
         }
       }
     }
-  }, async (request: FastifyRequest<{ Body: { email: string; code: string; turnstileToken?: string } }>, reply: FastifyReply) => {
-    const { email, code } = request.body
+  }, async (request: FastifyRequest<{ Body: { email: string; code: string; password: string; turnstileToken?: string } }>, reply: FastifyReply) => {
+    const { email, code, password } = request.body
 
     // 检查 SMTP 是否启用
     const smtpEnabled = await isSmtpEnabled()
@@ -1250,8 +1305,37 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_EMAIL))
     }
 
+    // 检查邮箱是否包含危险字符
+    const emailWithoutAllowed = email.replace(/@/g, '').replace(/\./g, '')
+    if (containsDangerousChars(emailWithoutAllowed)) {
+      return reply.code(400).send(apiError(ErrorCode.EMAIL_CONTAINS_ILLEGAL))
+    }
+
+    // 验证新密码强度，先校验再消费邮箱验证码
+    const passwordCheck = validatePassword(password)
+    if (!passwordCheck.valid) {
+      return reply.code(400).send({ error: passwordCheck.message })
+    }
+
+    // 查找用户并先检查状态，避免封禁账号消耗验证码
+    const user = await db.findUserByEmail(email)
+    if (!user) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_EMAIL_CODE))
+    }
+
+    if (user.status === 'banned') {
+      // 如果有封禁原因，返回该原因
+      if (user.ban_reason) {
+        return reply.code(403).send({
+          error: user.ban_reason,
+          code: ErrorCode.ACCOUNT_BANNED
+        })
+      }
+      return reply.code(403).send(apiError(ErrorCode.ACCOUNT_BANNED))
+    }
+
     // 验证验证码
-    const isValid = await verifyCode(email, code)
+    const isValid = await verifyCode(email, code, 'password_reset')
     if (!isValid) {
       // 记录验证码验证失败的安全事件（防止暴力破解）
       // 注意：不透露用户是否存在，统一返回错误
@@ -1264,29 +1348,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_EMAIL_CODE))
     }
 
-    // 查找用户
-    const user = await db.findUserByEmail(email)
-    if (!user) {
-      // 验证码已验证，但用户不存在（可能被删除），返回通用错误
-      return reply.code(400).send(apiError(ErrorCode.INVALID_EMAIL_CODE))
-    }
-
-    // 检查用户状态
-    if (user.status === 'banned') {
-      // 如果有封禁原因，返回该原因
-      if (user.ban_reason) {
-        return reply.code(403).send({
-          error: user.ban_reason,
-          code: ErrorCode.ACCOUNT_BANNED
-        })
-      }
-      return reply.code(403).send(apiError(ErrorCode.ACCOUNT_BANNED))
-    }
-
-    // 生成新密码
-    const { generateRandomPassword } = await import('../lib/incus-config-generator.js')
-    const newPassword = generateRandomPassword(16)
-    const passwordHash = await bcrypt.hash(newPassword, 12)
+    const passwordHash = await bcrypt.hash(password, 12)
 
     // 检查用户是否启用了2FA
     const is2FAEnabled = await db.is2FAEnabled(user.id)
@@ -1317,20 +1379,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
       reason: 'Password reset via forgot password'
     })
 
-    // 发送新密码邮件
-    const sendResult = await sendPasswordResetEmail(email, {
-      username: user.username,
-      newPassword: newPassword,
-      twoFactorDisabled: twoFactorDisabled
-    })
-
-    if (!sendResult.success) {
-      // 即使邮件发送失败，密码已经重置，记录错误但返回成功
-      request.log.error({ error: sendResult.error }, 'Failed to send password reset email')
-    }
-
     return {
-      message: 'Password reset successfully. Please check your email for the new password.',
+      message: 'Password reset successfully. Please log in with your new password.',
       twoFactorDisabled: twoFactorDisabled
     }
   })
@@ -1343,13 +1393,13 @@ export default async function authRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{
     Querystring: { page?: string; pageSize?: string }
   }>, _reply: FastifyReply) => {
-    const page = parseInt(request.query.page || '1', 10)
-    const pageSize = Math.min(parseInt(request.query.pageSize || '20', 10), 50) // 最多50条
+    const page = parsePositiveInteger(request.query.page, 1)
+    const pageSize = Math.min(parsePositiveInteger(request.query.pageSize, 20), 50) // 最多50条
 
-    const { records, total } = await getUserLoginRecords(request.user.id, page, pageSize)
+    const loginRecordsResult = await getUserLoginRecords(request.user.id, page, pageSize)
 
     return {
-      records: records.map(r => ({
+      records: loginRecordsResult.records.map(r => ({
         id: r.id,
         ip: r.ip,
         country: r.country,
@@ -1360,10 +1410,10 @@ export default async function authRoutes(fastify: FastifyInstance) {
         userAgent: r.userAgent,
         createdAt: r.createdAt.toISOString()
       })),
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize)
+      total: loginRecordsResult.total,
+      page: loginRecordsResult.page,
+      pageSize: loginRecordsResult.pageSize,
+      totalPages: loginRecordsResult.totalPages
     }
   })
 }

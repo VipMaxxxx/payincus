@@ -141,9 +141,13 @@ async function assertPublicHostname(hostname: string): Promise<void> {
 }
 
 export async function assertSafeWebhookUrl(url: string): Promise<URL> {
+  return assertSafeHttpUrl(url, 'Webhook URL')
+}
+
+export async function assertSafeHttpUrl(url: string, label = 'URL'): Promise<URL> {
   const parsed = buildUrl(url, 'https')
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new OutboundTargetValidationError('Webhook URL must use http or https')
+    throw new OutboundTargetValidationError(`${label} must use http or https`)
   }
 
   await assertPublicHostname(parsed.hostname)

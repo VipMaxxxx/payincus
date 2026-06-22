@@ -23,6 +23,7 @@ INJECT_AGENT_ID=""
 INJECT_AGENT_SECRET=""
 INJECT_AGENT_INSTALL_TOKEN=""
 INJECT_AGENT_BINARY_URL=""
+INJECT_AGENT_BINARY_SHA256=""
 INJECT_AGENT_ENABLED="true"
 # ==============================
 
@@ -38,6 +39,7 @@ readonly AGENT_ID="${INJECT_AGENT_ID:-}"
 readonly AGENT_SECRET="${INJECT_AGENT_SECRET:-}"
 readonly AGENT_INSTALL_TOKEN="${INJECT_AGENT_INSTALL_TOKEN:-}"
 readonly AGENT_BINARY_URL="${INJECT_AGENT_BINARY_URL:-}"
+readonly AGENT_BINARY_SHA256="${INJECT_AGENT_BINARY_SHA256:-}"
 readonly AGENT_ENABLED="${INJECT_AGENT_ENABLED:-true}"
 readonly AGENT_SERVICE_NAME="incudal-agent"
 readonly AGENT_CONFIG_FILE="${INCUDAL_AGENT_CONFIG_FILE:-/etc/incudal-agent/config.yaml}"
@@ -1490,6 +1492,7 @@ install_incudal_agent() {
         INCUDAL_AGENT_ID="$AGENT_ID" \
         INCUDAL_AGENT_SECRET="$AGENT_SECRET" \
         INCUDAL_AGENT_BINARY_URL="$AGENT_BINARY_URL" \
+        INCUDAL_AGENT_BINARY_SHA256="$AGENT_BINARY_SHA256" \
         INCUDAL_HEARTBEAT_INTERVAL_SECONDS="$AGENT_HEARTBEAT_INTERVAL_SECONDS" \
         bash; then
         AGENT_INSTALL_STATUS="已安装"
@@ -1510,6 +1513,7 @@ run_incudal_agent_installer() {
     local agent_secret="${4:-}"
     local heartbeat_interval="${5:-30}"
     local binary_url="${6:-}"
+    local binary_sha256="${7:-}"
 
     if [[ -z "$panel_url" ]]; then
         error "面板地址不能为空"
@@ -1541,6 +1545,7 @@ run_incudal_agent_installer() {
         INCUDAL_AGENT_ID="$agent_id" \
         INCUDAL_AGENT_SECRET="$agent_secret" \
         INCUDAL_AGENT_BINARY_URL="$binary_url" \
+        INCUDAL_AGENT_BINARY_SHA256="$binary_sha256" \
         INCUDAL_HEARTBEAT_INTERVAL_SECONDS="$heartbeat_interval" \
         bash; then
         log "宿主机 Agent 安装 / 更新完成"
@@ -1640,7 +1645,7 @@ update_incudal_agent_from_config() {
     fi
 
     prompt_agent_heartbeat_interval "$heartbeat_interval"
-    run_incudal_agent_installer "$panel_url" "" "$agent_id" "$agent_secret" "$AGENT_HEARTBEAT_INTERVAL_SECONDS" "$AGENT_BINARY_URL"
+    run_incudal_agent_installer "$panel_url" "" "$agent_id" "$agent_secret" "$AGENT_HEARTBEAT_INTERVAL_SECONDS" "$AGENT_BINARY_URL" "$AGENT_BINARY_SHA256"
 }
 
 install_incudal_agent_with_token() {
@@ -1673,7 +1678,7 @@ install_incudal_agent_with_token() {
     current_interval=$(read_agent_config_value "heartbeat_interval_seconds" || true)
     prompt_agent_heartbeat_interval "${current_interval:-30}"
 
-    run_incudal_agent_installer "$panel_url" "$install_token" "" "" "$AGENT_HEARTBEAT_INTERVAL_SECONDS" "$AGENT_BINARY_URL"
+    run_incudal_agent_installer "$panel_url" "$install_token" "" "" "$AGENT_HEARTBEAT_INTERVAL_SECONDS" "$AGENT_BINARY_URL" "$AGENT_BINARY_SHA256"
 }
 
 show_incudal_agent_logs() {

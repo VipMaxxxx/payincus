@@ -680,6 +680,7 @@ export default {
         usernameOrEmailPlaceholder: 'Enter username or email',
         password: 'Password',
         passwordPlaceholder: 'Enter password',
+        newPassword: 'New Password',
         confirmPassword: 'Confirm Password',
         confirmPasswordPlaceholder: 'Enter password again',
         email: 'Email',
@@ -724,7 +725,7 @@ export default {
           codeSent: 'Verification code sent, please check your email',
           codeHint: 'Please enter the 6-digit code sent to your email',
           resetPassword: 'Reset Password',
-          resetSuccess: 'Password reset successful! New password has been sent to your email, please check.',
+          resetSuccess: 'Password reset successful! Please log in with your new password.',
           twoFactorDisabled: 'Your two-factor authentication (2FA) has been automatically disabled. We recommend re-enabling it for account security.'
         },
         oauthNotBound: 'Please bind your {provider} account in settings first to use quick login',
@@ -3198,7 +3199,7 @@ export default {
             // Reset password
             resetPassword: 'Reset Password',
             resetPasswordConfirm: 'Are you sure to reset password for user "{name}"?',
-            resetPasswordHint: 'A new password will be generated automatically. All user sessions will be revoked and re-login with new password is required.',
+            resetPasswordHint: 'Set a new password. All user sessions will be revoked, and the password will not be shown after saving.',
             confirmResetPassword: 'Confirm Reset',
             resetting: 'Resetting...',
             passwordResetSuccess: 'Password Reset Successfully',
@@ -4272,6 +4273,8 @@ export default {
                 yipayMethodsHint: 'Choose at least one payment method supported by this provider.',
                 yipayMethodFeeHint: 'Fees are added to the payable amount based on the selected payment method. The recharge principal is still credited in full.',
                 yipayFeeFieldHint: 'Set Yipay fees per payment method above.',
+                secretKeepPlaceholder: 'Leave empty to keep current secret',
+                secretKeepHint: 'A secret is already configured. Leave empty to keep it unchanged.',
                 heleketMethods: 'Common Currency Display',
                 heleketMethodsPlaceholder: 'USDT@TRON\nUSDT@BSC\nBTC\nETH',
                 heleketMethodsHint: 'Used only as an admin-side display/reference list. It does not restrict the final currency or network chosen on the Heleket payment page.',
@@ -4772,6 +4775,7 @@ export default {
         CANNOT_BAN_ADMIN: 'Cannot ban admin account',
         CANNOT_DELETE_ADMIN: 'Cannot delete admin account',
         USER_HAS_INSTANCES: 'User has instances, please delete them first',
+        USER_HAS_RESOURCES: 'User still owns instances, hosts, packages, or hosting zones. Transfer or remove them first.',
         // Auth errors
         INVALID_CREDENTIALS: 'Invalid username or password',
         ACCOUNT_BANNED: 'Account has been disabled',

@@ -40,6 +40,7 @@ const TIMEOUT_CHECK_INTERVAL = 60000
 
 let workerInterval: ReturnType<typeof setInterval> | null = null
 let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null
+const runningRestoreTaskIds = new Set<number>()
 const dbBackoff = createWorkerDbBackoff('RestoreWorker')
 
 /**
@@ -68,10 +69,25 @@ async function cleanupTimeoutTasks(): Promise<void> {
     if (dbBackoff.shouldSkip()) return
     const timeoutThreshold = new Date(Date.now() - RESTORE_TIMEOUT)
     
-    const result = await prisma.restoreTask.updateMany({
+    const timedOutTasks = await prisma.restoreTask.findMany({
         where: {
             status: 'PROCESSING',
             startedAt: { lt: timeoutThreshold }
+        },
+        select: { id: true }
+    })
+    const timedOutTaskIds = timedOutTasks
+        .map(task => task.id)
+        .filter(taskId => !runningRestoreTaskIds.has(taskId))
+
+    if (timedOutTaskIds.length === 0) {
+        return
+    }
+
+    const result = await prisma.restoreTask.updateMany({
+        where: {
+            id: { in: timedOutTaskIds },
+            status: 'PROCESSING'
         },
         data: {
             status: 'FAILED',
@@ -174,8 +190,8 @@ async function claimNextTask(hostId: number) {
  * 更新任务进度
  */
 async function updateProgress(taskId: number, progress: string): Promise<void> {
-    await prisma.restoreTask.update({
-        where: { id: taskId },
+    await prisma.restoreTask.updateMany({
+        where: { id: taskId, status: 'PROCESSING' },
         data: { progress }
     })
 }
@@ -188,6 +204,7 @@ async function updateProgress(taskId: number, progress: string): Promise<void> {
  */
 async function executeRestoreTask(taskId: number): Promise<void> {
     const startTime = Date.now()
+    runningRestoreTaskIds.add(taskId)
 
     // 获取任务信息（已在事务中标记为 PROCESSING）
     const task = await prisma.restoreTask.findUnique({
@@ -324,12 +341,12 @@ async function executeRestoreTask(taskId: number): Promise<void> {
         console.log(`[RestoreWorker] Task ${taskId}: 启动实例`)
         await startInstance(client, task.originalIncusId)
 
-        // 10. 删除数据库中原实例的备份和快照记录（除了用于恢复的那个备份）
+        // 10. 删除数据库中原实例的备份和快照记录
+        // Incus 原实例及其所有备份已被删除，恢复后的新实例没有这些旧备份。
         console.log(`[RestoreWorker] Task ${taskId}: 清理数据库中的备份和快照记录`)
         await prisma.backup.updateMany({
             where: {
-                instanceId: task.instanceId,
-                id: { not: task.backupId ?? -1 } // 保留用于恢复的备份
+                instanceId: task.instanceId
             },
             data: { status: 'deleted' }
         })
@@ -360,10 +377,14 @@ async function executeRestoreTask(taskId: number): Promise<void> {
         }
 
         // 12. 标记成功
-        await prisma.restoreTask.update({
-            where: { id: taskId },
+        const completeResult = await prisma.restoreTask.updateMany({
+            where: { id: taskId, status: 'PROCESSING' },
             data: { status: 'COMPLETED', finishedAt: new Date() }
         })
+        if (completeResult.count === 0) {
+            console.warn(`[RestoreWorker] Task ${taskId}: 已不处于 PROCESSING，跳过完成状态覆盖`)
+            return
+        }
 
         console.log(`[RestoreWorker] Task ${taskId}: 恢复完成`)
 
@@ -410,14 +431,18 @@ async function executeRestoreTask(taskId: number): Promise<void> {
             }
         }
 
-        await prisma.restoreTask.update({
-            where: { id: taskId },
+        const failResult = await prisma.restoreTask.updateMany({
+            where: { id: taskId, status: 'PROCESSING' },
             data: {
                 status: 'FAILED',
                 error: errorMessage,
                 finishedAt: new Date()
             }
         })
+        if (failResult.count === 0) {
+            console.warn(`[RestoreWorker] Task ${taskId}: 已不处于 PROCESSING，跳过失败状态覆盖`)
+            return
+        }
 
         await createLog(
             task.userId,
@@ -427,6 +452,8 @@ async function executeRestoreTask(taskId: number): Promise<void> {
             'failed',
             { instanceId: task.instanceId }
         )
+    } finally {
+        runningRestoreTaskIds.delete(taskId)
     }
 }
 

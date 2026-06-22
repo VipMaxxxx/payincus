@@ -5,8 +5,10 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import PublicSiteLayout from '@/components/public/PublicSiteLayout.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import PopupAnnouncementModal from '@/components/PopupAnnouncementModal.vue'
+import { buildApiUrl } from '@/utils/api-url'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,8 +27,12 @@ const hiddenHostingRouteNames = new Set([
 
 // 不需要布局的页面
 const noLayoutRoutes: string[] = ['login', 'register']
+const publicSiteRouteNames = new Set(['portal', 'market'])
 const showLayout = computed<boolean>(() => {
   return authStore.isAuthenticated && !noLayoutRoutes.includes(route.name as string)
+})
+const showPublicSiteLayout = computed<boolean>(() => {
+  return typeof route.name === 'string' && publicSiteRouteNames.has(route.name)
 })
 
 watchEffect(() => {
@@ -116,7 +122,7 @@ onMounted(() => {
   tokenRefreshTimer = window.setInterval(async () => {
     if (authStore.isAuthenticated) {
       try {
-        const response = await fetch('/api/auth/refresh', {
+        const response = await fetch(buildApiUrl('/auth/refresh'), {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' }
@@ -177,6 +183,13 @@ onUnmounted(() => {
       </template>
     </RouterView>
   </AppLayout>
+  <PublicSiteLayout v-else-if="showPublicSiteLayout">
+    <RouterView v-slot="{ Component, route: currentRoute }">
+      <template v-if="Component">
+        <component :is="Component" :key="currentRoute.name" />
+      </template>
+    </RouterView>
+  </PublicSiteLayout>
   <RouterView v-else v-slot="{ Component, route: currentRoute }">
     <template v-if="Component">
       <component :is="Component" :key="currentRoute.name" />

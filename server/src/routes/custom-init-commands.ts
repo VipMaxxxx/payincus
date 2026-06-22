@@ -17,6 +17,17 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 
 // 有效的发行版列表
 const VALID_DISTROS = ['ubuntu', 'debian', 'rhel', 'alpine', 'arch', 'suse', 'all']
+const VALID_QUERY_DISTROS = [...VALID_DISTROS, 'other']
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
 
 export default async function customInitCommandRoutes(fastify: FastifyInstance) {
 
@@ -54,8 +65,12 @@ export default async function customInitCommandRoutes(fastify: FastifyInstance) 
         }
       }
     }
-  }, async (request: FastifyRequest<{ Querystring: { distro: string } }>) => {
+  }, async (request: FastifyRequest<{ Querystring: { distro: string } }>, reply: FastifyReply) => {
     const { distro } = request.query
+
+    if (!VALID_QUERY_DISTROS.includes(distro)) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid distro'))
+    }
     
     const commands = await getEnabledCommandsByDistro(request.user.id, distro)
 
@@ -75,9 +90,9 @@ export default async function customInitCommandRoutes(fastify: FastifyInstance) 
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const cmdId = Number(id)
+    const cmdId = parsePositiveRouteId(id)
 
-    if (isNaN(cmdId)) {
+    if (!cmdId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -195,9 +210,9 @@ export default async function customInitCommandRoutes(fastify: FastifyInstance) 
     Body: { name?: string; command?: string; distros?: string[]; description?: string | null; enabled?: boolean }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const cmdId = Number(id)
+    const cmdId = parsePositiveRouteId(id)
 
-    if (isNaN(cmdId)) {
+    if (!cmdId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -248,9 +263,9 @@ export default async function customInitCommandRoutes(fastify: FastifyInstance) 
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const cmdId = Number(id)
+    const cmdId = parsePositiveRouteId(id)
 
-    if (isNaN(cmdId)) {
+    if (!cmdId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 

@@ -45,6 +45,7 @@ interface HostingZonePayload {
 }
 
 const MAX_LOGO_URL_LENGTH = 2048
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
 const HOSTING_OWNER_SORT_FIELDS = [
   'vipLevel',
   'hostingBalance',
@@ -67,6 +68,12 @@ function toNumber(value: unknown): number {
 
 function roundMoney(value: number): number {
   return Number(value.toFixed(2))
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
 }
 
 function parseBoundedInt(value: string | undefined, fallback: number, min: number, max: number): number {
@@ -512,8 +519,8 @@ export default async function adminHostingRoutes(app: FastifyInstance): Promise<
     onRequest: [app.authenticate, app.requireAdmin],
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } }
   }, async (request, reply) => {
-    const zoneId = Number(request.params.id)
-    if (!Number.isInteger(zoneId) || zoneId <= 0) {
+    const zoneId = parsePositiveRouteId(request.params.id)
+    if (!zoneId) {
       return reply.status(400).send({ error: '无效的专区 ID' })
     }
 

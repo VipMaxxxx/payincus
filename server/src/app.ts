@@ -1,5 +1,5 @@
 // 确保环境变量被加载（必须在最前面）
-import 'dotenv/config'
+import './config/env.js'
 
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import cors from '@fastify/cors'
@@ -16,13 +16,15 @@ import { dirname, join } from 'path'
 
 // 导入数据库
 import { initPrismaDatabase } from './db/init-prisma.js'
-import { prisma } from './db/prisma.js'
+import { closePrismaDatabase, prisma } from './db/prisma.js'
 
 // 导入安全工具
 import { checkJwtConfig, isAccessTokenInvalidated } from './lib/security.js'
 
 // 导入日志敏感信息过滤器
 import { logSerializers } from './lib/log-sanitizer.js'
+import { getTrustProxyEnabled } from './lib/trust-proxy-config.js'
+import { getCorsOrigins } from './lib/origin-config.js'
 
 // 导入速率限制配置
 import {
@@ -39,8 +41,10 @@ import instanceRoutes from './routes/instances.js'
 import hostRoutes from './routes/hosts.js'
 import packageRoutes from './routes/packages.js'
 import snapshotRoutes from './routes/snapshots.js'
+import backupRoutes from './routes/backups.js'
 import sshKeyRoutes from './routes/ssh-keys.js'
 import notificationRoutes from './routes/notifications.js'
+import storageConfigRoutes from './routes/storage-configs.js'
 import oauthRoutes from './routes/oauth.js'
 import helpRoutes from './routes/help.js'
 import imageRoutes from './routes/images.js'
@@ -84,38 +88,6 @@ import vipBenefitRoutes from './routes/vip-benefits.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-async function failRetiredBackupTasks(): Promise<{ restoreCount: number; uploadCount: number }> {
-  const { prisma } = await import('./db/prisma.js')
-
-  const [restoreResult, uploadResult] = await Promise.all([
-    prisma.restoreTask.updateMany({
-      where: {
-        status: { in: ['PENDING', 'PROCESSING'] }
-      },
-      data: {
-        status: 'FAILED',
-        error: '备份恢复功能已下线，任务已终止',
-        finishedAt: new Date()
-      }
-    }),
-    prisma.backupUploadTask.updateMany({
-      where: {
-        status: { in: ['PENDING', 'PROCESSING'] }
-      },
-      data: {
-        status: 'FAILED',
-        error: '备份上传功能已下线，任务已终止',
-        finishedAt: new Date()
-      }
-    })
-  ])
-
-  return {
-    restoreCount: restoreResult.count,
-    uploadCount: uploadResult.count
-  }
-}
-
 // 创建 Fastify 实例
 // 日志级别: fatal, error, warn, info, debug, trace
 // 开发环境使用 'info' 减少噪音，可通过 LOG_LEVEL 环境变量覆盖
@@ -131,8 +103,8 @@ const fastify = Fastify({
   },
   // 关闭请求/响应日志，减少噪音
   disableRequestLogging: process.env.DISABLE_REQUEST_LOG !== 'false',
-  // 信任代理：当使用 Cloudflare 等代理时，需要信任 X-Forwarded-* 头
-  trustProxy: process.env.NODE_ENV === 'production',
+  // 信任代理：仅在后端位于可信 Nginx/内网代理之后时显式开启
+  trustProxy: getTrustProxyEnabled(),
   // 请求大小限制（防止 DoS 攻击）
   bodyLimit: parseInt(process.env.BODY_LIMIT || '10485760', 10), // 默认 10MB
   // 参数长度限制（使用新的 routerOptions 格式）
@@ -206,9 +178,7 @@ fastify.setErrorHandler((error: FastifyError, _request, reply) => {
 
 // 注册插件
 await fastify.register(cors, {
-  origin: process.env.NODE_ENV === 'production'
-    ? (process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(url => url.trim()) : false)
-    : ['http://localhost:43173', 'http://127.0.0.1:43173'],
+  origin: getCorsOrigins(),
   credentials: true
 })
 
@@ -249,6 +219,7 @@ await fastify.register(helmet, {
       ],
       connectSrc: [
         "'self'",
+        'ws:',   // HTTP-only intranet WebSocket validation
         'wss:',  // WebSocket 连接
         'https://challenges.cloudflare.com',  // Turnstile API
         'https://cloudflareinsights.com',  // Cloudflare Analytics
@@ -477,8 +448,10 @@ await fastify.register(instanceRoutes, { prefix: '/api/instances' })
 await fastify.register(hostRoutes, { prefix: '/api/hosts' })
 await fastify.register(packageRoutes, { prefix: '/api/packages' })
 await fastify.register(snapshotRoutes, { prefix: '/api/instances' })
+await fastify.register(backupRoutes, { prefix: '/api/instances' })
 await fastify.register(sshKeyRoutes, { prefix: '/api/ssh-keys' })
 await fastify.register(notificationRoutes, { prefix: '/api/notifications' })
+await fastify.register(storageConfigRoutes, { prefix: '/api/storage-configs' })
 await fastify.register(oauthRoutes, { prefix: '/api/oauth' })
 await fastify.register(helpRoutes, { prefix: '/api/help' })
 await fastify.register(imageRoutes, { prefix: '/api/images' })
@@ -519,8 +492,10 @@ await fastify.register(userInviteRoutes, { prefix: '/api/user-invites' })
 await fastify.register(vipLevelRoutes)
 await fastify.register(vipBenefitRoutes)
 
-// 生产环境：托管前端静态文件
-if (process.env.NODE_ENV === 'production') {
+const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
+
+// 生产环境：默认托管前端静态文件；前后端分离部署时可设置 SERVE_STATIC_CLIENT=false
+if (shouldServeStaticClient) {
   const clientDistPath = join(__dirname, '../../client/dist')
   const indexHtmlPath = join(clientDistPath, 'index.html')
   let indexHtmlCache: string | null = null
@@ -685,12 +660,13 @@ const start = async (): Promise<void> => {
       resetDatabase: process.env.RESET_DATABASE === 'true' || process.env.RESET_DATABASE === '1'
     })
 
-    const retiredTaskCleanup = await failRetiredBackupTasks()
-    if (retiredTaskCleanup.restoreCount > 0 || retiredTaskCleanup.uploadCount > 0) {
-      console.log(`📦 已终止 ${retiredTaskCleanup.restoreCount} 个历史恢复任务，${retiredTaskCleanup.uploadCount} 个历史上传任务`)
+    const { cleanupStaleCreatingBackups } = await import('./db/backups.js')
+    const staleCreatingBackups = await cleanupStaleCreatingBackups()
+    if (staleCreatingBackups > 0) {
+      console.log(`📦 清理了 ${staleCreatingBackups} 个长时间停留在创建中的备份记录`)
     }
 
-    const port = parseInt(process.env.PORT || '3000', 10)
+    const port = parseInt(process.env.PORT || '3001', 10)
     const host = process.env.HOST || '127.0.0.1'
 
     await fastify.listen({ port, host })
@@ -726,6 +702,23 @@ const start = async (): Promise<void> => {
     startInstanceTaskWorker()
     console.log('⚙️ 实例操作任务调度器已启动')
 
+    // 启动备份恢复和远程上传队列 Worker
+    const {
+      cleanupStaleTasks: cleanupStaleRestoreTasks,
+      startRestoreWorker,
+      stopRestoreWorker
+    } = await import('./workers/restoreTaskWorker.js')
+    const {
+      cleanupStaleUploadTasks,
+      startBackupUploadWorker,
+      stopBackupUploadWorker
+    } = await import('./workers/backupUploadWorker.js')
+    await cleanupStaleRestoreTasks()
+    await cleanupStaleUploadTasks()
+    startRestoreWorker()
+    startBackupUploadWorker()
+    console.log('📦 备份恢复和远程上传队列已启动')
+
     // 启动宿主机通知邮件队列 Worker
     const {
       cleanupStaleHostNotificationEmailTasks,
@@ -751,6 +744,8 @@ const start = async (): Promise<void> => {
       // 停止终端会话清理定时器
       stopSessionCleanup()
       stopHostNotificationEmailWorker()
+      stopRestoreWorker()
+      stopBackupUploadWorker()
       
       // 清理所有活跃终端会话
       const { closeAllSessions } = await import('./lib/terminal-proxy.js')
@@ -762,6 +757,7 @@ const start = async (): Promise<void> => {
       // 关闭 Fastify 服务器
       try {
         await fastify.close()
+        await closePrismaDatabase()
         console.log('✅ 服务器已关闭')
         process.exit(0)
       } catch (err) {
@@ -793,12 +789,15 @@ const start = async (): Promise<void> => {
     }, 5 * 60 * 1000) // 5分钟
 
     // 启动创建超时清理任务（清理10分钟仍处于创建中的实例）
-    const { getStuckCreatingInstances, getHostById } = await import('./db/index.js')
+    const { getStuckCreatingInstances, getHostById, compensateFailedInstancePurchase } = await import('./db/index.js')
     const { getIncusClient, deleteInstance } = await import('./lib/incus/index.js')
     const { createLog } = await import('./db/logs.js')
     const CREATE_TIMEOUT_MS = 10 * 60 * 1000 // 10分钟
     const CREATE_TIMEOUT_CHECK_INTERVAL = 2 * 60 * 1000 // 每2分钟检查一次
     
+    const instanceCreationReservesPorts = (networkMode: string) =>
+      ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(networkMode)
+
     const runCreateTimeoutCleanup = async () => {
       try {
         const stuckInstances = await getStuckCreatingInstances(CREATE_TIMEOUT_MS)
@@ -834,11 +833,22 @@ const start = async (): Promise<void> => {
               cpu: instance.cpu,
               memory: instance.memory,
               disk: instance.disk,
-              portCount: instance.network_mode === 'nat' ? (instance.port_limit || 0) : 0
+              portCount: instanceCreationReservesPorts(instance.network_mode) ? (instance.port_limit || 0) : 0
             })
             console.log(`[CreateTimeout] 实例 ${instance.name} 资源已回滚`)
           } catch (rollbackErr) {
             console.error(`[CreateTimeout] 资源回滚失败:`, rollbackErr)
+          }
+
+          try {
+            const compensation = await compensateFailedInstancePurchase(instance.id, instance.user_id, instance.host_id)
+            if (compensation.refunded) {
+              console.log(`[CreateTimeout] 实例 ${instance.name} 创建超时已自动退款 ¥${compensation.refundAmount.toFixed(2)}`)
+            } else if (compensation.reason !== 'not_paid_purchase') {
+              console.log(`[CreateTimeout] 实例 ${instance.name} 创建超时无需退款: ${compensation.reason || 'unknown'}`)
+            }
+          } catch (compensationErr) {
+            console.error(`[CreateTimeout] 实例 ${instance.name} 创建超时后的账务补偿失败:`, compensationErr)
           }
           
           // 3. 尝试清理 Incus 残留

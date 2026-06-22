@@ -98,6 +98,19 @@ function getProviderMethodSummary(provider: any): string {
   }).join(', ')
 }
 
+function getSecretPlaceholder(key: string, fallback: string): string {
+  return isEditing.value && (formData.value.config as any)[`${key}Configured`]
+    ? t('admin.paymentProviders.config.secretKeepPlaceholder')
+    : fallback
+}
+
+function getSecretHint(key: string, fallback: string): string {
+  const configuredHint = isEditing.value && (formData.value.config as any)[`${key}Configured`]
+    ? `${t('admin.paymentProviders.config.secretKeepHint')} `
+    : ''
+  return `${configuredHint}${fallback}`.trim()
+}
+
 // 支付渠道类型选项
 const providerTypes = computed(() => [
   { value: 'yipay', label: t('admin.paymentProviders.providerTypes.yipay') },
@@ -533,8 +546,8 @@ function togglePaymentMethod(method: string) {
               <template v-if="(formData.config as any).version === 'v1'">
                 <div>
                   <label class="label">{{ $t('admin.paymentProviders.config.key') }} *</label>
-                  <input v-model="(formData.config as any).key" type="text" class="input w-full font-mono" :placeholder="$t('admin.paymentProviders.config.yipayKeyPlaceholder')" />
-                  <p class="text-xs text-themed-muted mt-1">{{ $t('admin.paymentProviders.config.yipayKeyHint') }}</p>
+                  <input v-model="(formData.config as any).key" type="password" class="input w-full font-mono" :placeholder="getSecretPlaceholder('key', $t('admin.paymentProviders.config.yipayKeyPlaceholder'))" />
+                  <p class="text-xs text-themed-muted mt-1">{{ getSecretHint('key', $t('admin.paymentProviders.config.yipayKeyHint')) }}</p>
                 </div>
               </template>
 
@@ -547,8 +560,8 @@ function togglePaymentMethod(method: string) {
                 </div>
                 <div>
                   <label class="label">{{ $t('admin.paymentProviders.config.merchantPrivateKey') }} *</label>
-                  <textarea v-model="(formData.config as any).merchant_private_key" class="input w-full h-24 resize-none font-mono text-xs" :placeholder="$t('admin.paymentProviders.config.merchantPrivateKeyPlaceholder')"></textarea>
-                  <p class="text-xs text-themed-muted mt-1">{{ $t('admin.paymentProviders.config.merchantPrivateKeyHint') }}</p>
+                  <textarea v-model="(formData.config as any).merchant_private_key" class="input w-full h-24 resize-none font-mono text-xs" :placeholder="getSecretPlaceholder('merchant_private_key', $t('admin.paymentProviders.config.merchantPrivateKeyPlaceholder'))"></textarea>
+                  <p class="text-xs text-themed-muted mt-1">{{ getSecretHint('merchant_private_key', $t('admin.paymentProviders.config.merchantPrivateKeyHint')) }}</p>
                 </div>
               </template>
 
@@ -606,7 +619,8 @@ function togglePaymentMethod(method: string) {
               </div>
               <div>
                 <label class="label">{{ $t('admin.paymentProviders.config.heleketApiKey') }} *</label>
-                <input v-model="(formData.config as any).api_key" type="password" class="input w-full font-mono" :placeholder="$t('admin.paymentProviders.config.heleketApiKey')" />
+                <input v-model="(formData.config as any).api_key" type="password" class="input w-full font-mono" :placeholder="getSecretPlaceholder('api_key', $t('admin.paymentProviders.config.heleketApiKey'))" />
+                <p class="text-xs text-themed-muted mt-1">{{ getSecretHint('api_key', '') }}</p>
               </div>
               <div>
                 <label class="label">{{ $t('admin.paymentProviders.config.heleketInvoiceCurrency') }}</label>

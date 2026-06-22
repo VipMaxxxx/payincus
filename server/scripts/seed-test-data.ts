@@ -1,10 +1,10 @@
-import 'dotenv/config'
+import '../src/config/env.js'
 
 // @ts-ignore - bcryptjs has its own types
 import bcrypt from 'bcryptjs'
 
 import * as db from '../src/db/index.js'
-import { prisma } from '../src/db/prisma.js'
+import { closePrismaDatabase, prisma } from '../src/db/prisma.js'
 
 type SeedRole = 'admin' | 'user'
 type HostStatus = 'online' | 'offline' | 'maintenance'
@@ -418,7 +418,7 @@ async function ensurePlans(packageId: number, plans: SeedPlanSpec[]): Promise<vo
 const seedUsers: SeedUserSpec[] = [
   {
     username: 'admin',
-    email: 'admin@incudal.local',
+    email: 'admin@isvoro.com',
     role: 'admin'
   },
   {
@@ -971,5 +971,5 @@ void main().catch(async error => {
   console.error('[seed:test-data] failed:', error)
   process.exitCode = 1
 }).finally(async () => {
-  await prisma.$disconnect()
+  await closePrismaDatabase()
 })

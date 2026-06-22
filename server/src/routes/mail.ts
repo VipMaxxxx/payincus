@@ -12,6 +12,407 @@ import * as db from '../db/mail.js'
 import { calculateDiscountAmount, calculateDiscountedPrice } from '../lib/billing-calc.js'
 import * as craneMailService from '../services/cranemail.js'
 import * as smarterMailService from '../services/smartermail.js'
+import { MAIL_DOMAIN_LOCK_NAMESPACE, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import { assertSafeHttpUrl } from '../lib/outbound-security.js'
+
+function normalizeBaseUrl(url: URL): string {
+  return url.toString().replace(/\/+$/, '')
+}
+
+type MailPlanInput = {
+  sourceId?: number
+  name?: string
+  description?: string
+  domainLimit?: number
+  diskLimitGb?: number
+  billingCycle?: 'monthly' | 'yearly'
+  price?: number
+  enabled?: boolean
+  sortOrder?: number
+}
+
+type MailSourceInput = {
+  name?: string
+  code?: string
+  apiUrl?: string
+  apiKey?: string
+  smarterMailUrl?: string
+  enabled?: boolean
+  sortOrder?: number
+}
+
+type MailAccountInput = {
+  username?: string
+  password?: string
+  displayName?: string
+  diskLimitMb?: number
+}
+
+type MailSubscriptionCancelInput = {
+  refundType: 'none' | 'full' | 'remaining'
+  reason?: string
+}
+
+type MailSubscriptionPurchaseInput = {
+  planId: number
+  affCode?: string
+}
+
+const POSITIVE_ROUTE_ID_RE = /^[1-9]\d*$/
+const MAIL_CANCEL_REASON_MAX_LENGTH = 500
+const MAIL_SOURCE_CODE_RE = /^[a-z0-9_-]{2,32}$/
+const MAIL_SOURCE_SECRET_MAX_LENGTH = 4096
+const MAIL_AFF_CODE_MAX_LENGTH = 64
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function requireNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+  }
+  return value
+}
+
+function requireSafeInteger(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+  }
+  return value
+}
+
+function normalizeMailPlanInput(input: MailPlanInput, requireAll: boolean): MailPlanInput {
+  const normalized: MailPlanInput = {}
+
+  if (requireAll && (!input.sourceId || !input.name || !input.domainLimit || !input.diskLimitGb || !input.billingCycle || input.price === undefined)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
+  }
+
+  if (input.sourceId !== undefined) {
+    const sourceId = requireSafeInteger(input.sourceId, '邮箱源')
+    if (sourceId <= 0) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '邮箱源无效')
+    }
+    normalized.sourceId = sourceId
+  }
+
+  if (input.name !== undefined) {
+    const name = String(input.name).trim()
+    if (!name || name.length > 100) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '方案名称需为 1-100 个字符')
+    }
+    normalized.name = name
+  }
+
+  if (input.description !== undefined) {
+    const description = String(input.description).trim()
+    if (description.length > 1000) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '方案描述不能超过 1000 个字符')
+    }
+    normalized.description = description || undefined
+  }
+
+  if (input.domainLimit !== undefined) {
+    const domainLimit = requireSafeInteger(input.domainLimit, '域名数量限制')
+    if (domainLimit <= 0 || domainLimit > 1000) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '域名数量限制需为 1-1000 的整数')
+    }
+    normalized.domainLimit = domainLimit
+  }
+
+  if (input.diskLimitGb !== undefined) {
+    const diskLimitGb = requireSafeInteger(input.diskLimitGb, '磁盘容量')
+    if (diskLimitGb <= 0 || diskLimitGb > 102400) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '磁盘容量需为 1-102400 GB 的整数')
+    }
+    normalized.diskLimitGb = diskLimitGb
+  }
+
+  if (input.billingCycle !== undefined) {
+    if (input.billingCycle !== 'monthly' && input.billingCycle !== 'yearly') {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '计费周期无效')
+    }
+    normalized.billingCycle = input.billingCycle
+  }
+
+  if (input.price !== undefined) {
+    const price = requireNumber(input.price, '价格')
+    if (price <= 0 || price > 99999999.99) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '价格需大于 0 且不超过 99999999.99')
+    }
+    const roundedPrice = Math.round(price * 100) / 100
+    if (Math.abs(price - roundedPrice) > 1e-8) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '价格最多支持两位小数')
+    }
+    normalized.price = roundedPrice
+  }
+
+  if (input.enabled !== undefined) {
+    normalized.enabled = input.enabled === true
+  }
+
+  if (input.sortOrder !== undefined) {
+    const sortOrder = requireSafeInteger(input.sortOrder, '排序值')
+    if (sortOrder < -1000000 || sortOrder > 1000000) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '排序值无效')
+    }
+    normalized.sortOrder = sortOrder
+  }
+
+  return normalized
+}
+
+function optionalString(value: unknown, field: string, maxLength: number): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+  }
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > maxLength) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 需为 1-${maxLength} 个字符`)
+  }
+  return trimmed
+}
+
+function normalizeMailSourceInput(input: unknown, requireAll: boolean): MailSourceInput {
+  if (!isPlainRecord(input)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  }
+
+  const normalized: MailSourceInput = {}
+
+  if (requireAll && (!input.name || !input.code || !input.apiUrl || !input.apiKey || !input.smarterMailUrl)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
+  }
+
+  const name = optionalString(input.name, '邮箱源名称', 100)
+  if (name !== undefined) {
+    normalized.name = name
+  }
+
+  const code = optionalString(input.code, '地区代码', 32)
+  if (code !== undefined) {
+    const normalizedCode = code.toLowerCase()
+    if (!MAIL_SOURCE_CODE_RE.test(normalizedCode)) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '地区代码只能包含 2-32 位字母、数字、下划线和连字符')
+    }
+    normalized.code = normalizedCode
+  }
+
+  const apiUrl = optionalString(input.apiUrl, 'CraneMail API URL', 2048)
+  if (apiUrl !== undefined) {
+    normalized.apiUrl = apiUrl
+  }
+
+  const smarterMailUrl = optionalString(input.smarterMailUrl, 'SmarterMail URL', 2048)
+  if (smarterMailUrl !== undefined) {
+    normalized.smarterMailUrl = smarterMailUrl
+  }
+
+  if (input.apiKey !== undefined) {
+    if (typeof input.apiKey !== 'string') {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'API Key 无效')
+    }
+    const apiKey = input.apiKey.trim()
+    if (requireAll && !apiKey) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, 'API Key 不能为空')
+    }
+    if (apiKey.length > MAIL_SOURCE_SECRET_MAX_LENGTH) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, `API Key 不能超过 ${MAIL_SOURCE_SECRET_MAX_LENGTH} 个字符`)
+    }
+    normalized.apiKey = apiKey
+  }
+
+  if (input.enabled !== undefined) {
+    if (typeof input.enabled !== 'boolean') {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '启用状态无效')
+    }
+    normalized.enabled = input.enabled
+  }
+
+  if (input.sortOrder !== undefined) {
+    const sortOrder = requireSafeInteger(input.sortOrder, '排序值')
+    if (sortOrder < -1000000 || sortOrder > 1000000) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '排序值无效')
+    }
+    normalized.sortOrder = sortOrder
+  }
+
+  return normalized
+}
+
+function normalizeMailAccountInput(input: MailAccountInput, options: {
+  requireUsername?: boolean
+  requirePassword?: boolean
+  maxDiskLimitMb: number
+}): MailAccountInput {
+  const normalized: MailAccountInput = {}
+  const maxDiskLimitMb = Math.floor(Number(options.maxDiskLimitMb))
+  if (!Number.isInteger(maxDiskLimitMb) || maxDiskLimitMb <= 0) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '订阅磁盘配额无效')
+  }
+
+  if (options.requireUsername || input.username !== undefined) {
+    const username = String(input.username || '').trim().toLowerCase()
+    if (!username || username.length > 64 || !/^[a-z0-9._-]+$/i.test(username)) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '用户名只能包含 1-64 位字母、数字、点、下划线和连字符')
+    }
+    normalized.username = username
+  }
+
+  if (options.requirePassword || input.password !== undefined) {
+    const password = String(input.password || '')
+    if (password.length < 8 || password.length > 128) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '密码长度需为 8-128 位')
+    }
+    normalized.password = password
+  }
+
+  if (input.displayName !== undefined) {
+    const displayName = String(input.displayName).trim()
+    if (displayName.length > 100) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '显示名称不能超过 100 个字符')
+    }
+    normalized.displayName = displayName || undefined
+  }
+
+  if (input.diskLimitMb !== undefined) {
+    const diskLimitMb = requireSafeInteger(input.diskLimitMb, '邮箱容量')
+    if (diskLimitMb <= 0 || diskLimitMb > maxDiskLimitMb) {
+      throw apiError(ErrorCode.VALIDATION_ERROR, `邮箱容量需为 1-${maxDiskLimitMb} MB 的整数`)
+    }
+    normalized.diskLimitMb = diskLimitMb
+  }
+
+  return normalized
+}
+
+function normalizeMailRenewMonths(value: unknown): number {
+  const months = requireSafeInteger(value, '续费月数')
+  if (months < 1 || months > 12) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+  }
+  return months
+}
+
+function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+  if (!isPlainRecord(input)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  }
+
+  const planId = requireSafeInteger(input.planId, '邮箱方案')
+  if (planId <= 0) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '邮箱方案无效')
+  }
+
+  let affCode: string | undefined
+  if (input.affCode !== undefined && input.affCode !== null) {
+    if (typeof input.affCode !== 'string') {
+      throw apiError(ErrorCode.VALIDATION_ERROR, '优惠码无效')
+    }
+    const normalizedAffCode = input.affCode.trim().toUpperCase()
+    if (normalizedAffCode) {
+      if (normalizedAffCode.length > MAIL_AFF_CODE_MAX_LENGTH) {
+        throw apiError(ErrorCode.VALIDATION_ERROR, `优惠码不能超过 ${MAIL_AFF_CODE_MAX_LENGTH} 个字符`)
+      }
+      affCode = normalizedAffCode
+    }
+  }
+
+  return { planId, affCode }
+}
+
+function normalizeMailSubscriptionRenewInput(input: unknown): number {
+  if (!isPlainRecord(input)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  }
+
+  return normalizeMailRenewMonths(input.months)
+}
+
+function normalizeMailSubscriptionCancelInput(input: unknown): MailSubscriptionCancelInput {
+  if (!isPlainRecord(input)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  }
+
+  const refundType = input.refundType
+  if (refundType !== 'none' && refundType !== 'full' && refundType !== 'remaining') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '请选择退款方式')
+  }
+
+  if (input.reason !== undefined && typeof input.reason !== 'string') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '退款原因无效')
+  }
+
+  const reason = input.reason?.trim()
+  if (reason !== undefined && reason.length > MAIL_CANCEL_REASON_MAX_LENGTH) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `退款原因不能超过 ${MAIL_CANCEL_REASON_MAX_LENGTH} 个字符`)
+  }
+
+  if (refundType !== 'none' && !reason) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '退款时必须填写原因')
+  }
+
+  return {
+    refundType,
+    ...(reason ? { reason } : {})
+  }
+}
+
+function parseOptionalPositiveQueryInteger(value: string | undefined, max = Number.MAX_SAFE_INTEGER): number | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  if (!POSITIVE_ROUTE_ID_RE.test(value)) {
+    return undefined
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= max ? parsed : undefined
+}
+
+function parsePositiveQueryInteger(value: string | undefined, fallback: number, max = Number.MAX_SAFE_INTEGER): number {
+  return parseOptionalPositiveQueryInteger(value, max) ?? fallback
+}
+
+function parsePositiveRouteId(value: unknown): number {
+  if (typeof value === 'number') {
+    if (Number.isSafeInteger(value) && value > 0) return value
+    throw apiError(ErrorCode.INVALID_PARAMS, 'ID 无效')
+  }
+
+  if (typeof value !== 'string' || !POSITIVE_ROUTE_ID_RE.test(value)) {
+    throw apiError(ErrorCode.INVALID_PARAMS, 'ID 无效')
+  }
+
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) {
+    throw apiError(ErrorCode.INVALID_PARAMS, 'ID 无效')
+  }
+
+  return parsed
+}
+
+async function validateMailSourceOutboundUrls(input: {
+  apiUrl?: string
+  smarterMailUrl?: string
+}): Promise<{ apiUrl?: string; smarterMailUrl?: string }> {
+  try {
+    return {
+      ...(input.apiUrl !== undefined
+        ? { apiUrl: normalizeBaseUrl(await assertSafeHttpUrl(input.apiUrl, 'CraneMail API URL')) }
+        : {}),
+      ...(input.smarterMailUrl !== undefined
+        ? { smarterMailUrl: normalizeBaseUrl(await assertSafeHttpUrl(input.smarterMailUrl, 'SmarterMail URL')) }
+        : {})
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '邮箱源地址无效'
+    throw apiError(ErrorCode.VALIDATION_ERROR, message)
+  }
+}
 
 export default async function mailRoutes(fastify: FastifyInstance) {
   // ==================== 管理员：邮箱源管理 ====================
@@ -27,10 +428,8 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       sources.map(async (source) => {
         const stats = await db.getMailSourceStats(source.id)
         return {
-          ...source,
+          ...db.sanitizeMailSourceForResponse(source),
           ...stats,
-          // 隐藏敏感信息
-          apiKey: '***' + source.apiKey.slice(-4)
         }
       })
     )
@@ -52,37 +451,38 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/admin/sources', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request) => {
-    const { name, code, apiUrl, apiKey, smarterMailUrl, enabled, sortOrder } = request.body
-
-    if (!name || !code || !apiUrl || !apiKey || !smarterMailUrl) {
-      throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
-    }
+    const sourceInput = normalizeMailSourceInput(request.body, true)
 
     // 检查代码是否已存在
-    const existing = await db.getMailSourceByCode(code)
+    const existing = await db.getMailSourceByCode(sourceInput.code!)
     if (existing) {
       throw apiError(ErrorCode.SLUG_EXISTS, '该地区代码已存在')
     }
 
+    const safeUrls = await validateMailSourceOutboundUrls({
+      apiUrl: sourceInput.apiUrl,
+      smarterMailUrl: sourceInput.smarterMailUrl
+    })
+
     const source = await db.createMailSource({
-      name,
-      code: code.toLowerCase(),
-      apiUrl,
-      apiKey,
-      smarterMailUrl,
-      enabled: enabled ?? true,
-      sortOrder: sortOrder ?? 0
+      name: sourceInput.name!,
+      code: sourceInput.code!,
+      apiUrl: safeUrls.apiUrl!,
+      apiKey: sourceInput.apiKey!,
+      smarterMailUrl: safeUrls.smarterMailUrl!,
+      enabled: sourceInput.enabled ?? true,
+      sortOrder: sourceInput.sortOrder ?? 0
     })
 
     await createLog(
       request.user.id,
       'mail',
       'create_mail_source',
-      `Created mail source: ${name}`,
+      `Created mail source: ${sourceInput.name}`,
       'success'
     )
 
-    return { source }
+    return { source: db.sanitizeMailSourceForResponse(source) }
   })
 
   // 更新邮箱源
@@ -100,8 +500,8 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/admin/sources/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request) => {
-    const id = parseInt(request.params.id)
-    const { name, code, apiUrl, apiKey, smarterMailUrl, enabled, sortOrder } = request.body
+    const id = parsePositiveRouteId(request.params.id)
+    const sourceInput = normalizeMailSourceInput(request.body, false)
 
     const existing = await db.getMailSourceById(id)
     if (!existing) {
@@ -109,21 +509,26 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     }
 
     // 如果修改了代码，检查是否冲突
-    if (code && code !== existing.code) {
-      const codeExists = await db.getMailSourceByCode(code)
+    if (sourceInput.code && sourceInput.code !== existing.code) {
+      const codeExists = await db.getMailSourceByCode(sourceInput.code)
       if (codeExists) {
         throw apiError(ErrorCode.SLUG_EXISTS, '该地区代码已存在')
       }
     }
 
+    const safeUrls = await validateMailSourceOutboundUrls({
+      apiUrl: sourceInput.apiUrl,
+      smarterMailUrl: sourceInput.smarterMailUrl
+    })
+
     const source = await db.updateMailSource(id, {
-      name,
-      code: code?.toLowerCase(),
-      apiUrl,
-      apiKey,
-      smarterMailUrl,
-      enabled,
-      sortOrder
+      name: sourceInput.name,
+      code: sourceInput.code,
+      apiUrl: safeUrls.apiUrl,
+      apiKey: db.mergeMailSourceApiKeyForUpdate(sourceInput.apiKey),
+      smarterMailUrl: safeUrls.smarterMailUrl,
+      enabled: sourceInput.enabled,
+      sortOrder: sourceInput.sortOrder
     })
 
     await createLog(
@@ -134,7 +539,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       'success'
     )
 
-    return { source }
+    return { source: db.sanitizeMailSourceForResponse(source) }
   })
 
   // 删除邮箱源
@@ -143,7 +548,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/admin/sources/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request) => {
-    const id = parseInt(request.params.id)
+    const id = parsePositiveRouteId(request.params.id)
 
     const source = await db.getMailSourceById(id)
     if (!source) {
@@ -195,35 +600,31 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/admin/plans', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request) => {
-    const { sourceId, name, description, domainLimit, diskLimitGb, billingCycle, price, enabled, sortOrder } = request.body
-
-    if (!sourceId || !name || !domainLimit || !diskLimitGb || !billingCycle || price === undefined) {
-      throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
-    }
+    const planInput = normalizeMailPlanInput(request.body, true)
 
     // 检查邮箱源是否存在
-    const source = await db.getMailSourceById(sourceId)
+    const source = await db.getMailSourceById(planInput.sourceId!)
     if (!source) {
       throw apiError(ErrorCode.NOT_FOUND, '邮箱源不存在')
     }
 
     const plan = await db.createMailPlan({
-      sourceId,
-      name,
-      description,
-      domainLimit,
-      diskLimitGb,
-      billingCycle,
-      price,
-      enabled: enabled ?? true,
-      sortOrder: sortOrder ?? 0
+      sourceId: planInput.sourceId!,
+      name: planInput.name!,
+      description: planInput.description,
+      domainLimit: planInput.domainLimit!,
+      diskLimitGb: planInput.diskLimitGb!,
+      billingCycle: planInput.billingCycle!,
+      price: planInput.price!,
+      enabled: planInput.enabled ?? true,
+      sortOrder: planInput.sortOrder ?? 0
     })
 
     await createLog(
       request.user.id,
       'mail',
       'create_mail_plan',
-      `Created mail plan: ${name}`,
+      `Created mail plan: ${planInput.name}`,
       'success'
     )
 
@@ -246,12 +647,19 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/admin/plans/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request) => {
-    const id = parseInt(request.params.id)
-    const data = request.body
+    const id = parsePositiveRouteId(request.params.id)
+    const data = normalizeMailPlanInput(request.body, false)
 
     const existing = await db.getMailPlanById(id)
     if (!existing) {
       throw apiError(ErrorCode.NOT_FOUND, '方案不存在')
+    }
+
+    if (data.sourceId !== undefined) {
+      const source = await db.getMailSourceById(data.sourceId)
+      if (!source) {
+        throw apiError(ErrorCode.NOT_FOUND, '邮箱源不存在')
+      }
     }
 
     const plan = await db.updateMailPlan(id, data)
@@ -273,7 +681,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/admin/plans/:id', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request) => {
-    const id = parseInt(request.params.id)
+    const id = parsePositiveRouteId(request.params.id)
 
     const plan = await db.getMailPlanById(id)
     if (!plan) {
@@ -316,11 +724,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     const { sourceId, status, search, page, pageSize } = request.query
     
     const result = await db.getAllMailSubscriptions({
-      sourceId: sourceId ? parseInt(sourceId) : undefined,
-      status: status as any,
+      sourceId: parseOptionalPositiveQueryInteger(sourceId),
+      status,
       search: search || undefined,
-      page: parseInt(page || '1'),
-      pageSize: parseInt(pageSize || '20')
+      page: parsePositiveQueryInteger(page, 1),
+      pageSize: parsePositiveQueryInteger(pageSize, 20, 100)
     })
     
     return result
@@ -336,16 +744,8 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/admin/subscriptions/:id/cancel', {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async (request, reply) => {
-    const subscriptionId = parseInt(request.params.id)
-    const { refundType, reason } = request.body
-
-    if (!refundType || !['none', 'full', 'remaining'].includes(refundType)) {
-      return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, '请选择退款方式'))
-    }
-
-    if (refundType !== 'none' && (!reason || !reason.trim())) {
-      return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, '退款时必须填写原因'))
-    }
+    const subscriptionId = parsePositiveRouteId(request.params.id)
+    const { refundType, reason } = normalizeMailSubscriptionCancelInput(request.body)
 
     // 获取订阅详情（包含域名和 source）
     const subscription = await prisma.mailSubscription.findUnique({
@@ -360,6 +760,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
 
     if (!subscription) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '订阅不存在'))
+    }
+
+    const source = await db.getMailSourceById(subscription.sourceId)
+    if (!source) {
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱源不存在'))
     }
 
     // 计算退款金额
@@ -382,26 +787,36 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       // 已过期则剩余价值为 0
     }
 
-    // 删除 CraneMail 域名
+    // 删除 CraneMail 域名。远端删除失败时不能删除本地订阅，否则会隐藏残留资源。
     for (const domain of subscription.domains) {
       try {
-        await craneMailService.deleteDomain(subscription.source, domain.domain)
+        await craneMailService.deleteDomain(source, domain.domain)
       } catch (err: any) {
         console.error(`[AdminMailCancel] Failed to delete domain ${domain.domain} from CraneMail:`, err.message)
-        // 继续处理，不阻塞
+        return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `删除远端域名 ${domain.domain} 失败: ${err.message}`))
       }
     }
 
     // DB 事务：退款 + 删除订阅
     await prisma.$transaction(async (tx) => {
       if (refundAmount > 0) {
-        const oldBalance = Number(subscription.user.balance)
-        const newBalance = oldBalance + refundAmount
+        const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, subscription.user.id)
+        if (!balanceLocked) {
+          throw apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试')
+        }
 
-        await tx.user.update({
+        const currentUser = await tx.user.findUnique({
           where: { id: subscription.user.id },
-          data: { balance: { increment: refundAmount } }
+          select: { balance: true }
         })
+        const oldBalance = Number(currentUser?.balance || 0)
+
+        const updatedUser = await tx.user.update({
+          where: { id: subscription.user.id },
+          data: { balance: { increment: refundAmount } },
+          select: { balance: true }
+        })
+        const newBalance = Number(updatedUser.balance)
 
         await tx.balanceLog.create({
           data: {
@@ -410,7 +825,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
             amount: refundAmount,
             balanceBefore: oldBalance,
             balanceAfter: newBalance,
-            remark: `管理员退订邮箱 - ${subscription.plan.name}（${refundType === 'full' ? '全额退款' : '剩余价值退款'}）原因：${reason!.trim()}`
+            remark: `管理员退订邮箱 - ${subscription.plan.name}（${refundType === 'full' ? '全额退款' : '剩余价值退款'}）原因：${reason}`
           }
         })
       }
@@ -453,11 +868,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     const { sourceId, status, search, page, pageSize } = request.query
     
     const result = await db.getAllMailDomains({
-      sourceId: sourceId ? parseInt(sourceId) : undefined,
-      status: status as any,
+      sourceId: parseOptionalPositiveQueryInteger(sourceId),
+      status,
       search: search || undefined,
-      page: parseInt(page || '1'),
-      pageSize: parseInt(pageSize || '20')
+      page: parsePositiveQueryInteger(page, 1),
+      pageSize: parsePositiveQueryInteger(pageSize, 20, 100)
     })
     
     return result
@@ -593,7 +1008,14 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/subscription', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const { planId, affCode: affCodeInput } = request.body
+    let purchaseInput: MailSubscriptionPurchaseInput
+    try {
+      purchaseInput = normalizeMailSubscriptionPurchaseInput(request.body)
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
+
+    const { planId, affCode: affCodeInput } = purchaseInput
     const userId = request.user.id
 
     // 检查是否已有订阅
@@ -620,9 +1042,9 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     let validatedAffCode: { id: number; userId: number; discountRate: number } | null = null
 
     // 验证优惠码
-    if (affCodeInput && affCodeInput.trim()) {
+    if (affCodeInput) {
       const { validateMailAffCode } = await import('../db/aff.js')
-      const validation = await validateMailAffCode(affCodeInput.trim(), userId)
+      const validation = await validateMailAffCode(affCodeInput, userId)
       if (!validation.valid) {
         return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, validation.error || '优惠码无效'))
       }
@@ -654,22 +1076,52 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     }
 
     // 事务：扣费 + 创建订阅 + 处理AFF
-    const subscription = await prisma.$transaction(async (tx) => {
-      // 扣除余额
-      await tx.user.update({
-        where: { id: userId },
+    const purchaseResult = await prisma.$transaction(async (tx) => {
+      const locked = await tryAdvisoryTransactionLock(tx, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, userId)
+      if (!locked) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+      }
+      const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+      if (!balanceLocked) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试') }
+      }
+
+      const existingInTx = await tx.mailSubscription.findFirst({
+        where: { userId }
+      })
+      if (existingInTx) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
+      }
+
+      const deductResult = await tx.user.updateMany({
+        where: {
+          id: userId,
+          balance: { gte: finalPrice }
+        },
         data: { balance: { decrement: finalPrice } }
       })
+      if (deductResult.count === 0) {
+        const currentUser = await tx.user.findUnique({
+          where: { id: userId },
+          select: { balance: true }
+        })
+        return { error: apiError(ErrorCode.INSUFFICIENT_BALANCE, `余额不足，需要 ¥${finalPrice.toFixed(2)}，当前余额 ¥${Number(currentUser?.balance || 0).toFixed(2)}`) }
+      }
 
-      // 记录余额日志
-      const userBalance = Number(user.balance)
+      const updatedUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { balance: true }
+      })
+      const balanceAfter = Number(updatedUser?.balance || 0)
+      const balanceBefore = Number((balanceAfter + finalPrice).toFixed(2))
+
       await tx.balanceLog.create({
         data: {
           userId,
           type: 'consume',
           amount: -finalPrice,
-          balanceBefore: userBalance,
-          balanceAfter: Number((userBalance - finalPrice).toFixed(2)),
+          balanceBefore,
+          balanceAfter,
           remark: validatedAffCode 
             ? `购买域名邮箱 - ${plan.name} (折扣 ¥${discountAmount.toFixed(2)})`
             : `购买域名邮箱 - ${plan.name} (${source.name})`
@@ -707,8 +1159,14 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         )
       }
 
-      return newSubscription
+      return { subscription: newSubscription }
     })
+
+    if ('error' in purchaseResult) {
+      return reply.code(400).send(purchaseResult.error)
+    }
+
+    const subscription = purchaseResult.subscription
 
     await createLog(
       userId,
@@ -734,15 +1192,16 @@ export default async function mailRoutes(fastify: FastifyInstance) {
 
   // 续费订阅
   fastify.post<{
-    Body: { months: number }
+    Body: { months: unknown }
   }>('/subscription/renew', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const { months } = request.body
     const userId = request.user.id
-
-    if (!months || months < 1 || months > 12) {
-      return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, '续费月数需在 1-12 之间'))
+    let renewMonths: number
+    try {
+      renewMonths = normalizeMailSubscriptionRenewInput(request.body)
+    } catch (error) {
+      return reply.code(400).send(error)
     }
 
     const subscription = await db.getUserMailSubscription(userId)
@@ -760,7 +1219,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       ? Number(plan.price) 
       : Number(plan.price) / 12
     
-    const originalPrice = Math.round(monthlyPrice * months * 100) / 100
+    const originalPrice = Math.round(monthlyPrice * renewMonths * 100) / 100
 
     // 检查 AFF 绑定，计算折扣
     const { getMailSubscriptionAffBinding, processMailAffCommission } = await import('../db/aff.js')
@@ -785,32 +1244,67 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     }
 
     // 事务：扣费 + 续费 + 返利
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: userId },
+    const renewResult = await prisma.$transaction(async (tx) => {
+      const locked = await tryAdvisoryTransactionLock(tx, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, userId)
+      if (!locked) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+      }
+      const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+      if (!balanceLocked) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试') }
+      }
+
+      const currentSubscription = await tx.mailSubscription.findUnique({
+        where: { id: subscription.id },
+        include: { plan: true }
+      })
+      if (!currentSubscription || currentSubscription.userId !== userId) {
+        return { error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
+      }
+      if (currentSubscription.status === 'suspended') {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+      }
+
+      const deductResult = await tx.user.updateMany({
+        where: {
+          id: userId,
+          balance: { gte: finalPrice }
+        },
         data: { balance: { decrement: finalPrice } }
       })
+      if (deductResult.count === 0) {
+        const currentUser = await tx.user.findUnique({
+          where: { id: userId },
+          select: { balance: true }
+        })
+        return { error: apiError(ErrorCode.INSUFFICIENT_BALANCE, `余额不足，需要 ¥${finalPrice.toFixed(2)}，当前余额 ¥${Number(currentUser?.balance || 0).toFixed(2)}`) }
+      }
 
-      const userBalance = Number(user.balance)
+      const updatedUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { balance: true }
+      })
+      const balanceAfter = Number(updatedUser?.balance || 0)
+      const balanceBefore = Number((balanceAfter + finalPrice).toFixed(2))
       const remarkText = discountAmount > 0
-        ? `续费域名邮箱 ${months} 个月（优惠码折扣 -¥${discountAmount.toFixed(2)}）`
-        : `续费域名邮箱 ${months} 个月`
+        ? `续费域名邮箱 ${renewMonths} 个月（优惠码折扣 -¥${discountAmount.toFixed(2)}）`
+        : `续费域名邮箱 ${renewMonths} 个月`
       
       await tx.balanceLog.create({
         data: {
           userId,
           type: 'consume',
           amount: -finalPrice,
-          balanceBefore: userBalance,
-          balanceAfter: Number((userBalance - finalPrice).toFixed(2)),
+          balanceBefore,
+          balanceAfter,
           remark: remarkText
         }
       })
 
       // 计算新的过期时间
-      const currentExpiry = subscription.expiresAt > new Date() ? subscription.expiresAt : new Date()
+      const currentExpiry = currentSubscription.expiresAt > new Date() ? currentSubscription.expiresAt : new Date()
       const newExpiry = new Date(currentExpiry)
-      newExpiry.setMonth(newExpiry.getMonth() + months)
+      newExpiry.setMonth(newExpiry.getMonth() + renewMonths)
 
       // 更新订阅
       const result = await tx.mailSubscription.update({
@@ -829,14 +1323,20 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         )
       }
 
-      return result
+      return { subscription: result }
     })
+
+    if ('error' in renewResult) {
+      return reply.code(400).send(renewResult.error)
+    }
+
+    const updated = renewResult.subscription
 
     await createLog(
       userId,
       'mail',
       'renew_mail_subscription',
-      `Renewed mail subscription for ${months} months, price=${finalPrice}${discountAmount > 0 ? `, affDiscount=${discountAmount}` : ''}`,
+      `Renewed mail subscription for ${renewMonths} months, price=${finalPrice}${discountAmount > 0 ? `, affDiscount=${discountAmount}` : ''}`,
       'success'
     )
 
@@ -879,7 +1379,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:id', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.id)
+    const domainId = parsePositiveRouteId(request.params.id)
     const domain = await db.getMailDomainById(domainId)
     
     if (!domain || domain.subscription.userId !== request.user.id) {
@@ -919,8 +1419,9 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { domain: domainName } = request.body
     const userId = request.user.id
+    const normalizedDomain = domainName?.toLowerCase()
 
-    if (!domainName || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/i.test(domainName)) {
+    if (!normalizedDomain || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/i.test(normalizedDomain)) {
       return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, '请输入有效的域名'))
     }
 
@@ -933,55 +1434,89 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停'))
     }
 
-    // 检查域名数量限制
-    const usage = await db.getSubscriptionUsageStats(subscription.id)
-    if (usage.domainCount >= subscription.domainLimit) {
-      return reply.code(400).send(apiError(ErrorCode.QUOTA_EXCEEDED, '已达域名数量上限'))
-    }
+    const createResult = await prisma.$transaction(async (tx) => {
+      const subscriptionLocked = await tryAdvisoryTransactionLock(tx, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, userId)
+      if (!subscriptionLocked) {
+        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+      }
 
-    // 检查域名是否已存在
-    const exists = await db.checkMailDomainExists(domainName.toLowerCase(), subscription.sourceId)
-    if (exists) {
-      return reply.code(400).send(apiError(ErrorCode.RESOURCE_EXISTS, '该域名已被使用'))
-    }
+      const domainLocked = await tryAdvisoryTransactionLock(tx, MAIL_DOMAIN_LOCK_NAMESPACE, subscription.sourceId)
+      if (!domainLocked) {
+        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱域名正在处理，请稍后重试') }
+      }
 
-    // 调用 CraneMail API 创建域名
-    const source = subscription.source
-    let craneResult: { username?: string; password?: string; server?: string } = {}
-    
-    try {
-      craneResult = await craneMailService.createDomain(source, domainName.toLowerCase(), subscription.diskLimitGb)
-    } catch (err: any) {
-      return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `创建域名失败: ${err.message}`))
-    }
+      const currentSubscription = await tx.mailSubscription.findUnique({
+        where: { id: subscription.id }
+      })
+      if (!currentSubscription || currentSubscription.userId !== userId) {
+        return { statusCode: 404, error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
+      }
+      if (currentSubscription.status !== 'active') {
+        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停') }
+      }
 
-    // 保存域名
-    const mailDomain = await db.createMailDomain({
-      subscriptionId: subscription.id,
-      sourceId: subscription.sourceId,
-      domain: domainName.toLowerCase(),
-      adminUsername: craneResult.username,
-      adminPassword: craneResult.password
+      const domainCount = await tx.mailDomain.count({
+        where: { subscriptionId: currentSubscription.id }
+      })
+      if (domainCount >= currentSubscription.domainLimit) {
+        return { statusCode: 400, error: apiError(ErrorCode.QUOTA_EXCEEDED, '已达域名数量上限') }
+      }
+
+      const exists = await tx.mailDomain.findUnique({
+        where: {
+          domain_sourceId: {
+            domain: normalizedDomain,
+            sourceId: currentSubscription.sourceId
+          }
+        }
+      })
+      if (exists) {
+        return { statusCode: 400, error: apiError(ErrorCode.RESOURCE_EXISTS, '该域名已被使用') }
+      }
+
+      let craneResult: { username?: string; password?: string; server?: string } = {}
+      try {
+        craneResult = await craneMailService.createDomain(subscription.source, normalizedDomain, currentSubscription.diskLimitGb)
+      } catch (err: any) {
+        return { statusCode: 502, error: apiError(ErrorCode.UPSTREAM_ERROR, `创建域名失败: ${err.message}`) }
+      }
+
+      const mailDomain = await db.createMailDomainWithTx(tx, {
+        subscriptionId: currentSubscription.id,
+        sourceId: currentSubscription.sourceId,
+        domain: normalizedDomain,
+        adminUsername: craneResult.username,
+        adminPassword: craneResult.password
+      })
+
+      if (craneResult.username && craneResult.password) {
+        const usernameWithoutDomain = craneResult.username.split('@')[0] || 'postmaster'
+        await tx.mailAccount.create({
+          data: {
+            domainId: mailDomain.id,
+            email: craneResult.username,
+            username: usernameWithoutDomain,
+            displayName: 'Administrator',
+            isAdmin: true,
+            diskLimitMb: currentSubscription.diskLimitGb * 1024
+          }
+        })
+      }
+
+      return { mailDomain }
     })
 
-    // 如果 API 返回了管理员账号，自动创建账户记录
-    if (craneResult.username && craneResult.password) {
-      const usernameWithoutDomain = craneResult.username.split('@')[0] || 'postmaster'
-      await db.createMailAccount({
-        domainId: mailDomain.id,
-        email: craneResult.username,
-        username: usernameWithoutDomain,
-        displayName: 'Administrator',
-        isAdmin: true,
-        diskLimitMb: subscription.diskLimitGb * 1024 // 管理员账号使用全部配额
-      })
+    if ('error' in createResult) {
+      return reply.code(createResult.statusCode!).send(createResult.error)
     }
+
+    const mailDomain = createResult.mailDomain
 
     await createLog(
       userId,
       'mail',
       'add_mail_domain',
-      `Added mail domain: ${domainName}`,
+      `Added mail domain: ${normalizedDomain}`,
       'success'
     )
 
@@ -1001,7 +1536,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:id/verify', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.id)
+    const domainId = parsePositiveRouteId(request.params.id)
     const domain = await db.getMailDomainById(domainId)
     
     if (!domain || domain.subscription.userId !== request.user.id) {
@@ -1036,7 +1571,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:id/dns', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.id)
+    const domainId = parsePositiveRouteId(request.params.id)
     const domain = await db.getMailDomainById(domainId)
     
     if (!domain || domain.subscription.userId !== request.user.id) {
@@ -1066,7 +1601,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:id', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.id)
+    const domainId = parsePositiveRouteId(request.params.id)
     const domain = await db.getMailDomainById(domainId)
     
     if (!domain || domain.subscription.userId !== request.user.id) {
@@ -1078,7 +1613,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       await craneMailService.deleteDomain(domain.source, domain.domain)
     } catch (err: any) {
       console.error('CraneMail delete domain error:', err)
-      // 继续删除本地记录
+      return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `删除远端域名失败: ${err.message}`))
     }
 
     await db.deleteMailDomain(domainId)
@@ -1102,7 +1637,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:domainId/accounts', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.domainId)
+    const domainId = parsePositiveRouteId(request.params.domainId)
     const domain = await db.getMailDomainById(domainId)
     
     if (!domain || domain.subscription.userId !== request.user.id) {
@@ -1137,8 +1672,8 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:domainId/accounts', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.domainId)
-    const { username, password, displayName, diskLimitMb, isAdmin } = request.body
+    const domainId = parsePositiveRouteId(request.params.domainId)
+    const { username, password, displayName, diskLimitMb } = request.body
     
     const domain = await db.getMailDomainById(domainId)
     if (!domain || domain.subscription.userId !== request.user.id) {
@@ -1149,23 +1684,21 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '请先完成域名验证'))
     }
 
-    // 验证用户名
-    if (!username || !/^[a-z0-9._-]+$/i.test(username)) {
-      return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, '用户名只能包含字母、数字、点、下划线和连字符'))
-    }
-
-    // 验证密码
-    if (!password || password.length < 8) {
-      return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, '密码至少需要 8 位'))
-    }
+    const maxDiskLimitMb = domain.subscription.diskLimitGb * 1024
+    const accountInput = normalizeMailAccountInput({ username, password, displayName, diskLimitMb }, {
+      requireUsername: true,
+      requirePassword: true,
+      maxDiskLimitMb
+    })
+    const accountDiskLimitMb = accountInput.diskLimitMb ?? Math.min(2048, maxDiskLimitMb)
 
     // 检查账户是否已存在
-    const exists = await db.checkMailAccountExists(domainId, username.toLowerCase())
+    const exists = await db.checkMailAccountExists(domainId, accountInput.username!)
     if (exists) {
       return reply.code(400).send(apiError(ErrorCode.RESOURCE_EXISTS, '该邮箱账户已存在'))
     }
 
-    const email = `${username.toLowerCase()}@${domain.domain}`
+    const email = `${accountInput.username!}@${domain.domain}`
 
     // 调用 SmarterMail API 创建账户
     try {
@@ -1175,25 +1708,44 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         domain.adminUsername!,
         domain.adminPassword!,
         {
-          username: username.toLowerCase(),
-          password,
-          displayName: displayName || username,
-          diskLimitMb: diskLimitMb || 2048
+          username: accountInput.username!,
+          password: accountInput.password!,
+          displayName: accountInput.displayName || accountInput.username!,
+          diskLimitMb: accountDiskLimitMb
         }
       )
     } catch (err: any) {
       return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `创建邮箱账户失败: ${err.message}`))
     }
 
-    // 保存到数据库
-    const account = await db.createMailAccount({
-      domainId,
-      email,
-      username: username.toLowerCase(),
-      displayName: displayName || username,
-      diskLimitMb: diskLimitMb || 2048,
-      isAdmin: isAdmin || false
-    })
+    // 保存到数据库；如果本地落库失败，需要补偿删除已创建的远端账号，避免产生面板不可见的孤儿邮箱。
+    let account: Awaited<ReturnType<typeof db.createMailAccount>>
+    try {
+      account = await db.createMailAccount({
+        domainId,
+        email,
+        username: accountInput.username!,
+        displayName: accountInput.displayName || accountInput.username!,
+        diskLimitMb: accountDiskLimitMb,
+        isAdmin: false
+      })
+    } catch (err: any) {
+      try {
+        await smarterMailService.deleteAccount(
+          domain.source,
+          domain.domain,
+          domain.adminUsername!,
+          domain.adminPassword!,
+          accountInput.username!
+        )
+      } catch (compensationError) {
+        console.error('SmarterMail account create compensation failed:', compensationError)
+        return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, '邮箱账户已在远端创建，但本地记录保存失败且远端补偿删除失败，请联系管理员处理'))
+      }
+
+      console.error('Mail account local create failed after upstream create:', err)
+      return reply.code(500).send(apiError(ErrorCode.INTERNAL_ERROR, '邮箱账户创建失败，已回滚远端账号，请重试'))
+    }
 
     await createLog(
       request.user.id,
@@ -1225,8 +1777,8 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:domainId/accounts/:accountId', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.domainId)
-    const accountId = parseInt(request.params.accountId)
+    const domainId = parsePositiveRouteId(request.params.domainId)
+    const accountId = parsePositiveRouteId(request.params.accountId)
     const { displayName, diskLimitMb } = request.body
     
     const domain = await db.getMailDomainById(domainId)
@@ -1239,6 +1791,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱账户不存在'))
     }
 
+    const accountInput = normalizeMailAccountInput({ displayName, diskLimitMb }, {
+      maxDiskLimitMb: domain.subscription.diskLimitGb * 1024
+    })
+
     // 调用 SmarterMail API 更新账户
     try {
       await smarterMailService.updateAccount(
@@ -1247,13 +1803,19 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         domain.adminUsername!,
         domain.adminPassword!,
         account.username,
-        { displayName, diskLimitMb }
+        {
+          displayName: accountInput.displayName,
+          diskLimitMb: accountInput.diskLimitMb
+        }
       )
     } catch (err: any) {
       return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `更新邮箱账户失败: ${err.message}`))
     }
 
-    const updated = await db.updateMailAccount(accountId, { displayName, diskLimitMb })
+    const updated = await db.updateMailAccount(accountId, {
+      displayName: accountInput.displayName,
+      diskLimitMb: accountInput.diskLimitMb
+    })
 
     return {
       account: {
@@ -1272,8 +1834,8 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:domainId/accounts/:accountId/reset-password', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.domainId)
-    const accountId = parseInt(request.params.accountId)
+    const domainId = parsePositiveRouteId(request.params.domainId)
+    const accountId = parsePositiveRouteId(request.params.accountId)
     const { password } = request.body
     
     const domain = await db.getMailDomainById(domainId)
@@ -1286,9 +1848,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱账户不存在'))
     }
 
-    if (!password || password.length < 8) {
-      return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, '密码至少需要 8 位'))
-    }
+    const passwordInput = normalizeMailAccountInput({ password }, {
+      requirePassword: true,
+      maxDiskLimitMb: domain.subscription.diskLimitGb * 1024
+    })
 
     // 调用 SmarterMail API 重置密码
     try {
@@ -1298,7 +1861,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         domain.adminUsername!,
         domain.adminPassword!,
         account.username,
-        password
+        passwordInput.password!
       )
     } catch (err: any) {
       return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `重置密码失败: ${err.message}`))
@@ -1321,8 +1884,8 @@ export default async function mailRoutes(fastify: FastifyInstance) {
   }>('/domains/:domainId/accounts/:accountId', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {
-    const domainId = parseInt(request.params.domainId)
-    const accountId = parseInt(request.params.accountId)
+    const domainId = parsePositiveRouteId(request.params.domainId)
+    const accountId = parsePositiveRouteId(request.params.accountId)
     
     const domain = await db.getMailDomainById(domainId)
     if (!domain || domain.subscription.userId !== request.user.id) {
@@ -1345,7 +1908,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       )
     } catch (err: any) {
       console.error('SmarterMail delete account error:', err)
-      // 继续删除本地记录
+      return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `删除远端邮箱账户失败: ${err.message}`))
     }
 
     await db.deleteMailAccount(accountId)

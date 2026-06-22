@@ -6,6 +6,7 @@ import * as ftp from 'basic-ftp'
 import { Readable } from 'stream'
 import type { IStorageProvider, StorageConfigData } from '../types.js'
 import { assertSafeStorageTarget } from '../../lib/outbound-security.js'
+import { joinStorageRemoteDirectory, joinStorageRemotePath, normalizeStorageBasePath } from '../path.js'
 
 // FTP 超时配置（6小时，适合大型备份）
 const FTP_TIMEOUT = 6 * 60 * 60 * 1000
@@ -16,9 +17,7 @@ export class FtpProvider implements IStorageProvider {
 
     constructor(config: StorageConfigData) {
         this.config = config
-        this.basePath = config.basePath?.endsWith('/')
-            ? config.basePath
-            : `${config.basePath || ''}/`
+        this.basePath = normalizeStorageBasePath(config.basePath)
     }
 
     private async getClient(): Promise<ftp.Client> {
@@ -47,7 +46,7 @@ export class FtpProvider implements IStorageProvider {
             }
 
             // 上传文件
-            const remotePath = this.basePath + filename
+            const remotePath = joinStorageRemotePath(this.basePath, filename)
             await client.uploadFrom(fileStream, remotePath)
         } finally {
             client.close()
@@ -72,7 +71,7 @@ export class FtpProvider implements IStorageProvider {
         const client = await this.getClient()
 
         try {
-            const remotePath = this.basePath + filename
+            const remotePath = joinStorageRemotePath(this.basePath, filename)
             await client.remove(remotePath)
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
@@ -86,7 +85,7 @@ export class FtpProvider implements IStorageProvider {
         const client = await this.getClient()
 
         try {
-            const targetPath = path || this.basePath
+            const targetPath = joinStorageRemoteDirectory(this.basePath, path)
             const list = await client.list(targetPath)
             return list.map(item => item.name)
         } catch {

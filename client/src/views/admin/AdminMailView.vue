@@ -116,14 +116,14 @@ function openEditSourceModal(source: any) {
     name: source.name,
     code: source.code,
     apiUrl: source.apiUrl || '',
-    apiKey: source.apiKey || '',
+    apiKey: '',
     smarterMailUrl: source.smarterMailUrl || ''
   }
   showSourceModal.value = true
 }
 
 async function saveSource() {
-  if (!sourceForm.value.name || !sourceForm.value.apiUrl) {
+  if (!sourceForm.value.name || !sourceForm.value.apiUrl || (!editingSource.value && !sourceForm.value.apiKey)) {
     toast.error(t('admin.mail.fillRequired'))
     return
   }
@@ -131,7 +131,11 @@ async function saveSource() {
   actionLoading.value = 'save-source'
   try {
     if (editingSource.value) {
-      await api.mail.adminUpdateSource(editingSource.value.id, sourceForm.value)
+      const payload = { ...sourceForm.value }
+      if (!payload.apiKey) {
+        delete (payload as Partial<typeof sourceForm.value>).apiKey
+      }
+      await api.mail.adminUpdateSource(editingSource.value.id, payload)
       toast.success(t('admin.mail.sourceUpdated'))
     } else {
       await api.mail.adminCreateSource(sourceForm.value)
@@ -756,7 +760,12 @@ const regionOptions = [
             </div>
             <div>
               <label class="label">{{ t('admin.mail.apiKey') }}</label>
-              <input v-model="sourceForm.apiKey" type="password" class="input w-full" />
+              <input
+                v-model="sourceForm.apiKey"
+                type="password"
+                class="input w-full"
+                :placeholder="editingSource ? '留空表示不更改 API Key' : ''"
+              />
             </div>
             <div>
               <label class="label">{{ t('admin.mail.webmailUrl') }}</label>

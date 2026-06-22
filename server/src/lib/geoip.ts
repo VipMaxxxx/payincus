@@ -4,6 +4,8 @@
  * 通过请求队列确保不超过速率限制，且不阻塞调用方
  */
 
+import { isIP } from 'net'
+
 export interface GeoIpInfo {
   ip: string
   country: string | null
@@ -32,6 +34,7 @@ const CACHE_TTL = 24 * 60 * 60 * 1000 // 24小时缓存
 // ip-api.com 限制 45次/分钟，我们保守使用 40次/分钟
 const RATE_LIMIT = 40
 const RATE_WINDOW = 60 * 1000 // 1分钟窗口
+const MAX_QUEUE_SIZE = 1000
 const requestTimestamps: number[] = []
 let isProcessingQueue = false
 
@@ -50,20 +53,30 @@ const requestQueue: QueuedRequest[] = []
  * @returns 地理位置信息
  */
 export async function getGeoIpInfo(ip: string): Promise<GeoIpInfo> {
-  // 检查是否是本地 IP
-  if (isLocalIp(ip)) {
+  const normalizedIp = normalizeIpForGeoLookup(ip)
+  if (!normalizedIp) {
     return createEmptyResult(ip)
   }
 
+  // 检查是否是本地 IP
+  if (isLocalIp(normalizedIp)) {
+    return createEmptyResult(normalizedIp)
+  }
+
   // 检查缓存（缓存命中直接返回，不进入队列）
-  const cached = geoCache.get(ip)
+  const cached = geoCache.get(normalizedIp)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data
   }
 
+  if (requestQueue.length >= MAX_QUEUE_SIZE) {
+    console.warn('[GeoIP] Queue is full, skipping lookup')
+    return createEmptyResult(normalizedIp)
+  }
+
   // 将请求加入队列
   return new Promise<GeoIpInfo>((resolve) => {
-    requestQueue.push({ ip, resolve })
+    requestQueue.push({ ip: normalizedIp, resolve })
     processQueue()
   })
 }
@@ -118,7 +131,7 @@ async function processQueue(): Promise<void> {
 async function fetchGeoIpInfo(ip: string): Promise<GeoIpInfo> {
   try {
     const response = await fetch(
-      `http://ip-api.com/json/${ip}?fields=status,message,country,regionName,city,isp,timezone,query`,
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,regionName,city,isp,timezone,query`,
       {
         method: 'GET',
         headers: {
@@ -162,6 +175,11 @@ async function fetchGeoIpInfo(ip: string): Promise<GeoIpInfo> {
     console.error(`[GeoIP] Error querying IP ${ip}:`, error)
     return createEmptyResult(ip)
   }
+}
+
+function normalizeIpForGeoLookup(ip: string): string | null {
+  const normalized = typeof ip === 'string' ? ip.trim() : ''
+  return isIP(normalized) ? normalized : null
 }
 
 /**

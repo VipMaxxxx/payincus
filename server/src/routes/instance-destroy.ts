@@ -15,6 +15,7 @@ import { sendReleaseNotification } from '../lib/release-notifier.js'
 import { collectTrafficForRunningInstance } from '../services/instance-traffic-collector.js'
 import {
   INSTANCE_OPERATION_LOCK_NAMESPACE,
+  USER_BALANCE_LOCK_NAMESPACE,
   USER_DESTROY_BILLING_LOCK_NAMESPACE,
   advisoryTransactionLock,
   tryAdvisoryTransactionLock
@@ -181,6 +182,34 @@ async function restoreClaimedInstanceStatus(
   })
 }
 
+async function deleteIncusInstanceForUserDestroy(
+  instance: {
+    id: number
+    hostId: number
+    incusId: string
+    status: string
+  },
+  logger: { warn: (...args: any[]) => void }
+): Promise<void> {
+  const host = await db.getHostById(instance.hostId)
+  if (!host) {
+    throw new Error('宿主机不存在，无法删除实例')
+  }
+
+  const { getIncusClient, stopInstance, deleteInstance } = await import('../lib/incus/index.js')
+  const client = await getIncusClient(host)
+
+  if (instance.status === 'running') {
+    try {
+      await stopInstance(client, instance.incusId, true)
+    } catch (err) {
+      logger.warn(err, '停止实例失败，继续尝试删除')
+    }
+  }
+
+  await deleteInstance(client, instance.incusId)
+}
+
 async function settleUserDestroyBilling(params: {
   requestUserId: number
   instance: {
@@ -209,17 +238,20 @@ async function settleUserDestroyBilling(params: {
     const refundAmount = roundMoney(Math.max(0, refundableValue - feeAmount))
 
     if (refundAmount > 0) {
+      await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)
+
       const currentUser = await tx.user.findUnique({
         where: { id: instance.userId },
         select: { balance: true }
       })
       const oldBalance = Number(currentUser?.balance || 0)
-      const newBalance = roundMoney(oldBalance + refundAmount)
 
-      await tx.user.update({
+      const updatedUser = await tx.user.update({
         where: { id: instance.userId },
-        data: { balance: { increment: refundAmount } }
+        data: { balance: { increment: refundAmount } },
+        select: { balance: true }
       })
+      const newBalance = Number(updatedUser.balance)
 
       const balanceLog = await tx.balanceLog.create({
         data: {
@@ -586,34 +618,23 @@ async function executeDestroyForUser(
   }
 
   try {
-    if (!isFreeInstance) {
-      try {
-        const billingResult = await settleUserDestroyBilling({
-          requestUserId: user.id,
-          instance,
-          refundableValue,
-          feeWaiver
-        })
-        refundAmount = billingResult.refundAmount
-        feeAmount = billingResult.feeAmount
-        isFirstTime = billingResult.isFirstTime
-      } catch (settleError) {
-        await restoreClaimedInstanceStatus(instanceId, user.id, instance.status)
-        throw settleError
-      }
+    try {
+      await deleteIncusInstanceForUserDestroy(instance, logger)
+    } catch (incusErr) {
+      await restoreClaimedInstanceStatus(instanceId, user.id, instance.status)
+      throw incusErr
     }
 
-    if (instance.status === 'running') {
-      try {
-        const host = await db.getHostById(instance.hostId)
-        if (host) {
-          const { getIncusClient, stopInstance } = await import('../lib/incus/index.js')
-          const client = await getIncusClient(host)
-          await stopInstance(client, instance.incusId, true)
-        }
-      } catch (err) {
-        logger.warn(err, '停止实例失败')
-      }
+    if (!isFreeInstance) {
+      const billingResult = await settleUserDestroyBilling({
+        requestUserId: user.id,
+        instance,
+        refundableValue,
+        feeWaiver
+      })
+      refundAmount = billingResult.refundAmount
+      feeAmount = billingResult.feeAmount
+      isFirstTime = billingResult.isFirstTime
     }
 
     const portMappings = await prisma.portMapping.findMany({ where: { instanceId } })
@@ -635,17 +656,6 @@ async function executeDestroyForUser(
       })
     } catch (cleanupErr) {
       logger.warn(cleanupErr, '清理关联数据失败')
-    }
-
-    try {
-      const host = await db.getHostById(instance.hostId)
-      if (host) {
-        const { getIncusClient, deleteInstance } = await import('../lib/incus/index.js')
-        const client = await getIncusClient(host)
-        await deleteInstance(client, instance.incusId)
-      }
-    } catch (incusErr) {
-      logger.error(incusErr, 'Incus 删除实例失败')
     }
 
     const portMappingsCount = portMappings?.length || 0
@@ -1104,35 +1114,23 @@ export default async function instanceDestroyRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      if (!isFreeInstance) {
-        try {
-          const billingResult = await settleUserDestroyBilling({
-            requestUserId: user.id,
-            instance,
-            refundableValue,
-            feeWaiver
-          })
-          refundAmount = billingResult.refundAmount
-          feeAmount = billingResult.feeAmount
-          isFirstTime = billingResult.isFirstTime
-        } catch (settleError) {
-          await restoreClaimedInstanceStatus(instanceId, user.id, instance.status)
-          throw settleError
-        }
+      try {
+        await deleteIncusInstanceForUserDestroy(instance, request.log)
+      } catch (incusErr) {
+        await restoreClaimedInstanceStatus(instanceId, user.id, instance.status)
+        throw incusErr
       }
 
-      // 1. 停止实例
-      if (instance.status === 'running') {
-        try {
-          const host = await db.getHostById(instance.hostId)
-          if (host) {
-            const { getIncusClient, stopInstance } = await import('../lib/incus/index.js')
-            const client = await getIncusClient(host)
-            await stopInstance(client, instance.incusId, true)
-          }
-        } catch (err) {
-          request.log.warn(err, '停止实例失败')
-        }
+      if (!isFreeInstance) {
+        const billingResult = await settleUserDestroyBilling({
+          requestUserId: user.id,
+          instance,
+          refundableValue,
+          feeWaiver
+        })
+        refundAmount = billingResult.refundAmount
+        feeAmount = billingResult.feeAmount
+        isFirstTime = billingResult.isFirstTime
       }
 
       // 2. 获取端口映射数量（用于释放资源）
@@ -1156,18 +1154,6 @@ export default async function instanceDestroyRoutes(fastify: FastifyInstance) {
         })
       } catch (cleanupErr) {
         request.log.warn(cleanupErr, '清理关联数据失败')
-      }
-
-      // 4. 从 Incus 删除实例
-      try {
-        const host = await db.getHostById(instance.hostId)
-        if (host) {
-          const { getIncusClient, deleteInstance } = await import('../lib/incus/index.js')
-          const client = await getIncusClient(host)
-          await deleteInstance(client, instance.incusId)
-        }
-      } catch (incusErr) {
-        request.log.error(incusErr, 'Incus 删除实例失败')
       }
 
       // 6. 释放宿主机资源

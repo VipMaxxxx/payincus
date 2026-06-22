@@ -6,6 +6,48 @@ import { Prisma } from '@prisma/client'
 import type { LotteryPrizeType, LotteryRecordStatus } from '@prisma/client'
 import { createBadgeOwnership, selectRandomBadgeOrThrow } from './badges.js'
 import type { BadgeOwnershipView } from './badges.js'
+import {
+  USER_BALANCE_LOCK_NAMESPACE,
+  USER_POINTS_LOCK_NAMESPACE,
+  USER_RESOURCE_POOL_LOCK_NAMESPACE,
+  advisoryTransactionLock,
+  tryAdvisoryTransactionLock
+} from './advisory-locks.js'
+
+const LOTTERY_PRIZE_TYPES = new Set<LotteryPrizeType>([
+  'nothing',
+  'points',
+  'balance',
+  'badge',
+  'instance',
+  'cpu',
+  'memory',
+  'disk',
+  'traffic'
+])
+const LOTTERY_RECORD_STATUSES = new Set<LotteryRecordStatus>(['pending', 'delivered', 'claimed'])
+
+function clampPagination(
+  page: number | undefined,
+  pageSize: number | undefined,
+  fallbackPageSize: number = 20,
+  maxPageSize: number = 100
+): { page: number; pageSize: number } {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), maxPageSize)
+      : fallbackPageSize
+  }
+}
+
+function normalizeLotteryPrizeType(type: LotteryPrizeType | undefined): LotteryPrizeType | undefined {
+  return type && LOTTERY_PRIZE_TYPES.has(type) ? type : undefined
+}
+
+function normalizeLotteryRecordStatus(status: LotteryRecordStatus | undefined): LotteryRecordStatus | undefined {
+  return status && LOTTERY_RECORD_STATUSES.has(status) ? status : undefined
+}
 
 // ==================== 抽奖活动 ====================
 
@@ -84,7 +126,8 @@ export async function getAllLotteries(options: {
   pageSize?: number
   isActive?: boolean
 } = {}) {
-  const { page = 1, pageSize = 20, isActive } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const { isActive } = options
   const skip = (page - 1) * pageSize
 
   const where: Prisma.LotteryWhereInput = {}
@@ -323,12 +366,13 @@ export async function markRecordNotificationSent(id: number) {
  */
 export async function getUserLotteryRecords(
   userId: number,
-  options: { page?: number; pageSize?: number; prizeType?: string } = {}
+  options: { page?: number; pageSize?: number; prizeType?: LotteryPrizeType } = {}
 ) {
-  const { page = 1, pageSize = 20, prizeType } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const prizeType = normalizeLotteryPrizeType(options.prizeType)
   const skip = (page - 1) * pageSize
 
-  const where: any = { userId }
+  const where: Prisma.LotteryRecordWhereInput = { userId }
   if (prizeType) {
     where.prizeType = prizeType
   }
@@ -365,7 +409,13 @@ export async function getAllLotteryRecords(options: {
   status?: LotteryRecordStatus
   search?: string
 } = {}) {
-  const { page = 1, pageSize = 20, lotteryId, prizeType, status, search } = options
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const lotteryId = Number.isInteger(options.lotteryId) && options.lotteryId !== undefined && options.lotteryId > 0
+    ? options.lotteryId
+    : undefined
+  const prizeType = normalizeLotteryPrizeType(options.prizeType)
+  const status = normalizeLotteryRecordStatus(options.status)
+  const search = typeof options.search === 'string' ? options.search.trim().slice(0, 128) : undefined
   const skip = (page - 1) * pageSize
 
   const where: Prisma.LotteryRecordWhereInput = {}
@@ -496,6 +546,8 @@ export async function performDraw(userId: number, lotteryId: number): Promise<{
   // 事务冲突会在路由层通过指数退避重试机制处理
   return prisma.$transaction(
     async (tx) => {
+      await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)
+
     // 1. 检查抽奖是否有效
     const lottery = await tx.lottery.findUnique({
       where: { id: lotteryId },
@@ -584,17 +636,23 @@ export async function performDraw(userId: number, lotteryId: number): Promise<{
     if (prize.type === 'balance') {
       // 自动发放余额（value 存储分，转换为元）
       const balanceAmount = prize.value / 100
+      const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+      if (!balanceLocked) {
+        throw new Error('BALANCE_CONFLICT: 余额正在处理，请稍后重试')
+      }
+
       const user = await tx.user.findUnique({
         where: { id: userId },
         select: { balance: true }
       })
       if (user) {
         const balanceBefore = Number(user.balance)
-        const balanceAfter = balanceBefore + balanceAmount
-        await tx.user.update({
+        const updatedUser = await tx.user.update({
           where: { id: userId },
-          data: { balance: balanceAfter }
+          data: { balance: { increment: balanceAmount } },
+          select: { balance: true }
         })
+        const balanceAfter = Number(updatedUser.balance)
         // 记录余额日志
         await tx.balanceLog.create({
           data: {
@@ -640,6 +698,8 @@ export async function performDraw(userId: number, lotteryId: number): Promise<{
         traffic: 't'
       }
       const resourceType = resourceTypeMap[prize.type]
+
+      await advisoryTransactionLock(tx, USER_RESOURCE_POOL_LOCK_NAMESPACE, userId)
 
       // 更新资源池
       await tx.userResourcePool.upsert({

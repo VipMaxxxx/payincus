@@ -20,7 +20,11 @@ import {
 import { shouldSyncInstanceSwapSizeWithPlan } from '../lib/instance-swap.js'
 import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
 import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
-import { HOSTING_BALANCE_LOG_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from './advisory-locks.js'
+import {
+  HOSTING_BALANCE_LOG_LOCK_NAMESPACE,
+  USER_BALANCE_LOCK_NAMESPACE,
+  tryAdvisoryTransactionLock
+} from './advisory-locks.js'
 
 // ==================== 类型定义 ====================
 
@@ -557,6 +561,11 @@ export async function performRenewal(
 
   // 执行事务（带乐观锁）
   const result = await prisma.$transaction(async (tx) => {
+    const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+    if (!balanceLocked) {
+      throw new Error('余额正在处理，请稍后重试')
+    }
+
     // 获取用户当前余额
     const user = await tx.user.findUnique({
       where: { id: userId },
@@ -572,8 +581,6 @@ export async function performRenewal(
       throw new Error('余额不足')
     }
 
-    const newBalance = Number((oldBalance - finalAmount).toFixed(2))
-
     // 扣除余额（使用条件更新确保并发安全）
     const updateResult = await tx.user.updateMany({
       where: {
@@ -586,6 +593,15 @@ export async function performRenewal(
     if (updateResult.count === 0) {
       throw new Error('余额不足或并发冲突')
     }
+
+    const updatedUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: { balance: true }
+    })
+    if (!updatedUser) {
+      throw new Error('用户不存在')
+    }
+    const newBalance = Number(updatedUser.balance)
 
     // 乐观锁：检查实例版本号并更新
     const instanceUpdateResult = await tx.instance.updateMany({
@@ -749,6 +765,13 @@ export async function performPlanChange(
 
   // 执行事务（带乐观锁）
   const txResult = await prisma.$transaction(async (tx) => {
+    if (changeResult.priceDiff !== 0) {
+      const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+      if (!balanceLocked) {
+        throw new Error('余额正在处理，请稍后重试')
+      }
+    }
+
     // 获取用户当前余额
     const user = await tx.user.findUnique({
       where: { id: userId },
@@ -777,6 +800,15 @@ export async function performPlanChange(
         throw new Error('余额不足或并发冲突')
       }
 
+      const updatedUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { balance: true }
+      })
+      if (!updatedUser) {
+        throw new Error('用户不存在')
+      }
+      const newBalance = Number(updatedUser.balance)
+
       // 升级扣费记录
       await tx.balanceLog.create({
         data: {
@@ -784,7 +816,7 @@ export async function performPlanChange(
           type: 'consume',
           amount: -changeResult.priceDiff,
           balanceBefore: oldBalance,
-          balanceAfter: oldBalance - changeResult.priceDiff,
+          balanceAfter: newBalance,
           instanceId: instance.id,
           remark: `升级方案：${changeResult.oldPlan.name} → ${newPlan.name}`
         }
@@ -812,12 +844,13 @@ export async function performPlanChange(
     // 降级退款到余额
     if (changeResult.priceDiff < 0) {
       refundAmount = Math.abs(changeResult.priceDiff)
-      const newBalance = oldBalance + refundAmount
 
-      await tx.user.update({
+      const updatedUser = await tx.user.update({
         where: { id: userId },
-        data: { balance: { increment: refundAmount } }
+        data: { balance: { increment: refundAmount } },
+        select: { balance: true }
       })
+      const newBalance = Number(updatedUser.balance)
 
       // 降级退款记录
       await tx.balanceLog.create({
@@ -1354,6 +1387,11 @@ export async function deductHostingBalance(
       throw new Error('托管余额正在处理，请稍后重试')
     }
 
+    const userBalanceLocked = await tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)
+    if (!userBalanceLocked) {
+      throw new Error('余额正在处理，请稍后重试')
+    }
+
     // 查找该实例相关的冻结托管收入记录
     const frozenLogs = await client.hostingBalanceLog.findMany({
       where: {
@@ -1407,10 +1445,16 @@ export async function deductHostingBalance(
       const deductFromAvailable = Math.min(availableHostingBalance, remainingToDeduct)
 
       if (deductFromAvailable > 0) {
-        await client.user.update({
-          where: { id: hostOwnerId },
+        const hostingBalanceUpdateResult = await client.user.updateMany({
+          where: {
+            id: hostOwnerId,
+            hostingBalance: { gte: deductFromAvailable }
+          },
           data: { hostingBalance: { decrement: deductFromAvailable } }
         })
+        if (hostingBalanceUpdateResult.count === 0) {
+          throw new Error('托管余额不足，请稍后重试')
+        }
 
         fromAvailable = deductFromAvailable
         remainingToDeduct -= deductFromAvailable
@@ -1422,10 +1466,21 @@ export async function deductHostingBalance(
         const deductFromBalance = Math.min(availableBalance, remainingToDeduct)
 
         if (deductFromBalance > 0) {
-          await client.user.update({
-            where: { id: hostOwnerId },
+          const balanceUpdateResult = await client.user.updateMany({
+            where: {
+              id: hostOwnerId,
+              balance: { gte: deductFromBalance }
+            },
             data: { balance: { decrement: deductFromBalance } }
           })
+          if (balanceUpdateResult.count === 0) {
+            throw new Error('余额不足，请稍后重试')
+          }
+          const updatedUser = await client.user.findUniqueOrThrow({
+            where: { id: hostOwnerId },
+            select: { balance: true }
+          })
+          const balanceAfter = Number(updatedUser.balance)
 
           // 记录面板余额变动日志
           await client.balanceLog.create({
@@ -1434,7 +1489,7 @@ export async function deductHostingBalance(
               type: 'hosting_deduction',
               amount: -deductFromBalance,
               balanceBefore: availableBalance,
-              balanceAfter: availableBalance - deductFromBalance,
+              balanceAfter,
               instanceId,
               remark: `托管实例销毁扣款：用户退款需从面板余额补扣`
             }

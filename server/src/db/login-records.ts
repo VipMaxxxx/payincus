@@ -4,6 +4,16 @@
 
 import { prisma } from './prisma.js'
 
+const LINKED_ACCOUNT_DEFAULT_GROUP_LIMIT = 50
+const LINKED_ACCOUNT_MAX_GROUP_LIMIT = 100
+const LINKED_ACCOUNT_MAX_USERS_PER_GROUP = 20
+
+function clampPositiveInteger(value: number | undefined, fallback: number, max: number): number {
+  return Number.isInteger(value) && value! > 0
+    ? Math.min(value!, max)
+    : fallback
+}
+
 export interface CreateLoginRecordParams {
   userId: number
   ip: string
@@ -52,15 +62,17 @@ export async function getUserLoginRecords(
   userId: number,
   page: number = 1,
   pageSize: number = 20
-): Promise<{ records: LoginRecordItem[]; total: number }> {
-  const skip = (page - 1) * pageSize
+): Promise<{ records: LoginRecordItem[]; total: number; page: number; pageSize: number; totalPages: number }> {
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1
+  const safePageSize = Number.isInteger(pageSize) ? Math.min(Math.max(pageSize, 1), 50) : 20
+  const skip = (safePage - 1) * safePageSize
 
   const [records, total] = await Promise.all([
     prisma.loginRecord.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       skip,
-      take: pageSize,
+      take: safePageSize,
       select: {
         id: true,
         ip: true,
@@ -76,7 +88,13 @@ export async function getUserLoginRecords(
     prisma.loginRecord.count({ where: { userId } })
   ])
 
-  return { records, total }
+  return {
+    records,
+    total,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages: Math.ceil(total / safePageSize)
+  }
 }
 
 /**
@@ -179,7 +197,9 @@ export async function getLastLoginRecordsForUsers(
  */
 export async function getSharedIPGroups(
   days: number = 90,
-  minUsers: number = 2
+  minUsers: number = 2,
+  groupLimit: number = LINKED_ACCOUNT_DEFAULT_GROUP_LIMIT,
+  maxUsersPerGroup: number = LINKED_ACCOUNT_MAX_USERS_PER_GROUP
 ): Promise<{
   ip: string
   users: {
@@ -192,6 +212,8 @@ export async function getSharedIPGroups(
   }[]
   totalLogins: number
 }[]> {
+  const safeGroupLimit = clampPositiveInteger(groupLimit, LINKED_ACCOUNT_DEFAULT_GROUP_LIMIT, LINKED_ACCOUNT_MAX_GROUP_LIMIT)
+  const safeMaxUsersPerGroup = clampPositiveInteger(maxUsersPerGroup, LINKED_ACCOUNT_MAX_USERS_PER_GROUP, LINKED_ACCOUNT_MAX_USERS_PER_GROUP)
   const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
   // 步骤1：查找被多个用户使用的IP
@@ -278,23 +300,27 @@ export async function getSharedIPGroups(
 
     // 只有真正被多个不同用户使用的IP才加入结果
     if (userMap.size >= minUsers) {
+      const users = Array.from(userMap.values()).sort((a, b) => b.lastLogin.getTime() - a.lastLogin.getTime())
       result.push({
         ip: ipGroup.ip,
-        users: Array.from(userMap.values()).sort((a, b) => b.lastLogin.getTime() - a.lastLogin.getTime()),
+        users: users.slice(0, safeMaxUsersPerGroup),
         totalLogins: records.length
       })
     }
   }
 
   // 按关联用户数降序排列
-  return result.sort((a, b) => b.users.length - a.users.length)
+  return result.sort((a, b) => b.users.length - a.users.length).slice(0, safeGroupLimit)
 }
 
 /**
  * 获取邮箱相似的用户组（用于检测关联账号）
  * 相似规则：邮箱前缀相同，仅差数字后缀
  */
-export async function getSimilarEmailGroups(): Promise<{
+export async function getSimilarEmailGroups(
+  groupLimit: number = LINKED_ACCOUNT_DEFAULT_GROUP_LIMIT,
+  maxUsersPerGroup: number = LINKED_ACCOUNT_MAX_USERS_PER_GROUP
+): Promise<{
   pattern: string
   users: {
     id: number
@@ -304,6 +330,9 @@ export async function getSimilarEmailGroups(): Promise<{
     createdAt: Date
   }[]
 }[]> {
+  const safeGroupLimit = clampPositiveInteger(groupLimit, LINKED_ACCOUNT_DEFAULT_GROUP_LIMIT, LINKED_ACCOUNT_MAX_GROUP_LIMIT)
+  const safeMaxUsersPerGroup = clampPositiveInteger(maxUsersPerGroup, LINKED_ACCOUNT_MAX_USERS_PER_GROUP, LINKED_ACCOUNT_MAX_USERS_PER_GROUP)
+
   // 获取所有有邮箱的用户
   const users = await prisma.user.findMany({
     where: {
@@ -367,20 +396,25 @@ export async function getSimilarEmailGroups(): Promise<{
     if (groupUsers.length >= 2) {
       result.push({
         pattern,
-        users: groupUsers.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        users: groupUsers
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(0, safeMaxUsersPerGroup)
       })
     }
   }
 
   // 按用户数降序排列
-  return result.sort((a, b) => b.users.length - a.users.length)
+  return result.sort((a, b) => b.users.length - a.users.length).slice(0, safeGroupLimit)
 }
 
 /**
  * 获取用户名相似的用户组（用于检测关联账号）
  * 相似规则：用户名前缀相同，仅差数字后缀
  */
-export async function getSimilarUsernameGroups(): Promise<{
+export async function getSimilarUsernameGroups(
+  groupLimit: number = LINKED_ACCOUNT_DEFAULT_GROUP_LIMIT,
+  maxUsersPerGroup: number = LINKED_ACCOUNT_MAX_USERS_PER_GROUP
+): Promise<{
   pattern: string
   users: {
     id: number
@@ -390,6 +424,9 @@ export async function getSimilarUsernameGroups(): Promise<{
     createdAt: Date
   }[]
 }[]> {
+  const safeGroupLimit = clampPositiveInteger(groupLimit, LINKED_ACCOUNT_DEFAULT_GROUP_LIMIT, LINKED_ACCOUNT_MAX_GROUP_LIMIT)
+  const safeMaxUsersPerGroup = clampPositiveInteger(maxUsersPerGroup, LINKED_ACCOUNT_MAX_USERS_PER_GROUP, LINKED_ACCOUNT_MAX_USERS_PER_GROUP)
+
   const users = await prisma.user.findMany({
     select: {
       id: true,
@@ -444,11 +481,13 @@ export async function getSimilarUsernameGroups(): Promise<{
     if (groupUsers.length >= 2) {
       result.push({
         pattern,
-        users: groupUsers.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        users: groupUsers
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(0, safeMaxUsersPerGroup)
       })
     }
   }
 
   // 按用户数降序排列
-  return result.sort((a, b) => b.users.length - a.users.length)
+  return result.sort((a, b) => b.users.length - a.users.length).slice(0, safeGroupLimit)
 }

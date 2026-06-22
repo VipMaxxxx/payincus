@@ -2,7 +2,7 @@ import { prisma } from '../db/prisma.js'
 import { getTrafficCounters } from '../lib/incus/incus-traffic.js'
 import { getIncusClientFromPool } from '../lib/incus/incus-pool.js'
 import type { IncusClient } from '../lib/incus/incus-client.js'
-import { acquireLock, extendLock, releaseLock } from '../lib/distributed-lock.js'
+import { acquireLock, extendLock, releaseLock, withLock } from '../lib/distributed-lock.js'
 import type { LockOptions } from '../lib/distributed-lock.js'
 import { calculateIncrement } from './traffic-utils.js'
 
@@ -32,22 +32,37 @@ function getTrafficLockKey(instanceId: number): string {
   return `traffic:instance:${instanceId}`
 }
 
+function getUserTrafficLockKey(userId: number): string {
+  return `traffic:user:${userId}`
+}
+
 async function applyTrafficCounters(
   instanceId: number,
   userId: number,
   counters: { rxBytes: bigint; txBytes: bigint }
-): Promise<{ totalDelta: bigint; currentUsage: bigint }> {
+): Promise<{ totalDelta: bigint; currentUsage: bigint; skipped: boolean }> {
   const now = new Date()
   const normalizedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-  return prisma.$transaction(async (tx) => {
+  const userLockResult = await withLock(getUserTrafficLockKey(userId), async () => prisma.$transaction(async (tx) => {
     const instance = await tx.instance.findUnique({
       where: { id: instanceId },
-      select: { monthlyTrafficUsed: true }
+      select: {
+        monthlyTrafficUsed: true,
+        status: true
+      }
     })
 
     if (!instance) {
       throw new Error('实例不存在')
+    }
+
+    if (instance.status !== 'running') {
+      return {
+        totalDelta: 0n,
+        currentUsage: instance.monthlyTrafficUsed,
+        skipped: true
+      }
     }
 
     const latestSnapshot = await tx.trafficSnapshot.findUnique({
@@ -118,9 +133,20 @@ async function applyTrafficCounters(
 
     return {
       totalDelta,
-      currentUsage
+      currentUsage,
+      skipped: false
     }
+  }), {
+    expireMs: 30000,
+    waitTimeoutMs: 5000,
+    retryIntervalMs: 50
   })
+
+  if (!userLockResult.success || !userLockResult.result) {
+    throw new Error(userLockResult.error || '用户流量重置锁获取失败')
+  }
+
+  return userLockResult.result
 }
 
 /**
@@ -161,7 +187,7 @@ export async function collectTrafficForInstanceWithClient(
 
     return {
       success: true,
-      skipped: false,
+      skipped: result.skipped,
       totalDelta: result.totalDelta,
       currentUsage: result.currentUsage
     }

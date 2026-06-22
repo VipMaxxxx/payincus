@@ -37,6 +37,25 @@ func TestCanonicalJSONIsStableForMapOrder(t *testing.T) {
 	}
 }
 
+func TestCanonicalJSONMatchesPanelStableStringifyEscaping(t *testing.T) {
+	body := map[string]any{
+		"metrics": map[string]any{
+			"label": "<tag>&value",
+			"load1": 1.23,
+		},
+	}
+
+	jsonBody, err := CanonicalJSON(body)
+	if err != nil {
+		t.Fatalf("canonical json: %v", err)
+	}
+
+	const expected = `{"metrics":{"label":"<tag>&value","load1":1.23}}`
+	if string(jsonBody) != expected {
+		t.Fatalf("canonical json mismatch:\ngot=%s\nwant=%s", jsonBody, expected)
+	}
+}
+
 func TestSignatureChangesWithPath(t *testing.T) {
 	secret := "ias_test_secret"
 	bodyHash := BodySHA256([]byte(`{"ok":true}`))

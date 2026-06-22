@@ -5,7 +5,7 @@
 import { prisma } from './prisma.js'
 import { Prisma } from '@prisma/client'
 import type { TransferStatus } from '@prisma/client'
-import { TRANSFER_CREATE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from './advisory-locks.js'
+import { TRANSFER_CREATE_LOCK_NAMESPACE, USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from './advisory-locks.js'
 
 // 事务隔离级别配置
 const TRANSFER_TRANSACTION_OPTIONS = {
@@ -15,9 +15,35 @@ const TRANSFER_TRANSACTION_OPTIONS = {
 
 const TRANSFER_CREATE_LOCK_RETRY_LIMIT = 20
 const TRANSFER_CREATE_LOCK_RETRY_DELAY_MS = 100
+const TRANSFER_LIST_MAX_PAGE_SIZE = 100
+const TRANSFER_LIST_SEARCH_MAX_LENGTH = 128
+const TRANSFER_STATUSES = new Set<TransferStatus>(['pending', 'processing', 'accepted', 'rejected', 'cancelled'])
 
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function clampTransferListPagination(page: number | undefined, pageSize: number | undefined): {
+    page: number
+    pageSize: number
+} {
+    return {
+        page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+        pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+            ? Math.min(Math.max(pageSize, 1), TRANSFER_LIST_MAX_PAGE_SIZE)
+            : 20
+    }
+}
+
+function normalizeTransferStatus(status: TransferStatus | string | undefined): TransferStatus | undefined {
+    return TRANSFER_STATUSES.has(status as TransferStatus)
+        ? status as TransferStatus
+        : undefined
+}
+
+function normalizeTransferSearch(search: string | undefined): string | undefined {
+    const trimmed = search?.trim()
+    return trimmed ? trimmed.slice(0, TRANSFER_LIST_SEARCH_MAX_LENGTH) : undefined
 }
 
 /**
@@ -98,6 +124,11 @@ export async function createTransferWithFee(data: {
 
             // 1. 如果有手续费，先扣费
             if (data.fee > 0) {
+                const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, data.fromUserId)
+                if (!balanceLocked) {
+                    throw new Error('BALANCE_CONFLICT')
+                }
+
                 const user = await tx.user.findUnique({
                     where: { id: data.fromUserId },
                     select: { balance: true }
@@ -112,12 +143,26 @@ export async function createTransferWithFee(data: {
                     throw new Error('INSUFFICIENT_BALANCE')
                 }
 
-                const balanceAfter = balanceBefore - data.fee
-
-                await tx.user.update({
-                    where: { id: data.fromUserId },
-                    data: { balance: balanceAfter }
+                const balanceUpdateResult = await tx.user.updateMany({
+                    where: {
+                        id: data.fromUserId,
+                        balance: { gte: data.fee }
+                    },
+                    data: { balance: { decrement: data.fee } }
                 })
+
+                if (balanceUpdateResult.count === 0) {
+                    throw new Error('INSUFFICIENT_BALANCE')
+                }
+
+                const updatedUser = await tx.user.findUnique({
+                    where: { id: data.fromUserId },
+                    select: { balance: true }
+                })
+                if (!updatedUser) {
+                    throw new Error('USER_NOT_FOUND')
+                }
+                const balanceAfter = Number(updatedUser.balance)
 
                 await tx.balanceLog.create({
                     data: {
@@ -307,6 +352,11 @@ export async function refundTransferFee(data: {
 }): Promise<{ success: boolean; error?: string }> {
     try {
         await prisma.$transaction(async (tx) => {
+            const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, data.fromUserId)
+            if (!balanceLocked) {
+                throw new Error('BALANCE_CONFLICT')
+            }
+
             // 1. 获取当前余额
             const user = await tx.user.findUnique({
                 where: { id: data.fromUserId },
@@ -318,13 +368,14 @@ export async function refundTransferFee(data: {
             }
             
             const balanceBefore = Number(user.balance)
-            const balanceAfter = balanceBefore + data.fee
             
             // 2. 更新余额
-            await tx.user.update({
+            const updatedUser = await tx.user.update({
                 where: { id: data.fromUserId },
-                data: { balance: balanceAfter }
+                data: { balance: { increment: data.fee } },
+                select: { balance: true }
             })
+            const balanceAfter = Number(updatedUser.balance)
             
             // 3. 创建退款日志
             const remarkMap = {
@@ -358,17 +409,19 @@ export async function refundTransferFee(data: {
 export async function getTransfersSent(userId: number, options: {
     page: number
     pageSize: number
-    status?: TransferStatus
+    status?: TransferStatus | string
     search?: string
 }) {
+    const { page, pageSize } = clampTransferListPagination(options.page, options.pageSize)
+    const status = normalizeTransferStatus(options.status)
+    const searchTerm = normalizeTransferSearch(options.search)
     const where: any = { fromUserId: userId }
-    if (options.status) {
-        where.status = options.status
+    if (status) {
+        where.status = status
     }
 
     // 搜索条件
-    if (options.search && options.search.trim()) {
-        const searchTerm = options.search.trim()
+    if (searchTerm) {
         where.OR = [
             { instance: { name: { contains: searchTerm, mode: 'insensitive' } } },
             { toUser: { username: { contains: searchTerm, mode: 'insensitive' } } },
@@ -388,8 +441,8 @@ export async function getTransfersSent(userId: number, options: {
                 }
             },
             orderBy: { createdAt: 'desc' },
-            skip: (options.page - 1) * options.pageSize,
-            take: options.pageSize
+            skip: (page - 1) * pageSize,
+            take: pageSize
         }),
         prisma.instanceTransfer.count({ where })
     ])
@@ -397,9 +450,9 @@ export async function getTransfersSent(userId: number, options: {
     return {
         items,
         total,
-        page: options.page,
-        pageSize: options.pageSize,
-        totalPages: Math.ceil(total / options.pageSize)
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
     }
 }
 
@@ -407,17 +460,19 @@ export async function getTransfersSent(userId: number, options: {
 export async function getTransfersReceived(userId: number, options: {
     page: number
     pageSize: number
-    status?: TransferStatus
+    status?: TransferStatus | string
     search?: string
 }) {
+    const { page, pageSize } = clampTransferListPagination(options.page, options.pageSize)
+    const status = normalizeTransferStatus(options.status)
+    const searchTerm = normalizeTransferSearch(options.search)
     const where: any = { toUserId: userId }
-    if (options.status) {
-        where.status = options.status
+    if (status) {
+        where.status = status
     }
 
     // 搜索条件
-    if (options.search && options.search.trim()) {
-        const searchTerm = options.search.trim()
+    if (searchTerm) {
         where.OR = [
             { instance: { name: { contains: searchTerm, mode: 'insensitive' } } },
             { fromUser: { username: { contains: searchTerm, mode: 'insensitive' } } },
@@ -437,8 +492,8 @@ export async function getTransfersReceived(userId: number, options: {
                 }
             },
             orderBy: { createdAt: 'desc' },
-            skip: (options.page - 1) * options.pageSize,
-            take: options.pageSize
+            skip: (page - 1) * pageSize,
+            take: pageSize
         }),
         prisma.instanceTransfer.count({ where })
     ])
@@ -446,9 +501,9 @@ export async function getTransfersReceived(userId: number, options: {
     return {
         items,
         total,
-        page: options.page,
-        pageSize: options.pageSize,
-        totalPages: Math.ceil(total / options.pageSize)
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
     }
 }
 

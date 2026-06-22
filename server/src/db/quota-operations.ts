@@ -126,8 +126,11 @@ export async function reserveResources(options: {
   portCount?: number
 }): Promise<void> {
   const { hostId, cpu, memory, disk, portCount = 0 } = options
+  if (cpu < 0 || memory < 0 || disk < 0 || portCount < 0) {
+    throw new Error('Resource amounts must be non-negative')
+  }
 
-  // 使用交互式事务 + Serializable 隔离级别确保一致性
+  // 使用条件原子更新，避免并发预占时读改写丢失更新。
   await prisma.$transaction(async (tx) => {
     // 注意：不再限制用户的实例配额，只检查宿主机资源
 
@@ -140,12 +143,8 @@ export async function reserveResources(options: {
         cpuAllowanceMax: true,  // CPU 配额上限
         memoryMax: true,        // 内存配额上限
         storageSize: true,      // 存储池大小 (GB)
-        cpuUsed: true,
-        memoryUsed: true,
-        diskUsed: true,
         natPortStart: true,
         natPortEnd: true,
-        natPortsUsedCount: true
       }
     })
 
@@ -157,32 +156,47 @@ export async function reserveResources(options: {
     const cpuLimit = host.cpuAllowanceMax || 0
     const memoryLimit = host.memoryMax || 0
 
-    if (cpuLimit > 0 && host.cpuUsed + cpu > cpuLimit) {
-      throw new Error(`Host CPU exceeded: ${host.cpuUsed + cpu}/${cpuLimit}`)
+    if (cpuLimit > 0 && cpu > cpuLimit) {
+      throw new Error(`Host CPU exceeded: requested ${cpu}/${cpuLimit}`)
     }
-    if (memoryLimit > 0 && host.memoryUsed + memory > memoryLimit) {
-      throw new Error(`Host memory exceeded: ${host.memoryUsed + memory}/${memoryLimit}`)
+    if (memoryLimit > 0 && memory > memoryLimit) {
+      throw new Error(`Host memory exceeded: requested ${memory}/${memoryLimit}`)
     }
     // 磁盘配额检查已移除：不再限制磁盘空间
     // 计算端口总数
     const natPortsTotal = (host.natPortStart && host.natPortEnd) 
       ? (host.natPortEnd - host.natPortStart + 1) 
       : 0
-    if (portCount > 0 && host.natPortsUsedCount + portCount > natPortsTotal) {
-      throw new Error(`Host ports exceeded: ${host.natPortsUsedCount + portCount}/${natPortsTotal}`)
+    if (portCount > 0 && portCount > natPortsTotal) {
+      throw new Error(`Host ports exceeded: requested ${portCount}/${natPortsTotal}`)
     }
 
-    await tx.host.update({
-      where: { id: hostId },
+    const reserveWhere: Prisma.HostWhereInput = { id: hostId }
+    if (cpuLimit > 0) {
+      reserveWhere.cpuUsed = { lte: cpuLimit - cpu }
+    }
+    if (memoryLimit > 0) {
+      reserveWhere.memoryUsed = { lte: memoryLimit - memory }
+    }
+    if (portCount > 0) {
+      reserveWhere.natPortsUsedCount = { lte: natPortsTotal - portCount }
+    }
+
+    const result = await tx.host.updateMany({
+      where: reserveWhere,
       data: {
-        cpuUsed: host.cpuUsed + cpu,
-        memoryUsed: host.memoryUsed + memory,
-        diskUsed: host.diskUsed + disk,
+        cpuUsed: { increment: cpu },
+        memoryUsed: { increment: memory },
+        diskUsed: { increment: disk },
         ...(portCount > 0 ? {
-          natPortsUsedCount: host.natPortsUsedCount + portCount
+          natPortsUsedCount: { increment: portCount }
         } : {})
       }
     })
+
+    if (result.count === 0) {
+      throw new Error('Host resources exceeded or host was updated concurrently')
+    }
   }, QUOTA_TRANSACTION_OPTIONS)
 }
 
@@ -201,35 +215,34 @@ export async function rollbackResources(options: {
   portCount?: number
 }): Promise<void> {
   const { hostId, cpu, memory, disk, portCount = 0 } = options
+  if (cpu < 0 || memory < 0 || disk < 0 || portCount < 0) {
+    throw new Error('Resource amounts must be non-negative')
+  }
 
-  // 使用交互式事务 + Serializable 隔离级别
+  // 使用单条原子 SQL 回滚，避免并发释放时读改写丢失更新。
   await prisma.$transaction(async (tx) => {
     // 注意：不再限制用户的实例配额，只回滚宿主机资源
-
-    // 回滚宿主机资源使用量
-    const host = await tx.host.findUnique({
-      where: { id: hostId },
-      select: {
-        cpuUsed: true,
-        memoryUsed: true,
-        diskUsed: true,
-        natPortsUsedCount: true
-      }
-    })
-
-    if (host) {
-      await tx.host.update({
-        where: { id: hostId },
-        data: {
-          cpuUsed: Math.max(0, host.cpuUsed - cpu),
-          memoryUsed: Math.max(0, host.memoryUsed - memory),
-          diskUsed: Math.max(0, host.diskUsed - disk),
-          ...(portCount > 0 ? {
-            natPortsUsedCount: Math.max(0, host.natPortsUsedCount - portCount)
-          } : {})
-        }
-      })
+    if (portCount > 0) {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE hosts
+        SET
+          cpu_used = GREATEST(cpu_used - ${cpu}, 0),
+          memory_used = GREATEST(memory_used - ${memory}, 0),
+          disk_used = GREATEST(disk_used - ${disk}, 0),
+          nat_ports_used_count = GREATEST(nat_ports_used_count - ${portCount}, 0)
+        WHERE id = ${hostId}
+      `)
+      return
     }
+
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE hosts
+      SET
+        cpu_used = GREATEST(cpu_used - ${cpu}, 0),
+        memory_used = GREATEST(memory_used - ${memory}, 0),
+        disk_used = GREATEST(disk_used - ${disk}, 0)
+      WHERE id = ${hostId}
+    `)
   }, QUOTA_TRANSACTION_OPTIONS)
 }
 
@@ -525,7 +538,7 @@ export async function checkBackupQuota(_userId: number, instanceId: number): Pro
   const current = await prisma.backup.count({
     where: {
       instanceId,
-      status: { not: 'deleted' }
+      status: { in: ['creating', 'ready'] }
     }
   })
 

@@ -73,22 +73,33 @@ set_env_if_missing() {
 if [[ ! -f "$ENV_FILE" ]]; then
     cat > "$ENV_FILE" <<EOF_ENV
 # ============================================================================
-# Incudal Docker 部署环境配置
+# Incudal 主机进程部署环境配置
 # 由 scripts/init-env.sh 自动生成于 $(date '+%Y-%m-%d %H:%M:%S')
 # ============================================================================
 EOF_ENV
     info "已创建 ${ENV_FILE}"
 fi
 
-set_env_if_missing "POSTGRES_USER" "incudal" "PostgreSQL 用户"
-set_env_if_missing "POSTGRES_PASSWORD" "$(gen_password 24)" "PostgreSQL 密码"
-set_env_if_missing "POSTGRES_DB" "incudal" "PostgreSQL 数据库名"
-set_env_if_missing "REDIS_PASSWORD" "$(gen_password 24)" "Redis 密码"
+db_password="$(gen_password 24)"
+redis_password="$(gen_password 24)"
+
+set_env_if_missing "NODE_ENV" "production" "运行环境"
+set_env_if_missing "HOST" "127.0.0.1" "后端监听地址"
+set_env_if_missing "PORT" "3001" "后端监听端口"
+set_env_if_missing "TRUST_PROXY" "true" "信任本机 Nginx 代理头"
+set_env_if_missing "DATABASE_URL" "postgresql://incudal:${db_password}@127.0.0.1:5432/incudal" "PostgreSQL 连接地址"
+set_env_if_missing "REDIS_URL" "redis://:${redis_password}@127.0.0.1:6379" "Redis 连接地址"
 set_env_if_missing "JWT_SECRET" "$(gen_secret 48)" "JWT 密钥"
 set_env_if_missing "COOKIE_SECRET" "$(gen_secret 48)" "Cookie 密钥"
 set_env_if_missing "ENCRYPTION_KEY" "$(openssl rand -base64 32)" "敏感数据加密密钥"
-set_env_if_missing "APP_PORT" "3000" "应用端口"
 set_env_if_missing "ADMIN_PASSWORD" "$(gen_password 16)" "管理员初始密码"
+set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"
+set_env_if_missing "VITE_API_BASE_URL" "/api" "前端 API 基础路径"
+set_env_if_missing "INCUDAL_AGENT_RELEASE_REPOSITORY" "" "Agent GitHub Release 仓库"
+set_env_if_missing "INCUDAL_AGENT_RELEASE_TOKEN" "" "Agent GitHub Release Token"
+set_env_if_missing "INCUDAL_AGENT_RELEASE_DIR" "" "Agent 本地 Release 目录"
+set_env_if_missing "INCUDAL_AGENT_BINARY_URL" "" "Agent 自定义二进制地址"
+set_env_if_missing "INCUDAL_AGENT_BINARY_SHA256" "" "Agent 自定义二进制 SHA256"
 set_env_if_missing "LOG_LEVEL" "info" "日志级别"
 set_env_if_missing "DISABLE_REQUEST_LOG" "true" "请求日志开关"
 

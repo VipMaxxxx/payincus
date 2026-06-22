@@ -5,6 +5,8 @@
 import { prisma } from './prisma.js'
 import crypto from 'crypto'
 
+export type EmailVerificationPurpose = 'register' | 'password_reset' | 'change_email'
+
 // Verification code expiration time in minutes
 const CODE_EXPIRATION_MINUTES = 10
 
@@ -21,17 +23,34 @@ export function generateVerificationCode(): string {
     return crypto.randomInt(min, max + 1).toString()
 }
 
+function hashVerificationCode(code: string): string {
+    return `sha256:${crypto.createHash('sha256').update(code).digest('hex')}`
+}
+
+function verificationCodeMatches(storedCode: string, inputCode: string): boolean {
+    if (storedCode.startsWith('sha256:')) {
+        return storedCode === hashVerificationCode(inputCode)
+    }
+
+    return storedCode === inputCode
+}
+
 /**
  * Create a new email verification code
  */
-export async function createVerificationCode(email: string): Promise<{ code: string; expiresAt: Date } | null> {
+export async function createVerificationCode(
+    email: string,
+    purpose: EmailVerificationPurpose
+): Promise<{ code: string; expiresAt: Date } | null> {
     const normalizedEmail = email.toLowerCase().trim()
+    const now = new Date()
     
     // Check rate limit
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
     const recentCount = await prisma.emailVerificationCode.count({
         where: {
             email: normalizedEmail,
+            purpose,
             createdAt: { gte: oneHourAgo }
         }
     })
@@ -40,19 +59,28 @@ export async function createVerificationCode(email: string): Promise<{ code: str
         return null // Rate limited
     }
 
-    // Delete any existing codes for this email
-    await prisma.emailVerificationCode.deleteMany({
-        where: { email: normalizedEmail }
+    // Expire existing pending codes so only the newest code works while recent rows remain for rate limiting.
+    await prisma.emailVerificationCode.updateMany({
+        where: {
+            email: normalizedEmail,
+            purpose: { in: [purpose, 'general'] },
+            expiresAt: { gt: now }
+        },
+        data: {
+            expiresAt: now
+        }
     })
 
     // Generate new code
     const code = generateVerificationCode()
-    const expiresAt = new Date(Date.now() + CODE_EXPIRATION_MINUTES * 60 * 1000)
+    const codeHash = hashVerificationCode(code)
+    const expiresAt = new Date(now.getTime() + CODE_EXPIRATION_MINUTES * 60 * 1000)
 
     await prisma.emailVerificationCode.create({
         data: {
             email: normalizedEmail,
-            code,
+            purpose,
+            code: codeHash,
             expiresAt
         }
     })
@@ -63,27 +91,36 @@ export async function createVerificationCode(email: string): Promise<{ code: str
 /**
  * Verify an email verification code
  */
-export async function verifyCode(email: string, code: string): Promise<boolean> {
+export async function verifyCode(
+    email: string,
+    code: string,
+    purpose: EmailVerificationPurpose
+): Promise<boolean> {
     const normalizedEmail = email.toLowerCase().trim()
+    const codeHash = hashVerificationCode(code)
     
-    const record = await prisma.emailVerificationCode.findFirst({
+    const candidates = await prisma.emailVerificationCode.findMany({
         where: {
             email: normalizedEmail,
-            code,
+            purpose: { in: [purpose, 'general'] },
             expiresAt: { gt: new Date() }
-        }
+        },
+        orderBy: { createdAt: 'desc' }
     })
+    const record = candidates.find(candidate => (
+        candidate.code === codeHash || verificationCodeMatches(candidate.code, code)
+    ))
 
     if (!record) {
         return false
     }
 
-    // Delete the code after successful verification
-    await prisma.emailVerificationCode.delete({
+    // Claim the code atomically so repeated concurrent submissions fail cleanly.
+    const claimed = await prisma.emailVerificationCode.deleteMany({
         where: { id: record.id }
     })
 
-    return true
+    return claimed.count === 1
 }
 
 /**
@@ -101,16 +138,19 @@ export async function cleanupExpiredCodes(): Promise<number> {
 /**
  * Check if an email has a valid pending verification code
  */
-export async function hasPendingCode(email: string): Promise<boolean> {
+export async function hasPendingCode(
+    email: string,
+    purpose: EmailVerificationPurpose
+): Promise<boolean> {
     const normalizedEmail = email.toLowerCase().trim()
     
     const count = await prisma.emailVerificationCode.count({
         where: {
             email: normalizedEmail,
+            purpose: { in: [purpose, 'general'] },
             expiresAt: { gt: new Date() }
         }
     })
 
     return count > 0
 }
-

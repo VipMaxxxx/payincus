@@ -8,10 +8,13 @@ import * as db from '../db/index.js'
 import { createInboxMessage } from '../db/inbox.js'
 import { prisma } from '../db/prisma.js'
 import { assertSafeWebhookUrl } from './outbound-security.js'
+import { sanitizeTokensInString } from './log-sanitizer.js'
 
 // 重试配置
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 2000
+const NOTIFICATION_FETCH_TIMEOUT_MS = 15_000
+const NOTIFICATION_ERROR_PREVIEW_MAX_CHARS = 2_000
 
 type EventType =
   | 'snapshot_created'
@@ -858,6 +861,13 @@ function isNonRetryableError(error: string | null): boolean {
   )
 }
 
+async function readSafeNotificationError(response: Response): Promise<string> {
+  const text = await response.text()
+  const sanitized = sanitizeTokensInString(text)
+  const preview = sanitized.slice(0, NOTIFICATION_ERROR_PREVIEW_MAX_CHARS)
+  return preview || `HTTP ${response.status}`
+}
+
 /**
  * 发送通知到用户的所有启用渠道
  * 同时创建站内信
@@ -1158,6 +1168,8 @@ async function sendTelegram(
 
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(NOTIFICATION_FETCH_TIMEOUT_MS),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
@@ -1209,6 +1221,7 @@ async function sendDiscord(
     const parsedUrl = await assertSafeWebhookUrl(webhookUrl)
     const response = await fetch(parsedUrl.toString(), {
       method: 'POST',
+      signal: AbortSignal.timeout(NOTIFICATION_FETCH_TIMEOUT_MS),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         embeds: [{
@@ -1225,8 +1238,7 @@ async function sendDiscord(
     })
 
     if (!response.ok) {
-      const text = await response.text()
-      return { success: false, error: text || `HTTP ${response.status}` }
+      return { success: false, error: await readSafeNotificationError(response) }
     }
 
     return { success: true, error: null }
@@ -1277,6 +1289,7 @@ async function sendWebhook(
 
     const response = await fetch(parsedUrl.toString(), {
       method: 'POST',
+      signal: AbortSignal.timeout(NOTIFICATION_FETCH_TIMEOUT_MS),
       headers,
       body: JSON.stringify(payload),
       redirect: 'manual'
@@ -1473,6 +1486,8 @@ export async function sendToChannel(
           }
           const response = await fetch(`https://api.telegram.org/bot${telegramConfig.botToken}/sendMessage`, {
             method: 'POST',
+            redirect: 'manual',
+            signal: AbortSignal.timeout(NOTIFICATION_FETCH_TIMEOUT_MS),
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: telegramConfig.chatId,

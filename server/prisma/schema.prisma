@@ -526,7 +526,7 @@ model SshKey {
 
 model RefreshToken {
   id           Int      @id @default(autoincrement())
-  token        String   @unique // Refresh Token 完整值
+  token        String   @unique // Refresh Token 摘要值（sha256:<digest>），兼容旧库明文读取后升级
   userId       Int      @map("user_id")
   username     String
   role         UserRole
@@ -1551,11 +1551,12 @@ model InstanceAuditAction {
 model EmailVerificationCode {
   id        Int      @id @default(autoincrement())
   email     String
+  purpose   String   @default("general")
   code      String
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([email, code])
+  @@index([email, purpose, code])
   @@index([expiresAt])
   @@map("email_verification_codes")
 }
@@ -1652,6 +1653,7 @@ model OperationVerification {
   resourceType  String?             @map("resource_type") // 资源类型（instance/snapshot/backup）
   verified      Boolean             @default(false)
   verifiedAt    DateTime?           @map("verified_at")
+  attempts      Int                 @default(0)
   expiresAt     DateTime            @map("expires_at")
   createdAt     DateTime            @default(now()) @map("created_at")
 

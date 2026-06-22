@@ -11,6 +11,13 @@ import {
   type UserVipStats,
   type VipBadgeStyle
 } from './vip-levels.js'
+import {
+  USER_BALANCE_LOCK_NAMESPACE,
+  USER_POINTS_LOCK_NAMESPACE,
+  USER_VIP_BENEFIT_CLAIM_LOCK_NAMESPACE,
+  advisoryTransactionLock,
+  tryAdvisoryTransactionLock
+} from '../db/advisory-locks.js'
 
 type DbClient = Prisma.TransactionClient | typeof prisma
 
@@ -130,9 +137,23 @@ function getRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function requireSafeInteger(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw new VipBenefitError('INVALID_NUMBER', `${field} must be a safe integer`)
+  }
+  return value
+}
+
+function requireFiniteNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new VipBenefitError('INVALID_NUMBER', `${field} must be a finite number`)
+  }
+  return value
+}
+
 function normalizeLevel(value: unknown): number {
-  const level = Number(value)
-  if (!Number.isInteger(level) || level < 1 || level > MAX_VIP_LEVEL) {
+  const level = requireSafeInteger(value, 'VIP level')
+  if (level < 1 || level > MAX_VIP_LEVEL) {
     throw new VipBenefitError('INVALID_LEVEL', `VIP level must be between 1 and ${MAX_VIP_LEVEL}`)
   }
   return level
@@ -168,8 +189,8 @@ function normalizeDescription(value: unknown): string | null {
 }
 
 function normalizePositiveInteger(value: unknown, field: string, max: number): number {
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > max) {
+  const parsed = requireSafeInteger(value, field)
+  if (parsed <= 0 || parsed > max) {
     throw new VipBenefitError('INVALID_NUMBER', `${field} must be an integer between 1 and ${max}`)
   }
   return parsed
@@ -181,16 +202,17 @@ function normalizeOptionalPositiveInteger(value: unknown, fallback: number, fiel
 }
 
 function normalizeMoney(value: unknown, field: string): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_MONEY_AMOUNT) {
+  const parsed = requireFiniteNumber(value, field)
+  if (parsed <= 0 || parsed > MAX_MONEY_AMOUNT) {
     throw new VipBenefitError('INVALID_AMOUNT', `${field} must be between 0.01 and ${MAX_MONEY_AMOUNT}`)
   }
   return roundMoney(parsed)
 }
 
 function normalizeSortOrder(value: unknown): number {
-  const parsed = Number(value ?? 0)
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed > MAX_SORT_ORDER) {
+  if (value === null || value === undefined || value === '') return 0
+  const parsed = requireSafeInteger(value, 'Sort order')
+  if (parsed < 0 || parsed > MAX_SORT_ORDER) {
     throw new VipBenefitError('INVALID_SORT_ORDER', `Sort order must be an integer between 0 and ${MAX_SORT_ORDER}`)
   }
   return parsed
@@ -560,18 +582,19 @@ export async function claimVipBenefitReward(userId: number, rewardId: number): P
   claim: VipBenefitClaimView
   overview: VipBenefitOverview
 }> {
-  const parsedRewardId = Number(rewardId)
-  if (!Number.isInteger(parsedRewardId) || parsedRewardId <= 0) {
+  if (!Number.isSafeInteger(rewardId) || rewardId <= 0) {
     throw new VipBenefitError('INVALID_REWARD_ID', 'Invalid VIP benefit reward ID')
   }
 
   let createdClaim: VipBenefitClaim | null = null
   try {
     createdClaim = await prisma.$transaction(async (tx) => {
+      await advisoryTransactionLock(tx, USER_VIP_BENEFIT_CLAIM_LOCK_NAMESPACE, userId)
+
       const vip = await getCurrentUserVip(userId, tx)
       const reward = await tx.vipBenefitReward.findFirst({
         where: {
-          id: parsedRewardId,
+          id: rewardId,
           enabled: true
         }
       })
@@ -643,6 +666,11 @@ export async function claimVipBenefitReward(userId: number, rewardId: number): P
 
       if (type === 'balance') {
         const amount = normalizeMoney(config.amount, 'Balance reward amount')
+        const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+        if (!balanceLocked) {
+          throw new VipBenefitError('BALANCE_CONFLICT', 'Balance is being processed, please try again later', 409)
+        }
+
         const user = await tx.user.findUnique({
           where: { id: userId },
           select: { balance: true }
@@ -651,11 +679,12 @@ export async function claimVipBenefitReward(userId: number, rewardId: number): P
           throw new VipBenefitError('USER_NOT_FOUND', 'User not found', 404)
         }
         const balanceBefore = toNumber(user.balance)
-        const balanceAfter = roundMoney(balanceBefore + amount)
-        await tx.user.update({
+        const updatedUser = await tx.user.update({
           where: { id: userId },
-          data: { balance: balanceAfter }
+          data: { balance: { increment: amount } },
+          select: { balance: true }
         })
+        const balanceAfter = toNumber(updatedUser.balance)
         await tx.balanceLog.create({
           data: {
             userId,
@@ -668,6 +697,8 @@ export async function claimVipBenefitReward(userId: number, rewardId: number): P
         })
       } else if (type === 'points') {
         const amount = normalizePositiveInteger(config.amount, 'Points reward amount', MAX_POINTS_AMOUNT)
+        await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)
+
         const userPoints = await tx.userPoints.upsert({
           where: { userId },
           update: {},

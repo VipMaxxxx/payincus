@@ -5,6 +5,8 @@
 
 import { prisma } from '../db/prisma.js'
 
+let schedulerInterval: NodeJS.Timeout | null = null
+
 /**
  * 检查并更新过期的邮箱订阅
  */
@@ -30,23 +32,19 @@ export async function checkMailSubscriptionExpiry(): Promise<void> {
       return
     }
 
-    console.log(`[Mail] Found ${expiredSubscriptions.length} expired mail subscriptions`)
+    console.log(`[Mail] Found ${expiredSubscriptions.length} expired mail subscription candidate(s)`)
 
-    // 批量更新状态为 expired
+    // 批量更新状态为 expired。续费可能在 findMany 后发生，所以更新时必须重查 expiresAt。
     const result = await prisma.mailSubscription.updateMany({
       where: {
         id: { in: expiredSubscriptions.map(s => s.id) },
-        status: 'active'
+        status: 'active',
+        expiresAt: { lt: now }
       },
       data: { status: 'expired' }
     })
 
     console.log(`[Mail] Updated ${result.count} mail subscriptions to expired status`)
-
-    // 记录每个过期的订阅
-    for (const sub of expiredSubscriptions) {
-      console.log(`[Mail] Subscription expired: userId=${sub.userId}, username=${sub.user.username}, expiredAt=${sub.expiresAt.toISOString()}`)
-    }
   } catch (error) {
     console.error('[Mail] Error checking mail subscription expiry:', error)
     throw error
@@ -58,6 +56,10 @@ export async function checkMailSubscriptionExpiry(): Promise<void> {
  * 每小时执行一次
  */
 export function startMailExpiryScheduler(): NodeJS.Timeout {
+  if (schedulerInterval) {
+    return schedulerInterval
+  }
+
   const INTERVAL = 60 * 60 * 1000 // 1 小时
 
   console.log('[Mail] Starting mail subscription expiry scheduler')
@@ -68,9 +70,11 @@ export function startMailExpiryScheduler(): NodeJS.Timeout {
   })
 
   // 设置定时执行
-  return setInterval(() => {
+  schedulerInterval = setInterval(() => {
     checkMailSubscriptionExpiry().catch(err => {
       console.error('[Mail] Scheduled mail expiry check failed:', err)
     })
   }, INTERVAL)
+
+  return schedulerInterval
 }

@@ -8,7 +8,8 @@ import { getIncusClient } from '../lib/incus/index.js'
 import { patchInstanceResources } from '../lib/incus/incus-instances.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { createLog } from '../db/logs.js'
-import type { RedeemCodeType } from '@prisma/client'
+import type { RedeemCodeType, ResourcePoolAction } from '@prisma/client'
+import { acquireLock, releaseLock } from '../lib/distributed-lock.js'
 
 // 资源类型名称
 const RESOURCE_TYPE_NAMES: Record<string, { zh: string; en: string }> = {
@@ -24,6 +25,76 @@ const RESOURCE_TYPE_UNITS: Record<string, string> = {
   r: 'MB',
   d: 'MB',
   t: 'GB'
+}
+
+const POSITIVE_INTEGER_QUERY_PATTERN = /^[1-9]\d*$/
+const NON_NEGATIVE_INTEGER_QUERY_PATTERN = /^(0|[1-9]\d*)$/
+const RESOURCE_POOL_ACTIONS = new Set<ResourcePoolAction>([
+  'checkin',
+  'redeem',
+  'admin_grant',
+  'system_grant',
+  'lottery',
+  'apply',
+  'system_redeem'
+])
+const RESOURCE_POOL_RESOURCE_TYPES = new Set<RedeemCodeType>(['c', 'r', 'd', 't'])
+
+function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number {
+  if (!value || !POSITIVE_INTEGER_QUERY_PATTERN.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? Math.min(parsed, max) : fallback
+}
+
+function parseNonNegativeIntegerQuery(value: string | undefined, fallback: number): number {
+  if (!value || !NON_NEGATIVE_INTEGER_QUERY_PATTERN.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : fallback
+}
+
+function normalizeResourcePoolAction(value: string | undefined): ResourcePoolAction | undefined {
+  return value && RESOURCE_POOL_ACTIONS.has(value as ResourcePoolAction)
+    ? value as ResourcePoolAction
+    : undefined
+}
+
+function normalizeResourcePoolType(value: string | undefined): RedeemCodeType | undefined {
+  return value && RESOURCE_POOL_RESOURCE_TYPES.has(value as RedeemCodeType)
+    ? value as RedeemCodeType
+    : undefined
+}
+
+async function withResourcePoolApplyLocks<T>(
+  userId: number,
+  instanceId: number,
+  resourceType: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const lockKeys = [
+    `resource-pool:${userId}:${resourceType}`,
+    `instance:${instanceId}:resource-pool-apply`
+  ]
+  const acquired: Array<{ lockKey: string; ownerId: string }> = []
+
+  try {
+    for (const lockKey of lockKeys) {
+      const lock = await acquireLock(lockKey, {
+        expireMs: 120_000,
+        waitTimeoutMs: 10_000,
+        retryIntervalMs: 100
+      })
+      if (!lock.success || !lock.ownerId) {
+        throw new Error('RESOURCE_POOL_BUSY')
+      }
+      acquired.push({ lockKey, ownerId: lock.ownerId })
+    }
+
+    return await fn()
+  } finally {
+    for (const lock of acquired.reverse()) {
+      await releaseLock(lock.lockKey, lock.ownerId)
+    }
+  }
 }
 
 export default async function resourcePoolRoutes(fastify: FastifyInstance) {
@@ -60,132 +131,197 @@ export default async function resourcePoolRoutes(fastify: FastifyInstance) {
     const { user } = request
     const { instanceId, resourceType, amount } = request.body
 
-    // 获取实例
-    const instance = await db.getInstanceById(instanceId)
-    if (!instance) {
-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
-    }
-
-    // 检查实例所有权
-    if (instance.user_id !== user.id) {
-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
-    }
-
-    // 检查实例状态
-    if (!['running', 'stopped'].includes(instance.status)) {
-      return reply.code(400).send(apiError(ErrorCode.INSTANCE_STATUS_INVALID))
-    }
-
-    // 获取宿主机信息（用于判断是否为 KVM）
-    const host = await db.getHostById(instance.host_id)
-    if (!host) {
-      return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
-    }
-
-    // KVM 实例 CPU 必须整百
-    if (resourceType === 'c' && host.instance_type === 'vm') {
-      if (amount % 100 !== 0) {
-        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_KVM_CPU_MULTIPLE))
-      }
-    }
-
-    // KVM 实例内存必须是 128MB 的倍数
-    if (resourceType === 'r' && host.instance_type === 'vm') {
-      if (amount % 128 !== 0) {
-        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_KVM_MEMORY_MULTIPLE))
-      }
-    }
-
-    // KVM 实例硬盘必须是 1GB(1024MB) 的倍数
-    if (resourceType === 'd' && host.instance_type === 'vm') {
-      if (amount % 1024 !== 0) {
-        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_KVM_DISK_MULTIPLE))
-      }
-    }
-
-    // KVM 实例内存/硬盘调整需要停止状态（热调整容易失败）
-    if ((resourceType === 'r' || resourceType === 'd') && host.instance_type === 'vm') {
-      if (instance.status !== 'stopped') {
-        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_VM_MUST_STOP))
-      }
-    }
-
-    // 从资源池扣减资源
-    const success = await db.deductFromResourcePool(
-      user.id,
-      resourceType as RedeemCodeType,
-      amount,
-      instanceId,
-      `应用到实例 ${instance.name}`
-    )
-
-    if (!success) {
-      return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_INSUFFICIENT))
-    }
-
     try {
-      // 获取宿主机
-      const host = await db.getHostById(instance.host_id)
-      if (!host) {
-        throw new Error('Host not found')
-      }
+      const response = await withResourcePoolApplyLocks(user.id, instanceId, resourceType, async () => {
+        const instance = await db.getInstanceById(instanceId)
+        if (!instance) {
+          throw new Error('INSTANCE_NOT_FOUND')
+        }
 
-      // 应用资源到实例
-      if (resourceType === 'c') {
-        // CPU
-        const newCpu = instance.cpu + amount
-        await db.updateHostResources(instance.host_id, { cpuUsed: host.cpu_used + amount })
-        const client = await getIncusClient(host)
-        await patchInstanceResources(client, instance.incus_id, { cpu: newCpu })
-        await db.updateInstanceResources(instanceId, { cpu: newCpu })
-      } else if (resourceType === 'r') {
-        // 内存
-        const newMemory = instance.memory + amount
-        await db.updateHostResources(instance.host_id, { memoryUsed: host.memory_used + amount })
-        const client = await getIncusClient(host)
-        await patchInstanceResources(client, instance.incus_id, { memory: newMemory })
-        await db.updateInstanceResources(instanceId, { memory: newMemory })
-      } else if (resourceType === 'd') {
-        // 硬盘
-        const newDisk = instance.disk + amount
-        await db.updateHostResources(instance.host_id, { diskUsed: host.disk_used + amount })
-        const client = await getIncusClient(host)
-        await patchInstanceResources(client, instance.incus_id, { disk: newDisk })
-        await db.updateInstanceResources(instanceId, { disk: newDisk })
-      } else if (resourceType === 't') {
-        // 流量
-        const trafficBytes = BigInt(amount) * BigInt(1024 * 1024 * 1024) // GB to Bytes
-        const currentLimit = instance.monthly_traffic_limit ? BigInt(instance.monthly_traffic_limit) : BigInt(0)
-        const newLimit = currentLimit + trafficBytes
-        await db.updateInstanceResources(instanceId, { monthlyTrafficLimit: newLimit })
-      }
+        if (instance.user_id !== user.id) {
+          throw new Error('FORBIDDEN')
+        }
 
-      const typeName = RESOURCE_TYPE_NAMES[resourceType]?.zh || resourceType
-      const unit = RESOURCE_TYPE_UNITS[resourceType] || ''
+        if (!['running', 'stopped'].includes(instance.status)) {
+          throw new Error('INSTANCE_STATUS_INVALID')
+        }
 
-      await createLog(
-        user.id,
-        'resource_pool',
-        'apply.success',
-        `Applied ${amount}${unit} ${typeName} to instance ${instance.name}`,
-        'success',
-        { instanceId }
-      )
+        const host = await db.getHostById(instance.host_id)
+        if (!host) {
+          throw new Error('HOST_NOT_FOUND')
+        }
 
-      return {
-        message: 'Resource applied successfully',
-        resourceType,
-        amount,
-        instanceId,
-        instanceName: instance.name
-      }
+        if (!host.enable_resource_pool) {
+          throw new Error('RESOURCE_POOL_DISABLED')
+        }
+
+        if (resourceType === 'c' && host.instance_type === 'vm' && amount % 100 !== 0) {
+          throw new Error('RESOURCE_POOL_KVM_CPU_MULTIPLE')
+        }
+
+        if (resourceType === 'r' && host.instance_type === 'vm' && amount % 128 !== 0) {
+          throw new Error('RESOURCE_POOL_KVM_MEMORY_MULTIPLE')
+        }
+
+        if (resourceType === 'd' && host.instance_type === 'vm' && amount % 1024 !== 0) {
+          throw new Error('RESOURCE_POOL_KVM_DISK_MULTIPLE')
+        }
+
+        if ((resourceType === 'r' || resourceType === 'd') && host.instance_type === 'vm' && instance.status !== 'stopped') {
+          throw new Error('RESOURCE_POOL_VM_MUST_STOP')
+        }
+
+        let patchedRollback: (() => Promise<void>) | null = null
+
+        try {
+          if (resourceType === 'c') {
+            const newCpu = instance.cpu + amount
+            const client = await getIncusClient(host)
+            await patchInstanceResources(client, instance.incus_id, { cpu: newCpu })
+            patchedRollback = async () => {
+              await patchInstanceResources(client, instance.incus_id, { cpu: instance.cpu })
+            }
+            const applied = await db.applyResourcePoolToInstance({
+              userId: user.id,
+              instanceId,
+              hostId: instance.host_id,
+              resourceType: resourceType as RedeemCodeType,
+              amount,
+              remark: `应用到实例 ${instance.name}`,
+              instanceResources: { cpu: newCpu },
+              hostResourceDelta: { cpuUsed: amount }
+            })
+            if (!applied) {
+              throw new Error('RESOURCE_POOL_INSUFFICIENT')
+            }
+          } else if (resourceType === 'r') {
+            const newMemory = instance.memory + amount
+            const client = await getIncusClient(host)
+            await patchInstanceResources(client, instance.incus_id, { memory: newMemory })
+            patchedRollback = async () => {
+              await patchInstanceResources(client, instance.incus_id, { memory: instance.memory })
+            }
+            const applied = await db.applyResourcePoolToInstance({
+              userId: user.id,
+              instanceId,
+              hostId: instance.host_id,
+              resourceType: resourceType as RedeemCodeType,
+              amount,
+              remark: `应用到实例 ${instance.name}`,
+              instanceResources: { memory: newMemory },
+              hostResourceDelta: { memoryUsed: amount }
+            })
+            if (!applied) {
+              throw new Error('RESOURCE_POOL_INSUFFICIENT')
+            }
+          } else if (resourceType === 'd') {
+            const newDisk = instance.disk + amount
+            const client = await getIncusClient(host)
+            await patchInstanceResources(client, instance.incus_id, { disk: newDisk })
+            patchedRollback = async () => {
+              await patchInstanceResources(client, instance.incus_id, { disk: instance.disk })
+            }
+            const applied = await db.applyResourcePoolToInstance({
+              userId: user.id,
+              instanceId,
+              hostId: instance.host_id,
+              resourceType: resourceType as RedeemCodeType,
+              amount,
+              remark: `应用到实例 ${instance.name}`,
+              instanceResources: { disk: newDisk },
+              hostResourceDelta: { diskUsed: amount }
+            })
+            if (!applied) {
+              throw new Error('RESOURCE_POOL_INSUFFICIENT')
+            }
+          } else if (resourceType === 't') {
+            const trafficBytes = BigInt(amount) * BigInt(1024 * 1024 * 1024)
+            const applied = await db.applyResourcePoolToInstance({
+              userId: user.id,
+              instanceId,
+              hostId: instance.host_id,
+              resourceType: resourceType as RedeemCodeType,
+              amount,
+              remark: `应用到实例 ${instance.name}`,
+              monthlyTrafficDelta: trafficBytes
+            })
+            if (!applied) {
+              throw new Error('RESOURCE_POOL_INSUFFICIENT')
+            }
+          }
+        } catch (error) {
+          if (patchedRollback) {
+            try {
+              await patchedRollback()
+            } catch (rollbackError) {
+              request.log.error({ err: rollbackError, instanceId }, 'Failed to roll back Incus resource patch after resource-pool DB failure')
+            }
+          }
+          throw error
+        }
+
+        const typeName = RESOURCE_TYPE_NAMES[resourceType]?.zh || resourceType
+        const unit = RESOURCE_TYPE_UNITS[resourceType] || ''
+
+        await createLog(
+          user.id,
+          'resource_pool',
+          'apply.success',
+          `Applied ${amount}${unit} ${typeName} to instance ${instance.name}`,
+          'success',
+          { instanceId }
+        )
+
+        return {
+          message: 'Resource applied successfully',
+          resourceType,
+          amount,
+          instanceId,
+          instanceName: instance.name
+        }
+      })
+
+      return response
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage === 'INSTANCE_NOT_FOUND') {
+        return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+      }
+      if (errorMessage === 'FORBIDDEN') {
+        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+      }
+      if (errorMessage === 'INSTANCE_STATUS_INVALID') {
+        return reply.code(400).send(apiError(ErrorCode.INSTANCE_STATUS_INVALID))
+      }
+      if (errorMessage === 'HOST_NOT_FOUND') {
+        return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
+      }
+      if (errorMessage === 'RESOURCE_POOL_DISABLED') {
+        return reply.code(403).send(apiError(ErrorCode.FEATURE_DISABLED, '该节点未开启资源池玩法'))
+      }
+      if (errorMessage === 'RESOURCE_POOL_KVM_CPU_MULTIPLE') {
+        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_KVM_CPU_MULTIPLE))
+      }
+      if (errorMessage === 'RESOURCE_POOL_KVM_MEMORY_MULTIPLE') {
+        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_KVM_MEMORY_MULTIPLE))
+      }
+      if (errorMessage === 'RESOURCE_POOL_KVM_DISK_MULTIPLE') {
+        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_KVM_DISK_MULTIPLE))
+      }
+      if (errorMessage === 'RESOURCE_POOL_VM_MUST_STOP') {
+        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_VM_MUST_STOP))
+      }
+      if (errorMessage === 'RESOURCE_POOL_INSUFFICIENT') {
+        return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_INSUFFICIENT))
+      }
+      if (errorMessage === 'RESOURCE_POOL_BUSY') {
+        return reply.code(409).send({ error: 'RESOURCE_POOL_BUSY', message: 'Resource pool apply is busy, please retry' })
+      }
       await createLog(
         user.id,
         'resource_pool',
         'apply.failed',
-        `Failed to apply resource to instance ${instance.name}: ${errorMessage}`,
+        `Failed to apply resource to instance ${instanceId}: ${errorMessage}`,
         'failed',
         { instanceId }
       )
@@ -208,10 +344,10 @@ export default async function resourcePoolRoutes(fastify: FastifyInstance) {
     const { action, resourceType, limit, offset } = request.query
 
     const logs = await db.getResourcePoolLogs(user.id, {
-      action: action as any,
-      resourceType: resourceType as RedeemCodeType,
-      limit: limit ? Number(limit) : 20,
-      offset: offset ? Number(offset) : 0
+      action: normalizeResourcePoolAction(action),
+      resourceType: normalizeResourcePoolType(resourceType),
+      limit: parseClampedPositiveIntegerQuery(limit, 20, 100),
+      offset: parseNonNegativeIntegerQuery(offset, 0)
     })
 
     return logs

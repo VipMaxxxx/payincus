@@ -8,6 +8,36 @@ import type { TicketStatus, TicketPriority } from '@prisma/client'
 
 // ==================== 类型定义 ====================
 
+const TICKET_STATUSES = new Set<TicketStatus>(['open', 'in_progress', 'resolved', 'closed'])
+
+function clampPagination(
+  page: number | undefined,
+  pageSize: number | undefined,
+  fallbackPageSize: number,
+  maxPageSize: number = 100
+): { page: number; pageSize: number } {
+  return {
+    page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1,
+    pageSize: Number.isInteger(pageSize) && pageSize !== undefined
+      ? Math.min(Math.max(pageSize, 1), maxPageSize)
+      : fallbackPageSize
+  }
+}
+
+function normalizeTicketStatus(status: TicketStatus | 'active' | undefined): TicketStatus | 'active' | undefined {
+  if (status === 'active') return status
+  return status && TICKET_STATUSES.has(status) ? status : undefined
+}
+
+function normalizeSearchTerm(search: string | undefined): string {
+  return search?.trim().slice(0, 128) ?? ''
+}
+
+function getSearchId(searchTerm: string): number | null {
+  const parsed = Number(searchTerm)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
 export interface CreateTicketData {
   userId: number
   hostId?: number | null  // 可选：不选实例时为 null，工单直接发给管理员
@@ -95,6 +125,13 @@ export interface TicketMessage {
     avatarStyle: string
     avatarBadgeId: string | null
   }
+}
+
+export interface AutoClosedTicket {
+  id: number
+  subject: string
+  userId: number
+  hostId: number | null
 }
 
 export interface TicketMessageAttachment {
@@ -338,24 +375,24 @@ export async function getUserTickets(
   pageSize: number
   totalPages: number
 }> {
-  const page = options.page || 1
-  const pageSize = options.pageSize || 10
+  const { page, pageSize } = clampPagination(options.page, options.pageSize, 10)
+  const status = normalizeTicketStatus(options.status)
+  const searchTerm = normalizeSearchTerm(options.search)
   const skip = (page - 1) * pageSize
 
   const where: any = { userId }
   
   // 状态筛选：active 表示排除 closed
-  if (options.status === 'active') {
+  if (status === 'active') {
     where.status = { not: 'closed' }
-  } else if (options.status) {
-    where.status = options.status
+  } else if (status) {
+    where.status = status
   }
 
   // 搜索：支持主题和工单ID
-  if (options.search && options.search.trim()) {
-    const searchTerm = options.search.trim()
-    const searchId = parseInt(searchTerm)
-    if (!isNaN(searchId)) {
+  if (searchTerm) {
+    const searchId = getSearchId(searchTerm)
+    if (searchId !== null) {
       // 如果是数字，同时搜索 ID 和主题
       where.OR = [
         { id: searchId },
@@ -472,24 +509,24 @@ export async function getHostTickets(
   pageSize: number
   totalPages: number
 }> {
-  const page = options.page || 1
-  const pageSize = options.pageSize || 10
+  const { page, pageSize } = clampPagination(options.page, options.pageSize, 10)
+  const status = normalizeTicketStatus(options.status)
+  const searchTerm = normalizeSearchTerm(options.search)
   const skip = (page - 1) * pageSize
 
   const where: any = { hostId }
   
   // 状态筛选
-  if (options.status === 'active') {
+  if (status === 'active') {
     where.status = { not: 'closed' }
-  } else if (options.status) {
-    where.status = options.status
+  } else if (status) {
+    where.status = status
   }
 
   // 搜索
-  if (options.search && options.search.trim()) {
-    const searchTerm = options.search.trim()
-    const searchId = parseInt(searchTerm)
-    if (!isNaN(searchId)) {
+  if (searchTerm) {
+    const searchId = getSearchId(searchTerm)
+    if (searchId !== null) {
       where.OR = [
         { id: searchId },
         { subject: { contains: searchTerm, mode: 'insensitive' } },
@@ -631,8 +668,9 @@ export async function getOwnerAllTickets(
   pageSize: number
   totalPages: number
 }> {
-  const page = options.page || 1
-  const pageSize = options.pageSize || 10
+  const { page, pageSize } = clampPagination(options.page, options.pageSize, 10)
+  const status = normalizeTicketStatus(options.status)
+  const searchTerm = normalizeSearchTerm(options.search)
   const skip = (page - 1) * pageSize
 
   const where: any = {}
@@ -649,21 +687,20 @@ export async function getOwnerAllTickets(
   }
   
   // 状态筛选
-  if (options.status === 'active') {
+  if (status === 'active') {
     where.status = { not: 'closed' }
-  } else if (options.status) {
-    where.status = options.status
+  } else if (status) {
+    where.status = status
   }
   
-  if (options.hostId && options.sourceType !== 'user') {
+  if (Number.isInteger(options.hostId) && options.hostId !== undefined && options.hostId > 0 && options.sourceType !== 'user') {
     where.hostId = options.hostId
   }
 
   // 搜索
-  if (options.search && options.search.trim()) {
-    const searchTerm = options.search.trim()
-    const searchId = parseInt(searchTerm)
-    if (!isNaN(searchId)) {
+  if (searchTerm) {
+    const searchId = getSearchId(searchTerm)
+    if (searchId !== null) {
       where.OR = [
         { id: searchId },
         { subject: { contains: searchTerm, mode: 'insensitive' } },
@@ -797,8 +834,7 @@ export async function getTicketMessages(
   pageSize: number
   totalPages: number
 }> {
-  const page = options.page || 1
-  const pageSize = options.pageSize || 50
+  const { page, pageSize } = clampPagination(options.page, options.pageSize, 50)
   const skip = (page - 1) * pageSize
 
   const [messages, total] = await Promise.all([
@@ -853,6 +889,25 @@ export async function addTicketMessage(
   attachments: CreateTicketMessageAttachmentData[] = []
 ): Promise<TicketMessage> {
   const message = await prisma.$transaction(async tx => {
+    const ticketUpdate = await tx.ticket.updateMany({
+      where: {
+        id: ticketId,
+        status: { not: 'closed' }
+      },
+      data: {
+        updatedAt: new Date(),
+        ...(!isFromOwner ? {
+          status: 'in_progress' as TicketStatus,
+          resolvedAt: null,
+          closedAt: null
+        } : {})
+      }
+    })
+
+    if (ticketUpdate.count === 0) {
+      throw new Error('Cannot reply to a closed ticket')
+    }
+
     const createdMessage = await tx.ticketMessage.create({
       data: {
         ticketId,
@@ -882,11 +937,6 @@ export async function addTicketMessage(
         }))
       })
     }
-
-    await tx.ticket.update({
-      where: { id: ticketId },
-      data: { updatedAt: new Date() }
-    })
 
     return tx.ticketMessage.findUniqueOrThrow({
       where: { id: createdMessage.id },
@@ -1079,23 +1129,80 @@ export async function getTicketsForAutoClose(timeoutMs: number = 24 * 60 * 60 * 
 
 /**
  * 批量自动关闭工单
- * 返回关闭的工单数量
+ * 返回本次实际关闭的工单。调用方只能对返回的工单发送通知/写日志，
+ * 避免多进程调度或重复启动时对已经被其他进程关闭的工单重复通知。
  */
-export async function autoCloseTickets(ticketIds: number[]): Promise<number> {
-  if (ticketIds.length === 0) return 0
+export async function autoCloseTickets(
+  ticketIds: number[],
+  timeoutMs: number = 24 * 60 * 60 * 1000
+): Promise<AutoClosedTicket[]> {
+  if (ticketIds.length === 0) return []
 
-  const result = await prisma.ticket.updateMany({
-    where: {
-      id: { in: ticketIds },
-      status: 'resolved' // 安全检查：确保只关闭 resolved 状态的工单
-    },
-    data: {
-      status: 'closed',
-      closedAt: new Date()
+  const uniqueTicketIds = [...new Set(ticketIds)]
+  const closedTickets: AutoClosedTicket[] = []
+  const cutoffTime = new Date(Date.now() - timeoutMs)
+
+  for (const ticketId of uniqueTicketIds) {
+    const closedTicket = await prisma.$transaction(async tx => {
+      const latest = await tx.ticket.findUnique({
+        where: { id: ticketId },
+        select: {
+          id: true,
+          subject: true,
+          userId: true,
+          hostId: true,
+          status: true,
+          resolvedAt: true,
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              isFromOwner: true
+            }
+          }
+        }
+      })
+
+      if (
+        !latest ||
+        latest.status !== 'resolved' ||
+        !latest.resolvedAt ||
+        latest.resolvedAt >= cutoffTime ||
+        latest.messages[0]?.isFromOwner !== true
+      ) {
+        return null
+      }
+
+      const result = await tx.ticket.updateMany({
+        where: {
+          id: latest.id,
+          status: 'resolved',
+          resolvedAt: { lt: cutoffTime }
+        },
+        data: {
+          status: 'closed',
+          closedAt: new Date()
+        }
+      })
+
+      if (result.count === 0) {
+        return null
+      }
+
+      return {
+        id: latest.id,
+        subject: latest.subject,
+        userId: latest.userId,
+        hostId: latest.hostId
+      }
+    })
+
+    if (closedTicket) {
+      closedTickets.push(closedTicket)
     }
-  })
+  }
 
-  return result.count
+  return closedTickets
 }
 
 /**

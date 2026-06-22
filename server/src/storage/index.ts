@@ -4,6 +4,7 @@
 
 export * from './types.js'
 export * from './factory.js'
+export * from './path.js'
 export { WebDavProvider } from './providers/WebDavProvider.js'
 export { FtpProvider } from './providers/FtpProvider.js'
 export { SftpProvider } from './providers/SftpProvider.js'

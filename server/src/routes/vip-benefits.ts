@@ -11,9 +11,12 @@ import {
   type VipBenefitRewardInput
 } from '../services/vip-benefits.js'
 
-function parseId(value: unknown): number | null {
-  const id = Number(value)
-  return Number.isInteger(id) && id > 0 ? id : null
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
 }
 
 function sendVipBenefitError(reply: FastifyReply, error: unknown) {
@@ -40,7 +43,7 @@ export default async function vipBenefitRoutes(app: FastifyInstance): Promise<vo
     onRequest: [app.authenticate],
     config: { rateLimit: { max: 100, timeWindow: '3 minutes' } }
   }, async (request, reply) => {
-    const rewardId = parseId(request.params.rewardId)
+    const rewardId = parsePositiveRouteId(request.params.rewardId)
     if (!rewardId) {
       return reply.status(400).send({ error: 'Invalid VIP benefit reward ID', code: 'INVALID_REWARD_ID' })
     }
@@ -90,7 +93,7 @@ export default async function vipBenefitRoutes(app: FastifyInstance): Promise<vo
     onRequest: [app.authenticate, app.requireAdmin],
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } }
   }, async (request, reply) => {
-    const id = parseId(request.params.id)
+    const id = parsePositiveRouteId(request.params.id)
     if (!id) {
       return reply.status(400).send({ error: 'Invalid VIP benefit reward ID', code: 'INVALID_REWARD_ID' })
     }
@@ -108,7 +111,7 @@ export default async function vipBenefitRoutes(app: FastifyInstance): Promise<vo
     onRequest: [app.authenticate, app.requireAdmin],
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
   }, async (request, reply) => {
-    const id = parseId(request.params.id)
+    const id = parsePositiveRouteId(request.params.id)
     if (!id) {
       return reply.status(400).send({ error: 'Invalid VIP benefit reward ID', code: 'INVALID_REWARD_ID' })
     }

@@ -44,6 +44,9 @@ import {
     consumeDownloadToken
 } from '../lib/download-token.js'
 import { checkInstancePermission } from '../lib/permission.js'
+import {
+  claimOperationVerificationRequirement
+} from '../lib/operation-verification.js'
 
 // 检查实例是否被转移锁定
 async function checkTransferLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
@@ -55,6 +58,38 @@ async function checkTransferLock(instanceId: number, reply: FastifyReply): Promi
   return false
 }
 
+async function requireVerifiedOperation(
+  reply: FastifyReply,
+  userId: number,
+  resourceId: number
+): Promise<boolean> {
+  const verification = await claimOperationVerificationRequirement(userId, 'delete_backup', resourceId)
+  if (!verification.verified) {
+    reply.code(403).send({
+      error: 'Sensitive operation requires verification',
+      code: 'VERIFICATION_REQUIRED',
+      required: verification.required
+    })
+    return false
+  }
+  return true
+}
+
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function buildBackupExportDownloadTokenResourceId(instanceId: number, taskId: string): string {
+  return `${instanceId}:${taskId}`
+}
+
 // 恢复任务现在使用数据库存储，由 restoreTaskWorker 处理
 
 export default async function backupRoutes(fastify: FastifyInstance) {
@@ -64,9 +99,9 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { instanceId: string } }>, reply: FastifyReply) => {
     const { instanceId } = request.params
-    const instanceIdNum = Number(instanceId)
+    const instanceIdNum = parsePositiveRouteId(instanceId)
 
-    if (isNaN(instanceIdNum)) {
+    if (!instanceIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -118,9 +153,9 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     Body: CreateBackupRequest
   }>, reply: FastifyReply) => {
     const { instanceId } = request.params
-    const instanceIdNum = Number(instanceId)
+    const instanceIdNum = parsePositiveRouteId(instanceId)
 
-    if (isNaN(instanceIdNum)) {
+    if (!instanceIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -167,13 +202,17 @@ export default async function backupRoutes(fastify: FastifyInstance) {
       }
       const client = await getIncusClient(host)
 
-      // 先保存到数据库（状态为 creating）
-      const backupId = await db.createBackup({
+      // 原子预留备份配额并保存到数据库（状态为 creating）
+      const reservation = await db.createBackupWithQuotaReservation({
         instanceId: instanceIdNum,
         incusName,
         name,
         description
       })
+      if (!reservation.allowed || !reservation.backupId) {
+        return reply.code(400).send(apiError(ErrorCode.QUOTA_BACKUP_EXCEEDED, reservation.message))
+      }
+      const backupId = reservation.backupId
 
       // 在 Incus 中创建备份（异步操作）
       createIncusBackup(client, instance.incus_id, incusName, {
@@ -222,10 +261,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { instanceId: string; backupId: string } }>, reply: FastifyReply) => {
     const { instanceId, backupId } = request.params
-    const instanceIdNum = Number(instanceId)
-    const backupIdNum = Number(backupId)
+    const instanceIdNum = parsePositiveRouteId(instanceId)
+    const backupIdNum = parsePositiveRouteId(backupId)
 
-    if (isNaN(instanceIdNum) || isNaN(backupIdNum)) {
+    if (!instanceIdNum || !backupIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -250,7 +289,7 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     // 检查转移锁定
     if (await checkTransferLock(instanceIdNum, reply)) return
 
-
+    if (!await requireVerifiedOperation(reply, request.user.id, backupIdNum)) return
 
     try {
       // 获取宿主机信息并创建 Incus 客户端
@@ -294,9 +333,9 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Params: { instanceId: string } }>, reply: FastifyReply) => {
     const { instanceId } = request.params
-    const instanceIdNum = Number(instanceId)
+    const instanceIdNum = parsePositiveRouteId(instanceId)
 
-    if (isNaN(instanceIdNum)) {
+    if (!instanceIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -348,9 +387,9 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     Body: { enabled: boolean; intervalMinutes?: number }
   }>, reply: FastifyReply) => {
     const { instanceId } = request.params
-    const instanceIdNum = Number(instanceId)
+    const instanceIdNum = parsePositiveRouteId(instanceId)
 
-    if (isNaN(instanceIdNum)) {
+    if (!instanceIdNum) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -404,10 +443,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { instanceId, backupId } = request.params
-      const instanceIdNum = Number(instanceId)
-      const backupIdNum = Number(backupId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+      const backupIdNum = parsePositiveRouteId(backupId)
 
-      if (isNaN(instanceIdNum) || isNaN(backupIdNum)) {
+      if (!instanceIdNum || !backupIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -469,9 +508,9 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticateUser] },
     async (request, reply) => {
       const { instanceId, taskId } = request.params
-      const instanceIdNum = Number(instanceId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
 
-      if (isNaN(instanceIdNum)) {
+      if (!instanceIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -522,9 +561,9 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticate] },
     async (request, reply) => {
       const { instanceId, taskId } = request.params
-      const instanceIdNum = Number(instanceId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
 
-      if (isNaN(instanceIdNum)) {
+      if (!instanceIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -564,7 +603,7 @@ export default async function backupRoutes(fastify: FastifyInstance) {
       // 生成一次性下载 token（5分钟有效，仅可使用1次）
       const downloadToken = generateDownloadToken(
         request.user.id,
-        taskId,
+        buildBackupExportDownloadTokenResourceId(instanceIdNum, taskId),
         'backup-export',
         300,  // 5分钟
         1     // 1次使用
@@ -587,7 +626,7 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     {
       // 使用一次性下载 token 验证
       onRequest: async (request, reply) => {
-        const { taskId } = request.params
+        const { instanceId, taskId } = request.params
         const downloadToken = (request.query as { dt?: string }).dt
 
         // 必须提供下载 token
@@ -599,7 +638,16 @@ export default async function backupRoutes(fastify: FastifyInstance) {
         }
 
         // 验证并消费一次性 token
-        const result = consumeDownloadToken(downloadToken, taskId, 'backup-export')
+        const instanceIdNum = parsePositiveRouteId(instanceId)
+        if (!instanceIdNum) {
+          return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+        }
+
+        const result = consumeDownloadToken(
+          downloadToken,
+          buildBackupExportDownloadTokenResourceId(instanceIdNum, taskId),
+          'backup-export'
+        )
         if (!result.valid) {
           return reply.code(401).send({
             error: result.error || 'Invalid or expired download token',
@@ -613,10 +661,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { instanceId, taskId } = request.params
-      const instanceIdNum = Number(instanceId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
       const tokenUserId = (request as any).downloadTokenUserId as number
 
-      if (isNaN(instanceIdNum)) {
+      if (!instanceIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -693,20 +741,35 @@ export default async function backupRoutes(fastify: FastifyInstance) {
           reply.header('Content-Length', contentLength)
         }
 
-        // 监听响应完成，更新任务状态
-        reply.raw.on('close', async () => {
-          await updateExportTaskStatus(taskId, 'completed')
-          // 下载完成后删除任务
-          setTimeout(async () => {
-            await deleteExportTask(taskId)
-          }, 5000)
+        let exportFinalized = false
+        const finalizeExportTask = async (status: 'completed' | 'error', error?: string) => {
+          if (exportFinalized) return
+          exportFinalized = true
 
-          fastify.log.info(`Backup export completed: ${taskId}`)
+          await updateExportTaskStatus(taskId, status, error)
+          if (status === 'completed') {
+            setTimeout(async () => {
+              await deleteExportTask(taskId)
+            }, 5000)
+            fastify.log.info(`Backup export completed: ${taskId}`)
+          } else {
+            fastify.log.error(`Backup export error: ${error || 'unknown error'}`)
+          }
+        }
+
+        // finish 表示响应已经完整交给 Node.js 写出；close 也可能是客户端中断。
+        reply.raw.on('finish', () => {
+          void finalizeExportTask('completed')
         })
 
-        reply.raw.on('error', async (err) => {
-          await updateExportTaskStatus(taskId, 'error', err.message)
-          fastify.log.error(`Backup export error: ${err.message}`)
+        reply.raw.on('close', () => {
+          if (!reply.raw.writableEnded) {
+            void finalizeExportTask('error', 'Download connection closed before completion')
+          }
+        })
+
+        reply.raw.on('error', (err) => {
+          void finalizeExportTask('error', err.message)
         })
 
         // 将 Web ReadableStream 转换为 Node.js Readable
@@ -741,10 +804,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { instanceId, backupId } = request.params
-      const instanceIdNum = Number(instanceId)
-      const backupIdNum = Number(backupId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+      const backupIdNum = parsePositiveRouteId(backupId)
 
-      if (isNaN(instanceIdNum) || isNaN(backupIdNum)) {
+      if (!instanceIdNum || !backupIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -810,6 +873,12 @@ export default async function backupRoutes(fastify: FastifyInstance) {
         originalInstanceName: instance.name,
         originalIncusId: instance.incus_id
       })
+      if (!taskId) {
+        return reply.code(409).send({
+          error: 'RESTORE_IN_PROGRESS',
+          message: '该实例已有恢复任务正在进行中'
+        })
+      }
 
       await createLog(
         request.user.id,
@@ -839,10 +908,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticateUser] },
     async (request, reply) => {
       const { instanceId, taskId } = request.params
-      const instanceIdNum = Number(instanceId)
-      const taskIdNum = Number(taskId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+      const taskIdNum = parsePositiveRouteId(taskId)
 
-      if (isNaN(instanceIdNum) || isNaN(taskIdNum)) {
+      if (!instanceIdNum || !taskIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -899,10 +968,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticateUser] },
     async (request, reply) => {
       const { instanceId, taskId } = request.params
-      const instanceIdNum = Number(instanceId)
-      const taskIdNum = Number(taskId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+      const taskIdNum = parsePositiveRouteId(taskId)
 
-      if (isNaN(instanceIdNum) || isNaN(taskIdNum)) {
+      if (!instanceIdNum || !taskIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -941,24 +1010,34 @@ export default async function backupRoutes(fastify: FastifyInstance) {
         }
         const client = await getIncusClient(host)
 
-        // 删除临时实例（如果存在）
+        // 先确认并启动原实例，再清理临时实例。
+        // 如果原实例不存在，临时实例可能是最后一个可人工恢复的副本，不能先删。
+        const originalExists = await instanceExists(client, task.originalIncusId)
+        if (!originalExists) {
+          const message = '原实例不存在，已保留临时实例用于人工恢复'
+          await createLog(
+            request.user.id,
+            'backup',
+            'backup.restore.rollback',
+            `Refused rollback for restore task ${taskIdNum}: ${message}`,
+            'failed',
+            { instanceId: instanceIdNum }
+          )
+          return reply.code(409).send({
+            error: 'ROLLBACK_UNSAFE',
+            message
+          })
+        }
+
+        await startInstance(client, task.originalIncusId)
+
+        // 原实例已确认可启动后，再删除临时实例（如果存在）
         if (task.tempInstanceName) {
           const tempExists = await instanceExists(client, task.tempInstanceName)
           if (tempExists) {
-            try {
-              await deleteInstance(client, task.tempInstanceName)
-              fastify.log.info(`Deleted temp instance: ${task.tempInstanceName}`)
-            } catch (err) {
-              fastify.log.warn(`Failed to delete temp instance: ${err}`)
-            }
+            await deleteInstance(client, task.tempInstanceName)
+            fastify.log.info(`Deleted temp instance: ${task.tempInstanceName}`)
           }
-        }
-
-        // 尝试启动原实例
-        try {
-          await startInstance(client, task.originalIncusId)
-        } catch (err) {
-          fastify.log.warn(`Failed to start original instance: ${err}`)
         }
 
         // 更新任务状态 (数据库没有 rolled_back 状态，标记为 FAILED 并记录)
@@ -1001,10 +1080,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticateUser] },
     async (request, reply) => {
       const { instanceId, taskId } = request.params
-      const instanceIdNum = Number(instanceId)
-      const taskIdNum = Number(taskId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+      const taskIdNum = parsePositiveRouteId(taskId)
 
-      if (isNaN(instanceIdNum) || isNaN(taskIdNum)) {
+      if (!instanceIdNum || !taskIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -1036,7 +1115,13 @@ export default async function backupRoutes(fastify: FastifyInstance) {
         })
       }
 
-      await db.updateRestoreTaskStatus(taskIdNum, 'FAILED', '用户取消')
+      const cancelledTask = await db.cancelRestoreTask(taskIdNum)
+      if (!cancelledTask) {
+        return reply.code(400).send({
+          error: 'CANCEL_FAILED',
+          message: '取消任务失败，任务可能已开始执行'
+        })
+      }
 
       await createLog(
         request.user.id,
@@ -1075,10 +1160,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { instanceId, backupId } = request.params
-      const instanceIdNum = Number(instanceId)
-      const backupIdNum = Number(backupId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+      const backupIdNum = parsePositiveRouteId(backupId)
 
-      if (isNaN(instanceIdNum) || isNaN(backupIdNum)) {
+      if (!instanceIdNum || !backupIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -1154,6 +1239,12 @@ export default async function backupRoutes(fastify: FastifyInstance) {
         hostId: instance.host_id,
         storageConfigId: storageConfig.id
       })
+      if (!task) {
+        return reply.code(409).send({
+          error: ErrorCode.BACKUP_UPLOAD_IN_PROGRESS,
+          message: '您有上传任务正在进行中'
+        })
+      }
 
       await createLog(
         request.user.id,
@@ -1185,10 +1276,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticateUser] },
     async (request, reply) => {
       const { instanceId, taskId } = request.params
-      const instanceIdNum = Number(instanceId)
-      const taskIdNum = Number(taskId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+      const taskIdNum = parsePositiveRouteId(taskId)
 
-      if (isNaN(instanceIdNum) || isNaN(taskIdNum)) {
+      if (!instanceIdNum || !taskIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -1245,10 +1336,10 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticateUser] },
     async (request, reply) => {
       const { instanceId, taskId } = request.params
-      const instanceIdNum = Number(instanceId)
-      const taskIdNum = Number(taskId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+      const taskIdNum = parsePositiveRouteId(taskId)
 
-      if (isNaN(instanceIdNum) || isNaN(taskIdNum)) {
+      if (!instanceIdNum || !taskIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 
@@ -1276,7 +1367,13 @@ export default async function backupRoutes(fastify: FastifyInstance) {
         })
       }
 
-      await db.cancelBackupUploadTask(taskIdNum)
+      const cancelledTask = await db.cancelBackupUploadTask(taskIdNum)
+      if (!cancelledTask) {
+        return reply.code(400).send({
+          error: 'CANCEL_FAILED',
+          message: '取消任务失败，任务可能已开始执行'
+        })
+      }
 
       await createLog(
         request.user.id,
@@ -1300,9 +1397,9 @@ export default async function backupRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticateUser] },
     async (request, reply) => {
       const { instanceId } = request.params
-      const instanceIdNum = Number(instanceId)
+      const instanceIdNum = parsePositiveRouteId(instanceId)
 
-      if (isNaN(instanceIdNum)) {
+      if (!instanceIdNum) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       }
 

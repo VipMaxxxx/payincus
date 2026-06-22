@@ -11,9 +11,115 @@ import { testNotificationChannel } from '../lib/notifier.js'
 import type { NotificationChannel } from '../types/database.js'
 import { assertSafeWebhookUrl, OutboundTargetValidationError } from '../lib/outbound-security.js'
 
+const telegramBotTokenPattern = /^[1-9]\d{5,19}:[A-Za-z0-9_-]{20,}$/
+const telegramChatIdPattern = /^-?\d{1,20}$|^@[A-Za-z0-9_]{5,32}$/
+const maxWebhookSecretLength = 256
+const notificationLogStatuses = new Set(['pending', 'sent', 'failed'])
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+
+type UserNotificationChannelType = 'telegram' | 'discord' | 'webhook' | 'email'
+
+type NotificationChannelCreateInput = {
+  type: UserNotificationChannelType
+  name: string
+  config: Record<string, unknown>
+  enabled: boolean
+}
+
+type NotificationChannelUpdateInput = {
+  name?: string
+  config?: Record<string, unknown>
+  enabled?: boolean
+}
+
+const USER_NOTIFICATION_CHANNEL_TYPES = new Set<UserNotificationChannelType>(['telegram', 'discord', 'webhook', 'email'])
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function parsePositiveRouteId(value: string): number | null {
+  if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = parseInt(value || '', 10)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function parseNotificationLogStatus(value: string | undefined): 'pending' | 'sent' | 'failed' | undefined {
+  return value && notificationLogStatuses.has(value)
+    ? value as 'pending' | 'sent' | 'failed'
+    : undefined
+}
+
+function normalizeNotificationChannelName(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw { error: 'Invalid notification channel name' }
+  }
+  const name = value.trim()
+  if (!name || name.length > 50) {
+    throw { error: 'Notification channel name must be 1-50 characters' }
+  }
+  return name
+}
+
+function normalizeNotificationChannelCreateInput(input: unknown): NotificationChannelCreateInput {
+  if (!isPlainRecord(input)) {
+    throw { error: 'Invalid request body' }
+  }
+
+  if (typeof input.type !== 'string' || !USER_NOTIFICATION_CHANNEL_TYPES.has(input.type as UserNotificationChannelType)) {
+    throw { error: 'Invalid notification channel type' }
+  }
+  if (!isPlainRecord(input.config)) {
+    throw { error: 'Invalid notification channel config' }
+  }
+  if (input.enabled !== undefined && typeof input.enabled !== 'boolean') {
+    throw { error: 'Invalid enabled flag' }
+  }
+
+  return {
+    type: input.type as UserNotificationChannelType,
+    name: normalizeNotificationChannelName(input.name),
+    config: { ...input.config },
+    enabled: input.enabled ?? true
+  }
+}
+
+function normalizeNotificationChannelUpdateInput(input: unknown): NotificationChannelUpdateInput {
+  if (!isPlainRecord(input)) {
+    throw { error: 'Invalid request body' }
+  }
+
+  const update: NotificationChannelUpdateInput = {}
+  if (input.name !== undefined) {
+    update.name = normalizeNotificationChannelName(input.name)
+  }
+  if (input.config !== undefined) {
+    if (!isPlainRecord(input.config)) {
+      throw { error: 'Invalid notification channel config' }
+    }
+    update.config = { ...input.config }
+  }
+  if (input.enabled !== undefined) {
+    if (typeof input.enabled !== 'boolean') {
+      throw { error: 'Invalid enabled flag' }
+    }
+    update.enabled = input.enabled
+  }
+
+  return update
+}
+
 export default async function notificationRoutes(fastify: FastifyInstance) {
   async function validateOutboundConfig(
-    type: 'telegram' | 'discord' | 'webhook' | 'email',
+    type: UserNotificationChannelType,
     config: Record<string, unknown>
   ): Promise<{ valid: boolean; error?: string }> {
     if (type !== 'webhook' || typeof config.url !== 'string') {
@@ -55,9 +161,9 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const channelId = Number(id)
+    const channelId = parsePositiveRouteId(id)
 
-    if (isNaN(channelId)) {
+    if (!channelId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -103,7 +209,13 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Body: { type: 'telegram' | 'discord' | 'webhook' | 'email'; name: string; config: Record<string, unknown>; enabled?: boolean } }>, reply: FastifyReply) => {
-    const { type, name, config, enabled = true } = request.body
+    let input: NotificationChannelCreateInput
+    try {
+      input = normalizeNotificationChannelCreateInput(request.body)
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
+    const { type, name, config, enabled } = input
 
     // 验证配置
     const validation = validateConfig(type, config)
@@ -159,13 +271,19 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     Body: { name?: string; config?: Record<string, unknown>; enabled?: boolean }
   }>, reply: FastifyReply) => {
     const { id } = request.params
-    const channelId = Number(id)
+    const channelId = parsePositiveRouteId(id)
 
-    if (isNaN(channelId)) {
+    if (!channelId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
-    const { name, config, enabled } = request.body
+    let input: NotificationChannelUpdateInput
+    try {
+      input = normalizeNotificationChannelUpdateInput(request.body)
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
+    const { name, config, enabled } = input
 
     const channel = await db.getNotificationChannelById(channelId)
     if (!channel) {
@@ -214,9 +332,9 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const channelId = Number(id)
+    const channelId = parsePositiveRouteId(id)
 
-    if (isNaN(channelId)) {
+    if (!channelId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -242,9 +360,9 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const channelId = Number(id)
+    const channelId = parsePositiveRouteId(id)
 
-    if (isNaN(channelId)) {
+    if (!channelId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -272,9 +390,9 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params
-    const channelId = Number(id)
+    const channelId = parsePositiveRouteId(id)
 
-    if (isNaN(channelId)) {
+    if (!channelId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
@@ -313,9 +431,9 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{
     Querystring: { page?: string; pageSize?: string; status?: 'pending' | 'sent' | 'failed' }
   }>) => {
-    const page = parseInt(request.query.page || '1', 10)
-    const pageSize = Math.min(parseInt(request.query.pageSize || '20', 10), 100)
-    const status = request.query.status
+    const page = parsePositiveInteger(request.query.page, 1)
+    const pageSize = Math.min(100, parsePositiveInteger(request.query.pageSize, 20))
+    const status = parseNotificationLogStatus(request.query.status)
 
     const result = await db.getNotificationLogsByUserId(request.user.id, {
       page,
@@ -367,8 +485,20 @@ function validateConfig(
 ): { valid: boolean; error?: string } {
   switch (type) {
     case 'telegram':
-      if (!config.botToken || !config.chatId) {
+      if (typeof config.botToken !== 'string' || typeof config.chatId !== 'string') {
         return { valid: false, error: 'Please provide Bot Token and Chat ID' }
+      }
+      {
+        const botToken = config.botToken.trim()
+        const chatId = config.chatId.trim()
+        if (!telegramBotTokenPattern.test(botToken)) {
+          return { valid: false, error: 'Invalid Telegram Bot Token' }
+        }
+        if (!telegramChatIdPattern.test(chatId)) {
+          return { valid: false, error: 'Invalid Telegram Chat ID' }
+        }
+        config.botToken = botToken
+        config.chatId = chatId
       }
       break
     case 'discord':
@@ -383,8 +513,18 @@ function validateConfig(
       if (!config.url || typeof config.url !== 'string') {
         return { valid: false, error: 'Please provide Webhook URL' }
       }
-      if (!config.url.startsWith('http://') && !config.url.startsWith('https://')) {
-        return { valid: false, error: 'Invalid Webhook URL' }
+      {
+        const webhookUrl = config.url.trim()
+        if (!webhookUrl.startsWith('http://') && !webhookUrl.startsWith('https://')) {
+          return { valid: false, error: 'Invalid Webhook URL' }
+        }
+        config.url = webhookUrl
+      }
+      if (config.secret !== undefined) {
+        if (typeof config.secret !== 'string' || config.secret.length > maxWebhookSecretLength) {
+          return { valid: false, error: 'Invalid Webhook secret' }
+        }
+        config.secret = config.secret.trim()
       }
       break
     case 'email':
@@ -459,4 +599,3 @@ function maskSensitiveConfig(
 
   return masked
 }
-

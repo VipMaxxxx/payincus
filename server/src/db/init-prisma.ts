@@ -3,25 +3,73 @@
  */
 
 // 确保环境变量被加载
-import 'dotenv/config'
+import '../config/env.js'
 
-import { prisma } from './prisma.js'
+import { normalizeLegacyNetworkModes, prisma } from './prisma.js'
 // @ts-ignore - bcryptjs has its own types
 import bcrypt from 'bcryptjs'
 import { resetDatabaseFast } from './reset-database.js'
 import { initSystemConfig } from './system-config.js'
 import { seedDefaultBadges } from './badges.js'
 
+const productionResetConfirmation = 'RESET_PRODUCTION_DATABASE'
+const minimumProductionAdminPasswordLength = 12
+const unsafeInitialAdminPasswordPatterns = [
+  /^admin123$/i,
+  /^password$/i,
+  /^admin$/i,
+  /^default$/i,
+  /^changeme$/i,
+  /change[_-]?me/i,
+  /replace/i,
+  /generate/i,
+  /example/i,
+  /placeholder/i,
+  /beforedeploy/i
+]
+
+function getUnsafeInitialAdminPasswordReason(password: string | undefined): string | null {
+  const trimmed = password?.trim()
+  if (!trimmed) {
+    return 'missing'
+  }
+
+  if (trimmed.length < minimumProductionAdminPasswordLength) {
+    return `shorter than ${minimumProductionAdminPasswordLength} characters`
+  }
+
+  if (unsafeInitialAdminPasswordPatterns.some(pattern => pattern.test(trimmed))) {
+    return 'default or placeholder value'
+  }
+
+  return null
+}
+
 function getInitialAdminPassword(): string {
   const configuredPassword = process.env.ADMIN_PASSWORD || process.env.ADMIN_INITIAL_PASSWORD
 
   if (process.env.NODE_ENV === 'production') {
-    if (!configuredPassword || configuredPassword === 'admin123') {
-      throw new Error('ADMIN_PASSWORD must be configured to a non-default value in production')
+    const unsafeReason = getUnsafeInitialAdminPasswordReason(configuredPassword)
+    if (unsafeReason) {
+      throw new Error(`ADMIN_PASSWORD must be configured to a strong non-placeholder value in production (${unsafeReason})`)
     }
   }
 
   return configuredPassword || 'admin123'
+}
+
+function assertDatabaseResetAllowed(shouldReset: boolean): void {
+  if (!shouldReset || process.env.NODE_ENV !== 'production') {
+    return
+  }
+
+  if (process.env.ALLOW_PRODUCTION_DATABASE_RESET === productionResetConfirmation) {
+    return
+  }
+
+  throw new Error(
+    `RESET_DATABASE is disabled in production. To intentionally wipe production data, set ALLOW_PRODUCTION_DATABASE_RESET=${productionResetConfirmation}.`
+  )
 }
 
 /**
@@ -31,6 +79,8 @@ function getInitialAdminPassword(): string {
 export async function initPrismaDatabase(options: {
   resetDatabase?: boolean
 } = {}) {
+  await normalizeLegacyNetworkModes()
+
   // 测试连接
   await prisma.$connect()
   console.log('✅ Prisma 数据库连接成功')
@@ -38,6 +88,8 @@ export async function initPrismaDatabase(options: {
   // 如果配置了清空数据库，先清空
   const shouldReset = options.resetDatabase ??
     (process.env.RESET_DATABASE === 'true' || process.env.RESET_DATABASE === '1')
+
+  assertDatabaseResetAllowed(shouldReset)
 
   if (shouldReset) {
     console.log('⚠️  检测到 RESET_DATABASE=true，将清空数据库...')
@@ -73,7 +125,7 @@ async function createDefaultAdmin() {
     await prisma.user.create({
       data: {
         username: 'admin',
-        email: 'admin@incudal.local',
+        email: 'admin@isvoro.com',
         passwordHash,
         role: 'admin',
         status: 'active',

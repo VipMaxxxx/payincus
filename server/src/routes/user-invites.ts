@@ -20,6 +20,43 @@ interface GenerateInviteBody {
   count?: number
 }
 
+const INVITE_GENERATION_MAX_COUNT = 10
+const INVITE_COST_RESOURCE_MAX_LENGTH = 64
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeGenerateInviteBody(input: unknown): GenerateInviteBody {
+  if (!isPlainRecord(input)) {
+    throw { error: '请求参数无效' }
+  }
+
+  if (typeof input.costResource !== 'string') {
+    throw { error: '请选择生成方式' }
+  }
+  const costResource = input.costResource.trim()
+  if (!costResource || costResource.length > INVITE_COST_RESOURCE_MAX_LENGTH) {
+    throw { error: '生成方式无效' }
+  }
+
+  let count = 1
+  const countInput = input.count
+  if (countInput !== undefined) {
+    if (typeof countInput !== 'number' || !Number.isSafeInteger(countInput) || countInput < 1 || countInput > INVITE_GENERATION_MAX_COUNT) {
+      throw { error: `生成数量需为 1-${INVITE_GENERATION_MAX_COUNT} 的整数` }
+    }
+    count = countInput
+  }
+
+  return { costResource, count }
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = parseInt(value || '', 10)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
 function toInviteCodePayload(invite: {
   id: number
   code: string
@@ -90,8 +127,8 @@ export default async function userInviteRoutes(fastify: FastifyInstance) {
   }>('/', {
     onRequest: [fastify.authenticateUser]
   }, async (request: FastifyRequest<{ Querystring: { page?: string; pageSize?: string } }>) => {
-    const page = Math.max(1, parseInt(request.query.page || '1', 10))
-    const pageSize = Math.min(100, Math.max(1, parseInt(request.query.pageSize || '20', 10)))
+    const page = parsePositiveInteger(request.query.page, 1)
+    const pageSize = Math.min(100, parsePositiveInteger(request.query.pageSize, 20))
     const userId = request.user.id
 
     const [total, invites] = await Promise.all([
@@ -140,8 +177,13 @@ export default async function userInviteRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Body: GenerateInviteBody }>, reply: FastifyReply) => {
     const userId = request.user.id
-    const count = request.body.count ?? 1
-    const costResource = request.body.costResource
+    let input: GenerateInviteBody
+    try {
+      input = normalizeGenerateInviteBody(request.body)
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
+    const { count = 1, costResource } = input
     const [expiryDays, costOptions] = await Promise.all([
       getInviteExpiryDays(),
       getInviteCostOptions()

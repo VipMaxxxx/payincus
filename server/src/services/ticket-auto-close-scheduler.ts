@@ -33,12 +33,12 @@ async function processTicketAutoClose(): Promise<void> {
 
     console.log(`[TicketAutoClose] 发现 ${ticketsToClose.length} 个需要自动关闭的工单`)
 
-    // 批量关闭工单
+    // 批量关闭工单。只对本轮实际抢占并关闭成功的工单发送通知/写日志。
     const ticketIds = ticketsToClose.map(t => t.id)
-    const closedCount = await autoCloseTickets(ticketIds)
+    const closedTickets = await autoCloseTickets(ticketIds, AUTO_CLOSE_TIMEOUT_MS)
 
     // 发送通知和记录日志
-    for (const ticket of ticketsToClose) {
+    for (const ticket of closedTickets) {
       try {
         // 获取宿主机信息（hostId 可能为 null，表示直接发给管理员的工单）
         const host = ticket.hostId ? await getHostById(ticket.hostId) : null
@@ -62,7 +62,7 @@ async function processTicketAutoClose(): Promise<void> {
       }
     }
 
-    console.log(`[TicketAutoClose] 成功自动关闭 ${closedCount} 个工单`)
+    console.log(`[TicketAutoClose] 成功自动关闭 ${closedTickets.length} 个工单`)
   } catch (err) {
     console.error('[TicketAutoClose] 处理失败:', err)
   }

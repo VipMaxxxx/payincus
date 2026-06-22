@@ -6,6 +6,12 @@
 import { prisma } from './prisma.js'
 import type { Prisma } from '@prisma/client'
 import type { User, UserQuota } from '../types/database.js'
+import {
+  USER_BALANCE_LOCK_NAMESPACE,
+  USER_EMAIL_REGISTRATION_LOCK_NAMESPACE,
+  advisoryTransactionLockString,
+  tryAdvisoryTransactionLock
+} from './advisory-locks.js'
 
 const MAX_REGISTER_GIFT_BALANCE = 99999999.99
 const MAX_REGISTER_GIFT_POINTS = 2147483647
@@ -280,6 +286,11 @@ async function applyFreeSiteRegisterGiftInTransaction(
   let newPoints = 0
 
   if (balanceAmount > 0) {
+    const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+    if (!balanceLocked) {
+      throw new Error('余额正在处理，请稍后重试')
+    }
+
     const user = await tx.user.findUnique({
       where: { id: userId },
       select: { balance: true }
@@ -290,12 +301,13 @@ async function applyFreeSiteRegisterGiftInTransaction(
     }
 
     const balanceBefore = Number(user.balance)
-    const balanceAfter = Math.round((balanceBefore + balanceAmount) * 100) / 100
 
-    await tx.user.update({
+    const updatedUser = await tx.user.update({
       where: { id: userId },
-      data: { balance: balanceAfter }
+      data: { balance: { increment: balanceAmount } },
+      select: { balance: true }
     })
+    const balanceAfter = Number(updatedUser.balance)
 
     await tx.balanceLog.create({
       data: {
@@ -389,55 +401,95 @@ export async function createRegisteredUser(
     getFreeSiteRegisterGiftConfig()
   ])
   const avatarStyle = AVATAR_STYLES[Math.floor(Math.random() * AVATAR_STYLES.length)]
+  const normalizedEmail = input.email?.toLowerCase().trim() || null
 
-  return prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        username: input.username,
-        email: input.email,
-        passwordHash: input.passwordHash,
-        role: 'user',
-        avatarStyle,
-        quota: {
-          create: {
-            hostLimit: defaultQuota.hostLimit,
-            friendLimit: defaultQuota.friendLimit,
-            packageLimit: defaultQuota.packageLimit
-          }
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (normalizedEmail) {
+        await advisoryTransactionLockString(tx, USER_EMAIL_REGISTRATION_LOCK_NAMESPACE, normalizedEmail)
+      }
+
+      const existingUsername = await tx.user.findUnique({
+        where: { username: input.username },
+        select: { id: true }
+      })
+      if (existingUsername) {
+        throw new Error('USER_EXISTS')
+      }
+
+      if (normalizedEmail) {
+        const existingEmail = await tx.user.findFirst({
+          where: {
+            email: {
+              equals: normalizedEmail,
+              mode: 'insensitive'
+            }
+          },
+          select: { id: true }
+        })
+        if (existingEmail) {
+          throw new Error('EMAIL_ALREADY_REGISTERED')
         }
       }
-    })
 
-    if (input.inviteCode) {
-      const inviteUpdate = await tx.inviteCode.updateMany({
-        where: {
-          code: input.inviteCode,
-          usedBy: null,
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } }
-          ]
-        },
+      const user = await tx.user.create({
         data: {
-          usedBy: user.id,
-          usedAt: new Date()
+          username: input.username,
+          email: normalizedEmail,
+          passwordHash: input.passwordHash,
+          role: 'user',
+          avatarStyle,
+          quota: {
+            create: {
+              hostLimit: defaultQuota.hostLimit,
+              friendLimit: defaultQuota.friendLimit,
+              packageLimit: defaultQuota.packageLimit
+            }
+          }
         }
       })
 
-      if (inviteUpdate.count !== 1) {
-        throw new Error('INVITE_CODE_UNAVAILABLE')
+      if (input.inviteCode) {
+        const inviteUpdate = await tx.inviteCode.updateMany({
+          where: {
+            code: input.inviteCode,
+            usedBy: null,
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } }
+            ]
+          },
+          data: {
+            usedBy: user.id,
+            usedAt: new Date()
+          }
+        })
+
+        if (inviteUpdate.count !== 1) {
+          throw new Error('INVITE_CODE_UNAVAILABLE')
+        }
       }
-    }
 
-    const registerGift = giftConfig
-      ? await applyFreeSiteRegisterGiftInTransaction(tx, user.id, giftConfig)
-      : null
+      const registerGift = giftConfig
+        ? await applyFreeSiteRegisterGiftInTransaction(tx, user.id, giftConfig)
+        : null
 
-    return {
-      userId: user.id,
-      registerGift
+      return {
+        userId: user.id,
+        registerGift
+      }
+    })
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2002'
+    ) {
+      throw new Error('USER_EXISTS')
     }
-  })
+    throw error
+  }
 }
 
 /**
