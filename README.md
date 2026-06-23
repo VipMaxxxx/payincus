@@ -178,8 +178,10 @@ deploy/nginx-split-intranet.conf.example
 - 更新目标必须是形如 `v1.2.3` 的 release tag。
 - 生产目录必须包含 `.git` 和 release tags。`scripts/install-panel.sh` 会在解压 release 包后初始化 Git 元数据并同步 tags；如果你手动纯 tar 解压且没有初始化 Git，后台只能显示当前版本，不能执行在线更新。
 - 后台服务只负责创建任务；生产环境默认通过受限 sudo 启动 `incudal-online-update@.service` 或 `incudal-online-rollback@.service`，实际更新/回滚由 root 级 systemd oneshot 执行。
-- 检查更新时会读取 GitHub Release OTA manifest，后台展示发行包、架构、大小和 SHA256；没有 manifest 时仍保留 Git tag 兼容更新模式。
-- 更新会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
+- 检查更新时会读取 GitHub Release OTA manifest，后台展示发行包、架构、大小和 SHA256。
+- 默认 `SYSTEM_UPDATE_APPLY_MODE=auto`：如果目标 tag 有匹配当前 Linux 架构的 OTA artifact，更新任务会下载 release tar.gz、校验 SHA256、解压并替换安装内容；没有可用 artifact 时回退到 Git tag 兼容构建模式。也可设置为 `artifact` 强制只允许 OTA 包，或设置为 `git` 强制走旧的 Git 构建路径。
+- Artifact 模式会先备份当前目录，校验 release 包完整性，应用预构建产物，执行 Prisma migration、split host 验证、生产预检和响应头/日志检查。前后台边界守卫在 GitHub Release 打包前执行。
+- Git 兼容模式会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
 - 更新期间会保留 `.env`、`server/certs`、`agent-release`、`.npm` 和 `.cache` 等运行态资产。
 
 推荐生产环境变量：
@@ -189,6 +191,7 @@ SYSTEM_UPDATE_ALLOWED_ADMIN_IDS=1
 SYSTEM_UPDATE_LOG_DIR=/opt/incudal/update-logs
 SYSTEM_UPDATE_STARTED_BY_USER_ID=1
 SYSTEM_UPDATE_RELEASE_REPOSITORY=VipMaxxxx/payincus
+SYSTEM_UPDATE_APPLY_MODE=auto
 # 私有仓库或 API 限流时配置，public release 可留空
 SYSTEM_UPDATE_RELEASE_TOKEN=
 ```
