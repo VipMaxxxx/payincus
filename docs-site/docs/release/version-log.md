@@ -6,16 +6,30 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `301fc2c`
+- 当前 HEAD: `71cdcff`
 - 提交日期: 2026-06-24
-- 提交说明: Update version log for static root fix
-- 最新 tag: `v0.0.20`
+- 提交说明: Fix production OTA CLI start command
+- 最新 tag: `v0.0.21`
 
 ## 未发布变更
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本
+
+## v0.0.21
+
+- 发布提交: `71cdcff`
+- 提交日期: 2026-06-24
+- 提交说明: Fix production OTA CLI start command
+
+### 修复与稳定性
+
+- Fix production OTA CLI start command `71cdcff`
+
+### 改进与调整
+
+- Update version log for v0.0.20 `40a245e`
 
 ## v0.0.20
 
