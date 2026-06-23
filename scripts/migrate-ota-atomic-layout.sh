@@ -186,8 +186,8 @@ main() {
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
   systemctl restart "$SERVICE_NAME"
 
-  FRONTEND_URL="${FRONTEND_URL:-https://demo.payincus.com}" \
-  ADMIN_FRONTEND_URL="${ADMIN_FRONTEND_URL:-https://demoadmin.payincus.com}" \
+  FRONTEND_URL="${FRONTEND_URL:-https://pay.payincus.com}" \
+  ADMIN_FRONTEND_URL="${ADMIN_FRONTEND_URL:-https://admin.payincus.com}" \
   BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:3001}" \
     bash "$current_link/scripts/verify-split-host.sh"
 

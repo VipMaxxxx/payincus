@@ -6,14 +6,17 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `0453d5a`
+- Current HEAD: `7cd2baa`
 - Commit date: 2026-06-23
-- Commit subject: Add plugin center
+- Commit subject: Update handoff for plugin release
 - Latest tag: `v0.0.12`
 
 ## Unreleased Changes
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Improvements and Adjustments
+
+- Update handoff for plugin release `7cd2baa`
+- Update version log for v0.0.12 `6e8ce21`
 
 ## Historical Versions
 

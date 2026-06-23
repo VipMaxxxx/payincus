@@ -6,14 +6,17 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `0453d5a`
+- 当前 HEAD: `7cd2baa`
 - 提交日期: 2026-06-23
-- 提交说明: Add plugin center
+- 提交说明: Update handoff for plugin release
 - 最新 tag: `v0.0.12`
 
 ## 未发布变更
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 改进与调整
+
+- Update handoff for plugin release `7cd2baa`
+- Update version log for v0.0.12 `6e8ce21`
 
 ## 历史版本
 

@@ -6,8 +6,8 @@ It is based on `VipMaxxxx/incudal` and focuses on non-Docker production deployme
 
 ## Entrypoints
 
-- User portal: `https://demo.payincus.com`
-- Admin console: `https://demoadmin.payincus.com`
+- User portal: `https://pay.payincus.com`
+- Admin console: `https://admin.payincus.com`
 - Documentation: `https://payincus.com`
 - Telegram group: `https://t.me/Payincus`
 - GitHub repository: `https://github.com/VipMaxxxx/payincus`

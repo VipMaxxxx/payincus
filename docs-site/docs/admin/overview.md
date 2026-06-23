@@ -5,7 +5,7 @@
 入口：
 
 ```text
-https://demoadmin.payincus.com
+https://admin.payincus.com
 ```
 
 ## 访问边界
