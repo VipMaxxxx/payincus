@@ -27,6 +27,16 @@ assert.ok(
 )
 
 assert.ok(
+  hostInstallScript.includes('cert_file=$(mktemp /tmp/incudal-panel-cert.XXXXXX.crt)') &&
+    hostInstallScript.includes('curl -sSf "$cert_url" -o "$cert_file"') &&
+    hostInstallScript.includes('面板证书已存在，更新为当前证书') &&
+    hostInstallScript.includes('incus config trust remove panel') &&
+    hostInstallScript.includes('incus config trust add-certificate "$cert_file" --name panel') &&
+    !hostInstallScript.includes('面板证书已存在，跳过导入'),
+  'host install script must refresh the panel trust certificate instead of skipping stale panel entries'
+)
+
+assert.ok(
   zhCnLocale.includes('目前支持 Ubuntu 22.04+、Debian 12/13；Debian 11 可兼容安装但建议升级。') &&
     zhTwLocale.includes('目前支援 Ubuntu 22.04+、Debian 12/13；Debian 11 可相容安裝但建議升級。') &&
     enLocale.includes('Currently supports Ubuntu 22.04+ and Debian 12/13. Debian 11 is best-effort compatible but should be upgraded.'),
