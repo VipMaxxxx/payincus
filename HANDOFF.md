@@ -25,6 +25,12 @@ GitHub remote `payincus/main` was aligned after the handoff refresh commits.
 
 The tracked tree should be clean against `payincus/main` after pulling. The local audit ledger under `docs/production-audit.md` is ignored by git and may contain newer operational notes.
 
+Latest tracked handoff/rule commit at the time of this refresh:
+
+```text
+7fe3601 Document bilingual versioning and OTA cadence rules
+```
+
 Recently updated/released files include:
 
 ```text
@@ -150,9 +156,11 @@ Latest production proof:
 - Production `/opt/incudal/current/server/package.json` now reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
 - Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and its current admin JS assets contain `/admin/plugins` and `插件中心`.
-- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin static bundle markers for admin `/admin/plugins` and user `/plugins/smoke`, plugin API 401 protection, docs TLS, and v0.0.21 Chinese/English version logs.
+- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin static bundle markers for admin `/admin/plugins` and user `/plugins/smoke`, plugin API 401 protection, docs TLS, v0.0.22 Chinese/English version logs with bilingual headings, and public root/API security headers.
+- Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
+- GitHub Actions for `7fe3601` completed successfully: CI and Docs Pages both passed.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
-- Remaining production warnings are still business-proof blockers, not deployment blockers: full resource lifecycle cleanup proof, SMTP delivery, Lsky upload, external notification delivery, and Turnstile/session-gated browser smoke.
+- Remaining production warnings are still business-proof blockers, not deployment blockers: real stop/restart/reinstall-or-recreate/delete/cleanup proof, SMTP delivery, Lsky upload, Telegram/external notification delivery, Turnstile/session-gated browser smoke, and logged-in plugin rendering smoke.
 
 Latest release proof:
 
@@ -160,6 +168,7 @@ Latest release proof:
 - GitHub Build & Release run `28047303600` completed successfully.
 - GitHub Release assets are available for `ota-manifest.json`, `incudal-v0.0.22-ota-manifest.json`, linux amd64/arm64 tarballs, and both `.sha256` files.
 - The public OTA manifest reports version `v0.0.22`, commit `9f638d87fc3e`, changelog `Add redacted production proof snapshot`, amd64 size `89845500` with SHA256 prefix `c02b95244dca4323`, and arm64 size `88976634` with SHA256 prefix `489594c506ad5487`.
+- Rechecked public `v0.0.22` OTA metadata after the versioning-rule handoff: both OTA manifests and both amd64/arm64 `.sha256` files returned HTTP 200, and the `.sha256` files matched the manifest hashes.
 - Production has not yet been updated to `v0.0.22`; current live production proof remains `v0.0.21` until an online update task is run and verified.
 
 Storage-pool note:
@@ -375,10 +384,12 @@ Not completed:
 Remaining production proof items:
 
 - Real Incus stop, restart, reinstall/recreate, delete, cleanup and resource-release proof.
+- Real backup/restore, suspend/unsuspend, IPv6, and host migration smoke if these features remain in the final acceptance scope.
 - Real SMTP delivery.
 - Real Lsky upload.
 - Real Telegram / notification delivery.
 - Manual browser login smoke through Turnstile, or an explicitly approved temporary Turnstile disable-and-restore smoke.
+- Logged-in browser rendering proof for `/admin/plugins` and user `/plugins/smoke`.
 
 ## Current Server Access Constraint
 
@@ -414,15 +425,16 @@ Note: a previous request excluded the old demo domain from production audit scop
 2. Run the remaining real instance lifecycle proof on `HKCMI-01`: stop, restart, reinstall/recreate, delete, cleanup and resource-release verification.
 3. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
 4. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
-5. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
-6. Decide whether to continue improving docs:
+5. Decide whether to deploy `v0.0.22` for the production proof-snapshot helper. Under the current OTA cadence rule, this is optional unless bundled with a completed fix or needed for server-side proof collection.
+6. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
+7. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
    - User workflow screenshots.
    - API request/response/error reference.
    - Payment provider setup guide.
    - Agent install guide with real host commands.
-7. Complete remaining real production proof items from `docs/production-audit.md`.
-8. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+8. Complete remaining real production proof items from `docs/production-audit.md`.
+9. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
 
 ## Release Documentation Rule
 
