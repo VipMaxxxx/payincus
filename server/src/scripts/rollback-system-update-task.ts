@@ -49,6 +49,31 @@ async function run(command: string, args: string[], options: { timeoutMs?: numbe
   })
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolvePromise => setTimeout(resolvePromise, ms))
+}
+
+async function waitForBackendHealth(): Promise<void> {
+  const deadline = Date.now() + 90000
+  let attempt = 1
+  let lastError = ''
+
+  while (Date.now() < deadline) {
+    try {
+      await run('curl', ['-fsS', '--max-time', '5', `${backendUrl}/api/health`], { timeoutMs: 10000 })
+      await log(`Backend health is ready after ${attempt} attempt(s)`)
+      return
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+      await log(`Backend health not ready after attempt ${attempt}; retrying in 2s`)
+      await sleep(2000)
+      attempt += 1
+    }
+  }
+
+  throw new Error(`Backend health did not become ready after restart: ${lastError}`)
+}
+
 async function main(): Promise<void> {
   if (!Number.isSafeInteger(taskId) || taskId <= 0) {
     throw new Error('Invalid task id')
@@ -81,6 +106,7 @@ async function main(): Promise<void> {
     await mkdir(join(installDir, 'server/certs'), { recursive: true })
     await run('bash', ['-lc', `if id incudal >/dev/null 2>&1; then chown -R incudal:incudal ${JSON.stringify(installDir)}; fi`], { timeoutMs: 120000 })
     await run('systemctl', ['restart', serviceName], { timeoutMs: 120000 })
+    await waitForBackendHealth()
     await run('bash', ['scripts/verify-split-host.sh'], {
       timeoutMs: 180000,
       env: {
