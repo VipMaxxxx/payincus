@@ -24,7 +24,9 @@ KillSignal=SIGTERM
 TimeoutStopSec=30
 LimitNOFILE=65536
 
-NoNewPrivileges=true
+# Online updates start root-owned systemd oneshot units through a restricted
+# sudoers rule. Keep this false or sudo cannot elevate from the backend service.
+NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs
