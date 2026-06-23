@@ -135,6 +135,52 @@ function validatePackageNetworkModeForInstanceType(
   return null
 }
 
+function isHostTypeCompatibleWithPackage(
+  hostType: string | null | undefined,
+  packageType: string | null | undefined
+): boolean {
+  const normalizedHostType = hostType || 'container'
+  const normalizedPackageType = packageType || 'container'
+  return normalizedHostType === 'both' || normalizedHostType === normalizedPackageType
+}
+
+async function getIncompatiblePackageHosts(
+  hostIds: number[],
+  instanceType: string | null | undefined
+): Promise<Array<{ id: number; name: string; instanceType: string }>> {
+  const uniqueHostIds = [...new Set(hostIds.filter(id => Number.isInteger(id) && id > 0))]
+  if (uniqueHostIds.length === 0) {
+    return []
+  }
+
+  const hosts = await prisma.host.findMany({
+    where: { id: { in: uniqueHostIds } },
+    select: {
+      id: true,
+      name: true,
+      instanceType: true
+    }
+  })
+  return hosts
+    .filter(host => !isHostTypeCompatibleWithPackage(host.instanceType, instanceType))
+    .map(host => ({
+      id: host.id,
+      name: host.name,
+      instanceType: host.instanceType || 'container'
+    }))
+}
+
+function incompatiblePackageHostsResponse(
+  hosts: Array<{ id: number; name: string; instanceType: string }>,
+  instanceType: string | null | undefined
+) {
+  return {
+    error: `Package instance type "${instanceType || 'container'}" is not supported by the selected host`,
+    code: 'HOST_INSTANCE_TYPE_MISMATCH',
+    hosts
+  }
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -1595,6 +1641,11 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: packageNetworkModeError, code: 'KVM_NETWORK_MODE_UNSUPPORTED' })
     }
 
+    const incompatibleHosts = await getIncompatiblePackageHosts(hostIds, instanceType || 'container')
+    if (incompatibleHosts.length > 0) {
+      return reply.code(400).send(incompatiblePackageHostsResponse(incompatibleHosts, instanceType || 'container'))
+    }
+
     // 检查名称是否已存在（同一用户下）
     const existing = await db.getPackageByUserAndName(request.user.id, name!)
     if (existing) {
@@ -1820,6 +1871,13 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       }
       updateData.hostIds = hostIds
     }
+
+    const nextHostIds = hostIds ?? ((pkg as { host_ids?: number[] }).host_ids || [])
+    const incompatibleHosts = await getIncompatiblePackageHosts(nextHostIds, nextInstanceType)
+    if (incompatibleHosts.length > 0) {
+      return reply.code(400).send(incompatiblePackageHostsResponse(incompatibleHosts, nextInstanceType))
+    }
+
     if (hostStoragePools !== undefined) updateData.hostStoragePools = hostStoragePools
     if (hostTrafficMultipliers !== undefined) updateData.hostTrafficMultipliers = hostTrafficMultipliers
 

@@ -2397,6 +2397,17 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.HOST_IPV6_ROUTE_REQUIRES_CONFIG))
     }
 
+    if (updates.instanceType !== undefined && updates.instanceType !== host.instance_type) {
+      const incompatiblePackages = await db.getIncompatiblePackagesByHostTypeChange(hostId, updates.instanceType)
+      if (incompatiblePackages.length > 0) {
+        return reply.code(400).send({
+          error: 'Host instance type is incompatible with bound packages',
+          code: 'HOST_INSTANCE_TYPE_MISMATCH',
+          packages: incompatiblePackages
+        })
+      }
+    }
+
     try {
       if (updates.url !== undefined) {
         await withHostAddressRegistryLock(async () => {
@@ -2566,12 +2577,6 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       throw error
     }
 
-    // 检测节点类型变更影响的套餐
-    let incompatiblePackages: Array<{ id: number; name: string; instanceType: string }> = []
-    if (updates.instanceType !== undefined && updates.instanceType !== host.instance_type) {
-      incompatiblePackages = await db.getIncompatiblePackagesByHostTypeChange(hostId, updates.instanceType)
-    }
-
     // 如果证书配置或 URL 变更，移除旧连接
     if (updates.certPath || updates.keyPath || updates.url) {
       await removeIncusClient(hostId)
@@ -2599,18 +2604,6 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       `Updated host "${host.name}" [${changes.length > 0 ? changes.join(', ') : 'no major changes'}]`,
       'success'
     )
-
-    // 返回结果，如果有不兼容的套餐，返回警告
-    if (incompatiblePackages.length > 0) {
-      return {
-        message: 'Host config updated',
-        warnings: [{
-          code: 'INCOMPATIBLE_PACKAGES',
-          message: `节点类型变更后，以下套餐可能无法使用该节点创建实例`,
-          packages: incompatiblePackages
-        }]
-      }
-    }
 
     return { message: 'Host config updated' }
   })

@@ -96,6 +96,7 @@
     "test:operation-verification-code-storage": "node --import tsx scripts/test-operation-verification-code-storage.ts",
     "test:operation-verification-route-guards": "node --import tsx scripts/test-operation-verification-route-guards.ts",
     "test:package-input-guards": "node --import tsx scripts/test-package-input-guards.ts",
+    "test:package-host-type-guards": "node --import tsx scripts/test-package-host-type-guards.ts",
     "test:package-route-id-guards": "node --import tsx scripts/test-package-route-id-guards.ts",
     "test:package-plan-input-guards": "node --import tsx scripts/test-package-plan-input-guards.ts",
     "test:package-share-guards": "node --import tsx scripts/test-package-share-guards.ts",

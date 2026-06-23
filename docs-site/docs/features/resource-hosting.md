@@ -23,6 +23,8 @@
 
 提交节点时，宿主机推荐使用 Ubuntu 22.04+ 或 Debian 12/13。Debian 11 仅作为兼容路径保留，新节点应优先选择 Debian 12/13。
 
+KVM 套餐只能绑定支持虚拟机的宿主机。宿主机必须具备可用的 `/dev/kvm`，并在后台节点类型中标记为 `vm` 或 `both`；没有 KVM 能力的云服务器只能作为容器节点使用。后台会阻止把 VM 套餐绑定到 container 节点，也会阻止把已绑定 VM 套餐的节点改成 container，避免用户创建实例后进入错误状态。
+
 ## 管理端托管能力
 
 - 审核托管节点和资源提供方。
@@ -56,6 +58,7 @@ Agent 是托管链路的运行态数据来源：
 - 托管方不能越权查看其他用户资源。
 - 套餐上下架要避免影响已购买实例的续费和计费。
 - Agent 离线时不能继续盲目分配资源。
+- VM/KVM 套餐、宿主机类型和可见镜像必须一致；如果 Incus 返回 `KVM support is missing (no /dev/kvm)`，说明宿主机不能交付 KVM 实例，应开启嵌套虚拟化、替换支持 KVM 的宿主机，或把套餐改为容器套餐后重新发布。
 - Incus 返回 `not authorized` 时，优先检查宿主机是否信任当前面板证书；可重新生成节点安装命令并在宿主机执行以刷新 `panel` 信任项。
 - Debian/cloud 内核创建存储池时优先使用 LVM；只有确认宿主机可以 `modprobe zfs` 后再选择 ZFS。创建 ZFS 存储池时如果返回 `modprobe: FATAL: Module zfs not found`，说明宿主机没有可用 ZFS 内核模块。先修复 `linux-headers-$(uname -r)` / `zfs-dkms`，或改用 LVM、Btrfs、DIR 存储池。
 - 资源删除和收益结算需要保留审计记录。
