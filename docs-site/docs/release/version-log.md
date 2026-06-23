@@ -6,16 +6,27 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `6c06bd8`
+- 当前 HEAD / Current HEAD: `f2aaefa`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Polish update and plugin admin UI / 优化更新与插件后台界面
-- 最新 tag / Latest tag: `v0.1.0`
+- 提交说明 / Commit subject: Polish update task and plugin center UI / 优化更新任务和插件中心界面
+- 最新 tag / Latest tag: `v0.1.1`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.1.1
+
+- 发布提交 / Release commit: `f2aaefa`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Polish update task and plugin center UI / 优化更新任务和插件中心界面
+
+### 改进与调整 / Improvements and Adjustments
+
+- Polish update task and plugin center UI / 优化更新任务和插件中心界面 `f2aaefa`
+- Update version log for v0.1.0 / 更新 v0.1.0 版本日志 `e22c4e3`
 
 ## v0.1.0
 
