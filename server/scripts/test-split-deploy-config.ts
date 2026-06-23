@@ -123,6 +123,7 @@ function assertSingleNginxSiteShape(name: string, source: string): void {
   assert.equal(countOccurrences(source, 'add_header X-Content-Type-Options'), 1, `${name} must define exactly one nosniff header`)
   assert.equal(countOccurrences(source, 'add_header X-Frame-Options'), 1, `${name} must define exactly one frame-options header`)
   assert.equal(countOccurrences(source, 'add_header Referrer-Policy'), 1, `${name} must define exactly one referrer-policy header`)
+  assert.equal(countOccurrences(source, 'add_header Strict-Transport-Security'), 1, `${name} must define exactly one HSTS header`)
 }
 
 function extractHeredoc(source: string, startMarker: string, endMarker: string): string {

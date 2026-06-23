@@ -54,8 +54,9 @@ for (const [name, source] of [
   assert.ok(
     source.includes('add_header X-Content-Type-Options nosniff always;') &&
       source.includes('add_header X-Frame-Options DENY always;') &&
-      source.includes('add_header Referrer-Policy strict-origin-when-cross-origin always;'),
-    `${name} must set static frontend nosniff, frame, and referrer headers`
+      source.includes('add_header Referrer-Policy strict-origin-when-cross-origin always;') &&
+      source.includes('add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;'),
+    `${name} must set static frontend nosniff, frame, referrer, and HSTS headers`
   )
 }
 
