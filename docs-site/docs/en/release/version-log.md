@@ -6,18 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `d458c85`
+- Current HEAD: `6a0624a`
 - Commit date: 2026-06-23
-- Commit subject: Update version log for v0.0.13
-- Latest tag: `v0.0.13`
+- Commit subject: Clarify Debian host install support
+- Latest tag: `v0.0.14`
 
 ## Unreleased Changes
+
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+
+## Historical Versions
+
+## v0.0.14
+
+- Release commit: `6a0624a`
+- Commit date: 2026-06-23
+- Commit subject: Clarify Debian host install support
+
+### New Capabilities
+
+- Clarify Debian host install support `6a0624a`
 
 ### Improvements and Adjustments
 
 - Update version log for v0.0.13 `d458c85`
-
-## Historical Versions
 
 ## v0.0.13
 

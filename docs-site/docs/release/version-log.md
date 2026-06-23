@@ -6,18 +6,30 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `d458c85`
+- 当前 HEAD: `6a0624a`
 - 提交日期: 2026-06-23
-- 提交说明: Update version log for v0.0.13
-- 最新 tag: `v0.0.13`
+- 提交说明: Clarify Debian host install support
+- 最新 tag: `v0.0.14`
 
 ## 未发布变更
+
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+
+## 历史版本
+
+## v0.0.14
+
+- 发布提交: `6a0624a`
+- 提交日期: 2026-06-23
+- 提交说明: Clarify Debian host install support
+
+### 新增能力
+
+- Clarify Debian host install support `6a0624a`
 
 ### 改进与调整
 
 - Update version log for v0.0.13 `d458c85`
-
-## 历史版本
 
 ## v0.0.13
 
