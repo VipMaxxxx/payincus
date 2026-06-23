@@ -18,7 +18,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-847aaa6 Update version log for v0.0.22
+6c06bd8 Polish update and plugin admin UI / 优化更新与插件后台界面
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -28,7 +28,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-7fe3601 Document bilingual versioning and OTA cadence rules
+6c06bd8 Polish update and plugin admin UI / 优化更新与插件后台界面
 ```
 
 Recently updated/released files include:
@@ -37,15 +37,16 @@ Recently updated/released files include:
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
 README.md
-deploy/nginx-split-intranet.conf.example
-scripts/install-panel.sh
-server/package.json
-server/scripts/test-split-deploy-config.ts
+client/src/views/admin/PluginCenterView.vue
+client/src/views/admin/SystemUpdateView.vue
+server/src/lib/system-version.ts
 server/scripts/test-system-update-guards.ts
-docs-site/docs/deployment/nginx.md
-docs-site/docs/en/deployment/nginx.md
-docs-site/docs/guide/architecture.md
-docs-site/docs/en/guide/architecture.md
+docs-site/docs/admin/overview.md
+docs-site/docs/en/admin/overview.md
+docs-site/docs/guide/ota-update.md
+docs-site/docs/en/guide/ota-update.md
+docs-site/docs/plugins/overview.md
+docs-site/docs/en/plugins/overview.md
 ```
 
 Recommended first step in a new session or user terminal:
@@ -146,6 +147,7 @@ Key tags:
 - `v0.0.20`: production split static roots follow atomic `current`.
 - `v0.0.21`: production artifact CLI OTA start command uses compiled dist entry.
 - `v0.0.22`: redacted production proof snapshot helper.
+- `v0.1.0`: admin version-update UI and plugin-center UI polish.
 
 Latest production proof:
 
@@ -156,20 +158,20 @@ Latest production proof:
 - Production `/opt/incudal/current/server/package.json` now reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
 - Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and its current admin JS assets contain `/admin/plugins` and `插件中心`.
-- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin static bundle markers for admin `/admin/plugins` and user `/plugins/smoke`, plugin API 401 protection, docs TLS, v0.0.22 Chinese/English version logs with bilingual headings, and public root/API security headers.
+- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin static bundle markers for admin `/admin/plugins` and user `/plugins/smoke`, plugin API 401 protection, docs TLS, v0.1.0 Chinese/English version logs with bilingual headings, and public root/API security headers.
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
-- GitHub Actions for `7fe3601` completed successfully: CI and Docs Pages both passed.
+- GitHub Actions for `6c06bd8` completed successfully: CI, Docs Pages, and Build & Release all passed.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
 - Remaining production warnings are still business-proof blockers, not deployment blockers: real stop/restart/reinstall-or-recreate/delete/cleanup proof, SMTP delivery, Lsky upload, Telegram/external notification delivery, Turnstile/session-gated browser smoke, and logged-in plugin rendering smoke.
 
 Latest release proof:
 
-- `v0.0.22` was tagged from commit `9f638d8 Add redacted production proof snapshot`.
-- GitHub Build & Release run `28047303600` completed successfully.
-- GitHub Release assets are available for `ota-manifest.json`, `incudal-v0.0.22-ota-manifest.json`, linux amd64/arm64 tarballs, and both `.sha256` files.
-- The public OTA manifest reports version `v0.0.22`, commit `9f638d87fc3e`, changelog `Add redacted production proof snapshot`, amd64 size `89845500` with SHA256 prefix `c02b95244dca4323`, and arm64 size `88976634` with SHA256 prefix `489594c506ad5487`.
-- Rechecked public `v0.0.22` OTA metadata after the versioning-rule handoff: both OTA manifests and both amd64/arm64 `.sha256` files returned HTTP 200, and the `.sha256` files matched the manifest hashes.
-- Production has not yet been updated to `v0.0.22`; current live production proof remains `v0.0.21` until an online update task is run and verified.
+- `v0.1.0` was tagged from commit `6c06bd8 Polish update and plugin admin UI / 优化更新与插件后台界面`.
+- GitHub Build & Release run `28048819414` completed successfully.
+- GitHub Release assets are available for `ota-manifest.json`, `incudal-v0.1.0-ota-manifest.json`, linux amd64/arm64 tarballs, and both `.sha256` files.
+- The public OTA manifest reports version `v0.1.0`, commit `6c06bd873543`, changelog `Polish update and plugin admin UI / 优化更新与插件后台界面`, amd64 size `89855623` with SHA256 prefix `e3c40a9d15bbff82`, and arm64 size `88980892` with SHA256 prefix `1fb3a9ac750bbf80`.
+- Rechecked public `v0.1.0` OTA metadata after the UI polish release: both OTA manifests, both amd64/arm64 tarballs, and both `.sha256` files were available through GitHub Release.
+- Production has not yet been updated to `v0.1.0`; current live production proof remains `v0.0.21` until an online update task is run and verified.
 
 Storage-pool note:
 
@@ -425,7 +427,7 @@ Note: a previous request excluded the old demo domain from production audit scop
 2. Run the remaining real instance lifecycle proof on `HKCMI-01`: stop, restart, reinstall/recreate, delete, cleanup and resource-release verification.
 3. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
 4. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
-5. Decide whether to deploy `v0.0.22` for the production proof-snapshot helper. Under the current OTA cadence rule, this is optional unless bundled with a completed fix or needed for server-side proof collection.
+5. Deploy `v0.1.0` through the admin OTA page when ready, then verify the version-update UI, plugin-center UI, split host checks, production preflight, and rollback availability.
 6. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
 7. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.

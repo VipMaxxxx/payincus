@@ -6,18 +6,32 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `847aaa6`
+- 当前 HEAD / Current HEAD: `6c06bd8`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Update version log for v0.0.22
-- 最新 tag / Latest tag: `v0.0.22`
+- 提交说明 / Commit subject: Polish update and plugin admin UI / 优化更新与插件后台界面
+- 最新 tag / Latest tag: `v0.1.0`
 
 ## 未发布变更 / Unreleased Changes
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.0.22 `847aaa6`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.1.0
+
+- 发布提交 / Release commit: `6c06bd8`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Polish update and plugin admin UI / 优化更新与插件后台界面
+
+### 改进与调整 / Improvements and Adjustments
+
+- Polish update and plugin admin UI / 优化更新与插件后台界面 `6c06bd8`
+- Update handoff audit status / 更新交接审计状态 `3974ea2`
+- Update version log for v0.0.22 `847aaa6`
+
+### 其他变更 / Other Changes
+
+- Document bilingual versioning and OTA cadence rules `7fe3601`
 
 ## v0.0.22
 
