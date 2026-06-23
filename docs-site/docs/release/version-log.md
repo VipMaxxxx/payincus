@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `ac2b679`
+- 当前 HEAD / Current HEAD: `e865f4d`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Prevent incompatible VM package host binding / 阻止不兼容 VM 套餐节点绑定
-- 最新 tag / Latest tag: `v0.1.4`
+- 提交说明 / Commit subject: Localize operation logs in Chinese / 日志内容中文化
+- 最新 tag / Latest tag: `v0.1.5`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.1.5
+
+- 发布提交 / Release commit: `e865f4d`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Localize operation logs in Chinese / 日志内容中文化
+
+### 其他变更 / Other Changes
+
+- Localize operation logs in Chinese / 日志内容中文化 `e865f4d`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.1.4 / 更新 v0.1.4 版本日志 `dea5d77`
 
 ## v0.1.4
 

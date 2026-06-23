@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `ac2b679`
+- Current HEAD / 当前 HEAD: `e865f4d`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Prevent incompatible VM package host binding / 阻止不兼容 VM 套餐节点绑定
-- Latest tag / 最新 tag: `v0.1.4`
+- Commit subject / 提交说明: Localize operation logs in Chinese / 日志内容中文化
+- Latest tag / 最新 tag: `v0.1.5`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.1.5
+
+- Release commit / 发布提交: `e865f4d`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Localize operation logs in Chinese / 日志内容中文化
+
+### Other Changes / 其他变更
+
+- Localize operation logs in Chinese / 日志内容中文化 `e865f4d`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.1.4 / 更新 v0.1.4 版本日志 `dea5d77`
 
 ## v0.1.4
 
