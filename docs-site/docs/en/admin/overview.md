@@ -48,11 +48,11 @@ https://admin.payincus.com
 
 ## Plugin Center
 
-`/admin/plugins` lets administrators upload plugin packages, install from a GitHub-hosted market index, enable or disable plugins, edit plugin configuration and inspect install task logs.
+`/admin/plugins` splits plugin management into Installed, Plugin Market and Install Tasks pages. Administrators can upload plugin packages, install from a GitHub-hosted market index, enable or disable plugins, edit plugin configuration and inspect paginated install task logs.
 
 ## OTA
 
-`/admin/system-update` shows current version, tag, commit, build time, deployment time, release notes, task logs and rollback controls.
+`/admin/system-update` shows current version, latest release tag, tag, commit, build time, deployment time, release notes, paginated task logs and rollback controls. If the deployment is already on the latest tag, the latest version still remains visible and the update action is disabled as already up to date.
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 

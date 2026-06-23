@@ -45,7 +45,7 @@ https://admin.payincus.com
 | 工单 | `/admin/tickets` | 查看用户工单、回复、关闭和处理附件。 |
 | 通知 | `/admin/inbox` | 查看管理员通知和系统消息。 |
 | 帮助中心 | `/admin/help` | 维护用户端帮助文章。 |
-| 插件中心 | `/admin/plugins` | 上传安装插件、从 GitHub 插件市场安装、启用停用、维护插件配置和查看任务日志。 |
+| 插件中心 | `/admin/plugins` | 已安装插件、插件市场和安装任务分内页管理；支持上传安装、GitHub 市场安装、启用停用、维护插件配置和查看任务日志。 |
 | OAuth | `/admin/oauth` | 配置第三方登录、绑定和回调。 |
 | Telegram | `/admin/settings/telegram` | 配置 Telegram bot、通知和 webhook。 |
 | 邮箱 | `/admin/mail` | 管理邮箱套餐、域名、账号和订阅生命周期。 |
@@ -67,8 +67,9 @@ https://admin.payincus.com
 `/admin/system-update` 用于后台 OTA：
 
 - 查看当前版本、Git tag、commit、构建时间和部署时间。
-- 检查最新版本和 release tag 更新内容。
+- 检查最新版本和 release tag 更新内容；当前已是最新版本时仍展示最新版本，并显示“已更新至最新版本”。
 - 启动在线更新任务并查看实时日志。
+- 更新任务列表最多显示 7 条，更多历史任务通过分页查看。
 - 更新失败时自动回滚，成功后支持手动回滚到上一版。
 - 支持 Release artifact、SHA256 校验和 `current` / `releases` 原子切换。
 - 更新和回滚会保留 `plugins`、`plugin-data`、`plugin-logs` 和 `plugin-staging` 插件运行目录。

@@ -21,6 +21,8 @@ const tasks = ref<SystemUpdateTask[]>([])
 const selectedTaskId = ref<number | null>(null)
 const selectedTaskLogs = ref('')
 const logsLoading = ref(false)
+const taskPage = ref(1)
+const TASKS_PER_PAGE = 7
 let pollTimer: number | null = null
 
 const selectedTask = computed(() =>
@@ -44,6 +46,30 @@ const hasRunningTask = computed(() =>
 )
 
 const currentVersion = computed(() => updateCheck.value?.current || version.value)
+
+const totalTaskPages = computed(() =>
+  Math.max(1, Math.ceil(tasks.value.length / TASKS_PER_PAGE))
+)
+
+const paginatedTasks = computed(() => {
+  const start = (taskPage.value - 1) * TASKS_PER_PAGE
+  return tasks.value.slice(start, start + TASKS_PER_PAGE)
+})
+
+const updateActionLabel = computed(() => {
+  if (starting.value) return '启动中...'
+  if (hasRunningTask.value) return '已有更新任务执行中'
+  if (updateCheck.value && !updateCheck.value.updateAvailable && latestUpdate.value) return '已更新至最新版本'
+  return '更新到最新版本'
+})
+
+const updateActionDisabled = computed(() =>
+  repositoryUnavailable.value ||
+  !latestUpdate.value ||
+  !updateCheck.value?.updateAvailable ||
+  starting.value ||
+  hasRunningTask.value
+)
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-'
@@ -95,9 +121,13 @@ async function loadVersion() {
 async function loadTasks() {
   const response = await api.systemUpdate.listTasks()
   tasks.value = response.tasks
+  if (selectedTaskId.value && !response.tasks.some(task => task.id === selectedTaskId.value)) {
+    selectedTaskId.value = null
+  }
   if (!selectedTaskId.value && response.tasks.length > 0) {
     selectedTaskId.value = response.tasks[0].id
   }
+  ensureSelectedTaskVisible()
 }
 
 async function loadSelectedTaskLogs() {
@@ -120,7 +150,7 @@ async function loadSelectedTaskLogs() {
 async function refreshAll() {
   loading.value = true
   try {
-    await Promise.all([loadVersion(), loadTasks()])
+    await Promise.all([loadVersion(), loadTasks(), loadUpdateCheck(false)])
     await loadSelectedTaskLogs()
   } catch (err: any) {
     toast.error('加载版本信息失败：' + (err?.message || String(err)))
@@ -129,22 +159,28 @@ async function refreshAll() {
   }
 }
 
-async function checkUpdates() {
+async function loadUpdateCheck(notify: boolean) {
   checking.value = true
   try {
     updateCheck.value = await api.systemUpdate.check()
-    if (repositoryUnavailable.value) {
-      toast.error(updateCheck.value.repositoryError || '当前部署目录不是 Git 工作区，无法在线更新')
-    } else if (updateCheck.value.updateAvailable) {
-      toast.success('发现可更新版本')
-    } else {
-      toast.success('当前已经是最新版本')
+    if (notify) {
+      if (repositoryUnavailable.value) {
+        toast.error(updateCheck.value.repositoryError || '当前部署目录不是 Git 工作区，无法在线更新')
+      } else if (updateCheck.value.updateAvailable) {
+        toast.success('发现可更新版本')
+      } else {
+        toast.success('当前已经是最新版本')
+      }
     }
   } catch (err: any) {
-    toast.error('检查更新失败：' + (err?.message || String(err)))
+    if (notify) toast.error('检查更新失败：' + (err?.message || String(err)))
   } finally {
     checking.value = false
   }
+}
+
+async function checkUpdates() {
+  await loadUpdateCheck(true)
 }
 
 async function startUpdate(targetVersion: string) {
@@ -187,7 +223,25 @@ async function rollbackTask(task: SystemUpdateTask) {
 
 async function selectTask(task: SystemUpdateTask) {
   selectedTaskId.value = task.id
+  ensureSelectedTaskVisible()
   await loadSelectedTaskLogs()
+}
+
+function setTaskPage(page: number) {
+  taskPage.value = Math.min(Math.max(page, 1), totalTaskPages.value)
+}
+
+function ensureSelectedTaskVisible() {
+  if (!selectedTaskId.value) {
+    setTaskPage(taskPage.value)
+    return
+  }
+  const index = tasks.value.findIndex(task => task.id === selectedTaskId.value)
+  if (index >= 0) {
+    taskPage.value = Math.floor(index / TASKS_PER_PAGE) + 1
+  } else {
+    setTaskPage(taskPage.value)
+  }
 }
 
 function startPolling() {
@@ -331,10 +385,10 @@ onUnmounted(() => {
           </div>
           <button
             class="btn-primary mt-5 w-full"
-            :disabled="repositoryUnavailable || !latestUpdate || starting || hasRunningTask"
+            :disabled="updateActionDisabled"
             @click="latestUpdate && startUpdate(latestUpdate.version)"
           >
-            {{ starting ? '启动中...' : '更新到最新版本' }}
+            {{ updateActionLabel }}
           </button>
         </div>
       </section>
@@ -370,7 +424,7 @@ onUnmounted(() => {
           <div v-if="tasks.length === 0" class="px-5 py-10 text-center text-sm text-themed-muted">暂无更新任务。</div>
           <div v-else class="divide-y divide-themed">
             <button
-              v-for="task in tasks"
+              v-for="task in paginatedTasks"
               :key="task.id"
               class="block w-full px-5 py-4 text-left transition hover:bg-themed-hover"
               :class="selectedTaskId === task.id ? 'bg-themed-hover' : ''"
@@ -387,6 +441,13 @@ onUnmounted(() => {
               </div>
               <p v-if="task.errorMessage" class="mt-2 line-clamp-2 text-xs text-red-600">{{ task.errorMessage }}</p>
             </button>
+          </div>
+          <div v-if="tasks.length > TASKS_PER_PAGE" class="flex items-center justify-between border-t border-themed px-5 py-3 text-xs text-themed-muted">
+            <span>第 {{ taskPage }} / {{ totalTaskPages }} 页 · 共 {{ tasks.length }} 个任务</span>
+            <div class="flex gap-2">
+              <button class="btn-secondary" :disabled="taskPage <= 1" @click="setTaskPage(taskPage - 1)">上一页</button>
+              <button class="btn-secondary" :disabled="taskPage >= totalTaskPages" @click="setTaskPage(taskPage + 1)">下一页</button>
+            </div>
           </div>
         </div>
 

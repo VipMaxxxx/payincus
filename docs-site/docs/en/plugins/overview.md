@@ -22,6 +22,14 @@ These directories are preserved across OTA updates and rollbacks.
 - Manage plugin config from `configSchema`
 - Render plugin pages in sandboxed iframes
 
+## Admin UI
+
+The plugin center is split into three internal pages:
+
+- Installed: upload plugin packages, inspect plugins, enable/disable/uninstall plugins and edit plugin configuration.
+- Plugin Market: open a dedicated GitHub market index page, refresh the market and install market plugins.
+- Install Tasks: inspect upload installs, market installs, enable, disable and uninstall tasks. The task list shows up to 7 rows per page and the selected task log is shown beside the list.
+
 ## Security Boundary
 
 - Only super administrators can install, enable, disable, or uninstall plugins.

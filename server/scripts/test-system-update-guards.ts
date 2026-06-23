@@ -58,6 +58,14 @@ assert.ok(
 )
 
 assert.ok(
+  versionLib.includes('const latest = tags[0] ? await buildAvailableUpdate(tags[0]) : null') &&
+    versionLib.includes('updates.push(latest?.version === tag ? latest : await buildAvailableUpdate(tag))') &&
+    versionLib.includes('latest,') &&
+    versionLib.includes('updateAvailable: updates.length > 0'),
+  'system update checks must always expose the newest release tag while keeping updateAvailable tied to real pending updates'
+)
+
+assert.ok(
   prismaSchema.includes('model SystemUpdateTask') &&
     prismaSchema.includes('enum SystemUpdateTaskStatus') &&
     migration.includes('CREATE TABLE "system_update_tasks"') &&
