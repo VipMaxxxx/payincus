@@ -6,16 +6,30 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `a361779`
-- 提交日期: 2026-06-23
-- 提交说明: Fix atomic OTA install root detection
-- 最新 tag: `v0.0.15`
+- 当前 HEAD: `a0a35fb`
+- 提交日期: 2026-06-24
+- 提交说明: Refresh host panel trust certificate
+- 最新 tag: `v0.0.16`
 
 ## 未发布变更
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本
+
+## v0.0.16
+
+- 发布提交: `a0a35fb`
+- 提交日期: 2026-06-24
+- 提交说明: Refresh host panel trust certificate
+
+### 其他变更
+
+- Refresh host panel trust certificate `a0a35fb`
+
+### 改进与调整
+
+- Update version log for v0.0.15 `2a79838`
 
 ## v0.0.15
 
