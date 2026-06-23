@@ -18,13 +18,13 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 At the time this handoff was last refreshed, local `HEAD` was:
 
 ```text
-d93b1ef Update version log for v0.0.17
+78d35cf Update handoff with v0.0.17 production verification
 ```
 
 GitHub remote `payincus/main` was aligned with:
 
 ```text
-d93b1ef Update version log for v0.0.17
+78d35cf Update handoff with v0.0.17 production verification
 ```
 
 The current tracked tree is clean against `payincus/main`. The local audit ledger under `docs/production-audit.md` is ignored by git and may contain newer operational notes.
