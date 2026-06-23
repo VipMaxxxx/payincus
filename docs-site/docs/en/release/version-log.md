@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `368d195`
+- Current HEAD: `97f87c5`
 - Commit date: 2026-06-24
-- Commit subject: Fix Agent binary installer cache query
-- Latest tag: `v0.0.18`
+- Commit subject: Fix storage pool defaults and error guidance
+- Latest tag: `v0.0.19`
 
 ## Unreleased Changes
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions
+
+## v0.0.19
+
+- Release commit: `97f87c5`
+- Commit date: 2026-06-24
+- Commit subject: Fix storage pool defaults and error guidance
+
+### Fixes and Stability
+
+- Fix storage pool defaults and error guidance `97f87c5`
+
+### Improvements and Adjustments
+
+- Update version log for v0.0.18 `854bb87`
 
 ## v0.0.18
 

@@ -6,16 +6,30 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `368d195`
+- 当前 HEAD: `97f87c5`
 - 提交日期: 2026-06-24
-- 提交说明: Fix Agent binary installer cache query
-- 最新 tag: `v0.0.18`
+- 提交说明: Fix storage pool defaults and error guidance
+- 最新 tag: `v0.0.19`
 
 ## 未发布变更
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本
+
+## v0.0.19
+
+- 发布提交: `97f87c5`
+- 提交日期: 2026-06-24
+- 提交说明: Fix storage pool defaults and error guidance
+
+### 修复与稳定性
+
+- Fix storage pool defaults and error guidance `97f87c5`
+
+### 改进与调整
+
+- Update version log for v0.0.18 `854bb87`
 
 ## v0.0.18
 
