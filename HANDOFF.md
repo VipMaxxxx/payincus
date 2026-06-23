@@ -275,6 +275,14 @@ ENV_FILE=/opt/incudal/.env FRONTEND_URL=https://pay.payincus.com BACKEND_URL=htt
 
 Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.0.17-20260623164805`; `version.json` reports `v0.0.17`, commit `60faf9a59ba0`, and `deployedAt=2026-06-23T16:58:50.000Z`.
 
+Recent Incus/Agent read-only proof:
+
+- The SSH target `147.125.252.103` is the panel host, not the registered Incus host; it has no local `incus` command and no local `incudal-agent` service.
+- Production DB host `HKCMI-01` points to a different host URL than the panel SSH IP.
+- Panel-to-Incus mTLS read-only storage listing succeeded for host `HKCMI-01`: Incus returned `default` storage pool, driver `zfs`, status `Created`, with space data.
+- Backend logs show the Host Agent install token was consumed for host `2`, but `ENV_FILE=/opt/incudal/.env pnpm --filter server verify:production-db` still warns `Online host #2 (HKCMI-01) Agent status is offline`.
+- The latest `verify:production-db` warning set was reduced to Lsky not configured and Agent offline; the previous host-capacity and global-shared-package warnings were no longer present.
+
 Manual plugin package proof also passed with `plugin-templates/admin-user-mixed-plugin` packaged as `.tar.gz` and validated by `validateAndExtractPluginPackage`; result had id `com.example.coupon`, one admin page, one user page, one template and 64-char SHA256.
 
 Earlier full product gates already passed before the docs/plugin work:
@@ -309,6 +317,7 @@ Completed:
 - Plugin center API production smoke.
 - Host installer certificate-refresh hotfix.
 - Agent installer compact-manifest hotfix.
+- Panel-to-Incus storage-list proof for the registered host's existing `default` ZFS pool.
 
 Not completed:
 
@@ -319,7 +328,7 @@ Remaining production proof items:
 - Real payment provider order and callback.
 - Real Incus create, start, stop, restart, reinstall/recreate, delete.
 - Real Web terminal connection through `/api/ws`.
-- Production Agent install on a real Incus host, with fresh heartbeat, resources, metrics, instance report, and traffic updates.
+- Production Agent heartbeat on the real Incus host, with fresh resources, metrics, instance report, and traffic updates.
 - Real SMTP delivery.
 - Real Lsky upload.
 - Real Telegram / notification delivery.
@@ -356,16 +365,17 @@ Note: a previous request excluded the old demo domain from production audit scop
 ## Suggested Next Work
 
 1. Sync local Git with remote `payincus/main`.
-2. Fix or avoid ZFS on the real Debian host, then retry storage-pool creation.
-3. Re-run the Agent install command from the admin panel after the public installer hotfix and verify heartbeat/reporting.
-4. Decide whether to continue improving docs:
+2. Repair or restart the Agent on registered host `HKCMI-01`; the install token was consumed, but the Agent still reports offline.
+3. After Agent heartbeat is fresh, run real instance lifecycle proof: create, start, stop, restart, reinstall/recreate, delete, and `/api/ws` terminal.
+4. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
+5. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
    - User workflow screenshots.
    - API request/response/error reference.
    - Payment provider setup guide.
    - Agent install guide with real host commands.
-5. Complete real production proof items from `docs/production-audit.md`.
-6. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+6. Complete real production proof items from `docs/production-audit.md`.
+7. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
 
 ## Release Documentation Rule
 
