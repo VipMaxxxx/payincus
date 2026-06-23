@@ -47,7 +47,7 @@ Agent provides runtime truth:
 - Plan availability changes must not break renewal or billing for existing instances.
 - Do not keep allocating resources blindly when the Agent is offline.
 - If Incus returns `not authorized`, first check whether the host trusts the current panel certificate. Generate a fresh host install command and run it on the host to refresh the `panel` trust entry.
-- If ZFS pool creation on Debian/cloud kernels returns `modprobe: FATAL: Module zfs not found`, the host does not have a usable ZFS kernel module. Repair `linux-headers-$(uname -r)` / `zfs-dkms`, or use LVM, Btrfs, or DIR storage instead.
+- Prefer LVM when creating storage pools on Debian/cloud kernels. Choose ZFS only after confirming the host can run `modprobe zfs`. If ZFS pool creation returns `modprobe: FATAL: Module zfs not found`, the host does not have a usable ZFS kernel module. Repair `linux-headers-$(uname -r)` / `zfs-dkms`, or use LVM, Btrfs, or DIR storage instead.
 - Resource deletion and revenue settlement must leave audit records.
 
 ## Verification Checklist

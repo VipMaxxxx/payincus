@@ -7,6 +7,9 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'utf8')
+const storageTabSource = readFileSync(resolve(__dirname, '../../client/src/components/host/HostStorageTab.vue'), 'utf8')
+const zhCnLocaleSource = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+const enLocaleSource = readFileSync(resolve(__dirname, '../../client/src/locales/en.ts'), 'utf8')
 
 assert.ok(
   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
@@ -107,9 +110,28 @@ assert.ok(
   source.includes('function formatStoragePoolCreateError(error: unknown): string') &&
     source.includes("lowerMessage.includes('modprobe')") &&
     source.includes("lowerMessage.includes('zfs')") &&
+    source.includes('error loading "zfs" module') &&
+    source.includes("error loading 'zfs' module") &&
     source.includes('宿主机未加载 ZFS 内核模块') &&
+    source.includes("lowerMessage.includes('not authorized')") &&
+    source.includes('Incus 拒绝了面板客户端证书') &&
     source.includes('formatStoragePoolCreateError(err)'),
-  'host storage pool creation must return actionable guidance when ZFS kernel modules are missing'
+  'host storage pool creation must return actionable guidance for missing ZFS modules and Incus trust failures'
+)
+
+assert.ok(
+  storageTabSource.includes("driver: 'lvm' as 'zfs' | 'lvm' | 'btrfs' | 'dir'") &&
+    storageTabSource.includes("driver: 'lvm',") &&
+    storageTabSource.indexOf("{ value: 'lvm', label: 'LVM'") < storageTabSource.indexOf("{ value: 'zfs', label: 'ZFS'"),
+  'storage pool creation UI must default to LVM and list it before ZFS for Debian/cloud hosts'
+)
+
+assert.ok(
+  zhCnLocaleSource.includes('Debian/cloud 内核推荐') &&
+    zhCnLocaleSource.includes('仅在宿主机已能 modprobe zfs 时使用') &&
+    enLocaleSource.includes('Recommended for Debian/cloud kernels') &&
+    enLocaleSource.includes('Use only when the host can load the ZFS kernel module with modprobe'),
+  'storage pool locale copy must avoid recommending ZFS on Debian/cloud hosts without loaded ZFS modules'
 )
 
 for (const forbiddenPattern of [

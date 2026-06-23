@@ -57,7 +57,7 @@ Agent 是托管链路的运行态数据来源：
 - 套餐上下架要避免影响已购买实例的续费和计费。
 - Agent 离线时不能继续盲目分配资源。
 - Incus 返回 `not authorized` 时，优先检查宿主机是否信任当前面板证书；可重新生成节点安装命令并在宿主机执行以刷新 `panel` 信任项。
-- Debian/cloud 内核创建 ZFS 存储池时如果返回 `modprobe: FATAL: Module zfs not found`，说明宿主机没有可用 ZFS 内核模块。先修复 `linux-headers-$(uname -r)` / `zfs-dkms`，或改用 LVM、Btrfs、DIR 存储池。
+- Debian/cloud 内核创建存储池时优先使用 LVM；只有确认宿主机可以 `modprobe zfs` 后再选择 ZFS。创建 ZFS 存储池时如果返回 `modprobe: FATAL: Module zfs not found`，说明宿主机没有可用 ZFS 内核模块。先修复 `linux-headers-$(uname -r)` / `zfs-dkms`，或改用 LVM、Btrfs、DIR 存储池。
 - 资源删除和收益结算需要保留审计记录。
 
 ## 验证清单
