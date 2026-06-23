@@ -381,6 +381,35 @@ pnpm dev
 
 本地开发同样使用前后端分离：浏览器访问客户前端 `3000` 或后台前端 `3002`，两个 Vite 服务都把 `/api` 代理到后端 `3001`。
 
+## 文档站
+
+文档站源码位于 `docs-site/`，使用 VitePress 构建，面向 `docs.payincus.com`。文档站支持中英双语：中文默认路径 `/`，英文路径 `/en/`。
+
+本地预览：
+
+```bash
+pnpm docs:install
+pnpm docs:dev
+```
+
+如果提示 `vitepress: command not found`，说明文档站依赖还没有安装，先在仓库根目录执行 `pnpm docs:install`。
+
+构建静态站：
+
+```bash
+pnpm docs:build
+```
+
+主要页面：
+
+- 首页：`docs-site/docs/index.md`
+- 英文首页：`docs-site/docs/en/index.md`
+- 系统架构：`docs-site/docs/guide/architecture.md`
+- 前后台分离：`docs-site/docs/guide/split-deployment.md`
+- 后台 OTA：`docs-site/docs/guide/ota-update.md`
+- 生产验收：`docs-site/docs/deployment/production-checklist.md`
+- 系统版本更新日志：`docs-site/docs/release/version-log.md`、`docs-site/docs/en/release/version-log.md`
+
 ## 验证命令
 
 基础检查：
