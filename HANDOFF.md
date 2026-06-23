@@ -18,7 +18,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-5d17ef1 Update version log for v0.0.19
+517b972 Update version log for v0.0.21
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -30,15 +30,16 @@ Recently updated/released files include:
 ```text
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
-server/templates/agent-install.sh
-server/src/routes/hosts.ts
-server/scripts/test-host-route-id-guards.ts
-client/src/components/host/HostStorageTab.vue
-client/src/locales/*
-docs-site/docs/agent/install.md
-docs-site/docs/en/agent/install.md
-docs-site/docs/features/resource-hosting.md
-docs-site/docs/en/features/resource-hosting.md
+README.md
+deploy/nginx-split-intranet.conf.example
+scripts/install-panel.sh
+server/package.json
+server/scripts/test-split-deploy-config.ts
+server/scripts/test-system-update-guards.ts
+docs-site/docs/deployment/nginx.md
+docs-site/docs/en/deployment/nginx.md
+docs-site/docs/guide/architecture.md
+docs-site/docs/en/guide/architecture.md
 ```
 
 Recommended first step in a new session or user terminal:
@@ -128,13 +129,18 @@ Key tags:
 - `v0.0.17`: Agent installer manifest parsing and ZFS error guidance.
 - `v0.0.18`: Agent binary installer cache query fix.
 - `v0.0.19`: storage-pool LVM default plus Incus/ZFS actionable error guidance.
+- `v0.0.20`: production split static roots follow atomic `current`.
+- `v0.0.21`: production artifact CLI OTA start command uses compiled dist entry.
 
 Latest production proof:
 
-- Production online-update task `#16` updated from `v0.0.17` to `v0.0.19`.
-- Current production symlink after the task: `/opt/incudal/current -> /opt/incudal/releases/v0.0.19-20260623172730`.
-- `version.json` reports version/tag `v0.0.19`, commit `97f87c5a9a6b`, deployed at `2026-06-23T17:27:40.063Z`.
+- Production online-update task `#18` updated from `v0.0.20` to `v0.0.21`.
+- Current production symlink after the task: `/opt/incudal/current -> /opt/incudal/releases/v0.0.21-20260623175349`.
+- `version.json` reports version/tag `v0.0.21`, commit `71cdcff11008`, deployed at `2026-06-23T17:53:57.514Z`.
 - Post-OTA `verify-split-host`, `pnpm verify:production`, and `pnpm verify:log-header` passed.
+- Production `/opt/incudal/current/server/package.json` now reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
+- Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
+- Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and its current admin JS assets contain `/admin/plugins` and `插件中心`.
 - Remaining production warnings are still business-proof blockers, not deployment blockers: payment callback IP whitelist, Lsky, Agent heartbeat/traffic, and real resource lifecycle proof.
 
 Storage-pool note:
