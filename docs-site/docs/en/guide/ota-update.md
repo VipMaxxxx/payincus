@@ -17,7 +17,7 @@ SYSTEM_UPDATE_RELEASE_REPOSITORY=VipMaxxxx/payincus
 
 `auto` prefers verified GitHub Release OTA artifacts. If no matching artifact exists for the target tag, it can fall back to Git tag build mode.
 
-The page checks the latest release tag when it opens. If the current deployment is already on the latest tag, the latest version remains visible and the primary action changes to "Updated to latest version". Update tasks are capped at 7 rows per page, with pagination for older tasks and logs.
+The page checks the latest release tag when it opens. If the current deployment is already on the latest tag, the latest version remains visible and the primary action changes to "Updated to latest version". Update tasks are capped at 7 rows per page, with pagination for older tasks and a dedicated log panel for the selected task.
 
 | Mode | Behavior |
 | --- | --- |
@@ -49,6 +49,7 @@ Rollback switches the `current` symlink back to the previous release, restarts t
 
 ## Notes
 
+- Admin users can view the current version, latest release tag and OTA package status.
 - Only super administrators can start updates and rollbacks.
 - Update APIs stay under `/api/admin/system-update/*`.
 - The user portal does not include update controls or update APIs.

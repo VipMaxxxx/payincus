@@ -44,6 +44,12 @@ const stats = computed(() => ({
   market: market.value.length
 }))
 
+const taskSummary = computed(() => ({
+  total: tasks.value.length,
+  running: tasks.value.filter(task => task.status === 'pending' || task.status === 'running').length,
+  failed: tasks.value.filter(task => task.status === 'failed').length
+}))
+
 const activeTabMeta = computed(() =>
   tabs.find(tab => tab.key === activeTab.value) || tabs[0]
 )
@@ -352,7 +358,7 @@ onMounted(async () => {
     <div v-if="loading" class="py-16 text-center text-themed-muted">加载中...</div>
 
     <template v-else>
-      <div class="rounded-lg border border-themed bg-themed-surface">
+      <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
         <div class="flex flex-col gap-4 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 class="text-lg font-semibold text-themed">{{ activeTabMeta.label }}</h2>
@@ -373,7 +379,7 @@ onMounted(async () => {
       </div>
 
       <section v-if="activeTab === 'installed'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div class="card p-5">
+        <div class="rounded-lg border border-themed bg-themed-surface p-5">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <h2 class="text-lg font-semibold text-themed">已安装插件</h2>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -416,7 +422,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <aside class="card p-5">
+        <aside class="rounded-lg border border-themed bg-themed-surface p-5">
           <div class="flex items-start justify-between gap-3">
             <div>
               <h2 class="text-lg font-semibold text-themed">插件详情</h2>
@@ -465,7 +471,7 @@ onMounted(async () => {
         </aside>
       </section>
 
-      <section v-else-if="activeTab === 'market'" class="rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'market'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
         <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 class="text-lg font-semibold text-themed">GitHub 插件市场</h2>
@@ -474,19 +480,23 @@ onMounted(async () => {
           <button class="btn-primary" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
         </div>
 
-        <div v-if="market.length === 0" class="m-5 rounded border border-dashed border-themed px-5 py-12 text-center text-sm text-themed-muted">
-          暂无市场插件。
+        <div v-if="market.length === 0" class="px-5 py-16 text-center">
+          <div class="mx-auto max-w-md">
+            <h3 class="text-base font-semibold text-themed">暂无市场插件</h3>
+            <p class="mt-2 text-sm leading-6 text-themed-muted">请确认已配置插件市场索引地址，然后刷新市场读取 GitHub Release 插件包。</p>
+            <button class="btn-secondary mt-4" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
+          </div>
         </div>
-        <div v-else class="grid gap-4 p-5 lg:grid-cols-2">
-          <article v-for="entry in market" :key="entry.id" class="rounded border border-themed bg-themed p-4">
+        <div v-else class="grid gap-4 p-5 lg:grid-cols-2 2xl:grid-cols-3">
+          <article v-for="entry in market" :key="entry.id" class="flex min-h-[260px] flex-col rounded border border-themed bg-themed p-4">
             <div class="flex items-start justify-between gap-3">
-              <div>
+              <div class="min-w-0">
                 <h3 class="font-medium text-themed">{{ entry.name }}</h3>
-                <p class="mt-1 font-mono text-xs text-themed-muted">{{ entry.id }}</p>
+                <p class="mt-1 truncate font-mono text-xs text-themed-muted">{{ entry.id }}</p>
               </div>
               <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ entry.latest }}</span>
             </div>
-            <p class="mt-3 min-h-[40px] text-sm leading-6 text-themed-muted">{{ entry.description || entry.repo }}</p>
+            <p class="mt-3 line-clamp-3 min-h-[72px] text-sm leading-6 text-themed-muted">{{ entry.description || entry.repo }}</p>
             <dl class="mt-4 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
               <div>
                 <dt>作者</dt>
@@ -501,22 +511,30 @@ onMounted(async () => {
                 <dd class="mt-1 font-mono text-themed">{{ entry.sha256.slice(0, 16) }}...</dd>
               </div>
             </dl>
-            <button class="btn-primary mt-4 w-full" @click="installMarketPlugin(entry)">安装</button>
+            <button class="btn-primary mt-auto w-full" @click="installMarketPlugin(entry)">安装</button>
           </article>
         </div>
       </section>
 
-      <section v-else class="grid gap-6 xl:grid-cols-[minmax(280px,420px)_1fr]">
+      <section v-else class="grid gap-6 xl:grid-cols-[minmax(300px,440px)_1fr]">
         <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
-          <div class="border-b border-themed px-5 py-4">
-            <h2 class="text-lg font-semibold text-themed">安装任务</h2>
+          <div class="flex items-center justify-between gap-3 border-b border-themed px-5 py-4">
+            <div>
+              <h2 class="text-lg font-semibold text-themed">安装任务</h2>
+              <p class="mt-1 text-xs text-themed-muted">每页最多显示 7 条，选择任务后查看右侧日志。</p>
+            </div>
+            <div class="flex gap-2 text-xs">
+              <span class="rounded border border-themed px-2 py-1 text-themed-muted">{{ taskSummary.total }} 条</span>
+              <span v-if="taskSummary.running" class="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700">{{ taskSummary.running }} 运行中</span>
+              <span v-if="taskSummary.failed" class="rounded border border-red-200 bg-red-50 px-2 py-1 text-red-700">{{ taskSummary.failed }} 失败</span>
+            </div>
           </div>
           <div v-if="tasks.length === 0" class="px-5 py-10 text-center text-sm text-themed-muted">暂无安装任务。</div>
-          <div v-else class="max-h-[536px] divide-y divide-themed overflow-y-auto">
+          <div v-else class="divide-y divide-themed">
             <button
               v-for="task in paginatedTasks"
               :key="task.id"
-              class="block min-h-[76px] w-full px-5 py-3 text-left transition hover:bg-themed-hover"
+              class="block h-[76px] w-full overflow-hidden px-5 py-3 text-left transition hover:bg-themed-hover"
               :class="task.id === selectedTaskId ? 'bg-themed-hover' : ''"
               @click="selectTask(task)"
             >
@@ -527,10 +545,10 @@ onMounted(async () => {
                 </span>
               </div>
               <div class="mt-1 text-xs text-themed-muted">{{ task.pluginId || '-' }} · {{ formatDate(task.createdAt) }}</div>
-              <p v-if="task.errorMessage" class="mt-2 line-clamp-2 text-xs text-red-600">{{ task.errorMessage }}</p>
+              <p v-if="task.errorMessage" class="mt-1 truncate text-xs text-red-600">{{ task.errorMessage }}</p>
             </button>
           </div>
-          <div v-if="tasks.length > TASKS_PER_PAGE" class="flex items-center justify-between border-t border-themed px-5 py-3 text-xs text-themed-muted">
+          <div class="flex min-h-[54px] items-center justify-between border-t border-themed px-5 py-3 text-xs text-themed-muted">
             <span>第 {{ taskPage }} / {{ totalTaskPages }} 页 · 共 {{ tasks.length }} 个任务</span>
             <div class="flex gap-2">
               <button class="btn-secondary" :disabled="taskPage <= 1" @click="setTaskPage(taskPage - 1)">上一页</button>
@@ -549,7 +567,7 @@ onMounted(async () => {
               {{ taskLogsLoading ? '加载中...' : '刷新日志' }}
             </button>
           </div>
-          <pre class="min-h-[360px] max-h-[620px] overflow-auto whitespace-pre-wrap rounded-b bg-gray-950 p-5 text-xs leading-5 text-gray-100">{{ taskLogs || '暂无日志。' }}</pre>
+          <pre class="min-h-[460px] max-h-[620px] overflow-auto whitespace-pre-wrap bg-gray-950 p-5 text-xs leading-5 text-gray-100">{{ taskLogs || '暂无日志。' }}</pre>
         </div>
       </section>
     </template>

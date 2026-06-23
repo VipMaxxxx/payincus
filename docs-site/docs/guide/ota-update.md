@@ -19,7 +19,7 @@ SYSTEM_UPDATE_RELEASE_REPOSITORY=VipMaxxxx/payincus
 
 `auto` 会优先使用 GitHub Release OTA artifact。如果目标 tag 没有可用 artifact，则回退到 Git tag 构建模式。
 
-页面会在打开时自动读取最新 release tag。当前已经是最新版本时，最新版本仍然显示，主按钮显示“已更新至最新版本”且不可重复启动更新。更新任务列表最多显示 7 条，超过后使用分页查看历史任务和日志。
+页面会在打开时自动读取最新 release tag。当前已经是最新版本时，最新版本仍然显示，主按钮显示“已更新至最新版本”且不可重复启动更新。更新任务列表固定为每页最多 7 条，超过后使用分页查看历史任务，右侧日志面板显示当前选中任务的详细输出。
 
 | 模式 | 行为 |
 | --- | --- |
@@ -59,6 +59,7 @@ bash scripts/migrate-ota-atomic-layout.sh
 
 ## 注意事项
 
+- 后台管理员可以查看当前版本、最新 release tag 和 OTA 包状态。
 - 只允许超级管理员启动更新和回滚。
 - 更新 API 固定在 `/api/admin/system-update/*`。
 - 用户端不包含更新入口和更新 API。

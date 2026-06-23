@@ -66,6 +66,8 @@ const hasRunningTask = computed(() =>
 
 const currentVersion = computed(() => updateCheck.value?.current || version.value)
 
+const canManageUpdates = computed(() => updateCheck.value?.canManageUpdates !== false)
+
 const totalTaskPages = computed(() =>
   Math.max(1, Math.ceil(tasks.value.length / TASKS_PER_PAGE))
 )
@@ -78,13 +80,16 @@ const paginatedTasks = computed(() => {
 const updateActionLabel = computed(() => {
   if (starting.value) return '启动中...'
   if (hasRunningTask.value) return '已有更新任务执行中'
+  if (repositoryUnavailable.value) return '无法在线更新'
   if (updateCheck.value && !updateCheck.value.updateAvailable) return '已更新至最新版本'
+  if (updateCheck.value && !canManageUpdates.value) return '仅超管可更新'
   if (!updateCheck.value) return '检查更新后可操作'
   return '更新到最新版本'
 })
 
 const updateActionDisabled = computed(() =>
   repositoryUnavailable.value ||
+  !canManageUpdates.value ||
   !latestUpdate.value ||
   !updateCheck.value?.updateAvailable ||
   starting.value ||
@@ -436,17 +441,21 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <section class="grid gap-4 xl:grid-cols-[minmax(280px,420px)_1fr]">
+      <section class="grid gap-4 xl:grid-cols-[minmax(300px,440px)_1fr]">
         <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
-          <div class="border-b border-themed px-5 py-4">
-            <h2 class="text-lg font-semibold text-themed">更新任务</h2>
+          <div class="flex items-center justify-between gap-3 border-b border-themed px-5 py-4">
+            <div>
+              <h2 class="text-lg font-semibold text-themed">更新任务</h2>
+              <p class="mt-1 text-xs text-themed-muted">每页最多显示 7 条，旧任务翻页查看。</p>
+            </div>
+            <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ tasks.length }} 条</span>
           </div>
           <div v-if="tasks.length === 0" class="px-5 py-10 text-center text-sm text-themed-muted">暂无更新任务。</div>
-          <div v-else class="max-h-[536px] divide-y divide-themed overflow-y-auto">
+          <div v-else class="divide-y divide-themed">
             <button
               v-for="task in paginatedTasks"
               :key="task.id"
-              class="block min-h-[76px] w-full px-5 py-3 text-left transition hover:bg-themed-hover"
+              class="block h-[76px] w-full overflow-hidden px-5 py-3 text-left transition hover:bg-themed-hover"
               :class="selectedTaskId === task.id ? 'bg-themed-hover' : ''"
               @click="selectTask(task)"
             >
@@ -459,10 +468,10 @@ onUnmounted(() => {
               <div class="mt-1 text-xs text-themed-muted">
                 {{ task.startedByUsername || '-' }} · {{ formatDate(task.createdAt) }}
               </div>
-              <p v-if="task.errorMessage" class="mt-2 line-clamp-2 text-xs text-red-600">{{ task.errorMessage }}</p>
+              <p v-if="task.errorMessage" class="mt-1 truncate text-xs text-red-600">{{ task.errorMessage }}</p>
             </button>
           </div>
-          <div v-if="tasks.length > TASKS_PER_PAGE" class="flex items-center justify-between border-t border-themed px-5 py-3 text-xs text-themed-muted">
+          <div class="flex min-h-[54px] items-center justify-between border-t border-themed px-5 py-3 text-xs text-themed-muted">
             <span>第 {{ taskPage }} / {{ totalTaskPages }} 页 · 共 {{ tasks.length }} 个任务</span>
             <div class="flex gap-2">
               <button class="btn-secondary" :disabled="taskPage <= 1" @click="setTaskPage(taskPage - 1)">上一页</button>
@@ -492,7 +501,7 @@ onUnmounted(() => {
               </button>
             </div>
           </div>
-          <pre class="min-h-[360px] max-h-[620px] overflow-auto whitespace-pre-wrap p-5 text-xs leading-5 text-themed bg-themed">{{ selectedTaskLogs || '暂无日志。' }}</pre>
+          <pre class="min-h-[460px] max-h-[620px] overflow-auto whitespace-pre-wrap bg-gray-950 p-5 text-xs leading-5 text-gray-100">{{ selectedTaskLogs || '暂无日志。' }}</pre>
         </div>
       </section>
     </template>

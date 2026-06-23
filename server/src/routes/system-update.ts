@@ -123,9 +123,12 @@ export default async function systemUpdateRoutes(fastify: FastifyInstance) {
 
   fastify.get('/check', {
     onRequest: [fastify.authenticateAdmin]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireUpdateManager(request, reply))) return
-    return await checkForUpdates()
+  }, async (request: FastifyRequest) => {
+    const result = await checkForUpdates()
+    return {
+      ...result,
+      canManageUpdates: canManageSystemUpdates(getRequestUser(request))
+    }
   })
 
   fastify.get('/tasks', {

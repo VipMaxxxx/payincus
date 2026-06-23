@@ -186,6 +186,7 @@ export interface SystemUpdateCheckResult {
   updateAvailable: boolean
   repositoryAvailable: boolean
   repositoryError: string | null
+  canManageUpdates?: boolean
 }
 
 export type SystemUpdateTaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'rolled_back'

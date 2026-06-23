@@ -28,7 +28,7 @@ The plugin center is split into three internal pages:
 
 - Installed: upload plugin packages, inspect plugins, enable/disable/uninstall plugins and edit plugin configuration.
 - Plugin Market: open a dedicated GitHub market index page, refresh the market and install market plugins.
-- Install Tasks: inspect upload installs, market installs, enable, disable and uninstall tasks. The task list shows up to 7 rows per page and the selected task log is shown beside the list.
+- Install Tasks: inspect upload installs, market installs, enable, disable and uninstall tasks. The task list is fixed to at most 7 rows per page, and the log panel beside it shows the selected task output.
 
 ## Security Boundary
 

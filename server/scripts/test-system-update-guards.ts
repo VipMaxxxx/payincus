@@ -61,8 +61,11 @@ assert.ok(
   versionLib.includes('const latest = tags[0] ? await buildAvailableUpdate(tags[0]) : null') &&
     versionLib.includes('updates.push(latest?.version === tag ? latest : await buildAvailableUpdate(tag))') &&
     versionLib.includes('latest,') &&
-    versionLib.includes('updateAvailable: updates.length > 0'),
-  'system update checks must always expose the newest release tag while keeping updateAvailable tied to real pending updates'
+    versionLib.includes('updateAvailable: updates.length > 0') &&
+    route.includes('canManageUpdates: canManageSystemUpdates(getRequestUser(request))') &&
+    route.includes("fastify.post<{ Body: StartUpdateBody }>('/start'") &&
+    route.includes('if (!(await requireUpdateManager(request, reply))) return'),
+  'system update checks must always expose the newest release tag while keeping updateAvailable and mutation permissions separate'
 )
 
 assert.ok(
