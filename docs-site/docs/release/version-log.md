@@ -6,23 +6,32 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `5afc9a5`
+- 当前 HEAD: `301fc2c`
 - 提交日期: 2026-06-24
-- 提交说明: Fix production split static roots
-- 最新 tag: `v0.0.19`
+- 提交说明: Update version log for static root fix
+- 最新 tag: `v0.0.20`
 
 ## 未发布变更
 
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+
+## 历史版本
+
+## v0.0.20
+
+- 发布提交: `301fc2c`
+- 提交日期: 2026-06-24
+- 提交说明: Update version log for static root fix
+
 ### 修复与稳定性
 
+- Update version log for static root fix `301fc2c`
 - Fix production split static roots `5afc9a5`
 
 ### 改进与调整
 
 - Update handoff after storage pool release `3443585`
 - Update version log for v0.0.19 `5d17ef1`
-
-## 历史版本
 
 ## v0.0.19
 

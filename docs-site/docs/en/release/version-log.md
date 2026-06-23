@@ -6,23 +6,32 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `5afc9a5`
+- Current HEAD: `301fc2c`
 - Commit date: 2026-06-24
-- Commit subject: Fix production split static roots
-- Latest tag: `v0.0.19`
+- Commit subject: Update version log for static root fix
+- Latest tag: `v0.0.20`
 
 ## Unreleased Changes
 
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+
+## Historical Versions
+
+## v0.0.20
+
+- Release commit: `301fc2c`
+- Commit date: 2026-06-24
+- Commit subject: Update version log for static root fix
+
 ### Fixes and Stability
 
+- Update version log for static root fix `301fc2c`
 - Fix production split static roots `5afc9a5`
 
 ### Improvements and Adjustments
 
 - Update handoff after storage pool release `3443585`
 - Update version log for v0.0.19 `5d17ef1`
-
-## Historical Versions
 
 ## v0.0.19
 
