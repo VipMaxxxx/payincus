@@ -4611,8 +4611,8 @@ export default {
                 usedBy: '使用者',
                 volumes: '個卷',
                 // 驅動描述
-                zfsDesc: '推薦：功能最全，但 Debian/cloud 核心必須已載入 ZFS 模組；模組不可用時請選 LVM、Btrfs 或 DIR',
-                lvmDesc: 'Linux 標配，極其穩定，建議開啟 Thin Provisioning',
+                zfsDesc: '僅在宿主機已能 modprobe zfs 時使用；Debian/cloud 核心缺少 ZFS 模組時請選 LVM、Btrfs 或 DIR',
+                lvmDesc: 'Debian/cloud 核心推薦，Linux 標配且穩定，建議開啟 Thin Provisioning',
                 btrfsDesc: '類似 ZFS 特性，單碟或 RAID1/10 可用',
                 dirDesc: '目錄儲存，效能最差，僅用於測試',
                 // 通用

@@ -103,12 +103,24 @@ function formatStoragePoolCreateError(error: unknown): string {
   if (
     lowerMessage.includes('modprobe') &&
     lowerMessage.includes('zfs') &&
-    (lowerMessage.includes('module zfs not found') || lowerMessage.includes('error loading "zfs" module'))
+    (
+      lowerMessage.includes('module zfs not found') ||
+      lowerMessage.includes('error loading "zfs" module') ||
+      lowerMessage.includes("error loading 'zfs' module")
+    )
   ) {
     return [
       '宿主机未加载 ZFS 内核模块，当前系统无法创建 ZFS 存储池。',
       'Debian cloud 内核通常需要先安装匹配的 linux-headers 并让 zfs-dkms 编译成功；',
       '也可以改用 LVM、Btrfs 或 DIR 存储池。原始错误:',
+      message
+    ].join(' ')
+  }
+
+  if (lowerMessage.includes('not authorized')) {
+    return [
+      'Incus 拒绝了面板客户端证书，当前节点的 Incus trust 中没有信任面板证书或仍在使用旧证书。',
+      '请在后台重新生成该节点的安装/重装命令并在真实 Incus 宿主机执行，确认导入证书后再创建存储池。原始错误:',
       message
     ].join(' ')
   }

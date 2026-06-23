@@ -59,7 +59,7 @@ const importSource = ref('')
 // 表单
 const form = ref({
   name: '',
-  driver: 'zfs' as 'zfs' | 'lvm' | 'btrfs' | 'dir',
+  driver: 'lvm' as 'zfs' | 'lvm' | 'btrfs' | 'dir',
   source: '',
   sizeValue: '',
   sizeUnit: 'GiB' as 'GiB' | 'TiB',
@@ -72,8 +72,8 @@ const form = ref({
 
 // 驱动选项
 const driverOptions = [
-  { value: 'zfs', label: 'ZFS', desc: 'admin.hosts.storage.zfsDesc' },
   { value: 'lvm', label: 'LVM', desc: 'admin.hosts.storage.lvmDesc' },
+  { value: 'zfs', label: 'ZFS', desc: 'admin.hosts.storage.zfsDesc' },
   { value: 'btrfs', label: 'Btrfs', desc: 'admin.hosts.storage.btrfsDesc' },
   { value: 'dir', label: 'DIR', desc: 'admin.hosts.storage.dirDesc' }
 ]
@@ -137,7 +137,7 @@ function openCreateModal() {
   createMode.value = 'create'
   form.value = {
     name: '',
-    driver: 'zfs',
+    driver: 'lvm',
     source: '',
     sizeValue: '',
     sizeUnit: 'GiB',
