@@ -92,6 +92,14 @@ pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
 ```
 
+Production proof snapshot helper:
+
+```bash
+ENV_FILE=/opt/incudal/.env PROOF_SINCE_HOURS=24 pnpm verify:production-proof-snapshot
+```
+
+This is read-only and prints shareable redacted JSON for payment callback, Host/Agent, instance/traffic, lifecycle task/log, SMTP/Lsky presence, and notification-log proof. It intentionally omits database URLs, host URLs, certificate paths, install tokens, Agent secrets, provider config, order numbers, callback bodies, SMTP passwords, Lsky tokens, notification config, instance root passwords, user emails, IPs and User-Agent values.
+
 ## OTA Status
 
 Admin OTA is implemented and proven live through release artifacts and atomic release layout.
