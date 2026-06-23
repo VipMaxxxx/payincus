@@ -6,16 +6,36 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `71cdcff`
+- 当前 HEAD: `9f638d8`
 - 提交日期: 2026-06-24
-- 提交说明: Fix production OTA CLI start command
-- 最新 tag: `v0.0.21`
+- 提交说明: Add redacted production proof snapshot
+- 最新 tag: `v0.0.22`
 
 ## 未发布变更
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本
+
+## v0.0.22
+
+- 发布提交: `9f638d8`
+- 提交日期: 2026-06-24
+- 提交说明: Add redacted production proof snapshot
+
+### 新增能力
+
+- Add redacted production proof snapshot `9f638d8`
+
+### 其他变更
+
+- Record public production revalidation `f9ed41e`
+
+### 改进与调整
+
+- Update handoff with live business proof `db4f18b`
+- Update handoff after v0.0.21 production proof `ade22e5`
+- Update version log for v0.0.21 `517b972`
 
 ## v0.0.21
 

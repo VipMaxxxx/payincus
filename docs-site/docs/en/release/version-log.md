@@ -6,16 +6,36 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `71cdcff`
+- Current HEAD: `9f638d8`
 - Commit date: 2026-06-24
-- Commit subject: Fix production OTA CLI start command
-- Latest tag: `v0.0.21`
+- Commit subject: Add redacted production proof snapshot
+- Latest tag: `v0.0.22`
 
 ## Unreleased Changes
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions
+
+## v0.0.22
+
+- Release commit: `9f638d8`
+- Commit date: 2026-06-24
+- Commit subject: Add redacted production proof snapshot
+
+### New Capabilities
+
+- Add redacted production proof snapshot `9f638d8`
+
+### Other Changes
+
+- Record public production revalidation `f9ed41e`
+
+### Improvements and Adjustments
+
+- Update handoff with live business proof `db4f18b`
+- Update handoff after v0.0.21 production proof `ade22e5`
+- Update version log for v0.0.21 `517b972`
 
 ## v0.0.21
 
