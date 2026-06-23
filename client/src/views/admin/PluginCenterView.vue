@@ -23,6 +23,11 @@ const taskPage = ref(1)
 const configs = ref<PluginConfigValue[]>([])
 const configDraft = ref('')
 const TASKS_PER_PAGE = 7
+const tabs = [
+  { key: 'installed', label: '已安装', description: '上传插件包、启用停用、维护配置和查看插件页面。' },
+  { key: 'market', label: '插件市场', description: '从已配置的 GitHub 市场索引读取插件并安装。' },
+  { key: 'tasks', label: '安装任务', description: '查看上传安装、市场安装、启用、禁用和卸载任务日志。' }
+] as const
 
 const selectedPlugin = computed(() =>
   plugins.value.find(plugin => plugin.pluginId === selectedPluginId.value) || plugins.value[0] || null
@@ -38,6 +43,10 @@ const stats = computed(() => ({
   failed: plugins.value.filter(plugin => plugin.status === 'failed').length,
   market: market.value.length
 }))
+
+const activeTabMeta = computed(() =>
+  tabs.find(tab => tab.key === activeTab.value) || tabs[0]
+)
 
 const totalTaskPages = computed(() =>
   Math.max(1, Math.ceil(tasks.value.length / TASKS_PER_PAGE))
@@ -271,6 +280,18 @@ function openTasksTab() {
   void loadSelectedTaskLogs()
 }
 
+function setActiveTab(tab: typeof activeTab.value) {
+  if (tab === 'market') {
+    openMarketTab()
+    return
+  }
+  if (tab === 'tasks') {
+    openTasksTab()
+    return
+  }
+  activeTab.value = tab
+}
+
 function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   selectedFile.value = input.files?.[0] || null
@@ -290,7 +311,22 @@ onMounted(async () => {
       </div>
       <div class="flex gap-2">
         <button class="btn-secondary" @click="refreshAll">刷新</button>
-        <button class="btn-primary" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '打开市场' }}</button>
+        <button
+          v-if="activeTab === 'market'"
+          class="btn-primary"
+          :disabled="marketLoading"
+          @click="loadMarket"
+        >
+          {{ marketLoading ? '加载中...' : '刷新市场' }}
+        </button>
+        <button
+          v-else-if="activeTab === 'tasks'"
+          class="btn-primary"
+          :disabled="!selectedTask || taskLogsLoading"
+          @click="loadSelectedTaskLogs"
+        >
+          {{ taskLogsLoading ? '加载中...' : '刷新日志' }}
+        </button>
       </div>
     </div>
 
@@ -316,28 +352,24 @@ onMounted(async () => {
     <div v-if="loading" class="py-16 text-center text-themed-muted">加载中...</div>
 
     <template v-else>
-      <div class="flex flex-wrap gap-2 border-b border-themed">
-        <button
-          class="px-4 py-3 text-sm font-medium"
-          :class="activeTab === 'installed' ? 'border-b-2 border-themed text-themed' : 'text-themed-muted hover:text-themed'"
-          @click="activeTab = 'installed'"
-        >
-          已安装
-        </button>
-        <button
-          class="px-4 py-3 text-sm font-medium"
-          :class="activeTab === 'market' ? 'border-b-2 border-themed text-themed' : 'text-themed-muted hover:text-themed'"
-          @click="openMarketTab"
-        >
-          插件市场
-        </button>
-        <button
-          class="px-4 py-3 text-sm font-medium"
-          :class="activeTab === 'tasks' ? 'border-b-2 border-themed text-themed' : 'text-themed-muted hover:text-themed'"
-          @click="openTasksTab"
-        >
-          安装任务
-        </button>
+      <div class="rounded-lg border border-themed bg-themed-surface">
+        <div class="flex flex-col gap-4 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-themed">{{ activeTabMeta.label }}</h2>
+            <p class="mt-1 text-sm text-themed-muted">{{ activeTabMeta.description }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="tab in tabs"
+              :key="tab.key"
+              class="rounded border px-3 py-2 text-sm font-medium transition"
+              :class="activeTab === tab.key ? 'border-gray-900 bg-gray-900 text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
+              @click="setActiveTab(tab.key)"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <section v-if="activeTab === 'installed'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -433,20 +465,20 @@ onMounted(async () => {
         </aside>
       </section>
 
-      <section v-else-if="activeTab === 'market'" class="card p-5">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <section v-else-if="activeTab === 'market'" class="rounded-lg border border-themed bg-themed-surface">
+        <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 class="text-lg font-semibold text-themed">插件市场</h2>
-            <p class="mt-1 text-sm text-themed-muted">市场索引来自已配置的 GitHub 插件源。</p>
+            <h2 class="text-lg font-semibold text-themed">GitHub 插件市场</h2>
+            <p class="mt-1 text-sm text-themed-muted">仅安装市场索引中的 GitHub Release 包，并使用 SHA256 校验。</p>
           </div>
           <button class="btn-primary" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
         </div>
 
-        <div v-if="market.length === 0" class="mt-6 rounded border border-dashed border-themed px-5 py-12 text-center text-sm text-themed-muted">
+        <div v-if="market.length === 0" class="m-5 rounded border border-dashed border-themed px-5 py-12 text-center text-sm text-themed-muted">
           暂无市场插件。
         </div>
-        <div v-else class="mt-5 grid gap-4 lg:grid-cols-2">
-          <article v-for="entry in market" :key="entry.id" class="rounded border border-themed p-4">
+        <div v-else class="grid gap-4 p-5 lg:grid-cols-2">
+          <article v-for="entry in market" :key="entry.id" class="rounded border border-themed bg-themed p-4">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <h3 class="font-medium text-themed">{{ entry.name }}</h3>
@@ -454,7 +486,7 @@ onMounted(async () => {
               </div>
               <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ entry.latest }}</span>
             </div>
-            <p class="mt-3 min-h-[40px] text-sm text-themed-muted">{{ entry.description || entry.repo }}</p>
+            <p class="mt-3 min-h-[40px] text-sm leading-6 text-themed-muted">{{ entry.description || entry.repo }}</p>
             <dl class="mt-4 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
               <div>
                 <dt>作者</dt>
@@ -475,21 +507,21 @@ onMounted(async () => {
       </section>
 
       <section v-else class="grid gap-6 xl:grid-cols-[minmax(280px,420px)_1fr]">
-        <div class="card">
+        <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
           <div class="border-b border-themed px-5 py-4">
             <h2 class="text-lg font-semibold text-themed">安装任务</h2>
           </div>
           <div v-if="tasks.length === 0" class="px-5 py-10 text-center text-sm text-themed-muted">暂无安装任务。</div>
-          <div v-else class="divide-y divide-themed">
+          <div v-else class="max-h-[536px] divide-y divide-themed overflow-y-auto">
             <button
               v-for="task in paginatedTasks"
               :key="task.id"
-              class="block w-full px-5 py-4 text-left transition hover:bg-themed-hover"
+              class="block min-h-[76px] w-full px-5 py-3 text-left transition hover:bg-themed-hover"
               :class="task.id === selectedTaskId ? 'bg-themed-hover' : ''"
               @click="selectTask(task)"
             >
               <div class="flex items-center justify-between gap-3">
-                <span class="font-medium text-themed">#{{ task.id }} {{ taskActionText(task.action) }}</span>
+                <span class="truncate font-medium text-themed">#{{ task.id }} {{ taskActionText(task.action) }}</span>
                 <span class="rounded border px-2 py-0.5 text-xs" :class="taskStatusClass(task.status)">
                   {{ taskStatusText(task.status) }}
                 </span>
@@ -507,7 +539,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="card">
+        <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
           <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 class="text-lg font-semibold text-themed">任务日志</h2>
