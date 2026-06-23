@@ -6,16 +6,30 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `a0a35fb`
+- 当前 HEAD: `60faf9a`
 - 提交日期: 2026-06-24
-- 提交说明: Refresh host panel trust certificate
-- 最新 tag: `v0.0.16`
+- 提交说明: Fix Agent installer manifest parsing
+- 最新 tag: `v0.0.17`
 
 ## 未发布变更
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本
+
+## v0.0.17
+
+- 发布提交: `60faf9a`
+- 提交日期: 2026-06-24
+- 提交说明: Fix Agent installer manifest parsing
+
+### 修复与稳定性
+
+- Fix Agent installer manifest parsing `60faf9a`
+
+### 改进与调整
+
+- Update version log for v0.0.16 `2466e80`
 
 ## v0.0.16
 

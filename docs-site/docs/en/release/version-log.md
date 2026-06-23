@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `a0a35fb`
+- Current HEAD: `60faf9a`
 - Commit date: 2026-06-24
-- Commit subject: Refresh host panel trust certificate
-- Latest tag: `v0.0.16`
+- Commit subject: Fix Agent installer manifest parsing
+- Latest tag: `v0.0.17`
 
 ## Unreleased Changes
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions
+
+## v0.0.17
+
+- Release commit: `60faf9a`
+- Commit date: 2026-06-24
+- Commit subject: Fix Agent installer manifest parsing
+
+### Fixes and Stability
+
+- Fix Agent installer manifest parsing `60faf9a`
+
+### Improvements and Adjustments
+
+- Update version log for v0.0.16 `2466e80`
 
 ## v0.0.16
 
