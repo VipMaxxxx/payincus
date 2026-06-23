@@ -4,6 +4,8 @@ set -Eeuo pipefail
 FRONTEND_URL="${FRONTEND_URL:-http://127.0.0.1}"
 ADMIN_FRONTEND_URL="${ADMIN_FRONTEND_URL:-}"
 BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:3001}"
+VERIFY_RETRIES="${VERIFY_RETRIES:-8}"
+VERIFY_RETRY_DELAY="${VERIFY_RETRY_DELAY:-2}"
 
 trim_slash() {
   local value="$1"
@@ -27,9 +29,30 @@ fetch_url() {
   local name="$1"
   local url="$2"
   local output="$3"
+  local error_output="${output}.err"
+  local attempt=1
+  local status
 
   log "Checking $name: $url"
-  curl -fsS --max-time 10 "$url" -o "$output" || fail "$name check failed: $url"
+  while true; do
+    rm -f "$output" "$error_output"
+    set +e
+    curl -fsS --max-time 10 "$url" -o "$output" 2> "$error_output"
+    status=$?
+    set -e
+
+    if [[ "$status" -eq 0 ]]; then
+      return 0
+    fi
+
+    if [[ "$attempt" -ge "$VERIFY_RETRIES" ]]; then
+      fail "$name check failed: $url ($(tr '\n' ' ' < "$error_output"))"
+    fi
+
+    log "$name check attempt ${attempt}/${VERIFY_RETRIES} failed; retrying in ${VERIFY_RETRY_DELAY}s"
+    sleep "$VERIFY_RETRY_DELAY"
+    attempt=$((attempt + 1))
+  done
 }
 
 fetch_url_with_headers() {
@@ -37,9 +60,30 @@ fetch_url_with_headers() {
   local url="$2"
   local output="$3"
   local headers="$4"
+  local error_output="${output}.err"
+  local attempt=1
+  local status
 
   log "Checking $name: $url"
-  curl -fsS --max-time 10 -D "$headers" "$url" -o "$output" || fail "$name check failed: $url"
+  while true; do
+    rm -f "$output" "$headers" "$error_output"
+    set +e
+    curl -fsS --max-time 10 -D "$headers" "$url" -o "$output" 2> "$error_output"
+    status=$?
+    set -e
+
+    if [[ "$status" -eq 0 ]]; then
+      return 0
+    fi
+
+    if [[ "$attempt" -ge "$VERIFY_RETRIES" ]]; then
+      fail "$name check failed: $url ($(tr '\n' ' ' < "$error_output"))"
+    fi
+
+    log "$name check attempt ${attempt}/${VERIFY_RETRIES} failed; retrying in ${VERIFY_RETRY_DELAY}s"
+    sleep "$VERIFY_RETRY_DELAY"
+    attempt=$((attempt + 1))
+  done
 }
 
 fetch_static_asset() {

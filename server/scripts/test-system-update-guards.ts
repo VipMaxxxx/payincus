@@ -89,6 +89,7 @@ assert.ok(
     runTask.includes("test:frontend-dist-boundary-guards") &&
     runTask.includes("test:frontend-route-guards") &&
     runTask.includes("systemctl', ['restart', serviceName]") &&
+    runTask.includes('waitForBackendHealth()') &&
     runTask.includes("verify:production") &&
     runTask.includes("verify:log-header") &&
     runTask.includes("smoke:agent-release"),
@@ -127,6 +128,7 @@ assert.ok(
     runTask.includes("'.npm'") &&
     runTask.includes("'.cache'") &&
     rollbackTask.includes('pre-rollback') &&
+    rollbackTask.includes('waitForBackendHealth()') &&
     rollbackTask.includes('verify-split-host.sh'),
   'online update and rollback must preserve runtime assets and verify the split deployment'
 )
