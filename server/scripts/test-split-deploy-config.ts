@@ -139,9 +139,9 @@ assert.match(envExample, /^PORT=3001$/m, '.env.example must default backend PORT
 assert.match(envExample, /^SERVE_STATIC_CLIENT=false$/m, '.env.example must default backend static serving off for split deployment')
 assert.match(envExample, /^VITE_API_BASE_URL=\/api$/m, '.env.example must default frontend API base to same-origin /api')
 assert.match(envExample, /^ADMIN_FRONTEND_URL=https:\/\/admin\.payincus\.com$/m, '.env.example must define the separate admin frontend origin')
-assert.match(envExample, /^VITE_CUSTOMER_BASE_URL=https:\/\/demo\.payincus\.com$/m, '.env.example must define the customer frontend origin for admin-generated customer links')
+assert.match(envExample, /^VITE_CUSTOMER_BASE_URL=https:\/\/pay\.payincus\.com$/m, '.env.example must define the customer frontend origin for admin-generated customer links')
 assert.match(envExample, /^VITE_ADMIN_BASE_URL=https:\/\/admin\.payincus\.com$/m, '.env.example must define the user frontend admin redirect origin')
-assert.match(envExample, /^PAYMENT_CALLBACK_BASE_URL=https:\/\/demo\.payincus\.com$/m, '.env.example must default payment callbacks to the public customer frontend origin')
+assert.match(envExample, /^PAYMENT_CALLBACK_BASE_URL=https:\/\/pay\.payincus\.com$/m, '.env.example must default payment callbacks to the public customer frontend origin')
 assert.match(envExample, /^COOKIE_SAME_SITE=$/m, '.env.example must leave SameSite unset for HTTPS same-origin proxy deployments')
 assert.match(envExample, /^COOKIE_SECURE=$/m, '.env.example must leave secure-cookie auto mode enabled by default')
 assert.match(envExample, /^COOKIE_DOMAIN=$/m, '.env.example must not set a cookie domain by default')
@@ -573,8 +573,8 @@ assert.ok(
     readme.includes('/api, /api/ws -> http://10.0.0.12:3001'),
   'README architecture must document separate user/admin frontends and backend port 3001'
 )
-assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://demoadmin.payincus.com') && readme.includes('/opt/incudal/client/dist/admin'), 'README architecture must document the separate admin frontend')
-assert.ok(readme.includes('VITE_CUSTOMER_BASE_URL=https://demo.payincus.com'), 'README env example must document admin-generated customer links')
+assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://admin.payincus.com') && readme.includes('/opt/incudal/client/dist/admin'), 'README architecture must document the separate admin frontend')
+assert.ok(readme.includes('VITE_CUSTOMER_BASE_URL=https://pay.payincus.com'), 'README env example must document admin-generated customer links')
 assert.ok(readme.includes('PORT=3001'), 'README env example must use backend port 3001')
 assert.ok(
   readme.includes('PORT=3001') &&
@@ -585,7 +585,7 @@ assert.ok(
 assert.ok(readme.includes('BACKEND_URL=http://10.0.0.12:3001'), 'README split verification command must use backend port 3001')
 
 assert.ok(nginxExample.includes('10.0.0.12:3001'), 'Nginx split example must document backend port 3001')
-assert.ok(nginxExample.includes('server_name demo.payincus.com') && nginxExample.includes('server_name demoadmin.payincus.com'), 'Nginx split example must define customer and admin frontend server names')
+assert.ok(nginxExample.includes('server_name pay.payincus.com') && nginxExample.includes('server_name admin.payincus.com'), 'Nginx split example must define customer and admin frontend server names')
 assert.ok(nginxExample.includes('root /opt/incudal/client/dist/user') && nginxExample.includes('root /opt/incudal/client/dist/admin'), 'Nginx split example must serve separate user and admin build outputs')
 assert.ok(nginxExample.includes("connect-src 'self' ws: wss:"), 'Nginx split example CSP must allow HTTP and HTTPS WebSocket terminals')
 assertBalancedNginxBraces('Nginx split example', nginxExample)

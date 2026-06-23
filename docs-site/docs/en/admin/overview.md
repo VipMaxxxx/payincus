@@ -5,7 +5,7 @@ The admin console is for operators and administrators only. It provides operatio
 Entry:
 
 ```text
-https://demoadmin.payincus.com
+https://admin.payincus.com
 ```
 
 ## Access Boundary

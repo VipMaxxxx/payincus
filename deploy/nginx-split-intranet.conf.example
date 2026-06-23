@@ -1,7 +1,7 @@
 # Payincus host-process split deployment example.
 # Replace:
-#   demo.payincus.com       -> your customer panel domain
-#   demoadmin.payincus.com  -> your admin backend domain
+#   pay.payincus.com       -> your customer panel domain
+#   admin.payincus.com  -> your admin backend domain
 #   /opt/incudal/client/dist/user  -> customer frontend build output
 #   /opt/incudal/client/dist/admin -> admin frontend build output
 #   10.0.0.12:3001          -> backend private IP and port
@@ -19,7 +19,7 @@ map $http_x_forwarded_host $incudal_forwarded_host {
 server {
   listen 80;
   listen [::]:80;
-  server_name demo.payincus.com;
+  server_name pay.payincus.com;
 
   root /opt/incudal/client/dist/user;
   index index.html;
@@ -71,7 +71,7 @@ server {
 server {
   listen 80;
   listen [::]:80;
-  server_name demoadmin.payincus.com;
+  server_name admin.payincus.com;
 
   root /opt/incudal/client/dist/admin;
   index index.html;

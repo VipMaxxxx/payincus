@@ -40,13 +40,13 @@ features:
 ## 快速入口
 
 <div class="payincus-links">
-  <a class="payincus-link" href="https://demo.payincus.com">
+  <a class="payincus-link" href="https://pay.payincus.com">
     <strong>测试用户端</strong>
-    demo.payincus.com
+    pay.payincus.com
   </a>
-  <a class="payincus-link" href="https://demoadmin.payincus.com">
+  <a class="payincus-link" href="https://admin.payincus.com">
     <strong>测试后台</strong>
-    demoadmin.payincus.com
+    admin.payincus.com
   </a>
   <a class="payincus-link" href="https://t.me/Payincus">
     <strong>Telegram 交流群</strong>

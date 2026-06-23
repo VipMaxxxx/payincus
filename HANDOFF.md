@@ -333,12 +333,12 @@ Current known domains:
 
 - Product/user production: `https://pay.payincus.com`
 - Admin production: previously `https://admin.payincus.com`
-- Test user site in docs: `https://demo.payincus.com`
-- Test admin site in docs: `https://demoadmin.payincus.com`
+- User site in docs: `https://pay.payincus.com`
+- Admin site in docs: `https://admin.payincus.com`
 - Documentation/root site: `https://payincus.com`
 - Telegram group: `https://t.me/Payincus`
 
-Note: A previous request said `demo.payincus.com` is excluded from production audit scope, but it is still used in public README/docs as a test/demo user portal placeholder.
+Note: a previous request excluded the old demo domain from production audit scope. Public README/docs and example configs now use the current production user/admin domains instead.
 
 ## Suggested Next Work
 

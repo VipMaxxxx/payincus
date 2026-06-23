@@ -40,13 +40,13 @@ features:
 ## Quick Links
 
 <div class="payincus-links">
-  <a class="payincus-link" href="https://demo.payincus.com">
+  <a class="payincus-link" href="https://pay.payincus.com">
     <strong>Demo user portal</strong>
-    demo.payincus.com
+    pay.payincus.com
   </a>
-  <a class="payincus-link" href="https://demoadmin.payincus.com">
+  <a class="payincus-link" href="https://admin.payincus.com">
     <strong>Demo admin console</strong>
-    demoadmin.payincus.com
+    admin.payincus.com
   </a>
   <a class="payincus-link" href="https://t.me/Payincus">
     <strong>Telegram group</strong>
