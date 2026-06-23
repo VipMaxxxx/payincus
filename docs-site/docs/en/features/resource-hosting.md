@@ -39,3 +39,21 @@ Agent provides runtime truth:
 - Instance state reports.
 - Agent release metadata.
 - Signature and replay protection.
+
+## Risks
+
+- Host capacity must be checked against both Agent reports and admin configuration.
+- Resource providers must not access other users' resources.
+- Plan availability changes must not break renewal or billing for existing instances.
+- Do not keep allocating resources blindly when the Agent is offline.
+- If Incus returns `not authorized`, first check whether the host trusts the current panel certificate. Generate a fresh host install command and run it on the host to refresh the `panel` trust entry.
+- Resource deletion and revenue settlement must leave audit records.
+
+## Verification Checklist
+
+- Agent heartbeat and resource reports are healthy.
+- The admin console can read host storage pools and create or link a storage pool.
+- Capacity changes are reflected in the admin console.
+- User hosting entry points follow the system configuration.
+- Admins can review and manage hosted resources.
+- Instance delivery does not allocate to unavailable hosts.

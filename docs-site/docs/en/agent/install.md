@@ -6,6 +6,12 @@ The Agent runs on Incus hosts. It reports host resources, instance state and tra
 
 The host install script is recommended for Ubuntu 22.04+ and Debian 12/13. Debian 11 remains best-effort compatible, but it is not recommended for new hosts. Debian 10 and earlier are rejected by the installer.
 
+## Panel Certificate Trust
+
+The host install script imports the panel Incus client certificate into the host Incus trust list as `panel`. If the panel is reinstalled, migrated, restored from disaster recovery, or has its client certificate regenerated, the host may still trust an old `panel` certificate. Admin storage-pool creation or resource reads can then fail with `not authorized`.
+
+When this happens, generate a fresh host install command from the admin console and run it again on the host. The current installer downloads the latest panel certificate first, then replaces the existing `panel` trust entry on the host.
+
 ## Release Configuration
 
 ```dotenv

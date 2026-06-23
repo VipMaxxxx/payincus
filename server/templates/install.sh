@@ -1452,16 +1452,12 @@ YAML
 import_cert() {
     step "步骤 [5/5]  导入面板信任证书..."
 
-    # 幂等性：证书已存在则跳过
-    if incus config trust list --format csv 2>/dev/null | grep -q "panel"; then
-        info "面板证书已存在，跳过导入"
-        return 0
-    fi
-
     local cert_url="${PANEL_URL}/api/hosts/cert/${TOKEN}"
+    local cert_file=""
+    cert_file=$(mktemp /tmp/incudal-panel-cert.XXXXXX.crt)
 
-    if ! curl -sSf "$cert_url" \
-        | incus config trust add-certificate - --name panel >/dev/null 2>&1; then
+    if ! curl -sSf "$cert_url" -o "$cert_file"; then
+        rm -f "$cert_file"
         error "证书导入失败！请检查："
         error "  1. Token 是否正确"
         error "  2. 面板 ${PANEL_URL} 是否可达"
@@ -1469,6 +1465,22 @@ import_cert() {
         exit 1
     fi
 
+    # 证书可能因面板重装、迁移或灾备恢复而轮换；先成功下载新证书，再替换旧信任项。
+    if incus config trust list --format csv 2>/dev/null | grep -q "panel"; then
+        info "面板证书已存在，更新为当前证书"
+        incus config trust remove panel >/dev/null 2>&1 || true
+    fi
+
+    if ! incus config trust add-certificate "$cert_file" --name panel >/dev/null 2>&1; then
+        rm -f "$cert_file"
+        error "证书导入失败！请检查："
+        error "  1. Token 是否正确"
+        error "  2. 面板 ${PANEL_URL} 是否可达"
+        error "  3. 网络连接是否正常"
+        exit 1
+    fi
+
+    rm -f "$cert_file"
     log "面板证书导入成功"
 }
 
