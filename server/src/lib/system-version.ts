@@ -264,22 +264,24 @@ export async function checkForUpdates(root = getProjectRoot()): Promise<UpdateCh
     .slice(0, 30)
 
   const currentTag = current.gitTag || current.version
+  const buildAvailableUpdate = async (tag: string): Promise<AvailableUpdate> => ({
+    version: tag,
+    commit: await getTagCommit(tag, root),
+    date: await getTagDate(tag, root),
+    changelog: await getTagChangelog(tag, root),
+    ota: await getOtaReleaseInfo(tag)
+  })
+  const latest = tags[0] ? await buildAvailableUpdate(tags[0]) : null
   const updates: AvailableUpdate[] = []
 
   for (const tag of tags) {
     if (tag === currentTag || tag === current.version) break
-    updates.push({
-      version: tag,
-      commit: await getTagCommit(tag, root),
-      date: await getTagDate(tag, root),
-      changelog: await getTagChangelog(tag, root),
-      ota: await getOtaReleaseInfo(tag)
-    })
+    updates.push(latest?.version === tag ? latest : await buildAvailableUpdate(tag))
   }
 
   return {
     current,
-    latest: updates[0] || null,
+    latest,
     updates,
     updateAvailable: updates.length > 0,
     repositoryAvailable: true,

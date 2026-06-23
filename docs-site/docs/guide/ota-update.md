@@ -1,6 +1,6 @@
 # 后台 OTA
 
-管理后台提供“版本更新”页面，用于查看当前版本、Git tag、commit、构建时间、部署时间、更新内容、可更新版本、任务日志和回滚入口。
+管理后台提供“版本更新”页面，用于查看当前版本、Git tag、commit、构建时间、部署时间、更新内容、最新版本、可更新版本、任务日志和回滚入口。
 
 后台页面：
 
@@ -18,6 +18,8 @@ SYSTEM_UPDATE_RELEASE_REPOSITORY=VipMaxxxx/payincus
 ```
 
 `auto` 会优先使用 GitHub Release OTA artifact。如果目标 tag 没有可用 artifact，则回退到 Git tag 构建模式。
+
+页面会在打开时自动读取最新 release tag。当前已经是最新版本时，最新版本仍然显示，主按钮显示“已更新至最新版本”且不可重复启动更新。更新任务列表最多显示 7 条，超过后使用分页查看历史任务和日志。
 
 | 模式 | 行为 |
 | --- | --- |

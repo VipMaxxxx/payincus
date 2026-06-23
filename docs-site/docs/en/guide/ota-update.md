@@ -1,6 +1,6 @@
 # Admin OTA
 
-The admin console includes a version update page for controlled online updates.
+The admin console includes a version update page for controlled online updates. It shows the current version, latest release tag, release notes, OTA artifact metadata, update tasks, task logs and rollback controls.
 
 Admin page:
 
@@ -16,6 +16,8 @@ SYSTEM_UPDATE_RELEASE_REPOSITORY=VipMaxxxx/payincus
 ```
 
 `auto` prefers verified GitHub Release OTA artifacts. If no matching artifact exists for the target tag, it can fall back to Git tag build mode.
+
+The page checks the latest release tag when it opens. If the current deployment is already on the latest tag, the latest version remains visible and the primary action changes to "Updated to latest version". Update tasks are capped at 7 rows per page, with pagination for older tasks and logs.
 
 | Mode | Behavior |
 | --- | --- |

@@ -222,7 +222,7 @@ pnpm verify:split:host
 
 ## 后台在线更新
 
-管理后台提供“版本更新”页面，用于查看当前版本、Git tag、commit、构建/部署时间、更新内容、可更新版本、更新任务日志和回滚入口。
+管理后台提供“版本更新”页面，用于查看当前版本、Git tag、commit、构建/部署时间、更新内容、最新版本、可更新版本、更新任务日志和回滚入口。
 
 在线更新的设计边界：
 
@@ -233,6 +233,7 @@ pnpm verify:split:host
 - 生产目录必须包含 `.git` 和 release tags。`scripts/install-panel.sh` 会在解压 release 包后初始化 Git 元数据并同步 tags；如果你手动纯 tar 解压且没有初始化 Git，后台只能显示当前版本，不能执行在线更新。
 - 后台服务只负责创建任务；生产环境默认通过受限 sudo 启动 `incudal-online-update@.service` 或 `incudal-online-rollback@.service`，实际更新/回滚由 root 级 systemd oneshot 执行。
 - 检查更新时会读取 GitHub Release OTA manifest，后台展示发行包、架构、大小和 SHA256。
+- 后台会始终展示最新 release tag；当前已是最新版本时，更新按钮显示“已更新至最新版本”。更新任务列表最多显示 7 条，更多任务通过分页查看。
 - 默认 `SYSTEM_UPDATE_APPLY_MODE=auto`：如果目标 tag 有匹配当前 Linux 架构的 OTA artifact，更新任务会下载 release tar.gz、校验 SHA256、解压并替换安装内容；没有可用 artifact 时回退到 Git tag 兼容构建模式。也可设置为 `artifact` 强制只允许 OTA 包，或设置为 `git` 强制走旧的 Git 构建路径。
 - Artifact 模式会校验 release 包完整性并应用预构建产物：旧布局会先备份当前目录，原子 OTA 布局会创建新的 release 目录并切换 `current`。两种布局都会执行 Prisma migration、split host 验证、生产预检和响应头/日志检查。前后台边界守卫在 GitHub Release 打包前执行。
 - Git 兼容模式会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
@@ -265,7 +266,7 @@ https://admin.payincus.com/admin/plugins
 
 - 上传 `.tar.gz` 插件包安装，安装前校验 `payincus.plugin.json`、路径安全、入口文件和 SHA256。
 - 从 GitHub 托管的插件市场索引安装，只允许 GitHub Release artifact 下载地址。
-- 后台启用、停用、卸载插件，查看安装任务和日志。
+- 插件中心按“已安装 / 插件市场 / 安装任务”分为内页；后台启用、停用、卸载插件，在独立插件市场页安装 GitHub 市场插件，并在安装任务页查看最多 7 条一页的任务和日志。
 - 插件可以声明后台配置页、用户端页面、用户侧边栏等白名单扩展点。
 - OTA 更新和回滚会保留插件安装目录、插件数据目录和插件日志目录。
 
