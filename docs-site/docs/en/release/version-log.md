@@ -6,16 +6,38 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `60faf9a`
+- Current HEAD: `368d195`
 - Commit date: 2026-06-24
-- Commit subject: Fix Agent installer manifest parsing
-- Latest tag: `v0.0.17`
+- Commit subject: Fix Agent binary installer cache query
+- Latest tag: `v0.0.18`
 
 ## Unreleased Changes
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions
+
+## v0.0.18
+
+- Release commit: `368d195`
+- Commit date: 2026-06-24
+- Commit subject: Fix Agent binary installer cache query
+
+### Fixes and Stability
+
+- Fix Agent binary installer cache query `368d195`
+
+### Improvements and Adjustments
+
+- Update handoff with Incus storage proof `c0f10f7`
+- Update handoff with v0.0.17 production verification `78d35cf`
+- Update handoff after v0.0.17 production check `e86669f`
+- Update version log for v0.0.17 `d93b1ef`
+
+### Other Changes
+
+- Avoid stale head in handoff `f962435`
+- Correct handoff current head `4428fb9`
 
 ## v0.0.17
 

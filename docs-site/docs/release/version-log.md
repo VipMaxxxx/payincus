@@ -6,16 +6,38 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `60faf9a`
+- 当前 HEAD: `368d195`
 - 提交日期: 2026-06-24
-- 提交说明: Fix Agent installer manifest parsing
-- 最新 tag: `v0.0.17`
+- 提交说明: Fix Agent binary installer cache query
+- 最新 tag: `v0.0.18`
 
 ## 未发布变更
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本
+
+## v0.0.18
+
+- 发布提交: `368d195`
+- 提交日期: 2026-06-24
+- 提交说明: Fix Agent binary installer cache query
+
+### 修复与稳定性
+
+- Fix Agent binary installer cache query `368d195`
+
+### 改进与调整
+
+- Update handoff with Incus storage proof `c0f10f7`
+- Update handoff with v0.0.17 production verification `78d35cf`
+- Update handoff after v0.0.17 production check `e86669f`
+- Update version log for v0.0.17 `d93b1ef`
+
+### 其他变更
+
+- Avoid stale head in handoff `f962435`
+- Correct handoff current head `4428fb9`
 
 ## v0.0.17
 
