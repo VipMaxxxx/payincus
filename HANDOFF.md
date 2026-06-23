@@ -18,7 +18,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-517b972 Update version log for v0.0.21
+847aaa6 Update version log for v0.0.22
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -139,6 +139,7 @@ Key tags:
 - `v0.0.19`: storage-pool LVM default plus Incus/ZFS actionable error guidance.
 - `v0.0.20`: production split static roots follow atomic `current`.
 - `v0.0.21`: production artifact CLI OTA start command uses compiled dist entry.
+- `v0.0.22`: redacted production proof snapshot helper.
 
 Latest production proof:
 
@@ -152,6 +153,14 @@ Latest production proof:
 - Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin static bundle markers for admin `/admin/plugins` and user `/plugins/smoke`, plugin API 401 protection, docs TLS, and v0.0.21 Chinese/English version logs.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
 - Remaining production warnings are still business-proof blockers, not deployment blockers: full resource lifecycle cleanup proof, SMTP delivery, Lsky upload, external notification delivery, and Turnstile/session-gated browser smoke.
+
+Latest release proof:
+
+- `v0.0.22` was tagged from commit `9f638d8 Add redacted production proof snapshot`.
+- GitHub Build & Release run `28047303600` completed successfully.
+- GitHub Release assets are available for `ota-manifest.json`, `incudal-v0.0.22-ota-manifest.json`, linux amd64/arm64 tarballs, and both `.sha256` files.
+- The public OTA manifest reports version `v0.0.22`, commit `9f638d87fc3e`, changelog `Add redacted production proof snapshot`, amd64 size `89845500` with SHA256 prefix `c02b95244dca4323`, and arm64 size `88976634` with SHA256 prefix `489594c506ad5487`.
+- Production has not yet been updated to `v0.0.22`; current live production proof remains `v0.0.21` until an online update task is run and verified.
 
 Storage-pool note:
 
@@ -417,7 +426,16 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Release Documentation Rule
 
-When a new feature is completed, it must be released as a new OTA version, and GitHub plus the docs site must be kept in sync.
+When a new feature or complete bugfix bundle is completed, publish one OTA version for that completed unit of work, and keep GitHub plus the docs site in sync. Do not publish an OTA for every tiny intermediate fix. Handoff-only, audit-only, and non-behavior documentation changes usually do not need an OTA.
+
+Versioning rule:
+
+- Use three-part semantic tags: `vMAJOR.MINOR.PATCH`.
+- Patch values only run from `0` through `9`.
+- After `v0.0.9`, the next version is `v0.1.0`, not `v0.0.10`.
+- After `v0.9.9`, the next version is `v1.0.0`.
+- Existing historical tags remain unchanged; apply this rule to future releases.
+- Version-log section labels and commit subject labels must be bilingual Chinese/English.
 
 Required AI development lifecycle:
 
@@ -426,7 +444,7 @@ Implement feature
   -> run automatic acceptance / guard checks
   -> run targeted and relevant full tests
   -> fix any failures
-  -> publish a new OTA version
+  -> publish one OTA version for the completed feature/fix bundle
   -> regenerate version logs
   -> update missing Chinese and English docs
   -> build docs site
@@ -436,7 +454,7 @@ Implement feature
 Required release steps:
 
 1. Commit the code change with a clear commit message that can be used in the public version log.
-2. Create/publish a new OTA tag and GitHub Release artifact. Do not leave completed product features only on `main` without an OTA version.
+2. Create/publish one OTA tag and GitHub Release artifact for the completed feature/fix bundle. Do not leave completed product features only on `main` without an OTA version.
 3. Regenerate the docs-site version logs:
 
 ```bash
