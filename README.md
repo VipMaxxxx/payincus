@@ -178,6 +178,7 @@ deploy/nginx-split-intranet.conf.example
 - 更新目标必须是形如 `v1.2.3` 的 release tag。
 - 生产目录必须包含 `.git` 和 release tags。`scripts/install-panel.sh` 会在解压 release 包后初始化 Git 元数据并同步 tags；如果你手动纯 tar 解压且没有初始化 Git，后台只能显示当前版本，不能执行在线更新。
 - 后台服务只负责创建任务；生产环境默认通过受限 sudo 启动 `incudal-online-update@.service` 或 `incudal-online-rollback@.service`，实际更新/回滚由 root 级 systemd oneshot 执行。
+- 检查更新时会读取 GitHub Release OTA manifest，后台展示发行包、架构、大小和 SHA256；没有 manifest 时仍保留 Git tag 兼容更新模式。
 - 更新会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
 - 更新期间会保留 `.env`、`server/certs`、`agent-release`、`.npm` 和 `.cache` 等运行态资产。
 
@@ -187,6 +188,9 @@ deploy/nginx-split-intranet.conf.example
 SYSTEM_UPDATE_ALLOWED_ADMIN_IDS=1
 SYSTEM_UPDATE_LOG_DIR=/opt/incudal/update-logs
 SYSTEM_UPDATE_STARTED_BY_USER_ID=1
+SYSTEM_UPDATE_RELEASE_REPOSITORY=VipMaxxxx/payincus
+# 私有仓库或 API 限流时配置，public release 可留空
+SYSTEM_UPDATE_RELEASE_TOKEN=
 ```
 
 后台页面路径：
@@ -207,7 +211,7 @@ pnpm update:online v1.2.3
 ```bash
 sudo cp deploy/incudal-online-update@.service.example /etc/systemd/system/incudal-online-update@.service
 sudo cp deploy/incudal-online-rollback@.service.example /etc/systemd/system/incudal-online-rollback@.service
-printf 'Defaults:incudal !requiretty\nincudal ALL=(root) NOPASSWD: /usr/bin/systemctl start incudal-online-update@*.service, /usr/bin/systemctl start incudal-online-rollback@*.service\n' \
+printf 'Defaults:incudal !requiretty\nincudal ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block incudal-online-update@*.service, /usr/bin/systemctl start --no-block incudal-online-rollback@*.service\n' \
   | sudo tee /etc/sudoers.d/incudal-online-update >/dev/null
 sudo chmod 440 /etc/sudoers.d/incudal-online-update
 sudo visudo -cf /etc/sudoers.d/incudal-online-update

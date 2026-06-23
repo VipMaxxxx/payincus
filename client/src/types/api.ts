@@ -160,6 +160,23 @@ export interface AvailableSystemUpdate {
   commit: string | null
   date: string | null
   changelog: string[]
+  ota: OtaReleaseInfo
+}
+
+export interface OtaArtifactInfo {
+  name: string
+  platform: string
+  arch: string
+  url: string
+  sha256: string
+  size: number | null
+}
+
+export interface OtaReleaseInfo {
+  manifestAvailable: boolean
+  manifestUrl: string | null
+  artifacts: OtaArtifactInfo[]
+  error: string | null
 }
 
 export interface SystemUpdateCheckResult {

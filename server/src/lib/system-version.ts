@@ -19,6 +19,7 @@ export interface AvailableUpdate {
   commit: string | null
   date: string | null
   changelog: string[]
+  ota: OtaReleaseInfo
 }
 
 export interface UpdateCheckResult {
@@ -31,6 +32,32 @@ export interface UpdateCheckResult {
 }
 
 const tagPattern = /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/
+
+export interface OtaArtifactInfo {
+  name: string
+  platform: string
+  arch: string
+  url: string
+  sha256: string
+  size: number | null
+}
+
+export interface OtaReleaseInfo {
+  manifestAvailable: boolean
+  manifestUrl: string | null
+  artifacts: OtaArtifactInfo[]
+  error: string | null
+}
+
+interface GitHubReleaseAsset {
+  name?: string
+  size?: number
+  browser_download_url?: string
+}
+
+interface GitHubReleaseResponse {
+  assets?: GitHubReleaseAsset[]
+}
 
 export function getProjectRoot(): string {
   return resolve(process.env.INCUDAL_APP_DIR || process.cwd())
@@ -58,6 +85,92 @@ async function runGit(args: string[], cwd = getProjectRoot()): Promise<string | 
     return stdout.trim()
   } catch {
     return null
+  }
+}
+
+function getReleaseRepository(): string {
+  return process.env.SYSTEM_UPDATE_RELEASE_REPOSITORY ||
+    process.env.GITHUB_REPO ||
+    'VipMaxxxx/payincus'
+}
+
+function getReleaseToken(): string | null {
+  return process.env.SYSTEM_UPDATE_RELEASE_TOKEN ||
+    process.env.GITHUB_TOKEN ||
+    null
+}
+
+function normalizeOtaArtifact(input: unknown): OtaArtifactInfo | null {
+  if (!input || typeof input !== 'object') return null
+  const value = input as Partial<OtaArtifactInfo>
+  const name = typeof value.name === 'string' ? value.name.trim() : ''
+  const platform = typeof value.platform === 'string' ? value.platform.trim() : ''
+  const arch = typeof value.arch === 'string' ? value.arch.trim() : ''
+  const url = typeof value.url === 'string' ? value.url.trim() : ''
+  const sha256 = typeof value.sha256 === 'string' ? value.sha256.trim().toLowerCase() : ''
+  const size = typeof value.size === 'number' && Number.isSafeInteger(value.size) && value.size >= 0
+    ? value.size
+    : null
+
+  if (!name || !platform || !arch || !url || !/^[a-f0-9]{64}$/.test(sha256)) return null
+  return { name, platform, arch, url, sha256, size }
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const headers: Record<string, string> = {
+    accept: 'application/vnd.github+json',
+    'user-agent': 'payincus-online-update'
+  }
+  const token = getReleaseToken()
+  if (token) headers.authorization = `Bearer ${token}`
+
+  const response = await fetch(url, { headers })
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+  return await response.json() as T
+}
+
+async function getOtaReleaseInfo(tag: string): Promise<OtaReleaseInfo> {
+  const repository = getReleaseRepository()
+  const releaseApiUrl = `https://api.github.com/repos/${repository}/releases/tags/${encodeURIComponent(tag)}`
+
+  try {
+    const release = await fetchJson<GitHubReleaseResponse>(releaseApiUrl)
+    const assets = Array.isArray(release.assets) ? release.assets : []
+    const manifestAsset = assets.find(asset =>
+      asset.name === 'ota-manifest.json' ||
+      asset.name === `incudal-${tag}-ota-manifest.json`
+    )
+    const manifestUrl = manifestAsset?.browser_download_url || null
+    if (!manifestUrl) {
+      return {
+        manifestAvailable: false,
+        manifestUrl: null,
+        artifacts: [],
+        error: 'GitHub Release 未提供 OTA manifest'
+      }
+    }
+
+    const manifest = await fetchJson<{ artifacts?: unknown[] }>(manifestUrl)
+    const artifacts = (Array.isArray(manifest.artifacts) ? manifest.artifacts : [])
+      .map(normalizeOtaArtifact)
+      .filter((artifact): artifact is OtaArtifactInfo => artifact !== null)
+
+    return {
+      manifestAvailable: artifacts.length > 0,
+      manifestUrl,
+      artifacts,
+      error: artifacts.length > 0 ? null : 'OTA manifest 中没有有效 artifact'
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      manifestAvailable: false,
+      manifestUrl: null,
+      artifacts: [],
+      error: `读取 GitHub Release OTA manifest 失败: ${message}`
+    }
   }
 }
 
@@ -159,7 +272,8 @@ export async function checkForUpdates(root = getProjectRoot()): Promise<UpdateCh
       version: tag,
       commit: await getTagCommit(tag, root),
       date: await getTagDate(tag, root),
-      changelog: await getTagChangelog(tag, root)
+      changelog: await getTagChangelog(tag, root),
+      ota: await getOtaReleaseInfo(tag)
     })
   }
 

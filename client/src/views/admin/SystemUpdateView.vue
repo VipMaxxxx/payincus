@@ -31,6 +31,10 @@ const latestUpdate = computed<AvailableSystemUpdate | null>(() =>
   updateCheck.value?.latest || null
 )
 
+const latestOtaArtifacts = computed(() =>
+  latestUpdate.value?.ota?.artifacts || []
+)
+
 const repositoryUnavailable = computed(() =>
   updateCheck.value?.repositoryAvailable === false
 )
@@ -46,6 +50,22 @@ function formatDate(value: string | null | undefined): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
+}
+
+function formatBytes(value: number | null | undefined): string {
+  if (!value || value < 0) return '-'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let size = value
+  let index = 0
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024
+    index += 1
+  }
+  return `${size.toFixed(index === 0 ? 0 : 1)} ${units[index]}`
+}
+
+function shortSha(value: string | null | undefined): string {
+  return value ? `${value.slice(0, 12)}...` : '-'
 }
 
 function statusLabel(status: SystemUpdateTask['status']): string {
@@ -281,6 +301,34 @@ onUnmounted(() => {
             </ul>
             <p v-else class="mt-2 text-sm text-themed-muted">检查更新后显示 release tag 说明。</p>
           </div>
+          <div class="mt-5">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-sm font-medium text-themed">OTA 发行包</h3>
+              <span
+                class="rounded border px-2 py-0.5 text-xs"
+                :class="latestUpdate?.ota?.manifestAvailable ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
+              >
+                {{ latestUpdate?.ota?.manifestAvailable ? '已校验 manifest' : 'Git 更新兼容模式' }}
+              </span>
+            </div>
+            <div v-if="latestOtaArtifacts.length" class="mt-2 space-y-2">
+              <div
+                v-for="artifact in latestOtaArtifacts"
+                :key="artifact.name"
+                class="rounded border border-themed px-3 py-2 text-xs text-themed-muted"
+              >
+                <div class="font-medium text-themed">{{ artifact.name }}</div>
+                <div class="mt-1 grid gap-1 sm:grid-cols-3">
+                  <span>{{ artifact.platform }}/{{ artifact.arch }}</span>
+                  <span>{{ formatBytes(artifact.size) }}</span>
+                  <span class="font-mono">{{ shortSha(artifact.sha256) }}</span>
+                </div>
+              </div>
+            </div>
+            <p v-else class="mt-2 text-sm text-themed-muted">
+              {{ latestUpdate?.ota?.error || '检查更新后显示 OTA manifest 和包校验信息。' }}
+            </p>
+          </div>
           <button
             class="btn-primary mt-5 w-full"
             :disabled="repositoryUnavailable || !latestUpdate || starting || hasRunningTask"
@@ -300,6 +348,9 @@ onUnmounted(() => {
             <div>
               <div class="font-semibold text-themed">{{ item.version }}</div>
               <div class="mt-1 text-xs text-themed-muted">{{ formatDate(item.date) }} · {{ item.commit || '-' }}</div>
+              <div class="mt-1 text-xs" :class="item.ota.manifestAvailable ? 'text-emerald-700' : 'text-amber-700'">
+                {{ item.ota.manifestAvailable ? `OTA manifest · ${item.ota.artifacts.length} 个包` : (item.ota.error || '未发现 OTA manifest') }}
+              </div>
               <ul v-if="item.changelog.length" class="mt-2 list-disc space-y-1 pl-5 text-sm text-themed-muted">
                 <li v-for="line in item.changelog.slice(0, 6)" :key="line">{{ line }}</li>
               </ul>

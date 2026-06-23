@@ -236,12 +236,73 @@ jobs:
       - name: 列出发行文件
         run: ls -lh incudal-*.tar.gz
 
+      - name: 生成 OTA manifest 和校验文件
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          REPO="${{ github.repository }}"
+          CHANGELOG="$(git tag -l "$VERSION" --format='%(contents)' | sed '/^[[:space:]]*$/d' || true)"
+          if [[ -z "$CHANGELOG" ]]; then
+            CHANGELOG="$(git log -1 --pretty=%s)"
+          fi
+
+          for file in incudal-"$VERSION"-linux-*.tar.gz; do
+            sha256sum "$file" > "$file.sha256"
+          done
+
+          export VERSION REPO CHANGELOG
+          node <<'NODE'
+          const fs = require('fs')
+          const crypto = require('crypto')
+
+          const version = process.env.VERSION
+          const repo = process.env.REPO
+          const changelog = (process.env.CHANGELOG || '')
+            .split(/\r?\n/)
+            .map(line => line.replace(/^[-*]\s+/, '').trim())
+            .filter(Boolean)
+            .slice(0, 50)
+
+          const artifacts = fs.readdirSync('.')
+            .filter(name => name.startsWith(`incudal-${version}-linux-`) && name.endsWith('.tar.gz'))
+            .sort()
+            .map(name => {
+              const match = name.match(/linux-([^.]+)\.tar\.gz$/)
+              const data = fs.readFileSync(name)
+              return {
+                name,
+                platform: 'linux',
+                arch: match ? match[1] : 'unknown',
+                url: `https://github.com/${repo}/releases/download/${version}/${name}`,
+                sha256: crypto.createHash('sha256').update(data).digest('hex'),
+                size: data.length
+              }
+            })
+
+          fs.writeFileSync(`incudal-${version}-ota-manifest.json`, JSON.stringify({
+            schemaVersion: 1,
+            product: 'payincus',
+            version,
+            gitTag: version,
+            gitCommit: '${{ github.sha }}'.slice(0, 12),
+            buildTime: new Date().toISOString(),
+            minimumUpdaterVersion: 'v0.0.3',
+            changelog,
+            artifacts
+          }, null, 2) + '\n')
+          NODE
+
+          cp "incudal-${VERSION}-ota-manifest.json" ota-manifest.json
+          ls -lh incudal-*.tar.gz incudal-*.sha256 *ota-manifest.json
+
       # 创建 Release 并上传所有架构的产物
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             incudal-*.tar.gz
+            incudal-*.tar.gz.sha256
+            incudal-*-ota-manifest.json
+            ota-manifest.json
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}

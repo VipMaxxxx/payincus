@@ -46,10 +46,14 @@ assert.ok(
   versionLib.includes('const tagPattern = /^v\\d+\\.\\d+\\.\\d+') &&
     versionLib.includes('repositoryAvailable: false') &&
     versionLib.includes("rev-parse', '--is-inside-work-tree") &&
+    versionLib.includes('interface GitHubReleaseAsset') &&
+    versionLib.includes('getOtaReleaseInfo') &&
+    versionLib.includes('ota-manifest.json') &&
+    versionLib.includes('SYSTEM_UPDATE_RELEASE_REPOSITORY') &&
     route.includes('isValidReleaseTag(targetVersion)') &&
     route.includes('GIT_REPOSITORY_REQUIRED') &&
     route.includes('additionalProperties: false'),
-  'system update must only accept controlled release tags, require a Git checkout, and reject extra input'
+  'system update must only accept controlled release tags, require a Git checkout, expose OTA manifest metadata, and reject extra input'
 )
 
 assert.ok(
@@ -102,6 +106,8 @@ assert.ok(
     installPanel.includes('/etc/sudoers.d/incudal-online-update') &&
     installPanel.includes('NOPASSWD: ${systemctl_bin} start --no-block incudal-online-update@*.service') &&
     installPanel.includes('readonly SERVICE_NAME="incudal-backend"') &&
+    installPanel.includes('SYSTEM_UPDATE_RELEASE_REPOSITORY') &&
+    installPanel.includes('SYSTEM_UPDATE_RELEASE_TOKEN') &&
     installPanel.includes('NoNewPrivileges=false') &&
     backendService.includes('NoNewPrivileges=false') &&
     backendService.includes('/opt/incudal/.git /opt/incudal/update-logs'),
@@ -128,6 +134,9 @@ assert.ok(
 assert.ok(
   releaseWorkflow.includes('cp scripts/apply-online-update.sh release/scripts/') &&
     releaseWorkflow.includes("fs.writeFileSync('release/version.json'") &&
+    releaseWorkflow.includes('incudal-${VERSION}-ota-manifest.json') &&
+    releaseWorkflow.includes('sha256sum "$file" > "$file.sha256"') &&
+    releaseWorkflow.includes('ota-manifest.json') &&
     releaseWorkflow.includes('cp -r deploy/* release/deploy/') &&
     installPanel.includes('git init -q') &&
     installPanel.includes('git fetch --tags --force --quiet origin') &&

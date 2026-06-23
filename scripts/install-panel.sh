@@ -165,6 +165,8 @@ ensure_env_keys() {
     set_env_if_missing "SYSTEM_UPDATE_ALLOWED_ADMIN_IDS" "" "允许执行在线更新的管理员 ID"
     set_env_if_missing "SYSTEM_UPDATE_LOG_DIR" "${INSTALL_DIR}/update-logs" "在线更新日志目录"
     set_env_if_missing "SYSTEM_UPDATE_STARTED_BY_USER_ID" "" "命令行更新任务发起管理员 ID"
+    set_env_if_missing "SYSTEM_UPDATE_RELEASE_REPOSITORY" "${GITHUB_REPO}" "在线更新 GitHub Release 仓库"
+    set_env_if_missing "SYSTEM_UPDATE_RELEASE_TOKEN" "" "在线更新私有 Release Token"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_REPOSITORY" "" "Agent GitHub Release 仓库"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_TOKEN" "" "Agent GitHub Release Token"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_DIR" "" "Agent 本地 Release 目录"
@@ -789,6 +791,8 @@ DISABLE_REQUEST_LOG=true
 SYSTEM_UPDATE_ALLOWED_ADMIN_IDS=
 SYSTEM_UPDATE_LOG_DIR=${INSTALL_DIR}/update-logs
 SYSTEM_UPDATE_STARTED_BY_USER_ID=
+SYSTEM_UPDATE_RELEASE_REPOSITORY=${GITHUB_REPO}
+SYSTEM_UPDATE_RELEASE_TOKEN=
 
 # ============ Agent Release 配置 ============
 # 可使用 GitHub Release 仓库、本地 release 目录，或自定义二进制 URL+SHA256。
