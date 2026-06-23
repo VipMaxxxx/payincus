@@ -1,10 +1,19 @@
 import '../config/env.js'
-import { appendFile, mkdir, cp, rm, writeFile } from 'fs/promises'
-import { existsSync } from 'fs'
+import { createHash } from 'crypto'
+import { appendFile, mkdir, cp, rm, writeFile, readdir, stat } from 'fs/promises'
+import { createReadStream, createWriteStream, existsSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { spawn } from 'child_process'
+import { Readable } from 'stream'
+import { pipeline } from 'stream/promises'
 import { prisma, closePrismaDatabase } from '../db/prisma.js'
-import { getCurrentVersionMetadata, isValidReleaseTag } from '../lib/system-version.js'
+import {
+  getCurrentVersionMetadata,
+  getOtaReleaseInfo,
+  getReleaseToken,
+  isValidReleaseTag,
+  type OtaArtifactInfo
+} from '../lib/system-version.js'
 
 const taskId = Number(process.argv[2])
 let targetVersion = String(process.argv[3] || '').trim()
@@ -16,6 +25,8 @@ const adminFrontendUrl = process.env.ADMIN_FRONTEND_URL || 'https://admin.payinc
 const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:3001'
 const logDir = resolve(process.env.SYSTEM_UPDATE_LOG_DIR || join(installDir, 'update-logs'))
 const logPath = resolve(process.env.SYSTEM_UPDATE_LOG_PATH || join(logDir, `system-update-${taskId}.log`))
+const updateDownloadDir = resolve(process.env.SYSTEM_UPDATE_DOWNLOAD_DIR || join(dirname(installDir), '.incudal-update-downloads'))
+const updateApplyMode = process.env.SYSTEM_UPDATE_APPLY_MODE || 'auto'
 
 function now(): string {
   return new Date().toISOString()
@@ -89,6 +100,98 @@ async function waitForBackendHealth(): Promise<void> {
   throw new Error(`Backend health did not become ready after restart: ${lastError}`)
 }
 
+function getRuntimePlatform(): string {
+  return process.platform
+}
+
+function getRuntimeArch(): string {
+  if (process.arch === 'x64') return 'amd64'
+  if (process.arch === 'arm64') return 'arm64'
+  return process.arch
+}
+
+function selectRuntimeArtifact(artifacts: OtaArtifactInfo[]): OtaArtifactInfo | null {
+  const platform = getRuntimePlatform()
+  const arch = getRuntimeArch()
+  return artifacts.find(artifact => artifact.platform === platform && artifact.arch === arch) || null
+}
+
+async function sha256File(path: string): Promise<string> {
+  const hash = createHash('sha256')
+  await pipeline(createReadStream(path), hash)
+  return hash.digest('hex')
+}
+
+async function downloadArtifact(artifact: OtaArtifactInfo): Promise<string> {
+  await mkdir(updateDownloadDir, { recursive: true })
+  const artifactPath = join(updateDownloadDir, `${taskId}-${artifact.name}`)
+  await log(`Downloading OTA artifact ${artifact.name} (${artifact.size ?? 'unknown'} bytes)`)
+
+  const headers: Record<string, string> = {
+    'user-agent': 'payincus-online-update'
+  }
+  const token = getReleaseToken()
+  if (token) headers.authorization = `Bearer ${token}`
+
+  const response = await fetch(artifact.url, { headers })
+  if (!response.ok || !response.body) {
+    throw new Error(`Failed to download OTA artifact: HTTP ${response.status}`)
+  }
+
+  await pipeline(Readable.fromWeb(response.body), createWriteStream(artifactPath))
+
+  const fileStat = await stat(artifactPath)
+  if (artifact.size !== null && fileStat.size !== artifact.size) {
+    throw new Error(`OTA artifact size mismatch: expected ${artifact.size}, got ${fileStat.size}`)
+  }
+
+  const actualSha256 = await sha256File(artifactPath)
+  if (actualSha256 !== artifact.sha256) {
+    throw new Error(`OTA artifact sha256 mismatch: expected ${artifact.sha256}, got ${actualSha256}`)
+  }
+
+  await log(`OTA artifact verified: sha256=${actualSha256}`)
+  return artifactPath
+}
+
+async function assertArtifactStaging(stagingDir: string): Promise<void> {
+  const requiredPaths = [
+    'package.json',
+    'pnpm-lock.yaml',
+    'client/dist/user/index.html',
+    'client/dist/admin/index.html',
+    'server/dist/app.js',
+    'server/prisma/schema.prisma',
+    'scripts/verify-split-host.sh',
+    'scripts/verify-production-readiness.sh',
+    'scripts/verify-log-header-exposure.sh',
+    'version.json'
+  ]
+
+  for (const relativePath of requiredPaths) {
+    if (!existsSync(join(stagingDir, relativePath))) {
+      throw new Error(`OTA artifact is missing required path: ${relativePath}`)
+    }
+  }
+}
+
+async function clearInstallDirForArtifact(): Promise<void> {
+  const preserved = new Set([
+    '.env',
+    '.git',
+    '.gitconfig',
+    '.npm',
+    '.cache',
+    'agent-release',
+    'update-logs'
+  ])
+
+  for (const entry of await readdir(installDir)) {
+    if (preserved.has(entry)) continue
+    await rm(join(installDir, entry), { recursive: true, force: true })
+  }
+}
+
 async function copyIfExists(from: string, to: string): Promise<void> {
   if (existsSync(from)) {
     await rm(to, { recursive: true, force: true })
@@ -135,6 +238,115 @@ async function configureGitSafeDirectory(): Promise<void> {
   })
 }
 
+async function getRuntimeArtifact(targetVersion: string): Promise<OtaArtifactInfo | null> {
+  if (updateApplyMode === 'git') return null
+  const ota = await getOtaReleaseInfo(targetVersion)
+  const artifact = selectRuntimeArtifact(ota.artifacts)
+  if (artifact) {
+    await log(`Using OTA artifact ${artifact.name} for ${getRuntimePlatform()}/${getRuntimeArch()}`)
+    return artifact
+  }
+
+  const reason = ota.error || `no artifact for ${getRuntimePlatform()}/${getRuntimeArch()}`
+  if (updateApplyMode === 'artifact') {
+    throw new Error(`OTA artifact mode requested but no usable artifact is available: ${reason}`)
+  }
+  await log(`No usable OTA artifact found; falling back to Git build mode: ${reason}`)
+  return null
+}
+
+async function applyArtifactUpdate(artifact: OtaArtifactInfo, backupDir: string, timestamp: string): Promise<void> {
+  const artifactPath = await downloadArtifact(artifact)
+  const stagingDir = join(updateDownloadDir, `staging-${taskId}-${timestamp}`)
+
+  await rm(stagingDir, { recursive: true, force: true })
+  await mkdir(stagingDir, { recursive: true })
+  await run('tar', ['-xzf', artifactPath, '-C', stagingDir], { timeoutMs: 180000 })
+  await assertArtifactStaging(stagingDir)
+
+  await log(`Backup directory: ${backupDir}`)
+  await cp(installDir, backupDir, { recursive: true, preserveTimestamps: true })
+
+  await clearInstallDirForArtifact()
+  await run('bash', ['-lc', `cp -a ${JSON.stringify(stagingDir)}/. ${JSON.stringify(installDir)}/`], { timeoutMs: 180000 })
+  await restoreRuntimeAssets(backupDir)
+
+  await run('corepack', ['enable'], { timeoutMs: 120000 })
+  await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000 })
+  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
+  await writeVersionFile()
+}
+
+async function applyGitUpdate(backupDir: string): Promise<void> {
+  await run('git', ['fetch', '--tags', '--quiet'], { timeoutMs: 120000 })
+  await run('git', ['rev-parse', '--verify', `${targetVersion}^{commit}`], { timeoutMs: 30000 })
+
+  await log(`Backup directory: ${backupDir}`)
+  await cp(installDir, backupDir, { recursive: true, preserveTimestamps: true })
+
+  await run('git', ['checkout', '--force', targetVersion], { timeoutMs: 120000 })
+  await run('git', ['clean', '-fdx', '-e', '.env', '-e', '.gitconfig', '-e', 'server/certs', '-e', 'agent-release', '-e', '.npm', '-e', '.cache', '-e', 'update-logs'], { timeoutMs: 120000 })
+  await restoreRuntimeAssets(backupDir)
+
+  await run('corepack', ['enable'], { timeoutMs: 120000 })
+  await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000 })
+  await run('pnpm', ['install', '--frozen-lockfile', '--prod=false'], {
+    timeoutMs: 600000,
+    env: {
+      NODE_ENV: 'development',
+      PNPM_CONFIG_PROD: 'false'
+    }
+  })
+  await run('pnpm', ['build'], { timeoutMs: 900000 })
+  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
+  await run('pnpm', ['--filter', 'server', 'test:frontend-dist-boundary-guards'], { timeoutMs: 120000 })
+  await run('pnpm', ['--filter', 'server', 'test:frontend-route-guards'], { timeoutMs: 120000 })
+  await writeVersionFile()
+}
+
+async function verifyUpdatedRuntime(isArtifactMode: boolean): Promise<void> {
+  await chownInstallDir()
+  await run('systemctl', ['restart', serviceName], { timeoutMs: 120000 })
+  await waitForBackendHealth()
+  await run('bash', ['scripts/verify-split-host.sh'], {
+    timeoutMs: 180000,
+    env: {
+      FRONTEND_URL: frontendUrl,
+      ADMIN_FRONTEND_URL: adminFrontendUrl,
+      BACKEND_URL: backendUrl
+    }
+  })
+  await run('pnpm', ['verify:production'], {
+    timeoutMs: 240000,
+    env: {
+      ENV_FILE: join(installDir, '.env'),
+      FRONTEND_URL: frontendUrl,
+      ADMIN_FRONTEND_URL: adminFrontendUrl,
+      BACKEND_URL: backendUrl
+    }
+  })
+  await run('pnpm', ['verify:log-header'], {
+    timeoutMs: 240000,
+    env: {
+      ENV_FILE: join(installDir, '.env'),
+      FRONTEND_URL: frontendUrl,
+      ADMIN_FRONTEND_URL: adminFrontendUrl,
+      BACKEND_URL: backendUrl
+    }
+  })
+  if (!isArtifactMode) {
+    await run('pnpm', ['smoke:agent-release'], {
+      timeoutMs: 180000,
+      env: {
+        FRONTEND_URL: frontendUrl,
+        BACKEND_URL: backendUrl
+      }
+    })
+  } else {
+    await log('Skipping source-based Agent release smoke in artifact mode; production readiness already verified the Agent manifest')
+  }
+}
+
 async function main(): Promise<void> {
   if (!Number.isSafeInteger(taskId) || taskId <= 0) {
     throw new Error('Invalid task id')
@@ -162,66 +374,13 @@ async function main(): Promise<void> {
   const backupDir = `${installDir}.bak.${timestamp}`
 
   try {
-    await run('git', ['fetch', '--tags', '--quiet'], { timeoutMs: 120000 })
-    await run('git', ['rev-parse', '--verify', `${targetVersion}^{commit}`], { timeoutMs: 30000 })
-
-    await log(`Backup directory: ${backupDir}`)
-    await cp(installDir, backupDir, { recursive: true, preserveTimestamps: true })
-
-    await run('git', ['checkout', '--force', targetVersion], { timeoutMs: 120000 })
-    await run('git', ['clean', '-fdx', '-e', '.env', '-e', '.gitconfig', '-e', 'server/certs', '-e', 'agent-release', '-e', '.npm', '-e', '.cache', '-e', 'update-logs'], { timeoutMs: 120000 })
-    await restoreRuntimeAssets(backupDir)
-
-    await run('corepack', ['enable'], { timeoutMs: 120000 })
-    await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000 })
-    await run('pnpm', ['install', '--frozen-lockfile', '--prod=false'], {
-      timeoutMs: 600000,
-      env: {
-        NODE_ENV: 'development',
-        PNPM_CONFIG_PROD: 'false'
-      }
-    })
-    await run('pnpm', ['build'], { timeoutMs: 900000 })
-    await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
-    await run('pnpm', ['--filter', 'server', 'test:frontend-dist-boundary-guards'], { timeoutMs: 120000 })
-    await run('pnpm', ['--filter', 'server', 'test:frontend-route-guards'], { timeoutMs: 120000 })
-    await writeVersionFile()
-    await chownInstallDir()
-    await run('systemctl', ['restart', serviceName], { timeoutMs: 120000 })
-    await waitForBackendHealth()
-    await run('bash', ['scripts/verify-split-host.sh'], {
-      timeoutMs: 180000,
-      env: {
-        FRONTEND_URL: frontendUrl,
-        ADMIN_FRONTEND_URL: adminFrontendUrl,
-        BACKEND_URL: backendUrl
-      }
-    })
-    await run('pnpm', ['verify:production'], {
-      timeoutMs: 240000,
-      env: {
-        ENV_FILE: join(installDir, '.env'),
-        FRONTEND_URL: frontendUrl,
-        ADMIN_FRONTEND_URL: adminFrontendUrl,
-        BACKEND_URL: backendUrl
-      }
-    })
-    await run('pnpm', ['verify:log-header'], {
-      timeoutMs: 240000,
-      env: {
-        ENV_FILE: join(installDir, '.env'),
-        FRONTEND_URL: frontendUrl,
-        ADMIN_FRONTEND_URL: adminFrontendUrl,
-        BACKEND_URL: backendUrl
-      }
-    })
-    await run('pnpm', ['smoke:agent-release'], {
-      timeoutMs: 180000,
-      env: {
-        FRONTEND_URL: frontendUrl,
-        BACKEND_URL: backendUrl
-      }
-    })
+    const artifact = await getRuntimeArtifact(targetVersion)
+    if (artifact) {
+      await applyArtifactUpdate(artifact, backupDir, timestamp)
+    } else {
+      await applyGitUpdate(backupDir)
+    }
+    await verifyUpdatedRuntime(Boolean(artifact))
 
     await updateTask({
       status: 'success',

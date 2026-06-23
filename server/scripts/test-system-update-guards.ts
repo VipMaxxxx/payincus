@@ -97,6 +97,21 @@ assert.ok(
 )
 
 assert.ok(
+  runTask.includes('SYSTEM_UPDATE_APPLY_MODE') &&
+    runTask.includes('getOtaReleaseInfo(targetVersion)') &&
+    runTask.includes('selectRuntimeArtifact') &&
+    runTask.includes('downloadArtifact') &&
+    runTask.includes('createHash') &&
+    runTask.includes('OTA artifact sha256 mismatch') &&
+    runTask.includes("tar', ['-xzf', artifactPath") &&
+    runTask.includes('assertArtifactStaging') &&
+    runTask.includes("'.git'") &&
+    runTask.includes('No usable OTA artifact found; falling back to Git build mode') &&
+    runTask.includes('Skipping source-based Agent release smoke in artifact mode'),
+  'online updater must prefer checksum-verified OTA release artifacts while preserving Git fallback mode'
+)
+
+assert.ok(
   route.includes("execFileAsync('sudo', ['-n', 'systemctl', 'start', '--no-block', unitName]") &&
     route.includes("incudal-online-update@${taskId}.service") &&
     route.includes("incudal-online-rollback@${taskId}.service") &&
@@ -109,6 +124,7 @@ assert.ok(
     installPanel.includes('readonly SERVICE_NAME="incudal-backend"') &&
     installPanel.includes('SYSTEM_UPDATE_RELEASE_REPOSITORY') &&
     installPanel.includes('SYSTEM_UPDATE_RELEASE_TOKEN') &&
+    installPanel.includes('SYSTEM_UPDATE_APPLY_MODE=auto') &&
     installPanel.includes('NoNewPrivileges=false') &&
     backendService.includes('NoNewPrivileges=false') &&
     backendService.includes('/opt/incudal/.git /opt/incudal/update-logs'),
@@ -139,13 +155,15 @@ assert.ok(
     releaseWorkflow.includes('incudal-${VERSION}-ota-manifest.json') &&
     releaseWorkflow.includes('sha256sum "$file" > "$file.sha256"') &&
     releaseWorkflow.includes('ota-manifest.json') &&
+    releaseWorkflow.includes('pnpm --filter server test:frontend-dist-boundary-guards') &&
+    releaseWorkflow.includes('pnpm --filter server test:frontend-route-guards') &&
     releaseWorkflow.includes('fetch-depth: 0') &&
     releaseWorkflow.includes('cp -r deploy/* release/deploy/') &&
+    rootPackage.includes('"update:online": "bash scripts/apply-online-update.sh"') &&
     installPanel.includes('git init -q') &&
     installPanel.includes('git fetch --tags --force --quiet origin') &&
     onlineScript.includes('node server/dist/scripts/start-system-update-task.js') &&
     onlineScript.includes('git rev-parse --is-inside-work-tree') &&
-    rootPackage.includes('"update:online": "bash scripts/apply-online-update.sh"') &&
     serverPackage.includes('"update:online:start": "node --import tsx src/scripts/start-system-update-task.ts"'),
   'release package and package scripts must expose the controlled online updater and version metadata'
 )

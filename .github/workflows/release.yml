@@ -65,6 +65,11 @@ jobs:
       - name: 构建前端 (Vite)
         run: pnpm --filter client build
 
+      - name: 校验前后台构建边界
+        run: |
+          pnpm --filter server test:frontend-dist-boundary-guards
+          pnpm --filter server test:frontend-route-guards
+
       # ===== 构建后端 =====
       - name: 编译后端 (TypeScript)
         run: pnpm --filter server build

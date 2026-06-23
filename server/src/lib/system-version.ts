@@ -94,7 +94,7 @@ function getReleaseRepository(): string {
     'VipMaxxxx/payincus'
 }
 
-function getReleaseToken(): string | null {
+export function getReleaseToken(): string | null {
   return process.env.SYSTEM_UPDATE_RELEASE_TOKEN ||
     process.env.GITHUB_TOKEN ||
     null
@@ -131,7 +131,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return await response.json() as T
 }
 
-async function getOtaReleaseInfo(tag: string): Promise<OtaReleaseInfo> {
+export async function getOtaReleaseInfo(tag: string): Promise<OtaReleaseInfo> {
   const repository = getReleaseRepository()
   const releaseApiUrl = `https://api.github.com/repos/${repository}/releases/tags/${encodeURIComponent(tag)}`
 
