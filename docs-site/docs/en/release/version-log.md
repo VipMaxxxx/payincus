@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `301fc2c`
+- Current HEAD: `71cdcff`
 - Commit date: 2026-06-24
-- Commit subject: Update version log for static root fix
-- Latest tag: `v0.0.20`
+- Commit subject: Fix production OTA CLI start command
+- Latest tag: `v0.0.21`
 
 ## Unreleased Changes
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions
+
+## v0.0.21
+
+- Release commit: `71cdcff`
+- Commit date: 2026-06-24
+- Commit subject: Fix production OTA CLI start command
+
+### Fixes and Stability
+
+- Fix production OTA CLI start command `71cdcff`
+
+### Improvements and Adjustments
+
+- Update version log for v0.0.20 `40a245e`
 
 ## v0.0.20
 
