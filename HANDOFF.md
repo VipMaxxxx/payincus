@@ -141,6 +141,8 @@ Latest production proof:
 - Production `/opt/incudal/current/server/package.json` now reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
 - Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and its current admin JS assets contain `/admin/plugins` and `插件中心`.
+- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin static bundle markers for admin `/admin/plugins` and user `/plugins/smoke`, plugin API 401 protection, docs TLS, and v0.0.21 Chinese/English version logs.
+- Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
 - Remaining production warnings are still business-proof blockers, not deployment blockers: full resource lifecycle cleanup proof, SMTP delivery, Lsky upload, external notification delivery, and Turnstile/session-gated browser smoke.
 
 Storage-pool note:
