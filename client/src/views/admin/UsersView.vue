@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import api from '@/api'
+import api from '@/api/admin'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import VipLevelRulesEditor from '@/components/admin/VipLevelRulesEditor.vue'
@@ -11,6 +11,7 @@ import { useToast } from '@/stores/toast'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import { normalizeCountryName } from '@/utils/countryDisplay'
+import { instancesPath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -164,9 +165,14 @@ const linkedAccountsExpandedIP = ref(new Set())
 const linkedAccountsExpandedEmail = ref(new Set())
 const linkedAccountsExpandedUsername = ref(new Set())
 
+const customerBaseUrl = computed(() => {
+  const configuredUrl = import.meta.env.VITE_CUSTOMER_BASE_URL?.trim()
+  return (configuredUrl || window.location.origin).replace(/\/+$/, '')
+})
+
 // 计算注册链接
 const registerLink = computed(() => {
-  return `${window.location.origin}/register/${newInviteCode.value}`
+  return `${customerBaseUrl.value}/register/${newInviteCode.value}`
 })
 const normalizedUserSearchFields = computed(() => {
   return USER_SEARCH_FIELDS.filter(field => userSearchFields.value.includes(field))
@@ -373,7 +379,7 @@ async function toggleUserRole(user) {
 
 // 查看用户实例
 function viewUserInstances(user) {
-  router.push({ path: '/instances', query: { userId: user.id } })
+  router.push({ path: instancesPath(), query: { userId: user.id } })
 }
 
 // 打开重置密码确认弹窗

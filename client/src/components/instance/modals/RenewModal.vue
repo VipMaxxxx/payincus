@@ -6,6 +6,7 @@ import { useConfigStore } from '@/stores/config'
 import api from '@/api'
 import type { InstanceBillingInfo, RenewPreview } from '@/types/api'
 import { freeSiteCopy } from '@/utils/freeSiteFun'
+import { walletPath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 const themeStore = useThemeStore()
@@ -326,7 +327,7 @@ function handleClose() {
                 :class="themeStore.isDark ? 'bg-yellow-900/20 text-yellow-400' : 'bg-yellow-50 text-yellow-600'"
               >
                 {{ t('billing.insufficientBalance') }}
-                <a href="/wallet" class="underline ml-1">{{ t('billing.goRecharge') }}</a>
+                <RouterLink :to="walletPath()" class="underline ml-1">{{ t('billing.goRecharge') }}</RouterLink>
               </div>
               
               <!-- 托管实例续费限制提示 -->

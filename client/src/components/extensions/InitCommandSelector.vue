@@ -6,6 +6,7 @@
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
+import { extensionsPath } from '@/utils/app-paths'
 
 interface AvailableCommand {
   id: number
@@ -25,6 +26,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const manageExtensionsPath = extensionsPath()
 
 // 可用命令列表
 const commands = ref<AvailableCommand[]>([])
@@ -234,7 +236,8 @@ watch(() => props.distro, () => {
         <div v-else-if="loaded" class="text-center py-4">
           <p class="text-sm text-themed-muted">{{ $t('extensions.initCommands.noAvailable') }}</p>
           <router-link 
-            to="/extensions" 
+            v-if="manageExtensionsPath"
+            :to="manageExtensionsPath"
             class="text-xs text-primary-500 hover:text-primary-600 dark:hover:text-primary-400 mt-1 inline-block"
           >
             {{ $t('extensions.initCommands.goToManage') }} →

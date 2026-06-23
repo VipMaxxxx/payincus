@@ -11,6 +11,7 @@ import {
   getMessageRoute,
   canNavigate
 } from '@/utils/inboxHelper'
+import { inboxPath } from '@/utils/app-paths'
 import type { InboxMessage } from '@/types/api'
 import api from '@/api'
 
@@ -69,7 +70,7 @@ async function handleMessageClick(message: InboxMessage) {
   if (targetRoute) {
     router.push(targetRoute)
   } else {
-    router.push('/inbox')
+    router.push(inboxPath())
   }
 }
 
@@ -99,7 +100,7 @@ async function markAllAsRead() {
 // 查看全部
 function viewAll() {
   isOpen.value = false
-  router.push('/inbox')
+  router.push(inboxPath())
 }
 
 // 点击外部关闭

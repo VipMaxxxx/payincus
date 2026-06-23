@@ -204,6 +204,7 @@ export default {
         admin: 'Admin',
         expand: 'Expand',
         system: 'System',
+        systemUpdate: 'Version Update',
         users: 'Users',
         statistics: 'Statistics',
         hosts: 'Hosts',

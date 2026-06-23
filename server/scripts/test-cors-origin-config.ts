@@ -9,6 +9,7 @@ import {
 const originalEnv = {
   NODE_ENV: process.env.NODE_ENV,
   FRONTEND_URL: process.env.FRONTEND_URL,
+  ADMIN_FRONTEND_URL: process.env.ADMIN_FRONTEND_URL,
   CORS_ORIGINS: process.env.CORS_ORIGINS
 }
 
@@ -29,17 +30,30 @@ try {
 
   process.env.NODE_ENV = 'production'
   process.env.FRONTEND_URL = 'https://panel.example.com/app, https://alt.example.com/'
+  delete process.env.ADMIN_FRONTEND_URL
   delete process.env.CORS_ORIGINS
 
   assert.deepEqual(getConfiguredOrigins(), ['https://panel.example.com', 'https://alt.example.com'])
   assert.deepEqual(getCorsOrigins(), ['https://panel.example.com', 'https://alt.example.com'])
   assert.deepEqual(getAllowedWebSocketOrigins(), ['https://panel.example.com', 'https://alt.example.com'])
 
+  process.env.ADMIN_FRONTEND_URL = 'https://admin.example.com/console'
   process.env.CORS_ORIGINS = 'https://cors.example.com/path, invalid, https://cors.example.com/'
-  assert.deepEqual(getCorsOrigins(), ['https://cors.example.com'])
-  assert.deepEqual(getAllowedWebSocketOrigins(), ['https://cors.example.com'])
+  assert.deepEqual(getCorsOrigins(), [
+    'https://cors.example.com',
+    'https://panel.example.com',
+    'https://alt.example.com',
+    'https://admin.example.com'
+  ])
+  assert.deepEqual(getAllowedWebSocketOrigins(), [
+    'https://cors.example.com',
+    'https://panel.example.com',
+    'https://alt.example.com',
+    'https://admin.example.com'
+  ])
 
   delete process.env.FRONTEND_URL
+  delete process.env.ADMIN_FRONTEND_URL
   delete process.env.CORS_ORIGINS
   assert.equal(getCorsOrigins(), false)
   assert.deepEqual(getAllowedWebSocketOrigins(), [])
@@ -50,12 +64,16 @@ try {
   assert.deepEqual(getCorsOrigins(), [
     'https://panel.example.com',
     'http://localhost:3000',
-    'http://127.0.0.1:3000'
+    'http://127.0.0.1:3000',
+    'http://localhost:3002',
+    'http://127.0.0.1:3002'
   ])
   assert.deepEqual(getAllowedWebSocketOrigins(), [
     'https://panel.example.com',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:3002',
+    'http://127.0.0.1:3002',
     'http://localhost:3001',
     'http://127.0.0.1:3001'
   ])

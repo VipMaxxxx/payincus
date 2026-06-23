@@ -60,6 +60,7 @@ const verifyLiveAcceptance = readRepoFile('scripts/verify-live-acceptance.sh')
 const rootPackage = readRepoFile('package.json')
 const serverPackage = readRepoFile('server/package.json')
 const serverEnvConfig = readRepoFile('server/src/config/env.ts')
+const originConfig = readRepoFile('server/src/lib/origin-config.ts')
 const prismaConfig = readRepoFile('server/prisma.config.ts')
 const verifyProductionDbReadiness = readRepoFile('server/src/scripts/verify-production-db-readiness.ts')
 const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
@@ -132,10 +133,19 @@ function extractHeredoc(source: string, startMarker: string, endMarker: string):
 assert.match(envExample, /^PORT=3001$/m, '.env.example must default backend PORT to 3001')
 assert.match(envExample, /^SERVE_STATIC_CLIENT=false$/m, '.env.example must default backend static serving off for split deployment')
 assert.match(envExample, /^VITE_API_BASE_URL=\/api$/m, '.env.example must default frontend API base to same-origin /api')
-assert.match(envExample, /^PAYMENT_CALLBACK_BASE_URL=https:\/\/panel\.example\.com$/m, '.env.example must default payment callbacks to the public frontend origin')
+assert.match(envExample, /^ADMIN_FRONTEND_URL=https:\/\/admin\.payincus\.com$/m, '.env.example must define the separate admin frontend origin')
+assert.match(envExample, /^VITE_CUSTOMER_BASE_URL=https:\/\/demo\.payincus\.com$/m, '.env.example must define the customer frontend origin for admin-generated customer links')
+assert.match(envExample, /^VITE_ADMIN_BASE_URL=https:\/\/admin\.payincus\.com$/m, '.env.example must define the user frontend admin redirect origin')
+assert.match(envExample, /^PAYMENT_CALLBACK_BASE_URL=https:\/\/demo\.payincus\.com$/m, '.env.example must default payment callbacks to the public customer frontend origin')
 assert.match(envExample, /^COOKIE_SAME_SITE=$/m, '.env.example must leave SameSite unset for HTTPS same-origin proxy deployments')
 assert.match(envExample, /^COOKIE_SECURE=$/m, '.env.example must leave secure-cookie auto mode enabled by default')
 assert.match(envExample, /^COOKIE_DOMAIN=$/m, '.env.example must not set a cookie domain by default')
+assert.ok(
+  envExample.includes('Customer/admin subdomains must not share refresh cookies') &&
+    readme.includes('`COOKIE_DOMAIN` 必须保持空值') &&
+    installPanel.includes('COOKIE_DOMAIN must stay empty so customer/admin subdomains do not share refresh cookies'),
+  'split deployment docs must require COOKIE_DOMAIN to stay empty for customer/admin cookie isolation'
+)
 assert.ok(serverApp.includes("parseInt(process.env.PORT || '3001', 10)"), 'backend runtime must fall back to split backend port 3001 when PORT is missing')
 assert.ok(
   serverApp.includes("const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'"),
@@ -145,6 +155,8 @@ assert.match(installPanel, /^readonly DEFAULT_PORT=3001$/m, 'install script must
 assert.ok(initEnv.includes('set_env_if_missing "PORT" "3001" "后端监听端口"'), 'init-env script must default backend PORT to 3001')
 assert.ok(initEnv.includes('set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"'), 'init-env script must default SERVE_STATIC_CLIENT=false')
 assert.ok(initEnv.includes('set_env_if_missing "VITE_API_BASE_URL" "/api" "前端 API 基础路径"'), 'init-env script must default VITE_API_BASE_URL=/api')
+assert.ok(initEnv.includes('set_env_if_missing "VITE_CUSTOMER_BASE_URL" "" "管理后台生成客户链接的前端地址"'), 'init-env script must preserve the customer frontend URL for admin-generated customer links')
+assert.ok(initEnv.includes('set_env_if_missing "VITE_ADMIN_BASE_URL" "" "客户前端管理后台地址"'), 'init-env script must preserve the admin frontend URL for customer admin redirects')
 assert.ok(initEnv.includes('set_env_if_missing "INCUDAL_AGENT_RELEASE_DIR" "" "Agent 本地 Release 目录"'), 'init-env script must expose the local Agent release directory setting')
 assert.ok(
   installPanel.includes('set_env_if_value()') &&
@@ -153,22 +165,36 @@ assert.ok(
 )
 assert.ok(installPanel.includes('set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"'), 'install script must preserve split backend static-off mode')
 assert.ok(installPanel.includes('set_env_if_missing "VITE_API_BASE_URL" "/api" "前端 API 基础路径"'), 'install script must preserve same-origin /api frontend build mode')
+assert.ok(installPanel.includes('set_env_if_missing "VITE_CUSTOMER_BASE_URL" "" "管理后台生成客户链接的前端地址"'), 'install script must preserve the customer frontend URL for admin-generated customer links')
+assert.ok(installPanel.includes('set_env_if_missing "VITE_ADMIN_BASE_URL" "" "客户前端管理后台地址"'), 'install script must preserve the admin frontend URL for customer admin redirects')
 assert.ok(installPanel.includes('set_env_if_missing "INCUDAL_AGENT_RELEASE_DIR" "" "Agent 本地 Release 目录"'), 'install script must preserve the local Agent release directory setting')
 assert.ok(installPanel.includes('SERVE_STATIC_CLIENT=false'), 'generated production env must disable backend static serving')
 assert.ok(installPanel.includes('VITE_API_BASE_URL=/api'), 'generated production env must keep frontend API traffic under /api')
+assert.ok(installPanel.includes('ADMIN_FRONTEND_URL=') && installPanel.includes('VITE_CUSTOMER_BASE_URL=') && installPanel.includes('VITE_ADMIN_BASE_URL='), 'generated production env must include split user/admin frontend URL settings')
 assert.ok(installPanel.includes('INCUDAL_AGENT_RELEASE_DIR='), 'generated production env must include the local Agent release directory setting')
 assert.ok(
   verifySplitHost.includes('BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:3001}"'),
   'split verify script must default backend URL to port 3001'
 )
 assert.ok(rootPackage.includes('"smoke:split:auth": "pnpm --filter server smoke:split:auth"'), 'root package must expose split auth smoke script')
-assert.ok(serverPackage.includes('"smoke:split:auth": "tsx scripts/smoke-split-auth.ts"'), 'server package must expose split auth smoke script')
+assert.ok(
+  rootPackage.includes('VITE_APP_ENTRY=admin VITE_CUSTOMER_BASE_URL=http://127.0.0.1:3000 VITE_DEV_PORT=3002'),
+  'root dev scripts must point admin-generated customer links at the local user frontend'
+)
+assert.ok(serverPackage.includes('"smoke:split:auth": "node --import tsx scripts/smoke-split-auth.ts"'), 'server package must expose split auth smoke script')
 assert.ok(splitAuthSmoke.includes('frontend proxied /api/health'), 'split auth smoke must verify frontend /api proxy')
 assert.ok(splitAuthSmoke.includes('/api/auth/refresh'), 'split auth smoke must verify refresh token cookie flow')
 assert.ok(splitAuthSmoke.includes('anonymous admin boundary'), 'split auth smoke must verify anonymous admin boundary')
 assert.ok(rootPackage.includes('"smoke:agent-release": "pnpm --filter server smoke:agent-release"'), 'root package must expose Agent release smoke script')
-assert.ok(serverPackage.includes('"smoke:agent-release": "tsx scripts/smoke-agent-release.ts"'), 'server package must expose Agent release smoke script')
+assert.ok(serverPackage.includes('"smoke:agent-release": "node --import tsx scripts/smoke-agent-release.ts"'), 'server package must expose Agent release smoke script')
 assert.ok(localNginxSplitSmoke.includes('RUN_AGENT_RELEASE_SMOKE') && localNginxSplitSmoke.includes('pnpm --filter server smoke:agent-release'), 'local nginx split smoke must run the Agent release smoke by default')
+assert.ok(
+  localNginxSplitSmoke.includes('ADMIN_LOCAL_NGINX_PORT="${ADMIN_LOCAL_NGINX_PORT:-$((LOCAL_NGINX_PORT + 1))}"') &&
+    localNginxSplitSmoke.includes('ADMIN_CLIENT_DIST="${ADMIN_CLIENT_DIST:-$(pwd)/client/dist/admin}"') &&
+    localNginxSplitSmoke.includes('ADMIN_FRONTEND_URL="http://127.0.0.1:${ADMIN_LOCAL_NGINX_PORT}"') &&
+    localNginxSplitSmoke.includes('ADMIN_FRONTEND_URL="$ADMIN_FRONTEND_URL" BACKEND_URL="$BACKEND_URL" bash scripts/verify-split-host.sh'),
+  'local nginx split smoke must mount and verify a separate admin frontend'
+)
 assert.ok(
   agentReleaseSmoke.includes('/api/agent/install.sh') &&
     agentReleaseSmoke.includes('/api/agent/binary/incudal-agent-linux-amd64?v=v0.0.1') &&
@@ -197,9 +223,15 @@ assert.ok(
   'split verify script must scan live frontend index and built assets for hardcoded backend/dev API origins'
 )
 assert.ok(
+  verifySplitHost.includes('fetch_url_with_headers "admin frontend index" "$ADMIN_FRONTEND_URL/"') &&
+    verifySplitHost.includes('fetch_url "admin static asset ${asset_path}" "${ADMIN_FRONTEND_URL}${asset_path}"') &&
+    verifySplitHost.includes('fetch_websocket_probe "admin frontend proxied WebSocket" "$ADMIN_FRONTEND_URL/api/ws/instances/1/terminal?ticket=invalid"'),
+  'split verify script must scan admin frontend assets and verify admin /api/ws proxy'
+)
+assert.ok(
   backendServiceExample.includes('Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm') &&
     backendServiceExample.includes('Environment=XDG_CACHE_HOME=/opt/incudal/.cache') &&
-    backendServiceExample.includes('ReadWritePaths=/opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache') &&
+    backendServiceExample.includes('ReadWritePaths=/opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs') &&
     backendServiceExample.includes('pnpm exec prisma migrate deploy') &&
     !backendServiceExample.includes('npx prisma'),
   'systemd backend example must keep runtime cache paths writable and run locked local Prisma migrations under ProtectSystem=strict'
@@ -207,7 +239,7 @@ assert.ok(
 assert.ok(
   installPanel.includes('Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm') &&
     installPanel.includes('Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache') &&
-    installPanel.includes('ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache') &&
+    installPanel.includes('ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs') &&
     installPanel.includes('pnpm exec prisma migrate deploy') &&
     !installPanel.includes('npx prisma'),
   'install script systemd service must keep runtime cache paths writable and run locked local Prisma migrations under ProtectSystem=strict'
@@ -215,9 +247,37 @@ assert.ok(
 
 assert.ok(viteConfig.includes('const devPort = Number(process.env.VITE_DEV_PORT || 3000)'), 'Vite dev server must default frontend port to 3000')
 assert.ok(viteConfig.includes("const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'http://127.0.0.1:3001'"), 'Vite dev proxy must default to backend port 3001')
+assert.ok(viteConfig.includes("const appEntry = process.env.VITE_APP_ENTRY === 'admin' ? 'admin' : 'user'"), 'Vite config must select the frontend app entry from VITE_APP_ENTRY')
+assert.ok(viteConfig.includes("const entryScript = appEntry === 'admin' ? '/src/admin/main.ts' : '/src/main.ts'"), 'Vite config must switch index.html between user and admin entry scripts')
+assert.ok(viteConfig.includes("const apiClientEntry = appEntry === 'admin' ? './src/api/admin.ts' : './src/api/index.ts'"), 'Vite config must select the API client from VITE_APP_ENTRY')
+assert.ok(viteConfig.includes("const appPathsEntry = appEntry === 'admin' ? './src/utils/app-paths-admin.ts' : './src/utils/app-paths-user.ts'"), 'Vite config must select the URL path helper from VITE_APP_ENTRY')
+assert.ok(
+  viteConfig.includes("const sideNavItemsEntry = appEntry === 'admin'") &&
+    viteConfig.includes("'./src/config/side-nav-items-admin.ts'") &&
+    viteConfig.includes("'./src/config/side-nav-items-user.ts'"),
+  'Vite config must select the SideNav menu table from VITE_APP_ENTRY'
+)
+assert.ok(
+  viteConfig.includes('find: /^@\\/api$/') &&
+    viteConfig.includes('replacement: fileURLToPath(new URL(apiClientEntry, import.meta.url))'),
+  'Vite config must exact-alias shared @/api imports to the current entry API client'
+)
+assert.ok(
+  viteConfig.includes('find: /^@\\/utils\\/app-paths$/') &&
+    viteConfig.includes('replacement: fileURLToPath(new URL(appPathsEntry, import.meta.url))'),
+  'Vite config must exact-alias shared app path helpers to the current entry path table'
+)
+assert.ok(
+  viteConfig.includes('find: /^@\\/config\\/side-nav-items$/') &&
+    viteConfig.includes('replacement: fileURLToPath(new URL(sideNavItemsEntry, import.meta.url))'),
+  'Vite config must exact-alias SideNav menu items to the current entry menu table'
+)
+assert.ok(viteConfig.includes("order: 'pre'"), 'Vite split entry transform must run before index.html entry scanning')
+assert.ok(viteConfig.includes('outDir: `dist/${appEntry}`'), 'Vite config must build user and admin frontends into separate dist directories')
 assert.ok(viteConfig.includes("'/api':") && viteConfig.includes('ws: true'), 'Vite dev proxy must proxy /api including WebSocket traffic')
 assert.ok(
   viteConfig.includes("return 'api-client'") &&
+    viteConfig.includes("normalizedId.includes('/src/api/admin.ts')") &&
     viteConfig.includes("return 'locale-zh-cn'") &&
     viteConfig.includes("return 'locale-zh-tw'") &&
     viteConfig.includes("return 'locale-en'") &&
@@ -301,9 +361,17 @@ assert.ok(
 )
 assert.ok(
   verifyProductionReadiness.includes('validate_https_public_url FRONTEND_URL "$FRONTEND_URL_VALUE"') &&
+    verifyProductionReadiness.includes('validate_https_public_url ADMIN_FRONTEND_URL "$ADMIN_FRONTEND_URL_VALUE"') &&
     verifyProductionReadiness.includes('validate_https_public_url SITE_URL "$SITE_URL_VALUE"') &&
     verifyProductionReadiness.includes('validate_https_public_url PAYMENT_CALLBACK_BASE_URL "$PAYMENT_CALLBACK_BASE_URL_VALUE"'),
-  'production readiness verifier must require public HTTPS frontend/site/payment callback URLs'
+  'production readiness verifier must require public HTTPS frontend/admin/site/payment callback URLs'
+)
+assert.ok(
+  verifyProductionReadiness.includes('ADMIN_FRONTEND_URL must be a separate admin frontend origin') &&
+    verifyProductionReadiness.includes('COOKIE_DOMAIN_VALUE="$(config_value COOKIE_DOMAIN)"') &&
+    verifyProductionReadiness.includes('COOKIE_DOMAIN must stay empty so customer and admin subdomains do not share refresh cookies') &&
+    verifyProductionReadiness.includes('ADMIN_FRONTEND_URL="$ADMIN_FRONTEND_URL_VALUE"'),
+  'production readiness verifier must require and verify a separate admin frontend origin'
 )
 assert.ok(
   verifyProductionReadiness.includes('AGENT_RELEASE_DIR_VALUE="$(config_value INCUDAL_AGENT_RELEASE_DIR)"') &&
@@ -313,7 +381,7 @@ assert.ok(
   'production readiness verifier must require a GitHub Agent release path, local release directory, or checksum-pinned custom binary'
 )
 assert.ok(
-  verifyProductionReadiness.includes('FRONTEND_URL="$FRONTEND_URL_VALUE" BACKEND_URL="$BACKEND_URL_VALUE" bash scripts/verify-split-host.sh') &&
+  verifyProductionReadiness.includes('FRONTEND_URL="$FRONTEND_URL_VALUE" ADMIN_FRONTEND_URL="$ADMIN_FRONTEND_URL_VALUE" BACKEND_URL="$BACKEND_URL_VALUE" bash scripts/verify-split-host.sh') &&
     verifyProductionReadiness.includes('/api/agent/manifest.json') &&
     verifyProductionReadiness.includes('Agent manifest must include ${platform} name and sha256') &&
     verifyProductionReadiness.includes('ALLOW_MISSING_AGENT_RELEASE=true'),
@@ -455,46 +523,53 @@ assert.ok(clientApiUrl.includes('export function buildApiWebSocketUrl') && clien
 assert.ok(terminalCore.includes("buildApiWebSocketUrl(`/ws/instances/${instanceId}/terminal?ticket=${encodeURIComponent(ticket)}`)"), 'terminal WebSocket path must stay under /api/ws via buildApiWebSocketUrl')
 
 assert.ok(readme.includes('前端 Nginx -> http://10.0.0.12:3001/api -> 后端 Node API'), 'README architecture must document backend port 3001')
+assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://admin.payincus.com') && readme.includes('/opt/incudal/client/dist/admin'), 'README architecture must document the separate admin frontend')
+assert.ok(readme.includes('VITE_CUSTOMER_BASE_URL=https://demo.payincus.com'), 'README env example must document admin-generated customer links')
 assert.ok(readme.includes('PORT=3001'), 'README env example must use backend port 3001')
 assert.ok(readme.includes('PORT=3001 node server/dist/app.js'), 'README production start command must use backend port 3001')
 assert.ok(readme.includes('BACKEND_URL=http://10.0.0.12:3001'), 'README split verification command must use backend port 3001')
 
 assert.ok(nginxExample.includes('10.0.0.12:3001'), 'Nginx split example must document backend port 3001')
+assert.ok(nginxExample.includes('server_name demo.payincus.com') && nginxExample.includes('server_name admin.payincus.com'), 'Nginx split example must define customer and admin frontend server names')
+assert.ok(nginxExample.includes('root /opt/incudal/client/dist/user') && nginxExample.includes('root /opt/incudal/client/dist/admin'), 'Nginx split example must serve separate user and admin build outputs')
 assert.ok(nginxExample.includes("connect-src 'self' ws: wss:"), 'Nginx split example CSP must allow HTTP and HTTPS WebSocket terminals')
-assertSingleNginxSiteShape('Nginx split example', nginxExample)
+assertBalancedNginxBraces('Nginx split example', nginxExample)
+assert.equal(countOccurrences(nginxExample, 'server {'), 2, 'Nginx split example must define customer and admin server blocks')
+assert.equal(countOccurrences(nginxExample, 'location = /healthz {'), 2, 'Nginx split example must define /healthz for both frontends')
+assert.equal(countOccurrences(nginxExample, 'location /api/ws/ {'), 2, 'Nginx split example must define /api/ws for both frontends')
+assert.equal(countOccurrences(nginxExample, 'location /api/ {'), 2, 'Nginx split example must define /api for both frontends')
+assert.equal(countOccurrences(nginxExample, 'location / {'), 2, 'Nginx split example must define SPA fallback for both frontends')
 assertWebSocketProxyConfig('Nginx split example', nginxExample, 'http://10.0.0.12:3001/api/ws/;')
 assertWebSocketProxyConfig('install script Nginx template', installPanel, 'http://127.0.0.1:${DEFAULT_PORT};')
 assert.ok(installPanel.includes("connect-src 'self' ws: wss:"), 'install script Nginx CSP must allow HTTP and HTTPS WebSocket terminals')
 assertForwardedProxyHeaderConfig('Nginx split example', nginxExample)
 assertForwardedProxyHeaderConfig('install script Nginx template', installPanel)
 assert.ok(nginxExample.includes('proxy_pass http://10.0.0.12:3001/api/'), 'Nginx API proxy must target backend port 3001')
-const certbotNginxTemplate = extractHeredoc(installPanel, 'cat > /etc/nginx/sites-available/incudal.conf <<NGINX', '\nNGINX')
-const tunnelNginxStart = installPanel.indexOf('info "安装并配置本机 Nginx 静态前端与 /api 反代..."')
-assert.notEqual(tunnelNginxStart, -1, 'install script must contain the Cloudflare Tunnel Nginx setup section')
-const tunnelNginxTemplate = extractHeredoc(
-  installPanel.slice(tunnelNginxStart),
-  'cat > /etc/nginx/sites-available/incudal.conf <<NGINX',
-  '\nNGINX'
-)
-assertSingleNginxSiteShape('install script Certbot Nginx template', certbotNginxTemplate)
-assertSingleNginxSiteShape('install script Cloudflare Tunnel Nginx template', tunnelNginxTemplate)
 assert.ok(
   installPanel.includes('脚本会在本机配置 Nginx 托管前端并反代 /api 到后端') &&
-    installPanel.includes('listen 80 default_server;') &&
-    installPanel.includes('root ${client_dist};') &&
+    installPanel.includes('write_nginx_split_server_block "$server_name" "$client_dist" "default"') &&
+    installPanel.includes('write_nginx_split_server_block "$ADMIN_DOMAIN" "$admin_client_dist"') &&
     installPanel.includes('proxy_pass http://127.0.0.1:${DEFAULT_PORT};') &&
     installPanel.includes('systemctl enable nginx'),
-  'Cloudflare Tunnel install path must configure local Nginx static frontend and /api proxy'
+  'Cloudflare Tunnel install path must configure local Nginx static user/admin frontends and /api proxy'
 )
 assert.ok(
   installPanel.includes('Cloudflare Tunnel 生产部署必须配置浏览器访问域名') &&
     installPanel.includes('FRONTEND_URL/SITE_URL/PAYMENT_CALLBACK_BASE_URL 会用于 WebSocket Origin、OAuth 和支付回调') &&
     installPanel.includes('set_env_value "FRONTEND_URL" "https://${DOMAIN}" "前端公网地址"') &&
+    installPanel.includes('set_env_value "ADMIN_FRONTEND_URL" "https://${ADMIN_DOMAIN}" "管理后台公网地址"') &&
     installPanel.includes('set_env_value "SITE_URL" "https://${DOMAIN}" "站点公网地址"') &&
     installPanel.includes('set_env_value "PAYMENT_CALLBACK_BASE_URL" "https://${DOMAIN}" "支付回调公网地址"') &&
+    installPanel.includes('set_env_value "VITE_CUSTOMER_BASE_URL" "https://${DOMAIN}" "管理后台生成客户链接的前端地址"') &&
+    installPanel.includes('set_env_value "VITE_ADMIN_BASE_URL" "https://${ADMIN_DOMAIN}" "前端管理后台地址"') &&
     installPanel.includes('local server_name="${DOMAIN}"') &&
     !installPanel.includes('local server_name="${DOMAIN:-_}"'),
   'Cloudflare Tunnel install path must require and persist the public frontend domain'
+)
+assert.ok(
+  originConfig.includes('process.env.ADMIN_FRONTEND_URL') &&
+    originConfig.includes("'http://127.0.0.1:3002'"),
+  'backend origin config must include the admin frontend origin and local admin dev port'
 )
 
 assert.ok(!nginxExample.includes('10.0.0.12:3000'), 'Nginx split example must not point backend traffic at frontend port 3000')
@@ -533,7 +608,9 @@ const forbiddenClientSourceStrings = [
 ]
 const allowedClientNetworkPrimitiveLines = new Map<string, string[]>([
   ['client/src/App.vue', ["fetch(buildApiUrl('/auth/refresh'), {"]],
+  ['client/src/admin/AdminApp.vue', ["fetch(buildApiUrl('/auth/refresh'), {"]],
   ['client/src/api/index.ts', ["fetch(buildApiUrl('/auth/refresh'), {"]],
+  ['client/src/api/admin.ts', ["fetch(buildApiUrl('/auth/refresh'), {"]],
   ['client/src/components/TermsOfServiceModal.vue', ['fetch(`/tos/${lang}.md`)']],
   ['client/src/components/instance/TerminalModal.vue', ['new WebSocket(wsUrl)']],
   ['client/src/composables/useTerminal.ts', ['new WebSocket(wsUrl)']],

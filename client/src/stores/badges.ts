@@ -1,7 +1,17 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import api from '@/api'
+import { isAdminEntry } from '@/utils/app-paths'
 import type { BadgeCatalogItem, BadgeSeriesItem } from '@/types/api'
+
+interface AdminBadgeCatalogApi {
+  entertainment: {
+    adminGetBadgeCatalog: () => Promise<{
+      series: BadgeSeriesItem[]
+      badges: BadgeCatalogItem[]
+    }>
+  }
+}
 
 export const useBadgeStore = defineStore('badges', () => {
   const series = ref<BadgeSeriesItem[]>([])
@@ -20,7 +30,9 @@ export const useBadgeStore = defineStore('badges', () => {
     loading.value = true
     loadingPromise.value = (async () => {
       try {
-        const res = await api.entertainment.getBadgeCatalog()
+        const res = isAdminEntry
+          ? await (api as typeof api & AdminBadgeCatalogApi).entertainment.adminGetBadgeCatalog()
+          : await api.entertainment.getBadgeCatalog()
         series.value = res.series || []
         badges.value = res.badges || []
         loaded.value = true

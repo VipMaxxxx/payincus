@@ -6,6 +6,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
+import { isAdminEntry, navMenuItems, type MenuItem } from '@/config/side-nav-items'
+import { dashboardPath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 
@@ -19,14 +21,6 @@ const emit = defineEmits<{
   'update:mobileOpen': [value: boolean]
   closeMobile: []
 }>()
-
-interface MenuItem {
-  name?: string
-  path?: string
-  icon?: string
-  label?: string
-  divider?: boolean
-}
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -49,65 +43,19 @@ const footerTelegramLink = computed(() => {
 const hiddenExpandMenuNames = new Set(['my-hosts', 'my-packages', 'hosting-wallet'])
 const hiddenWhenTicketDisabledMenuNames = new Set(['tickets'])
 const hiddenWhenMailUnavailableMenuNames = new Set(['mail'])
+const navDashboardPath = dashboardPath()
 const shouldHideHostingFeature = computed(() =>
   !authStore.isAdmin && authStore.user?.canAccessHostingFeature === false
 )
 
-// 普通用户菜单
-const userMenuItems: MenuItem[] = [
-  { divider: true, label: 'nav.main' },
-  { name: 'dashboard', path: '/dashboard', icon: 'home', label: 'nav.dashboard' },
-  { name: 'instances', path: '/instances', icon: 'server', label: 'nav.instances' },
-  { name: 'mail', path: '/mail', icon: 'mail', label: 'nav.mail' },
-  { name: 'terminal', path: '/terminal', icon: 'terminal', label: 'nav.terminal' },
-  { name: 'extensions', path: '/extensions', icon: 'puzzle', label: 'nav.scripts' },
-  { name: 'transfers', path: '/transfers', icon: 'transfer', label: 'nav.transfers' },
-  { name: 'tickets', path: '/tickets', icon: 'ticket', label: 'nav.tickets' },
-  { name: 'entertainment', path: '/entertainment', icon: 'gift', label: 'nav.entertainment' },
-  { name: 'wallet', path: '/wallet', icon: 'wallet', label: 'nav.wallet' },
-  { name: 'invites', path: '/invites', icon: 'key', label: 'nav.invites' },
-  { divider: true, label: 'nav.expand' },
-  { name: 'my-hosts', path: '/resources/hosts', icon: 'database', label: 'nav.hosts' },
-  { name: 'my-packages', path: '/resources/packages', icon: 'package', label: 'nav.packages' },
-  { name: 'hosting-wallet', path: '/hosting-wallet', icon: 'coin', label: 'nav.earnings' },
-  { divider: true, label: 'nav.system' },
-  { name: 'profile', path: '/profile', icon: 'settings', label: 'nav.settings' },
-  { name: 'help', path: '/help', icon: 'help', label: 'nav.help' },
-  { name: 'logs', path: '/logs', icon: 'logs', label: 'nav.logs' }
-]
-
-// 管理员专用菜单（包含节点/套餐管理）
-const adminOnlyMenuItems: MenuItem[] = [
-  { divider: true, label: 'nav.admin' },
-  { name: 'admin-settings', path: '/admin/settings', icon: 'cog', label: 'nav.system' },
-  { name: 'admin-users', path: '/admin/users', icon: 'users', label: 'nav.users' },
-  { name: 'admin-hosting', path: '/admin/hosting', icon: 'coin', label: 'nav.hosting' },
-  { divider: true, label: 'nav.resources' },
-  { name: 'my-hosts', path: '/resources/hosts', icon: 'database', label: 'nav.hosts' },
-  { name: 'my-packages', path: '/resources/packages', icon: 'package', label: 'nav.packages' },
-  { name: 'admin-images', path: '/admin/images', icon: 'image', label: 'nav.images' },
-  { name: 'admin-instance-create', path: '/admin/instances/create', icon: 'gift', label: 'nav.create' },
-  { name: 'admin-mail', path: '/admin/mail', icon: 'mail', label: 'nav.mail' },
-  { divider: true, label: 'nav.operations' },
-  { name: 'tickets', path: '/tickets', icon: 'ticket', label: 'nav.tickets' },
-  { name: 'admin-billing', path: '/admin/billing', icon: 'wallet', label: 'nav.billing' },
-  { name: 'admin-broadcast', path: '/admin/broadcast', icon: 'bell', label: 'nav.broadcast' },
-  { name: 'admin-logs', path: '/logs', icon: 'logs', label: 'nav.logs' },
-  { name: 'admin-help', path: '/admin/help', icon: 'book', label: 'nav.helpManage' },
-  { name: 'admin-entertainment', path: '/admin/entertainment', icon: 'gift', label: 'nav.entertainment' },
-  { name: 'profile', path: '/profile', icon: 'settings', label: 'nav.settings' },
-  { name: 'admin-statistics', path: '/admin/statistics', icon: 'chart', label: 'nav.statistics' },
-  { name: 'admin-oauth', path: '/admin/oauth', icon: 'key', label: 'nav.oauth' }
-]
-
 const menuItems = computed<MenuItem[]>(() => {
-  let baseItems = authStore.isAdmin ? adminOnlyMenuItems : userMenuItems
+  let baseItems = [...navMenuItems]
 
-  if (!authStore.isAdmin && !configStore.ticketEnabled) {
+  if (!isAdminEntry && !configStore.ticketEnabled) {
     baseItems = baseItems.filter(item => !item.name || !hiddenWhenTicketDisabledMenuNames.has(item.name))
   }
 
-  if (!authStore.isAdmin && !configStore.mailAvailable) {
+  if (!isAdminEntry && !configStore.mailAvailable) {
     baseItems = baseItems.filter(item => !item.name || !hiddenWhenMailUnavailableMenuNames.has(item.name))
   }
 
@@ -125,7 +73,7 @@ const menuItems = computed<MenuItem[]>(() => {
 })
 
 function isActive(item: MenuItem): boolean {
-  if (item.name === 'dashboard') return route.path === '/dashboard'
+  if (item.name === 'dashboard') return route.path === navDashboardPath
   if (!item.path) return false
   return route.path.startsWith(item.path)
 }

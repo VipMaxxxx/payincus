@@ -1,0 +1,24 @@
+[Unit]
+Description=PayIncus online update task %i
+Documentation=https://github.com/VipMaxxxx/payincus
+After=network.target postgresql.service redis-server.service
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/incudal
+EnvironmentFile=/opt/incudal/.env
+Environment=HOME=/opt/incudal
+Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm
+Environment=XDG_CACHE_HOME=/opt/incudal/.cache
+Environment=INCUDAL_APP_DIR=/opt/incudal
+Environment=INSTALL_DIR=/opt/incudal
+Environment=SERVICE_NAME=incudal-backend
+ExecStart=/usr/bin/node /opt/incudal/server/dist/scripts/run-system-update-task.js %i
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=incudal-online-update
+

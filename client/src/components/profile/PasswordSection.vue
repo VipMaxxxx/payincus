@@ -4,9 +4,11 @@ import { useI18n } from 'vue-i18n'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import SensitiveVerificationModal from '@/components/SensitiveVerificationModal.vue'
+import { loginPath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const reauthLoginPath = loginPath()
 
 interface PasswordForm {
   currentPassword: string
@@ -53,7 +55,7 @@ async function updatePassword(): Promise<void> {
     if (response.reauthRequired) {
       setTimeout(() => {
         authStore.clearLocalAuth()
-        window.location.href = '/login'
+        window.location.href = reauthLoginPath
       }, 1000)
       return
     }
@@ -93,7 +95,7 @@ async function onVerificationSuccess(): Promise<void> {
       if (response.reauthRequired) {
         setTimeout(() => {
           authStore.clearLocalAuth()
-          window.location.href = '/login'
+          window.location.href = reauthLoginPath
         }, 1000)
         return
       }

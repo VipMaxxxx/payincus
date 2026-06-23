@@ -17,6 +17,7 @@ import HostRedeemCodesTab from '@/components/host/HostRedeemCodesTab.vue'
 import HostCreateInstanceTab from '@/components/host/HostCreateInstanceTab.vue'
 import HostOpsTab from '@/components/host/HostOpsTab.vue'
 import FlagIcon from '@/components/FlagIcon.vue'
+import { hostsPath } from '@/utils/app-paths'
 
 // 为 KeepAlive exclude 匹配定义组件名称
 defineOptions({
@@ -138,7 +139,7 @@ async function loadHost() {
   const hostId = parseInt(route.params.id as string)
   if (isNaN(hostId) || hostId <= 0) {
     toast.error(t('admin.hosts.invalidId'))
-    router.replace('/resources/hosts')
+    router.replace(hostsPath())
     return
   }
 
@@ -147,7 +148,7 @@ async function loadHost() {
     host.value = (res as any).host || res
   } catch (err: any) {
     toast.error(t('admin.hosts.loadFailed') + ': ' + (err?.message || String(err)))
-    router.replace('/resources/hosts')
+    router.replace(hostsPath())
   } finally {
     loading.value = false
   }
@@ -226,7 +227,7 @@ async function confirmDeleteHost() {
   try {
     await api.hosts.delete(host.value.id)
     toast.success(t('admin.hosts.hostDeleted'))
-    router.push('/resources/hosts')
+    router.push(hostsPath())
   } catch (err: any) {
     toast.error(t('admin.hosts.deleteFailed') + ': ' + (err?.message || String(err)))
   } finally {
@@ -245,18 +246,8 @@ function onConfigSaved() {
 // 打开批量延期弹窗（仅管理员）
 async function openExtendModal() {
   if (!host.value || !isAdmin.value) return
-  
-  // 查询该节点下付费实例数量
-  try {
-    const res = await api.admin.getBillingInstances({
-      hostId: host.value.id,
-      pageSize: 1
-    })
-    paidInstanceCount.value = (res as any).total || 0
-  } catch {
-    paidInstanceCount.value = 0
-  }
-  
+
+  paidInstanceCount.value = 0
   extendDays.value = undefined
   showExtendModal.value = true
 }
@@ -360,7 +351,7 @@ const tabs = [
       <div class="page-header flex-col sm:flex-row gap-4">
         <div class="flex items-center gap-3">
           <RouterLink
-            to="/resources/hosts"
+            :to="hostsPath()"
             class="transition-colors"
             :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'"
           >

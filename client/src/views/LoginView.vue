@@ -59,6 +59,10 @@ onMounted(async (): Promise<void> => {
   } catch (e) {
     console.error('Failed to load config:', e)
   }
+
+  if (route.query.adminOnly === '1') {
+    error.value = '管理员账号请使用独立管理后台登录'
+  }
   
   // 检查 OAuth 回调错误
   checkOAuthErrors()
@@ -113,10 +117,14 @@ async function handleLogin(): Promise<void> {
       turnstileEnabled.value ? turnstileToken.value : undefined
     )
     
-    // 根据用户角色决定跳转目标
+    if (authStore.isAdmin) {
+      await authStore.logout()
+      error.value = '管理员账号请使用独立管理后台登录'
+      return
+    }
+
     // 安全改进：验证 redirect 参数防止开放重定向漏洞
-    const defaultRedirect = authStore.isAdmin ? '/admin/users' : '/'
-    const safeRedirect = getSafeRedirectUrl(route.query.redirect as string, defaultRedirect)
+    const safeRedirect = getSafeRedirectUrl(route.query.redirect as string, '/dashboard')
     router.push(safeRedirect)
   } catch (err: any) {
     error.value = err?.message || String(err)
@@ -138,9 +146,7 @@ async function handleLogin(): Promise<void> {
 
 function loginWithOAuth(provider: string): void {
   // 安全改进：验证 redirect 参数防止开放重定向漏洞
-  // 默认跳转到根路径，路由守卫会根据用户角色自动跳转
-  const defaultRedirect = '/'
-  const safeRedirect = getSafeRedirectUrl(route.query.redirect as string, defaultRedirect)
+  const safeRedirect = getSafeRedirectUrl(route.query.redirect as string, '/dashboard')
   window.location.href = buildApiUrl(`/oauth/authorize/${provider}?mode=login&redirect=${encodeURIComponent(safeRedirect)}`)
 }
 

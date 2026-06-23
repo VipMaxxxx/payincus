@@ -27,7 +27,7 @@ const navigation = computed(() => [
 const isLoginRoute = computed(() => route.name === 'login')
 const isRegisterRoute = computed(() => route.name === 'register')
 const isForgotPasswordRoute = computed(() => route.name === 'forgot-password')
-const consoleTarget = computed(() => (authStore.isAdmin ? '/admin/users' : '/dashboard'))
+const consoleTarget = computed(() => '/dashboard')
 
 const primaryActionLabel = computed(() => {
   if (authStore.isAuthenticated) {

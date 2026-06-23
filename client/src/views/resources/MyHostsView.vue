@@ -10,6 +10,7 @@ import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import FlagIcon from '@/components/FlagIcon.vue'
 import { translateError } from '@/utils/errorHandler'
+import { hostCreatePath, hostDetailPath, isAdminEntry } from '@/utils/app-paths'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'MyHostsView' })
@@ -174,28 +175,28 @@ watch(search, () => {
 // 跳转到创建页面（需检查托管准入条件）
 async function goToCreate() {
   // 管理员直接放行
-  if (authStore.user?.role === 'admin') {
-    router.push('/resources/hosts/create')
+  if (isAdminEntry || authStore.user?.role === 'admin') {
+    router.push(hostCreatePath())
     return
   }
 
   try {
     const res = await api.hosting.checkAccess()
     if (res.allowed) {
-      router.push('/resources/hosts/create')
+      router.push(hostCreatePath())
     } else {
       accessDeniedDetails.value = res.details || null
       showAccessDeniedModal.value = true
     }
   } catch {
     // 检查失败时也允许跳转，让后端再次校验
-    router.push('/resources/hosts/create')
+    router.push(hostCreatePath())
   }
 }
 
 // 跳转到详情页面
 function goToDetail(host) {
-  router.push(`/resources/hosts/${host.id}`)
+  router.push(hostDetailPath(host.id))
 }
 
 // 测试宿主机连接

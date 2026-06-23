@@ -13,6 +13,7 @@ const oauthRouteSource = readFileSync(resolve(__dirname, '../src/routes/oauth.ts
 const loginRecordsDbSource = readFileSync(resolve(__dirname, '../src/db/login-records.ts'), 'utf8')
 const adminUsersViewSource = readFileSync(resolve(__dirname, '../../client/src/views/admin/UsersView.vue'), 'utf8')
 const apiSource = readFileSync(resolve(__dirname, '../../client/src/api/index.ts'), 'utf8')
+const adminApiSource = readFileSync(resolve(__dirname, '../../client/src/api/admin.ts'), 'utf8')
 
 function routeSection(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -225,8 +226,9 @@ assert.ok(
 )
 
 assert.ok(
-  apiSource.includes('resetPassword: (id: number, password: string): Promise<{ message: string; username: string }>') &&
-    apiSource.includes("http.post(`/users/${id}/reset-password`, { password })"),
+  adminApiSource.includes('resetPassword: (id: number, password: string): Promise<{ message: string; username: string }>') &&
+    adminApiSource.includes("http.post(`/users/${id}/reset-password`, { password })") &&
+    !apiSource.includes("http.post(`/users/${id}/reset-password`, { password })"),
   'frontend API wrapper must send admin-provided reset passwords and not type a returned plaintext password'
 )
 

@@ -22,7 +22,7 @@ set -euo pipefail
 readonly SCRIPT_VERSION="3.0.0"
 readonly GITHUB_REPO="VipMaxxxx/payincus"
 readonly INSTALL_DIR="/opt/incudal"
-readonly SERVICE_NAME="incudal"
+readonly SERVICE_NAME="incudal-backend"
 readonly SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly ENV_FILE="${INSTALL_DIR}/.env"
 readonly RUN_USER="incudal"
@@ -160,6 +160,11 @@ ensure_env_keys() {
     fi
     set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"
     set_env_if_missing "VITE_API_BASE_URL" "/api" "前端 API 基础路径"
+    set_env_if_missing "VITE_CUSTOMER_BASE_URL" "" "管理后台生成客户链接的前端地址"
+    set_env_if_missing "VITE_ADMIN_BASE_URL" "" "客户前端管理后台地址"
+    set_env_if_missing "SYSTEM_UPDATE_ALLOWED_ADMIN_IDS" "" "允许执行在线更新的管理员 ID"
+    set_env_if_missing "SYSTEM_UPDATE_LOG_DIR" "${INSTALL_DIR}/update-logs" "在线更新日志目录"
+    set_env_if_missing "SYSTEM_UPDATE_STARTED_BY_USER_ID" "" "命令行更新任务发起管理员 ID"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_REPOSITORY" "" "Agent GitHub Release 仓库"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_TOKEN" "" "Agent GitHub Release Token"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_DIR" "" "Agent 本地 Release 目录"
@@ -167,7 +172,7 @@ ensure_env_keys() {
     set_env_if_missing "INCUDAL_AGENT_BINARY_SHA256" "" "Agent 自定义二进制 SHA256"
     set_env_if_missing "COOKIE_SAME_SITE" "" "Cookie SameSite 策略"
     set_env_if_missing "COOKIE_SECURE" "" "Cookie Secure 开关"
-    set_env_if_missing "COOKIE_DOMAIN" "" "Cookie 共享域"
+    set_env_if_missing "COOKIE_DOMAIN" "" "Cookie 共享域（必须留空以隔离客户面板和管理后台）"
 
     local frontend_url
     frontend_url="$(get_env_value "FRONTEND_URL")"
@@ -283,6 +288,15 @@ install_nodejs() {
     apt-get install -y -qq nodejs >/dev/null 2>&1
 
     log "Node.js $(node -v) 安装完成"
+}
+
+# ========================== 安装系统工具 ==========================
+install_system_tools() {
+    step "安装基础系统工具..."
+
+    apt-get install -y -qq ca-certificates curl git sudo tar >/dev/null 2>&1
+
+    log "基础系统工具安装完成"
 }
 
 # ========================== 安装 PostgreSQL ==========================
@@ -608,6 +622,36 @@ install_release() {
     log "产物包安装完成"
 }
 
+# ========================== 配置 Git 在线更新元数据 ==========================
+configure_git_metadata() {
+    step "配置 Git 在线更新元数据..."
+
+    if ! command -v git &>/dev/null; then
+        warn "git 未安装，后台在线更新将不可用"
+        return 0
+    fi
+
+    cd "$INSTALL_DIR"
+
+    if [[ -d "${INSTALL_DIR}/.git" ]]; then
+        git remote get-url origin >/dev/null 2>&1 && \
+            git remote set-url origin "https://github.com/${GITHUB_REPO}.git" || \
+            git remote add origin "https://github.com/${GITHUB_REPO}.git"
+    else
+        git init -q
+        git remote add origin "https://github.com/${GITHUB_REPO}.git" 2>/dev/null || \
+            git remote set-url origin "https://github.com/${GITHUB_REPO}.git" 2>/dev/null || true
+    fi
+
+    git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
+    sudo -u "$RUN_USER" HOME="$INSTALL_DIR" git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
+    if git fetch --tags --force --quiet origin; then
+        log "Git release tags 已同步，后台在线更新可用"
+    else
+        warn "Git tags 同步失败，后台在线更新检查可能暂时不可用；可稍后在 ${INSTALL_DIR} 执行 git fetch --tags"
+    fi
+}
+
 # ========================== 创建系统用户 ==========================
 create_user() {
     step "配置系统用户..."
@@ -736,8 +780,15 @@ ENCRYPTION_KEY=${encryption_key}
 ADMIN_PASSWORD=${admin_password}
 SERVE_STATIC_CLIENT=false
 VITE_API_BASE_URL=/api
+VITE_CUSTOMER_BASE_URL=
+VITE_ADMIN_BASE_URL=
 LOG_LEVEL=info
 DISABLE_REQUEST_LOG=true
+
+# ============ 后台在线更新 ============
+SYSTEM_UPDATE_ALLOWED_ADMIN_IDS=
+SYSTEM_UPDATE_LOG_DIR=${INSTALL_DIR}/update-logs
+SYSTEM_UPDATE_STARTED_BY_USER_ID=
 
 # ============ Agent Release 配置 ============
 # 可使用 GitHub Release 仓库、本地 release 目录，或自定义二进制 URL+SHA256。
@@ -750,6 +801,7 @@ INCUDAL_AGENT_BINARY_SHA256=
 # ============ CORS 配置（必须修改为实际域名！）============
 # 支付回调地址也会使用这个域名，必须是公网可访问的地址
 FRONTEND_URL=
+ADMIN_FRONTEND_URL=
 SITE_URL=
 PAYMENT_CALLBACK_BASE_URL=
 
@@ -758,7 +810,7 @@ PAYMENT_CALLBACK_BASE_URL=
 # 若 API 与前端跨站，请设置：
 # COOKIE_SAME_SITE=none
 # COOKIE_SECURE=true
-# COOKIE_DOMAIN=.example.com  # 仅跨子域共享 Cookie 时需要
+# COOKIE_DOMAIN must stay empty so customer/admin subdomains do not share refresh cookies.
 COOKIE_SAME_SITE=
 COOKIE_SECURE=
 COOKIE_DOMAIN=
@@ -860,7 +912,7 @@ StartLimitIntervalSec=300
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache
+ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
 PrivateTmp=true
 
 # 资源限制
@@ -881,58 +933,100 @@ EOF
     log "systemd 服务创建完成"
 }
 
+# ========================== 创建在线更新 systemd 单元和 sudoers ==========================
+create_online_update_service() {
+    step "创建在线更新 systemd 单元..."
+
+    mkdir -p "${INSTALL_DIR}/update-logs"
+
+    cat > /etc/systemd/system/incudal-online-update@.service << EOF
+[Unit]
+Description=PayIncus online update task %i
+Documentation=https://github.com/${GITHUB_REPO}
+After=network.target postgresql.service redis-server.service
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${ENV_FILE}
+Environment=HOME=${INSTALL_DIR}
+Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
+Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
+Environment=INCUDAL_APP_DIR=${INSTALL_DIR}
+Environment=INSTALL_DIR=${INSTALL_DIR}
+Environment=SERVICE_NAME=${SERVICE_NAME}
+ExecStart=/usr/bin/node ${INSTALL_DIR}/server/dist/scripts/run-system-update-task.js %i
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=incudal-online-update
+EOF
+
+    cat > /etc/systemd/system/incudal-online-rollback@.service << EOF
+[Unit]
+Description=PayIncus online update rollback task %i
+Documentation=https://github.com/${GITHUB_REPO}
+After=network.target postgresql.service redis-server.service
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${ENV_FILE}
+Environment=HOME=${INSTALL_DIR}
+Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
+Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
+Environment=INCUDAL_APP_DIR=${INSTALL_DIR}
+Environment=INSTALL_DIR=${INSTALL_DIR}
+Environment=SERVICE_NAME=${SERVICE_NAME}
+ExecStart=/usr/bin/node ${INSTALL_DIR}/server/dist/scripts/rollback-system-update-task.js %i
+TimeoutStartSec=900
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=incudal-online-rollback
+EOF
+
+    local systemctl_bin
+    systemctl_bin="$(command -v systemctl)"
+    cat > /etc/sudoers.d/incudal-online-update << EOF
+Defaults:${RUN_USER} !requiretty
+${RUN_USER} ALL=(root) NOPASSWD: ${systemctl_bin} start incudal-online-update@*.service, ${systemctl_bin} start incudal-online-rollback@*.service
+EOF
+    chmod 440 /etc/sudoers.d/incudal-online-update
+    visudo -cf /etc/sudoers.d/incudal-online-update >/dev/null
+
+    systemctl daemon-reload
+    chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/update-logs" "${INSTALL_DIR}/.git" 2>/dev/null || true
+
+    log "在线更新 systemd 单元和 sudoers 创建完成"
+}
+
 # ========================== Nginx + Certbot ==========================
-setup_nginx_certbot() {
-    info "准备配置 Nginx 反代及 Let's Encrypt SSL 自动证书"
-    local client_dist="${INSTALL_DIR}/client/dist"
+write_nginx_split_server_block() {
+    local server_name="$1"
+    local root_dir="$2"
+    local default_server="${3:-}"
+    local listen_suffix=""
 
-    if [[ ! -d "$client_dist" ]]; then
-        error "未找到前端构建目录: $client_dist"
-        error "请确认安装包包含 client/dist，或先完成前端构建后再配置 Nginx。"
-        return 1
+    if [[ "$default_server" == "default" ]]; then
+        listen_suffix=" default_server"
     fi
 
-    echo -ne "  ${BOLD}请输入你要绑定的域名 (例如 panel.yourdomain.com): ${NC}"
-    read -r DOMAIN
-
-    if [[ -z "$DOMAIN" ]]; then
-        error "域名不能为空！"
-        return 1
-    fi
-
-    echo -ne "  ${BOLD}请输入你的邮箱 (用于证书过期通知，可留空): ${NC}"
-    read -r EMAIL
-
-    info "安装 Nginx 与 Certbot..."
-    apt-get install -y -qq nginx certbot python3-certbot-nginx >/dev/null 2>&1
-
-    # 更新公网 URL：CORS、页面链接、支付回调都应使用浏览器可访问的前端域名
-    set_env_value "FRONTEND_URL" "https://${DOMAIN}" "前端公网地址"
-    set_env_value "SITE_URL" "https://${DOMAIN}" "站点公网地址"
-    set_env_value "PAYMENT_CALLBACK_BASE_URL" "https://${DOMAIN}" "支付回调公网地址"
-
-    log "配置 Nginx 站点..."
-    cat > /etc/nginx/sites-available/incudal.conf <<NGINX
-map \$http_x_forwarded_proto \$incudal_forwarded_proto {
-    default \$http_x_forwarded_proto;
-    "" \$scheme;
-}
-
-map \$http_x_forwarded_host \$incudal_forwarded_host {
-    default \$http_x_forwarded_host;
-    "" \$host;
-}
-
+    cat <<NGINX
 server {
-    listen 80;
-    listen [::]:80;
-    server_name ${DOMAIN};
+    listen 80${listen_suffix};
+    listen [::]:80${listen_suffix};
+    server_name ${server_name};
 
-    root ${client_dist};
+    root ${root_dir};
     index index.html;
     client_max_body_size 100m;
 
-    # 安全头
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: http: https: https://kkksr.com https://api.dicebear.com https://dicebear.incudal.com https://*.githubusercontent.com https://avatars.githubusercontent.com https://lh3.googleusercontent.com; connect-src 'self' ws: wss: https://challenges.cloudflare.com https://cloudflareinsights.com https://api.dicebear.com https://dicebear.incudal.com; frame-src 'self' https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
     add_header X-Content-Type-Options nosniff always;
     add_header X-Frame-Options DENY always;
@@ -954,8 +1048,6 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
         proxy_cache_bypass \$http_upgrade;
-
-        # WebSocket 超时
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
         proxy_buffering off;
@@ -978,6 +1070,81 @@ server {
     }
 }
 NGINX
+}
+
+write_nginx_split_maps() {
+    cat <<'NGINX'
+map $http_x_forwarded_proto $incudal_forwarded_proto {
+    default $http_x_forwarded_proto;
+    "" $scheme;
+}
+
+map $http_x_forwarded_host $incudal_forwarded_host {
+    default $http_x_forwarded_host;
+    "" $host;
+}
+
+NGINX
+}
+
+setup_nginx_certbot() {
+    info "准备配置 Nginx 反代及 Let's Encrypt SSL 自动证书"
+    local client_dist="${INSTALL_DIR}/client/dist/user"
+    local admin_client_dist="${INSTALL_DIR}/client/dist/admin"
+
+    if [[ ! -d "$client_dist" ]]; then
+        error "未找到前端构建目录: $client_dist"
+        error "请确认安装包包含 client/dist/user，或先完成前端构建后再配置 Nginx。"
+        return 1
+    fi
+
+    if [[ ! -d "$admin_client_dist" ]]; then
+        error "未找到后台前端构建目录: $admin_client_dist"
+        error "请确认安装包包含 client/dist/admin，或先完成前端构建后再配置 Nginx。"
+        return 1
+    fi
+
+    echo -ne "  ${BOLD}请输入客户面板域名 (例如 demo.payincus.com): ${NC}"
+    read -r DOMAIN
+
+    if [[ -z "$DOMAIN" ]]; then
+        error "域名不能为空！"
+        return 1
+    fi
+
+    echo -ne "  ${BOLD}请输入管理后台域名 (例如 admin.payincus.com): ${NC}"
+    read -r ADMIN_DOMAIN
+
+    if [[ -z "$ADMIN_DOMAIN" ]]; then
+        error "管理后台域名不能为空！"
+        return 1
+    fi
+
+    if [[ "$ADMIN_DOMAIN" == "$DOMAIN" ]]; then
+        error "管理后台域名必须与客户面板域名分开！"
+        return 1
+    fi
+
+    echo -ne "  ${BOLD}请输入你的邮箱 (用于证书过期通知，可留空): ${NC}"
+    read -r EMAIL
+
+    info "安装 Nginx 与 Certbot..."
+    apt-get install -y -qq nginx certbot python3-certbot-nginx >/dev/null 2>&1
+
+    # 更新公网 URL：CORS、页面链接、支付回调都应使用浏览器可访问的前端域名
+    set_env_value "FRONTEND_URL" "https://${DOMAIN}" "前端公网地址"
+    set_env_value "ADMIN_FRONTEND_URL" "https://${ADMIN_DOMAIN}" "管理后台公网地址"
+    set_env_value "SITE_URL" "https://${DOMAIN}" "站点公网地址"
+    set_env_value "PAYMENT_CALLBACK_BASE_URL" "https://${DOMAIN}" "支付回调公网地址"
+    set_env_value "VITE_CUSTOMER_BASE_URL" "https://${DOMAIN}" "管理后台生成客户链接的前端地址"
+    set_env_value "VITE_ADMIN_BASE_URL" "https://${ADMIN_DOMAIN}" "前端管理后台地址"
+
+    log "配置 Nginx 站点..."
+    {
+        write_nginx_split_maps
+        write_nginx_split_server_block "$DOMAIN" "$client_dist"
+        write_nginx_split_server_block "$ADMIN_DOMAIN" "$admin_client_dist"
+    } > /etc/nginx/sites-available/incudal.conf
 
     ln -sf /etc/nginx/sites-available/incudal.conf /etc/nginx/sites-enabled/
     # 移除默认站点（避免冲突）
@@ -987,12 +1154,12 @@ NGINX
 
     log "申请 Let's Encrypt SSL 证书..."
     if [[ -n "$EMAIL" ]]; then
-        certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
+        certbot --nginx -d "$DOMAIN" -d "$ADMIN_DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
     else
-        certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect
+        certbot --nginx -d "$DOMAIN" -d "$ADMIN_DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect
     fi
 
-    log "HTTPS 配置完成！访问地址: https://${DOMAIN}"
+    log "HTTPS 配置完成！客户面板: https://${DOMAIN}，管理后台: https://${ADMIN_DOMAIN}"
 }
 
 # ========================== Cloudflare Tunnel ==========================
@@ -1010,7 +1177,7 @@ setup_cf_tunnel() {
         return 1
     fi
 
-    echo -ne "  ${BOLD}请输入绑定的域名 (例: panel.yourdomain.com): ${NC}"
+    echo -ne "  ${BOLD}请输入客户面板域名 (例: demo.payincus.com): ${NC}"
     read -r DOMAIN
 
     if [[ -z "$DOMAIN" ]]; then
@@ -1019,14 +1186,37 @@ setup_cf_tunnel() {
         return 1
     fi
 
+    echo -ne "  ${BOLD}请输入管理后台域名 (例: admin.payincus.com): ${NC}"
+    read -r ADMIN_DOMAIN
+
+    if [[ -z "$ADMIN_DOMAIN" ]]; then
+        error "管理后台域名不能为空！Cloudflare Tunnel 生产部署必须配置浏览器访问域名。"
+        return 1
+    fi
+
+    if [[ "$ADMIN_DOMAIN" == "$DOMAIN" ]]; then
+        error "管理后台域名必须与客户面板域名分开！"
+        return 1
+    fi
+
     set_env_value "FRONTEND_URL" "https://${DOMAIN}" "前端公网地址"
+    set_env_value "ADMIN_FRONTEND_URL" "https://${ADMIN_DOMAIN}" "管理后台公网地址"
     set_env_value "SITE_URL" "https://${DOMAIN}" "站点公网地址"
     set_env_value "PAYMENT_CALLBACK_BASE_URL" "https://${DOMAIN}" "支付回调公网地址"
+    set_env_value "VITE_CUSTOMER_BASE_URL" "https://${DOMAIN}" "管理后台生成客户链接的前端地址"
+    set_env_value "VITE_ADMIN_BASE_URL" "https://${ADMIN_DOMAIN}" "前端管理后台地址"
 
-    local client_dist="${INSTALL_DIR}/client/dist"
+    local client_dist="${INSTALL_DIR}/client/dist/user"
+    local admin_client_dist="${INSTALL_DIR}/client/dist/admin"
     if [[ ! -d "$client_dist" ]]; then
         error "未找到前端构建目录: $client_dist"
-        error "请确认安装包包含 client/dist，或先完成前端构建后再配置 Cloudflare Tunnel。"
+        error "请确认安装包包含 client/dist/user，或先完成前端构建后再配置 Cloudflare Tunnel。"
+        return 1
+    fi
+
+    if [[ ! -d "$admin_client_dist" ]]; then
+        error "未找到后台前端构建目录: $admin_client_dist"
+        error "请确认安装包包含 client/dist/admin，或先完成前端构建后再配置 Cloudflare Tunnel。"
         return 1
     fi
 
@@ -1034,69 +1224,11 @@ setup_cf_tunnel() {
     info "安装并配置本机 Nginx 静态前端与 /api 反代..."
     apt-get install -y -qq nginx >/dev/null 2>&1
 
-    cat > /etc/nginx/sites-available/incudal.conf <<NGINX
-map \$http_x_forwarded_proto \$incudal_forwarded_proto {
-    default \$http_x_forwarded_proto;
-    "" \$scheme;
-}
-
-map \$http_x_forwarded_host \$incudal_forwarded_host {
-    default \$http_x_forwarded_host;
-    "" \$host;
-}
-
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name ${server_name};
-
-    root ${client_dist};
-    index index.html;
-    client_max_body_size 100m;
-
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: http: https: https://kkksr.com https://api.dicebear.com https://dicebear.incudal.com https://*.githubusercontent.com https://avatars.githubusercontent.com https://lh3.googleusercontent.com; connect-src 'self' ws: wss: https://challenges.cloudflare.com https://cloudflareinsights.com https://api.dicebear.com https://dicebear.incudal.com; frame-src 'self' https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
-    add_header X-Content-Type-Options nosniff always;
-    add_header X-Frame-Options DENY always;
-    add_header Referrer-Policy strict-origin-when-cross-origin always;
-
-    location = /healthz {
-        add_header Content-Type text/plain;
-        return 200 "ok\n";
-    }
-
-    location /api/ws/ {
-        proxy_pass http://127.0.0.1:${DEFAULT_PORT};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-Host \$incudal_forwarded_host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-        proxy_buffering off;
-    }
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:${DEFAULT_PORT};
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-Host \$incudal_forwarded_host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-}
-NGINX
+    {
+        write_nginx_split_maps
+        write_nginx_split_server_block "$server_name" "$client_dist" "default"
+        write_nginx_split_server_block "$ADMIN_DOMAIN" "$admin_client_dist"
+    } > /etc/nginx/sites-available/incudal.conf
 
     ln -sf /etc/nginx/sites-available/incudal.conf /etc/nginx/sites-enabled/
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
@@ -1183,9 +1315,13 @@ do_upgrade() {
 
     info "检测到已安装的 Incudal，准备升级..."
 
+    apt-get update -qq >/dev/null 2>&1
+    install_system_tools
+
     # 停止服务
     info "停止当前服务..."
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    systemctl stop incudal 2>/dev/null || true
 
     # 获取产物包（自动下载或手动放置）
     local tar_file
@@ -1197,6 +1333,11 @@ do_upgrade() {
 
     # 修复权限
     chown -R "${RUN_USER}:${RUN_USER}" "$INSTALL_DIR"
+
+    configure_git_metadata
+    ensure_env_keys
+    create_service
+    create_online_update_service
 
     # 运行迁移
     run_migrations
@@ -1230,7 +1371,13 @@ do_uninstall() {
     # 停止服务
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
     systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    systemctl stop incudal 2>/dev/null || true
+    systemctl disable incudal 2>/dev/null || true
     rm -f "$SERVICE_FILE"
+    rm -f /etc/systemd/system/incudal.service
+    rm -f /etc/systemd/system/incudal-online-update@.service
+    rm -f /etc/systemd/system/incudal-online-rollback@.service
+    rm -f /etc/sudoers.d/incudal-online-update
     systemctl daemon-reload
 
     # 删除安装目录
@@ -1291,6 +1438,7 @@ do_install() {
     step "更新系统包索引..."
     apt-get update -qq >/dev/null 2>&1
 
+    install_system_tools
     install_nodejs
     install_postgresql
     install_redis
@@ -1313,6 +1461,9 @@ do_install() {
     # 创建用户
     create_user
 
+    # 配置 Git 元数据
+    configure_git_metadata
+
     # 生成面板客户端证书（与 Incus API mTLS 通信所需）
     generate_panel_cert
 
@@ -1327,6 +1478,7 @@ do_install() {
 
     # 创建 systemd 服务
     create_service
+    create_online_update_service
 
     # 运行数据库迁移
     run_migrations

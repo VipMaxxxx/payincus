@@ -28,11 +28,14 @@ server/src/generated/
 
 # ==================== 日志 ====================
 logs/
+update-logs/
 *.log
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+version.json
+release-packages/
 
 # ==================== IDE/编辑器 ====================
 .vscode/

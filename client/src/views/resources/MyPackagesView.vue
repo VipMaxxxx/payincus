@@ -11,6 +11,7 @@ import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import { translateError } from '@/utils/errorHandler'
 import type { Package, Host } from '@/types/api'
+import { instanceCreatePath, isAdminEntry, packageCreatePath, packageEditPath } from '@/utils/app-paths'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'MyPackagesView' })
@@ -109,64 +110,6 @@ function clearSearch() {
 // 记录是否已经首次加载
 let hasInitialLoad = false
 
-// 套餐共享相关
-interface Friend {
-  id: number
-  username: string
-  email?: string
-  avatarStyle: string
-  avatarBadgeId?: string | null
-}
-const friends = ref<Friend[]>([])
-const showShareModal = ref<boolean>(false)
-const currentPackageId = ref<number | null>(null)
-const selectedFriendId = ref<number | null>(null)
-const shareLoading = ref<boolean>(false)
-const showSharesModal = ref<boolean>(false)
-const shares = ref<Array<{
-  id: number
-  packageId: number
-  packageName: string
-  ownerId: number
-  ownerUsername: string
-  sharedToId: number
-  sharedToUsername: string
-  sharedToAvatarStyle?: string | null
-  sharedToAvatarBadgeId?: string | null
-  quotaMultiplier: number | null
-  maxInstances: number | null
-  usage?: {
-    instanceCount: number
-    totalCpu: number
-    totalMemory: number
-  }
-  createdAt: string
-}>>([])
-const sharesLoading = ref<boolean>(false)
-const friendSearchQuery = ref<string>('')
-
-// 共享配额限制
-const quotaMultiplierOptions = computed(() => [
-  { value: null, label: t('resources.packages.noLimit') },
-  { value: 0.5, label: '0.5x' },
-  { value: 1, label: '1x' },
-  { value: 1.5, label: '1.5x' },
-  { value: 2, label: '2x' },
-  { value: 3, label: '3x' },
-])
-const maxInstancesOptions = computed(() => [
-  { value: null, label: t('resources.packages.noLimit') },
-  { value: 1, label: t('resources.packages.instanceUnit', { n: 1 }) },
-  { value: 2, label: t('resources.packages.instanceUnit', { n: 2 }) },
-  { value: 3, label: t('resources.packages.instanceUnit', { n: 3 }) },
-  { value: 5, label: t('resources.packages.instanceUnit', { n: 5 }) },
-  { value: 10, label: t('resources.packages.instanceUnit', { n: 10 }) },
-])
-const selectedQuotaMultiplier = ref<number | null>(1)  // 默认 1x
-const selectedMaxInstances = ref<number | null>(null)   // 默认无限制
-const packageQuota = ref<{ cpuMax: number; memoryMax: number } | null>(null)
-const currentPackage = ref<Package | null>(null)
-
 // 配额释放相关
 const showQuotaReleaseModal = ref<boolean>(false)
 const quotaReleasePackage = ref<Package | null>(null)
@@ -179,24 +122,6 @@ function openQuotaReleaseModal(pkg: Package): void {
 function handleQuotaReleaseSuccess(): void {
   // 可选：刷新套餐列表以显示最新配额
 }
-
-// 编辑配额相关
-const showEditQuotaModal = ref<boolean>(false)
-const editingShare = ref<typeof shares.value[0] | null>(null)
-const editQuotaMultiplier = ref<number | null>(null)
-const editMaxInstances = ref<number | null>(null)
-const editQuotaLoading = ref<boolean>(false)
-
-// 过滤已共享的好友，并支持搜索
-const availableFriends = computed(() => {
-  const sharedIds = new Set(shares.value.map(s => s.sharedToId))
-  let filtered = friends.value.filter(f => !sharedIds.has(f.id))
-  if (friendSearchQuery.value.trim()) {
-    const query = friendSearchQuery.value.toLowerCase().trim()
-    filtered = filtered.filter(f => f.username.toLowerCase().includes(query))
-  }
-  return filtered
-})
 
 function bytesToGB(bytes: string | null | undefined): number {
   if (!bytes) return 1
@@ -237,7 +162,6 @@ function bytesToMbps(bytes: string | null | undefined): number {
 }
 
 onMounted(async (): Promise<void> => {
-  // 好友共享功能已禁用，不再加载好友列表
   await Promise.all([loadPackages(), loadHosts()])
   hasInitialLoad = true
 })
@@ -370,11 +294,13 @@ function isPackagePublic(pkg: Package): boolean {
  * 链接格式: /instances/create?source=market|official&package=123
  */
 function copyShareLink(pkg: Package): void {
+  if (isAdminEntry) return
+
   // 判断套餐来源：任一节点名以 PEER 开头 = 托管市场
   const hostNames = getHostNames(pkg)
   const isHostedPackage = hostNames.split(', ').some(name => name.toUpperCase().startsWith('PEER'))
   const source = isHostedPackage ? 'market' : 'official'
-  const link = `${window.location.origin}/instances/create?source=${source}&package=${pkg.id}`
+  const link = `${window.location.origin}${instanceCreatePath()}?source=${source}&package=${pkg.id}`
   
   navigator.clipboard.writeText(link).then(() => {
     toast.success(t('resources.packages.shareLinkCopied'))
@@ -385,11 +311,11 @@ function copyShareLink(pkg: Package): void {
 
 // 跳转到创建页面
 async function openCreate(): Promise<void> {
-  router.push({ name: 'my-package-create' })
+  router.push(packageCreatePath())
 }
 
 function openEdit(pkg: Package): void {
-  router.push({ name: 'my-package-edit', params: { id: pkg.id } })
+  router.push(packageEditPath(pkg.id))
 }
 
 async function deletePackage(pkg: Package): Promise<void> {
@@ -422,142 +348,6 @@ function formatDisk(mb: number): string {
     return gb % 1 === 0 ? gb.toFixed(0) + ' GB' : gb.toFixed(1) + ' GB'
   }
   return mb + ' MB'
-}
-
-// 好友共享功能已禁用，以下函数保留但不使用
-// @ts-ignore - 好友共享功能已禁用
-
-// 打开共享弹窗
-async function openShareModal(pkg: Package): Promise<void> {
-  currentPackageId.value = pkg.id
-  currentPackage.value = pkg
-  selectedFriendId.value = null
-  friendSearchQuery.value = ''
-  selectedQuotaMultiplier.value = 1  // 重置为默认值
-  selectedMaxInstances.value = null
-  showShareModal.value = true
-  // 预加载共享列表，用于过滤已共享的好友
-  await loadShares(pkg.id)
-}
-
-// @ts-ignore - 好友共享功能已禁用
- 
-// 共享套餐给好友
-async function sharePackage(): Promise<void> {
-  if (!currentPackageId.value || !selectedFriendId.value) return
-
-  shareLoading.value = true
-  try {
-    await api.packages.share(
-      currentPackageId.value,
-      selectedFriendId.value,
-      selectedQuotaMultiplier.value,
-      selectedMaxInstances.value
-    )
-    toast.success(t('resources.packages.shareSuccess'))
-    showShareModal.value = false
-    await loadShares(currentPackageId.value)
-  } catch (err: any) {
-    toast.error(err.message || t('resources.packages.shareFailed'))
-  } finally {
-    shareLoading.value = false
-  }
-}
-
-// @ts-ignore - 好友共享功能已禁用
- 
-// 加载共享列表
-async function loadShares(packageId: number): Promise<void> {
-  sharesLoading.value = true
-  try {
-    const res = await api.packages.getShares(packageId)
-    shares.value = res.shares || []
-    packageQuota.value = res.packageQuota || null
-  } catch (err) {
-    console.error('加载共享列表失败:', err)
-    shares.value = []
-    packageQuota.value = null
-  } finally {
-    sharesLoading.value = false
-  }
-}
-
-// @ts-ignore - 好友共享功能已禁用
- 
-// 取消共享
-async function unsharePackage(sharedToId: number): Promise<void> {
-  if (!currentPackageId.value) return
-  if (!confirm(t('resources.packages.confirmUnshare'))) return
-
-  try {
-    await api.packages.unshare(currentPackageId.value, sharedToId)
-    toast.success(t('resources.packages.unshareSuccess'))
-    await loadShares(currentPackageId.value)
-  } catch (err: any) {
-    toast.error(err.message || t('resources.packages.unshareFailed'))
-  }
-}
-
-// 格式化时间
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
-}
-
-// @ts-ignore - 好友共享功能已禁用
- 
-// 打开编辑配额弹窗
-function openEditQuotaModal(share: typeof shares.value[0]): void {
-  editingShare.value = share
-  editQuotaMultiplier.value = share.quotaMultiplier
-  editMaxInstances.value = share.maxInstances
-  showEditQuotaModal.value = true
-}
-
-// @ts-ignore - 好友共享功能已禁用
- 
-// 保存编辑的配额
-async function saveEditQuota(): Promise<void> {
-  if (!currentPackageId.value || !editingShare.value) return
-
-  editQuotaLoading.value = true
-  try {
-    await api.packages.updateShareQuota(
-      currentPackageId.value,
-      editingShare.value.id,
-      editQuotaMultiplier.value,
-      editMaxInstances.value
-    )
-    toast.success(t('resources.packages.quotaUpdated'))
-    showEditQuotaModal.value = false
-    await loadShares(currentPackageId.value)
-  } catch (err: any) {
-    toast.error(err.message || t('resources.packages.quotaUpdateFailed'))
-  } finally {
-    editQuotaLoading.value = false
-  }
-}
-
-// @ts-ignore - 好友共享功能已禁用
- 
-// 计算使用量百分比
-function getUsagePercent(share: typeof shares.value[0], type: 'cpu' | 'memory' | 'instances'): number {
-  if (!share.usage || !packageQuota.value) return 0
-  
-  if (type === 'instances') {
-    if (share.maxInstances === null) return 0
-    return Math.min(100, (share.usage.instanceCount / share.maxInstances) * 100)
-  }
-  
-  if (share.quotaMultiplier === null) return 0
-  
-  if (type === 'cpu') {
-    const maxCpu = Math.floor(packageQuota.value.cpuMax * share.quotaMultiplier)
-    return Math.min(100, (share.usage.totalCpu / maxCpu) * 100)
-  }
-  
-  const maxMemory = Math.floor(packageQuota.value.memoryMax * share.quotaMultiplier)
-  return Math.min(100, (share.usage.totalMemory / maxMemory) * 100)
 }
 
 // 方案管理相关
@@ -1060,6 +850,7 @@ function getBillingCycleLabel(months: number): string {
                   <div class="flex items-center justify-end gap-1">
                     <!-- 分享链接 -->
                     <button
+                      v-if="!isAdminEntry"
                       type="button"
                       class="p-1.5 transition-colors rounded"
                       :class="themeStore.isDark ? 'text-gray-500 hover:text-blue-400 hover:bg-gray-800' : 'text-gray-400 hover:text-blue-600 hover:bg-gray-100'"
@@ -1080,7 +871,6 @@ function getBillingCycleLabel(months: number): string {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                       </svg>
                     </button>
-                    <!-- 好友共享功能已禁用，移除共享按钮 -->
                     <button
                       class="p-1.5 transition-colors rounded"
                       :class="themeStore.isDark ? 'text-gray-500 hover:text-teal-400 hover:bg-gray-800' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'"
@@ -1091,7 +881,6 @@ function getBillingCycleLabel(months: number): string {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
                     </button>
-                    <!-- 好友共享功能已禁用，移除查看共享列表按钮 -->
                     <button
                       class="p-1.5 transition-colors rounded"
                       :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
@@ -1144,422 +933,6 @@ function getBillingCycleLabel(months: number): string {
         </div>
       </div>
     </template>
-
-    <!-- 共享套餐弹窗 -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showShareModal" class="modal-overlay">
-          <div class="modal-backdrop" @click="showShareModal = false"></div>
-          <div class="modal-content max-w-lg">
-            <div class="modal-header">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-blue-500/20' : 'bg-blue-100'">
-                  <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-blue-400' : 'text-blue-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 class="modal-title">{{ t('resources.packages.shareToFriend') }}</h3>
-                  <p v-if="currentPackage" class="text-xs text-themed-muted mt-0.5">
-                    {{ currentPackage.name }} · {{ currentPackage.cpu_max }}% CPU · {{ formatMemory(currentPackage.memory_max) }}
-                  </p>
-                </div>
-              </div>
-              <button class="p-1.5 rounded-lg transition-colors" :class="themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'" @click="showShareModal = false">
-                <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="modal-body space-y-4">
-              <!-- 搜索框 -->
-              <div class="relative">
-                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  v-model="friendSearchQuery"
-                  type="text"
-                  class="input pl-10"
-                  :placeholder="t('resources.packages.searchFriend')"
-                />
-              </div>
-
-              <!-- 好友列表 -->
-              <div v-if="sharesLoading" class="py-8">
-                <SkeletonLoader type="list" />
-              </div>
-              <div v-else-if="friends.length === 0" class="text-center py-10">
-                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'">
-                  <svg class="w-8 h-8" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <p class="text-themed-secondary font-medium">{{ t('resources.packages.noFriends') }}</p>
-                <p class="text-xs text-themed-muted mt-1">{{ t('resources.packages.noFriendsHint') }}</p>
-              </div>
-              <div v-else-if="availableFriends.length === 0" class="text-center py-10">
-                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-green-500/10' : 'bg-green-50'">
-                  <svg class="w-8 h-8" :class="themeStore.isDark ? 'text-green-400' : 'text-green-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p class="text-themed-secondary font-medium">{{ t('resources.packages.allFriendsShared') }}</p>
-                <p class="text-xs text-themed-muted mt-1">{{ t('resources.packages.noAvailableFriends') }}</p>
-              </div>
-              <div v-else class="space-y-2 max-h-56 overflow-y-auto">
-                <p class="text-xs text-themed-muted mb-2">{{ t('resources.packages.selectToShare') }}</p>
-                <button
-                  v-for="friend in availableFriends"
-                  :key="friend.id"
-                  type="button"
-                  class="w-full flex items-center gap-3 p-3 rounded-xl border transition-all"
-                  :class="[
-                    selectedFriendId === friend.id
-                      ? themeStore.isDark
-                        ? 'border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/30'
-                        : 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
-                      : themeStore.isDark
-                        ? 'border-gray-700 hover:border-gray-600 hover:bg-gray-800/50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  ]"
-                  @click="selectedFriendId = friend.id"
-                >
-                  <UserAvatar :username="friend.username" :email="friend.email" :avatar-style="friend.avatarStyle" :badge-id="friend.avatarBadgeId || null" :size="40" />
-                  <div class="flex-1 text-left min-w-0">
-                    <div class="font-medium truncate" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">{{ friend.username }}</div>
-                    <div v-if="friend.email" class="text-xs text-themed-muted truncate">{{ friend.email }}</div>
-                  </div>
-                  <div
-                    class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
-                    :class="[
-                      selectedFriendId === friend.id
-                        ? 'border-blue-500 bg-blue-500'
-                        : themeStore.isDark
-                          ? 'border-gray-600'
-                          : 'border-gray-300'
-                    ]"
-                  >
-                    <svg v-if="selectedFriendId === friend.id" class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                  </div>
-                </button>
-              </div>
-
-              <!-- 配额设置 -->
-              <Transition name="fade">
-                <div v-if="selectedFriendId" class="rounded-xl p-4" :class="themeStore.isDark ? 'bg-gray-800/50 border border-gray-700' : 'bg-gray-50 border border-gray-200'">
-                  <div class="flex items-center gap-2 mb-4">
-                    <svg class="w-4 h-4" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <h4 class="text-sm font-medium" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-700'">
-                      {{ t('resources.packages.quotaSettings') }}
-                    </h4>
-                  </div>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div>
-                      <label class="block text-xs font-medium text-themed-muted mb-1.5">{{ t('resources.packages.quotaMultiplier') }}</label>
-                      <select v-model="selectedQuotaMultiplier" class="input text-sm w-full">
-                        <option v-for="opt in quotaMultiplierOptions" :key="String(opt.value)" :value="opt.value">
-                          {{ opt.label }}
-                        </option>
-                      </select>
-                      <p class="text-xs text-themed-muted mt-1.5 leading-relaxed">{{ t('resources.packages.quotaMultiplierHint') }}</p>
-                    </div>
-                    <div>
-                      <label class="block text-xs font-medium text-themed-muted mb-1.5">{{ t('resources.packages.maxInstances') }}</label>
-                      <select v-model="selectedMaxInstances" class="input text-sm w-full">
-                        <option v-for="opt in maxInstancesOptions" :key="String(opt.value)" :value="opt.value">
-                          {{ opt.label }}
-                        </option>
-                      </select>
-                      <p class="text-xs text-themed-muted mt-1.5 leading-relaxed">{{ t('resources.packages.maxInstancesHint') }}</p>
-                    </div>
-                  </div>
-                </div>
-              </Transition>
-            </div>
-
-            <div class="modal-footer">
-              <button class="btn-secondary" @click="showShareModal = false">{{ t('common.cancel') }}</button>
-              <button
-                :disabled="!selectedFriendId || shareLoading || availableFriends.length === 0"
-                class="btn-primary"
-                @click="sharePackage"
-              >
-                <span v-if="shareLoading" class="loading-spinner w-4 h-4"></span>
-                <template v-else>
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                  </svg>
-                  {{ t('resources.packages.confirmShare') }}
-                </template>
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- 共享列表弹窗 -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showSharesModal" class="modal-overlay">
-          <div class="modal-backdrop" @click="showSharesModal = false"></div>
-          <div class="modal-content max-w-xl">
-            <div class="modal-header">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-purple-500/20' : 'bg-purple-100'">
-                  <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-purple-400' : 'text-purple-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <div class="flex items-center gap-2">
-                    <h3 class="modal-title">{{ t('resources.packages.sharesList') }}</h3>
-                    <span v-if="shares.length > 0" class="text-xs px-2 py-0.5 rounded-full" :class="themeStore.isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600'">
-                      {{ shares.length }}
-                    </span>
-                  </div>
-                  <p v-if="currentPackage" class="text-xs text-themed-muted mt-0.5">
-                    {{ currentPackage.name }} · {{ currentPackage.cpu_max }}% CPU · {{ formatMemory(currentPackage.memory_max) }}
-                  </p>
-                </div>
-              </div>
-              <button class="p-1.5 rounded-lg transition-colors" :class="themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'" @click="showSharesModal = false">
-                <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="modal-body">
-              <SkeletonLoader v-if="sharesLoading" type="list" />
-              <div v-else-if="shares.length === 0" class="text-center py-12">
-                <div class="w-20 h-20 mx-auto mb-4 rounded-2xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'">
-                  <svg class="w-10 h-10" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <p class="text-themed-secondary font-medium">{{ t('resources.packages.noShares') }}</p>
-                <p class="text-xs text-themed-muted mt-1">{{ t('resources.packages.noSharesHint') }}</p>
-              </div>
-              <div v-else class="space-y-3 max-h-96 overflow-y-auto">
-                <div
-                  v-for="share in shares"
-                  :key="share.id"
-                  class="rounded-xl border p-4 transition-colors"
-                  :class="themeStore.isDark ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50/50'"
-                >
-                  <!-- 用户信息和操作按钮 -->
-                  <div class="flex items-center gap-3 mb-3">
-                    <UserAvatar :username="share.sharedToUsername" :avatar-style="share.sharedToAvatarStyle || ''" :badge-id="share.sharedToAvatarBadgeId || null" :size="44" />
-                    <div class="flex-1 min-w-0">
-                      <div class="font-medium" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-                        {{ share.sharedToUsername }}
-                      </div>
-                      <div class="text-xs text-themed-muted flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {{ formatDate(share.createdAt) }}
-                      </div>
-                    </div>
-                    <div class="flex items-center gap-1">
-                      <button
-                        class="p-2 rounded-lg transition-colors"
-                        :class="themeStore.isDark ? 'hover:bg-gray-700 text-gray-400 hover:text-blue-400' : 'hover:bg-gray-200 text-gray-500 hover:text-blue-600'"
-                        :title="t('resources.packages.editQuota')"
-                        @click="openEditQuotaModal(share)"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        class="p-2 rounded-lg transition-colors"
-                        :class="themeStore.isDark ? 'hover:bg-red-500/20 text-gray-400 hover:text-red-400' : 'hover:bg-red-50 text-gray-500 hover:text-red-500'"
-                        :title="t('resources.packages.unshare')"
-                        @click="unsharePackage(share.sharedToId)"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- 配额信息 -->
-                  <div class="grid grid-cols-2 gap-3 mb-3">
-                    <div class="rounded-lg px-3 py-2" :class="themeStore.isDark ? 'bg-gray-900/50' : 'bg-white'">
-                      <div class="text-xs text-themed-muted mb-0.5">{{ t('resources.packages.quotaMultiplier') }}</div>
-                      <div class="font-medium text-sm" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-                        {{ share.quotaMultiplier !== null ? share.quotaMultiplier + 'x' : t('resources.packages.noLimit') }}
-                      </div>
-                    </div>
-                    <div class="rounded-lg px-3 py-2" :class="themeStore.isDark ? 'bg-gray-900/50' : 'bg-white'">
-                      <div class="text-xs text-themed-muted mb-0.5">{{ t('resources.packages.maxInstances') }}</div>
-                      <div class="font-medium text-sm" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-                        {{ share.maxInstances !== null ? t('resources.packages.instanceUnit', { n: share.maxInstances }) : t('resources.packages.noLimit') }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 使用量进度条 -->
-                  <div v-if="share.usage" class="space-y-2">
-                    <div class="text-xs font-medium text-themed-muted">{{ t('resources.packages.usageStatus') }}</div>
-                    
-                    <!-- 实例数 -->
-                    <div v-if="share.maxInstances !== null" class="space-y-1">
-                      <div class="flex justify-between text-xs">
-                        <span class="text-themed-muted">{{ t('resources.packages.instanceCount') }}</span>
-                        <span :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">{{ share.usage.instanceCount }} / {{ share.maxInstances }}</span>
-                      </div>
-                      <div class="h-1.5 rounded-full overflow-hidden" :class="themeStore.isDark ? 'bg-gray-700' : 'bg-gray-200'">
-                        <div
-                          class="h-full rounded-full transition-all"
-                          :class="getUsagePercent(share, 'instances') > 80 ? 'bg-amber-500' : themeStore.isDark ? 'bg-blue-500' : 'bg-blue-500'"
-                          :style="{ width: getUsagePercent(share, 'instances') + '%' }"
-                        ></div>
-                      </div>
-                    </div>
-
-                    <!-- CPU -->
-                    <div v-if="share.quotaMultiplier !== null && packageQuota" class="space-y-1">
-                      <div class="flex justify-between text-xs">
-                        <span class="text-themed-muted">CPU</span>
-                        <span :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">{{ share.usage.totalCpu }}% / {{ Math.floor(packageQuota.cpuMax * share.quotaMultiplier) }}%</span>
-                      </div>
-                      <div class="h-1.5 rounded-full overflow-hidden" :class="themeStore.isDark ? 'bg-gray-700' : 'bg-gray-200'">
-                        <div
-                          class="h-full rounded-full transition-all"
-                          :class="getUsagePercent(share, 'cpu') > 80 ? 'bg-amber-500' : themeStore.isDark ? 'bg-green-500' : 'bg-green-500'"
-                          :style="{ width: getUsagePercent(share, 'cpu') + '%' }"
-                        ></div>
-                      </div>
-                    </div>
-
-                    <!-- 内存 -->
-                    <div v-if="share.quotaMultiplier !== null && packageQuota" class="space-y-1">
-                      <div class="flex justify-between text-xs">
-                        <span class="text-themed-muted">{{ t('admin.packages.memory') }}</span>
-                        <span :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">{{ formatMemory(share.usage.totalMemory) }} / {{ formatMemory(Math.floor(packageQuota.memoryMax * share.quotaMultiplier)) }}</span>
-                      </div>
-                      <div class="h-1.5 rounded-full overflow-hidden" :class="themeStore.isDark ? 'bg-gray-700' : 'bg-gray-200'">
-                        <div
-                          class="h-full rounded-full transition-all"
-                          :class="getUsagePercent(share, 'memory') > 80 ? 'bg-amber-500' : themeStore.isDark ? 'bg-purple-500' : 'bg-purple-500'"
-                          :style="{ width: getUsagePercent(share, 'memory') + '%' }"
-                        ></div>
-                      </div>
-                    </div>
-
-                    <!-- 无限制时显示简单统计 -->
-                    <div v-if="share.quotaMultiplier === null && share.maxInstances === null" class="text-xs text-themed-muted">
-                      {{ t('resources.packages.currentUsage', { cpu: share.usage.totalCpu, memory: share.usage.totalMemory, instances: share.usage.instanceCount }) }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="modal-footer">
-              <button class="btn-primary" @click="openShareModal(currentPackage!)">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-                {{ t('resources.packages.addShare') }}
-              </button>
-              <button class="btn-secondary" @click="showSharesModal = false">{{ t('common.close') }}</button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- 编辑配额弹窗 -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showEditQuotaModal" class="modal-overlay">
-          <div class="modal-backdrop" @click="showEditQuotaModal = false"></div>
-          <div class="modal-content max-w-md">
-            <div class="modal-header">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-amber-500/20' : 'bg-amber-100'">
-                  <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 class="modal-title">{{ t('resources.packages.editQuota') }}</h3>
-                  <p v-if="editingShare" class="text-xs text-themed-muted mt-0.5">
-                    {{ t('resources.packages.editQuotaFor', { username: editingShare.sharedToUsername }) }}
-                  </p>
-                </div>
-              </div>
-              <button class="p-1.5 rounded-lg transition-colors" :class="themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'" @click="showEditQuotaModal = false">
-                <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="modal-body">
-              <div class="rounded-xl p-4" :class="themeStore.isDark ? 'bg-gray-800/50 border border-gray-700' : 'bg-gray-50 border border-gray-200'">
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-xs font-medium text-themed-muted mb-1.5">{{ t('resources.packages.quotaMultiplier') }}</label>
-                    <select v-model="editQuotaMultiplier" class="input text-sm w-full">
-                      <option v-for="opt in quotaMultiplierOptions" :key="String(opt.value)" :value="opt.value">
-                        {{ opt.label }}
-                      </option>
-                    </select>
-                    <p class="text-xs text-themed-muted mt-1.5 leading-relaxed">{{ t('resources.packages.quotaMultiplierHint') }}</p>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-medium text-themed-muted mb-1.5">{{ t('resources.packages.maxInstances') }}</label>
-                    <select v-model="editMaxInstances" class="input text-sm w-full">
-                      <option v-for="opt in maxInstancesOptions" :key="String(opt.value)" :value="opt.value">
-                        {{ opt.label }}
-                      </option>
-                    </select>
-                    <p class="text-xs text-themed-muted mt-1.5 leading-relaxed">{{ t('resources.packages.maxInstancesHint') }}</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 当前使用量提示 -->
-              <div v-if="editingShare?.usage" class="mt-4 rounded-lg p-3" :class="themeStore.isDark ? 'bg-blue-500/10 border border-blue-500/30' : 'bg-blue-50 border border-blue-200'">
-                <div class="flex items-start gap-2">
-                  <svg class="w-4 h-4 mt-0.5 flex-shrink-0" :class="themeStore.isDark ? 'text-blue-400' : 'text-blue-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div class="text-xs" :class="themeStore.isDark ? 'text-blue-300' : 'text-blue-700'">
-                    {{ t('resources.packages.currentUsageInfo', { cpu: editingShare.usage.totalCpu, memory: editingShare.usage.totalMemory, instances: editingShare.usage.instanceCount }) }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="modal-footer">
-              <button class="btn-secondary" @click="showEditQuotaModal = false">{{ t('common.cancel') }}</button>
-              <button :disabled="editQuotaLoading" class="btn-primary" @click="saveEditQuota">
-                <span v-if="editQuotaLoading" class="loading-spinner w-4 h-4"></span>
-                <template v-else>
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                  </svg>
-                  {{ t('common.save') }}
-                </template>
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
 
     <!-- 配额释放弹窗 -->
     <PackageQuotaReleaseModal

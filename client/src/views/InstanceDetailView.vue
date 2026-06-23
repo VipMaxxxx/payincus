@@ -23,6 +23,7 @@ import SnapshotManager from '@/components/SnapshotManager.vue'
 import TrafficStats from '@/components/instance/TrafficStats.vue'
 import AddPortModal from '@/components/instance/modals/AddPortModal.vue'
 import PortConflictModal from '@/components/instance/modals/PortConflictModal.vue'
+import { helpPath, hostDetailPath, instancesPath, isAdminEntry } from '@/utils/app-paths'
 import RebuildModal from '@/components/instance/modals/RebuildModal.vue'
 import RecreateModal from '@/components/instance/modals/RecreateModal.vue'
 import TransferModal from '@/components/instance/modals/TransferModal.vue'
@@ -69,6 +70,37 @@ const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const configStore = useConfigStore()
 
+interface CustomerSelfServiceApi {
+  billing: {
+    setAutoRenew: (instanceId: number, autoRenew: boolean) => Promise<{
+      message: string
+      autoRenew: boolean
+    }>
+    getDestroyInfo: (instanceId: number) => Promise<unknown>
+    destroyInstance: (instanceId: number, options?: { feeWaiver?: string }) => Promise<{
+      success: boolean
+      message: string
+      refundAmount: number
+      feeAmount: number
+      isFirstTime: boolean
+      isFreeInstance: boolean
+    }>
+  }
+  checkin: {
+    redeem: (redeemCode: string, instanceId: number) => Promise<{
+      codeType: string
+      actualAdded: number
+    }>
+  }
+  transfers: {
+    list: (type: 'sent' | 'received', params?: { status?: string; page?: number; pageSize?: number }) => Promise<{
+      transfers: Array<{ instanceId: number }>
+    }>
+  }
+}
+
+const customerSelfServiceApi = api as typeof api & CustomerSelfServiceApi
+
 // 获取返回路径：如果是从宿主机页面进入，则返回到宿主机页面
 function getReturnPath(): string {
   const fromHost = route.query.fromHost as string | undefined
@@ -76,12 +108,12 @@ function getReturnPath(): string {
     // 验证 hostId 是否为有效数字
     const hostId = parseInt(fromHost, 10)
     if (!isNaN(hostId) && hostId > 0) {
-      return `/resources/hosts/${hostId}`
+      return hostDetailPath(hostId)
     }
     // 如果 hostId 无效，返回实例列表
-    return '/instances'
+    return instancesPath()
   }
-  return '/instances'
+  return instancesPath()
 }
 
 // 标签页状态
@@ -437,7 +469,7 @@ const subscriptionAutoRenewEnabled = computed<boolean>(() =>
 )
 
 const showPaidSubscriptionCard = computed<boolean>(() =>
-  Boolean((instance.value as any)?.planName && instance.value?.expires_at)
+  !isAdminEntry && Boolean((instance.value as any)?.planName && instance.value?.expires_at)
 )
 
 const isError = computed<boolean>(() => {
@@ -860,7 +892,7 @@ async function loadInstance(): Promise<void> {
       if (loading.value) {
         // 并行执行独立的检查请求，加快首次加载速度
         await Promise.all([
-          checkPendingTransfer(),
+          isAdminEntry ? Promise.resolve() : checkPendingTransfer(),
           checkActiveTask()
         ])
         // 实例加载成功后，并行加载统计信息和流量数据
@@ -1136,13 +1168,14 @@ async function handleConfigEdit(data: { cpu?: number; memory?: number; disk?: nu
 
 // 打开兑换资源模态框
 function openRedeemModal(): void {
+  if (isAdminEntry) return
   redeemCodeInput.value = ''
   showRedeemModal.value = true
 }
 
 // 兑换系统兑换码到当前实例
 async function handleRedeem(): Promise<void> {
-  if (!instance.value || redeemLoading.value) return
+  if (isAdminEntry || !instance.value || redeemLoading.value) return
   const code = redeemCodeInput.value.trim()
   if (!code) {
     toast.warning(t('checkin.enterCode'))
@@ -1151,7 +1184,7 @@ async function handleRedeem(): Promise<void> {
   
   redeemLoading.value = true
   try {
-    const result = await api.checkin.redeem(code, instance.value.id)
+    const result = await customerSelfServiceApi.checkin.redeem(code, instance.value.id)
     // 显示成功提示
     const typeMap: Record<string, string> = { c: t('checkin.cpu'), r: t('checkin.memory'), d: t('checkin.disk'), t: t('checkin.traffic') }
     const unitMap: Record<string, string> = { c: '%', r: 'MB', d: 'MB', t: 'GB' }
@@ -1190,10 +1223,10 @@ async function handleChangePlanSuccess(): Promise<void> {
 
 // 设置自动续费
 async function handleSetAutoRenew(autoRenew: boolean): Promise<void> {
-  if (!instance.value) return
+  if (isAdminEntry || !instance.value) return
   autoRenewLoading.value = true
   try {
-    await api.billing.setAutoRenew(instance.value.id, autoRenew)
+    await customerSelfServiceApi.billing.setAutoRenew(instance.value.id, autoRenew)
     toast.success(autoRenew 
       ? t('instance.subscription.autoRenewEnabled') 
       : t('instance.subscription.autoRenewDisabled')
@@ -1209,10 +1242,10 @@ async function handleSetAutoRenew(autoRenew: boolean): Promise<void> {
 
 // 加载销毁信息
 async function loadDestroyInfo(): Promise<void> {
-  if (!instance.value) return
+  if (isAdminEntry || !instance.value) return
   destroyInfo.value = null
   try {
-    destroyInfo.value = await api.billing.getDestroyInfo(instance.value.id) as any
+    destroyInfo.value = await customerSelfServiceApi.billing.getDestroyInfo(instance.value.id) as any
   } catch {
     toast.error(t('instance.destroy.loadFailed'))
     showDestroyModal.value = false
@@ -1221,10 +1254,10 @@ async function loadDestroyInfo(): Promise<void> {
 
 // 执行销毁
 async function handleDestroy(): Promise<void> {
-  if (!instance.value || !destroyInfo.value?.canDestroy) return
+  if (isAdminEntry || !instance.value || !destroyInfo.value?.canDestroy) return
   destroyLoading.value = true
   try {
-    const result = await api.billing.destroyInstance(instance.value.id)
+    const result = await customerSelfServiceApi.billing.destroyInstance(instance.value.id)
     if (result.isFreeInstance) {
       toast.success(t('instance.destroy.success'))
     } else {
@@ -1232,7 +1265,7 @@ async function handleDestroy(): Promise<void> {
     }
     showDestroyModal.value = false
     // 跳转到实例列表
-    router.push({ name: 'instances' })
+    router.push(instancesPath())
   } catch (err) {
     const apiErr = err as { code?: string }
     if (apiErr.code === 'INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED') {
@@ -1255,17 +1288,17 @@ watch(showDestroyModal, async (visible) => {
 
 // 异常实例快速销毁（免手续费）
 async function handleErrorDestroy(): Promise<void> {
-  if (!instance.value) return
+  if (isAdminEntry || !instance.value) return
   if (!confirm(t('instance.errorBanner.confirmDestroy'))) return
   errorDestroyLoading.value = true
   try {
-    const result = await api.billing.destroyInstance(instance.value.id, { feeWaiver: 'error' })
+    const result = await customerSelfServiceApi.billing.destroyInstance(instance.value.id, { feeWaiver: 'error' })
     if (result.isFreeInstance) {
       toast.success(t('instance.destroy.success'))
     } else {
       toast.success(t('instance.destroy.successWithRefund', { amount: result.refundAmount.toFixed(2) }))
     }
-    router.push({ name: 'instances' })
+    router.push(instancesPath())
   } catch (err) {
     toast.error(translateError(err))
   } finally {
@@ -1693,15 +1726,19 @@ async function loadUserQuota(): Promise<void> {
 // 注意：转移状态变化不频繁，不需要频繁检查
 // 只在页面首次加载时检查，或在用户执行相关操作时检查
 async function checkPendingTransfer(): Promise<void> {
+  if (isAdminEntry) {
+    hasPendingTransfer.value = false
+    return
+  }
   if (!instance.value) return
   
   try {
     // 检查发送的转移
-    const sentResponse = await api.transfers.list('sent', { status: 'pending', pageSize: 100 })
+    const sentResponse = await customerSelfServiceApi.transfers.list('sent', { status: 'pending', pageSize: 100 })
     const hasSentPending = sentResponse.transfers.some(t => t.instanceId === instance.value?.id)
     
     // 检查接收的转移
-    const receivedResponse = await api.transfers.list('received', { status: 'pending', pageSize: 100 })
+    const receivedResponse = await customerSelfServiceApi.transfers.list('received', { status: 'pending', pageSize: 100 })
     const hasReceivedPending = receivedResponse.transfers.some(t => t.instanceId === instance.value?.id)
     
     hasPendingTransfer.value = hasSentPending || hasReceivedPending
@@ -1729,6 +1766,7 @@ async function checkActiveTask(): Promise<void> {
 
 // 点击转移按钮时的处理：运行中提示需要先关机
 function handleTransferBtnClick(): void {
+  if (isAdminEntry) return
   if (isRunning.value) {
     toast.warning(t('instance.detail.actions.stopRequired'))
     return
@@ -1738,6 +1776,7 @@ function handleTransferBtnClick(): void {
 
 // 处理转移按钮点击：在打开转移弹窗前检查转移状态
 async function handleTransferClick(): Promise<void> {
+  if (isAdminEntry) return
   // 在执行转移操作前，先检查是否有待处理的转移
   await checkPendingTransfer()
   if (!hasPendingTransfer.value) {
@@ -2316,6 +2355,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
               :class="themeStore.isDark ? 'bg-blue-500/15' : 'bg-blue-200/70'"
             />
             <button
+              v-if="!isAdminEntry"
               type="button"
               class="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[1.4rem] border shadow-sm transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
               :class="themeStore.isDark
@@ -2332,6 +2372,20 @@ function formatShortDate(dateStr: string | null | undefined): string {
                 :size="36"
               />
             </button>
+            <div
+              v-else
+              class="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[1.4rem] border shadow-sm"
+              :class="themeStore.isDark
+                ? 'border-gray-800 bg-gradient-to-br from-gray-900 via-gray-950 to-black'
+                : 'border-gray-200 bg-gradient-to-br from-white via-gray-50 to-slate-100'"
+            >
+              <InstanceDisplayIcon
+                :badge-id="instance.iconBadgeId"
+                :fallback-icon="getInstanceIconType(instance)"
+                :alt="instance.name"
+                :size="36"
+              />
+            </div>
             <div
               class="absolute -bottom-1 -right-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shadow-sm"
               :class="themeStore.isDark
@@ -2369,7 +2423,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
           </div>
           <!-- Transfer Lock Warning -->
           <div 
-            v-if="hasPendingTransfer"
+            v-if="!isAdminEntry && hasPendingTransfer"
             class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm"
             :class="themeStore.isDark ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-700'"
           >
@@ -2552,7 +2606,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline">{{ $t('instance.detail.actions.syncStatus') }}</span>
           </button>
           <button
-            v-if="canTransfer && !showPaidSubscriptionCard"
+            v-if="!isAdminEntry && canTransfer && !showPaidSubscriptionCard"
             :disabled="isOperationDisabled"
             class="btn-secondary btn-sm sm:btn inline-flex"
             :title="$t('transfer.actions.transfer')"
@@ -2563,7 +2617,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
           </button>
           <!-- 帮助按钮 -->
           <RouterLink 
-            to="/help"
+            :to="helpPath()"
             class="btn-secondary btn-sm sm:btn inline-flex items-center"
             :title="$t('instance.detail.actions.help')"
           >
@@ -2951,7 +3005,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
                       </button>
 
                       <button
-                        v-if="canTransfer"
+                        v-if="!isAdminEntry && canTransfer"
                         :disabled="isOperationDisabled"
                         class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
                         @click="handleTransferBtnClick"
@@ -2983,7 +3037,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
               :show-password="showPassword"
               :instance-password="instancePassword"
               :can-edit-config="instance.isHostOwner === true"
-              :enable-resource-pool="(instance as any).enableResourcePool === true"
+              :enable-resource-pool="!isAdminEntry && (instance as any).enableResourcePool === true"
               @toggle-password="togglePasswordVisibility"
               @copy="copyToClipboard"
               @edit-config="openConfigEditModal"
@@ -3106,7 +3160,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
 
     <!-- Transfer Modal -->
     <TransferModal
-      v-if="instance"
+      v-if="!isAdminEntry && instance"
       :show="showTransferModal"
       :instance="{ id: instance.id, name: instance.name, cpu: instance.cpu, memory: instance.memory, disk: instance.disk }"
       @close="showTransferModal = false"
@@ -3129,7 +3183,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
     <!-- Redeem Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="showRedeemModal" class="modal-overlay">
+        <div v-if="!isAdminEntry && showRedeemModal" class="modal-overlay">
           <div class="modal-backdrop" @click="showRedeemModal = false"></div>
           <div class="modal-content max-w-md">
             <div class="modal-header">
@@ -3182,7 +3236,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
 
     <!-- Renew Modal -->
     <RenewModal
-      v-if="instance"
+      v-if="!isAdminEntry && instance"
       v-model:show="showRenewModal"
       :instance-id="instance.id"
       :instance-name="instance.name"
@@ -3191,7 +3245,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
 
     <!-- Apply AFF Code Modal -->
     <ApplyAffCodeModal
-      v-if="instance"
+      v-if="!isAdminEntry && instance"
       v-model:show="showApplyAffModal"
       :instance-id="instance.id"
       :instance-name="instance.name"
@@ -3202,7 +3256,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
 
     <!-- Change Plan Modal -->
     <ChangePlanModal
-      v-if="instance && instance.package_id && (instance as any).planId"
+      v-if="!isAdminEntry && instance && instance.package_id && (instance as any).planId"
       v-model:show="showChangePlanModal"
       :instance-id="instance.id"
       :instance-name="instance.name"
@@ -3216,6 +3270,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
 
     <!-- Destroy Instance Modal -->
     <DestroyInstanceModal
+      v-if="!isAdminEntry"
       v-model:visible="showDestroyModal"
       :loading="destroyLoading"
       :destroy-info="destroyInfo"
@@ -3469,7 +3524,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
     <Teleport to="body">
       <Transition name="modal">
         <div
-          v-if="showAutoRenewModal && instance"
+          v-if="!isAdminEntry && showAutoRenewModal && instance"
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
           <!-- 背景遮罩 -->
@@ -3593,7 +3648,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
     </Teleport>
 
     <InstanceBadgeModal
-      v-if="instance"
+      v-if="!isAdminEntry && instance"
       :visible="showInstanceBadgeModal"
       :instance-id="instance.id"
       :instance-name="instance.name"

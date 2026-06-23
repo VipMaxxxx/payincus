@@ -204,6 +204,7 @@ export default {
         admin: '管理',
         expand: '扩展',
         system: '系统',
+        systemUpdate: '版本更新',
         users: '用户',
         statistics: '统计',
         hosts: '节点',

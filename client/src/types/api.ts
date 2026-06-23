@@ -146,6 +146,49 @@ export interface UserInviteSummary {
   }
 }
 
+export interface VersionMetadata {
+  version: string
+  gitTag: string | null
+  gitCommit: string | null
+  buildTime: string | null
+  deployedAt: string | null
+  changelog: string[]
+}
+
+export interface AvailableSystemUpdate {
+  version: string
+  commit: string | null
+  date: string | null
+  changelog: string[]
+}
+
+export interface SystemUpdateCheckResult {
+  current: VersionMetadata
+  latest: AvailableSystemUpdate | null
+  updates: AvailableSystemUpdate[]
+  updateAvailable: boolean
+  repositoryAvailable: boolean
+  repositoryError: string | null
+}
+
+export type SystemUpdateTaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'rolled_back'
+
+export interface SystemUpdateTask {
+  id: number
+  targetVersion: string
+  fromVersion: string | null
+  status: SystemUpdateTaskStatus
+  startedByUserId: number
+  startedByUsername: string | null
+  backupPath: string | null
+  logPath: string | null
+  errorMessage: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 // ==================== 用户相关 ====================
 
 export interface User {

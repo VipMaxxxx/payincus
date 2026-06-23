@@ -7,6 +7,7 @@ import { useThemeStore } from '@/stores/theme'
 import { useRestoreTask } from '@/stores/restoreTask'
 import { formatDate, formatDuration } from '@/utils/formatters'
 import type { Backup, BackupPolicy, CreateBackupRequest, UpdateBackupPolicyRequest } from '@/types/api'
+import { profilePath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 
@@ -916,7 +917,7 @@ function getUploadTaskInfo(): string {
                 </svg>
                 <p class="text-sm text-themed-muted">{{ t('backup.uploadModal.noStorage') }}</p>
                 <p class="text-xs text-themed-faint mt-1">{{ t('backup.uploadModal.noStorageHint') }}</p>
-                <router-link to="/profile" class="btn-primary btn-sm mt-3 inline-block">
+                <router-link :to="profilePath()" class="btn-primary btn-sm mt-3 inline-block">
                   {{ t('backup.uploadModal.goToSettings') }}
                 </router-link>
               </div>
@@ -993,4 +994,3 @@ function getUploadTaskInfo(): string {
     </Teleport>
   </div>
 </template>
-

@@ -212,6 +212,7 @@ export default {
         admin: '管理',
         expand: '擴展',
         system: '系統',
+        systemUpdate: '版本更新',
         users: '使用者',
         statistics: '統計',
         hosts: '節點',

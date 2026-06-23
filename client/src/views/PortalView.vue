@@ -271,8 +271,7 @@ function openPackage(pkg: PublicPackage): void {
 
 function goToConsole(): void {
   if (authStore.isAuthenticated) {
-    const target = authStore.isAdmin ? '/admin/users' : '/dashboard'
-    void router.push(target)
+    void router.push('/dashboard')
     return
   }
 

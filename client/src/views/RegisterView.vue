@@ -11,6 +11,8 @@ import TermsOfServiceModal from '@/components/TermsOfServiceModal.vue'
 import api from '@/api'
 import { useBrand } from '@/composables/useBrand'
 
+const isAdminEntry = import.meta.env.VITE_APP_ENTRY === 'admin'
+
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
@@ -280,7 +282,7 @@ async function handleRegister(): Promise<void> {
   error.value = ''
 
   try {
-    await authStore.register({
+    const response = await api.auth.register({
       username: form.value.username,
       email: form.value.email,
       password: form.value.password,
@@ -288,17 +290,25 @@ async function handleRegister(): Promise<void> {
       turnstileToken: turnstileEnabled.value ? turnstileToken.value : undefined,
       emailCode: emailVerificationEnabled.value ? form.value.emailCode : undefined
     })
+    localStorage.setItem('token', response.token)
+    authStore.syncToken()
+    await authStore.fetchCurrentUser()
     success.value = true
     // Clean up countdown timer
     if (countdownTimer) {
       clearInterval(countdownTimer)
       countdownTimer = null
     }
-    // 注册成功后自动登录并跳转到后台
-    // 管理员跳转到用户管理页面，普通用户跳转到 dashboard
+    if (isAdminEntry || authStore.isAdmin) {
+      await authStore.logout()
+      success.value = false
+      error.value = '该入口不支持管理员注册'
+      return
+    }
+
+    // 注册成功后自动登录并跳转到客户面板
     // 优化：减少延迟时间从 1.5 秒到 0.5 秒
-    const targetRoute = authStore.isAdmin ? '/admin/users' : '/'
-    setTimeout(() => router.push(targetRoute), 500)
+    setTimeout(() => router.push('/dashboard'), 500)
   } catch (err: any) {
     error.value = translateError(err)
   } finally {

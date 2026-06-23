@@ -153,6 +153,14 @@ enum HostNotificationEmailTaskStatus {
   FAILED
 }
 
+enum SystemUpdateTaskStatus {
+  pending
+  running
+  success
+  failed
+  rolled_back
+}
+
 // ==================== 恢复任务模型 ====================
 
 model RestoreTask {
@@ -458,6 +466,7 @@ model User {
   instanceAuditIgnores InstanceAuditIgnore[] @relation("InstanceAuditIgnoreCreator")
   instanceAuditScans InstanceAuditScan[] @relation("InstanceAuditScanUser")
   instanceAuditActions InstanceAuditAction[] @relation("InstanceAuditActionUser")
+  systemUpdateTasks SystemUpdateTask[] @relation("SystemUpdateTaskStarter")
 
   @@map("users")
 }
@@ -1413,6 +1422,29 @@ model Log {
   @@index([module])
   @@index([createdAt])
   @@map("logs")
+}
+
+model SystemUpdateTask {
+  id              Int                    @id @default(autoincrement())
+  targetVersion   String                 @map("target_version")
+  fromVersion     String?                @map("from_version")
+  status          SystemUpdateTaskStatus @default(pending)
+  startedByUserId Int                    @map("started_by_user_id")
+  backupPath      String?                @map("backup_path")
+  logPath         String?                @map("log_path")
+  errorMessage    String?                @map("error_message")
+  startedAt       DateTime?              @map("started_at")
+  finishedAt      DateTime?              @map("finished_at")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  startedBy User @relation("SystemUpdateTaskStarter", fields: [startedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([targetVersion])
+  @@index([startedByUserId])
+  @@index([createdAt])
+  @@map("system_update_tasks")
 }
 
 model InstanceAuditRule {

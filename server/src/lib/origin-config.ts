@@ -14,8 +14,14 @@ export function normalizeOrigin(origin: string): string | null {
 }
 
 export function getConfiguredOrigins(): string[] {
+  const configuredOriginList = [
+    process.env.CORS_ORIGINS,
+    process.env.FRONTEND_URL,
+    process.env.ADMIN_FRONTEND_URL
+  ].filter(Boolean).join(',')
+
   return Array.from(new Set(
-    parseOriginList(process.env.CORS_ORIGINS || process.env.FRONTEND_URL)
+    parseOriginList(configuredOriginList)
       .map(normalizeOrigin)
       .filter((origin): origin is string => Boolean(origin))
   ))
@@ -32,6 +38,8 @@ export function getCorsOrigins(): string[] | false {
     ...configuredOrigins,
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:3002',
+    'http://127.0.0.1:3002',
   ]))
 }
 
@@ -46,6 +54,8 @@ export function getAllowedWebSocketOrigins(): string[] {
     ...configuredOrigins,
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:3002',
+    'http://127.0.0.1:3002',
     'http://localhost:3001',
     'http://127.0.0.1:3001'
   ]))

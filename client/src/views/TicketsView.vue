@@ -13,6 +13,7 @@ import InstanceSelector from '@/components/InstanceSelector.vue'
 import TicketImageLightbox from '@/components/tickets/TicketImageLightbox.vue'
 import TicketImageUploader from '@/components/tickets/TicketImageUploader.vue'
 import TicketInstanceOwnerCard from '@/components/tickets/TicketInstanceOwnerCard.vue'
+import { ticketsPath } from '@/utils/app-paths'
 import type { Ticket, TicketMessage, TicketMessageAttachment, TicketStatus, TicketPriority, TicketCategory, InstanceWithDetails } from '@/types/api'
 
 const { t } = useI18n()
@@ -291,7 +292,7 @@ function resetCreateForm() {
 
 async function navigateToList(replace = false): Promise<void> {
   const location = {
-    name: 'tickets',
+    path: ticketsPath(),
     query: buildTicketsQuery({ tab: activeTab.value })
   }
 
@@ -462,7 +463,7 @@ async function switchTab(tab: TabType) {
   hostTicketSourceFilter.value = 'all'
   searchQuery.value = ''
   await router.replace({
-    name: 'tickets',
+    path: ticketsPath(),
     query: buildTicketsQuery({ tab })
   })
 }
@@ -486,7 +487,7 @@ watch(hostTicketSourceFilter, (value) => {
 // Detail view
 async function viewTicket(ticket: Ticket) {
   await router.push({
-    name: 'tickets',
+    path: ticketsPath(),
     query: buildTicketsQuery({ tab: activeTab.value, ticketId: ticket.id })
   })
 }
@@ -593,7 +594,7 @@ async function confirmDeleteMessage(message: TicketMessage) {
 function openCreateForm() {
   if (!configStore.ticketEnabled) return
   router.push({
-    name: 'tickets',
+    path: ticketsPath(),
     query: buildTicketsQuery({ tab: activeTab.value, compose: true })
   })
 }
@@ -635,7 +636,7 @@ async function submitCreate() {
     activeTab.value = 'my'
     await Promise.all([loadTickets(), loadPendingCount()])
     await router.replace({
-      name: 'tickets',
+      path: ticketsPath(),
       query: buildTicketsQuery({ tab: 'my', ticketId: res.ticket.id })
     })
   } catch (error: any) {

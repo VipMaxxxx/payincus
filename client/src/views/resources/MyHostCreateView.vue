@@ -10,6 +10,7 @@ import { onClickOutside } from '@vueuse/core'
 import { availableFlagCountryCodes, getLocalizedCountryName } from '@/utils/countryDisplay'
 import { buildHostApiUrl, validateIdentifier, validateName, validateHostAddress, validateIpAddress } from '@/utils/validation'
 import FlagIcon from '@/components/FlagIcon.vue'
+import { hostsPath } from '@/utils/app-paths'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -254,7 +255,7 @@ async function createHost() {
       showInstallScript.value = true
       installStatus.value = 'waiting'
     } else {
-      router.push('/resources/hosts')
+      router.push(hostsPath())
     }
   } catch (err: any) {
     const errorCode = err?.code
@@ -273,7 +274,7 @@ function copyCommand() {
 
 function closeAndGoBack() {
   showInstallScript.value = false
-  router.push('/resources/hosts')
+  router.push(hostsPath())
 }
 </script>
 
@@ -284,7 +285,7 @@ function closeAndGoBack() {
       <div class="w-full max-w-3xl space-y-6">
         <!-- 页面头部 -->
         <div class="flex items-center gap-3">
-          <RouterLink to="/resources/hosts" class="transition-colors" :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'">
+          <RouterLink :to="hostsPath()" class="transition-colors" :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7" /></svg>
           </RouterLink>
           <div>
@@ -508,7 +509,7 @@ function closeAndGoBack() {
 
             <!-- 按钮 -->
             <div class="flex items-center justify-end gap-3 pt-4 border-t border-themed">
-              <RouterLink to="/resources/hosts" class="btn-secondary">{{ t('common.cancel') }}</RouterLink>
+              <RouterLink :to="hostsPath()" class="btn-secondary">{{ t('common.cancel') }}</RouterLink>
               <button type="submit" class="btn-primary" :disabled="saving || (isAdmin ? !form.name : !form.nameSuffix) || !form.hostAddress">
                 <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                 {{ t('common.create') }}

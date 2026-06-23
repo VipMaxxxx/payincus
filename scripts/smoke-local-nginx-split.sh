@@ -3,8 +3,10 @@ set -Eeuo pipefail
 
 NGINX_BIN="${NGINX_BIN:-nginx}"
 LOCAL_NGINX_PORT="${LOCAL_NGINX_PORT:-3100}"
+ADMIN_LOCAL_NGINX_PORT="${ADMIN_LOCAL_NGINX_PORT:-$((LOCAL_NGINX_PORT + 1))}"
 BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:3001}"
-CLIENT_DIST="${CLIENT_DIST:-$(pwd)/client/dist}"
+CLIENT_DIST="${CLIENT_DIST:-$(pwd)/client/dist/user}"
+ADMIN_CLIENT_DIST="${ADMIN_CLIENT_DIST:-$(pwd)/client/dist/admin}"
 
 fail() {
   printf '[smoke-local-nginx-split] ERROR: %s\n' "$*" >&2
@@ -34,8 +36,10 @@ fi
 
 BACKEND_URL="$(trim_slash "$BACKEND_URL")"
 FRONTEND_URL="http://127.0.0.1:${LOCAL_NGINX_PORT}"
+ADMIN_FRONTEND_URL="http://127.0.0.1:${ADMIN_LOCAL_NGINX_PORT}"
 
 [[ -d "$CLIENT_DIST" ]] || fail "Missing client dist directory: $CLIENT_DIST. Run pnpm build first."
+[[ -d "$ADMIN_CLIENT_DIST" ]] || fail "Missing admin client dist directory: $ADMIN_CLIENT_DIST. Run pnpm build first."
 curl -fsS --max-time 5 "${BACKEND_URL}/api/health" >/dev/null \
   || fail "Backend is not reachable at ${BACKEND_URL}/api/health"
 
@@ -128,6 +132,56 @@ http {
       try_files \$uri \$uri/ /index.html;
     }
   }
+
+  server {
+    listen 127.0.0.1:${ADMIN_LOCAL_NGINX_PORT};
+    server_name 127.0.0.1 localhost;
+
+    root ${ADMIN_CLIENT_DIST};
+    index index.html;
+    client_max_body_size 100m;
+
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: http: https: https://kkksr.com https://api.dicebear.com https://dicebear.incudal.com https://*.githubusercontent.com https://avatars.githubusercontent.com https://lh3.googleusercontent.com; connect-src 'self' ws: wss: https://challenges.cloudflare.com https://cloudflareinsights.com https://api.dicebear.com https://dicebear.incudal.com; frame-src 'self' https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location = /healthz {
+      add_header Content-Type text/plain;
+      return 200 "ok\n";
+    }
+
+    location /api/ws/ {
+      proxy_pass ${BACKEND_URL}/api/ws/;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade \$http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host \$host;
+      proxy_set_header X-Forwarded-Host \$incudal_forwarded_host;
+      proxy_set_header X-Real-IP \$remote_addr;
+      proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
+      proxy_read_timeout 3600s;
+      proxy_send_timeout 3600s;
+      proxy_buffering off;
+    }
+
+    location /api/ {
+      proxy_pass ${BACKEND_URL}/api/;
+      proxy_http_version 1.1;
+      proxy_set_header Host \$host;
+      proxy_set_header X-Forwarded-Host \$incudal_forwarded_host;
+      proxy_set_header X-Real-IP \$remote_addr;
+      proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto \$incudal_forwarded_proto;
+      proxy_read_timeout 300s;
+      proxy_send_timeout 300s;
+    }
+
+    location / {
+      try_files \$uri \$uri/ /index.html;
+    }
+  }
 }
 NGINX
 
@@ -135,8 +189,9 @@ NGINX
 "$NGINX_BIN" -c "$config_file" -p "$tmp_dir"
 
 for _ in $(seq 1 50); do
-  if curl -fsS --max-time 1 "${FRONTEND_URL}/healthz" >/dev/null 2>&1; then
-    FRONTEND_URL="$FRONTEND_URL" BACKEND_URL="$BACKEND_URL" bash scripts/verify-split-host.sh
+  if curl -fsS --max-time 1 "${FRONTEND_URL}/healthz" >/dev/null 2>&1 && \
+    curl -fsS --max-time 1 "${ADMIN_FRONTEND_URL}/healthz" >/dev/null 2>&1; then
+    FRONTEND_URL="$FRONTEND_URL" ADMIN_FRONTEND_URL="$ADMIN_FRONTEND_URL" BACKEND_URL="$BACKEND_URL" bash scripts/verify-split-host.sh
     if [[ "${RUN_SPLIT_AUTH_SMOKE:-true}" == "true" ]]; then
       SMOKE_FRONTEND_URL="$FRONTEND_URL" \
         SMOKE_API_BASE_URL="$FRONTEND_URL" \

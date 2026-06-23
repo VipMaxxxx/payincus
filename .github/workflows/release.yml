@@ -98,6 +98,7 @@ jobs:
           cp scripts/verify-live-acceptance.sh release/scripts/
           cp scripts/verify-production-readiness.sh release/scripts/
           cp scripts/verify-split-host.sh release/scripts/
+          cp scripts/apply-online-update.sh release/scripts/
 
       # ===== 安装生产依赖 =====
       - name: 安装后端生产依赖
@@ -156,6 +157,37 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 版本号: $VERSION"
+
+      # ===== 写入版本元数据 =====
+      - name: 写入版本元数据
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          GIT_TAG=""
+          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            GIT_TAG="$VERSION"
+          fi
+          CHANGELOG="$(git tag -l "$VERSION" --format='%(contents)' | sed '/^[[:space:]]*$/d' || true)"
+          if [[ -z "$CHANGELOG" ]]; then
+            CHANGELOG="$(git log -1 --pretty=%s)"
+          fi
+          export CHANGELOG
+          node - "$VERSION" "$GIT_TAG" "${{ github.sha }}" <<'NODE'
+          const fs = require('fs')
+          const [version, gitTag, gitCommit] = process.argv.slice(2)
+          const changelog = (process.env.CHANGELOG || '')
+            .split(/\r?\n/)
+            .map(line => line.replace(/^[-*]\s+/, '').trim())
+            .filter(Boolean)
+            .slice(0, 50)
+          fs.writeFileSync('release/version.json', JSON.stringify({
+            version,
+            gitTag: gitTag || null,
+            gitCommit: gitCommit.slice(0, 12),
+            buildTime: new Date().toISOString(),
+            deployedAt: null,
+            changelog
+          }, null, 2) + '\n')
+          NODE
 
       # ===== 打包 =====
       - name: 打包为 tar.gz

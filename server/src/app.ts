@@ -84,6 +84,7 @@ import agentRoutes from './routes/agent.js'
 import userInviteRoutes from './routes/user-invites.js'
 import vipLevelRoutes from './routes/vip-levels.js'
 import vipBenefitRoutes from './routes/vip-benefits.js'
+import systemUpdateRoutes from './routes/system-update.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -491,12 +492,13 @@ await fastify.register(agentRoutes, { prefix: '/api/agent' })
 await fastify.register(userInviteRoutes, { prefix: '/api/user-invites' })
 await fastify.register(vipLevelRoutes)
 await fastify.register(vipBenefitRoutes)
+await fastify.register(systemUpdateRoutes, { prefix: '/api/admin/system-update' })
 
 const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
 
 // 生产环境：默认托管前端静态文件；前后端分离部署时可设置 SERVE_STATIC_CLIENT=false
 if (shouldServeStaticClient) {
-  const clientDistPath = join(__dirname, '../../client/dist')
+  const clientDistPath = join(__dirname, '../../client/dist/user')
   const indexHtmlPath = join(clientDistPath, 'index.html')
   let indexHtmlCache: string | null = null
   let previewBotSafeIndexHtmlCache: string | null = null

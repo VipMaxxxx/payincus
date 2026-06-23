@@ -7,7 +7,7 @@ import api, {
   type VipBenefitRewardType,
   type VipLevelRule,
   type UserVipMetric
-} from '@/api'
+} from '@/api/admin'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import { useToast } from '@/stores/toast'
 import type { Package } from '@/types/api'

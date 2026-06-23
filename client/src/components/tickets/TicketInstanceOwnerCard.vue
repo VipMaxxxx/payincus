@@ -9,6 +9,7 @@ import { useToast } from '@/stores/toast'
 import type { InstanceConfigResponse, InstanceWithDetails } from '@/types/api'
 import { translateError } from '@/utils/errorHandler'
 import { formatBytes, formatDisk, formatMemory, getStatusInfo } from '@/utils/formatters'
+import { instanceDetailPath } from '@/utils/app-paths'
 
 interface TicketInstanceSummary {
   id: number
@@ -551,10 +552,7 @@ async function deleteInstanceWithRefund(): Promise<void> {
 }
 
 function openInstanceDetail(): void {
-  void router.push({
-    name: 'instance-detail',
-    params: { id: props.instanceSummary.id }
-  })
+  void router.push(instanceDetailPath(props.instanceSummary.id))
 }
 
 watch(

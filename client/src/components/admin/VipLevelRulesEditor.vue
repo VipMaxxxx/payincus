@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import api, { type UserVipMetric, type VipConditionMode, type VipLevelRule, type VipRuleType } from '@/api'
+import api, { type UserVipMetric, type VipConditionMode, type VipLevelRule, type VipRuleType } from '@/api/admin'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import { useToast } from '@/stores/toast'
 import { getDefaultVipBadgeStyle, getVipBadgeInlineStyle, normalizeVipBadgeStyle, type VipBadgeStyle } from '@/utils/vipBadge'

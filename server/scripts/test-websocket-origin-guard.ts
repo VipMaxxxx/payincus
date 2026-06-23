@@ -11,6 +11,7 @@ const __dirname = dirname(__filename)
 const originalEnv = {
   NODE_ENV: process.env.NODE_ENV,
   FRONTEND_URL: process.env.FRONTEND_URL,
+  ADMIN_FRONTEND_URL: process.env.ADMIN_FRONTEND_URL,
   CORS_ORIGINS: process.env.CORS_ORIGINS
 }
 
@@ -31,6 +32,7 @@ function requestWithOrigin(origin?: string): FastifyRequest {
 try {
   process.env.NODE_ENV = 'production'
   process.env.FRONTEND_URL = 'https://panel.example.com, https://alt.example.com/app'
+  delete process.env.ADMIN_FRONTEND_URL
   delete process.env.CORS_ORIGINS
 
   assert.deepEqual(getAllowedWebSocketOrigins(), [
@@ -43,16 +45,25 @@ try {
   assert.equal(validateWebSocketOrigin(requestWithOrigin()).allowed, false)
   assert.equal(validateWebSocketOrigin(requestWithOrigin('not a url')).allowed, false)
 
+  process.env.ADMIN_FRONTEND_URL = 'https://admin.example.com/console'
   process.env.CORS_ORIGINS = 'https://cors.example.com'
-  assert.deepEqual(getAllowedWebSocketOrigins(), ['https://cors.example.com'])
-  assert.equal(validateWebSocketOrigin(requestWithOrigin('https://panel.example.com')).allowed, false)
+  assert.deepEqual(getAllowedWebSocketOrigins(), [
+    'https://cors.example.com',
+    'https://panel.example.com',
+    'https://alt.example.com',
+    'https://admin.example.com'
+  ])
+  assert.equal(validateWebSocketOrigin(requestWithOrigin('https://panel.example.com')).allowed, true)
   assert.equal(validateWebSocketOrigin(requestWithOrigin('https://cors.example.com')).allowed, true)
+  assert.equal(validateWebSocketOrigin(requestWithOrigin('https://admin.example.com/path')).allowed, true)
 
   process.env.NODE_ENV = 'development'
   delete process.env.CORS_ORIGINS
   delete process.env.FRONTEND_URL
+  delete process.env.ADMIN_FRONTEND_URL
   assert.equal(validateWebSocketOrigin(requestWithOrigin()).allowed, true)
   assert.equal(validateWebSocketOrigin(requestWithOrigin('http://127.0.0.1:3000')).allowed, true)
+  assert.equal(validateWebSocketOrigin(requestWithOrigin('http://127.0.0.1:3002')).allowed, true)
   assert.equal(validateWebSocketOrigin(requestWithOrigin('http://127.0.0.1:3001')).allowed, true)
   assert.equal(validateWebSocketOrigin(requestWithOrigin('https://evil.example.com')).allowed, false)
 

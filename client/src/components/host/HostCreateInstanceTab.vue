@@ -19,6 +19,7 @@ import InitCommandSelector from '@/components/extensions/InitCommandSelector.vue
 import type { Package, SshKey, UserQuota } from '@/types/api'
 import { validateName as validateInstanceName } from '@/utils/validation'
 import { translateError } from '@/utils/errorHandler'
+import { instanceDetailPath } from '@/utils/app-paths'
 
 interface Props {
   hostId: number
@@ -423,7 +424,7 @@ async function handleSelfSubmit(): Promise<void> {
   toast.success(t('host.createInstance.success'))
 
   if (result?.id) {
-    router.push(`/instances/${result.id}`)
+    router.push(instanceDetailPath(result.id))
   }
 }
 

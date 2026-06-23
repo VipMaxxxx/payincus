@@ -173,10 +173,12 @@ SERVE_STATIC_CLIENT_VALUE="$(config_value SERVE_STATIC_CLIENT)"
 VITE_API_BASE_URL_VALUE="$(config_value VITE_API_BASE_URL)"
 TRUST_PROXY_VALUE="$(config_value TRUST_PROXY)"
 FRONTEND_URL_VALUE="$(trim_slash "$(config_value FRONTEND_URL)")"
+ADMIN_FRONTEND_URL_VALUE="$(trim_slash "$(config_value ADMIN_FRONTEND_URL)")"
 SITE_URL_VALUE="$(trim_slash "$(config_value SITE_URL)")"
 PAYMENT_CALLBACK_BASE_URL_VALUE="$(trim_slash "$(config_value PAYMENT_CALLBACK_BASE_URL)")"
 PAYMENT_CALLBACK_IP_WHITELIST_VALUE="$(config_value PAYMENT_CALLBACK_IP_WHITELIST)"
 PAYMENT_CALLBACK_SKIP_IP_WHITELIST_VALUE="$(config_value PAYMENT_CALLBACK_SKIP_IP_WHITELIST)"
+COOKIE_DOMAIN_VALUE="$(config_value COOKIE_DOMAIN)"
 BACKEND_URL_VALUE="$(trim_slash "${BACKEND_URL:-$(config_value BACKEND_URL)}")"
 AGENT_RELEASE_REPOSITORY_VALUE="$(config_value INCUDAL_AGENT_RELEASE_REPOSITORY)"
 AGENT_RELEASE_DIR_VALUE="$(config_value INCUDAL_AGENT_RELEASE_DIR)"
@@ -190,12 +192,20 @@ require_equals VITE_API_BASE_URL "$VITE_API_BASE_URL_VALUE" /api
 require_equals TRUST_PROXY "$TRUST_PROXY_VALUE" true
 
 require_value FRONTEND_URL "$FRONTEND_URL_VALUE"
+require_value ADMIN_FRONTEND_URL "$ADMIN_FRONTEND_URL_VALUE"
 require_value SITE_URL "$SITE_URL_VALUE"
 require_value PAYMENT_CALLBACK_BASE_URL "$PAYMENT_CALLBACK_BASE_URL_VALUE"
 validate_https_public_url FRONTEND_URL "$FRONTEND_URL_VALUE"
+validate_https_public_url ADMIN_FRONTEND_URL "$ADMIN_FRONTEND_URL_VALUE"
 validate_https_public_url SITE_URL "$SITE_URL_VALUE"
 validate_https_public_url PAYMENT_CALLBACK_BASE_URL "$PAYMENT_CALLBACK_BASE_URL_VALUE"
 
+if [[ "$ADMIN_FRONTEND_URL_VALUE" == "$FRONTEND_URL_VALUE" ]]; then
+  fail "ADMIN_FRONTEND_URL must be a separate admin frontend origin"
+fi
+if [[ -n "$COOKIE_DOMAIN_VALUE" ]]; then
+  fail "COOKIE_DOMAIN must stay empty so customer and admin subdomains do not share refresh cookies"
+fi
 if [[ "$SITE_URL_VALUE" != "$FRONTEND_URL_VALUE" ]]; then
   warn "SITE_URL differs from FRONTEND_URL; verify OAuth and public links intentionally use ${SITE_URL_VALUE}"
 fi
@@ -238,7 +248,7 @@ if [[ -z "$BACKEND_URL_VALUE" ]]; then
   BACKEND_URL_VALUE="http://127.0.0.1:${PORT_VALUE}"
 fi
 
-FRONTEND_URL="$FRONTEND_URL_VALUE" BACKEND_URL="$BACKEND_URL_VALUE" bash scripts/verify-split-host.sh
+FRONTEND_URL="$FRONTEND_URL_VALUE" ADMIN_FRONTEND_URL="$ADMIN_FRONTEND_URL_VALUE" BACKEND_URL="$BACKEND_URL_VALUE" bash scripts/verify-split-host.sh
 
 if [[ -z "$AGENT_BINARY_URL_VALUE" ]]; then
   manifest_body="$(mktemp)"

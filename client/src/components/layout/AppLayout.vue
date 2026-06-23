@@ -10,6 +10,9 @@ import { useBrand } from '@/composables/useBrand'
 import SideNav from './SideNav.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import NotificationBell from '@/components/NotificationBell.vue'
+import { instancesPath, loginPath, profilePath, terminalPath } from '@/utils/app-paths'
+
+const isAdminEntry = import.meta.env.VITE_APP_ENTRY === 'admin'
 
 const router = useRouter()
 const route = useRoute()
@@ -27,12 +30,16 @@ const sidebarCollapsed = ref<boolean>(false)
 const mobileMenuOpen = ref<boolean>(false)
 const userMenuOpen = ref<boolean>(false)
 const userMenuRef = ref<HTMLElement | null>(null)
+const accountProfilePath = profilePath()
+const accountTerminalPath = terminalPath()
+const accountInstancesPath = instancesPath()
+const accountLoginPath = loginPath()
 
 async function handleLogout(): Promise<void> {
   userMenuOpen.value = false
   inboxStore.stopPolling()
   await authStore.logout()
-  router.push('/login')
+  router.push(accountLoginPath)
 }
 
 const { t } = useI18n()
@@ -159,11 +166,12 @@ onUnmounted(() => {
         <div class="flex items-center gap-2 md:gap-3">
           <!-- 终端管理入口 -->
           <button
+            v-if="!isAdminEntry"
             class="p-1.5 rounded transition-colors touch-target"
             :class="themeStore.isDark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'"
             :title="t('nav.terminal')"
             :aria-label="t('nav.terminal')"
-            @click="router.push('/terminal')"
+            @click="router.push(accountTerminalPath)"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -303,7 +311,7 @@ onUnmounted(() => {
                 <button
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
                   :class="themeStore.isDark ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100'"
-                  @click="navigateTo('/profile')"
+                  @click="navigateTo(accountProfilePath)"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -311,9 +319,10 @@ onUnmounted(() => {
                   {{ $t('userMenu.profile') }}
                 </button>
                 <button
+                  v-if="!isAdminEntry"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
                   :class="themeStore.isDark ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100'"
-                  @click="navigateTo('/instances')"
+                  @click="navigateTo(accountInstancesPath)"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />

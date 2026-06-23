@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/stores/toast'
 import { translateError } from '@/utils/errorHandler'
 import { buildApiUrl } from '@/utils/api-url'
+import { profilePath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -76,7 +77,7 @@ async function bindOAuth(provider: string): Promise<void> {
 
   try {
     const response = await api.oauth.createBindTicket()
-    window.location.href = buildApiUrl(`/oauth/authorize/${provider}?mode=bind&redirect=/profile&bindTicket=${encodeURIComponent(response.ticket)}`)
+    window.location.href = buildApiUrl(`/oauth/authorize/${provider}?mode=bind&redirect=${encodeURIComponent(profilePath())}&bindTicket=${encodeURIComponent(response.ticket)}`)
   } catch (error) {
     toast.error(translateError(error))
   }

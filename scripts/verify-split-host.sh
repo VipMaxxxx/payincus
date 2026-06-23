@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 FRONTEND_URL="${FRONTEND_URL:-http://127.0.0.1}"
+ADMIN_FRONTEND_URL="${ADMIN_FRONTEND_URL:-}"
 BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:3001}"
 
 trim_slash() {
@@ -104,6 +105,7 @@ assert_no_frontend_backend_origin_leaks() {
 require_command curl
 
 FRONTEND_URL="$(trim_slash "$FRONTEND_URL")"
+ADMIN_FRONTEND_URL="$(trim_slash "$ADMIN_FRONTEND_URL")"
 BACKEND_URL="$(trim_slash "$BACKEND_URL")"
 
 tmp_dir="$(mktemp -d)"
@@ -140,6 +142,42 @@ grep -q '"status":"ok"' "$tmp_dir/frontend-api.json" || fail "frontend proxied /
 fetch_websocket_probe "frontend proxied WebSocket" "$FRONTEND_URL/api/ws/instances/1/terminal?ticket=invalid" "$tmp_dir/frontend-ws.txt" "$tmp_dir/frontend-ws.err"
 grep -Eq '^HTTP/[0-9.]+ 101 ' "$tmp_dir/frontend-ws.txt" || fail "frontend /api/ws did not upgrade to WebSocket"
 grep -Eiq '^upgrade:[[:space:]]*websocket' "$tmp_dir/frontend-ws.txt" || fail "frontend /api/ws response missing WebSocket upgrade header"
+
+if [[ -n "$ADMIN_FRONTEND_URL" ]]; then
+  fetch_url "admin frontend health" "$ADMIN_FRONTEND_URL/healthz" "$tmp_dir/admin-frontend-health.txt"
+  grep -q '^ok' "$tmp_dir/admin-frontend-health.txt" || fail "admin frontend /healthz did not return ok"
+
+  fetch_url_with_headers "admin frontend index" "$ADMIN_FRONTEND_URL/" "$tmp_dir/admin-frontend.html" "$tmp_dir/admin-frontend.headers"
+  grep -Eq '<div id="?app"?' "$tmp_dir/admin-frontend.html" || fail "admin frontend index does not look like the Vue app"
+  assert_no_frontend_backend_origin_leaks "$tmp_dir/admin-frontend.html" "admin frontend index"
+  assert_header "$tmp_dir/admin-frontend.headers" "content-security-policy" ".*default-src 'self'.*frame-ancestors 'none'"
+  assert_header "$tmp_dir/admin-frontend.headers" "x-content-type-options" "nosniff"
+  assert_header "$tmp_dir/admin-frontend.headers" "x-frame-options" "DENY"
+  assert_header "$tmp_dir/admin-frontend.headers" "referrer-policy" "strict-origin-when-cross-origin"
+
+  grep -Eo '(src|href)="[^"]+"' "$tmp_dir/admin-frontend.html" \
+    | sed -E 's/^(src|href)="([^"]+)"/\2/' \
+    | sort -u > "$tmp_dir/admin-frontend-assets.txt"
+
+  admin_asset_index=0
+  while IFS= read -r asset_path; do
+    admin_asset_index=$((admin_asset_index + 1))
+    asset_output="$tmp_dir/admin-frontend-asset-${admin_asset_index}.txt"
+    if [[ "$asset_path" == /* ]]; then
+      fetch_url "admin static asset ${asset_path}" "${ADMIN_FRONTEND_URL}${asset_path}" "$asset_output"
+      if [[ -s "$asset_output" ]]; then
+        assert_no_frontend_backend_origin_leaks "$asset_output" "admin frontend asset ${asset_path}"
+      fi
+    fi
+  done < "$tmp_dir/admin-frontend-assets.txt"
+
+  fetch_url "admin frontend proxied API" "$ADMIN_FRONTEND_URL/api/health" "$tmp_dir/admin-frontend-api.json"
+  grep -q '"status":"ok"' "$tmp_dir/admin-frontend-api.json" || fail "admin frontend proxied /api/health did not return ok"
+
+  fetch_websocket_probe "admin frontend proxied WebSocket" "$ADMIN_FRONTEND_URL/api/ws/instances/1/terminal?ticket=invalid" "$tmp_dir/admin-frontend-ws.txt" "$tmp_dir/admin-frontend-ws.err"
+  grep -Eq '^HTTP/[0-9.]+ 101 ' "$tmp_dir/admin-frontend-ws.txt" || fail "admin frontend /api/ws did not upgrade to WebSocket"
+  grep -Eiq '^upgrade:[[:space:]]*websocket' "$tmp_dir/admin-frontend-ws.txt" || fail "admin frontend /api/ws response missing WebSocket upgrade header"
+fi
 
 fetch_url "backend direct API" "$BACKEND_URL/api/health" "$tmp_dir/backend-api.json"
 grep -q '"status":"ok"' "$tmp_dir/backend-api.json" || fail "backend direct /api/health did not return ok"

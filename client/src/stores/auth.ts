@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { ref, computed, type Ref } from 'vue'
 import api from '@/api'
 import type { AuthUser } from '@/types/store.js'
-import type { RegisterRequest } from '@/types/api.js'
 
 export const useAuthStore = defineStore('auth', () => {
   const user: Ref<AuthUser | null> = ref(null)
@@ -45,17 +44,6 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = response.token
     applyAuthUser(response.user)
     localStorage.setItem('token', response.token)
-    return response
-  }
-
-  async function register(data: RegisterRequest) {
-    const response = await api.auth.register(data)
-
-    // 注册成功后自动登录
-    token.value = response.token
-    applyAuthUser(response.user)
-    localStorage.setItem('token', response.token)
-
     return response
   }
 
@@ -138,7 +126,6 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     login,
-    register,
     fetchCurrentUser,
     logout,
     syncToken,
@@ -146,4 +133,3 @@ export const useAuthStore = defineStore('auth', () => {
     checkSession
   }
 })
-

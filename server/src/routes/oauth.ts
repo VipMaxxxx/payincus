@@ -57,10 +57,7 @@ function normalizePublicBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '')
 }
 
-function getConfiguredPublicBaseUrl(): string | null {
-  const configured = process.env.SITE_URL?.trim()
-    || process.env.FRONTEND_URL?.split(',')[0]?.trim()
-
+function parseConfiguredPublicBaseUrl(configured: string | undefined): string | null {
   if (!configured) {
     return null
   }
@@ -77,21 +74,50 @@ function getConfiguredPublicBaseUrl(): string | null {
   }
 }
 
-function getOAuthCallbackBaseUrl(request: FastifyRequest): string {
-  const configured = getConfiguredPublicBaseUrl()
+function getConfiguredCustomerBaseUrl(): string | null {
+  return parseConfiguredPublicBaseUrl(
+    process.env.SITE_URL?.trim()
+      || process.env.FRONTEND_URL?.split(',')[0]?.trim()
+  )
+}
+
+function getConfiguredAdminBaseUrl(): string | null {
+  return parseConfiguredPublicBaseUrl(process.env.ADMIN_FRONTEND_URL?.trim())
+}
+
+function isAdminRedirectPath(redirectUrl: string): boolean {
+  return redirectUrl === '/admin' || redirectUrl.startsWith('/admin/')
+}
+
+function getLoginPathForRedirect(redirectUrl: string): string {
+  return isAdminRedirectPath(redirectUrl) ? '/admin/login' : '/login'
+}
+
+function getOAuthCallbackBaseUrl(request: FastifyRequest, redirectUrl: string): string {
+  const isAdminRedirect = isAdminRedirectPath(redirectUrl)
+  const configured = isAdminRedirect
+    ? getConfiguredAdminBaseUrl()
+    : getConfiguredCustomerBaseUrl()
+
   if (configured) {
     return configured
   }
 
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('SITE_URL or FRONTEND_URL must be configured before OAuth can be used in production')
+    const requiredEnv = isAdminRedirect ? 'ADMIN_FRONTEND_URL' : 'SITE_URL or FRONTEND_URL'
+    throw new Error(`${requiredEnv} must be configured before OAuth can be used in production`)
   }
 
   return `${request.protocol}://${request.hostname}`
 }
 
-function buildOAuthCallbackUrl(request: FastifyRequest, provider: OAuthProvider): string {
-  return `${getOAuthCallbackBaseUrl(request)}/api/oauth/callback/${provider}`
+function buildOAuthCallbackUrl(request: FastifyRequest, provider: OAuthProvider, redirectUrl: string): string {
+  return `${getOAuthCallbackBaseUrl(request, redirectUrl)}/api/oauth/callback/${provider}`
+}
+
+function redirectWithQuery(baseUrl: string, params: Record<string, string>): string {
+  const separator = baseUrl.includes('?') ? '&' : '?'
+  return `${baseUrl}${separator}${new URLSearchParams(params).toString()}`
 }
 
 async function readOAuthJsonResponse<T>(response: Response, label: string): Promise<T> {
@@ -252,17 +278,18 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
 
     // 生成安全的一次性 state token（存储到 Redis）
     const validMode = mode === 'bind' ? 'bind' : 'login'
+    const safeRedirectUrl = getSafeRedirectUrl(redirect, validMode === 'bind' ? '/profile' : '/')
 
     // 绑定模式下需要验证短期票据
     let bindSession: { userId: number; issuedAt: number; sessionId?: string } | undefined
     if (validMode === 'bind') {
       if (!bindTicket) {
-        return reply.redirect(`/profile?error=not_logged_in`)
+        return reply.redirect(redirectWithQuery(safeRedirectUrl, { error: 'not_logged_in' }))
       }
 
       const ticketData = consumeOAuthBindTicket(bindTicket)
       if (!ticketData.valid || !ticketData.userId || !ticketData.issuedAt) {
-        return reply.redirect(`/profile?error=invalid_session`)
+        return reply.redirect(redirectWithQuery(safeRedirectUrl, { error: 'invalid_session' }))
       }
 
       const invalidated = await isAccessTokenInvalidated(
@@ -271,12 +298,12 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
         ticketData.sessionId
       )
       if (invalidated) {
-        return reply.redirect(`/profile?error=invalid_session`)
+        return reply.redirect(redirectWithQuery(safeRedirectUrl, { error: 'invalid_session' }))
       }
 
       const bindUser = await db.findUserById(ticketData.userId)
       if (!bindUser || bindUser.status !== 'active') {
-        return reply.redirect(`/profile?error=invalid_session`)
+        return reply.redirect(redirectWithQuery(safeRedirectUrl, { error: 'invalid_session' }))
       }
 
       bindSession = {
@@ -286,12 +313,12 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
       }
     }
 
-    const state = await generateOAuthState(validMode, getSafeRedirectUrl(redirect, '/'), bindSession)
+    const state = await generateOAuthState(validMode, safeRedirectUrl, bindSession)
 
     // 构建回调 URL
     let callbackUrl: string
     try {
-      callbackUrl = buildOAuthCallbackUrl(request, provider)
+      callbackUrl = buildOAuthCallbackUrl(request, provider, safeRedirectUrl)
     } catch (error) {
       request.log.error({ err: error, provider }, 'OAuth public callback URL is not configured')
       return reply.code(500).send({ error: 'OAuth callback URL is not configured', code: 'OAUTH_CALLBACK_URL_NOT_CONFIGURED' })
@@ -363,23 +390,24 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
     }
 
     // 安全检查：验证 redirect URL 防止开放重定向漏洞
-    const redirectUrl = getSafeRedirectUrl(stateData.redirect, '/')
+    const redirectUrl = getSafeRedirectUrl(stateData.redirect, stateData.mode === 'bind' ? '/profile' : '/')
     
     // 根据 mode 确定错误跳转目标
-    const errorRedirectBase = stateData.mode === 'bind' ? '/profile' : '/login'
+    const loginRedirectBase = getLoginPathForRedirect(redirectUrl)
+    const errorRedirectBase = stateData.mode === 'bind' ? redirectUrl : loginRedirectBase
 
     if (!code) {
-      return reply.redirect(`${errorRedirectBase}?error=missing_code`)
+      return reply.redirect(redirectWithQuery(errorRedirectBase, { error: 'missing_code' }))
     }
 
     try {
       const config = await db.getOAuthConfig(provider)
       if (!config || !config.enabled) {
-        return reply.redirect(`${errorRedirectBase}?error=provider_disabled`)
+        return reply.redirect(redirectWithQuery(errorRedirectBase, { error: 'provider_disabled' }))
       }
 
       const providerConfig = OAUTH_PROVIDERS[provider]
-      const callbackUrl = buildOAuthCallbackUrl(request, provider)
+      const callbackUrl = buildOAuthCallbackUrl(request, provider, redirectUrl)
 
       // 1. 获取 access_token
       const tokenRes = await fetch(providerConfig.tokenUrl, {
@@ -407,7 +435,7 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
       if (!tokenRes.ok || !tokenData.access_token) {
         // 记录详细错误信息便于调试
         fastify.log.error({ statusCode: tokenRes.status, tokenData: sanitizeObject(tokenData), provider }, 'OAuth token exchange failed')
-        return reply.redirect(`${errorRedirectBase}?error=token_error`)
+        return reply.redirect(redirectWithQuery(errorRedirectBase, { error: 'token_error' }))
       }
 
       // 2. 获取用户信息
@@ -440,7 +468,7 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
         // 绑定模式：从 state 中获取用户 ID
         const userId = stateData.userId
         if (!userId || !stateData.userIssuedAt) {
-          return reply.redirect(`/profile?error=not_logged_in`)
+          return reply.redirect(redirectWithQuery(errorRedirectBase, { error: 'not_logged_in' }))
         }
 
         const bindSessionInvalidated = await isAccessTokenInvalidated(
@@ -449,18 +477,18 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
           stateData.userSessionId
         )
         if (bindSessionInvalidated) {
-          return reply.redirect(`/profile?error=invalid_session`)
+          return reply.redirect(redirectWithQuery(errorRedirectBase, { error: 'invalid_session' }))
         }
 
         const bindUser = await db.findUserById(userId)
         if (!bindUser || bindUser.status !== 'active') {
-          return reply.redirect(`/profile?error=invalid_session`)
+          return reply.redirect(redirectWithQuery(errorRedirectBase, { error: 'invalid_session' }))
         }
 
         // 检查是否已有其他用户绑定了这个 OAuth 账号
         const existingBinding = await db.findOAuthBinding(provider, oauthUser.id)
         if (existingBinding && existingBinding.user_id !== userId) {
-          return reply.redirect(`/profile?error=already_bound_other`)
+          return reply.redirect(redirectWithQuery(errorRedirectBase, { error: 'already_bound_other' }))
         }
 
         // 检查当前用户是否已绑定该提供商
@@ -481,24 +509,24 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
           })
         }
 
-        return reply.redirect(`/profile?success=bound_${provider}`)
+        return reply.redirect(redirectWithQuery(redirectUrl, { success: `bound_${provider}` }))
       } else {
         // 登录模式：查找绑定的用户
         const binding = await db.findOAuthBinding(provider, oauthUser.id)
 
         if (!binding) {
           // 没有绑定，不允许注册，提示先绑定
-          return reply.redirect(`/login?error=not_bound&provider=${provider}`)
+          return reply.redirect(redirectWithQuery(loginRedirectBase, { error: 'not_bound', provider }))
         }
 
         // 查找用户
         const user = await db.findUserById(binding.user_id)
         if (!user) {
-          return reply.redirect(`/login?error=user_not_found`)
+          return reply.redirect(redirectWithQuery(loginRedirectBase, { error: 'user_not_found' }))
         }
 
         if (user.status !== 'active') {
-          return reply.redirect(`/login?error=account_banned`)
+          return reply.redirect(redirectWithQuery(loginRedirectBase, { error: 'account_banned' }))
         }
 
         // 更新 OAuth token
@@ -549,7 +577,7 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
       }
     } catch (err) {
       fastify.log.error({ err, provider }, 'OAuth callback error')
-      return reply.redirect(`${errorRedirectBase}?error=oauth_error`)
+      return reply.redirect(redirectWithQuery(errorRedirectBase, { error: 'oauth_error' }))
     }
   })
 

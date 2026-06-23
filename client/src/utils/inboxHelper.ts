@@ -4,6 +4,15 @@
  */
 
 import type { InboxMessage } from '@/types/api'
+import {
+  dashboardPath,
+  instanceDetailPath,
+  isAdminEntry,
+  packagesPath,
+  profilePath,
+  ticketsPath,
+  transfersPath
+} from '@/utils/app-paths'
 
 /**
  * 消息类别
@@ -215,7 +224,7 @@ export function getMessageRoute(message: InboxMessage): string | null {
     case 'snapshot':
       // 实例/快照相关 - 跳转到实例详情
       if (data.instanceId) {
-        return `/instances/${data.instanceId}`
+        return instanceDetailPath(String(data.instanceId))
       }
       break
       
@@ -225,29 +234,29 @@ export function getMessageRoute(message: InboxMessage): string | null {
       
     case 'transfer':
       // 转移相关 - 跳转到转移页面
-      return '/transfers'
+      return isAdminEntry ? null : transfersPath()
       
     case 'package':
       // 套餐共享 - 跳转到套餐页面
       if (data.packageId) {
-        return `/resources/packages/${data.packageId}`
+        return packagesPath()
       }
-      return '/resources/packages'
+      return packagesPath()
       
     case 'security':
       // 安全相关 - 跳转到个人设置
-      return '/profile'
+      return profilePath()
       
     case 'quota':
       // 配额相关 - 跳转到概览
-      return '/dashboard'
+      return isAdminEntry ? null : dashboardPath()
       
     case 'ticket':
       // 工单相关 - 跳转到工单页面
       if (data.ticketId) {
-        return `/tickets?id=${data.ticketId}`
+        return ticketsPath(String(data.ticketId))
       }
-      return '/tickets'
+      return ticketsPath()
   }
   
   return null

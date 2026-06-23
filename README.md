@@ -59,27 +59,28 @@ scripts/                安装、构建、预检和 smoke 脚本
 
 ```text
 浏览器
-  -> https://panel.example.com
-  -> Nginx 静态前端
-  -> /api 和 /api/ws 反代到后端 127.0.0.1:3001 或内网 IP:3001
+  -> https://demo.payincus.com 或 https://admin.payincus.com
+  -> Nginx 静态客户前端 / 管理后台前端
+  -> 各自的 /api 和 /api/ws 反代到后端 127.0.0.1:3001 或内网 IP:3001
   -> PostgreSQL / Redis / Incus 节点 / Agent
 ```
 
 双机内网部署也可以写成：
 
 ```text
-浏览器 -> https://panel.example.com -> 前端 Nginx
+浏览器 -> https://demo.payincus.com -> 客户前端 Nginx
+浏览器 -> https://admin.payincus.com -> 管理后台前端 Nginx
 前端 Nginx -> http://10.0.0.12:3001/api -> 后端 Node API
 后端 Node API -> PostgreSQL / Redis / Incus 节点
 ```
 
 约定：
 
-- 浏览器只访问前端公网域名。
+- 浏览器访问两个独立公网域名：客户面板 `FRONTEND_URL`，管理后台 `ADMIN_FRONTEND_URL`。
 - 前端构建使用 `VITE_API_BASE_URL=/api`。
 - 后端监听 `127.0.0.1:3001` 或内网 IP，生产设置 `SERVE_STATIC_CLIENT=false`。
-- Nginx 托管 `client/dist`，并只把 `/api/` 和 `/api/ws/` 反代到后端。
-- 支付回调地址使用前端公网域名，不使用后端内网地址。
+- Nginx 托管 `client/dist/user` 和 `client/dist/admin`，并只把两个站点的 `/api/` 和 `/api/ws/` 反代到后端。
+- 支付回调地址使用客户面板公网域名，不使用后端内网地址或管理后台域名。
 
 ## 一键安装
 
@@ -159,9 +160,71 @@ deploy/nginx-split-intranet.conf.example
 
 需要替换：
 
-- `panel.example.com`：你的前端公网域名
-- `/opt/incudal/client/dist`：前端构建产物目录
+- `demo.payincus.com`：你的客户面板公网域名
+- `admin.payincus.com`：你的管理后台公网域名
+- `/opt/incudal/client/dist/user`：客户前端构建产物目录
+- `/opt/incudal/client/dist/admin`：后台前端构建产物目录
 - `10.0.0.12:3001`：后端内网 IP 和端口
+
+## 后台在线更新
+
+管理后台提供“版本更新”页面，用于查看当前版本、Git tag、commit、构建/部署时间、更新内容、可更新版本、更新任务日志和回滚入口。
+
+在线更新的设计边界：
+
+- 只在管理后台暴露，用户端不包含更新入口和更新 API。
+- 接口路径固定为 `/api/admin/system-update/*`。
+- 只有超级管理员可以检查、启动更新和回滚。默认允许用户名为 `admin` 的管理员；生产建议显式配置 `SYSTEM_UPDATE_ALLOWED_ADMIN_IDS`。
+- 更新目标必须是形如 `v1.2.3` 的 release tag。
+- 生产目录必须包含 `.git` 和 release tags。`scripts/install-panel.sh` 会在解压 release 包后初始化 Git 元数据并同步 tags；如果你手动纯 tar 解压且没有初始化 Git，后台只能显示当前版本，不能执行在线更新。
+- 后台服务只负责创建任务；生产环境默认通过受限 sudo 启动 `incudal-online-update@.service` 或 `incudal-online-rollback@.service`，实际更新/回滚由 root 级 systemd oneshot 执行。
+- 更新会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
+- 更新期间会保留 `.env`、`server/certs`、`agent-release`、`.npm` 和 `.cache` 等运行态资产。
+
+推荐生产环境变量：
+
+```env
+SYSTEM_UPDATE_ALLOWED_ADMIN_IDS=1
+SYSTEM_UPDATE_LOG_DIR=/opt/incudal/update-logs
+SYSTEM_UPDATE_STARTED_BY_USER_ID=1
+```
+
+后台页面路径：
+
+```text
+https://admin.payincus.com/admin/system-update
+```
+
+命令行启动在线更新：
+
+```bash
+cd /opt/incudal
+pnpm update:online v1.2.3
+```
+
+手动部署时还需要安装在线更新 systemd 模板和 sudoers，安装脚本会自动完成；不用安装脚本时可参考：
+
+```bash
+sudo cp deploy/incudal-online-update@.service.example /etc/systemd/system/incudal-online-update@.service
+sudo cp deploy/incudal-online-rollback@.service.example /etc/systemd/system/incudal-online-rollback@.service
+printf 'Defaults:incudal !requiretty\nincudal ALL=(root) NOPASSWD: /usr/bin/systemctl start incudal-online-update@*.service, /usr/bin/systemctl start incudal-online-rollback@*.service\n' \
+  | sudo tee /etc/sudoers.d/incudal-online-update >/dev/null
+sudo chmod 440 /etc/sudoers.d/incudal-online-update
+sudo visudo -cf /etc/sudoers.d/incudal-online-update
+sudo systemctl daemon-reload
+```
+
+如果 systemd 服务名或域名不同，执行时覆盖：
+
+```bash
+SERVICE_NAME=incudal-backend \
+FRONTEND_URL=https://pay.payincus.com \
+ADMIN_FRONTEND_URL=https://admin.payincus.com \
+BACKEND_URL=http://127.0.0.1:3001 \
+pnpm update:online v1.2.3
+```
+
+回滚应优先在管理后台对应任务里操作。回滚会把任务记录里的备份目录恢复回来，并重启后端服务。
 
 ## 关键环境变量
 
@@ -177,10 +240,13 @@ SERVE_STATIC_CLIENT=false
 DATABASE_URL=postgresql://incudal:change_me@127.0.0.1:5432/incudal
 REDIS_URL=redis://:change_me@127.0.0.1:6379
 
-FRONTEND_URL=https://panel.example.com
-SITE_URL=https://panel.example.com
-PAYMENT_CALLBACK_BASE_URL=https://panel.example.com
+FRONTEND_URL=https://demo.payincus.com
+ADMIN_FRONTEND_URL=https://admin.payincus.com
+SITE_URL=https://demo.payincus.com
+PAYMENT_CALLBACK_BASE_URL=https://demo.payincus.com
 VITE_API_BASE_URL=/api
+VITE_CUSTOMER_BASE_URL=https://demo.payincus.com
+VITE_ADMIN_BASE_URL=https://admin.payincus.com
 
 COOKIE_SAME_SITE=
 COOKIE_SECURE=
@@ -198,6 +264,7 @@ ADMIN_PASSWORD=change_me_admin_password
 - 如确实要清空生产库，后端要求同时设置 `ALLOW_PRODUCTION_DATABASE_RESET=RESET_PRODUCTION_DATABASE`，否则启动会拒绝清库。
 - `TRUST_PROXY=true` 只应在后端端口仅允许可信 Nginx 或内网代理访问时开启。
 - HTTPS 同域 `/api` 反代部署下，Cookie 配置保持空值即可使用自动模式。
+- `COOKIE_DOMAIN` 必须保持空值，避免客户面板和管理后台跨子域共享 refresh cookie。
 - 内网 HTTP 临时验证且没有 TLS 时，可设置 `COOKIE_SECURE=false`。
 
 ## Agent 发布配置
@@ -248,10 +315,11 @@ pnpm dev
 
 ```text
 前端: http://127.0.0.1:3000
+后台: http://127.0.0.1:3002
 后端: http://127.0.0.1:3001
 ```
 
-本地开发同样使用前后端分离：浏览器访问前端 `3000`，Vite 把 `/api` 代理到后端 `3001`。
+本地开发同样使用前后端分离：浏览器访问客户前端 `3000` 或后台前端 `3002`，两个 Vite 服务都把 `/api` 代理到后端 `3001`。
 
 ## 验证命令
 
@@ -267,7 +335,8 @@ cd agent && go test ./...
 前后端分离检查：
 
 ```bash
-FRONTEND_URL=https://panel.example.com \
+FRONTEND_URL=https://demo.payincus.com \
+ADMIN_FRONTEND_URL=https://admin.payincus.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
@@ -275,7 +344,8 @@ pnpm verify:split:host
 双机内网后端示例：
 
 ```bash
-FRONTEND_URL=https://panel.example.com \
+FRONTEND_URL=https://demo.payincus.com \
+ADMIN_FRONTEND_URL=https://admin.payincus.com \
 BACKEND_URL=http://10.0.0.12:3001 \
 pnpm verify:split:host
 ```
@@ -284,12 +354,13 @@ pnpm verify:split:host
 
 ```bash
 ENV_FILE=/opt/incudal/.env \
-FRONTEND_URL=https://panel.example.com \
+FRONTEND_URL=https://demo.payincus.com \
+ADMIN_FRONTEND_URL=https://admin.payincus.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:production
 ```
 
-`pnpm verify:production` 会检查非 Docker 前后端分离部署关键项，包括 `NODE_ENV=production`、`PORT=3001`、`SERVE_STATIC_CLIENT=false`、`VITE_API_BASE_URL=/api`、公网 HTTPS `FRONTEND_URL` / `SITE_URL` / `PAYMENT_CALLBACK_BASE_URL`、`TRUST_PROXY=true`、`PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false`、支付回调 IP 白名单格式，以及 Agent Release 或自定义 Agent 二进制校验配置。默认还会执行数据库配置预检、`verify:split:host`，并检查 `/api/agent/manifest.json` 可用性。
+`pnpm verify:production` 会检查非 Docker 前后端分离部署关键项，包括 `NODE_ENV=production`、`PORT=3001`、`SERVE_STATIC_CLIENT=false`、`VITE_API_BASE_URL=/api`、公网 HTTPS `FRONTEND_URL` / `ADMIN_FRONTEND_URL` / `SITE_URL` / `PAYMENT_CALLBACK_BASE_URL`、`TRUST_PROXY=true`、`PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false`、支付回调 IP 白名单格式，以及 Agent Release 或自定义 Agent 二进制校验配置。默认还会执行数据库配置预检、两个前端站点的 `verify:split:host`，并检查 `/api/agent/manifest.json` 可用性。
 
 如果暂时只想检查 `.env` 静态配置，可跳过数据库和线上 HTTP 检查：
 
@@ -310,7 +381,8 @@ pnpm smoke:split:nginx
 
 ```bash
 ENV_FILE=/opt/incudal/.env \
-FRONTEND_URL=https://panel.example.com \
+FRONTEND_URL=https://demo.payincus.com \
+ADMIN_FRONTEND_URL=https://admin.payincus.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 RUN_SPLIT_AUTH_SMOKE=1 \
 RUN_AGENT_RELEASE_SMOKE=1 \

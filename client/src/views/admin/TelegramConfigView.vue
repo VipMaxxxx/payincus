@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import api from '@/api'
+import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
 import type { TelegramAdminBinding, TelegramAdminBindingsResponse } from '@/types/api'
 import { systemSettingsNavigationItems } from '@/constants/adminSettings'

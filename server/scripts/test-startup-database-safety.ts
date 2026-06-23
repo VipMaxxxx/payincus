@@ -15,6 +15,8 @@ const initSource = readRepoFile('server/src/db/init-prisma.ts')
 const appSource = readRepoFile('server/src/app.ts')
 const envExample = readRepoFile('.env.example')
 const installPanel = readRepoFile('scripts/install-panel.sh')
+const serverPackage = readRepoFile('server/package.json')
+const resetAdminPasswordSource = readRepoFile('server/scripts/reset-admin-password.ts')
 
 const guardIndex = initSource.indexOf('function assertDatabaseResetAllowed(')
 const resetIndex = initSource.indexOf('await resetDatabaseFast()')
@@ -59,6 +61,20 @@ assert.ok(
   envExample.includes('ADMIN_PASSWORD=change_me_admin_password') &&
     initSource.includes('change[_-]?me'),
   '.env.example admin password placeholder must be rejected by production initialization'
+)
+
+assert.ok(
+  serverPackage.includes('"reset:admin-password": "node --import tsx scripts/reset-admin-password.ts"') &&
+    resetAdminPasswordSource.includes('RESET_ADMIN_PASSWORD') &&
+    resetAdminPasswordSource.includes('ADMIN_PASSWORD') &&
+    resetAdminPasswordSource.includes("const unsafeProductionConfirmation = 'I_UNDERSTAND'") &&
+    resetAdminPasswordSource.includes('ALLOW_UNSAFE_ADMIN_PASSWORD') &&
+    resetAdminPasswordSource.includes('RESET_ADMIN_DISABLE_2FA') &&
+    resetAdminPasswordSource.includes('twoFactorEnabled: false') &&
+    resetAdminPasswordSource.includes('revokeAllUserRefreshTokens(userId)') &&
+    resetAdminPasswordSource.includes('invalidateUserAccessTokens(userId)') &&
+    !resetAdminPasswordSource.includes('console.log(password)'),
+  'admin password reset script must be available, production guarded, and must not print plaintext passwords'
 )
 
 console.log('startup database safety checks passed')

@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { Host, HostWithDetails, Package, CreatePackageRequest, UpdatePackageRequest } from '@/types/api'
 import { validateName, validateText } from '@/utils/validation'
 import { translateError } from '@/utils/errorHandler'
+import { packagesPath } from '@/utils/app-paths'
 
 // 为 KeepAlive exclude 匹配定义组件名称
 defineOptions({
@@ -615,7 +616,7 @@ async function loadPackage(id: number): Promise<void> {
     }
   } catch (_err: any) {
     toast.error(t('admin.packages.loadFailed') || 'Failed to load package')
-    router.push({ name: 'my-packages' })
+    router.push(packagesPath())
   } finally {
     loading.value = false
   }
@@ -767,7 +768,7 @@ async function savePackage(): Promise<void> {
       toast.success(t('admin.packages.packageCreated'))
     }
 
-    router.push({ name: 'my-packages' })
+    router.push(packagesPath())
   } catch (err: any) {
     formError.value = translateError(err) || t('admin.packages.saveFailed')
   } finally {
@@ -776,7 +777,7 @@ async function savePackage(): Promise<void> {
 }
 
 function goBack(): void {
-  router.push({ name: 'my-packages' })
+  router.push(packagesPath())
 }
 </script>
 

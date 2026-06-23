@@ -14,6 +14,7 @@ import HostInstancesList from '@/components/host/HostInstancesList.vue'
 import RecreateModal from '@/components/instance/modals/RecreateModal.vue'
 import type { InstanceConfigResponse } from '@/types/api'
 import { translateError } from '@/utils/errorHandler'
+import { instanceDetailPath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -1240,7 +1241,7 @@ function getDisplayIp(instance: Instance): { ipv4: string | null; ipv6: string |
 function goToInstance(id: number) {
   // 传递 hostId 作为查询参数，用于返回时跳转到宿主机页面
   router.push({
-    path: `/instances/${id}`,
+    path: instanceDetailPath(id),
     query: { fromHost: props.hostId.toString() }
   })
 }

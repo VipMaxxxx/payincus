@@ -17,12 +17,41 @@ import DistroIcon from '@/components/icons/DistroIcon.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
 import InstanceOrderMenu from '@/components/instance/InstanceOrderMenu.vue'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel } from '@/utils/freeSiteFun'
+import { instanceCreatePath, instanceDetailPath, isAdminEntry, walletPath } from '@/utils/app-paths'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'InstancesView' })
 
 type InstanceLayoutMode = 'list' | 'card'
 const INSTANCE_LAYOUT_STORAGE_KEY = 'incudal.instances.layout'
+
+interface CustomerBillingApi {
+  billing: {
+    setAutoRenewBatch: (instanceIds: number[], autoRenew: boolean) => Promise<{
+      message: string
+      successCount: number
+      skippedCount: number
+      failedCount: number
+    }>
+    previewBatchRenew: (instanceIds: number[]) => Promise<{ items: typeof batchRenewPreview.value }>
+    getUserBalance: () => Promise<{ balance: UserBalance }>
+    renewInstancesBatch: (instanceIds: number[], months: number) => Promise<{
+      message: string
+      successCount: number
+      skippedCount: number
+      failedCount: number
+    }>
+    getBatchDestroyInfo: (instanceIds: number[]) => Promise<{ items: typeof batchDestroyPreview.value }>
+    destroyInstancesBatch: (instanceIds: number[]) => Promise<{
+      message: string
+      successCount: number
+      skippedCount: number
+      failedCount: number
+    }>
+  }
+}
+
+const customerBillingApi = api as typeof api & CustomerBillingApi
 
 const route = useRoute()
 const router = useRouter()
@@ -124,6 +153,7 @@ const isViewingAnotherUsersInstances = computed(() => (
   filterUserId.value !== null &&
   filterUserId.value !== (authStore.user?.id || null)
 ))
+const canUseCustomerBillingActions = computed<boolean>(() => !isAdminEntry && !isViewingAnotherUsersInstances.value)
 const countryFilterOptions = computed(() => availableCountries.value.map(code => code.toLowerCase()))
 const instanceLayoutMode = computed<InstanceLayoutMode>(() => (
   isDesktopViewport.value
@@ -864,7 +894,7 @@ async function handleAction(instance: Instance, action: InstanceAction): Promise
 }
 
 function openInstanceDetail(instanceId: number): void {
-  router.push(`/instances/${instanceId}`)
+  router.push(instanceDetailPath(instanceId))
 }
 
 function getBatchTargets(action: BatchSimpleAction): Instance[] {
@@ -999,11 +1029,11 @@ async function handleBatchSimpleAction(action: BatchSimpleAction): Promise<void>
 }
 
 async function handleBatchAutoRenew(autoRenew: boolean): Promise<void> {
-  if (selectedCount.value === 0 || isViewingAnotherUsersInstances.value) return
+  if (selectedCount.value === 0 || !canUseCustomerBillingActions.value) return
 
   batchActionLoading.value = autoRenew ? 'autoRenewOn' : 'autoRenewOff'
   try {
-    const result = await api.billing.setAutoRenewBatch(Array.from(selectedIds.value), autoRenew)
+    const result = await customerBillingApi.billing.setAutoRenewBatch(Array.from(selectedIds.value), autoRenew)
     if (result.failedCount > 0) {
       toast.warning(t('instance.batch.partialResult', {
         success: result.successCount,
@@ -1023,7 +1053,7 @@ async function handleBatchAutoRenew(autoRenew: boolean): Promise<void> {
 }
 
 async function openBatchRenewModal(): Promise<void> {
-  if (selectedCount.value === 0 || isViewingAnotherUsersInstances.value) return
+  if (selectedCount.value === 0 || !canUseCustomerBillingActions.value) return
 
   showBatchRenewModal.value = true
   batchRenewLoading.value = true
@@ -1032,8 +1062,8 @@ async function openBatchRenewModal(): Promise<void> {
 
   try {
     const [previewRes, balanceRes] = await Promise.all([
-      api.billing.previewBatchRenew(Array.from(selectedIds.value)),
-      api.billing.getUserBalance()
+      customerBillingApi.billing.previewBatchRenew(Array.from(selectedIds.value)),
+      customerBillingApi.billing.getUserBalance()
     ])
     batchRenewPreview.value = previewRes.items
     batchRenewBalance.value = balanceRes.balance
@@ -1056,11 +1086,11 @@ function closeBatchRenewModal(force = false): void {
 }
 
 async function confirmBatchRenew(): Promise<void> {
-  if (!batchRenewCanSubmit.value) return
+  if (!batchRenewCanSubmit.value || !canUseCustomerBillingActions.value) return
 
   batchRenewSubmitting.value = true
   try {
-    const result = await api.billing.renewInstancesBatch(Array.from(selectedIds.value), batchRenewMonths.value)
+    const result = await customerBillingApi.billing.renewInstancesBatch(Array.from(selectedIds.value), batchRenewMonths.value)
     if (result.failedCount > 0) {
       toast.warning(t('instance.batch.partialResult', {
         success: result.successCount,
@@ -1081,7 +1111,7 @@ async function confirmBatchRenew(): Promise<void> {
 }
 
 async function openBatchDestroyModal(): Promise<void> {
-  if (selectedCount.value === 0 || isViewingAnotherUsersInstances.value) return
+  if (selectedCount.value === 0 || !canUseCustomerBillingActions.value) return
 
   showBatchDestroyModal.value = true
   batchDestroyLoading.value = true
@@ -1089,7 +1119,7 @@ async function openBatchDestroyModal(): Promise<void> {
   batchDestroyPreview.value = []
 
   try {
-    const result = await api.billing.getBatchDestroyInfo(Array.from(selectedIds.value))
+    const result = await customerBillingApi.billing.getBatchDestroyInfo(Array.from(selectedIds.value))
     batchDestroyPreview.value = result.items
   } catch (error: any) {
     toast.error(t('instance.batch.previewFailed') + ': ' + translateError(error))
@@ -1107,11 +1137,11 @@ function closeBatchDestroyModal(force = false): void {
 }
 
 async function confirmBatchDestroy(): Promise<void> {
-  if (!batchDestroyCanSubmit.value) return
+  if (!batchDestroyCanSubmit.value || !canUseCustomerBillingActions.value) return
 
   batchDestroySubmitting.value = true
   try {
-    const result = await api.billing.destroyInstancesBatch(Array.from(selectedIds.value))
+    const result = await customerBillingApi.billing.destroyInstancesBatch(Array.from(selectedIds.value))
     if (result.failedCount > 0) {
       toast.warning(t('instance.batch.partialResult', {
         success: result.successCount,
@@ -1151,7 +1181,7 @@ async function confirmBatchDestroy(): Promise<void> {
           </template>
         </p>
       </div>
-      <RouterLink to="/instances/create" class="btn-primary w-full sm:w-auto justify-center">
+      <RouterLink :to="instanceCreatePath()" class="btn-primary w-full sm:w-auto justify-center">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
@@ -1396,6 +1426,7 @@ async function confirmBatchDestroy(): Promise<void> {
             {{ $t('instance.batch.sync') }}
           </button>
           <button
+            v-if="!isAdminEntry"
             class="btn-ghost btn-sm"
             :disabled="selectedPaidCount === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
             @click="handleBatchAutoRenew(true)"
@@ -1407,6 +1438,7 @@ async function confirmBatchDestroy(): Promise<void> {
             {{ $t('instance.batch.autoRenewOn') }}
           </button>
           <button
+            v-if="!isAdminEntry"
             class="btn-ghost btn-sm"
             :disabled="selectedPaidCount === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
             @click="handleBatchAutoRenew(false)"
@@ -1418,6 +1450,7 @@ async function confirmBatchDestroy(): Promise<void> {
             {{ $t('instance.batch.autoRenewOff') }}
           </button>
           <button
+            v-if="!isAdminEntry"
             class="btn-secondary btn-sm"
             :disabled="selectedPaidCount === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
             @click="openBatchRenewModal"
@@ -1425,6 +1458,7 @@ async function confirmBatchDestroy(): Promise<void> {
             {{ configStore.freeSiteMode ? freeSiteCopy.instanceBatchRenewAction : $t('instance.batch.renew') }}
           </button>
           <button
+            v-if="!isAdminEntry"
             class="btn-danger btn-sm"
             :disabled="!hasSelectedInstances || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
             @click="openBatchDestroyModal"
@@ -1459,7 +1493,7 @@ async function confirmBatchDestroy(): Promise<void> {
         {{ search ? $t('instance.noMatchingInstances') : $t('instance.noInstances') }}
       </h3>
       <p class="text-themed-muted mb-4">{{ search ? $t('instance.tryOtherKeywords') : $t('instance.createFirstInstance') }}</p>
-      <RouterLink v-if="!search" to="/instances/create" class="btn-primary">{{ configStore.freeSiteMode ? freeSiteCopy.instanceCreateFirst : $t('instance.create') }}</RouterLink>
+      <RouterLink v-if="!search" :to="instanceCreatePath()" class="btn-primary">{{ configStore.freeSiteMode ? freeSiteCopy.instanceCreateFirst : $t('instance.create') }}</RouterLink>
     </div>
 
     <!-- 实例列表 -->
@@ -2261,7 +2295,7 @@ async function confirmBatchDestroy(): Promise<void> {
 
     <Teleport to="body">
       <div
-        v-if="showBatchRenewModal"
+        v-if="!isAdminEntry && showBatchRenewModal"
         class="fixed inset-0 z-50 flex items-center justify-center p-4"
         @click.self="closeBatchRenewModal()"
       >
@@ -2345,7 +2379,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 :class="themeStore.isDark ? 'border-red-500/20 bg-red-500/10 text-red-300' : 'border-red-200 bg-red-50 text-red-700'"
               >
                 {{ $t('billing.insufficientBalance') }}
-                <RouterLink to="/wallet" class="underline ml-1">{{ $t('billing.goRecharge') }}</RouterLink>
+                <RouterLink :to="walletPath()" class="underline ml-1">{{ $t('billing.goRecharge') }}</RouterLink>
               </div>
 
               <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/50' : 'border-gray-200 bg-white'">
@@ -2434,7 +2468,7 @@ async function confirmBatchDestroy(): Promise<void> {
 
     <Teleport to="body">
       <div
-        v-if="showBatchDestroyModal"
+        v-if="!isAdminEntry && showBatchDestroyModal"
         class="fixed inset-0 z-50 flex items-center justify-center p-4"
         @click.self="closeBatchDestroyModal()"
       >
