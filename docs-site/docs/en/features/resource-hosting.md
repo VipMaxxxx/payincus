@@ -21,6 +21,8 @@ Availability depends on system configuration:
 - Create and edit hosted plans.
 - View hosting revenue and settlement records.
 
+For new hosted hosts, use Ubuntu 22.04+ or Debian 12/13. Debian 11 remains a compatibility path only; new hosts should prefer Debian 12/13.
+
 ## Admin Hosting Features
 
 - Review hosted hosts and resource providers.

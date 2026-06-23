@@ -2,6 +2,10 @@
 
 The Agent runs on Incus hosts. It reports host resources, instance state and traffic data, and helps the panel complete delivery workflows.
 
+## Host OS
+
+The host install script is recommended for Ubuntu 22.04+ and Debian 12/13. Debian 11 remains best-effort compatible, but it is not recommended for new hosts. Debian 10 and earlier are rejected by the installer.
+
 ## Release Configuration
 
 ```dotenv
