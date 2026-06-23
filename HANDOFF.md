@@ -120,7 +120,7 @@ Key tags:
 
 ## Plugin Center Status
 
-Plugin center development is implemented locally but not yet committed, pushed, tagged or released as an OTA version.
+Plugin center development has been committed, pushed and released as `v0.0.12`.
 
 Implemented backend scope:
 
@@ -159,7 +159,16 @@ pnpm --filter server test:plugin-market-guards
 pnpm --filter server test:plugin-client-boundary-guards
 ```
 
-Before calling the feature complete for production, it still needs commit, push, release tag, GitHub Release OTA artifact, `pnpm docs:changelog`, docs build, and then a production OTA update proof.
+Release proof:
+
+- Commit: `0453d5a Add plugin center`
+- Version log commit: `6e8ce21 Update version log for v0.0.12`
+- Tag: `v0.0.12`
+- GitHub Actions Build & Release run: `28026305328`
+- Release URL: `https://github.com/VipMaxxxx/payincus/releases/tag/v0.0.12`
+- Assets generated: linux amd64 tar.gz, linux arm64 tar.gz, both `.sha256` files, `incudal-v0.0.12-ota-manifest.json`, and `ota-manifest.json`.
+
+Before calling the feature complete on the production server, it still needs a production OTA update proof from the admin panel or server-side update task logs.
 
 ## Documentation Site
 
