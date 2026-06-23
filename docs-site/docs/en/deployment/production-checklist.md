@@ -11,6 +11,16 @@ BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
 
+## Redacted Proof Snapshot
+
+```bash
+ENV_FILE=/opt/incudal/.env \
+PROOF_SINCE_HOURS=24 \
+pnpm verify:production-proof-snapshot
+```
+
+`verify:production-proof-snapshot` reads the database and prints shareable redacted JSON. It does not print the database URL, host URLs, certificate paths, install tokens, Agent secrets, payment order numbers, provider config, callback body, SMTP password, Lsky token, notification channel config, instance root passwords, user emails, IPs or User-Agent values. Use it to confirm payment callbacks, Agent reports, instance/traffic state and missing lifecycle log actions.
+
 ## Must-pass Items
 
 - User domain serves `client/dist/user`.

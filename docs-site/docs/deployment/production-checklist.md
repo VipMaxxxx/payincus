@@ -17,6 +17,14 @@ BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:production
 ```
 
+```bash
+ENV_FILE=/opt/incudal/.env \
+PROOF_SINCE_HOURS=24 \
+pnpm verify:production-proof-snapshot
+```
+
+`verify:production-proof-snapshot` 只读数据库并输出可分享的脱敏 JSON。它不会输出数据库连接串、宿主机 URL、证书路径、安装 Token、Agent 密钥、支付订单号、支付商配置、回调原文、SMTP 密码、Lsky Token、通知渠道配置、实例 root 密码、用户邮箱、IP 或 User-Agent。用它确认支付回调、Agent 上报、实例/流量状态和生命周期日志还缺哪些动作。
+
 ## 最终验收
 
 最终验收需要真实业务证据，不能只靠本地测试。
