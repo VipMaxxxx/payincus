@@ -8,7 +8,7 @@ It is based on `qwer-xyz/incudal` and focuses on non-Docker production deploymen
 
 - User portal: `https://demo.payincus.com`
 - Admin console: `https://demoadmin.payincus.com`
-- Documentation: `https://docs.payincus.com`
+- Documentation: `https://payincus.com`
 - Telegram group: `https://t.me/Payincus`
 - GitHub repository: `https://github.com/VipMaxxxx/payincus`
 

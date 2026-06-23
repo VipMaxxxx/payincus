@@ -7,7 +7,7 @@
   ·
   <a href="https://demoadmin.payincus.com">测试后台</a>
   ·
-  <a href="https://docs.payincus.com">文档站</a>
+  <a href="https://payincus.com">文档站</a>
   ·
   <a href="https://t.me/Payincus">Telegram 交流群</a>
   ·
@@ -24,7 +24,7 @@ PayIncus 是基于开源项目 [qwer-xyz/incudal](https://github.com/qwer-xyz/in
 
 - 测试用户端：https://demo.payincus.com
 - 测试后台：https://demoadmin.payincus.com
-- 文档站：https://docs.payincus.com
+- 文档站：https://payincus.com
 - Telegram 交流群：https://t.me/Payincus
 - 当前仓库：https://github.com/VipMaxxxx/payincus
 - 原始项目：https://github.com/qwer-xyz/incudal
@@ -383,7 +383,7 @@ pnpm dev
 
 ## 文档站
 
-文档站源码位于 `docs-site/`，使用 VitePress 构建，面向 `docs.payincus.com`。文档站支持中英双语：中文默认路径 `/`，英文路径 `/en/`。
+文档站源码位于 `docs-site/`，使用 VitePress 构建，面向 `payincus.com`。文档站支持中英双语：中文默认路径 `/`，英文路径 `/en/`。
 
 本地预览：
 

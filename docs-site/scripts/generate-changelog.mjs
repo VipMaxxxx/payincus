@@ -27,7 +27,7 @@ const locales = [
     generation: '生成方式',
     runBuild: '在仓库根目录执行：',
     runChangelog: '或者只刷新版本日志：',
-    shallowClone: '如果 CI 或 Cloudflare Pages 使用浅克隆，可能拿不到完整 tag。需要在构建前拉取 tags，或改用 GitHub Release API 作为数据源。',
+    shallowClone: '如果 CI 或 GitHub Pages 使用浅克隆，可能拿不到完整 tag。需要在构建前拉取 tags，或改用 GitHub Release API 作为数据源。',
     groups: {
       fixes: '修复与稳定性',
       features: '新增能力',
@@ -54,7 +54,7 @@ const locales = [
     generation: 'Generation',
     runBuild: 'Run from the repository root:',
     runChangelog: 'Or refresh only the version log:',
-    shallowClone: 'If CI or Cloudflare Pages uses a shallow clone, the build may not have the full tag history. Fetch tags before building, or switch the data source to the GitHub Release API.',
+    shallowClone: 'If CI or GitHub Pages uses a shallow clone, the build may not have the full tag history. Fetch tags before building, or switch the data source to the GitHub Release API.',
     groups: {
       fixes: 'Fixes and Stability',
       features: 'New Capabilities',

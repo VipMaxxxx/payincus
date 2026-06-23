@@ -6,12 +6,16 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `878fc93`
+- 当前 HEAD: `8d89da3`
 - 提交日期: 2026-06-23
-- 提交说明: Update split deployment docs
+- 提交说明: Add bilingual PayIncus documentation site
 - 最新 tag: `v0.0.11`
 
 ## 未发布变更
+
+### 新增能力
+
+- Add bilingual PayIncus documentation site `8d89da3`
 
 ### 改进与调整
 
@@ -158,5 +162,5 @@ pnpm docs:build
 pnpm docs:changelog
 ```
 
-如果 CI 或 Cloudflare Pages 使用浅克隆，可能拿不到完整 tag。需要在构建前拉取 tags，或改用 GitHub Release API 作为数据源。
+如果 CI 或 GitHub Pages 使用浅克隆，可能拿不到完整 tag。需要在构建前拉取 tags，或改用 GitHub Release API 作为数据源。
 

@@ -6,12 +6,16 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `878fc93`
+- Current HEAD: `8d89da3`
 - Commit date: 2026-06-23
-- Commit subject: Update split deployment docs
+- Commit subject: Add bilingual PayIncus documentation site
 - Latest tag: `v0.0.11`
 
 ## Unreleased Changes
+
+### New Capabilities
+
+- Add bilingual PayIncus documentation site `8d89da3`
 
 ### Improvements and Adjustments
 
@@ -158,5 +162,5 @@ Or refresh only the version log:
 pnpm docs:changelog
 ```
 
-If CI or Cloudflare Pages uses a shallow clone, the build may not have the full tag history. Fetch tags before building, or switch the data source to the GitHub Release API.
+If CI or GitHub Pages uses a shallow clone, the build may not have the full tag history. Fetch tags before building, or switch the data source to the GitHub Release API.
 
