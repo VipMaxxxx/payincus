@@ -6,7 +6,8 @@ import { spawn } from 'child_process'
 import { prisma, closePrismaDatabase } from '../db/prisma.js'
 
 const taskId = Number(process.argv[2])
-const installDir = resolve(process.env.INSTALL_DIR || process.env.INCUDAL_APP_DIR || process.cwd())
+const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())
+const installDir = resolve(process.env.INSTALL_DIR || (appDir.endsWith('/current') ? dirname(appDir) : appDir))
 const serviceName = process.env.SERVICE_NAME || 'incudal-backend'
 const frontendUrl = process.env.FRONTEND_URL || 'https://pay.payincus.com'
 const adminFrontendUrl = process.env.ADMIN_FRONTEND_URL || 'https://admin.payincus.com'

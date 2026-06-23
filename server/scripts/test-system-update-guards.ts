@@ -112,6 +112,8 @@ assert.ok(
     runTask.includes('autoRollbackFromBackup') &&
     runTask.includes('switchCurrentRelease') &&
     runTask.includes('applyArtifactAtomic') &&
+    runTask.includes("appDir.endsWith('/current') ? dirname(appDir) : appDir") &&
+    runTask.includes("join(installDir, '.incudal-update-downloads')") &&
     runTask.includes("join(installDir, 'current')") &&
     runTask.includes("join(installDir, 'releases')") &&
     runTask.includes('Auto rollback completed successfully') &&
@@ -178,6 +180,9 @@ assert.ok(
     onlineScript.includes('APP_DIR="$INSTALL_DIR"') &&
     onlineScript.includes('APP_DIR="$INSTALL_DIR/current"') &&
     onlineScript.includes('INCUDAL_APP_DIR="$APP_DIR"') &&
+    runTask.includes('const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())') &&
+    rollbackTask.includes("appDir.endsWith('/current') ? dirname(appDir) : appDir") &&
+    serverPackage.includes('"update:online:start": "node --import tsx src/scripts/start-system-update-task.ts"') &&
     releaseWorkflow.includes('fetch-depth: 0') &&
     releaseWorkflow.includes('cp -r deploy/* release/deploy/') &&
     rootPackage.includes('"update:online": "bash scripts/apply-online-update.sh"') &&
@@ -185,7 +190,7 @@ assert.ok(
     installPanel.includes('git fetch --tags --force --quiet origin') &&
     onlineScript.includes('node "$APP_DIR/server/dist/scripts/start-system-update-task.js"') &&
     onlineScript.includes('git rev-parse --is-inside-work-tree') &&
-    serverPackage.includes('"update:online:start": "node --import tsx src/scripts/start-system-update-task.ts"'),
+    read('server/src/scripts/start-system-update-task.ts').includes('INSTALL_DIR: installDir'),
   'release package and package scripts must expose the controlled online updater and version metadata'
 )
 

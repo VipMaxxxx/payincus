@@ -18,14 +18,14 @@ import {
 const taskId = Number(process.argv[2])
 let targetVersion = String(process.argv[3] || '').trim()
 const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())
-const installDir = resolve(process.env.INSTALL_DIR || appDir)
+const installDir = resolve(process.env.INSTALL_DIR || (appDir.endsWith('/current') ? dirname(appDir) : appDir))
 const serviceName = process.env.SERVICE_NAME || 'incudal-backend'
 const frontendUrl = process.env.FRONTEND_URL || 'https://pay.payincus.com'
 const adminFrontendUrl = process.env.ADMIN_FRONTEND_URL || 'https://admin.payincus.com'
 const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:3001'
 const logDir = resolve(process.env.SYSTEM_UPDATE_LOG_DIR || join(installDir, 'update-logs'))
 const logPath = resolve(process.env.SYSTEM_UPDATE_LOG_PATH || join(logDir, `system-update-${taskId}.log`))
-const updateDownloadDir = resolve(process.env.SYSTEM_UPDATE_DOWNLOAD_DIR || join(dirname(installDir), '.incudal-update-downloads'))
+const updateDownloadDir = resolve(process.env.SYSTEM_UPDATE_DOWNLOAD_DIR || join(installDir, '.incudal-update-downloads'))
 const updateApplyMode = process.env.SYSTEM_UPDATE_APPLY_MODE || 'auto'
 
 function now(): string {

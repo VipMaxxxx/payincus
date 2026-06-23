@@ -1,6 +1,6 @@
 import '../config/env.js'
 import { mkdir } from 'fs/promises'
-import { join, resolve } from 'path'
+import { dirname, join, resolve } from 'path'
 import { spawn } from 'child_process'
 import { prisma, closePrismaDatabase } from '../db/prisma.js'
 import { createSystemUpdateTask, hasRunningSystemUpdateTask, serializeSystemUpdateTask } from '../db/system-update-tasks.js'
@@ -8,7 +8,8 @@ import { getCurrentVersionMetadata, isGitRepository, isValidReleaseTag } from '.
 
 const targetVersion = String(process.argv[2] || '').trim()
 const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())
-const logDir = resolve(process.env.SYSTEM_UPDATE_LOG_DIR || join(appDir, 'update-logs'))
+const installDir = resolve(process.env.INSTALL_DIR || (appDir.endsWith('/current') ? dirname(appDir) : appDir))
+const logDir = resolve(process.env.SYSTEM_UPDATE_LOG_DIR || join(installDir, 'update-logs'))
 
 async function findUpdaterUserId(): Promise<number> {
   const configured = Number(process.env.SYSTEM_UPDATE_STARTED_BY_USER_ID || '')
@@ -65,6 +66,7 @@ async function main(): Promise<void> {
     env: {
       ...process.env,
       INCUDAL_APP_DIR: appDir,
+      INSTALL_DIR: installDir,
       SYSTEM_UPDATE_LOG_DIR: logDir,
       SYSTEM_UPDATE_LOG_PATH: logPath
     }
