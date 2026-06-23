@@ -6,16 +6,27 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `6c06bd8`
+- Current HEAD / 当前 HEAD: `f2aaefa`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Polish update and plugin admin UI / 优化更新与插件后台界面
-- Latest tag / 最新 tag: `v0.1.0`
+- Commit subject / 提交说明: Polish update task and plugin center UI / 优化更新任务和插件中心界面
+- Latest tag / 最新 tag: `v0.1.1`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.1.1
+
+- Release commit / 发布提交: `f2aaefa`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Polish update task and plugin center UI / 优化更新任务和插件中心界面
+
+### Improvements and Adjustments / 改进与调整
+
+- Polish update task and plugin center UI / 优化更新任务和插件中心界面 `f2aaefa`
+- Update version log for v0.1.0 / 更新 v0.1.0 版本日志 `e22c4e3`
 
 ## v0.1.0
 
