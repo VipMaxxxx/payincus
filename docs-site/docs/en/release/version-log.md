@@ -4,34 +4,36 @@
 
 This page is generated from Git tags and commits to show system version history. Admin OTA availability and production deployment still use GitHub Release tags as the source of truth.
 
-## Current Source State
+## Current Source State / 当前源码状态
 
-- Current HEAD: `9f638d8`
-- Commit date: 2026-06-24
-- Commit subject: Add redacted production proof snapshot
-- Latest tag: `v0.0.22`
+- Current HEAD / 当前 HEAD: `847aaa6`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Update version log for v0.0.22
+- Latest tag / 最新 tag: `v0.0.22`
 
-## Unreleased Changes
+## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Improvements and Adjustments / 改进与调整
 
-## Historical Versions
+- Update version log for v0.0.22 `847aaa6`
+
+## Historical Versions / 历史版本
 
 ## v0.0.22
 
-- Release commit: `9f638d8`
-- Commit date: 2026-06-24
-- Commit subject: Add redacted production proof snapshot
+- Release commit / 发布提交: `9f638d8`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Add redacted production proof snapshot
 
-### New Capabilities
+### New Capabilities / 新增能力
 
 - Add redacted production proof snapshot `9f638d8`
 
-### Other Changes
+### Other Changes / 其他变更
 
 - Record public production revalidation `f9ed41e`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update handoff with live business proof `db4f18b`
 - Update handoff after v0.0.21 production proof `ade22e5`
@@ -39,278 +41,278 @@ This page is generated from Git tags and commits to show system version history.
 
 ## v0.0.21
 
-- Release commit: `71cdcff`
-- Commit date: 2026-06-24
-- Commit subject: Fix production OTA CLI start command
+- Release commit / 发布提交: `71cdcff`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Fix production OTA CLI start command
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Fix production OTA CLI start command `71cdcff`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update version log for v0.0.20 `40a245e`
 
 ## v0.0.20
 
-- Release commit: `301fc2c`
-- Commit date: 2026-06-24
-- Commit subject: Update version log for static root fix
+- Release commit / 发布提交: `301fc2c`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Update version log for static root fix
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Update version log for static root fix `301fc2c`
 - Fix production split static roots `5afc9a5`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update handoff after storage pool release `3443585`
 - Update version log for v0.0.19 `5d17ef1`
 
 ## v0.0.19
 
-- Release commit: `97f87c5`
-- Commit date: 2026-06-24
-- Commit subject: Fix storage pool defaults and error guidance
+- Release commit / 发布提交: `97f87c5`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Fix storage pool defaults and error guidance
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Fix storage pool defaults and error guidance `97f87c5`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update version log for v0.0.18 `854bb87`
 
 ## v0.0.18
 
-- Release commit: `368d195`
-- Commit date: 2026-06-24
-- Commit subject: Fix Agent binary installer cache query
+- Release commit / 发布提交: `368d195`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Fix Agent binary installer cache query
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Fix Agent binary installer cache query `368d195`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update handoff with Incus storage proof `c0f10f7`
 - Update handoff with v0.0.17 production verification `78d35cf`
 - Update handoff after v0.0.17 production check `e86669f`
 - Update version log for v0.0.17 `d93b1ef`
 
-### Other Changes
+### Other Changes / 其他变更
 
 - Avoid stale head in handoff `f962435`
 - Correct handoff current head `4428fb9`
 
 ## v0.0.17
 
-- Release commit: `60faf9a`
-- Commit date: 2026-06-24
-- Commit subject: Fix Agent installer manifest parsing
+- Release commit / 发布提交: `60faf9a`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Fix Agent installer manifest parsing
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Fix Agent installer manifest parsing `60faf9a`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update version log for v0.0.16 `2466e80`
 
 ## v0.0.16
 
-- Release commit: `a0a35fb`
-- Commit date: 2026-06-24
-- Commit subject: Refresh host panel trust certificate
+- Release commit / 发布提交: `a0a35fb`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Refresh host panel trust certificate
 
-### Other Changes
+### Other Changes / 其他变更
 
 - Refresh host panel trust certificate `a0a35fb`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update version log for v0.0.15 `2a79838`
 
 ## v0.0.15
 
-- Release commit: `a361779`
-- Commit date: 2026-06-23
-- Commit subject: Fix atomic OTA install root detection
+- Release commit / 发布提交: `a361779`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Fix atomic OTA install root detection
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Fix atomic OTA install root detection `a361779`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update version log for v0.0.14 `91e5b32`
 
 ## v0.0.14
 
-- Release commit: `6a0624a`
-- Commit date: 2026-06-23
-- Commit subject: Clarify Debian host install support
+- Release commit / 发布提交: `6a0624a`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Clarify Debian host install support
 
-### New Capabilities
+### New Capabilities / 新增能力
 
 - Clarify Debian host install support `6a0624a`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update version log for v0.0.13 `d458c85`
 
 ## v0.0.13
 
-- Release commit: `5bf4e9a`
-- Commit date: 2026-06-23
-- Commit subject: Update version log for HSTS hardening
+- Release commit / 发布提交: `5bf4e9a`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Update version log for HSTS hardening
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Update version log for HSTS hardening `5bf4e9a`
 - Harden split deployment HSTS headers `79df25b`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update version log for production domain docs `b9b724f`
 - Update handoff for plugin release `7cd2baa`
 - Update version log for v0.0.12 `6e8ce21`
 
-### Other Changes
+### Other Changes / 其他变更
 
 - Align docs with production domains `bafe353`
 
 ## v0.0.12
 
-- Release commit: `0453d5a`
-- Commit date: 2026-06-23
-- Commit subject: Add plugin center
+- Release commit / 发布提交: `0453d5a`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Add plugin center
 
-### New Capabilities
+### New Capabilities / 新增能力
 
 - Add plugin center `0453d5a`
 - Add bilingual PayIncus documentation site `8d89da3`
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Fix GitHub Pages docs workflow `9b9b40f`
 
-### Other Changes
+### Other Changes / 其他变更
 
 - Deploy docs site with GitHub Pages `9d6cd2b`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Update split deployment docs `878fc93`
 - Update README with OTA and community links `86c6234`
 
 ## v0.0.11
 
-- Release commit: `6229369`
-- Commit date: 2026-06-23
-- Commit subject: Support atomic OTA release layout
+- Release commit / 发布提交: `6229369`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Support atomic OTA release layout
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## v0.0.10
 
-- Release commit: `6229369`
-- Commit date: 2026-06-23
-- Commit subject: Support atomic OTA release layout
+- Release commit / 发布提交: `6229369`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Support atomic OTA release layout
 
-### New Capabilities
+### New Capabilities / 新增能力
 
 - Support atomic OTA release layout `6229369`
 
 ## v0.0.9
 
-- Release commit: `2924080`
-- Commit date: 2026-06-23
-- Commit subject: Auto rollback failed online updates
+- Release commit / 发布提交: `2924080`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Auto rollback failed online updates
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Auto rollback failed online updates `2924080`
 
 ## v0.0.8
 
-- Release commit: `b601030`
-- Commit date: 2026-06-23
-- Commit subject: Prefer verified OTA artifacts for online updates
+- Release commit / 发布提交: `b601030`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Prefer verified OTA artifacts for online updates
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## v0.0.7
 
-- Release commit: `b601030`
-- Commit date: 2026-06-23
-- Commit subject: Prefer verified OTA artifacts for online updates
+- Release commit / 发布提交: `b601030`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Prefer verified OTA artifacts for online updates
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Prefer verified OTA artifacts for online updates `b601030`
 
 ## v0.0.6
 
-- Release commit: `e691ffa`
-- Commit date: 2026-06-23
-- Commit subject: Stabilize OTA restart verification
+- Release commit / 发布提交: `e691ffa`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Stabilize OTA restart verification
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Stabilize OTA restart verification `e691ffa`
 
 ## v0.0.5
 
-- Release commit: `674c0d8`
-- Commit date: 2026-06-23
-- Commit subject: Fix OTA manifest release workflow checkout
+- Release commit / 发布提交: `674c0d8`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Fix OTA manifest release workflow checkout
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Fix OTA manifest release workflow checkout `674c0d8`
 
 ## v0.0.4
 
-- Release commit: `21c398f`
-- Commit date: 2026-06-23
-- Commit subject: Add OTA release manifest metadata
+- Release commit / 发布提交: `21c398f`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Add OTA release manifest metadata
 
-### New Capabilities
+### New Capabilities / 新增能力
 
 - Add OTA release manifest metadata `21c398f`
 
 ## v0.0.3
 
-- Release commit: `edac4e9`
-- Commit date: 2026-06-23
-- Commit subject: Make OTA worker tolerate production git ownership
+- Release commit / 发布提交: `edac4e9`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Make OTA worker tolerate production git ownership
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Make OTA worker tolerate production git ownership `edac4e9`
 
 ## v0.0.2
 
-- Release commit: `19391c9`
-- Commit date: 2026-06-23
-- Commit subject: Make online updates asynchronous and build-ready
+- Release commit / 发布提交: `19391c9`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Make online updates asynchronous and build-ready
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Make online updates asynchronous and build-ready `19391c9`
 
 ## v0.0.1
 
-- Release commit: `c7629e6`
-- Commit date: 2026-06-23
-- Commit subject: Allow online update worker sudo under systemd
+- Release commit / 发布提交: `c7629e6`
+- Commit date / 提交日期: 2026-06-23
+- Commit subject / 提交说明: Allow online update worker sudo under systemd
 
-### New Capabilities
+### New Capabilities / 新增能力
 
 - Allow online update worker sudo under systemd `c7629e6`
 
-### Improvements and Adjustments
+### Improvements and Adjustments / 改进与调整
 
 - Prepare v0.0.1 online update baseline `6a9854c`
 - Make release installs reproducible `fb02c8c`
@@ -320,11 +322,11 @@ This page is generated from Git tags and commits to show system version history.
 - Update README.md `fb92971`
 - Prepare host deployment package `52e1af4`
 
-### Fixes and Stability
+### Fixes and Stability / 修复与稳定性
 
 - Harden release production verification `8b23a8f`
 
-### Other Changes
+### Other Changes / 其他变更
 
 - first commit `c249891`
 
