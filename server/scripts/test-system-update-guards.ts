@@ -90,7 +90,7 @@ assert.ok(
 )
 
 assert.ok(
-  route.includes("execFileAsync('sudo', ['-n', 'systemctl', 'start', unitName]") &&
+  route.includes("execFileAsync('sudo', ['-n', 'systemctl', 'start', '--no-block', unitName]") &&
     route.includes("incudal-online-update@${taskId}.service") &&
     route.includes("incudal-online-rollback@${taskId}.service") &&
     updateService.includes('User=root') &&
@@ -98,12 +98,19 @@ assert.ok(
     rollbackService.includes('User=root') &&
     rollbackService.includes('rollback-system-update-task.js %i') &&
     installPanel.includes('/etc/sudoers.d/incudal-online-update') &&
-    installPanel.includes('NOPASSWD: ${systemctl_bin} start incudal-online-update@*.service') &&
+    installPanel.includes('NOPASSWD: ${systemctl_bin} start --no-block incudal-online-update@*.service') &&
     installPanel.includes('readonly SERVICE_NAME="incudal-backend"') &&
     installPanel.includes('NoNewPrivileges=false') &&
     backendService.includes('NoNewPrivileges=false') &&
     backendService.includes('/opt/incudal/.git /opt/incudal/update-logs'),
   'production online updates must run through root-owned systemd oneshot units with restricted sudoers, sudo-compatible backend privileges, and writable git/log paths'
+)
+
+assert.ok(
+  runTask.includes("pnpm', ['install', '--frozen-lockfile', '--prod=false']") &&
+    runTask.includes("NODE_ENV: 'development'") &&
+    runTask.includes("PNPM_CONFIG_PROD: 'false'"),
+  'online updater must install build-time dependencies even when the production service environment sets NODE_ENV=production'
 )
 
 assert.ok(

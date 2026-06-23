@@ -88,7 +88,7 @@ async function startSystemUpdateWorker(mode: 'update' | 'rollback', taskId: numb
     const unitName = mode === 'rollback'
       ? `incudal-online-rollback@${taskId}.service`
       : `incudal-online-update@${taskId}.service`
-    await execFileAsync('sudo', ['-n', 'systemctl', 'start', unitName], {
+    await execFileAsync('sudo', ['-n', 'systemctl', 'start', '--no-block', unitName], {
       cwd: getProjectRoot(),
       timeout: 30000
     })

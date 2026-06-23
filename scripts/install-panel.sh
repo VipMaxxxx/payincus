@@ -997,7 +997,7 @@ EOF
     systemctl_bin="$(command -v systemctl)"
     cat > /etc/sudoers.d/incudal-online-update << EOF
 Defaults:${RUN_USER} !requiretty
-${RUN_USER} ALL=(root) NOPASSWD: ${systemctl_bin} start incudal-online-update@*.service, ${systemctl_bin} start incudal-online-rollback@*.service
+${RUN_USER} ALL=(root) NOPASSWD: ${systemctl_bin} start --no-block incudal-online-update@*.service, ${systemctl_bin} start --no-block incudal-online-rollback@*.service
 EOF
     chmod 440 /etc/sudoers.d/incudal-online-update
     visudo -cf /etc/sudoers.d/incudal-online-update >/dev/null
