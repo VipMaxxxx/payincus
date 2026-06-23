@@ -6,15 +6,26 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `79df25b`
+- 当前 HEAD: `5bf4e9a`
 - 提交日期: 2026-06-23
-- 提交说明: Harden split deployment HSTS headers
-- 最新 tag: `v0.0.12`
+- 提交说明: Update version log for HSTS hardening
+- 最新 tag: `v0.0.13`
 
 ## 未发布变更
 
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+
+## 历史版本
+
+## v0.0.13
+
+- 发布提交: `5bf4e9a`
+- 提交日期: 2026-06-23
+- 提交说明: Update version log for HSTS hardening
+
 ### 修复与稳定性
 
+- Update version log for HSTS hardening `5bf4e9a`
 - Harden split deployment HSTS headers `79df25b`
 
 ### 改进与调整
@@ -26,8 +37,6 @@
 ### 其他变更
 
 - Align docs with production domains `bafe353`
-
-## 历史版本
 
 ## v0.0.12
 

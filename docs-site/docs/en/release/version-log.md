@@ -6,15 +6,26 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `79df25b`
+- Current HEAD: `5bf4e9a`
 - Commit date: 2026-06-23
-- Commit subject: Harden split deployment HSTS headers
-- Latest tag: `v0.0.12`
+- Commit subject: Update version log for HSTS hardening
+- Latest tag: `v0.0.13`
 
 ## Unreleased Changes
 
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+
+## Historical Versions
+
+## v0.0.13
+
+- Release commit: `5bf4e9a`
+- Commit date: 2026-06-23
+- Commit subject: Update version log for HSTS hardening
+
 ### Fixes and Stability
 
+- Update version log for HSTS hardening `5bf4e9a`
 - Harden split deployment HSTS headers `79df25b`
 
 ### Improvements and Adjustments
@@ -26,8 +37,6 @@ This page is generated from Git tags and commits to show system version history.
 ### Other Changes
 
 - Align docs with production domains `bafe353`
-
-## Historical Versions
 
 ## v0.0.12
 
