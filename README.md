@@ -3,7 +3,9 @@
 <p align="center">基于 Incus 的 LXC / KVM NAT VPS 销售、交付与管理面板。</p>
 
 <p align="center">
-  <a href="https://demo.payincus.com">测试站</a>
+  <a href="https://demo.payincus.com">测试用户端</a>
+  ·
+  <a href="https://demoadmin.payincus.com">测试后台</a>
   ·
   <a href="https://docs.payincus.com">文档站</a>
   ·
@@ -20,7 +22,8 @@ PayIncus 是基于开源项目 [qwer-xyz/incudal](https://github.com/qwer-xyz/in
 
 访问入口：
 
-- 测试站：https://demo.payincus.com
+- 测试用户端：https://demo.payincus.com
+- 测试后台：https://demoadmin.payincus.com
 - 文档站：https://docs.payincus.com
 - Telegram 交流群：https://t.me/Payincus
 - 当前仓库：https://github.com/VipMaxxxx/payincus
@@ -59,32 +62,49 @@ scripts/                安装、构建、预检和 smoke 脚本
 
 ## 推荐生产架构
 
-生产环境推荐非 Docker、前后端分离部署：
+生产环境推荐非 Docker、前后台双前端分离部署。当前代码不是一个前端入口里区分用户/后台，而是两个 Vite entry、两个构建目录、两个公网域名，共用同一个后端 API：
 
 ```text
-浏览器
-  -> https://demo.payincus.com 或 https://demoadmin.payincus.com
-  -> Nginx 静态客户前端 / 管理后台前端
-  -> 各自的 /api 和 /api/ws 反代到后端 127.0.0.1:3001 或内网 IP:3001
+用户浏览器
+  -> https://demo.payincus.com
+  -> Nginx 静态用户端：/opt/incudal/client/dist/user
+  -> /api 和 /api/ws 反代到后端 127.0.0.1:3001 或内网 IP:3001
+
+管理员浏览器
+  -> https://demoadmin.payincus.com
+  -> Nginx 静态管理端：/opt/incudal/client/dist/admin
+  -> /api 和 /api/ws 反代到同一个后端 127.0.0.1:3001 或内网 IP:3001
+
+后端 Node API
   -> PostgreSQL / Redis / Incus 节点 / Agent
 ```
 
-双机内网部署也可以写成：
+双机内网部署可以写成：
 
 ```text
-浏览器 -> https://demo.payincus.com -> 客户前端 Nginx
-浏览器 -> https://demoadmin.payincus.com -> 管理后台前端 Nginx
-前端 Nginx -> http://10.0.0.12:3001/api -> 后端 Node API
-后端 Node API -> PostgreSQL / Redis / Incus 节点
+https://demo.payincus.com
+  -> 用户端 Nginx
+  -> /api, /api/ws -> http://10.0.0.12:3001
+
+https://demoadmin.payincus.com
+  -> 管理端 Nginx
+  -> /api, /api/ws -> http://10.0.0.12:3001
+
+http://10.0.0.12:3001
+  -> 后端 Node API
+  -> PostgreSQL / Redis / Incus 节点 / Agent
 ```
 
 约定：
 
-- 浏览器访问两个独立公网域名：客户面板 `FRONTEND_URL`，管理后台 `ADMIN_FRONTEND_URL`。
-- 前端构建使用 `VITE_API_BASE_URL=/api`。
-- 后端监听 `127.0.0.1:3001` 或内网 IP，生产设置 `SERVE_STATIC_CLIENT=false`。
-- Nginx 托管 `client/dist/user` 和 `client/dist/admin`，并只把两个站点的 `/api/` 和 `/api/ws/` 反代到后端。
+- 用户端和管理端必须使用两个独立公网域名：用户端 `FRONTEND_URL`，管理端 `ADMIN_FRONTEND_URL`。
+- 用户端构建入口是 `VITE_APP_ENTRY=user`，产物目录是 `client/dist/user`。
+- 管理端构建入口是 `VITE_APP_ENTRY=admin`，产物目录是 `client/dist/admin`。
+- 两个前端都使用 `VITE_API_BASE_URL=/api`，浏览器只访问同源 `/api` 和 `/api/ws`。
+- 后端监听 `127.0.0.1:3001` 或内网 IP，生产必须设置 `SERVE_STATIC_CLIENT=false`，不由后端直接托管前端静态文件。
+- Nginx 分别托管 `client/dist/user` 和 `client/dist/admin`，并且只把两个站点的 `/api/` 和 `/api/ws/` 反代到后端。
 - 支付回调地址使用客户面板公网域名，不使用后端内网地址或管理后台域名。
+- 用户端不能暴露后台入口、后台 API 或后台跳转；管理端不能暴露用户端自助功能入口。
 
 ## 一键安装
 
@@ -115,6 +135,8 @@ https://github.com/VipMaxxxx/payincus/releases
 
 ## 手动部署
 
+手动部署也按双前端分离方式执行。以下示例假设安装目录是 `/opt/incudal`，用户端域名是 `demo.payincus.com`，后台域名是 `demoadmin.payincus.com`。
+
 安装依赖：
 
 ```bash
@@ -123,12 +145,23 @@ corepack prepare pnpm@9.14.2 --activate
 pnpm install --frozen-lockfile
 ```
 
-生成 Prisma Client、执行迁移并构建：
+生成 Prisma Client、执行迁移并构建用户端、管理端和后端：
 
 ```bash
 pnpm --filter server exec prisma generate
 pnpm --filter server exec prisma migrate deploy
-VITE_API_BASE_URL=/api pnpm build
+VITE_API_BASE_URL=/api \
+VITE_CUSTOMER_BASE_URL=https://demo.payincus.com \
+VITE_ADMIN_BASE_URL=https://demoadmin.payincus.com \
+pnpm build
+```
+
+构建完成后关键产物应存在：
+
+```text
+client/dist/user/index.html
+client/dist/admin/index.html
+server/dist/app.js
 ```
 
 后端生产启动示例：
@@ -138,13 +171,17 @@ NODE_ENV=production \
 HOST=127.0.0.1 \
 PORT=3001 \
 SERVE_STATIC_CLIENT=false \
+FRONTEND_URL=https://demo.payincus.com \
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+SITE_URL=https://demo.payincus.com \
+PAYMENT_CALLBACK_BASE_URL=https://demo.payincus.com \
 node server/dist/app.js
 ```
 
 同机部署的最小启动命令也可以写成：
 
 ```bash
-NODE_ENV=production SERVE_STATIC_CLIENT=false HOST=127.0.0.1 PORT=3001 node server/dist/app.js
+NODE_ENV=production HOST=127.0.0.1 PORT=3001 SERVE_STATIC_CLIENT=false node server/dist/app.js
 ```
 
 systemd 模板：
@@ -169,6 +206,15 @@ deploy/nginx-split-intranet.conf.example
 - `/opt/incudal/client/dist/user`：客户前端构建产物目录
 - `/opt/incudal/client/dist/admin`：后台前端构建产物目录
 - `10.0.0.12:3001`：后端内网 IP 和端口
+
+部署后应验证：
+
+```bash
+FRONTEND_URL=https://demo.payincus.com \
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+BACKEND_URL=http://127.0.0.1:3001 \
+pnpm verify:split:host
+```
 
 ## 后台在线更新
 
@@ -232,7 +278,7 @@ sudo systemctl daemon-reload
 
 ```bash
 SERVICE_NAME=incudal-backend \
-FRONTEND_URL=https://pay.payincus.com \
+FRONTEND_URL=https://demo.payincus.com \
 ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm update:online v1.2.3
