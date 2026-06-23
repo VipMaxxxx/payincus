@@ -15,26 +15,32 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 
 ## Current Git State
 
-At the time this handoff was written, local `HEAD` was:
+At the time this handoff was last refreshed, local `HEAD` was:
 
 ```text
-9b9b40f Fix GitHub Pages docs workflow
+d93b1ef Update version log for v0.0.17
 ```
 
-GitHub remote `payincus/main` was also updated directly through the GitHub connector with:
+GitHub remote `payincus/main` was aligned with:
 
 ```text
-9b9b40f Fix GitHub Pages docs workflow
+d93b1ef Update version log for v0.0.17
 ```
 
-Local uncommitted changes now include the plugin center implementation, plugin templates, plugin docs, OTA/runtime directory preservation updates, and regenerated docs version logs.
+The current tracked tree is clean against `payincus/main`. The local audit ledger under `docs/production-audit.md` is ignored by git and may contain newer operational notes.
 
-Previously possible docs-only files were:
+Recently updated/released files include:
 
 ```text
-.github/workflows/docs-pages.yml
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
+server/templates/agent-install.sh
+server/src/routes/hosts.ts
+client/src/locales/*
+docs-site/docs/agent/install.md
+docs-site/docs/en/agent/install.md
+docs-site/docs/features/resource-hosting.md
+docs-site/docs/en/features/resource-hosting.md
 ```
 
 Recommended first step in a new session or user terminal:
@@ -117,6 +123,11 @@ Key tags:
 - `v0.0.3`: git safe-directory fix.
 - `v0.0.7` / `v0.0.8`: verified OTA artifact path.
 - `v0.0.10` / `v0.0.11`: atomic OTA release layout and rollback proof.
+- `v0.0.12`: plugin center.
+- `v0.0.13`: production plugin OTA proof.
+- `v0.0.15`: atomic OTA install-root recovery.
+- `v0.0.16`: host panel trust certificate refresh.
+- `v0.0.17`: Agent installer manifest parsing and ZFS error guidance.
 
 ## Plugin Center Status
 
@@ -168,7 +179,7 @@ Release proof:
 - Release URL: `https://github.com/VipMaxxxx/payincus/releases/tag/v0.0.12`
 - Assets generated: linux amd64 tar.gz, linux arm64 tar.gz, both `.sha256` files, `incudal-v0.0.12-ota-manifest.json`, and `ota-manifest.json`.
 
-Before calling the feature complete on the production server, it still needs a production OTA update proof from the admin panel or server-side update task logs.
+Production API proof has passed for the plugin center. Browser UI smoke for `/admin/plugins` iframe rendering and user `/plugins/smoke` rendering still needs a real session/Turnstile proof.
 
 ## Documentation Site
 
@@ -244,23 +255,16 @@ Known docs build behavior:
 
 ## Last Known Verification
 
-Recently passed locally after the plugin center work:
+Recently passed locally after the Agent installer and ZFS guidance work:
 
 ```text
-pnpm --filter client type-check
-pnpm --filter client lint:check
+bash -n server/templates/agent-install.sh server/templates/install.sh
+pnpm --filter server test:agent-install-command-guards
+pnpm --filter server test:host-route-id-guards
+pnpm --filter server test:frontend-i18n-keys
 pnpm --filter server type-check
-pnpm --filter server test:split-deploy-config
-pnpm --filter server test:frontend-route-guards
-pnpm --filter server test:system-update-guards
-pnpm --filter server test:plugin-center-guards
-pnpm --filter server test:plugin-package-guards
-pnpm --filter server test:plugin-market-guards
-pnpm --filter server test:plugin-client-boundary-guards
-pnpm --filter client build
+pnpm --filter client type-check
 pnpm build
-pnpm test
-pnpm test:agent
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
@@ -297,6 +301,9 @@ Completed:
 - OTA artifact update path.
 - Atomic OTA layout and rollback proof.
 - Bilingual docs site and GitHub Pages deployment.
+- Plugin center API production smoke.
+- Host installer certificate-refresh hotfix.
+- Agent installer compact-manifest hotfix.
 
 Not completed:
 
@@ -315,17 +322,18 @@ Remaining production proof items:
 
 ## Current Server Access Constraint
 
-This Codex environment cannot SSH to the production server.
+This Codex environment can reach the production server TCP/22, but recent authenticated and non-authenticated SSH attempts were closed by the remote host during the SSH handshake before command execution.
 
-Last SSH connectivity test:
+Recent SSH behavior:
 
 ```text
-ssh: connect to host 147.125.252.103 port 22: Operation not permitted
+nc -vz 147.125.252.103 22: succeeded
+kex_exchange_identification: Connection closed by remote host
 ```
 
-This is sandbox network restriction, not a password issue.
+This is no longer the earlier local sandbox `Operation not permitted` result. Treat it as remote SSH service, rate-limit, or access-policy instability until server-side logs prove otherwise.
 
-For any server-side work, ask the user to run commands in their own terminal and paste output. Do not ask them to put passwords into handoff notes.
+For server-side work while SSH is unstable, ask the user to run commands in their own terminal and paste redacted output. Do not ask them to put passwords into handoff notes.
 
 ## Important Production Domains
 
@@ -343,15 +351,17 @@ Note: a previous request excluded the old demo domain from production audit scop
 ## Suggested Next Work
 
 1. Sync local Git with remote `payincus/main`.
-2. Confirm GitHub Pages HTTPS is enforced and both `https://payincus.com` and `https://payincus.com/en/` load.
-3. Decide whether to continue improving docs:
+2. When SSH stabilizes, write the missing `deployedAt` value in `/opt/incudal/current/version.json` and run server-side `pnpm verify:production` plus `pnpm verify:log-header` from `/opt/incudal/current`.
+3. Fix or avoid ZFS on the real Debian host, then retry storage-pool creation.
+4. Re-run the Agent install command from the admin panel after the public installer hotfix and verify heartbeat/reporting.
+5. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
    - User workflow screenshots.
    - API request/response/error reference.
    - Payment provider setup guide.
    - Agent install guide with real host commands.
-4. Complete real production proof items from `docs/production-audit.md`.
-5. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+6. Complete real production proof items from `docs/production-audit.md`.
+7. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
 
 ## Release Documentation Rule
 
