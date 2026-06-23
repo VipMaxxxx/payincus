@@ -20,6 +20,7 @@ admin.payincus.com
 - Do not serve the user build from the admin domain.
 - Keep backend traffic same-origin through `/api`.
 - Ensure WebSocket upgrade headers are set for `/api/ws`.
+- Keep CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and HSTS on public responses. If Cloudflare/CDN is in front, confirm `Strict-Transport-Security` is still preserved.
 
 Use the repository template:
 

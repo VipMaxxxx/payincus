@@ -30,3 +30,4 @@ pnpm verify:split:host
 - SMTP delivery.
 - Lsky upload or attachment delivery.
 - Notification delivery through configured channels.
+- Public responses include CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and `Strict-Transport-Security`.

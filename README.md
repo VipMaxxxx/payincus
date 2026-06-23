@@ -209,6 +209,8 @@ deploy/nginx-split-intranet.conf.example
 - `/opt/incudal/client/dist/admin`：后台前端构建产物目录
 - `10.0.0.12:3001`：后端内网 IP 和端口
 
+模板会设置 CSP、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy` 和 HSTS。若前面还有 Cloudflare/CDN，应确认公网响应也保留 `Strict-Transport-Security`。
+
 部署后应验证：
 
 ```bash

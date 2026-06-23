@@ -28,5 +28,6 @@ pnpm verify:production
 - 真实 Agent 安装、心跳、资源、实例和流量上报。
 - 真实 SMTP 发信、Lsky 上传和通知投递。
 - 生产响应头和日志敏感信息暴露检查。
+- 公网响应头包含 CSP、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy` 和 `Strict-Transport-Security`。
 
 没有这些 proof refs 时，不应标记为最终生产 100%。

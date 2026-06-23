@@ -25,6 +25,8 @@ deploy/nginx-split-intranet.conf.example
 /api/ws/ -> 后端 /api/ws/
 ```
 
+模板会设置 CSP、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy` 和 HSTS。若前面还有 Cloudflare/CDN，应确认公网响应也保留 `Strict-Transport-Security`。
+
 部署后执行：
 
 ```bash
