@@ -6,14 +6,21 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `97f87c5`
+- Current HEAD: `5afc9a5`
 - Commit date: 2026-06-24
-- Commit subject: Fix storage pool defaults and error guidance
+- Commit subject: Fix production split static roots
 - Latest tag: `v0.0.19`
 
 ## Unreleased Changes
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Fixes and Stability
+
+- Fix production split static roots `5afc9a5`
+
+### Improvements and Adjustments
+
+- Update handoff after storage pool release `3443585`
+- Update version log for v0.0.19 `5d17ef1`
 
 ## Historical Versions
 
