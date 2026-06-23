@@ -3445,9 +3445,15 @@ export default {
         personal: '個人設定',
         ssh_key: 'SSH 金鑰',
         notification: '通知設定',
+        plugin: '外掛',
         system: '系統設定',
         auth: '認證操作',
         storage: '遠端儲存',
+        billing: '計費',
+        mail: '信箱',
+        admin: '後台管理',
+        entertainment: '福利娛樂',
+        agent: 'Agent',
         // 相容舊資料中的中文模組名
         '登入操作': '登入操作',
         '安全事件': '安全事件',
@@ -3491,9 +3497,13 @@ export default {
         'instance.cloud_init_manual_complete': '手動完成初始化檢測',
         'instance.update_quota': '更新實例配額',
         'instance.rename': '重新命名實例',
+        'instance.batch_delete': '批次刪除實例',
+        'instance.suspend': '暫停實例',
+        'instance.unsuspend': '恢復實例',
         // 連接埠映射
         'port.add': '新增連接埠映射',
         'port.delete': '刪除連接埠映射',
+        'port.batch_add': '批次新增連接埠映射',
         // 快照操作
         'snapshot.create': '建立快照',
         'snapshot.delete': '刪除快照',
@@ -3512,10 +3522,18 @@ export default {
         'host.update': '更新節點',
         'host.delete': '刪除節點',
         'host.test': '測試節點',
+        'host.verify': '驗證節點',
+        'host.image_policy': '更新映像檔策略',
+        'host.agent_install_token_issue': '產生 Agent 安裝 Token',
         // 方案操作
         'package.create': '建立方案',
         'package.update': '更新方案',
         'package.delete': '刪除方案',
+        'package.release_quota': '釋放方案配額',
+        'plan.create': '建立規格',
+        'plan.update': '更新規格',
+        'plan.delete': '刪除規格',
+        'plan.sync_quota': '同步規格配額',
         // 使用者管理
         'user.ban': '封禁使用者',
         'user.unban': '解除封禁',
@@ -3541,6 +3559,9 @@ export default {
         'session.revoke_all': '撤銷所有會話',
         // 系統設定
         'system.config_update': '更新系統設定',
+        'system.update.start': '開始系統更新',
+        'system.update.rollback': '開始系統回滾',
+        'system.update.denied': '拒絕系統更新',
         // 幫助文件
         'help.create': '建立幫助文件',
         'help.update': '更新幫助文件',

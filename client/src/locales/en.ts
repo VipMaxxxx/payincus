@@ -4634,9 +4634,15 @@ export default {
         personal: 'Personal',
         ssh_key: 'SSH Key',
         notification: 'Notification',
+        plugin: 'Plugin',
         system: 'System',
         auth: 'Auth',
         storage: 'Storage',
+        billing: 'Billing',
+        mail: 'Mail',
+        admin: 'Admin',
+        entertainment: 'Benefits',
+        agent: 'Agent',
         // Legacy Chinese module names compatibility
         '登录操作': 'Login',
         '安全事件': 'Security',
@@ -4680,9 +4686,13 @@ export default {
         'instance.cloud_init_manual_complete': 'Manually Complete Init Check',
         'instance.update_quota': 'Update Instance Quota',
         'instance.rename': 'Rename Instance',
+        'instance.batch_delete': 'Batch Delete Instances',
+        'instance.suspend': 'Suspend Instance',
+        'instance.unsuspend': 'Unsuspend Instance',
         // Port mapping
         'port.add': 'Add Port Mapping',
         'port.delete': 'Delete Port Mapping',
+        'port.batch_add': 'Batch Add Port Mappings',
         // Snapshot operations
         'snapshot.create': 'Create Snapshot',
         'snapshot.delete': 'Delete Snapshot',
@@ -4701,11 +4711,19 @@ export default {
         'host.update': 'Update Host',
         'host.delete': 'Delete Host',
         'host.test': 'Test Host',
+        'host.verify': 'Verify Host',
+        'host.image_policy': 'Update Image Policy',
+        'host.agent_install_token_issue': 'Issue Agent Install Token',
         // Node group operations
         // Package operations
         'package.create': 'Create Package',
         'package.update': 'Update Package',
         'package.delete': 'Delete Package',
+        'package.release_quota': 'Release Package Quota',
+        'plan.create': 'Create Plan',
+        'plan.update': 'Update Plan',
+        'plan.delete': 'Delete Plan',
+        'plan.sync_quota': 'Sync Plan Quota',
         // User management
         'user.ban': 'Ban User',
         'user.unban': 'Unban User',
@@ -4731,6 +4749,9 @@ export default {
         'session.revoke_all': 'Revoke All Sessions',
         // System config
         'system.config_update': 'Update System Config',
+        'system.update.start': 'Start System Update',
+        'system.update.rollback': 'Start System Rollback',
+        'system.update.denied': 'Deny System Update',
         // Help articles
         'help.create': 'Create Help Article',
         'help.update': 'Update Help Article',

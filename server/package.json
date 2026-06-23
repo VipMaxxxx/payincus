@@ -62,6 +62,7 @@
     "test:invite-pagination-guards": "node --import tsx scripts/test-invite-pagination-guards.ts",
     "test:ip-address-route-guards": "node --import tsx scripts/test-ip-address-route-guards.ts",
     "test:log-query-guards": "node --import tsx scripts/test-log-query-guards.ts",
+    "test:log-localization-guards": "node --import tsx scripts/test-log-localization-guards.ts",
     "test:log-sanitizer": "node --import tsx scripts/test-log-sanitizer.ts",
     "test:billing-expiry-delete": "node --import tsx scripts/test-billing-expiry-delete.ts",
     "test:billing-expiry-race-guards": "node --import tsx scripts/test-billing-expiry-race-guards.ts",

@@ -6,6 +6,7 @@
 import { prisma } from './prisma.js'
 import type { Log } from '../types/database.js'
 import type { Prisma } from '@prisma/client'
+import { normalizeLogContentForStorage } from '../lib/log-localization.js'
 
 // ==================== 日志模块常量 ====================
 
@@ -193,6 +194,7 @@ export async function createLog(
     const instanceId = options.instanceId !== undefined
       ? options.instanceId
       : await inferLogInstanceId(userId, content)
+    const normalizedContent = normalizeLogContentForStorage(content)
 
     await prisma.log.create({
       data: {
@@ -200,7 +202,7 @@ export async function createLog(
         instanceId: instanceId ?? null,
         module,
         action,
-        content,
+        content: normalizedContent,
         result
       }
     })

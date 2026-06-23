@@ -28,6 +28,7 @@ https://pay.payincus.com
 | Invites | `/invites` | Referral relationships and rewards. |
 | Tickets | `/tickets` | Create tickets, read replies and upload attachments. |
 | Inbox | `/inbox` | System notifications and delivery state. |
+| Logs | `/logs` | User-related operation logs. In the Chinese UI, modules, actions, results and common log content are localized to Chinese. |
 | Help | `/help` | Help articles maintained by admins. |
 | Profile | `/profile` | Account settings, OAuth binding and preferences. |
 

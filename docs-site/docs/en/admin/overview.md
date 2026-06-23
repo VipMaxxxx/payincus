@@ -26,7 +26,7 @@ https://admin.payincus.com
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Statistics | `/admin/statistics` | Operational, resource and billing metrics. |
-| Logs | `/admin/logs` | Audit logs and system operation records. |
+| Logs | `/admin/logs` | Audit logs and system operation records. In the Chinese UI, modules, actions, results and common log content are localized to Chinese. |
 
 ## Billing and Commercial Features
 

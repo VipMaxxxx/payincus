@@ -6,11 +6,17 @@ import api from '@/api'
 import { useToast } from '@/stores/toast'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import type { Log } from '@/types/api'
+import {
+  formatLogAction,
+  formatLogContent,
+  formatLogModule,
+  formatLogResult
+} from '@/utils/log-format'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'LogsView' })
 
-const { t, locale } = useI18n()
+const { t, locale, tm } = useI18n()
 const toast = useToast()
 const themeStore = useThemeStore()
 
@@ -124,19 +130,20 @@ function getResultClass(result: string): string {
   }
 }
 
-// 格式化结果文本 - 直接显示原始值
 function formatResult(result: string): string {
-  return result
+  return formatLogResult(result, tm('logResults') as Record<string, unknown>)
 }
 
-// 格式化模块文本 - 直接显示原始值
 function formatModule(module: string): string {
-  return module
+  return formatLogModule(module, tm('logModules') as Record<string, unknown>)
 }
 
-// 格式化操作文本 - 直接显示原始值
 function formatAction(action: string): string {
-  return action
+  return formatLogAction(action, tm('logActions') as Record<string, unknown>)
+}
+
+function formatContent(content: string): string {
+  return formatLogContent(content)
 }
 
 // 切换内容展开/收起
@@ -240,13 +247,13 @@ onMounted(async () => {
               <td class="py-3 px-4 text-sm">
                 <div class="max-w-xs lg:max-w-md">
                   <!-- 短内容直接显示 -->
-                  <span v-if="!isContentLong(log.content)" class="text-themed-secondary">
-                    {{ log.content }}
+                  <span v-if="!isContentLong(formatContent(log.content))" class="text-themed-secondary">
+                    {{ formatContent(log.content) }}
                   </span>
                   <!-- 长内容可展开 -->
                   <template v-else>
                     <div v-if="!expandedRows.has(log.id)" class="flex items-center gap-1.5">
-                      <span class="text-themed-secondary truncate flex-1">{{ log.content.slice(0, 50) }}...</span>
+                      <span class="text-themed-secondary truncate flex-1">{{ formatContent(log.content).slice(0, 50) }}...</span>
                       <button
                         class="flex-shrink-0 p-1 rounded transition-colors"
                         :class="themeStore.isDark ? 'hover:bg-gray-700 text-blue-400' : 'hover:bg-gray-100 text-blue-500'"
@@ -259,7 +266,7 @@ onMounted(async () => {
                       </button>
                     </div>
                     <div v-else class="space-y-2">
-                      <p class="text-themed-secondary whitespace-pre-wrap break-words">{{ log.content }}</p>
+                      <p class="text-themed-secondary whitespace-pre-wrap break-words">{{ formatContent(log.content) }}</p>
                       <button
                         class="text-xs flex items-center gap-1 transition-colors"
                         :class="themeStore.isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-500 hover:text-blue-600'"
@@ -353,4 +360,3 @@ onMounted(async () => {
     </div>
   </div>
 </template>
-

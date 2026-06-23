@@ -4640,9 +4640,15 @@ export default {
         personal: '个人设置',
         ssh_key: 'SSH 密钥',
         notification: '通知设置',
+        plugin: '插件',
         system: '系统配置',
         auth: '认证操作',
         storage: '远程存储',
+        billing: '计费',
+        mail: '邮箱',
+        admin: '后台管理',
+        entertainment: '福利娱乐',
+        agent: 'Agent',
         // 兼容旧数据中的中文模块名
         '登录操作': '登录操作',
         '安全事件': '安全事件',
@@ -4686,9 +4692,13 @@ export default {
         'instance.cloud_init_manual_complete': '手动完成初始化检测',
         'instance.update_quota': '更新实例配额',
         'instance.rename': '重命名实例',
+        'instance.batch_delete': '批量删除实例',
+        'instance.suspend': '暂停实例',
+        'instance.unsuspend': '恢复实例',
         // 端口映射
         'port.add': '添加端口映射',
         'port.delete': '删除端口映射',
+        'port.batch_add': '批量添加端口映射',
         // 快照操作
         'snapshot.create': '创建快照',
         'snapshot.delete': '删除快照',
@@ -4707,11 +4717,19 @@ export default {
         'host.update': '更新节点',
         'host.delete': '删除节点',
         'host.test': '测试节点',
+        'host.verify': '验证节点',
+        'host.image_policy': '更新镜像策略',
+        'host.agent_install_token_issue': '生成 Agent 安装 Token',
         // 节点组操作
         // 套餐操作
         'package.create': '创建套餐',
         'package.update': '更新套餐',
         'package.delete': '删除套餐',
+        'package.release_quota': '释放套餐配额',
+        'plan.create': '创建方案',
+        'plan.update': '更新方案',
+        'plan.delete': '删除方案',
+        'plan.sync_quota': '同步方案配额',
         // 用户管理
         'user.ban': '封禁用户',
         'user.unban': '解封用户',
@@ -4737,6 +4755,9 @@ export default {
         'session.revoke_all': '撤销所有会话',
         // 系统配置
         'system.config_update': '更新系统配置',
+        'system.update.start': '开始系统更新',
+        'system.update.rollback': '开始系统回滚',
+        'system.update.denied': '拒绝系统更新',
         // 帮助文档
         'help.create': '创建帮助文档',
         'help.update': '更新帮助文档',
