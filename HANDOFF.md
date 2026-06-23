@@ -15,19 +15,15 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 
 ## Current Git State
 
-At the time this handoff was last refreshed, local `HEAD` was:
+Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-78d35cf Update handoff with v0.0.17 production verification
+d93b1ef Update version log for v0.0.17
 ```
 
-GitHub remote `payincus/main` was aligned with:
+GitHub remote `payincus/main` was aligned after the handoff refresh commits.
 
-```text
-78d35cf Update handoff with v0.0.17 production verification
-```
-
-The current tracked tree is clean against `payincus/main`. The local audit ledger under `docs/production-audit.md` is ignored by git and may contain newer operational notes.
+The tracked tree should be clean against `payincus/main` after pulling. The local audit ledger under `docs/production-audit.md` is ignored by git and may contain newer operational notes.
 
 Recently updated/released files include:
 
