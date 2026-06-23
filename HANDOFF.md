@@ -1,6 +1,6 @@
 # PayIncus / Incudal Handoff
 
-Last updated: 2026-06-23 CST
+Last updated: 2026-06-24 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -18,7 +18,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-d93b1ef Update version log for v0.0.17
+5d17ef1 Update version log for v0.0.19
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -32,6 +32,8 @@ docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
 server/templates/agent-install.sh
 server/src/routes/hosts.ts
+server/scripts/test-host-route-id-guards.ts
+client/src/components/host/HostStorageTab.vue
 client/src/locales/*
 docs-site/docs/agent/install.md
 docs-site/docs/en/agent/install.md
@@ -124,6 +126,23 @@ Key tags:
 - `v0.0.15`: atomic OTA install-root recovery.
 - `v0.0.16`: host panel trust certificate refresh.
 - `v0.0.17`: Agent installer manifest parsing and ZFS error guidance.
+- `v0.0.18`: Agent binary installer cache query fix.
+- `v0.0.19`: storage-pool LVM default plus Incus/ZFS actionable error guidance.
+
+Latest production proof:
+
+- Production online-update task `#16` updated from `v0.0.17` to `v0.0.19`.
+- Current production symlink after the task: `/opt/incudal/current -> /opt/incudal/releases/v0.0.19-20260623172730`.
+- `version.json` reports version/tag `v0.0.19`, commit `97f87c5a9a6b`, deployed at `2026-06-23T17:27:40.063Z`.
+- Post-OTA `verify-split-host`, `pnpm verify:production`, and `pnpm verify:log-header` passed.
+- Remaining production warnings are still business-proof blockers, not deployment blockers: payment callback IP whitelist, Lsky, Agent heartbeat/traffic, and real resource lifecycle proof.
+
+Storage-pool note:
+
+- Debian 12 is supported. The current failure was caused by choosing ZFS on a host/kernel where `modprobe zfs` fails, not by Debian 12 itself.
+- New storage-pool creation now defaults to LVM and lists LVM before ZFS.
+- If Incus returns `not authorized`, rerun a fresh host install command on the real Incus host to refresh the `panel` trust entry.
+- If Incus returns `Error loading "zfs" module` or `modprobe: FATAL: Module zfs not found`, install matching headers and make `zfs-dkms`/`modprobe zfs` work, or use LVM/Btrfs/DIR.
 
 ## Plugin Center Status
 
