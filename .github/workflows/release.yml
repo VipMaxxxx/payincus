@@ -218,6 +218,11 @@ jobs:
       contents: write
 
     steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: 确定版本号
         id: version
         run: echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
