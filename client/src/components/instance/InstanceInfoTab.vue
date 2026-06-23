@@ -143,30 +143,34 @@ function getSuspendReasonText(reason: string | null | undefined): string {
 
 // 格式化带宽值，统一换算成 Mbps
 function formatBandwidth(bandwidth: string | null | undefined): string {
-  if (!bandwidth) return t('traffic.unlimited')
-  
-  // 如果是带单位的字符串（如 "100Mbit"），转换显示格式
-  if (/Mbit$/i.test(bandwidth)) {
-    return bandwidth.replace(/Mbit$/i, ' Mbps')
+  const value = String(bandwidth || '').trim()
+  if (!value || value === '0') return t('traffic.unlimited')
+
+  const unitMatch = value.match(/^(\d+(?:\.\d+)?)\s*(m|g)?(?:bit|bps)$/i)
+  if (unitMatch) {
+    const numeric = Number(unitMatch[1])
+    if (!Number.isFinite(numeric) || numeric <= 0) return t('traffic.unlimited')
+    const multiplier = unitMatch[2]?.toLowerCase() === 'g' ? 1024 : 1
+    const mbps = numeric * multiplier
+    return `${Number.isInteger(mbps) ? mbps.toFixed(0) : mbps.toFixed(1)} Mbps`
   }
-  if (/Gbit$/i.test(bandwidth)) {
-    const value = parseFloat(bandwidth)
-    return (value * 1024) + ' Mbps'
+
+  if (/^\d+$/.test(value)) {
+    const bytes = BigInt(value)
+    const GB = BigInt(1024 * 1024 * 1024)
+    const MB = BigInt(1024 * 1024)
+
+    if (bytes >= GB) {
+      const gbps = Number(bytes / GB)
+      return `${gbps * 1024} Mbps`
+    }
+    if (bytes >= MB) {
+      return `${Number(bytes / MB)} Mbps`
+    }
+    return t('traffic.unlimited')
   }
-  
-  // 如果是纯数字（字节数表示，1GB=1Gbps），换算成 Mbps
-  const bytes = BigInt(bandwidth)
-  const GB = BigInt(1024 * 1024 * 1024)
-  const MB = BigInt(1024 * 1024)
-  
-  if (bytes >= GB) {
-    const gbps = Number(bytes / GB)
-    return (gbps * 1024) + ' Mbps'
-  } else if (bytes >= MB) {
-    return Number(bytes / MB) + ' Mbps'
-  }
-  
-  return t('traffic.unlimited')
+
+  return value
 }
 </script>
 
@@ -652,4 +656,3 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
     </Teleport>
   </div>
 </template>
-
