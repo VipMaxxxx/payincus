@@ -19,7 +19,7 @@
     "seed:bulk-local-data": "node --import tsx scripts/seed-bulk-local-data.ts",
     "reset:admin-password": "node --import tsx scripts/reset-admin-password.ts",
     "update:admin-quota": "node --import tsx scripts/update-admin-quota.ts",
-    "update:online:start": "node --import tsx src/scripts/start-system-update-task.ts",
+    "update:online:start": "node dist/scripts/start-system-update-task.js",
     "smoke:split:auth": "node --import tsx scripts/smoke-split-auth.ts",
     "smoke:recharge-callback": "node --import tsx scripts/smoke-recharge-callback.ts",
     "smoke:agent-heartbeat": "node --import tsx scripts/smoke-agent-heartbeat.ts",

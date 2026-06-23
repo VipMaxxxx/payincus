@@ -182,7 +182,7 @@ assert.ok(
     onlineScript.includes('INCUDAL_APP_DIR="$APP_DIR"') &&
     runTask.includes('const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())') &&
     rollbackTask.includes("appDir.endsWith('/current') ? dirname(appDir) : appDir") &&
-    serverPackage.includes('"update:online:start": "node --import tsx src/scripts/start-system-update-task.ts"') &&
+    serverPackage.includes('"update:online:start": "node dist/scripts/start-system-update-task.js"') &&
     releaseWorkflow.includes('fetch-depth: 0') &&
     releaseWorkflow.includes('cp -r deploy/* release/deploy/') &&
     rootPackage.includes('"update:online": "bash scripts/apply-online-update.sh"') &&
