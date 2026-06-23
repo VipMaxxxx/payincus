@@ -90,6 +90,8 @@ coverage/
 
 # ==================== 文档 (内部) ====================
 docs/
+!docs-site/docs/
+!docs-site/docs/**
 SDK/
 SDKNEW/
 namecrane_modules/
