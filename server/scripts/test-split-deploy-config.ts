@@ -526,15 +526,25 @@ assert.ok(clientApiUrl.includes("const API_BASE_URL = import.meta.env.VITE_API_B
 assert.ok(clientApiUrl.includes('export function buildApiWebSocketUrl') && clientApiUrl.includes("const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:'"), 'client WebSocket URLs must derive from API base URL and current origin')
 assert.ok(terminalCore.includes("buildApiWebSocketUrl(`/ws/instances/${instanceId}/terminal?ticket=${encodeURIComponent(ticket)}`)"), 'terminal WebSocket path must stay under /api/ws via buildApiWebSocketUrl')
 
-assert.ok(readme.includes('前端 Nginx -> http://10.0.0.12:3001/api -> 后端 Node API'), 'README architecture must document backend port 3001')
-assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://admin.payincus.com') && readme.includes('/opt/incudal/client/dist/admin'), 'README architecture must document the separate admin frontend')
+assert.ok(
+  readme.includes('用户浏览器') &&
+    readme.includes('管理员浏览器') &&
+    readme.includes('/api, /api/ws -> http://10.0.0.12:3001'),
+  'README architecture must document separate user/admin frontends and backend port 3001'
+)
+assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://demoadmin.payincus.com') && readme.includes('/opt/incudal/client/dist/admin'), 'README architecture must document the separate admin frontend')
 assert.ok(readme.includes('VITE_CUSTOMER_BASE_URL=https://demo.payincus.com'), 'README env example must document admin-generated customer links')
 assert.ok(readme.includes('PORT=3001'), 'README env example must use backend port 3001')
-assert.ok(readme.includes('PORT=3001 node server/dist/app.js'), 'README production start command must use backend port 3001')
+assert.ok(
+  readme.includes('PORT=3001') &&
+    readme.includes('SERVE_STATIC_CLIENT=false') &&
+    readme.includes('node server/dist/app.js'),
+  'README production start command must use backend port 3001'
+)
 assert.ok(readme.includes('BACKEND_URL=http://10.0.0.12:3001'), 'README split verification command must use backend port 3001')
 
 assert.ok(nginxExample.includes('10.0.0.12:3001'), 'Nginx split example must document backend port 3001')
-assert.ok(nginxExample.includes('server_name demo.payincus.com') && nginxExample.includes('server_name admin.payincus.com'), 'Nginx split example must define customer and admin frontend server names')
+assert.ok(nginxExample.includes('server_name demo.payincus.com') && nginxExample.includes('server_name demoadmin.payincus.com'), 'Nginx split example must define customer and admin frontend server names')
 assert.ok(nginxExample.includes('root /opt/incudal/client/dist/user') && nginxExample.includes('root /opt/incudal/client/dist/admin'), 'Nginx split example must serve separate user and admin build outputs')
 assert.ok(nginxExample.includes("connect-src 'self' ws: wss:"), 'Nginx split example CSP must allow HTTP and HTTPS WebSocket terminals')
 assertBalancedNginxBraces('Nginx split example', nginxExample)

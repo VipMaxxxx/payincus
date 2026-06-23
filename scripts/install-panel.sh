@@ -1129,7 +1129,7 @@ setup_nginx_certbot() {
         return 1
     fi
 
-    echo -ne "  ${BOLD}请输入管理后台域名 (例如 admin.payincus.com): ${NC}"
+    echo -ne "  ${BOLD}请输入管理后台域名 (例如 demoadmin.payincus.com): ${NC}"
     read -r ADMIN_DOMAIN
 
     if [[ -z "$ADMIN_DOMAIN" ]]; then
@@ -1203,7 +1203,7 @@ setup_cf_tunnel() {
         return 1
     fi
 
-    echo -ne "  ${BOLD}请输入管理后台域名 (例: admin.payincus.com): ${NC}"
+    echo -ne "  ${BOLD}请输入管理后台域名 (例: demoadmin.payincus.com): ${NC}"
     read -r ADMIN_DOMAIN
 
     if [[ -z "$ADMIN_DOMAIN" ]]; then
