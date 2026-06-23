@@ -27,6 +27,8 @@ INCUDAL_AGENT_RELEASE_DIR=/opt/incudal/agent-release
 
 The Agent installer reads `https://<panel>/api/agent/manifest.json` and selects the `linux-amd64` or `linux-arm64` binary for the host. If installation fails with `agent manifest does not contain linux-amd64 binary metadata`, the installer is likely too old to parse the compact single-line JSON manifest served by the panel. Update the panel to a version that includes the Agent manifest parser fix, then copy a fresh Agent install command from the admin console.
 
+If backend logs show the install token was consumed but the Agent remains offline, and the Nginx access log shows `/api/agent/binary/...gz?v=<timestamp>` returning HTTP 400, the old installer is using the backend-reserved `v` query parameter for binary cache busting. Update the panel to a version that includes the Agent binary download query fix, confirm the public `install.sh` uses `cache_bust` for binary URLs, then copy a fresh Agent install command from the admin console.
+
 ## Local Build
 
 ```bash

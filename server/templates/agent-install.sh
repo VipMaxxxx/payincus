@@ -303,7 +303,10 @@ if [ -z "${INCUDAL_AGENT_BINARY_URL:-}" ]; then
   fi
 
   BINARY_URL="${BINARY_BASE_URL}/${BINARY_NAME}"
-  BINARY_URL="$(append_query_param "${BINARY_URL}" "v" "${BINARY_CACHE_BUSTER}")"
+  # The Agent binary proxy reserves "v" for exact release-version downloads.
+  # Use a separate cache-busting key so installer downloads can fall back to
+  # the manifest-selected binary without tripping version+sha256 validation.
+  BINARY_URL="$(append_query_param "${BINARY_URL}" "cache_bust" "${BINARY_CACHE_BUSTER}")"
 elif [ -z "${BINARY_EXPECTED_SHA256}" ]; then
   fail "INCUDAL_AGENT_BINARY_SHA256 is required when INCUDAL_AGENT_BINARY_URL is set"
 fi

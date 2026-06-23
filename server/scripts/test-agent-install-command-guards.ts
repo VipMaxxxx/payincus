@@ -61,6 +61,12 @@ assert.ok(
   'Agent install script must parse compact single-line Agent manifests served by the panel'
 )
 assert.ok(
+  installScriptSource.includes('MANIFEST_URL="$(append_query_param "${MANIFEST_URL}" "v" "${BINARY_CACHE_BUSTER}")"') &&
+    installScriptSource.includes('BINARY_URL="$(append_query_param "${BINARY_URL}" "cache_bust" "${BINARY_CACHE_BUSTER}")"') &&
+    !installScriptSource.includes('BINARY_URL="$(append_query_param "${BINARY_URL}" "v" "${BINARY_CACHE_BUSTER}")"'),
+  'Agent install script must not use the binary proxy reserved v query parameter for cache busting'
+)
+assert.ok(
   installScriptSource.includes('download_binary_once "${fallback_url}" "${target}" "${expected_sha256}"'),
   'Agent install script fallback binary downloads must keep the same sha256 verification requirement'
 )

@@ -27,6 +27,8 @@ INCUDAL_AGENT_RELEASE_DIR=/opt/incudal/agent-release
 
 Agent 安装脚本会读取 `https://<panel>/api/agent/manifest.json`，并按当前系统架构选择 `linux-amd64` 或 `linux-arm64` 二进制。如果安装时报 `agent manifest does not contain linux-amd64 binary metadata`，通常表示安装脚本版本过旧，无法解析面板返回的单行 JSON manifest。请先更新面板到包含 Agent manifest 解析修复的版本，再重新复制后台生成的 Agent 安装命令。
 
+如果后台日志显示安装 token 已被消费，但 Agent 仍然离线，并且 Nginx access log 中 `/api/agent/binary/...gz?v=<timestamp>` 返回 HTTP 400，说明旧安装脚本把二进制下载的缓存刷新参数写成了后端保留的 `v` 参数。请更新面板到包含 Agent 二进制下载参数修复的版本，确认公开 `install.sh` 中二进制 URL 使用 `cache_bust` 参数，然后重新复制后台生成的 Agent 安装命令。
+
 ## 本地构建
 
 ```bash
