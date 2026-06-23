@@ -33,8 +33,27 @@ const latestUpdate = computed<AvailableSystemUpdate | null>(() =>
   updateCheck.value?.latest || null
 )
 
+const displayLatestUpdate = computed<AvailableSystemUpdate | null>(() => {
+  if (latestUpdate.value) return latestUpdate.value
+  if (!currentVersion.value) return null
+  return {
+    version: currentVersion.value.version,
+    commit: currentVersion.value.gitCommit,
+    date: currentVersion.value.buildTime || currentVersion.value.deployedAt,
+    changelog: currentVersion.value.changelog || [],
+    ota: {
+      manifestAvailable: false,
+      manifestUrl: null,
+      artifacts: [],
+      error: updateCheck.value
+        ? '当前版本已是最新版本，未发现新的 OTA 发行包。'
+        : '检查更新后显示 OTA manifest 和包校验信息。'
+    }
+  }
+})
+
 const latestOtaArtifacts = computed(() =>
-  latestUpdate.value?.ota?.artifacts || []
+  displayLatestUpdate.value?.ota?.artifacts || []
 )
 
 const repositoryUnavailable = computed(() =>
@@ -59,7 +78,8 @@ const paginatedTasks = computed(() => {
 const updateActionLabel = computed(() => {
   if (starting.value) return '启动中...'
   if (hasRunningTask.value) return '已有更新任务执行中'
-  if (updateCheck.value && !updateCheck.value.updateAvailable && latestUpdate.value) return '已更新至最新版本'
+  if (updateCheck.value && !updateCheck.value.updateAvailable) return '已更新至最新版本'
+  if (!updateCheck.value) return '检查更新后可操作'
   return '更新到最新版本'
 })
 
@@ -323,7 +343,7 @@ onUnmounted(() => {
           <div class="flex items-start justify-between gap-4">
             <div>
               <h2 class="text-lg font-semibold text-themed">最新版本</h2>
-              <p class="mt-1 text-3xl font-semibold text-themed">{{ latestUpdate?.version || '-' }}</p>
+              <p class="mt-1 text-3xl font-semibold text-themed">{{ displayLatestUpdate?.version || '-' }}</p>
             </div>
             <span
               class="rounded border px-2 py-1 text-xs"
@@ -341,17 +361,17 @@ onUnmounted(() => {
           <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt class="text-themed-muted">Commit</dt>
-              <dd class="mt-1 font-mono text-xs text-themed">{{ latestUpdate?.commit || '-' }}</dd>
+              <dd class="mt-1 font-mono text-xs text-themed">{{ displayLatestUpdate?.commit || '-' }}</dd>
             </div>
             <div>
               <dt class="text-themed-muted">发布时间</dt>
-              <dd class="mt-1 text-themed">{{ formatDate(latestUpdate?.date) }}</dd>
+              <dd class="mt-1 text-themed">{{ formatDate(displayLatestUpdate?.date) }}</dd>
             </div>
           </dl>
           <div class="mt-5">
             <h3 class="text-sm font-medium text-themed">最新版本更新内容</h3>
-            <ul v-if="latestUpdate?.changelog?.length" class="mt-2 list-disc space-y-1 pl-5 text-sm text-themed-muted">
-              <li v-for="item in latestUpdate.changelog" :key="item">{{ item }}</li>
+            <ul v-if="displayLatestUpdate?.changelog?.length" class="mt-2 list-disc space-y-1 pl-5 text-sm text-themed-muted">
+              <li v-for="item in displayLatestUpdate.changelog" :key="item">{{ item }}</li>
             </ul>
             <p v-else class="mt-2 text-sm text-themed-muted">检查更新后显示 release tag 说明。</p>
           </div>
@@ -360,9 +380,9 @@ onUnmounted(() => {
               <h3 class="text-sm font-medium text-themed">OTA 发行包</h3>
               <span
                 class="rounded border px-2 py-0.5 text-xs"
-                :class="latestUpdate?.ota?.manifestAvailable ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
+                :class="displayLatestUpdate?.ota?.manifestAvailable ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
               >
-                {{ latestUpdate?.ota?.manifestAvailable ? '已校验 manifest' : 'Git 更新兼容模式' }}
+                {{ displayLatestUpdate?.ota?.manifestAvailable ? '已校验 manifest' : 'Git 更新兼容模式' }}
               </span>
             </div>
             <div v-if="latestOtaArtifacts.length" class="mt-2 space-y-2">
@@ -380,7 +400,7 @@ onUnmounted(() => {
               </div>
             </div>
             <p v-else class="mt-2 text-sm text-themed-muted">
-              {{ latestUpdate?.ota?.error || '检查更新后显示 OTA manifest 和包校验信息。' }}
+              {{ displayLatestUpdate?.ota?.error || '检查更新后显示 OTA manifest 和包校验信息。' }}
             </p>
           </div>
           <button
@@ -417,21 +437,21 @@ onUnmounted(() => {
       </section>
 
       <section class="grid gap-4 xl:grid-cols-[minmax(280px,420px)_1fr]">
-        <div class="rounded-lg border border-themed bg-themed-surface">
+        <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
           <div class="border-b border-themed px-5 py-4">
             <h2 class="text-lg font-semibold text-themed">更新任务</h2>
           </div>
           <div v-if="tasks.length === 0" class="px-5 py-10 text-center text-sm text-themed-muted">暂无更新任务。</div>
-          <div v-else class="divide-y divide-themed">
+          <div v-else class="max-h-[536px] divide-y divide-themed overflow-y-auto">
             <button
               v-for="task in paginatedTasks"
               :key="task.id"
-              class="block w-full px-5 py-4 text-left transition hover:bg-themed-hover"
+              class="block min-h-[76px] w-full px-5 py-3 text-left transition hover:bg-themed-hover"
               :class="selectedTaskId === task.id ? 'bg-themed-hover' : ''"
               @click="selectTask(task)"
             >
               <div class="flex items-center justify-between gap-3">
-                <span class="font-medium text-themed">#{{ task.id }} {{ task.fromVersion || '-' }} -> {{ task.targetVersion }}</span>
+                <span class="truncate font-medium text-themed">#{{ task.id }} {{ task.fromVersion || '-' }} -> {{ task.targetVersion }}</span>
                 <span class="rounded border px-2 py-0.5 text-xs" :class="statusClass(task.status)">
                   {{ statusLabel(task.status) }}
                 </span>
