@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `a361779`
-- Commit date: 2026-06-23
-- Commit subject: Fix atomic OTA install root detection
-- Latest tag: `v0.0.15`
+- Current HEAD: `a0a35fb`
+- Commit date: 2026-06-24
+- Commit subject: Refresh host panel trust certificate
+- Latest tag: `v0.0.16`
 
 ## Unreleased Changes
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions
+
+## v0.0.16
+
+- Release commit: `a0a35fb`
+- Commit date: 2026-06-24
+- Commit subject: Refresh host panel trust certificate
+
+### Other Changes
+
+- Refresh host panel trust certificate `a0a35fb`
+
+### Improvements and Adjustments
+
+- Update version log for v0.0.15 `2a79838`
 
 ## v0.0.15
 
