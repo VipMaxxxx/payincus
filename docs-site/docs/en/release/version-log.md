@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `6a0624a`
+- Current HEAD: `a361779`
 - Commit date: 2026-06-23
-- Commit subject: Clarify Debian host install support
-- Latest tag: `v0.0.14`
+- Commit subject: Fix atomic OTA install root detection
+- Latest tag: `v0.0.15`
 
 ## Unreleased Changes
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions
+
+## v0.0.15
+
+- Release commit: `a361779`
+- Commit date: 2026-06-23
+- Commit subject: Fix atomic OTA install root detection
+
+### Fixes and Stability
+
+- Fix atomic OTA install root detection `a361779`
+
+### Improvements and Adjustments
+
+- Update version log for v0.0.14 `91e5b32`
 
 ## v0.0.14
 

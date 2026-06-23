@@ -6,16 +6,30 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `6a0624a`
+- 当前 HEAD: `a361779`
 - 提交日期: 2026-06-23
-- 提交说明: Clarify Debian host install support
-- 最新 tag: `v0.0.14`
+- 提交说明: Fix atomic OTA install root detection
+- 最新 tag: `v0.0.15`
 
 ## 未发布变更
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本
+
+## v0.0.15
+
+- 发布提交: `a361779`
+- 提交日期: 2026-06-23
+- 提交说明: Fix atomic OTA install root detection
+
+### 修复与稳定性
+
+- Fix atomic OTA install root detection `a361779`
+
+### 改进与调整
+
+- Update version log for v0.0.14 `91e5b32`
 
 ## v0.0.14
 
