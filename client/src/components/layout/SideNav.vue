@@ -8,6 +8,7 @@ import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
 import { isAdminEntry, navMenuItems, type MenuItem } from '@/config/side-nav-items'
 import { dashboardPath } from '@/utils/app-paths'
+import PluginSlot from '@/components/plugins/PluginSlot.vue'
 
 const { t } = useI18n()
 
@@ -289,6 +290,7 @@ function handleLinkClick() {
           <span v-if="!collapsed || mobileOpen" class="truncate">{{ t(item.label || '') }}</span>
         </RouterLink>
       </template>
+      <PluginSlot v-if="!isAdminEntry" slot-name="user.sidebar.extra" :collapsed="collapsed && !mobileOpen" />
     </nav>
 
     <!-- 底部 -->

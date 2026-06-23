@@ -47,6 +47,11 @@ function listRepoFilesRecursively(root: string): string[] {
   return files
 }
 
+function assertIncludesAll(source: string, expected: string[], message: string): void {
+  const missing = expected.filter(value => !source.includes(value))
+  assert.deepEqual(missing, [], message)
+}
+
 const envExample = readRepoFile('.env.example')
 const readme = readRepoFile('README.md')
 const nginxExample = readRepoFile('deploy/nginx-split-intranet.conf.example')
@@ -233,20 +238,56 @@ assert.ok(
     backendServiceExample.includes('Environment=XDG_CACHE_HOME=/opt/incudal/.cache') &&
     backendServiceExample.includes('WorkingDirectory=/opt/incudal/current') &&
     backendServiceExample.includes('NoNewPrivileges=false') &&
-    backendServiceExample.includes('ReadWritePaths=/opt/incudal /opt/incudal/current /opt/incudal/releases /opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs') &&
     backendServiceExample.includes('pnpm exec prisma migrate deploy') &&
     !backendServiceExample.includes('npx prisma'),
   'systemd backend example must keep runtime cache paths writable, allow restricted online-update sudo, and run locked local Prisma migrations under ProtectSystem=strict'
+)
+assertIncludesAll(
+  backendServiceExample,
+  [
+    'ReadWritePaths=',
+    '/opt/incudal',
+    '/opt/incudal/current',
+    '/opt/incudal/releases',
+    '/opt/incudal/server/certs',
+    '/opt/incudal/plugins',
+    '/opt/incudal/plugin-data',
+    '/opt/incudal/plugin-logs',
+    '/opt/incudal/plugin-staging',
+    '/opt/incudal/.npm',
+    '/opt/incudal/.cache',
+    '/opt/incudal/.git',
+    '/opt/incudal/update-logs'
+  ],
+  'systemd backend example must keep all runtime, cache, git, update and plugin paths writable'
 )
 assert.ok(
     installPanel.includes('Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm') &&
     installPanel.includes('Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache') &&
     installPanel.includes('app_dir="${INSTALL_DIR}/current"') &&
     installPanel.includes('NoNewPrivileges=false') &&
-    installPanel.includes('ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs') &&
     installPanel.includes('pnpm exec prisma migrate deploy') &&
     !installPanel.includes('npx prisma'),
   'install script systemd service must keep runtime cache paths writable, allow restricted online-update sudo, and run locked local Prisma migrations under ProtectSystem=strict'
+)
+assertIncludesAll(
+  installPanel,
+  [
+    'ReadWritePaths=',
+    '${INSTALL_DIR}',
+    '${INSTALL_DIR}/current',
+    '${INSTALL_DIR}/releases',
+    '${INSTALL_DIR}/server/certs',
+    '${INSTALL_DIR}/plugins',
+    '${INSTALL_DIR}/plugin-data',
+    '${INSTALL_DIR}/plugin-logs',
+    '${INSTALL_DIR}/plugin-staging',
+    '${INSTALL_DIR}/.npm',
+    '${INSTALL_DIR}/.cache',
+    '${INSTALL_DIR}/.git',
+    '${INSTALL_DIR}/update-logs'
+  ],
+  'install script systemd service must keep all runtime, cache, git, update and plugin paths writable'
 )
 
 assert.ok(viteConfig.includes('const devPort = Number(process.env.VITE_DEV_PORT || 3000)'), 'Vite dev server must default frontend port to 3000')

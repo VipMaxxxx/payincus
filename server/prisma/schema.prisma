@@ -161,6 +161,33 @@ enum SystemUpdateTaskStatus {
   rolled_back
 }
 
+enum PluginStatus {
+  installed
+  enabled
+  disabled
+  failed
+}
+
+enum PluginInstallTaskStatus {
+  pending
+  running
+  success
+  failed
+}
+
+enum PluginInstallTaskAction {
+  upload_install
+  market_install
+  enable
+  disable
+  uninstall
+}
+
+enum PluginSourceType {
+  upload
+  market
+}
+
 // ==================== 恢复任务模型 ====================
 
 model RestoreTask {
@@ -467,6 +494,11 @@ model User {
   instanceAuditScans InstanceAuditScan[] @relation("InstanceAuditScanUser")
   instanceAuditActions InstanceAuditAction[] @relation("InstanceAuditActionUser")
   systemUpdateTasks SystemUpdateTask[] @relation("SystemUpdateTaskStarter")
+  pluginsInstalled Plugin[] @relation("PluginInstaller")
+  pluginsEnabled Plugin[] @relation("PluginEnabler")
+  pluginInstallTasks PluginInstallTask[] @relation("PluginInstallTaskStarter")
+  pluginEventLogs PluginEventLog[] @relation("PluginEventLogUser")
+  pluginUserData PluginUserData[] @relation("PluginUserDataUser")
 
   @@map("users")
 }
@@ -1445,6 +1477,144 @@ model SystemUpdateTask {
   @@index([startedByUserId])
   @@index([createdAt])
   @@map("system_update_tasks")
+}
+
+model Plugin {
+  id                Int          @id @default(autoincrement())
+  pluginId          String       @unique @map("plugin_id")
+  name              String
+  status            PluginStatus @default(installed)
+  enabled           Boolean      @default(false)
+  currentVersion    String?      @map("current_version")
+  sourceType        PluginSourceType @default(upload) @map("source_type")
+  sourceRepo        String?      @map("source_repo")
+  installedByUserId Int          @map("installed_by_user_id")
+  enabledByUserId   Int?         @map("enabled_by_user_id")
+  enabledAt         DateTime?    @map("enabled_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  installedBy User @relation("PluginInstaller", fields: [installedByUserId], references: [id], onDelete: Restrict)
+  enabledBy User? @relation("PluginEnabler", fields: [enabledByUserId], references: [id], onDelete: SetNull)
+  versions PluginVersion[]
+  configs PluginConfig[]
+  tasks PluginInstallTask[]
+  eventLogs PluginEventLog[]
+  userData PluginUserData[]
+
+  @@index([status])
+  @@index([enabled])
+  @@index([sourceType])
+  @@index([installedByUserId])
+  @@map("plugins")
+}
+
+model PluginVersion {
+  id            Int      @id @default(autoincrement())
+  pluginId      String   @map("plugin_id")
+  version       String
+  manifest      Json
+  packageSha256 String   @map("package_sha256")
+  installPath   String   @map("install_path")
+  installedAt   DateTime @default(now()) @map("installed_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+
+  @@unique([pluginId, version])
+  @@index([pluginId])
+  @@map("plugin_versions")
+}
+
+model PluginInstallTask {
+  id              Int                     @id @default(autoincrement())
+  pluginId        String?                 @map("plugin_id")
+  action          PluginInstallTaskAction
+  status          PluginInstallTaskStatus @default(pending)
+  sourceType      PluginSourceType        @default(upload) @map("source_type")
+  sourceUrl       String?                 @map("source_url")
+  logPath         String?                 @map("log_path")
+  errorMessage    String?                 @map("error_message")
+  startedByUserId Int                     @map("started_by_user_id")
+  startedAt       DateTime?               @map("started_at")
+  finishedAt      DateTime?               @map("finished_at")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+
+  plugin Plugin? @relation(fields: [pluginId], references: [pluginId], onDelete: SetNull)
+  startedBy User @relation("PluginInstallTaskStarter", fields: [startedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([pluginId])
+  @@index([status])
+  @@index([action])
+  @@index([startedByUserId])
+  @@index([createdAt])
+  @@map("plugin_install_tasks")
+}
+
+model PluginConfig {
+  id             Int      @id @default(autoincrement())
+  pluginId       String   @map("plugin_id")
+  key            String
+  valueEncrypted String?  @map("value_encrypted")
+  valueJson      Json?    @map("value_json")
+  isSecret       Boolean  @default(false) @map("is_secret")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+
+  @@unique([pluginId, key])
+  @@index([pluginId])
+  @@map("plugin_configs")
+}
+
+model PluginMarketSource {
+  id        Int      @id @default(autoincrement())
+  name      String
+  url       String   @unique
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled])
+  @@map("plugin_market_sources")
+}
+
+model PluginEventLog {
+  id        Int      @id @default(autoincrement())
+  pluginId  String   @map("plugin_id")
+  userId    Int?     @map("user_id")
+  action    String
+  result    String
+  message   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+  user User? @relation("PluginEventLogUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([pluginId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("plugin_event_logs")
+}
+
+model PluginUserData {
+  id        Int      @id @default(autoincrement())
+  pluginId  String   @map("plugin_id")
+  userId    Int      @map("user_id")
+  key       String
+  valueJson Json     @default("{}") @map("value_json")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+  user User @relation("PluginUserDataUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pluginId, userId, key])
+  @@index([pluginId])
+  @@index([userId])
+  @@map("plugin_user_data")
 }
 
 model InstanceAuditRule {

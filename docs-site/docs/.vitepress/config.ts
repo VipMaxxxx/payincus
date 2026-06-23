@@ -4,6 +4,7 @@ const zhNav = [
   { text: '开始', link: '/guide/introduction' },
   { text: '部署', link: '/deployment/one-click-install' },
   { text: '后台 OTA', link: '/guide/ota-update' },
+  { text: '插件', link: '/plugins/overview' },
   { text: '版本日志', link: '/release/version-log' },
   { text: 'API', link: '/api/overview' },
   {
@@ -19,6 +20,7 @@ const enNav = [
   { text: 'Start', link: '/en/guide/introduction' },
   { text: 'Deploy', link: '/en/deployment/one-click-install' },
   { text: 'Admin OTA', link: '/en/guide/ota-update' },
+  { text: 'Plugins', link: '/en/plugins/overview' },
   { text: 'Version Log', link: '/en/release/version-log' },
   { text: 'API', link: '/en/api/overview' },
   {
@@ -66,6 +68,16 @@ const zhSidebar = [
     ]
   },
   {
+    text: '插件开发',
+    items: [
+      { text: '插件中心', link: '/plugins/overview' },
+      { text: '开发指南', link: '/plugins/development' },
+      { text: 'Manifest', link: '/plugins/manifest' },
+      { text: '客户端扩展点', link: '/plugins/client-extensions' },
+      { text: '插件模板', link: '/plugins/templates' }
+    ]
+  },
+  {
     text: '发布与排障',
     items: [
       { text: '发布说明', link: '/release/changelog' },
@@ -108,6 +120,16 @@ const enSidebar = [
       { text: 'Hosting and Resource Pools', link: '/en/features/resource-hosting' },
       { text: 'Agent', link: '/en/agent/install' },
       { text: 'API Overview', link: '/en/api/overview' }
+    ]
+  },
+  {
+    text: 'Plugin Development',
+    items: [
+      { text: 'Plugin Center', link: '/en/plugins/overview' },
+      { text: 'Development Guide', link: '/en/plugins/development' },
+      { text: 'Manifest', link: '/en/plugins/manifest' },
+      { text: 'Client Extensions', link: '/en/plugins/client-extensions' },
+      { text: 'Plugin Templates', link: '/en/plugins/templates' }
     ]
   },
   {

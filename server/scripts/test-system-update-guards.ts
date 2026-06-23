@@ -159,6 +159,13 @@ assert.ok(
   'online update and rollback must preserve runtime assets and verify the split deployment'
 )
 
+for (const runtimeDir of ['plugins', 'plugin-data', 'plugin-logs', 'plugin-staging']) {
+  assert.ok(runTask.includes(runtimeDir), `online updater must preserve plugin runtime dir: ${runtimeDir}`)
+  assert.ok(rollbackTask.includes(runtimeDir), `online rollback must recreate plugin runtime dir: ${runtimeDir}`)
+  assert.ok(installPanel.includes(runtimeDir), `install panel must create plugin runtime dir: ${runtimeDir}`)
+  assert.ok(backendService.includes(runtimeDir), `backend service must permit plugin runtime dir: ${runtimeDir}`)
+}
+
 assert.ok(
   releaseWorkflow.includes('cp scripts/apply-online-update.sh release/scripts/') &&
     releaseWorkflow.includes("fs.writeFileSync('release/version.json'") &&

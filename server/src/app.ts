@@ -85,6 +85,8 @@ import userInviteRoutes from './routes/user-invites.js'
 import vipLevelRoutes from './routes/vip-levels.js'
 import vipBenefitRoutes from './routes/vip-benefits.js'
 import systemUpdateRoutes from './routes/system-update.js'
+import adminPluginRoutes from './routes/admin-plugins.js'
+import pluginRoutes from './routes/plugins.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -493,6 +495,8 @@ await fastify.register(userInviteRoutes, { prefix: '/api/user-invites' })
 await fastify.register(vipLevelRoutes)
 await fastify.register(vipBenefitRoutes)
 await fastify.register(systemUpdateRoutes, { prefix: '/api/admin/system-update' })
+await fastify.register(adminPluginRoutes, { prefix: '/api/admin/plugins' })
+await fastify.register(pluginRoutes, { prefix: '/api/plugins' })
 
 const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
 

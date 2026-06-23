@@ -34,6 +34,7 @@ PayIncus 是基于开源项目 [VipMaxxxx/incudal](https://github.com/VipMaxxxx/
 - 实例交付：基于 Incus 创建和管理 LXC / KVM 实例，支持 NAT 网络、IPv6、系统镜像、套餐资源和节点绑定。
 - 用户后台：注册登录、控制台、实例详情、终端 WebSocket、工单、公告、通知、邀请、钱包、邮箱和托管节点。
 - 管理后台：用户、套餐、节点、镜像、订单、日志、OAuth、Telegram、邮件、系统配置、资源池和统计。
+- 插件中心：后台上传安装、GitHub 插件市场安装、启用/停用/卸载、配置维护、任务日志、用户端扩展点和开发模板。
 - 计费账务：余额、充值、支付回调、消费记录、返利、积分、VIP 等级和会员福利。
 - 宿主机 Agent：安装脚本、心跳、资源上报、实例报告、流量统计和二进制下载代理。
 - 生产安全：JWT、Cookie、CORS、CSP、Helmet、SSRF 防护、文件上传校验、支付签名/IP 白名单和敏感日志脱敏。
@@ -47,6 +48,7 @@ server/                 Fastify + Prisma 后端
 agent/                  Go 宿主机 Agent
 server/prisma/          Prisma schema 与 migrations
 server/templates/       Agent / 节点安装模板
+plugin-templates/       插件开发模板
 deploy/                 systemd 与 Nginx 分离部署模板
 scripts/                安装、构建、预检和 smoke 脚本
 ```
@@ -235,7 +237,7 @@ pnpm verify:split:host
 - 如果更新已创建备份但后续应用、重启或验证失败，worker 会尝试自动回滚到备份版本，并把失败现场保存在 `/opt/incudal.failed-update.<timestamp>` 便于排查。
 - 可执行 `bash scripts/migrate-ota-atomic-layout.sh` 将部署迁移为原子 OTA 布局：`/opt/incudal/current` 指向当前 release，`/opt/incudal/releases/<version>` 保存各版本，systemd 运行 `current` 指针。迁移后 artifact 更新会先解压到新的 release 目录，再切换 `current`；失败回滚只需切回上一版 release。
 - 原子 OTA 布局下，成功更新会把上一版 release 路径记录到任务 `backupPath`；管理后台回滚会把 `current` 切回该路径，重启后端，并重新执行 split host 验证。
-- 更新期间会保留 `.env`、`server/certs`、`agent-release`、`.npm` 和 `.cache` 等运行态资产。
+- 更新期间会保留 `.env`、`server/certs`、`agent-release`、`plugins`、`plugin-data`、`plugin-logs`、`plugin-staging`、`.npm` 和 `.cache` 等运行态资产。
 
 推荐生产环境变量：
 
@@ -248,6 +250,42 @@ SYSTEM_UPDATE_APPLY_MODE=auto
 # 私有仓库或 API 限流时配置，public release 可留空
 SYSTEM_UPDATE_RELEASE_TOKEN=
 ```
+
+## 插件中心
+
+插件中心位于管理后台：
+
+```text
+https://demoadmin.payincus.com/admin/plugins
+```
+
+核心能力：
+
+- 上传 `.tar.gz` 插件包安装，安装前校验 `payincus.plugin.json`、路径安全、入口文件和 SHA256。
+- 从 GitHub 托管的插件市场索引安装，只允许 GitHub Release artifact 下载地址。
+- 后台启用、停用、卸载插件，查看安装任务和日志。
+- 插件可以声明后台配置页、用户端页面、用户侧边栏等白名单扩展点。
+- OTA 更新和回滚会保留插件安装目录、插件数据目录和插件日志目录。
+
+推荐生产环境变量：
+
+```env
+PLUGIN_MANAGER_ALLOWED_ADMIN_IDS=1
+PLUGIN_MARKET_INDEX_URL=
+PLUGIN_INSTALL_DIR=/opt/incudal/plugins
+PLUGIN_DATA_DIR=/opt/incudal/plugin-data
+PLUGIN_LOG_DIR=/opt/incudal/plugin-logs
+PLUGIN_STAGING_DIR=/opt/incudal/plugin-staging
+PLUGIN_MAX_PACKAGE_SIZE_MB=20
+```
+
+插件模板位于 `plugin-templates/`：
+
+- `basic-admin-plugin`：只有后台配置页。
+- `user-sidebar-plugin`：用户端侧边栏入口和用户页面。
+- `admin-user-mixed-plugin`：后台配置页、用户页面和安装模板。
+
+第三方开发者应从 `docs-site/docs/plugins/overview.md` 和 `docs-site/docs/en/plugins/overview.md` 开始阅读。
 
 后台页面路径：
 
@@ -407,6 +445,7 @@ pnpm docs:build
 - 系统架构：`docs-site/docs/guide/architecture.md`
 - 前后台分离：`docs-site/docs/guide/split-deployment.md`
 - 后台 OTA：`docs-site/docs/guide/ota-update.md`
+- 插件开发：`docs-site/docs/plugins/overview.md`
 - 生产验收：`docs-site/docs/deployment/production-checklist.md`
 - 系统版本更新日志：`docs-site/docs/release/version-log.md`、`docs-site/docs/en/release/version-log.md`
 

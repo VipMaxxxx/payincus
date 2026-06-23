@@ -1,0 +1,23 @@
+{
+  "id": "com.example.user-sidebar",
+  "name": "User Sidebar Example",
+  "version": "1.0.0",
+  "payincus": ">=0.0.12",
+  "description": "Adds a user sidebar page through a controlled client extension slot.",
+  "author": "Example",
+  "entrypoints": {
+    "adminPages": [],
+    "userPages": [
+      {
+        "slot": "user.sidebar.extra",
+        "title": "Example Page",
+        "path": "/plugins/example-page",
+        "entry": "dist/user/index.html",
+        "requiresAuth": true
+      }
+    ]
+  },
+  "permissions": ["plugin:config:read"],
+  "configSchema": {},
+  "templates": []
+}

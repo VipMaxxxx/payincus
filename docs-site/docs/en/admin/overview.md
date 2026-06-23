@@ -46,8 +46,14 @@ https://demoadmin.payincus.com
 - Popup announcements.
 - Telegram integration.
 
+## Plugin Center
+
+`/admin/plugins` lets administrators upload plugin packages, install from a GitHub-hosted market index, enable or disable plugins, edit plugin configuration and inspect install task logs.
+
 ## OTA
 
 `/admin/system-update` shows current version, tag, commit, build time, deployment time, release notes, task logs and rollback controls.
+
+OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
 Verification must prove that regular users cannot enter the admin console and that the admin bundle does not include user self-service workflows.

@@ -75,7 +75,11 @@ import type {
   TelegramWebhookSetupResponse,
   VersionMetadata,
   SystemUpdateCheckResult,
-  SystemUpdateTask
+  SystemUpdateTask,
+  PluginRecord,
+  PluginTask,
+  PluginMarketEntry,
+  PluginConfigValue
 } from '@/types/api.js'
 
 export type VipRuleType = 'user' | 'hosting'
@@ -2076,6 +2080,45 @@ const api = {
       http.post('/admin/system-update/start', { targetVersion }, { timeout: TIMEOUT.LONG }),
     rollback: (id: number): Promise<{ taskId: number; logPath: string }> =>
       http.post(`/admin/system-update/tasks/${id}/rollback`, {}, { timeout: TIMEOUT.LONG })
+  },
+
+  plugins: {
+    list: (): Promise<{ plugins: PluginRecord[] }> =>
+      http.get('/admin/plugins'),
+    get: (pluginId: string): Promise<{
+      plugin: PluginRecord
+      versions: Array<PluginRecord['latestVersion']>
+      configs: PluginConfigValue[]
+      tasks: PluginTask[]
+      eventLogs: Array<{ id: number; pluginId: string; userId: number | null; action: string; result: string; message: string | null; createdAt: string }>
+    }> =>
+      http.get(`/admin/plugins/${pluginId}`),
+    market: (): Promise<{ plugins: PluginMarketEntry[] }> =>
+      http.get('/admin/plugins/market'),
+    upload: (file: File): Promise<{ task: PluginTask | null }> => {
+      const form = new FormData()
+      form.append('package', file)
+      return http.post('/admin/plugins/upload', form, {
+        timeout: TIMEOUT.LONG,
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    },
+    installFromMarket: (pluginId: string): Promise<{ task: PluginTask | null }> =>
+      http.post('/admin/plugins/market/install', { pluginId }, { timeout: TIMEOUT.LONG }),
+    enable: (pluginId: string): Promise<{ plugin: PluginRecord }> =>
+      http.post(`/admin/plugins/${pluginId}/enable`, {}, { timeout: TIMEOUT.LONG }),
+    disable: (pluginId: string): Promise<{ plugin: PluginRecord }> =>
+      http.post(`/admin/plugins/${pluginId}/disable`, {}, { timeout: TIMEOUT.LONG }),
+    uninstall: (pluginId: string): Promise<{ message: string }> =>
+      http.delete(`/admin/plugins/${pluginId}`, { timeout: TIMEOUT.LONG }),
+    getConfig: (pluginId: string): Promise<{ configs: PluginConfigValue[] }> =>
+      http.get(`/admin/plugins/${pluginId}/config`),
+    updateConfig: (pluginId: string, configs: Array<{ key: string; value: unknown; isSecret?: boolean }>): Promise<{ configs: PluginConfigValue[] }> =>
+      http.put(`/admin/plugins/${pluginId}/config`, { configs }),
+    listTasks: (): Promise<{ tasks: PluginTask[] }> =>
+      http.get('/admin/plugins/tasks'),
+    getTaskLogs: (id: number): Promise<{ logs: string }> =>
+      http.get(`/admin/plugins/tasks/${id}/logs`)
   },
 
   // Storage Configs (远程存储配置)

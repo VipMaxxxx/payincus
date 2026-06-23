@@ -43,6 +43,7 @@ export const LogModule = {
   PERSONAL: 'personal',
   SSH_KEY: 'ssh_key',
   NOTIFICATION: 'notification',
+  PLUGIN: 'plugin',
   SYSTEM: 'system',
   AUTH: 'auth'
 } as const

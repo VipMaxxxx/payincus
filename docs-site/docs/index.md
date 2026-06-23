@@ -33,8 +33,8 @@ features:
     details: 宿主机 Agent 提供心跳、资源、实例、流量和二进制下载代理链路。
   - title: 生产预检
     details: 内置 split host、生产配置、响应头、日志暴露和最终验收脚本。
-  - title: 社区入口
-    details: 通过 GitHub 和 Telegram 交流群获取发布、部署和维护信息。
+  - title: 插件中心
+    details: 支持上传安装、GitHub 插件市场、启用管理、用户端扩展点和开发模板。
 ---
 
 ## 快速入口
@@ -69,6 +69,7 @@ features:
 
 - [用户端功能](/user/dashboard)：客户控制台、实例、终端、钱包、邀请、工单、通知和自助模块。
 - [管理后台功能](/admin/overview)：用户、实例、账务、支付、通知、系统配置和 OTA。
+- [插件开发](/plugins/overview)：插件中心、manifest、前后台扩展点、安装模板和第三方开发流程。
 - [实例与资源交付](/features/instances)：从下单、计费、Incus 创建到 Agent 上报的完整链路。
 - [支付与账务](/features/billing)：充值、回调、余额、返利、兑换码和后台账务审计。
 - [通知、工单与帮助](/features/communication)：站内信、SMTP、Telegram、Lsky、工单和帮助中心。

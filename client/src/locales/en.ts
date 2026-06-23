@@ -205,6 +205,7 @@ export default {
         expand: 'Expand',
         system: 'System',
         systemUpdate: 'Version Update',
+        plugins: 'Plugin Center',
         users: 'Users',
         statistics: 'Statistics',
         hosts: 'Hosts',

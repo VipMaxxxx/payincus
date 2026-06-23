@@ -206,6 +206,118 @@ export interface SystemUpdateTask {
   updatedAt: string
 }
 
+export type PluginStatus = 'installed' | 'enabled' | 'disabled' | 'failed'
+export type PluginSourceType = 'upload' | 'market'
+export type PluginTaskStatus = 'pending' | 'running' | 'success' | 'failed'
+export type PluginTaskAction = 'upload_install' | 'market_install' | 'enable' | 'disable' | 'uninstall'
+
+export interface PluginPageManifest {
+  slot: string
+  title: string
+  entry: string
+  path?: string | null
+  requiresAuth?: boolean
+}
+
+export interface PluginTemplateManifest {
+  name: string
+  path: string
+}
+
+export interface PayIncusPluginManifest {
+  id: string
+  name: string
+  version: string
+  payincus: string
+  description?: string
+  author?: string
+  homepage?: string
+  entrypoints: {
+    adminPages?: PluginPageManifest[]
+    userPages?: PluginPageManifest[]
+  }
+  permissions?: string[]
+  configSchema?: Record<string, unknown>
+  templates?: PluginTemplateManifest[]
+}
+
+export interface PluginVersion {
+  id: number
+  pluginId: string
+  version: string
+  manifest: PayIncusPluginManifest
+  packageSha256: string
+  installPath: string
+  installedAt: string
+}
+
+export interface PluginRecord {
+  id: number
+  pluginId: string
+  name: string
+  status: PluginStatus
+  enabled: boolean
+  currentVersion: string | null
+  sourceType: PluginSourceType
+  sourceRepo: string | null
+  installedByUsername: string | null
+  enabledByUsername: string | null
+  enabledAt: string | null
+  createdAt: string
+  updatedAt: string
+  latestVersion: PluginVersion | null
+}
+
+export interface PluginTask {
+  id: number
+  pluginId: string | null
+  action: PluginTaskAction
+  status: PluginTaskStatus
+  sourceType: PluginSourceType
+  sourceUrl: string | null
+  logPath: string | null
+  errorMessage: string | null
+  startedByUserId: number
+  startedByUsername: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PluginConfigValue {
+  id: number
+  pluginId: string
+  key: string
+  value: unknown
+  isSecret: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PluginMarketEntry {
+  id: string
+  name: string
+  latest: string
+  repo: string
+  manifestUrl: string
+  downloadUrl: string
+  sha256: string
+  description?: string
+  author?: string
+}
+
+export interface PluginClientExtension {
+  pluginId: string
+  pluginName: string
+  version: string | null
+  slot: string
+  title: string
+  path: string | null
+  requiresAuth: boolean
+  url: string
+}
+
 // ==================== 用户相关 ====================
 
 export interface User {

@@ -6,12 +6,20 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `8d89da3`
+- Current HEAD: `9b9b40f`
 - Commit date: 2026-06-23
-- Commit subject: Add bilingual PayIncus documentation site
+- Commit subject: Fix GitHub Pages docs workflow
 - Latest tag: `v0.0.11`
 
 ## Unreleased Changes
+
+### Fixes and Stability
+
+- Fix GitHub Pages docs workflow `9b9b40f`
+
+### Other Changes
+
+- Deploy docs site with GitHub Pages `9d6cd2b`
 
 ### New Capabilities
 

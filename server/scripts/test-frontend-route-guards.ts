@@ -30,6 +30,8 @@ const adminMainSource = readRepoFile('client/src/admin/main.ts')
 const publicHeaderSource = readRepoFile('client/src/components/public/PublicSiteHeader.vue')
 const publicFooterSource = readRepoFile('client/src/components/public/PublicSiteFooter.vue')
 const sideNavSource = readRepoFile('client/src/components/layout/SideNav.vue')
+const pluginSlotSource = readRepoFile('client/src/components/plugins/PluginSlot.vue')
+const pluginFrameSource = readRepoFile('client/src/components/plugins/PluginFrame.vue')
 const sideNavUserItemsSource = readRepoFile('client/src/config/side-nav-items-user.ts')
 const sideNavAdminItemsSource = readRepoFile('client/src/config/side-nav-items-admin.ts')
 const passwordSectionSource = readRepoFile('client/src/components/profile/PasswordSection.vue')
@@ -227,6 +229,15 @@ const userAuthenticatedRoutesWithoutUserGuard = Array.from(
 assert.ok(!userRouterSource.includes("path: '/admin"), 'customer router must not expose /admin routes')
 assert.ok(!userRouterSource.includes('@/views/admin/'), 'customer router must not import admin views')
 assert.ok(!userRouterSource.includes('requiresAdmin'), 'customer router must not carry admin-only route metadata')
+assert.ok(
+  userRouterSource.includes("path: '/plugins/:pathMatch(.*)*'") &&
+    userRouterSource.includes('@/views/PluginPageView.vue') &&
+    userRouterSource.includes('requiresUser: true') &&
+    adminRouterSource.includes("path: '/admin/plugins'") &&
+    adminRouterSource.includes('@/views/admin/PluginCenterView.vue') &&
+    !userRouterSource.includes('@/views/admin/PluginCenterView.vue'),
+  'plugin center must keep admin management under /admin/plugins while exposing only user plugin pages in the customer router'
+)
 assert.deepEqual(
   userAuthenticatedRoutesWithoutUserGuard,
   [],
@@ -356,6 +367,16 @@ assert.deepEqual(
   [],
   'customer API client must not contain admin endpoint strings or admin API namespaces'
 )
+assert.ok(
+  userApiSource.includes('/plugins/enabled-client-extensions') &&
+    userApiSource.includes('/plugins/${pluginId}/config/public') &&
+    userApiSource.includes('/plugins/${pluginId}/actions/${action}') &&
+    !userApiSource.includes('/admin/plugins') &&
+    adminApiSource.includes('/admin/plugins') &&
+    adminApiSource.includes('/admin/plugins/upload') &&
+    adminApiSource.includes('/admin/plugins/market/install'),
+  'plugin API clients must keep user extension APIs separate from admin plugin management APIs'
+)
 assert.deepEqual(
   customerApiForbiddenAdminMarkers.filter(marker => userApiSource.includes(marker)),
   [],
@@ -436,6 +457,11 @@ assert.ok(
     sideNavSource.includes("if (item.name === 'dashboard') return route.path === navDashboardPath") &&
     !sideNavSource.includes("return route.path === '/dashboard'") &&
     sideNavSource.includes('let baseItems = [...navMenuItems]') &&
+    sideNavSource.includes('PluginSlot') &&
+    sideNavSource.includes('v-if="!isAdminEntry"') &&
+    sideNavSource.includes('slot-name="user.sidebar.extra"') &&
+    pluginSlotSource.includes('getEnabledClientExtensions') &&
+    pluginFrameSource.includes('sandbox=') &&
     sideNavUserItemsSource.includes("path: '/resources/hosts'") &&
     sideNavUserItemsSource.includes("path: '/resources/packages'") &&
     !sideNavUserItemsSource.includes('/admin/') &&

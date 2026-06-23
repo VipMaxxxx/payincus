@@ -162,6 +162,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.extensions', title: '扩展' }
   },
   {
+    path: '/plugins/:pathMatch(.*)*',
+    name: 'plugin-page',
+    component: () => import('@/views/PluginPageView.vue'),
+    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.plugins', title: '插件' }
+  },
+  {
     path: '/logs',
     name: 'logs',
     component: () => import('@/views/LogsView.vue'),

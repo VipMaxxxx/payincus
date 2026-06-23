@@ -1,0 +1,404 @@
+# PayIncus / Incudal Handoff
+
+Last updated: 2026-06-23 CST
+
+This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
+
+## Repository
+
+- Local path: `/Users/max/Documents/incudal`
+- Main product repository: `git@github.com:VipMaxxxx/payincus.git`
+- Current local branch: `master`
+- Target remote branch: `payincus/main`
+- Upstream original project: `git@github.com:VipMaxxxx/payincus.git`
+- Important ledger: `docs/production-audit.md`
+
+## Current Git State
+
+At the time this handoff was written, local `HEAD` was:
+
+```text
+9b9b40f Fix GitHub Pages docs workflow
+```
+
+GitHub remote `payincus/main` was also updated directly through the GitHub connector with:
+
+```text
+9b9b40f Fix GitHub Pages docs workflow
+```
+
+Local uncommitted changes now include the plugin center implementation, plugin templates, plugin docs, OTA/runtime directory preservation updates, and regenerated docs version logs.
+
+Previously possible docs-only files were:
+
+```text
+.github/workflows/docs-pages.yml
+docs-site/docs/release/version-log.md
+docs-site/docs/en/release/version-log.md
+```
+
+Recommended first step in a new session or user terminal:
+
+```bash
+cd /Users/max/Documents/incudal
+git status
+git pull --rebase --autostash payincus main
+```
+
+If Git reports conflicts or blocks because of staged local changes, inspect with:
+
+```bash
+git status
+git diff --cached --stat
+git diff --stat
+```
+
+Do not reset or discard changes unless the user explicitly approves.
+
+## Product Split Status
+
+The user portal and admin console are split into independent Vite entries and builds.
+
+Key files:
+
+- User router: `client/src/router/user.ts`
+- Admin router: `client/src/router/admin.ts`
+- Admin entry: `client/src/admin/`
+- Admin login view: `client/src/views/admin/AdminLoginView.vue`
+- User API client: `client/src/api/index.ts`
+- Admin API client: `client/src/api/admin.ts`
+- User build output: `client/dist/user`
+- Admin build output: `client/dist/admin`
+
+Boundary status:
+
+- User authenticated routes require ordinary-user identity.
+- Admin accounts are blocked from user-only pages.
+- Regular users are blocked from admin pages.
+- Admin login is `/admin/login`.
+- Legacy admin `/login` only redirects to `/admin/login`.
+- User bundle should not contain admin entrypoints, admin API, admin routes, or admin wording.
+- Admin bundle should not contain user self-service features such as wallet recharge, friends, transfers, check-in, package sharing, resource pool self-service, mail subscription self-service, or hosting balance self-service.
+
+Important guards:
+
+```bash
+pnpm --filter server test:frontend-route-guards
+pnpm --filter server test:frontend-dist-boundary-guards
+```
+
+## OTA Status
+
+Admin OTA is implemented and proven live through release artifacts and atomic release layout.
+
+Important features completed:
+
+- Admin version page shows current version, tag, commit, release notes, task logs, update and rollback controls.
+- Release OTA artifact mode uses GitHub Release manifest, size check and SHA256.
+- Atomic layout is supported:
+
+```text
+/opt/incudal/current -> /opt/incudal/releases/<version-timestamp>
+/opt/incudal/releases/v0.0.10-...
+/opt/incudal/releases/v0.0.11-...
+```
+
+Live proof already completed:
+
+- Updated through artifact path to `v0.0.10`.
+- Migrated production to atomic OTA layout.
+- Updated to `v0.0.11`.
+- Rolled back to previous release.
+- Updated forward again to `v0.0.11`.
+
+Key tags:
+
+- `v0.0.1`: OTA baseline.
+- `v0.0.3`: git safe-directory fix.
+- `v0.0.7` / `v0.0.8`: verified OTA artifact path.
+- `v0.0.10` / `v0.0.11`: atomic OTA release layout and rollback proof.
+
+## Plugin Center Status
+
+Plugin center development is implemented locally but not yet committed, pushed, tagged or released as an OTA version.
+
+Implemented backend scope:
+
+- Prisma schema and migration for plugins, plugin versions, install tasks, plugin configs, market sources, event logs and user plugin data.
+- Admin API under `/api/admin/plugins` for list/detail, upload install, GitHub market install, enable, disable, uninstall, config and task logs.
+- User API under `/api/plugins` for enabled client extensions, public config, plugin action placeholder and sandboxed plugin assets.
+- Package validation for `.tar.gz` uploads, manifest validation, path traversal rejection, link rejection, SHA256 calculation, staging extraction and entry/template file checks.
+- Market index support through `PLUGIN_MARKET_INDEX_URL`, restricted to GitHub-hosted indexes and GitHub Release artifact download URLs with SHA256 verification.
+
+Implemented frontend scope:
+
+- Admin route `/admin/plugins` and plugin center page for upload install, market install, enable/disable/uninstall, config JSON and task log viewing.
+- User route `/plugins/:pathMatch(.*)*` for plugin-provided user pages.
+- User sidebar extension point `user.sidebar.extra` rendered through sandboxed plugin frames.
+- User and admin API clients remain separated; user client does not expose `/admin/plugins`.
+
+Templates and docs:
+
+- `plugin-templates/basic-admin-plugin`
+- `plugin-templates/user-sidebar-plugin`
+- `plugin-templates/admin-user-mixed-plugin`
+- Chinese docs under `docs-site/docs/plugins/`
+- English docs under `docs-site/docs/en/plugins/`
+
+Deployment/OTA changes:
+
+- `.env.example`, `scripts/install-panel.sh`, and `deploy/incudal-backend.service.example` include plugin env vars and runtime directories.
+- Online update and rollback preserve/recreate `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
+
+Important plugin commands:
+
+```bash
+pnpm --filter server test:plugin-center-guards
+pnpm --filter server test:plugin-package-guards
+pnpm --filter server test:plugin-market-guards
+pnpm --filter server test:plugin-client-boundary-guards
+```
+
+Before calling the feature complete for production, it still needs commit, push, release tag, GitHub Release OTA artifact, `pnpm docs:changelog`, docs build, and then a production OTA update proof.
+
+## Documentation Site
+
+Documentation site is implemented under `docs-site/`.
+
+Technology:
+
+- VitePress
+- Chinese default route: `/`
+- English route: `/en/`
+- Auto-generated system version logs from Git tags and commits.
+
+Important files:
+
+- VitePress config: `docs-site/docs/.vitepress/config.ts`
+- Docs package: `docs-site/package.json`
+- Git changelog generator: `docs-site/scripts/generate-changelog.mjs`
+- GitHub Pages workflow: `.github/workflows/docs-pages.yml`
+- GitHub Pages root-domain CNAME: `docs-site/docs/public/CNAME`
+
+Current docs domain:
+
+```text
+https://payincus.com
+https://payincus.com/en/
+```
+
+GitHub Pages deployment:
+
+- Repository: `VipMaxxxx/payincus`
+- Pages source: GitHub Actions
+- Custom domain: `payincus.com`
+- DNS apex records should point to GitHub Pages:
+
+```text
+A @ 185.199.108.153
+A @ 185.199.109.153
+A @ 185.199.110.153
+A @ 185.199.111.153
+```
+
+Optional IPv6:
+
+```text
+AAAA @ 2606:50c0:8000::153
+AAAA @ 2606:50c0:8001::153
+AAAA @ 2606:50c0:8002::153
+AAAA @ 2606:50c0:8003::153
+```
+
+Useful docs commands:
+
+```bash
+pnpm docs:install
+pnpm docs:changelog
+pnpm docs:build
+pnpm docs:preview
+```
+
+Direct docs-site commands:
+
+```bash
+pnpm --dir docs-site install --ignore-workspace
+pnpm --dir docs-site --ignore-workspace build
+pnpm --dir docs-site --ignore-workspace preview
+```
+
+Known docs build behavior:
+
+- `docs-site/docs/.vitepress/dist/`, `.temp/`, and `docs-site/node_modules/` are ignored.
+- `docs-site/pnpm-lock.yaml` should be committed.
+- `docs-site/docs/public/CNAME` must stay `payincus.com`.
+
+## Last Known Verification
+
+Recently passed locally after the plugin center work:
+
+```text
+pnpm --filter client type-check
+pnpm --filter client lint:check
+pnpm --filter server type-check
+pnpm --filter server test:split-deploy-config
+pnpm --filter server test:frontend-route-guards
+pnpm --filter server test:system-update-guards
+pnpm --filter server test:plugin-center-guards
+pnpm --filter server test:plugin-package-guards
+pnpm --filter server test:plugin-market-guards
+pnpm --filter server test:plugin-client-boundary-guards
+pnpm --filter client build
+pnpm build
+pnpm test
+pnpm test:agent
+pnpm docs:changelog
+pnpm --dir docs-site --ignore-workspace build
+git diff --check
+```
+
+Manual plugin package proof also passed with `plugin-templates/admin-user-mixed-plugin` packaged as `.tar.gz` and validated by `validateAndExtractPluginPackage`; result had id `com.example.coupon`, one admin page, one user page, one template and 64-char SHA256.
+
+Earlier full product gates already passed before the docs/plugin work:
+
+```text
+pnpm --filter client build
+pnpm --filter server test:frontend-dist-boundary-guards
+pnpm build
+pnpm --filter server test:frontend-route-guards
+pnpm --filter client lint:check
+pnpm --filter server type-check
+pnpm test
+pnpm test:agent
+git diff --check
+```
+
+Only rerun the full suite when relevant production code changes occur. For docs-only changes, docs build plus link/format checks are usually enough.
+
+## Production Audit Status
+
+`docs/production-audit.md` currently says progress is about 99%.
+
+Completed:
+
+- Non-Docker split deployment path.
+- User/admin frontend split and bundle boundary guards.
+- Local build/test gates.
+- Live HTTPS smoke for the production split hosts.
+- OTA artifact update path.
+- Atomic OTA layout and rollback proof.
+- Bilingual docs site and GitHub Pages deployment.
+
+Not completed:
+
+- Final real production business proof.
+
+Remaining production proof items:
+
+- Real payment provider order and callback.
+- Real Incus create, start, stop, restart, reinstall/recreate, delete.
+- Real Web terminal connection through `/api/ws`.
+- Production Agent install on a real Incus host, with fresh heartbeat, resources, metrics, instance report, and traffic updates.
+- Real SMTP delivery.
+- Real Lsky upload.
+- Real Telegram / notification delivery.
+- Manual browser login smoke through Turnstile, or an explicitly approved temporary Turnstile disable-and-restore smoke.
+
+## Current Server Access Constraint
+
+This Codex environment cannot SSH to the production server.
+
+Last SSH connectivity test:
+
+```text
+ssh: connect to host 147.125.252.103 port 22: Operation not permitted
+```
+
+This is sandbox network restriction, not a password issue.
+
+For any server-side work, ask the user to run commands in their own terminal and paste output. Do not ask them to put passwords into handoff notes.
+
+## Important Production Domains
+
+Current known domains:
+
+- Product/user production: `https://pay.payincus.com`
+- Admin production: previously `https://admin.payincus.com`
+- Test user site in docs: `https://demo.payincus.com`
+- Test admin site in docs: `https://demoadmin.payincus.com`
+- Documentation/root site: `https://payincus.com`
+- Telegram group: `https://t.me/Payincus`
+
+Note: A previous request said `demo.payincus.com` is excluded from production audit scope, but it is still used in public README/docs as a test/demo user portal placeholder.
+
+## Suggested Next Work
+
+1. Sync local Git with remote `payincus/main`.
+2. Confirm GitHub Pages HTTPS is enforced and both `https://payincus.com` and `https://payincus.com/en/` load.
+3. Decide whether to continue improving docs:
+   - Page-by-page admin field explanations.
+   - User workflow screenshots.
+   - API request/response/error reference.
+   - Payment provider setup guide.
+   - Agent install guide with real host commands.
+4. Complete real production proof items from `docs/production-audit.md`.
+5. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+
+## Release Documentation Rule
+
+When a new feature is completed, it must be released as a new OTA version, and GitHub plus the docs site must be kept in sync.
+
+Required AI development lifecycle:
+
+```text
+Implement feature
+  -> run automatic acceptance / guard checks
+  -> run targeted and relevant full tests
+  -> fix any failures
+  -> publish a new OTA version
+  -> regenerate version logs
+  -> update missing Chinese and English docs
+  -> build docs site
+  -> commit and push everything
+```
+
+Required release steps:
+
+1. Commit the code change with a clear commit message that can be used in the public version log.
+2. Create/publish a new OTA tag and GitHub Release artifact. Do not leave completed product features only on `main` without an OTA version.
+3. Regenerate the docs-site version logs:
+
+```bash
+pnpm docs:changelog
+```
+
+This updates:
+
+```text
+docs-site/docs/release/version-log.md
+docs-site/docs/en/release/version-log.md
+```
+
+4. If the OTA changes user-visible behavior, admin behavior, deployment steps, config, API, Agent behavior, payment flow, resource delivery, or troubleshooting behavior, update the matching docs page in `docs-site/docs/` and `docs-site/docs/en/`.
+5. Run the docs build before publishing:
+
+```bash
+pnpm --dir docs-site --ignore-workspace build
+```
+
+6. Commit and push the docs changes so GitHub Pages updates `payincus.com`.
+
+Do not publish an OTA that changes behavior while leaving the public docs and version logs stale. Also do not mark a new feature complete unless its OTA version, Git tag, GitHub Release artifact, docs version log, and any missing feature docs are updated together.
+
+Acceptance rule:
+
+- A feature is not considered complete immediately after code changes.
+- It is complete only after automatic acceptance checks pass, relevant tests pass, the OTA version is published, the version logs are regenerated, and the docs site is updated for any changed behavior.
+- For auth, payment, permissions, OTA, Agent, resource delivery, and production deployment changes, include the relevant guard scripts and document any remaining live proof requirement in `docs/production-audit.md`.
+
+## Safety Notes
+
+- Do not include server passwords, API secrets, payment keys, SMTP passwords, Telegram tokens, Lsky tokens, or GitHub tokens in summaries or docs.
+- Treat auth, payment, permissions, OTA, Agent, and resource delivery as high-risk.
+- Do not revert user changes or staged files without explicit approval.
+- Before changing backend/admin/user boundary code, read existing guards and update tests with the change.

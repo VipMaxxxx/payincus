@@ -6,12 +6,20 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `8d89da3`
+- 当前 HEAD: `9b9b40f`
 - 提交日期: 2026-06-23
-- 提交说明: Add bilingual PayIncus documentation site
+- 提交说明: Fix GitHub Pages docs workflow
 - 最新 tag: `v0.0.11`
 
 ## 未发布变更
+
+### 修复与稳定性
+
+- Fix GitHub Pages docs workflow `9b9b40f`
+
+### 其他变更
+
+- Deploy docs site with GitHub Pages `9d6cd2b`
 
 ### 新增能力
 

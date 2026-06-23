@@ -91,6 +91,43 @@ export const rateLimitRules: RateLimitRule[] = [
         description: '重置密码 - 防止暴力破解验证码'
     },
 
+    // ========== 插件中心 (高风险后台操作) ==========
+    {
+        path: '/api/admin/plugins/upload',
+        method: 'POST',
+        max: 3,
+        timeWindow: '10 minutes',
+        description: '上传安装插件 - 高风险文件操作'
+    },
+    {
+        path: '/api/admin/plugins/market/install',
+        method: 'POST',
+        max: 5,
+        timeWindow: '10 minutes',
+        description: '市场安装插件 - 高风险远程包操作'
+    },
+    {
+        path: '/api/admin/plugins/*/enable',
+        method: 'POST',
+        max: 10,
+        timeWindow: '10 minutes',
+        description: '启用插件'
+    },
+    {
+        path: '/api/admin/plugins/*/disable',
+        method: 'POST',
+        max: 10,
+        timeWindow: '10 minutes',
+        description: '禁用插件'
+    },
+    {
+        path: '/api/admin/plugins/*',
+        method: 'DELETE',
+        max: 5,
+        timeWindow: '10 minutes',
+        description: '卸载插件'
+    },
+
     // ========== 实例操作 (适中限制) ==========
     {
         path: '/api/instances',
