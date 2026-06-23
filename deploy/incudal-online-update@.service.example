@@ -8,17 +8,16 @@ Requires=postgresql.service redis-server.service
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=/opt/incudal
+WorkingDirectory=/opt/incudal/current
 EnvironmentFile=/opt/incudal/.env
 Environment=HOME=/opt/incudal
 Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm
 Environment=XDG_CACHE_HOME=/opt/incudal/.cache
-Environment=INCUDAL_APP_DIR=/opt/incudal
+Environment=INCUDAL_APP_DIR=/opt/incudal/current
 Environment=INSTALL_DIR=/opt/incudal
 Environment=SERVICE_NAME=incudal-backend
-ExecStart=/usr/bin/node /opt/incudal/server/dist/scripts/run-system-update-task.js %i
+ExecStart=/usr/bin/node /opt/incudal/current/server/dist/scripts/run-system-update-task.js %i
 TimeoutStartSec=1800
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=incudal-online-update
-

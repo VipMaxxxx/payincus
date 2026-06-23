@@ -14,6 +14,11 @@ if [[ ! "$TARGET_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; 
   exit 1
 fi
 
+APP_DIR="$INSTALL_DIR"
+if [[ -L "$INSTALL_DIR/current" ]]; then
+  APP_DIR="$INSTALL_DIR/current"
+fi
+
 cd "$INSTALL_DIR"
 
 if [[ ! -d .git ]] || ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -25,6 +30,6 @@ fi
 corepack enable
 corepack prepare pnpm@9.14.2 --activate
 
-INCUDAL_APP_DIR="$INSTALL_DIR" \
+INCUDAL_APP_DIR="$APP_DIR" \
 NODE_ENV="${NODE_ENV:-production}" \
-node server/dist/scripts/start-system-update-task.js "$TARGET_VERSION"
+node "$APP_DIR/server/dist/scripts/start-system-update-task.js" "$TARGET_VERSION"

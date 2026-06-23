@@ -104,6 +104,7 @@ jobs:
           cp scripts/verify-production-readiness.sh release/scripts/
           cp scripts/verify-split-host.sh release/scripts/
           cp scripts/apply-online-update.sh release/scripts/
+          cp scripts/migrate-ota-atomic-layout.sh release/scripts/
 
       # ===== 安装生产依赖 =====
       - name: 安装后端生产依赖

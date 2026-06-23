@@ -183,6 +183,7 @@ deploy/nginx-split-intranet.conf.example
 - Artifact 模式会先备份当前目录，校验 release 包完整性，应用预构建产物，执行 Prisma migration、split host 验证、生产预检和响应头/日志检查。前后台边界守卫在 GitHub Release 打包前执行。
 - Git 兼容模式会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
 - 如果更新已创建备份但后续应用、重启或验证失败，worker 会尝试自动回滚到备份版本，并把失败现场保存在 `/opt/incudal.failed-update.<timestamp>` 便于排查。
+- 可执行 `bash scripts/migrate-ota-atomic-layout.sh` 将部署迁移为原子 OTA 布局：`/opt/incudal/current` 指向当前 release，`/opt/incudal/releases/<version>` 保存各版本，systemd 运行 `current` 指针。迁移后 artifact 更新会先解压到新的 release 目录，再切换 `current`；失败回滚只需切回上一版 release。
 - 更新期间会保留 `.env`、`server/certs`、`agent-release`、`.npm` 和 `.cache` 等运行态资产。
 
 推荐生产环境变量：

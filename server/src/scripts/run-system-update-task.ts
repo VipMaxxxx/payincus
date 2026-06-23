@@ -1,6 +1,6 @@
 import '../config/env.js'
 import { createHash } from 'crypto'
-import { appendFile, mkdir, cp, rm, writeFile, readdir, stat } from 'fs/promises'
+import { appendFile, mkdir, cp, rm, writeFile, readdir, stat, lstat, readlink, symlink, rename } from 'fs/promises'
 import { createReadStream, createWriteStream, existsSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { spawn } from 'child_process'
@@ -37,11 +37,11 @@ async function log(message: string): Promise<void> {
   await appendFile(logPath, `[${now()}] ${message}\n`)
 }
 
-async function run(command: string, args: string[], options: { timeoutMs?: number; env?: NodeJS.ProcessEnv } = {}): Promise<void> {
+async function run(command: string, args: string[], options: { timeoutMs?: number; env?: NodeJS.ProcessEnv; cwd?: string } = {}): Promise<void> {
   await log(`$ ${command} ${args.join(' ')}`)
   await new Promise<void>((resolvePromise, reject) => {
     const child = spawn(command, args, {
-      cwd: appDir,
+      cwd: options.cwd || appDir,
       env: {
         ...process.env,
         ...options.env
@@ -98,6 +98,42 @@ async function waitForBackendHealth(): Promise<void> {
   }
 
   throw new Error(`Backend health did not become ready after restart: ${lastError}`)
+}
+
+function getCurrentLinkPath(): string {
+  return join(installDir, 'current')
+}
+
+function getReleasesDir(): string {
+  return join(installDir, 'releases')
+}
+
+async function isAtomicReleaseLayout(): Promise<boolean> {
+  try {
+    return (await lstat(getCurrentLinkPath())).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
+async function resolveSymlinkTarget(path: string): Promise<string> {
+  const target = await readlink(path)
+  return resolve(dirname(path), target)
+}
+
+async function getCurrentReleaseTarget(): Promise<string | null> {
+  if (!(await isAtomicReleaseLayout())) return null
+  return await resolveSymlinkTarget(getCurrentLinkPath())
+}
+
+async function switchCurrentRelease(targetDir: string): Promise<void> {
+  await mkdir(getReleasesDir(), { recursive: true })
+  const currentLink = getCurrentLinkPath()
+  const nextLink = join(getReleasesDir(), `.next-current-${taskId}-${Date.now()}`)
+  await rm(nextLink, { force: true })
+  await symlink(targetDir, nextLink)
+  await rename(nextLink, currentLink)
+  await log(`Switched current release to ${targetDir}`)
 }
 
 function getRuntimePlatform(): string {
@@ -204,13 +240,13 @@ async function copyIfExists(from: string, to: string): Promise<void> {
   }
 }
 
-async function restoreRuntimeAssets(backupDir: string): Promise<void> {
-  await copyIfExists(join(backupDir, '.env'), join(installDir, '.env'))
-  await copyIfExists(join(backupDir, 'server/certs'), join(installDir, 'server/certs'))
-  await copyIfExists(join(backupDir, 'agent-release'), join(installDir, 'agent-release'))
+async function restoreRuntimeAssets(backupDir: string, targetDir = installDir): Promise<void> {
+  await copyIfExists(join(backupDir, '.env'), join(targetDir, '.env'))
+  await copyIfExists(join(backupDir, 'server/certs'), join(targetDir, 'server/certs'))
+  await copyIfExists(join(backupDir, 'agent-release'), join(targetDir, 'agent-release'))
   await mkdir(join(installDir, '.npm'), { recursive: true })
   await mkdir(join(installDir, '.cache'), { recursive: true })
-  await mkdir(join(installDir, 'server/certs'), { recursive: true })
+  await mkdir(join(targetDir, 'server/certs'), { recursive: true })
 }
 
 async function chownInstallDir(): Promise<void> {
@@ -220,13 +256,13 @@ async function chownInstallDir(): Promise<void> {
   })
 }
 
-async function writeVersionFile(): Promise<void> {
-  const version = await getCurrentVersionMetadata(appDir)
+async function writeVersionFile(root = appDir): Promise<void> {
+  const version = await getCurrentVersionMetadata(root)
   const payload = {
     ...version,
     deployedAt: now()
   }
-  await writeFile(join(appDir, 'version.json'), `${JSON.stringify(payload, null, 2)}\n`)
+  await writeFile(join(root, 'version.json'), `${JSON.stringify(payload, null, 2)}\n`)
 }
 
 async function updateTask(data: Parameters<typeof prisma.systemUpdateTask.update>[0]['data']): Promise<void> {
@@ -259,15 +295,39 @@ async function getRuntimeArtifact(targetVersion: string): Promise<OtaArtifactInf
   return null
 }
 
-async function applyArtifactUpdate(artifact: OtaArtifactInfo, backupDir: string, timestamp: string): Promise<void> {
-  const artifactPath = await downloadArtifact(artifact)
-  const stagingDir = join(updateDownloadDir, `staging-${taskId}-${timestamp}`)
+async function copyStagingToRelease(stagingDir: string, releaseDir: string): Promise<void> {
+  await rm(releaseDir, { recursive: true, force: true })
+  await mkdir(dirname(releaseDir), { recursive: true })
+  await mkdir(releaseDir, { recursive: true })
+  await run('bash', ['-lc', `cp -a ${JSON.stringify(stagingDir)}/. ${JSON.stringify(releaseDir)}/`], {
+    timeoutMs: 180000,
+    cwd: installDir
+  })
+}
 
-  await rm(stagingDir, { recursive: true, force: true })
-  await mkdir(stagingDir, { recursive: true })
-  await run('tar', ['-xzf', artifactPath, '-C', stagingDir], { timeoutMs: 180000 })
-  await assertArtifactStaging(stagingDir)
+async function applyArtifactAtomic(stagingDir: string, timestamp: string): Promise<string> {
+  const currentTarget = await getCurrentReleaseTarget()
+  if (!currentTarget) {
+    throw new Error('Atomic release layout is missing current target')
+  }
 
+  const releaseDir = join(getReleasesDir(), `${targetVersion}-${timestamp}`)
+  await log(`Atomic release directory: ${releaseDir}`)
+  await copyStagingToRelease(stagingDir, releaseDir)
+  await restoreRuntimeAssets(currentTarget, releaseDir)
+  await run('corepack', ['enable'], { timeoutMs: 120000, cwd: releaseDir })
+  await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000, cwd: releaseDir })
+  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], {
+    timeoutMs: 300000,
+    cwd: releaseDir
+  })
+  await writeVersionFile(releaseDir)
+  await chownInstallDir()
+  await switchCurrentRelease(releaseDir)
+  return currentTarget
+}
+
+async function applyArtifactLegacy(stagingDir: string, backupDir: string): Promise<string> {
   await log(`Backup directory: ${backupDir}`)
   await cp(installDir, backupDir, { recursive: true, preserveTimestamps: true })
 
@@ -279,9 +339,26 @@ async function applyArtifactUpdate(artifact: OtaArtifactInfo, backupDir: string,
   await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000 })
   await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
   await writeVersionFile()
+  return backupDir
 }
 
-async function applyGitUpdate(backupDir: string): Promise<void> {
+async function applyArtifactUpdate(artifact: OtaArtifactInfo, backupDir: string, timestamp: string): Promise<string> {
+  const artifactPath = await downloadArtifact(artifact)
+  const stagingDir = join(updateDownloadDir, `staging-${taskId}-${timestamp}`)
+
+  await rm(stagingDir, { recursive: true, force: true })
+  await mkdir(stagingDir, { recursive: true })
+  await run('tar', ['-xzf', artifactPath, '-C', stagingDir], { timeoutMs: 180000 })
+  await assertArtifactStaging(stagingDir)
+
+  if (await isAtomicReleaseLayout()) {
+    return await applyArtifactAtomic(stagingDir, timestamp)
+  }
+
+  return await applyArtifactLegacy(stagingDir, backupDir)
+}
+
+async function applyGitUpdate(backupDir: string): Promise<string> {
   await run('git', ['fetch', '--tags', '--quiet'], { timeoutMs: 120000 })
   await run('git', ['rev-parse', '--verify', `${targetVersion}^{commit}`], { timeoutMs: 30000 })
 
@@ -306,6 +383,7 @@ async function applyGitUpdate(backupDir: string): Promise<void> {
   await run('pnpm', ['--filter', 'server', 'test:frontend-dist-boundary-guards'], { timeoutMs: 120000 })
   await run('pnpm', ['--filter', 'server', 'test:frontend-route-guards'], { timeoutMs: 120000 })
   await writeVersionFile()
+  return backupDir
 }
 
 async function verifyUpdatedRuntime(isArtifactMode: boolean): Promise<void> {
@@ -355,6 +433,30 @@ async function autoRollbackFromBackup(backupDir: string, timestamp: string): Pro
   if (!existsSync(backupDir)) {
     await log('Auto rollback skipped: backup directory does not exist')
     return false
+  }
+
+  if (await isAtomicReleaseLayout()) {
+    const failedTarget = await getCurrentReleaseTarget()
+    if (failedTarget) {
+      const failedInstallBackup = join(getReleasesDir(), `failed-update-${timestamp}`)
+      await log(`Preserving failed release before auto rollback: ${failedInstallBackup}`)
+      await cp(failedTarget, failedInstallBackup, { recursive: true, preserveTimestamps: true })
+    }
+    await log(`Auto rollback switching current release back to: ${backupDir}`)
+    await switchCurrentRelease(backupDir)
+    await chownInstallDir()
+    await run('systemctl', ['restart', serviceName], { timeoutMs: 120000 })
+    await waitForBackendHealth()
+    await run('bash', ['scripts/verify-split-host.sh'], {
+      timeoutMs: 180000,
+      env: {
+        FRONTEND_URL: frontendUrl,
+        ADMIN_FRONTEND_URL: adminFrontendUrl,
+        BACKEND_URL: backendUrl
+      }
+    })
+    await log('Auto rollback completed successfully')
+    return true
   }
 
   const failedInstallBackup = `${installDir}.failed-update.${timestamp}`
@@ -410,19 +512,20 @@ async function main(): Promise<void> {
 
   const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)
   const backupDir = `${installDir}.bak.${timestamp}`
+  let backupPath = backupDir
 
   try {
     const artifact = await getRuntimeArtifact(targetVersion)
     if (artifact) {
-      await applyArtifactUpdate(artifact, backupDir, timestamp)
+      backupPath = await applyArtifactUpdate(artifact, backupDir, timestamp)
     } else {
-      await applyGitUpdate(backupDir)
+      backupPath = await applyGitUpdate(backupDir)
     }
     await verifyUpdatedRuntime(Boolean(artifact))
 
     await updateTask({
       status: 'success',
-      backupPath: backupDir,
+      backupPath,
       finishedAt: new Date(),
       errorMessage: null
     })
@@ -432,14 +535,14 @@ async function main(): Promise<void> {
     await log(`ERROR: ${message}`)
     let rolledBack = false
     try {
-      rolledBack = await autoRollbackFromBackup(backupDir, timestamp)
+      rolledBack = await autoRollbackFromBackup(backupPath, timestamp)
     } catch (rollbackError) {
       const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
       await log(`AUTO ROLLBACK ERROR: ${rollbackMessage}`)
     }
     await updateTask({
       status: rolledBack ? 'rolled_back' : 'failed',
-      backupPath: backupDir,
+      backupPath,
       finishedAt: new Date(),
       errorMessage: (rolledBack ? `Update failed and was auto-rolled back: ${message}` : message).slice(0, 5000)
     })

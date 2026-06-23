@@ -8,14 +8,14 @@ Wants=network.target
 Type=simple
 User=incudal
 Group=incudal
-WorkingDirectory=/opt/incudal
+WorkingDirectory=/opt/incudal/current
 EnvironmentFile=/opt/incudal/.env
 Environment=HOME=/opt/incudal
 Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm
 Environment=XDG_CACHE_HOME=/opt/incudal/.cache
 
-ExecStartPre=/usr/bin/bash -lc 'cd /opt/incudal/server && pnpm exec prisma migrate deploy'
-ExecStart=/usr/bin/node /opt/incudal/server/dist/app.js
+ExecStartPre=/usr/bin/bash -lc 'cd /opt/incudal/current/server && pnpm exec prisma migrate deploy'
+ExecStart=/usr/bin/node /opt/incudal/current/server/dist/app.js
 
 Restart=on-failure
 RestartSec=10
@@ -29,7 +29,7 @@ LimitNOFILE=65536
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs
+ReadWritePaths=/opt/incudal /opt/incudal/current /opt/incudal/releases /opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs
 PrivateTmp=true
 
 StandardOutput=journal

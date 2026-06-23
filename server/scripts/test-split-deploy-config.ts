@@ -231,17 +231,19 @@ assert.ok(
 assert.ok(
     backendServiceExample.includes('Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm') &&
     backendServiceExample.includes('Environment=XDG_CACHE_HOME=/opt/incudal/.cache') &&
+    backendServiceExample.includes('WorkingDirectory=/opt/incudal/current') &&
     backendServiceExample.includes('NoNewPrivileges=false') &&
-    backendServiceExample.includes('ReadWritePaths=/opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs') &&
+    backendServiceExample.includes('ReadWritePaths=/opt/incudal /opt/incudal/current /opt/incudal/releases /opt/incudal/server/certs /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs') &&
     backendServiceExample.includes('pnpm exec prisma migrate deploy') &&
     !backendServiceExample.includes('npx prisma'),
   'systemd backend example must keep runtime cache paths writable, allow restricted online-update sudo, and run locked local Prisma migrations under ProtectSystem=strict'
 )
 assert.ok(
-  installPanel.includes('Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm') &&
+    installPanel.includes('Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm') &&
     installPanel.includes('Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache') &&
+    installPanel.includes('app_dir="${INSTALL_DIR}/current"') &&
     installPanel.includes('NoNewPrivileges=false') &&
-    installPanel.includes('ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs') &&
+    installPanel.includes('ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs') &&
     installPanel.includes('pnpm exec prisma migrate deploy') &&
     !installPanel.includes('npx prisma'),
   'install script systemd service must keep runtime cache paths writable, allow restricted online-update sudo, and run locked local Prisma migrations under ProtectSystem=strict'

@@ -1,5 +1,5 @@
 import '../config/env.js'
-import { appendFile, cp, mkdir, rm } from 'fs/promises'
+import { appendFile, cp, mkdir, rm, lstat, readlink, rename, symlink } from 'fs/promises'
 import { existsSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { spawn } from 'child_process'
@@ -74,6 +74,42 @@ async function waitForBackendHealth(): Promise<void> {
   throw new Error(`Backend health did not become ready after restart: ${lastError}`)
 }
 
+function getCurrentLinkPath(): string {
+  return join(installDir, 'current')
+}
+
+function getReleasesDir(): string {
+  return join(installDir, 'releases')
+}
+
+async function isAtomicReleaseLayout(): Promise<boolean> {
+  try {
+    return (await lstat(getCurrentLinkPath())).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
+async function resolveSymlinkTarget(path: string): Promise<string> {
+  const target = await readlink(path)
+  return resolve(dirname(path), target)
+}
+
+async function getCurrentReleaseTarget(): Promise<string | null> {
+  if (!(await isAtomicReleaseLayout())) return null
+  return await resolveSymlinkTarget(getCurrentLinkPath())
+}
+
+async function switchCurrentRelease(targetDir: string): Promise<void> {
+  await mkdir(getReleasesDir(), { recursive: true })
+  const currentLink = getCurrentLinkPath()
+  const nextLink = join(getReleasesDir(), `.next-current-rollback-${taskId}-${Date.now()}`)
+  await rm(nextLink, { force: true })
+  await symlink(targetDir, nextLink)
+  await rename(nextLink, currentLink)
+  await log(`Switched current release to ${targetDir}`)
+}
+
 async function main(): Promise<void> {
   if (!Number.isSafeInteger(taskId) || taskId <= 0) {
     throw new Error('Invalid task id')
@@ -84,7 +120,9 @@ async function main(): Promise<void> {
     throw new Error('Task backup path is missing')
   }
   const backupPath = resolve(task.backupPath)
-  if (!backupPath.startsWith(resolve(`${installDir}.bak.`)) || !existsSync(backupPath)) {
+  const backupIsLegacy = backupPath.startsWith(resolve(`${installDir}.bak.`))
+  const backupIsAtomicRelease = backupPath.startsWith(resolve(getReleasesDir()))
+  if ((!backupIsLegacy && !backupIsAtomicRelease) || !existsSync(backupPath)) {
     throw new Error('Backup path is invalid or does not exist')
   }
 
@@ -95,12 +133,21 @@ async function main(): Promise<void> {
 
   try {
     const rollbackBackup = `${installDir}.pre-rollback.${new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`
-    await log(`Preserving current install before rollback: ${rollbackBackup}`)
-    if (existsSync(installDir)) {
-      await cp(installDir, rollbackBackup, { recursive: true, preserveTimestamps: true })
-      await rm(installDir, { recursive: true, force: true })
+    if (backupIsAtomicRelease && await isAtomicReleaseLayout()) {
+      const currentTarget = await getCurrentReleaseTarget()
+      if (currentTarget) {
+        await log(`Preserving current release before rollback: ${rollbackBackup}`)
+        await cp(currentTarget, rollbackBackup, { recursive: true, preserveTimestamps: true })
+      }
+      await switchCurrentRelease(backupPath)
+    } else {
+      await log(`Preserving current install before rollback: ${rollbackBackup}`)
+      if (existsSync(installDir)) {
+        await cp(installDir, rollbackBackup, { recursive: true, preserveTimestamps: true })
+        await rm(installDir, { recursive: true, force: true })
+      }
+      await cp(backupPath, installDir, { recursive: true, preserveTimestamps: true })
     }
-    await cp(backupPath, installDir, { recursive: true, preserveTimestamps: true })
     await mkdir(join(installDir, '.npm'), { recursive: true })
     await mkdir(join(installDir, '.cache'), { recursive: true })
     await mkdir(join(installDir, 'server/certs'), { recursive: true })

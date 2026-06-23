@@ -19,6 +19,7 @@ const adminRouter = read('client/src/router/admin.ts')
 const adminNav = read('client/src/config/side-nav-items-admin.ts')
 const releaseWorkflow = read('.github/workflows/release.yml')
 const onlineScript = read('scripts/apply-online-update.sh')
+const atomicMigrationScript = read('scripts/migrate-ota-atomic-layout.sh')
 const installPanel = read('scripts/install-panel.sh')
 const backendService = read('deploy/incudal-backend.service.example')
 const updateService = read('deploy/incudal-online-update@.service.example')
@@ -109,10 +110,14 @@ assert.ok(
     runTask.includes('No usable OTA artifact found; falling back to Git build mode') &&
     runTask.includes('Skipping source-based Agent release smoke in artifact mode') &&
     runTask.includes('autoRollbackFromBackup') &&
+    runTask.includes('switchCurrentRelease') &&
+    runTask.includes('applyArtifactAtomic') &&
+    runTask.includes("join(installDir, 'current')") &&
+    runTask.includes("join(installDir, 'releases')") &&
     runTask.includes('Auto rollback completed successfully') &&
     runTask.includes("status: rolledBack ? 'rolled_back' : 'failed'") &&
     runTask.includes('failed-update'),
-  'online updater must prefer checksum-verified OTA release artifacts while preserving Git fallback mode'
+  'online updater must prefer checksum-verified OTA release artifacts, support atomic current/release switching, and preserve Git fallback mode'
 )
 
 assert.ok(
@@ -129,6 +134,7 @@ assert.ok(
     installPanel.includes('SYSTEM_UPDATE_RELEASE_REPOSITORY') &&
     installPanel.includes('SYSTEM_UPDATE_RELEASE_TOKEN') &&
     installPanel.includes('SYSTEM_UPDATE_APPLY_MODE=auto') &&
+    installPanel.includes('app_dir="${INSTALL_DIR}/current"') &&
     installPanel.includes('NoNewPrivileges=false') &&
     backendService.includes('NoNewPrivileges=false') &&
     backendService.includes('/opt/incudal/.git /opt/incudal/update-logs'),
@@ -161,15 +167,30 @@ assert.ok(
     releaseWorkflow.includes('ota-manifest.json') &&
     releaseWorkflow.includes('pnpm --filter server test:frontend-dist-boundary-guards') &&
     releaseWorkflow.includes('pnpm --filter server test:frontend-route-guards') &&
+    releaseWorkflow.includes('cp scripts/migrate-ota-atomic-layout.sh release/scripts/') &&
+    onlineScript.includes('APP_DIR="$INSTALL_DIR"') &&
+    onlineScript.includes('APP_DIR="$INSTALL_DIR/current"') &&
+    onlineScript.includes('INCUDAL_APP_DIR="$APP_DIR"') &&
     releaseWorkflow.includes('fetch-depth: 0') &&
     releaseWorkflow.includes('cp -r deploy/* release/deploy/') &&
     rootPackage.includes('"update:online": "bash scripts/apply-online-update.sh"') &&
     installPanel.includes('git init -q') &&
     installPanel.includes('git fetch --tags --force --quiet origin') &&
-    onlineScript.includes('node server/dist/scripts/start-system-update-task.js') &&
+    onlineScript.includes('node "$APP_DIR/server/dist/scripts/start-system-update-task.js"') &&
     onlineScript.includes('git rev-parse --is-inside-work-tree') &&
     serverPackage.includes('"update:online:start": "node --import tsx src/scripts/start-system-update-task.ts"'),
   'release package and package scripts must expose the controlled online updater and version metadata'
+)
+
+assert.ok(
+  atomicMigrationScript.includes('current_link="$INSTALL_DIR/current"') &&
+    atomicMigrationScript.includes('releases_dir="$INSTALL_DIR/releases"') &&
+    atomicMigrationScript.includes('WorkingDirectory=${app_dir}') &&
+    atomicMigrationScript.includes('Environment=INCUDAL_APP_DIR=${app_dir}') &&
+    atomicMigrationScript.includes('ExecStart=/usr/bin/node ${app_dir}/server/dist/scripts/run-system-update-task.js %i') &&
+    atomicMigrationScript.includes('mv -Tf "$next_link" "$current_link"') &&
+    atomicMigrationScript.includes('bash "$current_link/scripts/verify-split-host.sh"'),
+  'atomic OTA migration script must create current/releases layout, rewrite systemd units, and verify the split host'
 )
 
 console.log('system update guard tests passed')

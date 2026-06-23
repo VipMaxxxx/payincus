@@ -878,6 +878,11 @@ run_migrations() {
 create_service() {
     step "创建 systemd 服务..."
 
+    local app_dir="${INSTALL_DIR}"
+    if [[ -L "${INSTALL_DIR}/current" ]]; then
+        app_dir="${INSTALL_DIR}/current"
+    fi
+
     cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Incudal 容器虚拟化管理平台
@@ -889,7 +894,7 @@ Requires=postgresql.service redis-server.service
 Type=simple
 User=${RUN_USER}
 Group=${RUN_USER}
-WorkingDirectory=${INSTALL_DIR}
+WorkingDirectory=${app_dir}
 EnvironmentFile=${ENV_FILE}
 
 # 确保 npm 缓存目录可写
@@ -898,10 +903,10 @@ Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
 Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
 
 # 启动前自动执行数据库迁移
-ExecStartPre=/usr/bin/bash -c 'cd ${INSTALL_DIR}/server && pnpm exec prisma migrate deploy'
+ExecStartPre=/usr/bin/bash -c 'cd ${app_dir}/server && pnpm exec prisma migrate deploy'
 
 # 启动主程序
-ExecStart=/usr/bin/node ${INSTALL_DIR}/server/dist/app.js
+ExecStart=/usr/bin/node ${app_dir}/server/dist/app.js
 
 # 优雅关闭
 KillMode=mixed
@@ -920,7 +925,7 @@ StartLimitIntervalSec=300
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
+ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
 PrivateTmp=true
 
 # 资源限制
@@ -946,6 +951,10 @@ create_online_update_service() {
     step "创建在线更新 systemd 单元..."
 
     mkdir -p "${INSTALL_DIR}/update-logs"
+    local app_dir="${INSTALL_DIR}"
+    if [[ -L "${INSTALL_DIR}/current" ]]; then
+        app_dir="${INSTALL_DIR}/current"
+    fi
 
     cat > /etc/systemd/system/incudal-online-update@.service << EOF
 [Unit]
@@ -958,15 +967,15 @@ Requires=postgresql.service redis-server.service
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=${INSTALL_DIR}
+WorkingDirectory=${app_dir}
 EnvironmentFile=${ENV_FILE}
 Environment=HOME=${INSTALL_DIR}
 Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
 Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
-Environment=INCUDAL_APP_DIR=${INSTALL_DIR}
+Environment=INCUDAL_APP_DIR=${app_dir}
 Environment=INSTALL_DIR=${INSTALL_DIR}
 Environment=SERVICE_NAME=${SERVICE_NAME}
-ExecStart=/usr/bin/node ${INSTALL_DIR}/server/dist/scripts/run-system-update-task.js %i
+ExecStart=/usr/bin/node ${app_dir}/server/dist/scripts/run-system-update-task.js %i
 TimeoutStartSec=1800
 StandardOutput=journal
 StandardError=journal
@@ -984,15 +993,15 @@ Requires=postgresql.service redis-server.service
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=${INSTALL_DIR}
+WorkingDirectory=${app_dir}
 EnvironmentFile=${ENV_FILE}
 Environment=HOME=${INSTALL_DIR}
 Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
 Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
-Environment=INCUDAL_APP_DIR=${INSTALL_DIR}
+Environment=INCUDAL_APP_DIR=${app_dir}
 Environment=INSTALL_DIR=${INSTALL_DIR}
 Environment=SERVICE_NAME=${SERVICE_NAME}
-ExecStart=/usr/bin/node ${INSTALL_DIR}/server/dist/scripts/rollback-system-update-task.js %i
+ExecStart=/usr/bin/node ${app_dir}/server/dist/scripts/rollback-system-update-task.js %i
 TimeoutStartSec=900
 StandardOutput=journal
 StandardError=journal
