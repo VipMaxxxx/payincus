@@ -6,12 +6,27 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `9b9b40f`
+- Current HEAD: `0453d5a`
 - Commit date: 2026-06-23
-- Commit subject: Fix GitHub Pages docs workflow
-- Latest tag: `v0.0.11`
+- Commit subject: Add plugin center
+- Latest tag: `v0.0.12`
 
 ## Unreleased Changes
+
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+
+## Historical Versions
+
+## v0.0.12
+
+- Release commit: `0453d5a`
+- Commit date: 2026-06-23
+- Commit subject: Add plugin center
+
+### New Capabilities
+
+- Add plugin center `0453d5a`
+- Add bilingual PayIncus documentation site `8d89da3`
 
 ### Fixes and Stability
 
@@ -21,16 +36,10 @@ This page is generated from Git tags and commits to show system version history.
 
 - Deploy docs site with GitHub Pages `9d6cd2b`
 
-### New Capabilities
-
-- Add bilingual PayIncus documentation site `8d89da3`
-
 ### Improvements and Adjustments
 
 - Update split deployment docs `878fc93`
 - Update README with OTA and community links `86c6234`
-
-## Historical Versions
 
 ## v0.0.11
 

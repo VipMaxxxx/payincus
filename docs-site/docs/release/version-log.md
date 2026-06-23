@@ -6,12 +6,27 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `9b9b40f`
+- 当前 HEAD: `0453d5a`
 - 提交日期: 2026-06-23
-- 提交说明: Fix GitHub Pages docs workflow
-- 最新 tag: `v0.0.11`
+- 提交说明: Add plugin center
+- 最新 tag: `v0.0.12`
 
 ## 未发布变更
+
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+
+## 历史版本
+
+## v0.0.12
+
+- 发布提交: `0453d5a`
+- 提交日期: 2026-06-23
+- 提交说明: Add plugin center
+
+### 新增能力
+
+- Add plugin center `0453d5a`
+- Add bilingual PayIncus documentation site `8d89da3`
 
 ### 修复与稳定性
 
@@ -21,16 +36,10 @@
 
 - Deploy docs site with GitHub Pages `9d6cd2b`
 
-### 新增能力
-
-- Add bilingual PayIncus documentation site `8d89da3`
-
 ### 改进与调整
 
 - Update split deployment docs `878fc93`
 - Update README with OTA and community links `86c6234`
-
-## 历史版本
 
 ## v0.0.11
 
