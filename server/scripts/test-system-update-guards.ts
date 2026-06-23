@@ -137,6 +137,7 @@ assert.ok(
     releaseWorkflow.includes('incudal-${VERSION}-ota-manifest.json') &&
     releaseWorkflow.includes('sha256sum "$file" > "$file.sha256"') &&
     releaseWorkflow.includes('ota-manifest.json') &&
+    releaseWorkflow.includes('fetch-depth: 0') &&
     releaseWorkflow.includes('cp -r deploy/* release/deploy/') &&
     installPanel.includes('git init -q') &&
     installPanel.includes('git fetch --tags --force --quiet origin') &&
