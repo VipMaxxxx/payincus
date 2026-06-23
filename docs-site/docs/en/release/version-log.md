@@ -6,21 +6,26 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `bafe353`
+- Current HEAD: `79df25b`
 - Commit date: 2026-06-23
-- Commit subject: Align docs with production domains
+- Commit subject: Harden split deployment HSTS headers
 - Latest tag: `v0.0.12`
 
 ## Unreleased Changes
 
-### Other Changes
+### Fixes and Stability
 
-- Align docs with production domains `bafe353`
+- Harden split deployment HSTS headers `79df25b`
 
 ### Improvements and Adjustments
 
+- Update version log for production domain docs `b9b724f`
 - Update handoff for plugin release `7cd2baa`
 - Update version log for v0.0.12 `6e8ce21`
+
+### Other Changes
+
+- Align docs with production domains `bafe353`
 
 ## Historical Versions
 

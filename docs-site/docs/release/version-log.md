@@ -6,21 +6,26 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `bafe353`
+- 当前 HEAD: `79df25b`
 - 提交日期: 2026-06-23
-- 提交说明: Align docs with production domains
+- 提交说明: Harden split deployment HSTS headers
 - 最新 tag: `v0.0.12`
 
 ## 未发布变更
 
-### 其他变更
+### 修复与稳定性
 
-- Align docs with production domains `bafe353`
+- Harden split deployment HSTS headers `79df25b`
 
 ### 改进与调整
 
+- Update version log for production domain docs `b9b724f`
 - Update handoff for plugin release `7cd2baa`
 - Update version log for v0.0.12 `6e8ce21`
+
+### 其他变更
+
+- Align docs with production domains `bafe353`
 
 ## 历史版本
 
