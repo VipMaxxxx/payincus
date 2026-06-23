@@ -7,6 +7,8 @@
   ·
   <a href="https://docs.payincus.com">文档站</a>
   ·
+  <a href="https://t.me/Payincus">Telegram 交流群</a>
+  ·
   <a href="https://github.com/VipMaxxxx/payincus">GitHub</a>
 </p>
 
@@ -20,6 +22,7 @@ PayIncus 是基于开源项目 [qwer-xyz/incudal](https://github.com/qwer-xyz/in
 
 - 测试站：https://demo.payincus.com
 - 文档站：https://docs.payincus.com
+- Telegram 交流群：https://t.me/Payincus
 - 当前仓库：https://github.com/VipMaxxxx/payincus
 - 原始项目：https://github.com/qwer-xyz/incudal
 
@@ -31,6 +34,7 @@ PayIncus 是基于开源项目 [qwer-xyz/incudal](https://github.com/qwer-xyz/in
 - 计费账务：余额、充值、支付回调、消费记录、返利、积分、VIP 等级和会员福利。
 - 宿主机 Agent：安装脚本、心跳、资源上报、实例报告、流量统计和二进制下载代理。
 - 生产安全：JWT、Cookie、CORS、CSP、Helmet、SSRF 防护、文件上传校验、支付签名/IP 白名单和敏感日志脱敏。
+- 后台 OTA：管理后台查看当前版本、更新内容、Release OTA 包、SHA256、任务日志和回滚入口；生产支持 `current`/`releases` 原子切换、失败自动回滚和手动回滚。
 
 ## 技术栈
 
@@ -59,7 +63,7 @@ scripts/                安装、构建、预检和 smoke 脚本
 
 ```text
 浏览器
-  -> https://demo.payincus.com 或 https://admin.payincus.com
+  -> https://demo.payincus.com 或 https://demoadmin.payincus.com
   -> Nginx 静态客户前端 / 管理后台前端
   -> 各自的 /api 和 /api/ws 反代到后端 127.0.0.1:3001 或内网 IP:3001
   -> PostgreSQL / Redis / Incus 节点 / Agent
@@ -69,7 +73,7 @@ scripts/                安装、构建、预检和 smoke 脚本
 
 ```text
 浏览器 -> https://demo.payincus.com -> 客户前端 Nginx
-浏览器 -> https://admin.payincus.com -> 管理后台前端 Nginx
+浏览器 -> https://demoadmin.payincus.com -> 管理后台前端 Nginx
 前端 Nginx -> http://10.0.0.12:3001/api -> 后端 Node API
 后端 Node API -> PostgreSQL / Redis / Incus 节点
 ```
@@ -161,7 +165,7 @@ deploy/nginx-split-intranet.conf.example
 需要替换：
 
 - `demo.payincus.com`：你的客户面板公网域名
-- `admin.payincus.com`：你的管理后台公网域名
+- `demoadmin.payincus.com`：你的管理后台公网域名
 - `/opt/incudal/client/dist/user`：客户前端构建产物目录
 - `/opt/incudal/client/dist/admin`：后台前端构建产物目录
 - `10.0.0.12:3001`：后端内网 IP 和端口
@@ -180,10 +184,11 @@ deploy/nginx-split-intranet.conf.example
 - 后台服务只负责创建任务；生产环境默认通过受限 sudo 启动 `incudal-online-update@.service` 或 `incudal-online-rollback@.service`，实际更新/回滚由 root 级 systemd oneshot 执行。
 - 检查更新时会读取 GitHub Release OTA manifest，后台展示发行包、架构、大小和 SHA256。
 - 默认 `SYSTEM_UPDATE_APPLY_MODE=auto`：如果目标 tag 有匹配当前 Linux 架构的 OTA artifact，更新任务会下载 release tar.gz、校验 SHA256、解压并替换安装内容；没有可用 artifact 时回退到 Git tag 兼容构建模式。也可设置为 `artifact` 强制只允许 OTA 包，或设置为 `git` 强制走旧的 Git 构建路径。
-- Artifact 模式会先备份当前目录，校验 release 包完整性，应用预构建产物，执行 Prisma migration、split host 验证、生产预检和响应头/日志检查。前后台边界守卫在 GitHub Release 打包前执行。
+- Artifact 模式会校验 release 包完整性并应用预构建产物：旧布局会先备份当前目录，原子 OTA 布局会创建新的 release 目录并切换 `current`。两种布局都会执行 Prisma migration、split host 验证、生产预检和响应头/日志检查。前后台边界守卫在 GitHub Release 打包前执行。
 - Git 兼容模式会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
 - 如果更新已创建备份但后续应用、重启或验证失败，worker 会尝试自动回滚到备份版本，并把失败现场保存在 `/opt/incudal.failed-update.<timestamp>` 便于排查。
 - 可执行 `bash scripts/migrate-ota-atomic-layout.sh` 将部署迁移为原子 OTA 布局：`/opt/incudal/current` 指向当前 release，`/opt/incudal/releases/<version>` 保存各版本，systemd 运行 `current` 指针。迁移后 artifact 更新会先解压到新的 release 目录，再切换 `current`；失败回滚只需切回上一版 release。
+- 原子 OTA 布局下，成功更新会把上一版 release 路径记录到任务 `backupPath`；管理后台回滚会把 `current` 切回该路径，重启后端，并重新执行 split host 验证。
 - 更新期间会保留 `.env`、`server/certs`、`agent-release`、`.npm` 和 `.cache` 等运行态资产。
 
 推荐生产环境变量：
@@ -201,7 +206,7 @@ SYSTEM_UPDATE_RELEASE_TOKEN=
 后台页面路径：
 
 ```text
-https://admin.payincus.com/admin/system-update
+https://demoadmin.payincus.com/admin/system-update
 ```
 
 命令行启动在线更新：
@@ -228,7 +233,7 @@ sudo systemctl daemon-reload
 ```bash
 SERVICE_NAME=incudal-backend \
 FRONTEND_URL=https://pay.payincus.com \
-ADMIN_FRONTEND_URL=https://admin.payincus.com \
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm update:online v1.2.3
 ```
@@ -250,12 +255,12 @@ DATABASE_URL=postgresql://incudal:change_me@127.0.0.1:5432/incudal
 REDIS_URL=redis://:change_me@127.0.0.1:6379
 
 FRONTEND_URL=https://demo.payincus.com
-ADMIN_FRONTEND_URL=https://admin.payincus.com
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com
 SITE_URL=https://demo.payincus.com
 PAYMENT_CALLBACK_BASE_URL=https://demo.payincus.com
 VITE_API_BASE_URL=/api
 VITE_CUSTOMER_BASE_URL=https://demo.payincus.com
-VITE_ADMIN_BASE_URL=https://admin.payincus.com
+VITE_ADMIN_BASE_URL=https://demoadmin.payincus.com
 
 COOKIE_SAME_SITE=
 COOKIE_SECURE=
@@ -345,7 +350,7 @@ cd agent && go test ./...
 
 ```bash
 FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://admin.payincus.com \
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
@@ -354,7 +359,7 @@ pnpm verify:split:host
 
 ```bash
 FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://admin.payincus.com \
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
 BACKEND_URL=http://10.0.0.12:3001 \
 pnpm verify:split:host
 ```
@@ -364,7 +369,7 @@ pnpm verify:split:host
 ```bash
 ENV_FILE=/opt/incudal/.env \
 FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://admin.payincus.com \
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:production
 ```
@@ -391,7 +396,7 @@ pnpm smoke:split:nginx
 ```bash
 ENV_FILE=/opt/incudal/.env \
 FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://admin.payincus.com \
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 RUN_SPLIT_AUTH_SMOKE=1 \
 RUN_AGENT_RELEASE_SMOKE=1 \
