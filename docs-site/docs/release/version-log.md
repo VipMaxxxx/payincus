@@ -6,18 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `8c5bbd8`
+- 当前 HEAD / Current HEAD: `ac2b679`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Update version log for v0.1.3 / 更新 v0.1.3 版本日志
-- 最新 tag / Latest tag: `v0.1.3`
+- 提交说明 / Commit subject: Prevent incompatible VM package host binding / 阻止不兼容 VM 套餐节点绑定
+- 最新 tag / Latest tag: `v0.1.4`
 
 ## 未发布变更 / Unreleased Changes
+
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+
+## 历史版本 / Historical Versions
+
+## v0.1.4
+
+- 发布提交 / Release commit: `ac2b679`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Prevent incompatible VM package host binding / 阻止不兼容 VM 套餐节点绑定
+
+### 其他变更 / Other Changes
+
+- Prevent incompatible VM package host binding / 阻止不兼容 VM 套餐节点绑定 `ac2b679`
 
 ### 改进与调整 / Improvements and Adjustments
 
 - Update version log for v0.1.3 / 更新 v0.1.3 版本日志 `8c5bbd8`
-
-## 历史版本 / Historical Versions
 
 ## v0.1.3
 
