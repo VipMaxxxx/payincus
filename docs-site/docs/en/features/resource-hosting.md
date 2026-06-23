@@ -23,6 +23,8 @@ Availability depends on system configuration:
 
 For new hosted hosts, use Ubuntu 22.04+ or Debian 12/13. Debian 11 remains a compatibility path only; new hosts should prefer Debian 12/13.
 
+KVM plans can only be bound to hosts that support virtual machines. The host must expose a usable `/dev/kvm` and be marked as `vm` or `both` in the admin host type. Hosts without KVM support should be used as container hosts only. The backend rejects VM plans bound to container-only hosts and rejects changing a host to container-only while VM plans are still bound to it, so users do not create instances that immediately enter an error state.
+
 ## Admin Hosting Features
 
 - Review hosted hosts and resource providers.
@@ -46,6 +48,7 @@ Agent provides runtime truth:
 - Resource providers must not access other users' resources.
 - Plan availability changes must not break renewal or billing for existing instances.
 - Do not keep allocating resources blindly when the Agent is offline.
+- VM/KVM plan type, host type and visible images must stay compatible. If Incus returns `KVM support is missing (no /dev/kvm)`, the host cannot deliver KVM instances; enable nested virtualization, replace the host with one that supports KVM, or convert the plan to a container plan before publishing it again.
 - If Incus returns `not authorized`, first check whether the host trusts the current panel certificate. Generate a fresh host install command and run it on the host to refresh the `panel` trust entry.
 - Prefer LVM when creating storage pools on Debian/cloud kernels. Choose ZFS only after confirming the host can run `modprobe zfs`. If ZFS pool creation returns `modprobe: FATAL: Module zfs not found`, the host does not have a usable ZFS kernel module. Repair `linux-headers-$(uname -r)` / `zfs-dkms`, or use LVM, Btrfs, or DIR storage instead.
 - Resource deletion and revenue settlement must leave audit records.

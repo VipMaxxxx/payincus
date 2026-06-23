@@ -6,14 +6,16 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `5bec34f`
+- Current HEAD / 当前 HEAD: `8c5bbd8`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Fix instance detail bandwidth rendering / 修复实例详情带宽渲染
+- Commit subject / 提交说明: Update version log for v0.1.3 / 更新 v0.1.3 版本日志
 - Latest tag / 最新 tag: `v0.1.3`
 
 ## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.1.3 / 更新 v0.1.3 版本日志 `8c5bbd8`
 
 ## Historical Versions / 历史版本
 
