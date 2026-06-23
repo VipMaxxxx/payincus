@@ -6,12 +6,16 @@
 
 ## 当前源码状态
 
-- 当前 HEAD: `7cd2baa`
+- 当前 HEAD: `bafe353`
 - 提交日期: 2026-06-23
-- 提交说明: Update handoff for plugin release
+- 提交说明: Align docs with production domains
 - 最新 tag: `v0.0.12`
 
 ## 未发布变更
+
+### 其他变更
+
+- Align docs with production domains `bafe353`
 
 ### 改进与调整
 

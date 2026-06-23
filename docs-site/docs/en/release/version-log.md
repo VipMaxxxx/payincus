@@ -6,12 +6,16 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State
 
-- Current HEAD: `7cd2baa`
+- Current HEAD: `bafe353`
 - Commit date: 2026-06-23
-- Commit subject: Update handoff for plugin release
+- Commit subject: Align docs with production domains
 - Latest tag: `v0.0.12`
 
 ## Unreleased Changes
+
+### Other Changes
+
+- Align docs with production domains `bafe353`
 
 ### Improvements and Adjustments
 
