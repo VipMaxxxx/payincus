@@ -182,6 +182,7 @@ deploy/nginx-split-intranet.conf.example
 - 默认 `SYSTEM_UPDATE_APPLY_MODE=auto`：如果目标 tag 有匹配当前 Linux 架构的 OTA artifact，更新任务会下载 release tar.gz、校验 SHA256、解压并替换安装内容；没有可用 artifact 时回退到 Git tag 兼容构建模式。也可设置为 `artifact` 强制只允许 OTA 包，或设置为 `git` 强制走旧的 Git 构建路径。
 - Artifact 模式会先备份当前目录，校验 release 包完整性，应用预构建产物，执行 Prisma migration、split host 验证、生产预检和响应头/日志检查。前后台边界守卫在 GitHub Release 打包前执行。
 - Git 兼容模式会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
+- 如果更新已创建备份但后续应用、重启或验证失败，worker 会尝试自动回滚到备份版本，并把失败现场保存在 `/opt/incudal.failed-update.<timestamp>` 便于排查。
 - 更新期间会保留 `.env`、`server/certs`、`agent-release`、`.npm` 和 `.cache` 等运行态资产。
 
 推荐生产环境变量：

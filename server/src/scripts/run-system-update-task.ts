@@ -175,8 +175,17 @@ async function assertArtifactStaging(stagingDir: string): Promise<void> {
   }
 }
 
+async function clearInstallDirPreserving(preservedEntries: string[]): Promise<void> {
+  const preserved = new Set(preservedEntries)
+
+  for (const entry of await readdir(installDir)) {
+    if (preserved.has(entry)) continue
+    await rm(join(installDir, entry), { recursive: true, force: true })
+  }
+}
+
 async function clearInstallDirForArtifact(): Promise<void> {
-  const preserved = new Set([
+  await clearInstallDirPreserving([
     '.env',
     '.git',
     '.gitconfig',
@@ -185,11 +194,6 @@ async function clearInstallDirForArtifact(): Promise<void> {
     'agent-release',
     'update-logs'
   ])
-
-  for (const entry of await readdir(installDir)) {
-    if (preserved.has(entry)) continue
-    await rm(join(installDir, entry), { recursive: true, force: true })
-  }
 }
 
 async function copyIfExists(from: string, to: string): Promise<void> {
@@ -347,6 +351,40 @@ async function verifyUpdatedRuntime(isArtifactMode: boolean): Promise<void> {
   }
 }
 
+async function autoRollbackFromBackup(backupDir: string, timestamp: string): Promise<boolean> {
+  if (!existsSync(backupDir)) {
+    await log('Auto rollback skipped: backup directory does not exist')
+    return false
+  }
+
+  const failedInstallBackup = `${installDir}.failed-update.${timestamp}`
+  await log(`Auto rollback starting from backup: ${backupDir}`)
+  await log(`Preserving failed install before auto rollback: ${failedInstallBackup}`)
+
+  if (existsSync(installDir)) {
+    await cp(installDir, failedInstallBackup, { recursive: true, preserveTimestamps: true })
+  }
+
+  await clearInstallDirPreserving(['update-logs'])
+  await run('bash', ['-lc', `cp -a ${JSON.stringify(backupDir)}/. ${JSON.stringify(installDir)}/`], { timeoutMs: 180000 })
+  await mkdir(join(installDir, '.npm'), { recursive: true })
+  await mkdir(join(installDir, '.cache'), { recursive: true })
+  await mkdir(join(installDir, 'server/certs'), { recursive: true })
+  await chownInstallDir()
+  await run('systemctl', ['restart', serviceName], { timeoutMs: 120000 })
+  await waitForBackendHealth()
+  await run('bash', ['scripts/verify-split-host.sh'], {
+    timeoutMs: 180000,
+    env: {
+      FRONTEND_URL: frontendUrl,
+      ADMIN_FRONTEND_URL: adminFrontendUrl,
+      BACKEND_URL: backendUrl
+    }
+  })
+  await log('Auto rollback completed successfully')
+  return true
+}
+
 async function main(): Promise<void> {
   if (!Number.isSafeInteger(taskId) || taskId <= 0) {
     throw new Error('Invalid task id')
@@ -392,11 +430,18 @@ async function main(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await log(`ERROR: ${message}`)
+    let rolledBack = false
+    try {
+      rolledBack = await autoRollbackFromBackup(backupDir, timestamp)
+    } catch (rollbackError) {
+      const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+      await log(`AUTO ROLLBACK ERROR: ${rollbackMessage}`)
+    }
     await updateTask({
-      status: 'failed',
+      status: rolledBack ? 'rolled_back' : 'failed',
       backupPath: backupDir,
       finishedAt: new Date(),
-      errorMessage: message.slice(0, 5000)
+      errorMessage: (rolledBack ? `Update failed and was auto-rolled back: ${message}` : message).slice(0, 5000)
     })
     process.exitCode = 1
   } finally {

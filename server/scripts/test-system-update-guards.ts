@@ -107,7 +107,11 @@ assert.ok(
     runTask.includes('assertArtifactStaging') &&
     runTask.includes("'.git'") &&
     runTask.includes('No usable OTA artifact found; falling back to Git build mode') &&
-    runTask.includes('Skipping source-based Agent release smoke in artifact mode'),
+    runTask.includes('Skipping source-based Agent release smoke in artifact mode') &&
+    runTask.includes('autoRollbackFromBackup') &&
+    runTask.includes('Auto rollback completed successfully') &&
+    runTask.includes("status: rolledBack ? 'rolled_back' : 'failed'") &&
+    runTask.includes('failed-update'),
   'online updater must prefer checksum-verified OTA release artifacts while preserving Git fallback mode'
 )
 
