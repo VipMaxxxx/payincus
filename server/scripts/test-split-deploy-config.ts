@@ -574,7 +574,7 @@ assert.ok(
     readme.includes('/api, /api/ws -> http://10.0.0.12:3001'),
   'README architecture must document separate user/admin frontends and backend port 3001'
 )
-assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://admin.payincus.com') && readme.includes('/opt/incudal/client/dist/admin'), 'README architecture must document the separate admin frontend')
+assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://admin.payincus.com') && readme.includes('/opt/incudal/current/client/dist/admin'), 'README architecture must document the separate admin frontend')
 assert.ok(readme.includes('VITE_CUSTOMER_BASE_URL=https://pay.payincus.com'), 'README env example must document admin-generated customer links')
 assert.ok(readme.includes('PORT=3001'), 'README env example must use backend port 3001')
 assert.ok(
@@ -587,7 +587,7 @@ assert.ok(readme.includes('BACKEND_URL=http://10.0.0.12:3001'), 'README split ve
 
 assert.ok(nginxExample.includes('10.0.0.12:3001'), 'Nginx split example must document backend port 3001')
 assert.ok(nginxExample.includes('server_name pay.payincus.com') && nginxExample.includes('server_name admin.payincus.com'), 'Nginx split example must define customer and admin frontend server names')
-assert.ok(nginxExample.includes('root /opt/incudal/client/dist/user') && nginxExample.includes('root /opt/incudal/client/dist/admin'), 'Nginx split example must serve separate user and admin build outputs')
+assert.ok(nginxExample.includes('root /opt/incudal/current/client/dist/user') && nginxExample.includes('root /opt/incudal/current/client/dist/admin'), 'Nginx split example must serve separate user and admin build outputs from the active release')
 assert.ok(nginxExample.includes("connect-src 'self' ws: wss:"), 'Nginx split example CSP must allow HTTP and HTTPS WebSocket terminals')
 assertBalancedNginxBraces('Nginx split example', nginxExample)
 assert.equal(countOccurrences(nginxExample, 'server {'), 2, 'Nginx split example must define customer and admin server blocks')
@@ -602,7 +602,10 @@ assertForwardedProxyHeaderConfig('Nginx split example', nginxExample)
 assertForwardedProxyHeaderConfig('install script Nginx template', installPanel)
 assert.ok(nginxExample.includes('proxy_pass http://10.0.0.12:3001/api/'), 'Nginx API proxy must target backend port 3001')
 assert.ok(
-  installPanel.includes('脚本会在本机配置 Nginx 托管前端并反代 /api 到后端') &&
+    installPanel.includes('脚本会在本机配置 Nginx 托管前端并反代 /api 到后端') &&
+    installPanel.includes('resolve_static_dist_dir "client/dist/user"') &&
+    installPanel.includes('resolve_static_dist_dir "client/dist/admin"') &&
+    installPanel.includes('${INSTALL_DIR}/current/${relative_dist}') &&
     installPanel.includes('write_nginx_split_server_block "$server_name" "$client_dist" "default"') &&
     installPanel.includes('write_nginx_split_server_block "$ADMIN_DOMAIN" "$admin_client_dist"') &&
     installPanel.includes('proxy_pass http://127.0.0.1:${DEFAULT_PORT};') &&

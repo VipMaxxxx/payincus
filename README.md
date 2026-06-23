@@ -69,12 +69,12 @@ scripts/                安装、构建、预检和 smoke 脚本
 ```text
 用户浏览器
   -> https://pay.payincus.com
-  -> Nginx 静态用户端：/opt/incudal/client/dist/user
+  -> Nginx 静态用户端：/opt/incudal/current/client/dist/user
   -> /api 和 /api/ws 反代到后端 127.0.0.1:3001 或内网 IP:3001
 
 管理员浏览器
   -> https://admin.payincus.com
-  -> Nginx 静态管理端：/opt/incudal/client/dist/admin
+  -> Nginx 静态管理端：/opt/incudal/current/client/dist/admin
   -> /api 和 /api/ws 反代到同一个后端 127.0.0.1:3001 或内网 IP:3001
 
 后端 Node API
@@ -104,7 +104,7 @@ http://10.0.0.12:3001
 - 管理端构建入口是 `VITE_APP_ENTRY=admin`，产物目录是 `client/dist/admin`。
 - 两个前端都使用 `VITE_API_BASE_URL=/api`，浏览器只访问同源 `/api` 和 `/api/ws`。
 - 后端监听 `127.0.0.1:3001` 或内网 IP，生产必须设置 `SERVE_STATIC_CLIENT=false`，不由后端直接托管前端静态文件。
-- Nginx 分别托管 `client/dist/user` 和 `client/dist/admin`，并且只把两个站点的 `/api/` 和 `/api/ws/` 反代到后端。
+- Nginx 生产环境应托管当前 release 下的 `/opt/incudal/current/client/dist/user` 和 `/opt/incudal/current/client/dist/admin`，并且只把两个站点的 `/api/` 和 `/api/ws/` 反代到后端。
 - 支付回调地址使用客户面板公网域名，不使用后端内网地址或管理后台域名。
 - 用户端不能暴露后台入口、后台 API 或后台跳转；管理端不能暴露用户端自助功能入口。
 
@@ -205,8 +205,8 @@ deploy/nginx-split-intranet.conf.example
 
 - `pay.payincus.com`：你的客户面板公网域名
 - `admin.payincus.com`：你的管理后台公网域名
-- `/opt/incudal/client/dist/user`：客户前端构建产物目录
-- `/opt/incudal/client/dist/admin`：后台前端构建产物目录
+- `/opt/incudal/current/client/dist/user`：客户前端当前 release 静态目录
+- `/opt/incudal/current/client/dist/admin`：后台前端当前 release 静态目录
 - `10.0.0.12:3001`：后端内网 IP 和端口
 
 模板会设置 CSP、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy` 和 HSTS。若前面还有 Cloudflare/CDN，应确认公网响应也保留 `Strict-Transport-Security`。

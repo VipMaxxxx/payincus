@@ -5,12 +5,12 @@ PayIncus uses a split frontend architecture with one shared backend API.
 ```text
 User browser
   -> https://pay.payincus.com
-  -> Nginx serves client/dist/user
+  -> Nginx serves /opt/incudal/current/client/dist/user
   -> /api and /api/ws proxy to backend
 
 Admin browser
   -> https://admin.payincus.com
-  -> Nginx serves client/dist/admin
+  -> Nginx serves /opt/incudal/current/client/dist/admin
   -> /api and /api/ws proxy to backend
 
 Backend API

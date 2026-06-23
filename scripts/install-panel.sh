@@ -1102,6 +1102,19 @@ server {
 NGINX
 }
 
+resolve_static_dist_dir() {
+    local relative_dist="$1"
+    local current_dist="${INSTALL_DIR}/current/${relative_dist}"
+    local legacy_dist="${INSTALL_DIR}/${relative_dist}"
+
+    if [[ -d "$current_dist" ]]; then
+        printf '%s\n' "$current_dist"
+        return 0
+    fi
+
+    printf '%s\n' "$legacy_dist"
+}
+
 write_nginx_split_maps() {
     cat <<'NGINX'
 map $http_x_forwarded_proto $incudal_forwarded_proto {
@@ -1119,8 +1132,10 @@ NGINX
 
 setup_nginx_certbot() {
     info "准备配置 Nginx 反代及 Let's Encrypt SSL 自动证书"
-    local client_dist="${INSTALL_DIR}/client/dist/user"
-    local admin_client_dist="${INSTALL_DIR}/client/dist/admin"
+    local client_dist
+    local admin_client_dist
+    client_dist="$(resolve_static_dist_dir "client/dist/user")"
+    admin_client_dist="$(resolve_static_dist_dir "client/dist/admin")"
 
     if [[ ! -d "$client_dist" ]]; then
         error "未找到前端构建目录: $client_dist"
@@ -1236,8 +1251,10 @@ setup_cf_tunnel() {
     set_env_value "VITE_CUSTOMER_BASE_URL" "https://${DOMAIN}" "管理后台生成客户链接的前端地址"
     set_env_value "VITE_ADMIN_BASE_URL" "https://${ADMIN_DOMAIN}" "前端管理后台地址"
 
-    local client_dist="${INSTALL_DIR}/client/dist/user"
-    local admin_client_dist="${INSTALL_DIR}/client/dist/admin"
+    local client_dist
+    local admin_client_dist
+    client_dist="$(resolve_static_dist_dir "client/dist/user")"
+    admin_client_dist="$(resolve_static_dist_dir "client/dist/admin")"
     if [[ ! -d "$client_dist" ]]; then
         error "未找到前端构建目录: $client_dist"
         error "请确认安装包包含 client/dist/user，或先完成前端构建后再配置 Cloudflare Tunnel。"

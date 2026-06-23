@@ -4,12 +4,12 @@ Nginx should serve two different static frontend directories and proxy API traff
 
 ```text
 pay.payincus.com
-  root /opt/incudal/client/dist/user
+  root /opt/incudal/current/client/dist/user
   /api/ -> http://127.0.0.1:3001
   /api/ws/ -> WebSocket proxy
 
 admin.payincus.com
-  root /opt/incudal/client/dist/admin
+  root /opt/incudal/current/client/dist/admin
   /api/ -> http://127.0.0.1:3001
   /api/ws/ -> WebSocket proxy
 ```

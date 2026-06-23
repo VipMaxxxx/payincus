@@ -2,8 +2,8 @@
 # Replace:
 #   pay.payincus.com       -> your customer panel domain
 #   admin.payincus.com  -> your admin backend domain
-#   /opt/incudal/client/dist/user  -> customer frontend build output
-#   /opt/incudal/client/dist/admin -> admin frontend build output
+#   /opt/incudal/current/client/dist/user  -> customer frontend build output
+#   /opt/incudal/current/client/dist/admin -> admin frontend build output
 #   10.0.0.12:3001          -> backend private IP and port
 
 map $http_x_forwarded_proto $incudal_forwarded_proto {
@@ -21,7 +21,7 @@ server {
   listen [::]:80;
   server_name pay.payincus.com;
 
-  root /opt/incudal/client/dist/user;
+  root /opt/incudal/current/client/dist/user;
   index index.html;
 
   client_max_body_size 100m;
@@ -74,7 +74,7 @@ server {
   listen [::]:80;
   server_name admin.payincus.com;
 
-  root /opt/incudal/client/dist/admin;
+  root /opt/incudal/current/client/dist/admin;
   index index.html;
 
   client_max_body_size 100m;

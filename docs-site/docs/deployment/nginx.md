@@ -12,15 +12,15 @@ deploy/nginx-split-intranet.conf.example
 
 - `pay.payincus.com`：用户端域名。
 - `admin.payincus.com`：后台域名。
-- `/opt/incudal/client/dist/user`：用户端构建产物。
-- `/opt/incudal/client/dist/admin`：后台构建产物。
+- `/opt/incudal/current/client/dist/user`：用户端当前 release 静态目录。
+- `/opt/incudal/current/client/dist/admin`：后台当前 release 静态目录。
 - `10.0.0.12:3001`：后端内网 IP 和端口。
 
 关键规则：
 
 ```text
-用户端域名 -> client/dist/user
-后台域名 -> client/dist/admin
+用户端域名 -> /opt/incudal/current/client/dist/user
+后台域名 -> /opt/incudal/current/client/dist/admin
 /api/ -> 后端 /api/
 /api/ws/ -> 后端 /api/ws/
 ```
