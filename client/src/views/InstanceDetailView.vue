@@ -119,6 +119,11 @@ function getReturnPath(): string {
 // 标签页状态
 type TabType = 'info' | 'network' | 'sites' | 'traffic' | 'snapshots' | 'quota' | 'config' | 'logs'
 const activeTab = ref<TabType>('info')
+const instanceDetailRouteNames = new Set(['instance-detail', 'admin-instance-detail'])
+
+function isInstanceDetailRouteName(name: unknown): boolean {
+  return typeof name === 'string' && instanceDetailRouteNames.has(name)
+}
 
 // 实例数据
 const instance = ref<InstanceWithDetails | null>(null)
@@ -517,7 +522,7 @@ const instanceHostName = computed<string>(() => {
 watch(() => route.params.id, async (newId, oldId) => {
   if (newId !== oldId) {
     // 如果路由参数从有效变为无效，或者路由名称变化，清除定时器
-    if (!newId || route.name !== 'instance-detail') {
+    if (!newId || !isInstanceDetailRouteName(route.name)) {
       if (refreshInterval) {
         clearInterval(refreshInterval)
         refreshInterval = null
@@ -839,7 +844,7 @@ async function loadInstance(): Promise<void> {
   
   try {
     // 检查当前路由是否仍然是实例详情页面
-    if (!route.params.id || route.name !== 'instance-detail') {
+    if (!route.params.id || !isInstanceDetailRouteName(route.name)) {
       // 路由已经变化，清除定时器并返回
       if (refreshInterval) {
         clearInterval(refreshInterval)

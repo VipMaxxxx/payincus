@@ -260,6 +260,15 @@ assert.ok(
   'admin router must keep shared admin features under the /admin namespace'
 )
 assert.ok(
+  userRouterSource.includes("name: 'instance-detail'") &&
+    adminRouterSource.includes("name: 'admin-instance-detail'") &&
+    instanceDetailViewSource.includes("'instance-detail'") &&
+    instanceDetailViewSource.includes("'admin-instance-detail'") &&
+    instanceDetailViewSource.includes('isInstanceDetailRouteName(route.name)') &&
+    !instanceDetailViewSource.includes("route.name !== 'instance-detail'"),
+  'shared instance detail view must accept both customer and admin detail route names before loading data'
+)
+assert.ok(
   !adminRouterSource.includes("path: '/tickets'") &&
     !adminRouterSource.includes("path: '/logs'") &&
     !adminRouterSource.includes("path: '/profile'") &&
