@@ -141,7 +141,7 @@ Latest production proof:
 - Production `/opt/incudal/current/server/package.json` now reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
 - Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and its current admin JS assets contain `/admin/plugins` and `插件中心`.
-- Remaining production warnings are still business-proof blockers, not deployment blockers: payment callback IP whitelist, Lsky, Agent heartbeat/traffic, and real resource lifecycle proof.
+- Remaining production warnings are still business-proof blockers, not deployment blockers: full resource lifecycle cleanup proof, SMTP delivery, Lsky upload, external notification delivery, and Turnstile/session-gated browser smoke.
 
 Storage-pool note:
 
@@ -298,15 +298,17 @@ ENV_FILE=/opt/incudal/.env FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_
 ENV_FILE=/opt/incudal/.env FRONTEND_URL=https://pay.payincus.com BACKEND_URL=http://127.0.0.1:3001 pnpm verify:log-header
 ```
 
-Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.0.17-20260623164805`; `version.json` reports `v0.0.17`, commit `60faf9a59ba0`, and `deployedAt=2026-06-23T16:58:50.000Z`.
+Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.0.21-20260623175349`; `version.json` reports `v0.0.21`, commit `71cdcff11008`, and `deployedAt=2026-06-23T17:53:57.514Z`.
 
-Recent Incus/Agent read-only proof:
+Recent live business proof:
 
-- The SSH target `147.125.252.103` is the panel host, not the registered Incus host; it has no local `incus` command and no local `incudal-agent` service.
-- Production DB host `HKCMI-01` points to a different host URL than the panel SSH IP.
-- Panel-to-Incus mTLS read-only storage listing succeeded for host `HKCMI-01`: Incus returned `default` storage pool, driver `zfs`, status `Created`, with space data.
-- Backend logs show the Host Agent install token was consumed for host `2`, but `ENV_FILE=/opt/incudal/.env pnpm --filter server verify:production-db` still warns `Online host #2 (HKCMI-01) Agent status is offline`.
-- The latest `verify:production-db` warning set was reduced to Lsky not configured and Agent offline; the previous host-capacity and global-shared-package warnings were no longer present.
+- `ENV_FILE=/opt/incudal/.env pnpm --filter server verify:production-db` passed on production `v0.0.21`.
+- Production host `HKCMI-01` is online/installed/API-enabled, with one live storage pool and two running instances.
+- Host Agent for `HKCMI-01` is enabled and online with fresh `lastSeenAt`, version `v0.0.1`, and capabilities `heartbeat`, `report`, `host-metrics`, `instance-status`, and `traffic-counters`.
+- Agent `lastReport` contains `incus`, `metrics`, `resources`, and `runtime`; traffic snapshots and daily traffic rows exist for both running instances.
+- A completed real recharge exists with actual amount, fee, third-party trade number and callback timestamp; a processed payment callback row exists with callback IP present. Full order number, provider config and callback body were intentionally not printed.
+- Live operation logs show SSH key generation, recharge completion, instance create, terminal connect/disconnect, Agent install token consumption, a Debian 12 instance create, and NAT port-add successes.
+- Interpretation: real payment callback, Agent heartbeat/report, resource/instance/traffic reporting, Incus create, NAT port add, and Web terminal connect/disconnect are now live-proven.
 
 Manual plugin package proof also passed with `plugin-templates/admin-user-mixed-plugin` packaged as `.tar.gz` and validated by `validateAndExtractPluginPackage`; result had id `com.example.coupon`, one admin page, one user page, one template and 64-char SHA256.
 
@@ -343,6 +345,9 @@ Completed:
 - Host installer certificate-refresh hotfix.
 - Agent installer compact-manifest hotfix.
 - Panel-to-Incus storage-list proof for the registered host's existing `default` ZFS pool.
+- Live payment callback proof.
+- Live Agent heartbeat/resource/instance/traffic proof.
+- Live Incus create, NAT port add, Web terminal connect/disconnect, and Debian 12 instance proof.
 
 Not completed:
 
@@ -350,10 +355,7 @@ Not completed:
 
 Remaining production proof items:
 
-- Real payment provider order and callback.
-- Real Incus create, start, stop, restart, reinstall/recreate, delete.
-- Real Web terminal connection through `/api/ws`.
-- Production Agent heartbeat on the real Incus host, with fresh resources, metrics, instance report, and traffic updates.
+- Real Incus stop, restart, reinstall/recreate, delete, cleanup and resource-release proof.
 - Real SMTP delivery.
 - Real Lsky upload.
 - Real Telegram / notification delivery.
@@ -390,17 +392,18 @@ Note: a previous request excluded the old demo domain from production audit scop
 ## Suggested Next Work
 
 1. Sync local Git with remote `payincus/main`.
-2. Repair or restart the Agent on registered host `HKCMI-01`; the install token was consumed, but the Agent still reports offline.
-3. After Agent heartbeat is fresh, run real instance lifecycle proof: create, start, stop, restart, reinstall/recreate, delete, and `/api/ws` terminal.
-4. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
-5. Decide whether to continue improving docs:
+2. Run the remaining real instance lifecycle proof on `HKCMI-01`: stop, restart, reinstall/recreate, delete, cleanup and resource-release verification.
+3. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
+4. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
+5. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
+6. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
    - User workflow screenshots.
    - API request/response/error reference.
    - Payment provider setup guide.
    - Agent install guide with real host commands.
-6. Complete real production proof items from `docs/production-audit.md`.
-7. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+7. Complete remaining real production proof items from `docs/production-audit.md`.
+8. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
 
 ## Release Documentation Rule
 
