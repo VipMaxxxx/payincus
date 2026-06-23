@@ -142,7 +142,13 @@ async function main(): Promise<void> {
 
     await run('corepack', ['enable'], { timeoutMs: 120000 })
     await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000 })
-    await run('pnpm', ['install', '--frozen-lockfile'], { timeoutMs: 600000 })
+    await run('pnpm', ['install', '--frozen-lockfile', '--prod=false'], {
+      timeoutMs: 600000,
+      env: {
+        NODE_ENV: 'development',
+        PNPM_CONFIG_PROD: 'false'
+      }
+    })
     await run('pnpm', ['build'], { timeoutMs: 900000 })
     await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
     await run('pnpm', ['--filter', 'server', 'test:frontend-dist-boundary-guards'], { timeoutMs: 120000 })
