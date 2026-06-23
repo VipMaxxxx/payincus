@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `004c84f`
+- 当前 HEAD / Current HEAD: `5bec34f`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Fix admin update and plugin UI / 修复更新与插件 UI
-- 最新 tag / Latest tag: `v0.1.2`
+- 提交说明 / Commit subject: Fix instance detail bandwidth rendering / 修复实例详情带宽渲染
+- 最新 tag / Latest tag: `v0.1.3`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.1.3
+
+- 发布提交 / Release commit: `5bec34f`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Fix instance detail bandwidth rendering / 修复实例详情带宽渲染
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix instance detail bandwidth rendering / 修复实例详情带宽渲染 `5bec34f`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.1.2 / 更新 v0.1.2 版本日志 `2f265f6`
 
 ## v0.1.2
 
