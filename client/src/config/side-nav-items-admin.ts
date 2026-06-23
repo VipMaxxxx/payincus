@@ -6,6 +6,7 @@ export const navMenuItems: MenuItem[] = [
   { divider: true, label: 'nav.admin' },
   { name: 'admin-settings', path: '/admin/settings', icon: 'cog', label: 'nav.system' },
   { name: 'admin-system-update', path: '/admin/system-update', icon: 'sparkles', label: 'nav.systemUpdate' },
+  { name: 'admin-plugins', path: '/admin/plugins', icon: 'package', label: 'nav.plugins' },
   { name: 'admin-users', path: '/admin/users', icon: 'users', label: 'nav.users' },
   { name: 'admin-hosting', path: '/admin/hosting', icon: 'coin', label: 'nav.hosting' },
   { divider: true, label: 'nav.resources' },

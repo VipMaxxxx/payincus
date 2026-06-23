@@ -1,0 +1,21 @@
+{
+  "id": "com.example.admin-tool",
+  "name": "Admin Tool Example",
+  "version": "1.0.0",
+  "payincus": ">=0.0.12",
+  "description": "A minimal admin-only PayIncus plugin.",
+  "author": "Example",
+  "entrypoints": {
+    "adminPages": [
+      {
+        "slot": "admin.plugins.settings",
+        "title": "Admin Tool",
+        "entry": "dist/admin/index.html"
+      }
+    ],
+    "userPages": []
+  },
+  "permissions": ["plugin:config:read"],
+  "configSchema": {},
+  "templates": []
+}

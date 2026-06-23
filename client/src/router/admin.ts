@@ -174,6 +174,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.systemUpdate', title: '版本更新' }
   },
   {
+    path: '/admin/plugins',
+    name: 'admin-plugins',
+    component: () => import('@/views/admin/PluginCenterView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.plugins', title: '插件中心' }
+  },
+  {
     path: '/admin/images',
     name: 'admin-images',
     component: () => import('@/views/admin/ImagesView.vue'),

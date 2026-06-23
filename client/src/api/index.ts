@@ -68,7 +68,8 @@ import type {
   TelegramBindingStatus,
   TelegramBindTokenResponse,
   UserInvite,
-  UserInviteSummary
+  UserInviteSummary,
+  PluginClientExtension
 } from '@/types/api.js'
 
 export type VipRuleType = 'user' | 'hosting'
@@ -3670,6 +3671,15 @@ const api = {
   },
 
   // 域名邮箱
+  plugins: {
+    getEnabledClientExtensions: (): Promise<{ extensions: PluginClientExtension[] }> =>
+      http.get('/plugins/enabled-client-extensions'),
+    getPublicConfig: (pluginId: string): Promise<{ config: Record<string, unknown> }> =>
+      http.get(`/plugins/${pluginId}/config/public`),
+    runAction: (pluginId: string, action: string, payload?: Record<string, unknown>): Promise<unknown> =>
+      http.post(`/plugins/${pluginId}/actions/${action}`, payload || {})
+  },
+
   mail: {
     // 获取可购买的邮箱源和方案
     getSources: (): Promise<{

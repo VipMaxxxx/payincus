@@ -45,6 +45,7 @@ https://demoadmin.payincus.com
 | 工单 | `/admin/tickets` | 查看用户工单、回复、关闭和处理附件。 |
 | 通知 | `/admin/inbox` | 查看管理员通知和系统消息。 |
 | 帮助中心 | `/admin/help` | 维护用户端帮助文章。 |
+| 插件中心 | `/admin/plugins` | 上传安装插件、从 GitHub 插件市场安装、启用停用、维护插件配置和查看任务日志。 |
 | OAuth | `/admin/oauth` | 配置第三方登录、绑定和回调。 |
 | Telegram | `/admin/settings/telegram` | 配置 Telegram bot、通知和 webhook。 |
 | 邮箱 | `/admin/mail` | 管理邮箱套餐、域名、账号和订阅生命周期。 |
@@ -70,6 +71,7 @@ https://demoadmin.payincus.com
 - 启动在线更新任务并查看实时日志。
 - 更新失败时自动回滚，成功后支持手动回滚到上一版。
 - 支持 Release artifact、SHA256 校验和 `current` / `releases` 原子切换。
+- 更新和回滚会保留 `plugins`、`plugin-data`、`plugin-logs` 和 `plugin-staging` 插件运行目录。
 
 ## 验证重点
 

@@ -150,6 +150,10 @@ async function main(): Promise<void> {
     }
     await mkdir(join(installDir, '.npm'), { recursive: true })
     await mkdir(join(installDir, '.cache'), { recursive: true })
+    await mkdir(join(installDir, 'plugins'), { recursive: true })
+    await mkdir(join(installDir, 'plugin-data'), { recursive: true })
+    await mkdir(join(installDir, 'plugin-logs'), { recursive: true })
+    await mkdir(join(installDir, 'plugin-staging'), { recursive: true })
     await mkdir(join(installDir, 'server/certs'), { recursive: true })
     await run('bash', ['-lc', `if id incudal >/dev/null 2>&1; then chown -R incudal:incudal ${JSON.stringify(installDir)}; fi`], { timeoutMs: 120000 })
     await run('systemctl', ['restart', serviceName], { timeoutMs: 120000 })

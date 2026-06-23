@@ -1,0 +1,31 @@
+# 插件中心
+
+PayIncus 插件中心用于安装和管理第三方插件。插件可以提供后台配置页，也可以通过受控客户端扩展点向用户端增加入口或页面。
+
+插件不会直接修改 PayIncus 源码。安装后的文件保存在运行态目录：
+
+```text
+/opt/incudal/plugins
+/opt/incudal/plugin-data
+/opt/incudal/plugin-logs
+/opt/incudal/plugin-staging
+```
+
+这些目录会在 OTA 更新和回滚时保留。
+
+## 能力
+
+- 上传 `.tar.gz` 插件包安装
+- 从 GitHub 插件市场安装
+- 启用、禁用和卸载插件
+- 查看安装任务日志
+- 通过 `configSchema` 管理插件配置
+- 通过 sandbox iframe 加载后台或用户端插件页面
+
+## 安全边界
+
+- 只有超级管理员可以安装、启用、禁用和卸载插件。
+- 用户端插件不能访问 `/api/admin/*`。
+- 插件包不能包含绝对路径、`../` 路径、软链接或硬链接。
+- 市场插件必须来自 GitHub Release artifact，并校验 SHA256。
+- 当前版本不执行插件自带 shell 脚本，也不加载任意后端代码。

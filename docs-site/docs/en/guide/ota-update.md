@@ -44,3 +44,10 @@ SYSTEM_UPDATE_RELEASE_REPOSITORY=VipMaxxxx/payincus
 ```
 
 Rollback switches the `current` symlink back to the previous release, restarts the backend and reruns verification.
+
+## Notes
+
+- Only super administrators can start updates and rollbacks.
+- Update APIs stay under `/api/admin/system-update/*`.
+- The user portal does not include update controls or update APIs.
+- Updates and rollbacks preserve `.env`, `server/certs`, `agent-release`, `plugins`, `plugin-data`, `plugin-logs`, `plugin-staging`, `.npm` and `.cache`.

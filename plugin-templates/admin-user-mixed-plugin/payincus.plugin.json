@@ -1,0 +1,37 @@
+{
+  "id": "com.example.coupon",
+  "name": "Coupon Example",
+  "version": "1.0.0",
+  "payincus": ">=0.0.12",
+  "description": "A mixed plugin with admin settings and a user-facing coupon page.",
+  "author": "Example",
+  "entrypoints": {
+    "adminPages": [
+      {
+        "slot": "admin.plugins.settings",
+        "title": "Coupon Settings",
+        "entry": "dist/admin/settings.html"
+      }
+    ],
+    "userPages": [
+      {
+        "slot": "user.sidebar.extra",
+        "title": "My Coupons",
+        "path": "/plugins/coupons",
+        "entry": "dist/user/coupons.html",
+        "requiresAuth": true
+      }
+    ]
+  },
+  "permissions": ["plugin:config:read", "plugin:config:write", "billing:discount:apply"],
+  "configSchema": {
+    "enabled": { "type": "boolean", "title": "Enable coupons" },
+    "maxDiscount": { "type": "number", "title": "Maximum discount" }
+  },
+  "templates": [
+    {
+      "name": "Default coupon config",
+      "path": "templates/default-config.json"
+    }
+  ]
+}

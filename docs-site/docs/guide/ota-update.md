@@ -60,4 +60,5 @@ bash scripts/migrate-ota-atomic-layout.sh
 - 只允许超级管理员启动更新和回滚。
 - 更新 API 固定在 `/api/admin/system-update/*`。
 - 用户端不包含更新入口和更新 API。
+- 更新和回滚会保留 `.env`、`server/certs`、`agent-release`、`plugins`、`plugin-data`、`plugin-logs`、`plugin-staging`、`.npm` 和 `.cache`。
 - SSH 维护建议使用少量长连接，避免短时间大量连接触发服务器连接率限制。

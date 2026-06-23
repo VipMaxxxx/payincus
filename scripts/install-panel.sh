@@ -168,6 +168,13 @@ ensure_env_keys() {
     set_env_if_missing "SYSTEM_UPDATE_RELEASE_REPOSITORY" "${GITHUB_REPO}" "在线更新 GitHub Release 仓库"
     set_env_if_missing "SYSTEM_UPDATE_RELEASE_TOKEN" "" "在线更新私有 Release Token"
     set_env_if_missing "SYSTEM_UPDATE_APPLY_MODE" "auto" "在线更新应用模式"
+    set_env_if_missing "PLUGIN_MANAGER_ALLOWED_ADMIN_IDS" "" "允许管理插件的管理员 ID"
+    set_env_if_missing "PLUGIN_MARKET_INDEX_URL" "" "插件市场索引地址"
+    set_env_if_missing "PLUGIN_INSTALL_DIR" "${INSTALL_DIR}/plugins" "插件安装目录"
+    set_env_if_missing "PLUGIN_DATA_DIR" "${INSTALL_DIR}/plugin-data" "插件数据目录"
+    set_env_if_missing "PLUGIN_LOG_DIR" "${INSTALL_DIR}/plugin-logs" "插件日志目录"
+    set_env_if_missing "PLUGIN_STAGING_DIR" "${INSTALL_DIR}/plugin-staging" "插件临时目录"
+    set_env_if_missing "PLUGIN_MAX_PACKAGE_SIZE_MB" "20" "插件包大小限制"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_REPOSITORY" "" "Agent GitHub Release 仓库"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_TOKEN" "" "Agent GitHub Release Token"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_DIR" "" "Agent 本地 Release 目录"
@@ -669,6 +676,10 @@ create_user() {
     # 创建 npm 缓存目录（npx/prisma 需要可写的 home 目录）
     mkdir -p "${INSTALL_DIR}/.npm"
     mkdir -p "${INSTALL_DIR}/.cache"
+    mkdir -p "${INSTALL_DIR}/plugins"
+    mkdir -p "${INSTALL_DIR}/plugin-data"
+    mkdir -p "${INSTALL_DIR}/plugin-logs"
+    mkdir -p "${INSTALL_DIR}/plugin-staging"
 
     # 设置目录权限
     chown -R "${RUN_USER}:${RUN_USER}" "$INSTALL_DIR"
@@ -925,7 +936,7 @@ StartLimitIntervalSec=300
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
+ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/plugins ${INSTALL_DIR}/plugin-data ${INSTALL_DIR}/plugin-logs ${INSTALL_DIR}/plugin-staging ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
 PrivateTmp=true
 
 # 资源限制
@@ -951,6 +962,7 @@ create_online_update_service() {
     step "创建在线更新 systemd 单元..."
 
     mkdir -p "${INSTALL_DIR}/update-logs"
+    mkdir -p "${INSTALL_DIR}/plugins" "${INSTALL_DIR}/plugin-data" "${INSTALL_DIR}/plugin-logs" "${INSTALL_DIR}/plugin-staging"
     local app_dir="${INSTALL_DIR}"
     if [[ -L "${INSTALL_DIR}/current" ]]; then
         app_dir="${INSTALL_DIR}/current"
@@ -1018,7 +1030,7 @@ EOF
     visudo -cf /etc/sudoers.d/incudal-online-update >/dev/null
 
     systemctl daemon-reload
-    chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/update-logs" "${INSTALL_DIR}/.git" 2>/dev/null || true
+    chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/update-logs" "${INSTALL_DIR}/plugins" "${INSTALL_DIR}/plugin-data" "${INSTALL_DIR}/plugin-logs" "${INSTALL_DIR}/plugin-staging" "${INSTALL_DIR}/.git" 2>/dev/null || true
 
     log "在线更新 systemd 单元和 sudoers 创建完成"
 }
