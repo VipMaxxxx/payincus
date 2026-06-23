@@ -270,6 +270,15 @@ pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
+Recently passed on production `v0.0.17`:
+
+```text
+ENV_FILE=/opt/incudal/.env FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=http://127.0.0.1:3001 pnpm verify:production
+ENV_FILE=/opt/incudal/.env FRONTEND_URL=https://pay.payincus.com BACKEND_URL=http://127.0.0.1:3001 pnpm verify:log-header
+```
+
+Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.0.17-20260623164805`; `version.json` reports `v0.0.17`, commit `60faf9a59ba0`, and `deployedAt=2026-06-23T16:58:50.000Z`.
+
 Manual plugin package proof also passed with `plugin-templates/admin-user-mixed-plugin` packaged as `.tar.gz` and validated by `validateAndExtractPluginPackage`; result had id `com.example.coupon`, one admin page, one user page, one template and 64-char SHA256.
 
 Earlier full product gates already passed before the docs/plugin work:
@@ -351,17 +360,16 @@ Note: a previous request excluded the old demo domain from production audit scop
 ## Suggested Next Work
 
 1. Sync local Git with remote `payincus/main`.
-2. When SSH stabilizes, write the missing `deployedAt` value in `/opt/incudal/current/version.json` and run server-side `pnpm verify:production` plus `pnpm verify:log-header` from `/opt/incudal/current`.
-3. Fix or avoid ZFS on the real Debian host, then retry storage-pool creation.
-4. Re-run the Agent install command from the admin panel after the public installer hotfix and verify heartbeat/reporting.
-5. Decide whether to continue improving docs:
+2. Fix or avoid ZFS on the real Debian host, then retry storage-pool creation.
+3. Re-run the Agent install command from the admin panel after the public installer hotfix and verify heartbeat/reporting.
+4. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
    - User workflow screenshots.
    - API request/response/error reference.
    - Payment provider setup guide.
    - Agent install guide with real host commands.
-6. Complete real production proof items from `docs/production-audit.md`.
-7. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+5. Complete real production proof items from `docs/production-audit.md`.
+6. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
 
 ## Release Documentation Rule
 
