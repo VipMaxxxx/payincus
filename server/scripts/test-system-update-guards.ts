@@ -100,8 +100,10 @@ assert.ok(
     installPanel.includes('/etc/sudoers.d/incudal-online-update') &&
     installPanel.includes('NOPASSWD: ${systemctl_bin} start incudal-online-update@*.service') &&
     installPanel.includes('readonly SERVICE_NAME="incudal-backend"') &&
+    installPanel.includes('NoNewPrivileges=false') &&
+    backendService.includes('NoNewPrivileges=false') &&
     backendService.includes('/opt/incudal/.git /opt/incudal/update-logs'),
-  'production online updates must run through root-owned systemd oneshot units with restricted sudoers and writable git/log paths'
+  'production online updates must run through root-owned systemd oneshot units with restricted sudoers, sudo-compatible backend privileges, and writable git/log paths'
 )
 
 assert.ok(

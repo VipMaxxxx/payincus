@@ -909,7 +909,9 @@ StartLimitBurst=5
 StartLimitIntervalSec=300
 
 # 安全加固
-NoNewPrivileges=true
+# 后台在线更新需要通过受限 sudoers 启动 root-owned systemd oneshot 单元。
+# 如果启用 NoNewPrivileges，sudo 会被内核直接拒绝。
+NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
