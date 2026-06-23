@@ -5292,7 +5292,7 @@ export default {
             description: 'Manage your hosts that can be used by you and your friends',
             create: 'Add Host',
             createDesc: 'Add a new Incus host',
-            ubuntuOnlyHint: 'Currently supports Ubuntu 22.04+ and Debian 11+ only.',
+            ubuntuOnlyHint: 'Currently supports Ubuntu 22.04+ and Debian 12/13. Debian 11 is best-effort compatible but should be upgraded.',
             installHintTitle: 'After submitting, the system will generate an install command with the panel URL and Token embedded. Copy and run it on the host to complete installation.',
             installHintIpv6: 'Tip: For IPv6 modes (NAT+IPv6, IPv6 Only), run the install script on the host first. It will auto-generate IPv6 subnet info for you to fill in below.',
             ipv6OptionalHint: 'Not sure? Leave blank for now. Run the install script on the host first — it will detect and display your IPv6 subnet. Then come back and edit the node to fill in.',

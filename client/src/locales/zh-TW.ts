@@ -5917,7 +5917,7 @@ export default {
             description: '管理您的節點，這些節點可以供您和您的好友使用',
             create: '新增節點',
             createDesc: '新增一個 Incus 節點',
-            ubuntuOnlyHint: '目前僅支援 Ubuntu 22.04+ 和 Debian 11+ 系統。',
+            ubuntuOnlyHint: '目前支援 Ubuntu 22.04+、Debian 12/13；Debian 11 可相容安裝但建議升級。',
             installHintTitle: '填寫節點資訊並提交後，系統會生成包含面板地址和 Token 的安裝命令，複製到節點宿主機執行即可完成安裝。',
             installHintIpv6: '提示：如需 IPv6 網路模式（NAT+IPv6、IPv6 Only），請先在宿主機執行安裝腳本，腳本會自動生成 IPv6 子網資訊供您填入下方表單。',
             ipv6OptionalHint: '如不清楚以上資訊，可先留空。在節點宿主機執行安裝腳本後，腳本會自動檢測並輸出可用的 IPv6 子網，屆時回到面板編輯節點補充即可。',

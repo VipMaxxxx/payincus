@@ -148,6 +148,7 @@
     "test:user-destroy-incus-order": "node --import tsx scripts/test-user-destroy-incus-order.ts",
     "test:instance-delete-incus-order": "node --import tsx scripts/test-instance-delete-incus-order.ts",
     "test:host-route-id-guards": "node --import tsx scripts/test-host-route-id-guards.ts",
+    "test:host-install-script-guards": "node --import tsx scripts/test-host-install-script-guards.ts",
     "test:host-migration-consistency": "node --import tsx scripts/test-host-migration-consistency.ts",
     "test:host-resource-atomic-guards": "node --import tsx scripts/test-host-resource-atomic-guards.ts",
     "test:instance-recreate-consistency": "node --import tsx scripts/test-instance-recreate-consistency.ts",

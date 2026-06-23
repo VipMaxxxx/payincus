@@ -248,11 +248,14 @@ detect_system() {
             fi
             ;;
         debian)
-            # 最低 Debian 11 (Bullseye)
+            # 明确支持 Debian 12/13；Debian 11 保留兼容但不作为推荐新装系统。
             local deb_major="${OS_VERSION%%.*}"
             if [[ "$deb_major" -lt 11 ]] 2>/dev/null; then
                 error "Debian 版本过低 (${OS_VERSION})，最低要求 Debian 11 (Bullseye)"
                 exit 1
+            fi
+            if [[ "$deb_major" -eq 11 ]] 2>/dev/null; then
+                warn "Debian 11 可兼容安装，但推荐使用 Debian 12/13"
             fi
             ;;
     esac
