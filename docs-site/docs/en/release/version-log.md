@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `e865f4d`
+- Current HEAD / 当前 HEAD: `474ae02`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Localize operation logs in Chinese / 日志内容中文化
-- Latest tag / 最新 tag: `v0.1.5`
+- Commit subject / 提交说明: Fix admin instance detail loading / 修复后台实例详情加载
+- Latest tag / 最新 tag: `v0.1.6`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.1.6
+
+- Release commit / 发布提交: `474ae02`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Fix admin instance detail loading / 修复后台实例详情加载
+
+### Fixes and Stability / 修复与稳定性
+
+- Fix admin instance detail loading / 修复后台实例详情加载 `474ae02`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.1.5 / 更新 v0.1.5 版本日志 `248b05e`
 
 ## v0.1.5
 
