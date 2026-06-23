@@ -104,6 +104,12 @@ async function updateTask(data: Parameters<typeof prisma.systemUpdateTask.update
   })
 }
 
+async function configureGitSafeDirectory(): Promise<void> {
+  await run('git', ['config', '--global', '--add', 'safe.directory', appDir], {
+    timeoutMs: 30000
+  })
+}
+
 async function main(): Promise<void> {
   if (!Number.isSafeInteger(taskId) || taskId <= 0) {
     throw new Error('Invalid task id')
@@ -122,6 +128,7 @@ async function main(): Promise<void> {
   await mkdir(logDir, { recursive: true })
   await updateTask({ status: 'running', startedAt: new Date(), logPath })
   await log(`Starting system update task ${taskId} -> ${targetVersion}`)
+  await configureGitSafeDirectory()
 
   const currentVersion = await getCurrentVersionMetadata(appDir)
   await updateTask({ fromVersion: currentVersion.version })
@@ -137,7 +144,7 @@ async function main(): Promise<void> {
     await cp(installDir, backupDir, { recursive: true, preserveTimestamps: true })
 
     await run('git', ['checkout', '--force', targetVersion], { timeoutMs: 120000 })
-    await run('git', ['clean', '-fdx', '-e', '.env', '-e', 'server/certs', '-e', 'agent-release', '-e', '.npm', '-e', '.cache', '-e', 'update-logs'], { timeoutMs: 120000 })
+    await run('git', ['clean', '-fdx', '-e', '.env', '-e', '.gitconfig', '-e', 'server/certs', '-e', 'agent-release', '-e', '.npm', '-e', '.cache', '-e', 'update-logs'], { timeoutMs: 120000 })
     await restoreRuntimeAssets(backupDir)
 
     await run('corepack', ['enable'], { timeoutMs: 120000 })

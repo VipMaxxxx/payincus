@@ -78,6 +78,8 @@ assert.ok(
   runTask.includes("git', ['checkout', '--force', targetVersion]") &&
     runTask.includes("git', ['clean', '-fdx'") &&
     runTask.includes("'-e', '.env'") &&
+    runTask.includes("'-e', '.gitconfig'") &&
+    runTask.includes("git', ['config', '--global', '--add', 'safe.directory', appDir]") &&
     runTask.includes("targetVersion = task.targetVersion") &&
     runTask.includes("pnpm', ['build']") &&
     runTask.includes("test:frontend-dist-boundary-guards") &&
