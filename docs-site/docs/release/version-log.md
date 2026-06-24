@@ -6,16 +6,24 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `326cab1`
+- 当前 HEAD / Current HEAD: `7ae4967`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Add production proof workspace / 新增生产验收工作台
-- 最新 tag / Latest tag: `v0.4.8`
+- 提交说明 / Commit subject: Fix Lsky upload cleanup identifier / 修复 Lsky 上传清理标识
+- 最新 tag / Latest tag: `v0.4.9`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.4.9
+
+- 发布提交 / Release commit: `7ae4967`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Fix Lsky upload cleanup identifier / 修复 Lsky 上传清理标识
+
+Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can be cleaned up when provider responses omit id/key/hash.
 
 ## v0.4.8
 
