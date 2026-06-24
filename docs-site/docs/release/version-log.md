@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `21a678c`
+- 当前 HEAD / Current HEAD: `0eb2178`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Add order exception handling / 新增订单异常处理
-- 最新 tag / Latest tag: `v0.2.3`
+- 提交说明 / Commit subject: Add balance adjustment approval / 新增调账审批流
+- 最新 tag / Latest tag: `v0.2.4`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.2.4
+
+- 发布提交 / Release commit: `0eb2178`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Add balance adjustment approval / 新增调账审批流
+
+### 新增能力 / New Capabilities
+
+- Add balance adjustment approval / 新增调账审批流 `0eb2178`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff for v0.2.3 OTA proof / 更新 v0.2.3 OTA 证明交接 `e5a5c2e`
+- Update version log for v0.2.3 / 更新 v0.2.3 版本日志 `cd63437`
 
 ## v0.2.3
 

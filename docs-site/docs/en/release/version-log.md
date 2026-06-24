@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `21a678c`
+- Current HEAD / 当前 HEAD: `0eb2178`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Add order exception handling / 新增订单异常处理
-- Latest tag / 最新 tag: `v0.2.3`
+- Commit subject / 提交说明: Add balance adjustment approval / 新增调账审批流
+- Latest tag / 最新 tag: `v0.2.4`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.2.4
+
+- Release commit / 发布提交: `0eb2178`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Add balance adjustment approval / 新增调账审批流
+
+### New Capabilities / 新增能力
+
+- Add balance adjustment approval / 新增调账审批流 `0eb2178`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff for v0.2.3 OTA proof / 更新 v0.2.3 OTA 证明交接 `e5a5c2e`
+- Update version log for v0.2.3 / 更新 v0.2.3 版本日志 `cd63437`
 
 ## v0.2.3
 
