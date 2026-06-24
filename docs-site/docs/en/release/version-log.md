@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `a721de8`
+- Current HEAD / 当前 HEAD: `c71ade8`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Add SLA alert center / 新增 SLA 告警中心
-- Latest tag / 最新 tag: `v0.3.0`
+- Commit subject / 提交说明: Add customer success ticket workspace / 新增客服成功工单工作台
+- Latest tag / 最新 tag: `v0.3.1`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.3.1
+
+- Release commit / 发布提交: `c71ade8`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Add customer success ticket workspace / 新增客服成功工单工作台
+
+### New Capabilities / 新增能力
+
+- Add customer success ticket workspace / 新增客服成功工单工作台 `c71ade8`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff for v0.3.0 OTA proof / 更新 v0.3.0 OTA 证明交接 `fd2634c`
+- Update version log for v0.3.0 / 更新 v0.3.0 版本日志 `2443c77`
 
 ## v0.3.0
 
