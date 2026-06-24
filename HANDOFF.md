@@ -12,13 +12,14 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 - Target remote branch: `payincus/main`
 - Upstream original project: `git@github.com:qwer-xyz/incudal.git`
 - Important ledger: `docs/production-audit.md`
+- Commercial operation task ledger: `docs/commercial-operation-task-goals.md`
 
 ## Current Git State
 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-2063fae Update version log for v0.2.7 / 更新 v0.2.7 版本日志
+87bf91c Update version log for v0.2.8 / 更新 v0.2.8 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -28,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-2063fae Update version log for v0.2.7 / 更新 v0.2.7 版本日志
+87bf91c Update version log for v0.2.8 / 更新 v0.2.8 版本日志
 ```
 
 Recently updated/released files include:
@@ -37,6 +38,11 @@ Recently updated/released files include:
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
 server/prisma/schema.prisma
+server/prisma/migrations/20260624214500_add_financial_reconciliation/migration.sql
+server/src/routes/admin-billing.ts
+server/scripts/test-financial-reconciliation-guards.ts
+docs-site/docs/features/billing.md
+docs-site/docs/en/features/billing.md
 server/prisma/migrations/20260624210000_add_order_operation_cases/migration.sql
 server/src/routes/orders.ts
 server/scripts/test-order-payment-operations-guards.ts
@@ -90,39 +96,38 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.2.7 Add order payment operations workflow / 新增订单支付运营闭环
-feature commit: 5de795a
-version-log commit: 2063fae
+v0.2.8 Add financial reconciliation workflow / 新增财务对账闭环
+feature commit: dc95c91
+version-log commit: 87bf91c
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28101929322: success
-CI 28101926080: success
-Deploy docs site to GitHub Pages 28101926077: success
+Build & Release 28104039525: success
+CI 28104035963: success
+Deploy docs site to GitHub Pages 28104035968: success
 ```
 
-Release assets for `v0.2.7` were present:
+Release assets for `v0.2.8` were present:
 
 ```text
-incudal-v0.2.7-linux-amd64.tar.gz
-incudal-v0.2.7-linux-amd64.tar.gz.sha256
-incudal-v0.2.7-linux-arm64.tar.gz
-incudal-v0.2.7-linux-arm64.tar.gz.sha256
-incudal-v0.2.7-ota-manifest.json
+incudal-v0.2.8-linux-amd64.tar.gz
+incudal-v0.2.8-linux-amd64.tar.gz.sha256
+incudal-v0.2.8-linux-arm64.tar.gz
+incudal-v0.2.8-linux-arm64.tar.gz.sha256
+incudal-v0.2.8-ota-manifest.json
 ota-manifest.json
 ```
 
 Production OTA proof:
 
 ```text
-task: #38
-from: v0.2.6
-to: v0.2.7
-current: /opt/incudal/releases/v0.2.7-20260624133147
-version.json: v0.2.7, commit 5de795a23e1e, deployedAt 2026-06-24T13:31:56.124Z
-artifact sha256: e36b8782316b37b87be470fcdb9a13463e10b041806f1f5b41f2f43f25ca6bc6
+task: #39
+from: v0.2.7
+to: v0.2.8
+current: /opt/incudal/releases/v0.2.8-20260624140556
+artifact sha256: abe31b2cd945e7f6f28b093c42adf5614d909bc0a8104ca7c85ca8880706c939
 result: System update completed successfully
 ```
 
@@ -132,7 +137,7 @@ Post-update checks completed in the update log:
 OTA download cache cleanup at update start
 disk-space preflight before update and before artifact download/extract/backup
 backend health ready after restart
-Prisma migration 20260624210000_add_order_operation_cases applied
+Prisma migration 20260624214500_add_financial_reconciliation applied
 scripts/verify-split-host.sh passed
 pnpm verify:production passed
 pnpm verify:log-header passed
@@ -143,30 +148,38 @@ Public checks after the OTA:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/orders: HTTP 200
-https://payincus.com/release/version-log.html: contains v0.2.7 and 订单支付运营
-https://payincus.com/en/release/version-log.html: contains v0.2.7 and order payment operations
+https://payincus.com/release/version-log.html: contains v0.2.8, dc95c91 and 财务对账
+https://payincus.com/en/release/version-log.html: contains v0.2.8, dc95c91 and financial reconciliation
 ```
 
-Local gates run for `v0.2.7`:
+Local gates run for `v0.2.8`:
 
 ```text
 pnpm --filter server exec prisma generate
-pnpm --filter server test:order-payment-operations-guards
-pnpm --filter server test:order-center-guards
-pnpm --filter server test:balance-adjustment-approval-guards
+pnpm --filter server test:financial-reconciliation-guards
 pnpm --filter server type-check
 pnpm --filter client type-check
 pnpm --filter client build
+pnpm --filter server test:admin-billing-route-id-guards
+pnpm --filter server test:order-payment-operations-guards
+pnpm --filter server test:frontend-i18n-keys
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
-pnpm --dir docs-site --ignore-workspace build
-git diff --check
+pnpm --filter server build
 pnpm build
 pnpm test
+pnpm --dir docs-site --ignore-workspace build
+git diff --check
 ```
 
-The release was verified by GitHub Actions, release assets, production OTA task status, `version.json`, update log, service health, public user/admin health, public admin order page HTTP 200, and docs/version-log checks.
+The release was verified by GitHub Actions, release assets, production OTA task status, update log, service health, public user/admin health, Prisma migration output, and docs/version-log checks.
+
+Current commercial operation progress:
+
+```text
+4/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation.
+Suggested next category: delivery assurance enhancement.
+```
 
 ## Product Split Status
 
@@ -598,20 +611,21 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.2.7 release, the product/docs baseline is `2063fae` and a handoff-only commit may exist on top.
-2. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
-3. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
-4. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
-5. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
-6. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
-7. Decide whether to continue improving docs:
+1. Keep local Git synced with remote `payincus/main`; after the v0.2.8 release, the product/docs baseline is `87bf91c` and this handoff-only commit may exist on top.
+2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; the suggested next category is delivery assurance enhancement.
+3. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
+4. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
+5. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
+6. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
+7. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
+8. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
    - User workflow screenshots.
    - API request/response/error reference.
    - Payment provider setup guide.
    - Agent install guide with real host commands.
-8. Complete remaining real production proof items from `docs/production-audit.md`.
-9. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+9. Complete remaining real production proof items from `docs/production-audit.md`.
+10. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
 
 ## Release Documentation Rule
 
