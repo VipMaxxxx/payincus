@@ -79,7 +79,7 @@ assert.ok(
 )
 
 for (const [name, source, expectedUses] of [
-  ['balance', balanceSource, 4],
+  ['balance', balanceSource, 7],
   ['AFF', affSource, 3]
 ] as const) {
   assert.ok(
@@ -102,6 +102,20 @@ assert.ok(
     .includes('const userId = parsePositiveRouteId(request.params.userId)'),
   'admin balance mutations must validate userId before balance writes'
 )
+
+for (const [label, marker] of [
+  ['balance adjustment create', "}>('/admin/:userId/adjustment-requests'"],
+  ['balance adjustment approve', "}>('/admin/adjustment-requests/:requestId/approve'"],
+  ['balance adjustment reject', "}>('/admin/adjustment-requests/:requestId/reject'"]
+] as const) {
+  const section = sectionFrom(balanceSource, marker)
+  assert.ok(
+    section.includes(label === 'balance adjustment create'
+      ? 'const userId = parsePositiveRouteId(request.params.userId)'
+      : 'const requestId = parsePositiveRouteId(request.params.requestId)'),
+    `${label} must strictly validate path IDs before accounting writes`
+  )
+}
 
 assert.ok(
   sectionFrom(affSource, "fastify.post<{\n    Params: { withdrawalId: string }")

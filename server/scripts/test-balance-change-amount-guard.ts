@@ -14,6 +14,11 @@ assert.notEqual(changeBalanceStart, -1, 'missing changeBalance function')
 const changeBalanceEnd = balanceSource.indexOf('/**\n * 充值到账', changeBalanceStart)
 assert.notEqual(changeBalanceEnd, -1, 'missing changeBalance end marker')
 const changeBalanceSection = balanceSource.slice(changeBalanceStart, changeBalanceEnd)
+const transactionHelperStart = balanceSource.indexOf('async function changeBalanceInTransaction(')
+assert.notEqual(transactionHelperStart, -1, 'missing shared balance transaction helper')
+const transactionHelperEnd = balanceSource.indexOf('/**\n * 变更用户余额', transactionHelperStart)
+assert.notEqual(transactionHelperEnd, -1, 'missing shared balance transaction helper end marker')
+const transactionHelperSection = balanceSource.slice(transactionHelperStart, transactionHelperEnd)
 
 assert.ok(
   balanceSource.includes("throw new Error('余额变动金额无效')"),
@@ -30,18 +35,22 @@ assert.ok(
   'balance changes must normalize to cents and reject values outside database precision before mutating'
 )
 assert.ok(
-  changeBalanceSection.includes('const normalizedAmount = normalizeBalanceAmount(amount)'),
-  'changeBalance must normalize the input amount once before the transaction'
+  transactionHelperSection.includes('const normalizedAmount = normalizeBalanceAmount(amount)'),
+  'balance mutation helper must normalize the input amount once before the transaction'
 )
 assert.ok(
-  changeBalanceSection.includes('const balanceAfter = Number((balanceBefore + normalizedAmount).toFixed(2))') &&
-    changeBalanceSection.includes('Math.abs(balanceAfter) > MAX_BALANCE_AMOUNT'),
+  transactionHelperSection.includes('const balanceAfter = Number((balanceBefore + normalizedAmount).toFixed(2))') &&
+    transactionHelperSection.includes('Math.abs(balanceAfter) > MAX_BALANCE_AMOUNT'),
   'changeBalance must validate the resulting balance against Decimal(10,2) limits'
 )
 assert.ok(
-  changeBalanceSection.includes('data: { balance: { increment: normalizedAmount } }') &&
-    changeBalanceSection.includes('amount: normalizedAmount'),
+  transactionHelperSection.includes('data: { balance: { increment: normalizedAmount } }') &&
+    transactionHelperSection.includes('amount: normalizedAmount'),
   'changeBalance must use the normalized amount for both the balance mutation and balance log'
+)
+assert.ok(
+  changeBalanceSection.includes('prisma.$transaction((tx) => changeBalanceInTransaction(tx, input))'),
+  'changeBalance must delegate to the shared transaction helper'
 )
 assert.ok(
   balanceRouteSource.includes("typeof amount !== 'number' || !Number.isFinite(amount)"),
@@ -67,7 +76,9 @@ assert.ok(
 )
 
 assert.ok(
-  balanceRouteSource.includes("import type { BalanceLogType, BillingRecordType } from '@prisma/client'"),
+  balanceRouteSource.includes('BalanceLogType') &&
+    balanceRouteSource.includes('BillingRecordType') &&
+    balanceRouteSource.includes("from '@prisma/client'"),
   'balance routes must type query filters against Prisma enums'
 )
 

@@ -34,7 +34,7 @@ https://admin.example.com
 | 功能 | 路由 | 说明 |
 | --- | --- | --- |
 | 计费中心 | `/admin/billing` | 订单、充值、消费、余额变动、支付配置和账务审计。 |
-| 订单中心 | `/admin/orders` | 聚合查询全站充值订单和实例账单，支持按类型、状态和用户 ID 筛选、查看详情、处理充值异常和人工调账。 |
+| 订单中心 | `/admin/orders` | 聚合查询全站充值订单和实例账单，支持按类型、状态和用户 ID 筛选、查看详情、处理充值异常、提交调账审批并审核执行。 |
 | 支付渠道 | `/admin/billing?tab=paymentProviders` | 管理支付提供商、密钥、回调和启用状态。 |
 | 推荐返利 | `/admin/billing?tab=affConversions` | 审核推荐转化、返利和推广记录。 |
 | 娱乐管理 | `/admin/entertainment` | 管理积分、会员或娱乐模块配置。 |

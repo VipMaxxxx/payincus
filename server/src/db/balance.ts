@@ -4,7 +4,14 @@
  */
 
 import { prisma } from './prisma.js'
-import { Prisma, type BalanceLog, type BalanceLogType } from '@prisma/client'
+import {
+  Prisma,
+  type BalanceAdjustmentRequest,
+  type BalanceAdjustmentRequestStatus,
+  type BalanceAdjustmentRequestType,
+  type BalanceLog,
+  type BalanceLogType
+} from '@prisma/client'
 import { USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from './advisory-locks.js'
 
 type BalanceQueryClient = typeof prisma | Prisma.TransactionClient
@@ -167,6 +174,102 @@ export interface BalanceChangeResult {
   error?: string
 }
 
+export type BalanceAdjustmentRequestWithRelations = BalanceAdjustmentRequest & {
+  user: { id: number; username: string; email: string | null }
+  requestedBy: { id: number; username: string }
+  reviewedBy?: { id: number; username: string } | null
+  balanceLog?: BalanceLog | null
+}
+
+export interface BalanceAdjustmentRequestInput {
+  userId: number
+  requestedByUserId: number
+  amount: number
+  requestType: BalanceAdjustmentRequestType
+  reason: string
+  sourceType?: string
+  sourceId?: number
+  orderNo?: string
+}
+
+export interface BalanceAdjustmentRequestListOptions {
+  page?: number
+  pageSize?: number
+  status?: BalanceAdjustmentRequestStatus
+  userId?: number
+}
+
+async function changeBalanceInTransaction(
+  tx: Prisma.TransactionClient,
+  input: BalanceChangeInput
+): Promise<{ balanceLog: BalanceLog; newBalance: number }> {
+  const { userId, type, amount, orderId, instanceId, remark } = input
+  const normalizedAmount = normalizeBalanceAmount(amount)
+
+  const locked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+  if (!locked) {
+    throw new Error('余额正在处理，请稍后重试')
+  }
+
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: { balance: true }
+  })
+
+  if (!user) {
+    throw new Error('用户不存在')
+  }
+
+  const balanceBefore = Number(user.balance)
+  const balanceAfter = Number((balanceBefore + normalizedAmount).toFixed(2))
+
+  if (normalizedAmount < 0 && balanceAfter < 0) {
+    throw new Error('余额不足')
+  }
+
+  if (Math.abs(balanceAfter) > MAX_BALANCE_AMOUNT) {
+    throw new Error('余额超出系统允许范围')
+  }
+
+  const updateResult = await tx.user.updateMany({
+    where: {
+      id: userId,
+      ...(normalizedAmount < 0 ? { balance: { gte: Math.abs(normalizedAmount) } } : {})
+    },
+    data: { balance: { increment: normalizedAmount } }
+  })
+
+  if (updateResult.count === 0) {
+    throw new Error('余额不足或并发冲突')
+  }
+
+  const updatedUser = await tx.user.findUnique({
+    where: { id: userId },
+    select: { balance: true }
+  })
+
+  if (!updatedUser) {
+    throw new Error('用户不存在')
+  }
+
+  const persistedBalanceAfter = Number(updatedUser.balance)
+
+  const balanceLog = await tx.balanceLog.create({
+    data: {
+      userId,
+      type,
+      amount: normalizedAmount,
+      balanceBefore,
+      balanceAfter: persistedBalanceAfter,
+      orderId,
+      instanceId,
+      remark
+    }
+  })
+
+  return { balanceLog, newBalance: persistedBalanceAfter }
+}
+
 /**
  * 变更用户余额（事务安全）
  * 所有余额变动都应该通过这个函数进行，确保日志记录和数据一致性
@@ -174,79 +277,8 @@ export interface BalanceChangeResult {
 export async function changeBalance(
   input: BalanceChangeInput
 ): Promise<BalanceChangeResult> {
-  const { userId, type, amount, orderId, instanceId, remark } = input
-
   try {
-    const normalizedAmount = normalizeBalanceAmount(amount)
-
-    const result = await prisma.$transaction(async (tx) => {
-      const locked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
-      if (!locked) {
-        throw new Error('余额正在处理，请稍后重试')
-      }
-
-      // 1. 获取当前余额（加锁）
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: { balance: true }
-      })
-
-      if (!user) {
-        throw new Error('用户不存在')
-      }
-
-      const balanceBefore = Number(user.balance)
-      const balanceAfter = Number((balanceBefore + normalizedAmount).toFixed(2))
-
-      // 2. 检查余额是否足够（如果是扣款）
-      if (normalizedAmount < 0 && balanceAfter < 0) {
-        throw new Error('余额不足')
-      }
-
-      if (Math.abs(balanceAfter) > MAX_BALANCE_AMOUNT) {
-        throw new Error('余额超出系统允许范围')
-      }
-
-      // 3. 更新用户余额。扣款使用条件更新，防止并发下绕过余额检查。
-      const updateResult = await tx.user.updateMany({
-        where: {
-          id: userId,
-          ...(normalizedAmount < 0 ? { balance: { gte: Math.abs(normalizedAmount) } } : {})
-        },
-        data: { balance: { increment: normalizedAmount } }
-      })
-
-      if (updateResult.count === 0) {
-        throw new Error('余额不足或并发冲突')
-      }
-
-      const updatedUser = await tx.user.findUnique({
-        where: { id: userId },
-        select: { balance: true }
-      })
-
-      if (!updatedUser) {
-        throw new Error('用户不存在')
-      }
-
-      const persistedBalanceAfter = Number(updatedUser.balance)
-
-      // 4. 创建余额变动日志
-      const balanceLog = await tx.balanceLog.create({
-        data: {
-          userId,
-          type,
-          amount: normalizedAmount,
-          balanceBefore,
-          balanceAfter: persistedBalanceAfter,
-          orderId,
-          instanceId,
-          remark
-        }
-      })
-
-      return { balanceLog, newBalance: persistedBalanceAfter }
-    })
+    const result = await prisma.$transaction((tx) => changeBalanceInTransaction(tx, input))
 
     return {
       success: true,
@@ -259,6 +291,159 @@ export async function changeBalance(
       error: error instanceof Error ? error.message : '余额变动失败'
     }
   }
+}
+
+function includeBalanceAdjustmentRequestRelations() {
+  return {
+    user: { select: { id: true, username: true, email: true } },
+    requestedBy: { select: { id: true, username: true } },
+    reviewedBy: { select: { id: true, username: true } },
+    balanceLog: true
+  } satisfies Prisma.BalanceAdjustmentRequestInclude
+}
+
+export async function createBalanceAdjustmentRequest(
+  input: BalanceAdjustmentRequestInput
+): Promise<BalanceAdjustmentRequestWithRelations> {
+  const amount = normalizeBalanceAmount(input.amount)
+
+  return prisma.balanceAdjustmentRequest.create({
+    data: {
+      userId: input.userId,
+      requestedByUserId: input.requestedByUserId,
+      amount,
+      requestType: input.requestType,
+      reason: input.reason,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      orderNo: input.orderNo
+    },
+    include: includeBalanceAdjustmentRequestRelations()
+  }) as Promise<BalanceAdjustmentRequestWithRelations>
+}
+
+export async function getBalanceAdjustmentRequests(
+  options: BalanceAdjustmentRequestListOptions = {}
+): Promise<{
+  requests: BalanceAdjustmentRequestWithRelations[]
+  total: number
+  page: number
+  pageSize: number
+}> {
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const skip = (page - 1) * pageSize
+  const where: Prisma.BalanceAdjustmentRequestWhereInput = {
+    ...(options.status ? { status: options.status } : {}),
+    ...(options.userId ? { userId: options.userId } : {})
+  }
+
+  const [requests, total] = await Promise.all([
+    prisma.balanceAdjustmentRequest.findMany({
+      where,
+      include: includeBalanceAdjustmentRequestRelations(),
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: pageSize
+    }),
+    prisma.balanceAdjustmentRequest.count({ where })
+  ])
+
+  return { requests: requests as BalanceAdjustmentRequestWithRelations[], total, page, pageSize }
+}
+
+export async function approveBalanceAdjustmentRequest(
+  requestId: number,
+  reviewerUserId: number,
+  reviewRemark?: string
+): Promise<{ request: BalanceAdjustmentRequestWithRelations; newBalance: number }> {
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.balanceAdjustmentRequest.findUnique({
+      where: { id: requestId },
+      include: includeBalanceAdjustmentRequestRelations()
+    })
+
+    if (!request) {
+      throw new Error('调账申请不存在')
+    }
+    if (request.status !== 'pending') {
+      throw new Error('调账申请已处理')
+    }
+
+    const claimed = await tx.balanceAdjustmentRequest.updateMany({
+      where: { id: requestId, status: 'pending' },
+      data: {
+        status: 'approved',
+        reviewedByUserId: reviewerUserId,
+        reviewedAt: new Date(),
+        reviewRemark
+      }
+    })
+
+    if (claimed.count !== 1) {
+      throw new Error('调账申请已处理')
+    }
+
+    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
+      ? 'refund'
+      : 'admin_adjust'
+    const remark = [
+      `[审批通过] ${request.reason}`,
+      request.orderNo ? `订单 ${request.orderNo}` : '',
+      reviewRemark ? `审核备注: ${reviewRemark}` : ''
+    ].filter(Boolean).join('；')
+
+    const balanceResult = await changeBalanceInTransaction(tx, {
+      userId: request.userId,
+      type: logType,
+      amount: Number(request.amount),
+      orderId: request.orderNo || undefined,
+      remark
+    })
+
+    const updatedRequest = await tx.balanceAdjustmentRequest.update({
+      where: { id: requestId },
+      data: { balanceLogId: balanceResult.balanceLog.id },
+      include: includeBalanceAdjustmentRequestRelations()
+    })
+
+    return {
+      request: updatedRequest as BalanceAdjustmentRequestWithRelations,
+      newBalance: balanceResult.newBalance
+    }
+  })
+}
+
+export async function rejectBalanceAdjustmentRequest(
+  requestId: number,
+  reviewerUserId: number,
+  reviewRemark: string
+): Promise<BalanceAdjustmentRequestWithRelations> {
+  return prisma.$transaction(async (tx) => {
+    const claimed = await tx.balanceAdjustmentRequest.updateMany({
+      where: { id: requestId, status: 'pending' },
+      data: {
+        status: 'rejected',
+        reviewedByUserId: reviewerUserId,
+        reviewedAt: new Date(),
+        reviewRemark
+      }
+    })
+
+    if (claimed.count !== 1) {
+      throw new Error('调账申请不存在或已处理')
+    }
+
+    const request = await tx.balanceAdjustmentRequest.findUnique({
+      where: { id: requestId },
+      include: includeBalanceAdjustmentRequestRelations()
+    })
+
+    if (!request) {
+      throw new Error('调账申请不存在')
+    }
+
+    return request as BalanceAdjustmentRequestWithRelations
+  })
 }
 
 /**

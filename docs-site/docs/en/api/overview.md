@@ -30,7 +30,8 @@ wss://admin.example.com/api/ws/...
 - User portal: `GET /api/orders` and `GET /api/orders/:type/:id`, scoped to the current regular user.
 - Admin console: `GET /api/admin/orders` and `GET /api/admin/orders/:type/:id`, available only to administrators.
 - The order center aggregates `recharge_records` and `instance_billing_records` and does not return raw callback payloads, provider config snapshots or other sensitive fields.
-- Manual completion, failure marking and balance adjustments in admin order detail reuse the existing recharge and balance endpoints: `POST /api/admin/recharge/orders/:orderNo/complete`, `POST /api/admin/recharge/orders/:orderNo/fail`, and `POST /api/balance/admin/:userId/adjust`.
+- Manual completion and failure marking in admin order detail reuse the existing recharge endpoints: `POST /api/admin/recharge/orders/:orderNo/complete` and `POST /api/admin/recharge/orders/:orderNo/fail`.
+- Refunds, compensation credits and deductions first enter balance-adjustment approval: `POST /api/balance/admin/:userId/adjustment-requests` creates a request, `GET /api/balance/admin/adjustment-requests` lists tasks, `POST /api/balance/admin/adjustment-requests/:requestId/approve` approves and executes it, and `POST /api/balance/admin/adjustment-requests/:requestId/reject` rejects it. Balance logs are written only after approval.
 
 ## Boundary Rule
 

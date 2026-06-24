@@ -36,18 +36,53 @@ interface AdminOrderItem {
   expiredAt: string | null
 }
 
+interface BalanceAdjustmentRequest {
+  id: number
+  userId: number
+  user: { id: number; username: string; email: string | null }
+  requestedBy: { id: number; username: string }
+  reviewedBy: { id: number; username: string } | null
+  amount: number
+  requestType: string
+  status: string
+  sourceType: string | null
+  sourceId: number | null
+  orderNo: string | null
+  reason: string
+  reviewRemark: string | null
+  balanceLogId: number | null
+  balanceLog: {
+    id: number
+    type: string
+    amount: number
+    balanceBefore: number
+    balanceAfter: number
+  } | null
+  createdAt: string
+  updatedAt: string
+  reviewedAt: string | null
+}
+
 const orders = ref<AdminOrderItem[]>([])
 const selectedOrder = ref<AdminOrderItem | null>(null)
+const adjustmentRequests = ref<BalanceAdjustmentRequest[]>([])
 const loading = ref(false)
+const requestLoading = ref(false)
 const detailLoading = ref(false)
 const error = ref('')
+const requestError = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
+const requestPage = ref(1)
+const requestPageSize = 7
+const requestTotal = ref(0)
+const requestStatus = ref('pending')
 const type = ref('')
 const status = ref('')
 const userId = ref('')
 const actionLoading = ref(false)
+const reviewLoadingId = ref<number | null>(null)
 const actionMessage = ref('')
 const actionError = ref('')
 const completeTradeNo = ref('')
@@ -57,6 +92,7 @@ const adjustmentAmount = ref('')
 const adjustmentRemark = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const requestTotalPages = computed(() => Math.max(1, Math.ceil(requestTotal.value / requestPageSize)))
 
 const typeOptions = [
   { value: '', label: '全部类型' },
@@ -88,6 +124,13 @@ const statusOptions = computed(() => {
   ]
 })
 
+const requestStatusOptions = [
+  { value: 'pending', label: '待审核' },
+  { value: 'approved', label: '已通过' },
+  { value: 'rejected', label: '已驳回' },
+  { value: '', label: '全部' }
+]
+
 function formatMoney(value: number | null | undefined): string {
   return `¥${Number(value || 0).toFixed(2)}`
 }
@@ -118,6 +161,26 @@ function statusClass(statusValue: string): string {
 
 function sourceLabel(sourceType: OrderSourceType): string {
   return sourceType === 'recharge' ? '充值订单' : '实例账单'
+}
+
+function adjustmentTypeLabel(requestType: string): string {
+  return requestType === 'refund' ? '退款补偿' : '人工调账'
+}
+
+function adjustmentStatusLabel(statusValue: string): string {
+  const labels: Record<string, string> = {
+    pending: '待审核',
+    approved: '已通过',
+    rejected: '已驳回'
+  }
+  return labels[statusValue] || statusValue
+}
+
+function adjustmentStatusClass(statusValue: string): string {
+  if (statusValue === 'approved') return 'bg-green-50 text-green-700 border-green-200'
+  if (statusValue === 'pending') return 'bg-yellow-50 text-yellow-700 border-yellow-200'
+  if (statusValue === 'rejected') return 'bg-red-50 text-red-700 border-red-200'
+  return 'bg-gray-50 text-gray-700 border-gray-200'
 }
 
 const canCompleteRecharge = computed(() => {
@@ -160,6 +223,24 @@ async function loadOrders() {
     error.value = err?.message || '订单加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadAdjustmentRequests() {
+  requestLoading.value = true
+  requestError.value = ''
+  try {
+    const res = await api.admin.getBalanceAdjustmentRequests({
+      page: requestPage.value,
+      pageSize: requestPageSize,
+      status: requestStatus.value || undefined
+    })
+    adjustmentRequests.value = res.requests as BalanceAdjustmentRequest[]
+    requestTotal.value = res.total
+  } catch (err: any) {
+    requestError.value = err?.message || '调账审批任务加载失败'
+  } finally {
+    requestLoading.value = false
   }
 }
 
@@ -274,14 +355,53 @@ async function adjustBalance() {
   actionMessage.value = ''
   actionError.value = ''
   try {
-    const result = await api.admin.adjustUserBalance(selectedOrder.value.userId, amount, remark)
-    actionMessage.value = `调账成功，用户新余额 ${formatMoney(result.newBalance)}`
+    const result = await api.admin.createBalanceAdjustmentRequest(selectedOrder.value.userId, {
+      amount,
+      reason: remark,
+      requestType: amount > 0 ? 'refund' : 'manual_adjust',
+      sourceType: selectedOrder.value.sourceType,
+      sourceId: selectedOrder.value.sourceId,
+      orderNo: selectedOrder.value.orderNo
+    })
+    actionMessage.value = `${result.message}：#${result.request.id}`
     adjustmentAmount.value = ''
+    requestStatus.value = 'pending'
+    requestPage.value = 1
+    await loadAdjustmentRequests()
     await refreshSelectedOrder()
   } catch (err: any) {
-    actionError.value = err?.message || '调账失败'
+    actionError.value = err?.message || '调账申请提交失败'
   } finally {
     actionLoading.value = false
+  }
+}
+
+async function approveAdjustmentRequest(request: BalanceAdjustmentRequest) {
+  if (request.status !== 'pending') return
+  reviewLoadingId.value = request.id
+  requestError.value = ''
+  try {
+    await api.admin.approveBalanceAdjustmentRequest(request.id, `订单中心审批通过 #${request.id}`)
+    await loadAdjustmentRequests()
+    await loadOrders()
+  } catch (err: any) {
+    requestError.value = err?.message || '审批通过失败'
+  } finally {
+    reviewLoadingId.value = null
+  }
+}
+
+async function rejectAdjustmentRequest(request: BalanceAdjustmentRequest) {
+  if (request.status !== 'pending') return
+  reviewLoadingId.value = request.id
+  requestError.value = ''
+  try {
+    await api.admin.rejectBalanceAdjustmentRequest(request.id, `订单中心驳回 #${request.id}`)
+    await loadAdjustmentRequests()
+  } catch (err: any) {
+    requestError.value = err?.message || '驳回失败'
+  } finally {
+    reviewLoadingId.value = null
   }
 }
 
@@ -303,7 +423,21 @@ function goPage(nextPage: number) {
   void loadOrders()
 }
 
-onMounted(loadOrders)
+function applyRequestFilters() {
+  requestPage.value = 1
+  void loadAdjustmentRequests()
+}
+
+function goRequestPage(nextPage: number) {
+  if (nextPage < 1 || nextPage > requestTotalPages.value || nextPage === requestPage.value) return
+  requestPage.value = nextPage
+  void loadAdjustmentRequests()
+}
+
+onMounted(() => {
+  void loadOrders()
+  void loadAdjustmentRequests()
+})
 </script>
 
 <template>
@@ -383,6 +517,81 @@ onMounted(loadOrders)
       </div>
     </section>
 
+    <section class="overflow-hidden rounded-lg border border-themed bg-themed-secondary">
+      <div class="flex flex-col gap-3 border-b border-themed p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-themed">调账审批</h2>
+          <p class="mt-1 text-sm text-themed-muted">订单退款、补款和扣款先进入审批任务，通过后才会写入余额日志。</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select v-model="requestStatus" class="input w-32" @change="applyRequestFilters">
+            <option v-for="item in requestStatusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+          <button class="btn btn-outline" :disabled="requestLoading" @click="loadAdjustmentRequests">刷新</button>
+        </div>
+      </div>
+
+      <div v-if="requestError" class="m-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ requestError }}</div>
+      <div v-if="requestLoading" class="p-6 text-center text-sm text-themed-muted">正在加载审批任务...</div>
+      <div v-else-if="adjustmentRequests.length === 0" class="p-6 text-center text-sm text-themed-muted">暂无调账审批任务</div>
+      <div v-else class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-themed">
+          <thead class="bg-themed-tertiary">
+            <tr class="text-left text-xs font-medium text-themed-muted">
+              <th class="px-4 py-3">申请</th>
+              <th class="px-4 py-3">用户</th>
+              <th class="px-4 py-3">金额</th>
+              <th class="px-4 py-3">来源</th>
+              <th class="px-4 py-3">状态</th>
+              <th class="px-4 py-3">时间</th>
+              <th class="px-4 py-3 text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-themed">
+            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
+              <td class="px-4 py-3">
+                <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+              </td>
+              <td class="px-4 py-3">
+                <div class="text-themed">{{ request.user.username }}</div>
+                <div class="text-xs text-themed-muted">申请人 {{ request.requestedBy.username }}</div>
+              </td>
+              <td class="px-4 py-3 font-medium" :class="request.amount >= 0 ? 'text-green-700' : 'text-red-700'">
+                {{ request.amount >= 0 ? '+' : '' }}{{ formatMoney(request.amount) }}
+              </td>
+              <td class="px-4 py-3 text-themed-muted">
+                <div>{{ request.orderNo || '-' }}</div>
+                <div class="text-xs">{{ request.sourceType || '-' }}</div>
+              </td>
+              <td class="px-4 py-3">
+                <span :class="['inline-flex rounded-full border px-2 py-0.5 text-xs', adjustmentStatusClass(request.status)]">
+                  {{ adjustmentStatusLabel(request.status) }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-themed-muted">{{ formatTime(request.createdAt) }}</td>
+              <td class="px-4 py-3 text-right">
+                <div v-if="request.status === 'pending'" class="flex justify-end gap-2">
+                  <button class="btn btn-sm btn-outline text-red-600" :disabled="reviewLoadingId === request.id" @click="rejectAdjustmentRequest(request)">驳回</button>
+                  <button class="btn btn-sm btn-primary" :disabled="reviewLoadingId === request.id" @click="approveAdjustmentRequest(request)">通过并执行</button>
+                </div>
+                <span v-else class="text-xs text-themed-muted">{{ request.reviewedBy?.username || '-' }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-between border-t border-themed px-4 py-3 text-sm text-themed-muted">
+        <span>共 {{ requestTotal }} 条审批</span>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-sm btn-outline" :disabled="requestPage <= 1" @click="goRequestPage(requestPage - 1)">上一页</button>
+          <span>{{ requestPage }} / {{ requestTotalPages }}</span>
+          <button class="btn btn-sm btn-outline" :disabled="requestPage >= requestTotalPages" @click="goRequestPage(requestPage + 1)">下一页</button>
+        </div>
+      </div>
+    </section>
+
     <div v-if="selectedOrder" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="selectedOrder = null">
       <aside class="h-full w-full max-w-xl overflow-y-auto bg-themed p-6 shadow-xl">
         <div class="flex items-start justify-between gap-4">
@@ -439,8 +648,8 @@ onMounted(loadOrders)
         </section>
 
         <section class="mt-6 border-t border-themed pt-5">
-          <h3 class="text-base font-semibold text-themed">人工调账 / 退款</h3>
-          <p class="mt-1 text-sm text-themed-muted">用于补款、退款或扣款。正数增加用户余额，负数扣减用户余额，操作会写入余额日志和管理员日志。</p>
+          <h3 class="text-base font-semibold text-themed">人工调账 / 退款审批</h3>
+          <p class="mt-1 text-sm text-themed-muted">用于补款、退款或扣款。正数增加用户余额，负数扣减用户余额；提交后进入审批任务，通过后才会写入余额日志。</p>
           <div class="mt-4 grid gap-3">
             <label class="text-sm">
               <span class="mb-1 block text-themed-muted">调账金额</span>
@@ -450,7 +659,7 @@ onMounted(loadOrders)
               <span class="mb-1 block text-themed-muted">调账原因</span>
               <textarea v-model="adjustmentRemark" class="input min-h-[84px]" placeholder="必须写明订单、原因和处理结论" :disabled="actionLoading" />
             </label>
-            <button class="btn btn-primary justify-self-start" :disabled="actionLoading" @click="adjustBalance">确认调账</button>
+            <button class="btn btn-primary justify-self-start" :disabled="actionLoading" @click="adjustBalance">提交调账审批</button>
           </div>
         </section>
       </aside>

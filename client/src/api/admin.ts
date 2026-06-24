@@ -3190,6 +3190,93 @@ const api = {
       } | null
     }> => http.post(`/balance/admin/${userId}/adjust`, { amount, remark }),
 
+    // 创建余额调账审批申请
+    createBalanceAdjustmentRequest: (
+      userId: number,
+      data: {
+        amount: number
+        reason: string
+        requestType?: 'manual_adjust' | 'refund'
+        sourceType?: string
+        sourceId?: number
+        orderNo?: string
+      }
+    ): Promise<{
+      message: string
+      request: {
+        id: number
+        userId: number
+        user: { id: number; username: string; email: string | null }
+        requestedBy: { id: number; username: string }
+        reviewedBy: { id: number; username: string } | null
+        amount: number
+        requestType: string
+        status: string
+        sourceType: string | null
+        sourceId: number | null
+        orderNo: string | null
+        reason: string
+        reviewRemark: string | null
+        balanceLogId: number | null
+        balanceLog: {
+          id: number
+          type: string
+          amount: number
+          balanceBefore: number
+          balanceAfter: number
+        } | null
+        createdAt: string
+        updatedAt: string
+        reviewedAt: string | null
+      }
+    }> => http.post(`/balance/admin/${userId}/adjustment-requests`, data),
+
+    // 获取余额调账审批列表
+    getBalanceAdjustmentRequests: (params?: { page?: number; pageSize?: number; status?: string; userId?: number }): Promise<{
+      requests: Array<{
+        id: number
+        userId: number
+        user: { id: number; username: string; email: string | null }
+        requestedBy: { id: number; username: string }
+        reviewedBy: { id: number; username: string } | null
+        amount: number
+        requestType: string
+        status: string
+        sourceType: string | null
+        sourceId: number | null
+        orderNo: string | null
+        reason: string
+        reviewRemark: string | null
+        balanceLogId: number | null
+        balanceLog: {
+          id: number
+          type: string
+          amount: number
+          balanceBefore: number
+          balanceAfter: number
+        } | null
+        createdAt: string
+        updatedAt: string
+        reviewedAt: string | null
+      }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/balance/admin/adjustment-requests', { params }),
+
+    // 审批通过余额调账申请
+    approveBalanceAdjustmentRequest: (requestId: number, remark?: string): Promise<{
+      message: string
+      newBalance: number
+      request: any
+    }> => http.post(`/balance/admin/adjustment-requests/${requestId}/approve`, { remark }),
+
+    // 驳回余额调账申请
+    rejectBalanceAdjustmentRequest: (requestId: number, remark: string): Promise<{
+      message: string
+      request: any
+    }> => http.post(`/balance/admin/adjustment-requests/${requestId}/reject`, { remark }),
+
     // 赠送用户余额
     giftUserBalance: (userId: number, amount: number, remark?: string): Promise<{
       message: string

@@ -280,6 +280,17 @@ enum BalanceLogType {
   invite_generate   // 生成邀请码扣款
 }
 
+enum BalanceAdjustmentRequestType {
+  manual_adjust // 人工调账
+  refund        // 退款补偿
+}
+
+enum BalanceAdjustmentRequestStatus {
+  pending  // 待审核
+  approved // 已通过并执行
+  rejected // 已驳回
+}
+
 enum VipBenefitRewardType {
   balance
   points
@@ -456,6 +467,9 @@ model User {
   // 计费相关
   balanceLogs     BalanceLog[]
   rechargeRecords RechargeRecord[]
+  balanceAdjustmentTargets BalanceAdjustmentRequest[] @relation("BalanceAdjustmentTarget")
+  balanceAdjustmentRequests BalanceAdjustmentRequest[] @relation("BalanceAdjustmentRequester")
+  balanceAdjustmentReviews BalanceAdjustmentRequest[] @relation("BalanceAdjustmentReviewer")
   badgeOwnerships UserBadgeOwnership[]
   vipBenefitClaims VipBenefitClaim[]
 
@@ -2283,10 +2297,42 @@ model BalanceLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adjustmentRequest BalanceAdjustmentRequest?
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([type])
   @@map("balance_logs")
+}
+
+model BalanceAdjustmentRequest {
+  id                Int                            @id @default(autoincrement())
+  userId            Int                            @map("user_id")
+  requestedByUserId Int                            @map("requested_by_user_id")
+  reviewedByUserId  Int?                           @map("reviewed_by_user_id")
+  amount            Decimal                        @db.Decimal(10, 2)
+  requestType       BalanceAdjustmentRequestType   @default(manual_adjust) @map("request_type")
+  status            BalanceAdjustmentRequestStatus @default(pending)
+  sourceType        String?                        @map("source_type")
+  sourceId          Int?                           @map("source_id")
+  orderNo           String?                        @map("order_no")
+  reason            String
+  reviewRemark      String?                        @map("review_remark")
+  balanceLogId      Int?                           @unique @map("balance_log_id")
+  createdAt         DateTime                       @default(now()) @map("created_at")
+  updatedAt         DateTime                       @updatedAt @map("updated_at")
+  reviewedAt        DateTime?                      @map("reviewed_at")
+
+  user        User        @relation("BalanceAdjustmentTarget", fields: [userId], references: [id], onDelete: Cascade)
+  requestedBy User        @relation("BalanceAdjustmentRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  reviewedBy  User?       @relation("BalanceAdjustmentReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  balanceLog  BalanceLog? @relation(fields: [balanceLogId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([requestedByUserId])
+  @@index([reviewedByUserId])
+  @@index([orderNo])
+  @@map("balance_adjustment_requests")
 }
 
 // 支付渠道配置
