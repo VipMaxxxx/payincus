@@ -18,8 +18,8 @@ NODE_ENV=production
 HOST=127.0.0.1
 PORT=3001
 SERVE_STATIC_CLIENT=false
-FRONTEND_URL=https://demo.payincus.com
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com
+FRONTEND_URL=https://panel.example.com
+ADMIN_FRONTEND_URL=https://admin.example.com
 ```
 
 ## OTA Note

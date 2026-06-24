@@ -29,8 +29,8 @@ sudo bash install-panel.sh --uninstall
 
 ## Required Domains
 
-- User portal domain, for example `demo.payincus.com`.
-- Admin console domain, for example `demoadmin.payincus.com`.
+- User portal domain, for example `panel.example.com`.
+- Admin console domain, for example `admin.example.com`.
 - Initial admin email: enter a real email when prompted, or leave blank to use `admin@payincus.local`.
 
 The two domains must be separate.

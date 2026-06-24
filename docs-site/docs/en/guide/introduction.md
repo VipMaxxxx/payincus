@@ -4,20 +4,14 @@ PayIncus is an Incus-based panel for selling, delivering and operating LXC / KVM
 
 It is based on `VipMaxxxx/incudal` and focuses on non-Docker production deployment, split user/admin frontends, payment callbacks, resource delivery, host Agent reporting and admin OTA updates.
 
-## Entrypoints
+## Entrypoint Examples
 
-- User portal: `https://demo.payincus.com`
-- Admin console: `https://demoadmin.payincus.com`
+- User portal: `https://panel.example.com`
+- Admin console: `https://admin.example.com`
+- Online demo: [/en/demo](/en/demo)
 - Documentation: `https://payincus.com`
 - Telegram group: `https://t.me/Payincus`
 - GitHub repository: `https://github.com/VipMaxxxx/payincus`
-
-## Demo Accounts
-
-| Entry | Username | Password |
-| --- | --- | --- |
-| User portal | `demo` | `demo123` |
-| Admin console | `admin` | `admin123` |
 
 ## Main Capabilities
 

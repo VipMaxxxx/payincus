@@ -4,12 +4,12 @@ PayIncus uses a split frontend architecture with one shared backend API.
 
 ```text
 User browser
-  -> https://demo.payincus.com
+  -> https://panel.example.com
   -> Nginx serves /opt/incudal/current/client/dist/user
   -> /api and /api/ws proxy to backend
 
 Admin browser
-  -> https://demoadmin.payincus.com
+  -> https://admin.example.com
   -> Nginx serves /opt/incudal/current/client/dist/admin
   -> /api and /api/ws proxy to backend
 
@@ -34,8 +34,8 @@ Production should set:
 
 ```dotenv
 SERVE_STATIC_CLIENT=false
-FRONTEND_URL=https://demo.payincus.com
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com
+FRONTEND_URL=https://panel.example.com
+ADMIN_FRONTEND_URL=https://admin.example.com
 VITE_API_BASE_URL=/api
 ```
 

@@ -4,8 +4,8 @@
 
 用户端和后台必须是两个独立域名：
 
-- 用户端：`demo.payincus.com`
-- 后台：`demoadmin.payincus.com`
+- 用户端：`panel.example.com`
+- 后台：`admin.example.com`
 
 不要把两个入口写成同一个域名下的不同路径。
 

@@ -3,12 +3,12 @@
 Nginx should serve two different static frontend directories and proxy API traffic to the same backend.
 
 ```text
-demo.payincus.com
+panel.example.com
   root /opt/incudal/current/client/dist/user
   /api/ -> http://127.0.0.1:3001
   /api/ws/ -> WebSocket proxy
 
-demoadmin.payincus.com
+admin.example.com
   root /opt/incudal/current/client/dist/admin
   /api/ -> http://127.0.0.1:3001
   /api/ws/ -> WebSocket proxy

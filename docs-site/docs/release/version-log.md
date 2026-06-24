@@ -6,14 +6,22 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `e8cca39`
+- 当前 HEAD / Current HEAD: `a7b1825`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Allow installer to set initial admin email / 允许安装器设置初始管理员邮箱
+- 提交说明 / Commit subject: Revert "Add demo login and read-only safeguards / 新增演示登录与只读保护"
 - 最新 tag / Latest tag: `v0.2.1`
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 新增能力 / New Capabilities
+
+- Revert "Add demo login and read-only safeguards / 新增演示登录与只读保护" `a7b1825`
+- Add demo login and read-only safeguards / 新增演示登录与只读保护 `07592a7`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff for v0.2.1 OTA proof / 更新 v0.2.1 OTA 证明交接 `b246189`
+- Update version log for v0.2.1 / 更新 v0.2.1 版本日志 `7f2ac52`
 
 ## 历史版本 / Historical Versions
 

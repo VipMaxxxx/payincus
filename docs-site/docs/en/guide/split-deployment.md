@@ -6,8 +6,8 @@ The production standard is two public frontend domains with one shared backend A
 
 | Purpose | Example |
 | --- | --- |
-| User portal | `https://demo.payincus.com` |
-| Admin console | `https://demoadmin.payincus.com` |
+| User portal | `https://panel.example.com` |
+| Admin console | `https://admin.example.com` |
 | Backend API | Same-origin `/api` behind each frontend |
 
 ## Build Outputs

@@ -3,9 +3,7 @@
 <p align="center">基于 Incus 的 LXC / KVM NAT VPS 销售、交付与管理面板。</p>
 
 <p align="center">
-  <a href="https://demo.payincus.com">测试用户端</a>
-  ·
-  <a href="https://demoadmin.payincus.com">测试后台</a>
+  <a href="https://payincus.com/demo">在线 Demo</a>
   ·
   <a href="https://payincus.com">文档站</a>
   ·
@@ -20,21 +18,15 @@ PayIncus 是基于开源项目 [VipMaxxxx/incudal](https://github.com/VipMaxxxx/
 
 当前维护重点是非 Docker 生产部署、前后端分离、安全审计、支付回调、资源交付和 Agent 上报链路。
 
-访问入口：
+入口示例：
 
-- 测试用户端：https://demo.payincus.com
-- 测试后台：https://demoadmin.payincus.com
+- 用户端：https://panel.example.com
+- 管理后台：https://admin.example.com
+- 在线 Demo：https://payincus.com/demo
 - 文档站：https://payincus.com
 - Telegram 交流群：https://t.me/Payincus
 - 当前仓库：https://github.com/VipMaxxxx/payincus
 - 原始项目：https://github.com/VipMaxxxx/payincus
-
-演示账号：
-
-| 入口 | 用户名 | 密码 |
-| --- | --- | --- |
-| 用户端 | `demo` | `demo123` |
-| 管理后台 | `admin` | `admin123` |
 
 ## 核心能力
 
@@ -75,12 +67,12 @@ scripts/                安装、构建、预检和 smoke 脚本
 
 ```text
 用户浏览器
-  -> https://demo.payincus.com
+  -> https://panel.example.com
   -> Nginx 静态用户端：/opt/incudal/current/client/dist/user
   -> /api 和 /api/ws 反代到后端 127.0.0.1:3001 或内网 IP:3001
 
 管理员浏览器
-  -> https://demoadmin.payincus.com
+  -> https://admin.example.com
   -> Nginx 静态管理端：/opt/incudal/current/client/dist/admin
   -> /api 和 /api/ws 反代到同一个后端 127.0.0.1:3001 或内网 IP:3001
 
@@ -91,11 +83,11 @@ scripts/                安装、构建、预检和 smoke 脚本
 双机内网部署可以写成：
 
 ```text
-https://demo.payincus.com
+https://panel.example.com
   -> 用户端 Nginx
   -> /api, /api/ws -> http://10.0.0.12:3001
 
-https://demoadmin.payincus.com
+https://admin.example.com
   -> 管理端 Nginx
   -> /api, /api/ws -> http://10.0.0.12:3001
 
@@ -144,7 +136,7 @@ https://github.com/VipMaxxxx/payincus/releases
 
 ## 手动部署
 
-手动部署也按双前端分离方式执行。以下示例假设安装目录是 `/opt/incudal`，用户端域名是 `demo.payincus.com`，后台域名是 `demoadmin.payincus.com`。
+手动部署也按双前端分离方式执行。以下示例假设安装目录是 `/opt/incudal`，用户端域名是 `panel.example.com`，后台域名是 `admin.example.com`。
 
 安装依赖：
 
@@ -160,8 +152,8 @@ pnpm install --frozen-lockfile
 pnpm --filter server exec prisma generate
 pnpm --filter server exec prisma migrate deploy
 VITE_API_BASE_URL=/api \
-VITE_CUSTOMER_BASE_URL=https://demo.payincus.com \
-VITE_ADMIN_BASE_URL=https://demoadmin.payincus.com \
+VITE_CUSTOMER_BASE_URL=https://panel.example.com \
+VITE_ADMIN_BASE_URL=https://admin.example.com \
 pnpm build
 ```
 
@@ -180,10 +172,10 @@ NODE_ENV=production \
 HOST=127.0.0.1 \
 PORT=3001 \
 SERVE_STATIC_CLIENT=false \
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
-SITE_URL=https://demo.payincus.com \
-PAYMENT_CALLBACK_BASE_URL=https://demo.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
+SITE_URL=https://panel.example.com \
+PAYMENT_CALLBACK_BASE_URL=https://panel.example.com \
 node server/dist/app.js
 ```
 
@@ -210,8 +202,8 @@ deploy/nginx-split-intranet.conf.example
 
 需要替换：
 
-- `demo.payincus.com`：你的客户面板公网域名
-- `demoadmin.payincus.com`：你的管理后台公网域名
+- `panel.example.com`：你的客户面板公网域名
+- `admin.example.com`：你的管理后台公网域名
 - `/opt/incudal/current/client/dist/user`：客户前端当前 release 静态目录
 - `/opt/incudal/current/client/dist/admin`：后台前端当前 release 静态目录
 - `10.0.0.12:3001`：后端内网 IP 和端口
@@ -221,8 +213,8 @@ deploy/nginx-split-intranet.conf.example
 部署后应验证：
 
 ```bash
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
@@ -266,7 +258,7 @@ SYSTEM_UPDATE_RELEASE_TOKEN=
 插件中心位于管理后台：
 
 ```text
-https://demoadmin.payincus.com/admin/plugins
+https://admin.example.com/admin/plugins
 ```
 
 核心能力：
@@ -300,7 +292,7 @@ PLUGIN_MAX_PACKAGE_SIZE_MB=20
 后台页面路径：
 
 ```text
-https://demoadmin.payincus.com/admin/system-update
+https://admin.example.com/admin/system-update
 ```
 
 命令行启动在线更新：
@@ -326,8 +318,8 @@ sudo systemctl daemon-reload
 
 ```bash
 SERVICE_NAME=incudal-backend \
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm update:online v1.2.3
 ```
@@ -348,13 +340,13 @@ SERVE_STATIC_CLIENT=false
 DATABASE_URL=postgresql://incudal:change_me@127.0.0.1:5432/incudal
 REDIS_URL=redis://:change_me@127.0.0.1:6379
 
-FRONTEND_URL=https://demo.payincus.com
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com
-SITE_URL=https://demo.payincus.com
-PAYMENT_CALLBACK_BASE_URL=https://demo.payincus.com
+FRONTEND_URL=https://panel.example.com
+ADMIN_FRONTEND_URL=https://admin.example.com
+SITE_URL=https://panel.example.com
+PAYMENT_CALLBACK_BASE_URL=https://panel.example.com
 VITE_API_BASE_URL=/api
-VITE_CUSTOMER_BASE_URL=https://demo.payincus.com
-VITE_ADMIN_BASE_URL=https://demoadmin.payincus.com
+VITE_CUSTOMER_BASE_URL=https://panel.example.com
+VITE_ADMIN_BASE_URL=https://admin.example.com
 
 COOKIE_SAME_SITE=
 COOKIE_SECURE=
@@ -474,8 +466,8 @@ cd agent && go test ./...
 前后端分离检查：
 
 ```bash
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
@@ -483,8 +475,8 @@ pnpm verify:split:host
 双机内网后端示例：
 
 ```bash
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://10.0.0.12:3001 \
 pnpm verify:split:host
 ```
@@ -493,8 +485,8 @@ pnpm verify:split:host
 
 ```bash
 ENV_FILE=/opt/incudal/.env \
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:production
 ```
@@ -520,8 +512,8 @@ pnpm smoke:split:nginx
 
 ```bash
 ENV_FILE=/opt/incudal/.env \
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 RUN_SPLIT_AUTH_SMOKE=1 \
 RUN_AGENT_RELEASE_SMOKE=1 \

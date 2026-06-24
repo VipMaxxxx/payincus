@@ -10,8 +10,8 @@ deploy/nginx-split-intranet.conf.example
 
 替换项：
 
-- `demo.payincus.com`：用户端域名。
-- `demoadmin.payincus.com`：后台域名。
+- `panel.example.com`：用户端域名。
+- `admin.example.com`：后台域名。
 - `/opt/incudal/current/client/dist/user`：用户端当前 release 静态目录。
 - `/opt/incudal/current/client/dist/admin`：后台当前 release 静态目录。
 - `10.0.0.12:3001`：后端内网 IP 和端口。
@@ -30,8 +30,8 @@ deploy/nginx-split-intranet.conf.example
 部署后执行：
 
 ```bash
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```

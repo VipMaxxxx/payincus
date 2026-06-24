@@ -3,16 +3,16 @@
 ## 自动检查
 
 ```bash
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
 
 ```bash
 ENV_FILE=/opt/incudal/.env \
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:production
 ```

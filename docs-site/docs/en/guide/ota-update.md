@@ -5,7 +5,7 @@ The admin console includes a version update page for controlled online updates. 
 Admin page:
 
 ```text
-https://demoadmin.payincus.com/admin/system-update
+https://admin.example.com/admin/system-update
 ```
 
 ## Recommended Mode

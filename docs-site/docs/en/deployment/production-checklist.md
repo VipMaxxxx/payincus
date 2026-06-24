@@ -5,8 +5,8 @@ Local tests do not replace real production proof.
 ## Split Host Checks
 
 ```bash
-FRONTEND_URL=https://demo.payincus.com \
-ADMIN_FRONTEND_URL=https://demoadmin.payincus.com \
+FRONTEND_URL=https://panel.example.com \
+ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```

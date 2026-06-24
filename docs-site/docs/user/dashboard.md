@@ -5,14 +5,7 @@
 入口：
 
 ```text
-https://demo.payincus.com
-```
-
-演示账号：
-
-```text
-用户名：demo
-密码：demo123
+https://panel.example.com
 ```
 
 ## 访问边界

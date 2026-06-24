@@ -40,13 +40,13 @@ features:
 ## Quick Links
 
 <div class="payincus-links">
-  <a class="payincus-link" href="https://demo.payincus.com">
-    <strong>Demo user portal</strong>
-    demo.payincus.com
+  <a class="payincus-link" href="/en/demo">
+    <strong>Online Demo</strong>
+    Try the user portal and admin console
   </a>
-  <a class="payincus-link" href="https://demoadmin.payincus.com">
-    <strong>Demo admin console</strong>
-    demoadmin.payincus.com
+  <a class="payincus-link" href="/en/deployment/one-click-install">
+    <strong>Start deployment</strong>
+    One-click install and production settings
   </a>
   <a class="payincus-link" href="https://t.me/Payincus">
     <strong>Telegram group</strong>
@@ -57,13 +57,6 @@ features:
     VipMaxxxx/payincus
   </a>
 </div>
-
-## Demo Accounts
-
-| Entry | URL | Username | Password |
-| --- | --- | --- | --- |
-| User portal | <https://demo.payincus.com> | `demo` | `demo123` |
-| Admin console | <https://demoadmin.payincus.com> | `admin` | `admin123` |
 
 ## Recommended Reading Order
 

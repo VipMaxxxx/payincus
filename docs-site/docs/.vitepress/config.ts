@@ -2,6 +2,7 @@ import { defineConfig } from 'vitepress'
 
 const zhNav = [
   { text: '开始', link: '/guide/introduction' },
+  { text: '在线 Demo', link: '/demo' },
   { text: '部署', link: '/deployment/one-click-install' },
   { text: '后台 OTA', link: '/guide/ota-update' },
   { text: '插件', link: '/plugins/overview' },
@@ -18,6 +19,7 @@ const zhNav = [
 
 const enNav = [
   { text: 'Start', link: '/en/guide/introduction' },
+  { text: 'Demo', link: '/en/demo' },
   { text: 'Deploy', link: '/en/deployment/one-click-install' },
   { text: 'Admin OTA', link: '/en/guide/ota-update' },
   { text: 'Plugins', link: '/en/plugins/overview' },
@@ -37,6 +39,7 @@ const zhSidebar = [
     text: '指南',
     items: [
       { text: '项目介绍', link: '/guide/introduction' },
+      { text: '在线 Demo', link: '/demo' },
       { text: '系统架构', link: '/guide/architecture' },
       { text: '前后台分离', link: '/guide/split-deployment' },
       { text: '权限边界', link: '/guide/admin-user-boundary' },
@@ -92,6 +95,7 @@ const enSidebar = [
     text: 'Guide',
     items: [
       { text: 'Introduction', link: '/en/guide/introduction' },
+      { text: 'Online Demo', link: '/en/demo' },
       { text: 'Architecture', link: '/en/guide/architecture' },
       { text: 'Split Deployment', link: '/en/guide/split-deployment' },
       { text: 'Access Boundaries', link: '/en/guide/admin-user-boundary' },

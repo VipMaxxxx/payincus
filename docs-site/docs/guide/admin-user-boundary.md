@@ -25,7 +25,7 @@
 
 ## 建议验收
 
-1. 普通用户访问 `https://demoadmin.payincus.com`，应被拒绝或要求后台登录。
-2. 管理员访问 `https://demo.payincus.com` 的用户认证页面，应被踢回用户登录并提示使用独立后台。
+1. 普通用户访问 `https://admin.example.com`，应被拒绝或要求后台登录。
+2. 管理员访问 `https://panel.example.com` 的用户认证页面，应被踢回用户登录并提示使用独立后台。
 3. 用户端构建产物不应含后台敏感 marker。
 4. 管理端构建产物不应含用户自助功能 marker。

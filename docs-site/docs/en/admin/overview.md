@@ -5,14 +5,7 @@ The admin console is for operators and administrators only. It provides operatio
 Entry:
 
 ```text
-https://demoadmin.payincus.com
-```
-
-Demo account:
-
-```text
-Username: admin
-Password: admin123
+https://admin.example.com
 ```
 
 ## Access Boundary

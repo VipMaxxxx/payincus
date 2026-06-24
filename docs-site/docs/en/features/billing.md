@@ -24,7 +24,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 
 ## Callback Boundary
 
-- Payment callbacks should use the user portal domain, for example `https://demo.payincus.com/api/...`.
+- Payment callbacks should use the user portal domain, for example `https://panel.example.com/api/...`.
 - Do not use the admin domain or internal backend URL for callbacks.
 - Verify signature, order ID, amount, status and idempotency.
 - Payment secrets must never enter frontend bundles or logs.

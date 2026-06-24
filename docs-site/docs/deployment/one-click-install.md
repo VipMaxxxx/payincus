@@ -21,8 +21,8 @@ sudo bash install-panel.sh --uninstall
 
 安装时建议使用：
 
-- 用户端域名：`demo.payincus.com`
-- 后台域名：`demoadmin.payincus.com`
+- 用户端域名：`panel.example.com`
+- 后台域名：`admin.example.com`
 - 初始管理员邮箱：按提示输入真实邮箱；留空默认 `admin@payincus.local`
 
 实际生产环境请替换为自己的正式域名。

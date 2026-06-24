@@ -3,8 +3,8 @@
 PayIncus 前端通过同源 `/api` 调用后端。
 
 ```text
-https://demo.payincus.com/api
-https://demoadmin.payincus.com/api
+https://panel.example.com/api
+https://admin.example.com/api
 ```
 
 两个域名的 `/api` 都由 Nginx 反代到同一个后端。
@@ -14,8 +14,8 @@ https://demoadmin.payincus.com/api
 终端 WebSocket 走同源 `/api/ws`：
 
 ```text
-wss://demo.payincus.com/api/ws/...
-wss://demoadmin.payincus.com/api/ws/...
+wss://panel.example.com/api/ws/...
+wss://admin.example.com/api/ws/...
 ```
 
 ## 权限
