@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `68abb17`
+- 当前 HEAD / Current HEAD: `d0d0c06`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Add capacity and cost operations view / 新增容量与成本运营视图
-- 最新 tag / Latest tag: `v0.4.4`
+- 提交说明 / Commit subject: Fix ticket AI cached API fallback / 修复工单 AI 缓存 API 兜底
+- 最新 tag / Latest tag: `v0.4.5`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.4.5
+
+- 发布提交 / Release commit: `d0d0c06`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Fix ticket AI cached API fallback / 修复工单 AI 缓存 API 兜底
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix ticket AI cached API fallback / 修复工单 AI 缓存 API 兜底 `d0d0c06`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.4.4 / 更新 v0.4.4 版本日志 `70ec05e`
 
 ## v0.4.4
 
