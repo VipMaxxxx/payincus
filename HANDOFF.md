@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-87bf91c Update version log for v0.2.8 / 更新 v0.2.8 版本日志
+9885685 Update version log for v0.2.9 / 更新 v0.2.9 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-87bf91c Update version log for v0.2.8 / 更新 v0.2.8 版本日志
+9885685 Update version log for v0.2.9 / 更新 v0.2.9 版本日志
 ```
 
 Recently updated/released files include:
@@ -38,6 +38,13 @@ Recently updated/released files include:
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
 server/prisma/schema.prisma
+server/prisma/migrations/20260624222000_add_delivery_assurance_cases/migration.sql
+server/src/routes/admin-delivery.ts
+server/src/lib/notifier.ts
+server/scripts/test-delivery-center-guards.ts
+client/src/views/admin/DeliveryCenterView.vue
+docs-site/docs/features/instances.md
+docs-site/docs/en/features/instances.md
 server/prisma/migrations/20260624214500_add_financial_reconciliation/migration.sql
 server/src/routes/admin-billing.ts
 server/scripts/test-financial-reconciliation-guards.ts
@@ -68,8 +75,8 @@ docs-site/docs/plugins/overview.md
 docs-site/docs/en/plugins/overview.md
 client/src/components/layout/SideNav.vue
 client/src/router/admin.ts
-client/src/views/admin/DeliveryAssuranceView.vue
-server/src/routes/admin/delivery.ts
+client/src/views/admin/DeliveryCenterView.vue
+server/src/routes/admin-delivery.ts
 server/scripts/test-delivery-center-guards.ts
 ```
 
@@ -96,38 +103,38 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.2.8 Add financial reconciliation workflow / 新增财务对账闭环
-feature commit: dc95c91
-version-log commit: 87bf91c
+v0.2.9 Add delivery assurance operations workflow / 新增交付保障运营闭环
+feature commit: 62825b8
+version-log commit: 9885685
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28104039525: success
-CI 28104035963: success
-Deploy docs site to GitHub Pages 28104035968: success
+Build & Release 28106031495: success
+CI 28106027364: success
+Deploy docs site to GitHub Pages 28106027434: success
 ```
 
-Release assets for `v0.2.8` were present:
+Release assets for `v0.2.9` were present:
 
 ```text
-incudal-v0.2.8-linux-amd64.tar.gz
-incudal-v0.2.8-linux-amd64.tar.gz.sha256
-incudal-v0.2.8-linux-arm64.tar.gz
-incudal-v0.2.8-linux-arm64.tar.gz.sha256
-incudal-v0.2.8-ota-manifest.json
+incudal-v0.2.9-linux-amd64.tar.gz
+incudal-v0.2.9-linux-amd64.tar.gz.sha256
+incudal-v0.2.9-linux-arm64.tar.gz
+incudal-v0.2.9-linux-arm64.tar.gz.sha256
+incudal-v0.2.9-ota-manifest.json
 ota-manifest.json
 ```
 
 Production OTA proof:
 
 ```text
-task: #39
-from: v0.2.7
-to: v0.2.8
-current: /opt/incudal/releases/v0.2.8-20260624140556
-artifact sha256: abe31b2cd945e7f6f28b093c42adf5614d909bc0a8104ca7c85ca8880706c939
+task: #40
+from: v0.2.8
+to: v0.2.9
+current: /opt/incudal/releases/v0.2.9-20260624143538
+artifact sha256: 121b87c94b2cb9ecc8b329cf54776d4a7ca2e567950f09b02cd32d7b91cbe469
 result: System update completed successfully
 ```
 
@@ -137,7 +144,7 @@ Post-update checks completed in the update log:
 OTA download cache cleanup at update start
 disk-space preflight before update and before artifact download/extract/backup
 backend health ready after restart
-Prisma migration 20260624214500_add_financial_reconciliation applied
+Prisma migration 20260624222000_add_delivery_assurance_cases applied
 scripts/verify-split-host.sh passed
 pnpm verify:production passed
 pnpm verify:log-header passed
@@ -148,23 +155,21 @@ Public checks after the OTA:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://payincus.com/release/version-log.html: contains v0.2.8, dc95c91 and 财务对账
-https://payincus.com/en/release/version-log.html: contains v0.2.8, dc95c91 and financial reconciliation
+https://payincus.com/release/version-log.html: contains v0.2.9, 62825b8 and 交付保障
+https://payincus.com/en/release/version-log.html: contains v0.2.9, 62825b8 and delivery assurance
 ```
 
-Local gates run for `v0.2.8`:
+Local gates run for `v0.2.9`:
 
 ```text
 pnpm --filter server exec prisma generate
-pnpm --filter server test:financial-reconciliation-guards
+pnpm --filter server test:delivery-center-guards
 pnpm --filter server type-check
 pnpm --filter client type-check
 pnpm --filter client build
-pnpm --filter server test:admin-billing-route-id-guards
-pnpm --filter server test:order-payment-operations-guards
-pnpm --filter server test:frontend-i18n-keys
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
+pnpm --filter server test:frontend-i18n-keys
 pnpm --filter server build
 pnpm build
 pnpm test
@@ -177,8 +182,8 @@ The release was verified by GitHub Actions, release assets, production OTA task 
 Current commercial operation progress:
 
 ```text
-4/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation.
-Suggested next category: delivery assurance enhancement.
+5/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement.
+Suggested next category: SLA and alerting.
 ```
 
 ## Product Split Status
@@ -611,8 +616,8 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.2.8 release, the product/docs baseline is `87bf91c` and this handoff-only commit may exist on top.
-2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; the suggested next category is delivery assurance enhancement.
+1. Keep local Git synced with remote `payincus/main`; after the v0.2.9 release, the product/docs baseline is `9885685` and this handoff-only commit may exist on top.
+2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; the suggested next category is SLA and alerting.
 3. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
 4. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
 5. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
