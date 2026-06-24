@@ -7,6 +7,7 @@ const appSource = readFileSync(resolve(process.cwd(), 'src/app.ts'), 'utf8')
 const adminApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/admin.ts'), 'utf8')
 const adminRouterSource = readFileSync(resolve(process.cwd(), '../client/src/router/admin.ts'), 'utf8')
 const adminNavSource = readFileSync(resolve(process.cwd(), '../client/src/config/side-nav-items-admin.ts'), 'utf8')
+const sideNavSource = readFileSync(resolve(process.cwd(), '../client/src/components/layout/SideNav.vue'), 'utf8')
 const deliveryViewSource = readFileSync(resolve(process.cwd(), '../client/src/views/admin/DeliveryCenterView.vue'), 'utf8')
 const workerSource = readFileSync(resolve(process.cwd(), 'src/workers/instanceTaskWorker.ts'), 'utf8')
 
@@ -48,7 +49,9 @@ assert.ok(
     adminRouterSource.includes("name: 'admin-delivery'") &&
     adminRouterSource.includes("requiresAdmin: true") &&
     adminNavSource.includes("path: '/admin/delivery'") &&
-    adminNavSource.includes("label: 'nav.delivery'"),
+    adminNavSource.includes("label: 'nav.delivery'") &&
+    adminNavSource.includes("icon: 'pulse'") &&
+    sideNavSource.includes("item.icon === 'pulse'"),
   'admin delivery center must be reachable from admin router and navigation'
 )
 
