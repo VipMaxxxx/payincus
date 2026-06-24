@@ -127,27 +127,27 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.4.0 Add standalone plugin settings pages / 新增独立插件设置页
-feature commit: b4d4cce
-version-log commit: 3dc1f66
+v0.4.2 Fix ticket AI actions and panel cert paths / 修复工单 AI 与面板证书路径
+hotfix commit: 7f574ae
+version-log/docs commit: this documentation commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28122325318: success for tag v0.4.0
-CI 28122395990: success for main commit 3dc1f66
-Deploy docs site to GitHub Pages 28122395969: success for main commit 3dc1f66
+Build & Release 28124355269: success for tag v0.4.2
+CI 28124350941: success for main commit 7f574ae
+Deploy docs site to GitHub Pages: pending this documentation push
 ```
 
-Release assets for `v0.4.0` were present:
+Release assets for `v0.4.2` were present:
 
 ```text
-incudal-v0.4.0-linux-amd64.tar.gz
-incudal-v0.4.0-linux-amd64.tar.gz.sha256
-incudal-v0.4.0-linux-arm64.tar.gz
-incudal-v0.4.0-linux-arm64.tar.gz.sha256
-incudal-v0.4.0-ota-manifest.json
+incudal-v0.4.2-linux-amd64.tar.gz
+incudal-v0.4.2-linux-amd64.tar.gz.sha256
+incudal-v0.4.2-linux-arm64.tar.gz
+incudal-v0.4.2-linux-arm64.tar.gz.sha256
+incudal-v0.4.2-ota-manifest.json
 ota-manifest.json
 plugin-market-index.json
 ```
@@ -155,10 +155,12 @@ plugin-market-index.json
 Production OTA proof:
 
 ```text
-from: v0.3.9
-to: v0.4.0
-version metadata: /opt/incudal/current/version.json reports v0.4.0, gitTag v0.4.0, gitCommit b4d4cce11319, deployedAt 2026-06-24T19:02:35.403Z
-result: OTA completed and public health checks passed
+from: v0.4.0
+to: v0.4.2
+task: #51
+current symlink: /opt/incudal/current -> /opt/incudal/releases/v0.4.2-20260624193731
+version metadata: /opt/incudal/current/version.json reports v0.4.2, gitTag v0.4.2, gitCommit 7f574ae8e9ca, deployedAt 2026-06-24T19:37:40.080Z
+result: OTA completed successfully and public health checks passed
 ```
 
 Post-update checks:
@@ -166,20 +168,21 @@ Post-update checks:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/plugins/com.payincus.ai-ticket-agent/settings: HTTP 200 app shell
-Production admin assets contain: AI 工单助手, 自动回复策略, OpenAI 兼容接口地址, 模型 API Key, 留空则保持不变
-Production admin assets no longer contain: 配置 JSON, 套用默认模板
-https://payincus.com/release/version-log.html: contains v0.4.0
-https://payincus.com/en/release/version-log.html: contains v0.4.0
+https://admin.payincus.com/admin/tickets: HTTP 200 app shell
+https://admin.payincus.com/admin/plugins: HTTP 200 app shell
+Production admin assets contain: /ai/draft, /ai/reply, contentTooShort
+Production hosts now use stable panel cert paths: /opt/incudal/server/certs/client.crt and /opt/incudal/server/certs/client.key
+https://payincus.com/release/version-log.html: pending this documentation push for v0.4.2
+https://payincus.com/en/release/version-log.html: pending this documentation push for v0.4.2
 ```
 
-Local gates run for `v0.4.0`:
+Local gates run for `v0.4.2`:
 
 ```text
-pnpm --filter server test:plugin-center-guards
-pnpm --filter server test:plugin-package-guards
-pnpm --filter server test:plugin-market-guards
 pnpm --filter server test:ai-ticket-context-guards
+pnpm --filter server test:ticket-success-guards
+pnpm --filter server test:host-install-script-guards
+pnpm --filter server type-check
 pnpm --filter client build
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards

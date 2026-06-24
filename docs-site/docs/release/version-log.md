@@ -6,16 +6,41 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `b4d4cce`
+- 当前 HEAD / Current HEAD: `7f574ae`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Add standalone plugin settings pages / 新增独立插件设置页
-- 最新 tag / Latest tag: `v0.4.0`
+- 提交说明 / Commit subject: Fix ticket AI actions and panel cert paths / 修复工单 AI 与面板证书路径
+- 最新 tag / Latest tag: `v0.4.2`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.4.2
+
+- 发布提交 / Release commit: `7f574ae`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Fix ticket AI actions and panel cert paths / 修复工单 AI 与面板证书路径
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix ticket AI actions and panel cert paths / 修复工单 AI 与面板证书路径 `7f574ae`
+
+## v0.4.1
+
+- 发布提交 / Release commit: `dfb4900`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Show installed plugin settings in sidebar / 安装后显示插件设置入口
+
+### 其他变更 / Other Changes
+
+- Show installed plugin settings in sidebar / 安装后显示插件设置入口 `dfb4900`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff for v0.4.0 OTA proof / 更新 v0.4.0 OTA 证明交接 `15cdb65`
+- Update version log for v0.4.0 / 更新 v0.4.0 版本日志 `3dc1f66`
 
 ## v0.4.0
 
