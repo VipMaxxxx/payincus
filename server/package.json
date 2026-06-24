@@ -51,6 +51,7 @@
     "test:cors-origin-config": "node --import tsx scripts/test-cors-origin-config.ts",
     "test:custom-init-command-guards": "node --import tsx scripts/test-custom-init-command-guards.ts",
     "test:delivery-center-guards": "node --import tsx scripts/test-delivery-center-guards.ts",
+    "test:ticket-success-guards": "node --import tsx scripts/test-ticket-success-guards.ts",
     "test:core-pagination-guards": "node --import tsx scripts/test-core-pagination-guards.ts",
     "test:entertainment-vip-points-locks": "node --import tsx scripts/test-entertainment-vip-points-locks.ts",
     "test:entertainment-route-guards": "node --import tsx scripts/test-entertainment-route-guards.ts",

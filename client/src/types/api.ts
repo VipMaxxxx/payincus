@@ -1813,6 +1813,8 @@ export interface Log {
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type TicketCategory = 'general' | 'billing' | 'technical' | 'abuse'
+export type TicketSlaStatus = 'waiting_first_response' | 'waiting_user' | 'waiting_internal' | 'due_soon' | 'overdue' | 'met' | 'closed'
+export type TicketObjectLinkType = 'recharge_record' | 'order_operation_case' | 'instance' | 'host' | 'delivery_case' | 'sla_alert' | 'plugin_task'
 
 export interface Ticket {
   id: number
@@ -1827,6 +1829,11 @@ export interface Ticket {
   updatedAt: string
   resolvedAt: string | null
   closedAt: string | null
+  firstResponseDueAt?: string | null
+  resolutionDueAt?: string | null
+  firstRespondedAt?: string | null
+  slaBreachedAt?: string | null
+  slaStatus?: TicketSlaStatus
   user?: {
     id: number
     username: string
@@ -1895,6 +1902,72 @@ export interface TicketMessageAttachment {
   width: number | null
   height: number | null
   createdAt: string
+}
+
+export interface TicketInternalNote {
+  id: number
+  ticketId: number
+  actorUserId: number
+  actorUsername: string
+  content: string
+  createdAt: string
+}
+
+export interface TicketObjectLink {
+  id: number
+  ticketId: number
+  objectType: TicketObjectLinkType
+  objectId: number
+  objectLabel: string | null
+  createdByUserId: number
+  createdByUsername: string
+  createdAt: string
+}
+
+export interface TicketSupportTimelineItem {
+  type: 'message' | 'internal_note' | 'object_link'
+  id: number
+  title: string
+  actor: string
+  content: string
+  createdAt: string
+}
+
+export interface TicketSupportContext {
+  ticket: Ticket
+  userContext: {
+    id: number
+    username: string
+    emailMasked: string | null
+    role: 'admin' | 'user'
+    status: 'active' | 'banned'
+    balance: string | null
+    createdAt: string
+    updatedAt: string
+    counts: {
+      instances: number
+      ticketsCreated: number
+      rechargeRecords: number
+      balanceLogs: number
+    }
+  } | null
+  recentOrders: Array<Record<string, unknown>>
+  recentOrderCases: Array<Record<string, unknown>>
+  recentInstances: Array<Record<string, unknown>>
+  recentDeliveryCases: Array<Record<string, unknown>>
+  recentAlerts: Array<Record<string, unknown>>
+  links: TicketObjectLink[]
+  internalNotes: TicketInternalNote[]
+  timeline: TicketSupportTimelineItem[]
+  knowledgeSuggestions: Array<{ title: string; steps: string[] }>
+  quickActions: {
+    notifyUser: boolean
+    balanceAdjustmentPath: string
+    deliveryCenterPath: string
+    userPath: string
+    instancePath: string | null
+    hostPath: string | null
+  }
 }
 
 export interface CreateTicketRequest {

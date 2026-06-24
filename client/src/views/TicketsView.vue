@@ -14,7 +14,17 @@ import TicketImageLightbox from '@/components/tickets/TicketImageLightbox.vue'
 import TicketImageUploader from '@/components/tickets/TicketImageUploader.vue'
 import TicketInstanceOwnerCard from '@/components/tickets/TicketInstanceOwnerCard.vue'
 import { ticketsPath } from '@/utils/app-paths'
-import type { Ticket, TicketMessage, TicketMessageAttachment, TicketStatus, TicketPriority, TicketCategory, InstanceWithDetails } from '@/types/api'
+import type {
+  Ticket,
+  TicketMessage,
+  TicketMessageAttachment,
+  TicketStatus,
+  TicketPriority,
+  TicketCategory,
+  TicketObjectLinkType,
+  TicketSupportContext,
+  InstanceWithDetails
+} from '@/types/api'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -51,9 +61,11 @@ let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 // Filters - 默认筛选活跃工单（排除已关闭）
 type StatusFilterType = TicketStatus | 'active' | 'all'
 type HostTicketSourceType = 'all' | 'user' | 'official' | 'hosted'
+type TicketQueueFilter = 'all' | 'pending' | 'due_soon' | 'overdue' | 'waiting_user' | 'waiting_internal'
 const statusFilter = ref<StatusFilterType>('active')
 const hostFilter = ref<number | ''>('')
 const hostTicketSourceFilter = ref<HostTicketSourceType>('all')
+const queueFilter = ref<TicketQueueFilter>('all')
 
 // Detail data
 const selectedTicket = ref<Ticket | null>(null)
@@ -61,6 +73,17 @@ const messages = ref<TicketMessage[]>([])
 const messagesLoading = ref(false)
 const isOwner = ref(false)
 const isCreator = ref(false)
+const supportContext = ref<TicketSupportContext | null>(null)
+const supportContextLoading = ref(false)
+const internalNoteContent = ref('')
+const internalNoteSubmitting = ref(false)
+const notifyContent = ref('')
+const notifySubmitting = ref(false)
+const linkForm = ref({
+  objectType: 'instance' as TicketObjectLinkType,
+  objectId: ''
+})
+const linkSubmitting = ref(false)
 
 // Messages pagination
 const messagesPage = ref(1)
@@ -126,6 +149,18 @@ const priorityColors: Record<TicketPriority, string> = {
   high: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   urgent: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
 }
+
+const slaStatusColors = {
+  waiting_first_response: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  waiting_user: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
+  waiting_internal: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+  due_soon: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+  overdue: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  met: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  closed: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+}
+
+const ticketLinkTypes: TicketObjectLinkType[] = ['recharge_record', 'order_operation_case', 'instance', 'host', 'delivery_case', 'sla_alert', 'plugin_task']
 
 const lightboxImages = computed(() => {
   return messages.value.flatMap(message =>
@@ -275,6 +310,14 @@ function resetDetailState() {
   messagesTotal.value = 0
   isOwner.value = false
   isCreator.value = false
+  supportContext.value = null
+  supportContextLoading.value = false
+  internalNoteContent.value = ''
+  notifyContent.value = ''
+  linkForm.value = {
+    objectType: 'instance',
+    objectId: ''
+  }
   lightboxOpen.value = false
   revokeAttachmentUrls()
 }
@@ -306,6 +349,7 @@ async function navigateToList(replace = false): Promise<void> {
 async function openTicketDetail(ticketId: number): Promise<void> {
   viewMode.value = 'detail'
   messagesLoading.value = true
+  supportContext.value = null
   messagesPage.value = 1
   revokeAttachmentUrls()
   messages.value = []
@@ -322,11 +366,27 @@ async function openTicketDetail(ticketId: number): Promise<void> {
     messages.value = messagesRes.messages
     messagesTotal.value = messagesRes.total
     await ensureMessageAttachmentUrls(messagesRes.messages)
+    if (authStore.isAdmin) {
+      await loadSupportContext(ticketId)
+    }
   } catch (error: any) {
     toast.error(error?.message || t('common.error'))
     await navigateToList(true)
   } finally {
     messagesLoading.value = false
+  }
+}
+
+async function loadSupportContext(ticketId = selectedTicket.value?.id): Promise<void> {
+  if (!authStore.isAdmin || !ticketId) return
+  supportContextLoading.value = true
+  try {
+    supportContext.value = await api.tickets.getSupportContext(ticketId)
+    selectedTicket.value = supportContext.value.ticket
+  } catch (error: any) {
+    toast.error(error?.message || t('common.error'))
+  } finally {
+    supportContextLoading.value = false
   }
 }
 
@@ -412,6 +472,9 @@ async function loadTickets(silent = false) {
     if (activeTab.value === 'host' && authStore.isAdmin && hostTicketSourceFilter.value !== 'all') {
       params.sourceType = hostTicketSourceFilter.value
     }
+    if (activeTab.value === 'host' && authStore.isAdmin && queueFilter.value !== 'all') {
+      params.queue = queueFilter.value
+    }
     
     let response
     if (activeTab.value === 'my') {
@@ -461,6 +524,7 @@ async function switchTab(tab: TabType) {
   statusFilter.value = 'active'
   hostFilter.value = ''
   hostTicketSourceFilter.value = 'all'
+  queueFilter.value = 'all'
   searchQuery.value = ''
   await router.replace({
     path: ticketsPath(),
@@ -473,7 +537,7 @@ function handlePageChange(newPage: number) {
   loadTickets(true)
 }
 
-watch([statusFilter, hostFilter, hostTicketSourceFilter], () => {
+watch([statusFilter, hostFilter, hostTicketSourceFilter, queueFilter], () => {
   page.value = 1
   loadTickets(true)
 })
@@ -532,6 +596,9 @@ async function handleReply() {
     replyContent.value = ''
     replyAttachments.value = []
     toast.success(t('tickets.replySuccess'))
+    if (authStore.isAdmin) {
+      await loadSupportContext()
+    }
     // Scroll to bottom
     await nextTick()
     const container = document.getElementById('messages-container')
@@ -553,6 +620,9 @@ async function updateStatus(status: TicketStatus) {
     toast.success(t('tickets.statusUpdated'))
     loadPendingCount()
     loadTickets(true)
+    if (authStore.isAdmin) {
+      await loadSupportContext()
+    }
   } catch (error: any) {
     toast.error(error?.message || t('common.error'))
   }
@@ -569,6 +639,9 @@ async function closeTicket() {
     toast.success(t('tickets.closeSuccess'))
     loadPendingCount()
     loadTickets(true)
+    if (authStore.isAdmin) {
+      await loadSupportContext()
+    }
   } catch (error: any) {
     toast.error(error?.message || t('common.error'))
   }
@@ -588,6 +661,72 @@ async function confirmDeleteMessage(message: TicketMessage) {
   } catch (error: any) {
     toast.error(error?.message || t('common.error'))
   }
+}
+
+async function submitInternalNote() {
+  if (!selectedTicket.value || !internalNoteContent.value.trim()) return
+  internalNoteSubmitting.value = true
+  try {
+    await api.tickets.createInternalNote(selectedTicket.value.id, internalNoteContent.value.trim())
+    internalNoteContent.value = ''
+    toast.success(t('tickets.support.noteSaved'))
+    await loadSupportContext()
+  } catch (error: any) {
+    toast.error(error?.message || t('common.error'))
+  } finally {
+    internalNoteSubmitting.value = false
+  }
+}
+
+async function submitNotifyUser() {
+  if (!selectedTicket.value || !notifyContent.value.trim()) return
+  notifySubmitting.value = true
+  try {
+    await api.tickets.notifyUser(selectedTicket.value.id, notifyContent.value.trim())
+    notifyContent.value = ''
+    toast.success(t('tickets.support.noticeSent'))
+    await loadSupportContext()
+  } catch (error: any) {
+    toast.error(error?.message || t('common.error'))
+  } finally {
+    notifySubmitting.value = false
+  }
+}
+
+async function submitLinkObject() {
+  if (!selectedTicket.value) return
+  const objectId = Number(linkForm.value.objectId)
+  if (!Number.isInteger(objectId) || objectId <= 0) {
+    toast.error(t('tickets.support.invalidObjectId'))
+    return
+  }
+  linkSubmitting.value = true
+  try {
+    await api.tickets.linkObject(selectedTicket.value.id, linkForm.value.objectType, objectId)
+    linkForm.value.objectId = ''
+    toast.success(t('tickets.support.linkSaved'))
+    await loadSupportContext()
+  } catch (error: any) {
+    toast.error(error?.message || t('common.error'))
+  } finally {
+    linkSubmitting.value = false
+  }
+}
+
+function openAdminPath(path: string | null) {
+  if (!path) return
+  router.push(path)
+}
+
+function displayValue(item: Record<string, unknown>, key: string, fallback = '-'): string {
+  const value = item[key]
+  if (value === null || value === undefined || value === '') return fallback
+  return String(value)
+}
+
+function displayDateValue(item: Record<string, unknown>, key: string): string {
+  const value = item[key]
+  return typeof value === 'string' && value ? formatDateShort(value) : '-'
 }
 
 // Create ticket
@@ -771,6 +910,24 @@ function formatDateShort(dateString: string) {
               </button>
             </div>
           </div>
+
+          <div v-if="activeTab === 'host' && authStore.isAdmin" class="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex-shrink-0">
+            <div class="inline-flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <button
+                v-for="queue in ['all', 'pending', 'due_soon', 'overdue', 'waiting_user', 'waiting_internal']"
+                :key="queue"
+                :class="[
+                  'px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap',
+                  queueFilter === queue
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                ]"
+                @click="queueFilter = queue as TicketQueueFilter"
+              >
+                {{ t(`tickets.support.queue.${queue}`) }}
+              </button>
+            </div>
+          </div>
           
           <!-- Search Box -->
           <div class="flex-1 max-w-xs">
@@ -848,6 +1005,9 @@ function formatDateShort(dateString: string) {
                     </span>
                     <span :class="['px-2 py-0.5 text-xs rounded-full', priorityColors[ticket.priority]]">
                       {{ t(`tickets.priority.${ticket.priority}`) }}
+                    </span>
+                    <span v-if="authStore.isAdmin && ticket.slaStatus" :class="['px-2 py-0.5 text-xs rounded-full', slaStatusColors[ticket.slaStatus]]">
+                      {{ t(`tickets.support.slaStatus.${ticket.slaStatus}`) }}
                     </span>
                     <span class="text-xs text-gray-500 dark:text-gray-400">
                       #{{ ticket.id }}
@@ -941,6 +1101,9 @@ function formatDateShort(dateString: string) {
               <span class="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
                 {{ t(`tickets.category.${selectedTicket.category}`) }}
               </span>
+              <span v-if="authStore.isAdmin && selectedTicket.slaStatus" :class="['px-2 py-0.5 text-xs rounded-full', slaStatusColors[selectedTicket.slaStatus]]">
+                {{ t(`tickets.support.slaStatus.${selectedTicket.slaStatus}`) }}
+              </span>
             </div>
             <div class="flex items-center gap-3 mb-3">
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
@@ -975,6 +1138,12 @@ function formatDateShort(dateString: string) {
               <span>
                 {{ t('tickets.createdAt') }}: {{ formatDate(selectedTicket.createdAt) }}
               </span>
+              <span v-if="authStore.isAdmin && selectedTicket.firstResponseDueAt">
+                {{ t('tickets.support.firstResponseDue') }}: {{ formatDate(selectedTicket.firstResponseDueAt) }}
+              </span>
+              <span v-if="authStore.isAdmin && selectedTicket.resolutionDueAt">
+                {{ t('tickets.support.resolutionDue') }}: {{ formatDate(selectedTicket.resolutionDueAt) }}
+              </span>
             </div>
             
             <TicketInstanceOwnerCard
@@ -998,6 +1167,169 @@ function formatDateShort(dateString: string) {
               <button class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" @click="closeTicket">
                 {{ t('tickets.close') }}
               </button>
+            </div>
+          </div>
+
+          <div v-if="authStore.isAdmin" class="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+            <div v-if="supportContextLoading" class="py-4">
+              <SkeletonLoader type="list" :count="2" />
+            </div>
+            <div v-else-if="supportContext" class="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+              <section class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                  <h3 class="font-semibold text-gray-900 dark:text-white">{{ t('tickets.support.userContext') }}</h3>
+                  <button class="text-sm text-blue-600 dark:text-blue-400 hover:underline" @click="openAdminPath(supportContext.quickActions.userPath)">
+                    {{ t('tickets.support.openUser') }}
+                  </button>
+                </div>
+                <div v-if="supportContext.userContext" class="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div>
+                    <p class="text-gray-500 dark:text-gray-400">{{ t('tickets.support.account') }}</p>
+                    <p class="font-medium text-gray-900 dark:text-white">{{ supportContext.userContext.username }} · {{ supportContext.userContext.status }}</p>
+                    <p class="text-gray-500 dark:text-gray-400">{{ supportContext.userContext.emailMasked || '-' }}</p>
+                  </div>
+                  <div>
+                    <p class="text-gray-500 dark:text-gray-400">{{ t('tickets.support.balance') }}</p>
+                    <p class="font-medium text-gray-900 dark:text-white">¥{{ supportContext.userContext.balance || '0.00' }}</p>
+                    <p class="text-gray-500 dark:text-gray-400">{{ t('tickets.support.registeredAt') }} {{ formatDateShort(supportContext.userContext.createdAt) }}</p>
+                  </div>
+                  <div class="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-2">
+                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('tickets.support.instances') }}</p>
+                      <p class="font-semibold">{{ supportContext.userContext.counts.instances }}</p>
+                    </div>
+                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-2">
+                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('tickets.support.tickets') }}</p>
+                      <p class="font-semibold">{{ supportContext.userContext.counts.ticketsCreated }}</p>
+                    </div>
+                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-2">
+                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('tickets.support.orders') }}</p>
+                      <p class="font-semibold">{{ supportContext.userContext.counts.rechargeRecords }}</p>
+                    </div>
+                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-2">
+                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('tickets.support.ledger') }}</p>
+                      <p class="font-semibold">{{ supportContext.userContext.counts.balanceLogs }}</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-4 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">{{ t('tickets.support.recentOrders') }}</h4>
+                    <div class="space-y-2">
+                      <div v-for="order in supportContext.recentOrders" :key="displayValue(order, 'id')" class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-sm">
+                        <div class="flex justify-between gap-2">
+                          <span class="font-medium text-gray-900 dark:text-white">{{ displayValue(order, 'orderNo') }}</span>
+                          <span>{{ displayValue(order, 'status') }}</span>
+                        </div>
+                        <p class="text-gray-500 dark:text-gray-400">¥{{ displayValue(order, 'amount') }} · {{ displayDateValue(order, 'createdAt') }}</p>
+                      </div>
+                      <p v-if="supportContext.recentOrders.length === 0" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.noData') }}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">{{ t('tickets.support.recentInstances') }}</h4>
+                    <div class="space-y-2">
+                      <div v-for="instance in supportContext.recentInstances" :key="displayValue(instance, 'id')" class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-sm">
+                        <div class="flex justify-between gap-2">
+                          <span class="font-medium text-gray-900 dark:text-white">{{ displayValue(instance, 'name') }}</span>
+                          <span>{{ displayValue(instance, 'status') }}</span>
+                        </div>
+                        <p class="text-gray-500 dark:text-gray-400">#{{ displayValue(instance, 'id') }} · {{ displayDateValue(instance, 'createdAt') }}</p>
+                      </div>
+                      <p v-if="supportContext.recentInstances.length === 0" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.noData') }}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="space-y-4">
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                  <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.quickActions') }}</h3>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700" @click="openAdminPath(supportContext.quickActions.balanceAdjustmentPath)">
+                      {{ t('tickets.support.adjustment') }}
+                    </button>
+                    <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700" @click="openAdminPath(supportContext.quickActions.deliveryCenterPath)">
+                      {{ t('tickets.support.delivery') }}
+                    </button>
+                    <button :disabled="!supportContext.quickActions.instancePath" class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" @click="openAdminPath(supportContext.quickActions.instancePath)">
+                      {{ t('tickets.support.openInstance') }}
+                    </button>
+                    <button :disabled="!supportContext.quickActions.hostPath" class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" @click="openAdminPath(supportContext.quickActions.hostPath)">
+                      {{ t('tickets.support.openHost') }}
+                    </button>
+                  </div>
+                  <div class="mt-3 space-y-2">
+                    <textarea v-model="notifyContent" rows="2" :placeholder="t('tickets.support.notifyPlaceholder')" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none" />
+                    <button :disabled="notifySubmitting || !notifyContent.trim()" class="w-full px-3 py-2 text-sm rounded-lg bg-black dark:bg-white text-white dark:text-black disabled:opacity-50" @click="submitNotifyUser">
+                      {{ notifySubmitting ? t('common.sending') : t('tickets.support.sendNotice') }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                  <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.linkedObjects') }}</h3>
+                  <div class="flex gap-2">
+                    <select v-model="linkForm.objectType" class="w-40 px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800">
+                      <option v-for="type in ticketLinkTypes" :key="type" :value="type">{{ t(`tickets.support.linkType.${type}`) }}</option>
+                    </select>
+                    <input v-model="linkForm.objectId" type="number" min="1" class="flex-1 px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800" :placeholder="t('tickets.support.objectId')" />
+                    <button :disabled="linkSubmitting" class="px-3 py-2 text-sm rounded-lg bg-black dark:bg-white text-white dark:text-black disabled:opacity-50" @click="submitLinkObject">
+                      {{ t('tickets.support.addLink') }}
+                    </button>
+                  </div>
+                  <div class="mt-3 space-y-2">
+                    <div v-for="link in supportContext.links" :key="link.id" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-sm">
+                      <span class="font-medium">{{ t(`tickets.support.linkType.${link.objectType}`) }}</span>
+                      <span class="text-gray-500 dark:text-gray-400"> · {{ link.objectLabel || `#${link.objectId}` }}</span>
+                    </div>
+                    <p v-if="supportContext.links.length === 0" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.noData') }}</p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:col-span-2">
+                <div class="grid gap-4 lg:grid-cols-3">
+                  <div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.knowledge') }}</h3>
+                    <div class="space-y-3">
+                      <div v-for="item in supportContext.knowledgeSuggestions" :key="item.title" class="rounded-lg bg-gray-100 dark:bg-gray-700 p-3 text-sm">
+                        <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
+                        <ul class="mt-2 space-y-1 text-gray-600 dark:text-gray-300">
+                          <li v-for="step in item.steps" :key="step">- {{ step }}</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.internalNotes') }}</h3>
+                    <textarea v-model="internalNoteContent" rows="3" :placeholder="t('tickets.support.notePlaceholder')" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none" />
+                    <button :disabled="internalNoteSubmitting || !internalNoteContent.trim()" class="mt-2 w-full px-3 py-2 text-sm rounded-lg bg-black dark:bg-white text-white dark:text-black disabled:opacity-50" @click="submitInternalNote">
+                      {{ internalNoteSubmitting ? t('common.saving') : t('tickets.support.saveNote') }}
+                    </button>
+                    <div class="mt-3 max-h-48 overflow-y-auto space-y-2">
+                      <div v-for="note in supportContext.internalNotes" :key="note.id" class="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-2 text-sm">
+                        <p class="text-gray-900 dark:text-white whitespace-pre-wrap">{{ note.content }}</p>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ note.actorUsername }} · {{ formatDateShort(note.createdAt) }}</p>
+                      </div>
+                      <p v-if="supportContext.internalNotes.length === 0" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.noData') }}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.timeline') }}</h3>
+                    <div class="max-h-80 overflow-y-auto space-y-2">
+                      <div v-for="item in supportContext.timeline" :key="`${item.type}-${item.id}-${item.createdAt}`" class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-sm">
+                        <div class="flex justify-between gap-2">
+                          <span class="font-medium text-gray-900 dark:text-white">{{ item.title }}</span>
+                          <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatDateShort(item.createdAt) }}</span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ item.actor }}</p>
+                        <p class="mt-1 text-gray-700 dark:text-gray-300 line-clamp-2">{{ item.content }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
           
