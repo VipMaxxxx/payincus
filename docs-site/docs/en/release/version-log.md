@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `62825b8`
+- Current HEAD / 当前 HEAD: `a721de8`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Add delivery assurance operations workflow / 新增交付保障运营闭环
-- Latest tag / 最新 tag: `v0.2.9`
+- Commit subject / 提交说明: Add SLA alert center / 新增 SLA 告警中心
+- Latest tag / 最新 tag: `v0.3.0`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.3.0
+
+- Release commit / 发布提交: `a721de8`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Add SLA alert center / 新增 SLA 告警中心
+
+### New Capabilities / 新增能力
+
+- Add SLA alert center / 新增 SLA 告警中心 `a721de8`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff for v0.2.9 OTA proof / 更新 v0.2.9 OTA 证明交接 `495cf5e`
+- Update version log for v0.2.9 / 更新 v0.2.9 版本日志 `9885685`
 
 ## v0.2.9
 
