@@ -36,6 +36,7 @@ type EventType =
   | 'instance_cloned'
   | 'instance_host_changed'
   | 'instance_task_failed'
+  | 'delivery_assurance_update'
   | 'instance_unexpected_stop'
   | 'instance_deleted'
   | 'instance_deleted_by_host_owner'
@@ -94,6 +95,7 @@ interface EventData {
   backupName?: string
   status?: string
   error?: string
+  deliveryMessage?: string
   // 删除原因（宿主机所有者删除时）
   deleteReason?: string
   // 封停原因
@@ -397,6 +399,21 @@ const EVENT_TEMPLATES: Record<EventType, EventTemplate> = {
       if (data.taskType) msg += `\n操作: ${data.taskType}`
       if (data.error) msg += `\n错误: ${data.error}`
       if (data.hostName) msg += `\n节点: ${data.hostName}`
+      return msg
+    }
+  },
+  delivery_assurance_update: {
+    title: '🛠️ 交付保障通知',
+    message: (data) => {
+      const statusLabel = data.status === 'delayed'
+        ? '交付处理中'
+        : data.status === 'recovered'
+          ? '交付已恢复'
+          : '需要人工处理'
+      let msg = `实例「${data.instanceName}」${statusLabel}`
+      if (data.hostName) msg += `\n节点: ${data.hostName}`
+      if (data.deliveryMessage) msg += `\n说明: ${data.deliveryMessage}`
+      if (data.status === 'contact_support') msg += `\n请通过工单或客服继续跟进。`
       return msg
     }
   },

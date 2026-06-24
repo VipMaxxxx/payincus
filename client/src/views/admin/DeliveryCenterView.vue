@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
-import type { DeliveryOverview, DeliveryTaskContext, InstanceTaskStatus } from '@/types/api'
+import type { DeliveryAssuranceCaseStatus, DeliveryOverview, DeliveryTaskContext, InstanceTaskStatus } from '@/types/api'
 
 const toast = useToast()
 
@@ -18,6 +18,9 @@ const total = ref(0)
 const totalPages = ref(1)
 const statusFilter = ref<'all' | InstanceTaskStatus>('all')
 const search = ref('')
+const actionLoading = ref<string | null>(null)
+const actionNote = ref('')
+const notifyMode = ref<'delayed' | 'recovered' | 'contact_support'>('contact_support')
 
 const statusOptions: Array<{ value: 'all' | InstanceTaskStatus; label: string }> = [
   { value: 'all', label: '全部状态' },
@@ -78,6 +81,17 @@ const notificationItems = computed(() => {
   ]
 })
 
+const caseItems = computed(() => {
+  const data = summary.value
+  if (!data) return []
+  return [
+    { label: '待人工处理', value: data.casesPendingManual, tone: data.casesPendingManual > 0 ? 'danger' : 'success' },
+    { label: '可自动重试', value: data.casesAutoRetryable, tone: data.casesAutoRetryable > 0 ? 'warning' : 'success' },
+    { label: '处理中', value: data.casesInProgress, tone: data.casesInProgress > 0 ? 'info' : 'neutral' },
+    { label: '已恢复 / 已关闭', value: data.casesRecovered + data.casesClosed, tone: 'neutral' }
+  ]
+})
+
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-'
   const date = new Date(value)
@@ -107,11 +121,82 @@ function statusLabel(status: string): string {
   return labels[status] || status
 }
 
+function caseStatusLabel(status: DeliveryAssuranceCaseStatus | null | undefined): string {
+  const labels: Record<DeliveryAssuranceCaseStatus, string> = {
+    pending_manual: '待人工处理',
+    auto_retryable: '可自动重试',
+    in_progress: '处理中',
+    recovered: '已恢复',
+    closed: '已关闭'
+  }
+  return status ? labels[status] || status : '未生成'
+}
+
+function caseStatusClass(status: DeliveryAssuranceCaseStatus | null | undefined): string {
+  if (status === 'auto_retryable') return 'border-amber-200 bg-amber-50 text-amber-700'
+  if (status === 'pending_manual') return 'border-red-200 bg-red-50 text-red-700'
+  if (status === 'in_progress') return 'border-blue-200 bg-blue-50 text-blue-700'
+  if (status === 'recovered') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (status === 'closed') return 'border-themed bg-themed-tertiary text-themed-muted'
+  return 'border-themed bg-themed-secondary text-themed-muted'
+}
+
 function badgeClass(status: string): string {
   if (status === 'COMPLETED') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
   if (status === 'FAILED') return 'border-red-200 bg-red-50 text-red-700'
   if (status === 'PROCESSING') return 'border-blue-200 bg-blue-50 text-blue-700'
   return 'border-amber-200 bg-amber-50 text-amber-700'
+}
+
+function formatAmount(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '-'
+  return `¥${Number(value).toFixed(2)}`
+}
+
+function formatAgent(task: DeliveryTaskContext): string {
+  const agent = task.host?.agent
+  if (!agent) return '未安装'
+  const lastSeen = agent.lastSeenAt ? formatDate(agent.lastSeenAt) : '无心跳'
+  return `${agent.status}${agent.version ? ` · ${agent.version}` : ''} · ${lastSeen}`
+}
+
+function updateSelectedCase(updatedCase: NonNullable<DeliveryTaskContext['assuranceCase']>) {
+  const update = (task: DeliveryTaskContext) => {
+    if (task.id === updatedCase.taskId) task.assuranceCase = updatedCase
+  }
+  tasks.value.forEach(update)
+  overview.value?.recentFailures.forEach(update)
+}
+
+async function runCaseAction(action: 'takeover' | 'retry' | 'notify' | 'recovered' | 'closed') {
+  if (!selectedTask.value || actionLoading.value) return
+  const task = selectedTask.value
+  actionLoading.value = action
+  try {
+    if (action === 'takeover') {
+      const res = await api.delivery.takeover(task.id, actionNote.value || null)
+      updateSelectedCase(res.case)
+      toast.success('已接管交付问题')
+    } else if (action === 'retry') {
+      const res = await api.delivery.retry(task.id, actionNote.value || null)
+      updateSelectedCase(res.case)
+      toast.success(`已重新入队任务 #${res.retryTaskId}`)
+    } else if (action === 'notify') {
+      const res = await api.delivery.notifyUser(task.id, notifyMode.value, actionNote.value || null)
+      updateSelectedCase(res.case)
+      toast.success(res.message || '通知已提交')
+    } else {
+      const res = await api.delivery.resolve(task.id, action, actionNote.value || null)
+      updateSelectedCase(res.case)
+      toast.success(action === 'recovered' ? '已标记恢复' : '已关闭交付问题')
+    }
+    actionNote.value = ''
+    await loadOverview()
+  } catch (err: any) {
+    toast.error('交付保障操作失败：' + (err?.message || String(err)))
+  } finally {
+    actionLoading.value = null
+  }
 }
 
 function toneClass(tone: string): string {
@@ -214,6 +299,19 @@ onMounted(() => {
 
       <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div
+          v-for="item in caseItems"
+          :key="item.label"
+          class="flex items-center justify-between rounded-lg border border-themed bg-themed-secondary p-4"
+        >
+          <span class="text-sm text-themed-muted">{{ item.label }}</span>
+          <span class="rounded-md border px-2 py-1 text-sm font-semibold" :class="toneClass(item.tone)">
+            {{ item.value }}
+          </span>
+        </div>
+      </section>
+
+      <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div
           v-for="item in notificationItems"
           :key="item.label"
           class="flex items-center justify-between rounded-lg border border-themed bg-themed-secondary p-4"
@@ -260,6 +358,7 @@ onMounted(() => {
                   <th class="px-4 py-3 font-medium">用户</th>
                   <th class="px-4 py-3 font-medium">节点</th>
                   <th class="px-4 py-3 font-medium">状态</th>
+                  <th class="px-4 py-3 font-medium">保障</th>
                   <th class="px-4 py-3 font-medium">时间</th>
                 </tr>
               </thead>
@@ -292,12 +391,17 @@ onMounted(() => {
                       {{ statusLabel(task.status) }}
                     </span>
                   </td>
+                  <td class="px-4 py-3">
+                    <span class="rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(task.assuranceCase?.status)">
+                      {{ caseStatusLabel(task.assuranceCase?.status) }}
+                    </span>
+                  </td>
                   <td class="whitespace-nowrap px-4 py-3 text-xs text-themed-muted">
                     {{ formatDate(task.createdAt) }}
                   </td>
                 </tr>
                 <tr v-if="tasks.length === 0">
-                  <td colspan="6" class="px-4 py-10 text-center text-sm text-themed-muted">
+                  <td colspan="7" class="px-4 py-10 text-center text-sm text-themed-muted">
                     暂无交付任务
                   </td>
                 </tr>
@@ -348,16 +452,82 @@ onMounted(() => {
                 <div class="text-themed-muted">节点</div>
                 <div class="mt-1 text-themed">{{ selectedTask.host?.name || `#${selectedTask.hostId}` }}</div>
               </div>
+              <div class="rounded-lg border border-themed p-3">
+                <div class="text-themed-muted">Agent</div>
+                <div class="mt-1 text-themed">{{ formatAgent(selectedTask) }}</div>
+              </div>
+              <div class="rounded-lg border border-themed p-3">
+                <div class="text-themed-muted">最近扣费</div>
+                <div class="mt-1 text-themed">{{ formatAmount(selectedTask.billing?.amount) }}</div>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-themed p-3 text-sm">
+              <div class="flex items-center justify-between">
+                <div class="text-themed-muted">保障状态</div>
+                <span class="rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(selectedTask.assuranceCase?.status)">
+                  {{ caseStatusLabel(selectedTask.assuranceCase?.status) }}
+                </span>
+              </div>
+              <div class="mt-2 text-themed">
+                {{ selectedTask.assuranceCase?.title || '当前任务未生成交付保障问题' }}
+              </div>
+              <div v-if="selectedTask.assuranceCase?.handledByUsername" class="mt-1 text-xs text-themed-muted">
+                处理人：{{ selectedTask.assuranceCase.handledByUsername }} · {{ formatDate(selectedTask.assuranceCase.handledAt) }}
+              </div>
+              <div v-if="selectedTask.assuranceCase?.note" class="mt-2 rounded-md bg-themed-tertiary p-2 text-xs text-themed-muted">
+                {{ selectedTask.assuranceCase.note }}
+              </div>
             </div>
 
             <div class="rounded-lg border border-themed p-3 text-sm">
               <div class="text-themed-muted">失败原因 / 当前进度</div>
-              <pre class="mt-2 whitespace-pre-wrap break-words rounded-md bg-black p-3 text-xs text-white">{{ selectedTask.error || selectedTask.progress || '暂无异常信息' }}</pre>
+              <pre class="mt-2 whitespace-pre-wrap break-words rounded-md bg-black p-3 text-xs text-white">{{ selectedTask.assuranceCase?.lastError || selectedTask.error || selectedTask.progress || '暂无异常信息' }}</pre>
+            </div>
+
+            <div class="rounded-lg border border-themed p-3 text-sm">
+              <label class="mb-1 block text-themed-muted">处理备注</label>
+              <textarea
+                v-model="actionNote"
+                class="input min-h-[84px] w-full resize-y"
+                maxlength="500"
+                placeholder="填写处理说明，最多 500 字"
+              />
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button class="btn-secondary" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('takeover')">
+                  {{ actionLoading === 'takeover' ? '处理中...' : '人工接管' }}
+                </button>
+                <button
+                  class="btn-primary"
+                  :disabled="!!actionLoading || !selectedTask.assuranceCase?.retryable"
+                  @click="runCaseAction('retry')"
+                >
+                  {{ actionLoading === 'retry' ? '入队中...' : '自动重试' }}
+                </button>
+                <button class="btn-secondary" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('recovered')">
+                  标记恢复
+                </button>
+                <button class="btn-secondary" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('closed')">
+                  关闭
+                </button>
+              </div>
+              <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+                <select v-model="notifyMode" class="input sm:w-44">
+                  <option value="delayed">交付延迟</option>
+                  <option value="recovered">已恢复</option>
+                  <option value="contact_support">需联系客服</option>
+                </select>
+                <button class="btn-secondary" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('notify')">
+                  {{ actionLoading === 'notify' ? '发送中...' : '通知用户' }}
+                </button>
+              </div>
             </div>
 
             <div class="flex flex-wrap gap-2">
               <RouterLink class="btn-primary" :to="`/admin/instances/${selectedTask.instanceId}`">查看实例</RouterLink>
               <RouterLink class="btn-secondary" :to="`/admin/resources/hosts/${selectedTask.hostId}?tab=instances`">查看节点</RouterLink>
+              <RouterLink class="btn-secondary" to="/admin/users">查看用户</RouterLink>
+              <RouterLink class="btn-secondary" to="/admin/logs">查看日志</RouterLink>
             </div>
           </div>
 

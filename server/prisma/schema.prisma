@@ -146,6 +146,31 @@ enum InstanceTaskStatus {
   FAILED
 }
 
+enum DeliveryAssuranceCaseStatus {
+  pending_manual
+  auto_retryable
+  in_progress
+  recovered
+  closed
+}
+
+enum DeliveryAssuranceIssueType {
+  task_failed
+  task_stale
+  host_offline
+  agent_offline
+  resource_pressure
+}
+
+enum DeliveryAssuranceActionType {
+  detected
+  retry
+  takeover
+  notify_user
+  mark_recovered
+  close
+}
+
 enum HostNotificationEmailTaskStatus {
   PENDING
   PROCESSING
@@ -244,6 +269,50 @@ model InstanceTask {
   @@index([instanceId])
   @@index([userId])
   @@map("instance_tasks")
+}
+
+model DeliveryAssuranceCase {
+  id                Int                          @id @default(autoincrement())
+  taskId            Int?                         @unique @map("task_id")
+  instanceId        Int                          @map("instance_id")
+  hostId            Int                          @map("host_id")
+  userId            Int                          @map("user_id")
+  status            DeliveryAssuranceCaseStatus @default(pending_manual)
+  issueType         DeliveryAssuranceIssueType   @map("issue_type")
+  severity          String                       @default("warning")
+  retryable         Boolean                      @default(false)
+  retryTaskId       Int?                         @map("retry_task_id")
+  title             String
+  lastError         String?                      @map("last_error")
+  detail            Json?
+  note              String?
+  handledByUserId   Int?                         @map("handled_by_user_id")
+  handledByUsername String?                      @map("handled_by_username")
+  handledAt         DateTime?                    @map("handled_at")
+  createdAt         DateTime                     @default(now()) @map("created_at")
+  updatedAt         DateTime                     @updatedAt @map("updated_at")
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([instanceId])
+  @@index([hostId])
+  @@index([userId])
+  @@index([retryTaskId])
+  @@map("delivery_assurance_cases")
+}
+
+model DeliveryAssuranceAction {
+  id            Int                         @id @default(autoincrement())
+  caseId        Int                         @map("case_id")
+  actionType    DeliveryAssuranceActionType @map("action_type")
+  actorUserId   Int?                        @map("actor_user_id")
+  actorUsername String?                     @map("actor_username")
+  note          String?
+  detail        Json?
+  createdAt     DateTime                    @default(now()) @map("created_at")
+
+  @@index([caseId, createdAt(sort: Desc)])
+  @@index([actionType, createdAt(sort: Desc)])
+  @@map("delivery_assurance_actions")
 }
 
 enum NotificationChannelType {
