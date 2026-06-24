@@ -3,7 +3,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
@@ -80,6 +80,25 @@ import type { InstanceStatus } from '@prisma/client'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+function getInstallDirFromRuntime(): string | null {
+  const appDir = process.env.INCUDAL_APP_DIR || process.cwd()
+  if (process.env.INSTALL_DIR) return process.env.INSTALL_DIR
+  return appDir.endsWith('/current') ? dirname(appDir) : null
+}
+
+function getPanelCertificatePaths(): { certPath: string; keyPath: string } {
+  const fallbackCertPath = join(__dirname, '../../certs/client.crt')
+  const fallbackKeyPath = join(__dirname, '../../certs/client.key')
+  const installDir = getInstallDirFromRuntime()
+  const stableCertPath = installDir ? join(installDir, 'server/certs/client.crt') : null
+  const stableKeyPath = installDir ? join(installDir, 'server/certs/client.key') : null
+
+  return {
+    certPath: process.env.PANEL_CRT_PATH || (stableCertPath && existsSync(stableCertPath) ? stableCertPath : fallbackCertPath),
+    keyPath: process.env.PANEL_KEY_PATH || (stableKeyPath && existsSync(stableKeyPath) ? stableKeyPath : fallbackKeyPath)
+  }
+}
 
 const AUDIT_SEVERITIES = new Set<AuditSeverity>(['info', 'low', 'medium', 'high'])
 const AUDIT_TARGETS = new Set<AuditRuleTarget>(['process', 'network', 'startup'])
@@ -1521,7 +1540,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       }
 
       // 读取证书文件
-      const certPath = process.env.PANEL_CRT_PATH || join(__dirname, '../../certs/client.crt')
+      const { certPath } = getPanelCertificatePaths()
       let certContent: string
       try {
         certContent = readFileSync(certPath, 'utf-8')
@@ -1587,8 +1606,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
     const baseUrl = `${urlObj.protocol}//${urlObj.host}`
 
     // 准备证书路径
-    const certPath = process.env.PANEL_CRT_PATH || join(__dirname, '../../certs/client.crt')
-    const keyPath = process.env.PANEL_KEY_PATH || join(__dirname, '../../certs/client.key')
+    const { certPath, keyPath } = getPanelCertificatePaths()
 
     let cert: Buffer
     let key: Buffer

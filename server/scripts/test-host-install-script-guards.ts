@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const hostInstallScript = readFileSync(resolve(__dirname, '../templates/install.sh'), 'utf8')
+const hostRoutes = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'utf8')
 const zhCnLocale = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
 const zhTwLocale = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
 const enLocale = readFileSync(resolve(__dirname, '../../client/src/locales/en.ts'), 'utf8')
@@ -34,6 +35,16 @@ assert.ok(
     hostInstallScript.includes('incus config trust add-certificate "$cert_file" --name panel') &&
     !hostInstallScript.includes('面板证书已存在，跳过导入'),
   'host install script must refresh the panel trust certificate instead of skipping stale panel entries'
+)
+
+assert.ok(
+  hostRoutes.includes('function getPanelCertificatePaths') &&
+    hostRoutes.includes("appDir.endsWith('/current') ? dirname(appDir) : null") &&
+    hostRoutes.includes("join(installDir, 'server/certs/client.crt')") &&
+    hostRoutes.includes("join(installDir, 'server/certs/client.key')") &&
+    hostRoutes.includes('existsSync(stableCertPath)') &&
+    hostRoutes.includes('existsSync(stableKeyPath)'),
+  'host routes must prefer stable install-level panel client certificate paths over release-local paths'
 )
 
 assert.ok(

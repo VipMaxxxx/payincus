@@ -65,6 +65,8 @@ import type {
   TicketObjectLinkType,
   TicketSupportContext,
   TicketInternalNote,
+  TicketAiDraftResponse,
+  TicketAiReplyResponse,
   TicketAiStatusResponse,
   CreateTicketRequest,
   PaginatedTickets,
@@ -2604,6 +2606,14 @@ const api = {
     // 获取 AI 工单插件安全状态（仅管理员，不返回模型地址或密钥）
     getAiStatus: (): Promise<TicketAiStatusResponse> =>
       http.get('/tickets/ai/status'),
+
+    // 生成 AI 回复草稿（仅管理员，插件启用后可用，不会自动发送）
+    generateAiDraft: (id: number): Promise<TicketAiDraftResponse> =>
+      http.post(`/tickets/${id}/ai/draft`, {}, { timeout: TIMEOUT.MEDIUM }),
+
+    // 由 AI 工单插件生成并发送回复（仅管理员，要求插件 reply 权限和非草稿模式）
+    sendAiReply: (id: number): Promise<TicketAiReplyResponse> =>
+      http.post(`/tickets/${id}/ai/reply`, {}, { timeout: TIMEOUT.MEDIUM }),
 
     // 创建内部备注（仅管理员）
     createInternalNote: (id: number, content: string): Promise<{ note: TicketInternalNote }> =>

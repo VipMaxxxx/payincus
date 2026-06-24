@@ -6363,6 +6363,7 @@ export default {
         confirmCloseHint: '关闭后将无法继续回复',
         // 消息
         createSuccess: '工单创建成功',
+        contentTooShort: '工单内容至少需要 10 个字符，或上传一张图片附件',
         replySuccess: '回复成功',
         closeSuccess: '工单已关闭',
         deleteMessage: '删除消息',
