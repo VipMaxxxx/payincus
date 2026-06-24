@@ -38,9 +38,11 @@ pnpm verify:production-proof-snapshot
 必须补齐：
 
 - 真实支付订单和支付商回调。
-- 真实 Incus 创建、启动、停止、重装、删除和终端。
+- 真实 Incus 创建、启动、停止、重启、重装/重建、删除、清理和终端。
 - 真实 Agent 安装、心跳、资源、实例和流量上报。
-- 真实 SMTP 发信、Lsky 上传和通知投递。
+- 真实 SMTP 发信、Lsky 上传和通知投递；Lsky proof 必须同时记录上传成功和测试附件已删除/清理，不能只记录图片 URL。
+- 真实 Turnstile 登录和会话刷新 smoke。
+- 备份恢复演练，优先恢复到临时目录或临时库，不能覆盖生产数据。
 - 生产响应头和日志敏感信息暴露检查。
 - 公网响应头包含 CSP、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy` 和 `Strict-Transport-Security`。
 

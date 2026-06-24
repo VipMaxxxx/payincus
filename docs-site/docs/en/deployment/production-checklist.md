@@ -41,9 +41,11 @@ pnpm verify:production-proof-snapshot
 ## Real Live Proof Still Required
 
 - Real payment callback.
-- Real Incus create, start, stop, delete and terminal.
+- Real Incus create, start, stop, restart, recreate/rebuild, delete, cleanup and terminal.
 - Agent heartbeat and resource reporting.
 - SMTP delivery.
-- Lsky upload or attachment delivery.
+- Lsky upload or attachment delivery, including confirmed deletion or cleanup of the test attachment. A bare image URL is not enough proof.
 - Notification delivery through configured channels.
+- Real Turnstile login and session-refresh smoke.
+- Backup/restore drill, preferably restoring to a temporary directory or temporary database without overwriting production data.
 - Public responses include CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and `Strict-Transport-Security`.

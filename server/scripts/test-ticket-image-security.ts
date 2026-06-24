@@ -38,6 +38,12 @@ assert.ok(
   lskySource.includes('function normalizeAllowedImageMimeType'),
   'Lsky upload result MIME types must be normalized before persistence'
 )
+assert.ok(
+  lskySource.includes('function pickProviderFileId') &&
+    lskySource.includes('pickProviderFileId(data?.id, data?.key, data?.hash, data?.pathname, data?.path)') &&
+    lskySource.includes('pickProviderFileId(data?.key, data?.id, data?.hash, data?.pathname, data?.path)'),
+  'Lsky upload results must preserve pathname/path fallback identifiers so uploaded images can be cleaned up'
+)
 assert.equal(
   (lskySource.match(/redirect: 'manual'/g) ?? []).length,
   3,

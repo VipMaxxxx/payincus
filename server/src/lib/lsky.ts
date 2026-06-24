@@ -144,6 +144,11 @@ function joinUrl(baseUrl: string, pathname: string | null): string | null {
   return `${normalizeBaseUrl(baseUrl)}/${normalizedPath}`
 }
 
+function pickProviderFileId(...values: unknown[]): string | null {
+  const picked = pickString(...values)
+  return picked?.replace(/^\/+/, '') ?? null
+}
+
 function extractLskyErrorMessage(payload: any, fallback: string): string {
   return pickString(
     payload?.message,
@@ -355,8 +360,8 @@ export async function uploadTicketImageToLsky(
     provider: 'lsky',
     providerVersion: config.apiVersion,
     providerFileId: config.apiVersion === 'v2'
-      ? pickString(data?.id, data?.key, data?.hash)
-      : pickString(data?.key, data?.id, data?.hash),
+      ? pickProviderFileId(data?.id, data?.key, data?.hash, data?.pathname, data?.path)
+      : pickProviderFileId(data?.key, data?.id, data?.hash, data?.pathname, data?.path),
     filename: pickString(data?.name, data?.filename, input.filename) || input.filename,
     originalName: input.filename,
     mimeType,
