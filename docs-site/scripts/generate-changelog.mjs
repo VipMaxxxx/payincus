@@ -104,16 +104,21 @@ function commitsBetween(fromRef, toRef) {
     .filter((item) => item.hash && item.subject)
 }
 
-function tagBody(tag) {
-  return safeGit(['tag', '--list', tag, '--format=%(contents:body)']).trim()
+function tagContent(tag, format) {
+  return safeGit(['tag', '--list', tag, `--format=${format}`]).trim()
 }
 
 function tagBodyLines(tag) {
-  const body = tagBody(tag)
-  if (!body) return []
+  const fullContent = tagContent(tag, '%(contents)')
+  const body = tagContent(tag, '%(contents:body)')
+  const firstLine = fullContent.split(/\r?\n/).find((line) => line.trim())
+  const startsWithGroupHeading =
+    firstLine && /\/ (Fixes and stability|New capabilities|Other changes|Improvements and adjustments|修复与稳定性|新增能力|其他变更|改进与调整)/i.test(firstLine.trim())
+  const note = startsWithGroupHeading ? fullContent : body
+  if (!note) return []
 
   const lines = []
-  for (const rawLine of body.split(/\r?\n/)) {
+  for (const rawLine of note.split(/\r?\n/)) {
     const line = rawLine.trim()
     if (!line) {
       if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
@@ -221,7 +226,6 @@ function render() {
   lines.push('```')
   lines.push('')
   lines.push(locale.shallowClone)
-  lines.push('')
 
   mkdirSync(dirname(locale.outputFile), { recursive: true })
   writeFileSync(locale.outputFile, `${lines.join('\n')}\n`, 'utf8')
