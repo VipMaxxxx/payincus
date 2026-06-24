@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-2443c77 Update version log for v0.3.0 / 更新 v0.3.0 版本日志
+6b8aa1f Update version log for v0.3.1 / 更新 v0.3.1 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-2443c77 Update version log for v0.3.0 / 更新 v0.3.0 版本日志
+6b8aa1f Update version log for v0.3.1 / 更新 v0.3.1 版本日志
 ```
 
 Recently updated/released files include:
@@ -37,6 +37,20 @@ Recently updated/released files include:
 ```text
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
+server/prisma/migrations/20260624233000_add_ticket_success_center/migration.sql
+server/scripts/test-ticket-success-guards.ts
+server/src/db/tickets.ts
+server/src/routes/tickets.ts
+server/prisma/schema.prisma
+client/src/views/TicketsView.vue
+client/src/types/api.ts
+client/src/api/index.ts
+client/src/api/admin.ts
+client/src/locales/zh-CN.ts
+client/src/locales/zh-TW.ts
+client/src/locales/en.ts
+docs-site/docs/admin/overview.md
+docs-site/docs/en/admin/overview.md
 server/prisma/migrations/20260624230000_add_sla_alert_center/migration.sql
 server/src/routes/admin-sla-alerts.ts
 server/scripts/test-sla-alert-guards.ts
@@ -111,50 +125,50 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.3.0 Add SLA alert center / 新增 SLA 告警中心
-feature commit: a721de8
-version-log commit: 2443c77
+v0.3.1 Add customer success ticket workspace / 新增客服成功工单工作台
+feature commit: c71ade8
+version-log commit: 6b8aa1f
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28108119921: release assets available
-CI 28108115564: started for main push; public API was rate-limited during polling
-Deploy docs site to GitHub Pages 28108115502: public docs pages showed v0.3.0 after cache refresh
+Build & Release 28110336729: success for tag v0.3.1
+CI 28110333965: success for main commit 6b8aa1f
+Deploy docs site to GitHub Pages 28110333949: success for main commit 6b8aa1f
 ```
 
-Release assets for `v0.3.0` were present:
+Release assets for `v0.3.1` were present:
 
 ```text
-incudal-v0.3.0-linux-amd64.tar.gz
-incudal-v0.3.0-linux-amd64.tar.gz.sha256
-incudal-v0.3.0-linux-arm64.tar.gz
-incudal-v0.3.0-linux-arm64.tar.gz.sha256
-incudal-v0.3.0-ota-manifest.json
+incudal-v0.3.1-linux-amd64.tar.gz
+incudal-v0.3.1-linux-amd64.tar.gz.sha256
+incudal-v0.3.1-linux-arm64.tar.gz
+incudal-v0.3.1-linux-arm64.tar.gz.sha256
+incudal-v0.3.1-ota-manifest.json
 ota-manifest.json
 ```
 
 Production OTA proof:
 
 ```text
-task: #41
-from: v0.2.9
-to: v0.3.0
-current: /opt/incudal/releases/v0.3.0-20260624150720
-artifact sha256: affcd8a89c49046e9c7323d25fc7e943e62a721b6aec0f72cd68ff368bc69601
+task: #42
+from: v0.3.0
+to: v0.3.1
+current: /opt/incudal/releases/v0.3.1-20260624154031
+artifact sha256: c53c274af7b116a117308a4abcf80d9f6a2f4ba71051fe8c7ab31bc2ce3f6458
 result: System update completed successfully
 ```
 
 Post-update checks completed in the update log:
 
 ```text
-OTA download cache cleanup at update start
-disk-space preflight before update and before artifact download/extract/backup
+OTA download cache cleaned before update
+old releases pruned before update; root filesystem available space improved from 14G to 17G
 backend health ready after restart
-Prisma migration 20260624230000_add_sla_alert_center applied
+Prisma migration 20260624233000_add_ticket_success_center applied
 scripts/verify-split-host.sh passed
-pnpm verify:production passed
+pnpm verify:production passed with existing accepted warning: PAYMENT_CALLBACK_IP_WHITELIST is empty
 pnpm verify:log-header passed
 ```
 
@@ -163,27 +177,31 @@ Public checks after the OTA:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/sla-alerts: HTTP 200 app shell
-https://admin.payincus.com/api/admin/sla-alerts/overview without auth: 401
-https://payincus.com/release/version-log.html: contains v0.3.0, a721de8 and SLA/告警
-https://payincus.com/en/release/version-log.html: contains v0.3.0, a721de8 and SLA/告警
+https://admin.payincus.com/admin/tickets: HTTP 200 app shell
+https://admin.payincus.com/api/tickets/1/support-context without auth: 401
+https://payincus.com/release/version-log.html: contains v0.3.1, c71ade8 and customer-success/ticket workspace wording
+https://payincus.com/en/release/version-log.html: contains v0.3.1, c71ade8 and customer-success/ticket workspace wording
 ```
 
-Local gates run for `v0.3.0`:
+Local gates run for `v0.3.1`:
 
 ```text
 pnpm --filter server exec prisma generate
-pnpm --filter server test:sla-alert-guards
+pnpm --filter server test:ticket-success-guards
+pnpm --filter server test:ticket-query-guards
+pnpm --filter server test:ticket-image-security
+pnpm --filter server test:frontend-i18n-keys
 pnpm --filter server type-check
 pnpm --filter client type-check
 pnpm --filter client build
-pnpm --filter server test:delivery-center-guards
+pnpm --filter server build
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
-pnpm --filter server test:frontend-i18n-keys
-pnpm --filter server build
+pnpm --filter server test:sla-alert-guards
+pnpm --filter server test:delivery-center-guards
 pnpm build
 pnpm test
+pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
@@ -193,8 +211,8 @@ The release was verified by GitHub Actions, release assets, production OTA task 
 Current commercial operation progress:
 
 ```text
-6/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting.
-Suggested next category: customer success.
+7/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success.
+Suggested next category: user lifecycle.
 ```
 
 ## Product Split Status
@@ -293,6 +311,12 @@ Key tags:
 - `v0.2.3`: order exception handling and manual balance adjustment from admin order detail.
 - `v0.2.4`: balance adjustment approval flow.
 - `v0.2.5`: OTA download cache cleanup, disk-space preflight and atomic release pruning safeguards.
+- `v0.2.6`: commercial operations overview.
+- `v0.2.7`: order payment operations workflow.
+- `v0.2.8`: financial reconciliation workflow.
+- `v0.2.9`: delivery assurance operations workflow.
+- `v0.3.0`: SLA alert center.
+- `v0.3.1`: customer success ticket workspace.
 
 Latest production proof:
 
@@ -627,8 +651,8 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.2.9 release, the product/docs baseline is `9885685` and this handoff-only commit may exist on top.
-2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; the suggested next category is SLA and alerting.
+1. Keep local Git synced with remote `payincus/main`; after the v0.3.1 release, the product/docs baseline is `6b8aa1f` and this handoff-only commit may exist on top.
+2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; current progress is 7/12 categories complete, 58%, and the suggested next category is user lifecycle.
 3. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
 4. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
 5. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
