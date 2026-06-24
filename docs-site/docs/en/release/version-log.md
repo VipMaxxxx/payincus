@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `7f574ae`
+- Current HEAD / 当前 HEAD: `b186fa8`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Fix ticket AI actions and panel cert paths / 修复工单 AI 与面板证书路径
-- Latest tag / 最新 tag: `v0.4.2`
+- Commit subject / 提交说明: Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底
+- Latest tag / 最新 tag: `v0.4.3`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.4.3
+
+- Release commit / 发布提交: `b186fa8`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底
+
+### Fixes and Stability / 修复与稳定性
+
+- Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底 `b186fa8`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.4.2 / 更新 v0.4.2 版本日志 `1e62fcf`
 
 ## v0.4.2
 

@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `7f574ae`
+- 当前 HEAD / Current HEAD: `b186fa8`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Fix ticket AI actions and panel cert paths / 修复工单 AI 与面板证书路径
-- 最新 tag / Latest tag: `v0.4.2`
+- 提交说明 / Commit subject: Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底
+- 最新 tag / Latest tag: `v0.4.3`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.4.3
+
+- 发布提交 / Release commit: `b186fa8`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底 `b186fa8`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.4.2 / 更新 v0.4.2 版本日志 `1e62fcf`
 
 ## v0.4.2
 
