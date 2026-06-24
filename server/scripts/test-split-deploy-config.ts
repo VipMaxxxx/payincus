@@ -170,6 +170,12 @@ assert.ok(
     installPanel.indexOf('install_pnpm') < installPanel.indexOf('install_postgresql'),
   'install script must install pnpm after Node.js and before migrations'
 )
+assert.ok(
+  installPanel.includes('Nginx runs as www-data and must be able to traverse the install root') &&
+    countOccurrences(installPanel, 'chmod 751 "$INSTALL_DIR"') >= 2 &&
+    countOccurrences(installPanel, 'chmod 600 "${ENV_FILE}" 2>/dev/null || true') >= 2,
+  'install script must keep the install root traversable for Nginx static assets while preserving .env owner-only permissions'
+)
 assert.ok(initEnv.includes('set_env_if_missing "PORT" "3001" "后端监听端口"'), 'init-env script must default backend PORT to 3001')
 assert.ok(initEnv.includes('set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"'), 'init-env script must default SERVE_STATIC_CLIENT=false')
 assert.ok(initEnv.includes('set_env_if_missing "VITE_API_BASE_URL" "/api" "前端 API 基础路径"'), 'init-env script must default VITE_API_BASE_URL=/api')

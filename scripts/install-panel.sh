@@ -706,9 +706,10 @@ create_user() {
     mkdir -p "${INSTALL_DIR}/plugin-logs"
     mkdir -p "${INSTALL_DIR}/plugin-staging"
 
-    # 设置目录权限
+    # Nginx runs as www-data and must be able to traverse the install root
+    # to serve client/dist while .env stays owner-only below.
     chown -R "${RUN_USER}:${RUN_USER}" "$INSTALL_DIR"
-    chmod 750 "$INSTALL_DIR"
+    chmod 751 "$INSTALL_DIR"
     chmod 600 "${ENV_FILE}" 2>/dev/null || true
 }
 
@@ -1405,6 +1406,8 @@ do_upgrade() {
 
     # 修复权限
     chown -R "${RUN_USER}:${RUN_USER}" "$INSTALL_DIR"
+    chmod 751 "$INSTALL_DIR"
+    chmod 600 "${ENV_FILE}" 2>/dev/null || true
 
     configure_git_metadata
     ensure_env_keys
