@@ -19,17 +19,17 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-6879d58 Update version log for v0.4.5 / 更新 v0.4.5 版本日志
+b92a5a0 Add plugin market governance / 新增插件市场治理
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
 
 The tracked tree should be clean against `payincus/main` after pulling. The local audit ledger under `docs/production-audit.md` is ignored by git and may contain newer operational notes.
 
-Latest tracked handoff/rule commit at the time of this refresh:
+Latest tracked product commit at the time of this refresh:
 
 ```text
-6879d58 Update version log for v0.4.5 / 更新 v0.4.5 版本日志
+b92a5a0 Add plugin market governance / 新增插件市场治理
 ```
 
 Recently updated/released files include:
@@ -40,6 +40,12 @@ server/src/routes/admin-capacity-cost.ts
 server/scripts/test-capacity-cost-guards.ts
 server/scripts/test-ai-ticket-context-guards.ts
 server/scripts/test-split-deploy-config.ts
+server/scripts/test-plugin-market-governance-guards.ts
+server/src/lib/plugin-market.ts
+server/src/routes/admin-plugins.ts
+client/src/views/admin/PluginCenterView.vue
+docs-site/docs/plugins/overview.md
+docs-site/docs/en/plugins/overview.md
 client/src/views/admin/CapacityCostView.vue
 client/src/components/layout/SideNav.vue
 client/src/views/TicketsView.vue
@@ -135,28 +141,27 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.4.5 Fix ticket AI cached API fallback / 修复工单 AI 缓存 API 兜底
-hotfix commit: d0d0c06
-version-log/docs commit: 6879d58
+v0.4.6 Plugin market governance / 插件市场治理
+feature commit: b92a5a0
+version-log/docs commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28128936618: success for tag v0.4.5
-CI 28128932543: success for tag/main commit d0d0c06
-CI 28129207221: success for docs commit 6879d58
-Deploy docs site to GitHub Pages 28129207232: success for docs commit 6879d58
+Build & Release 28130354066: success for tag v0.4.6
+CI 28130351224: success for main commit b92a5a0
+Deploy docs site to GitHub Pages 28130351235: success for main commit b92a5a0
 ```
 
-Release assets for `v0.4.5` were present:
+Release assets for `v0.4.6` were present:
 
 ```text
-incudal-v0.4.5-linux-amd64.tar.gz
-incudal-v0.4.5-linux-amd64.tar.gz.sha256
-incudal-v0.4.5-linux-arm64.tar.gz
-incudal-v0.4.5-linux-arm64.tar.gz.sha256
-incudal-v0.4.5-ota-manifest.json
+incudal-v0.4.6-linux-amd64.tar.gz
+incudal-v0.4.6-linux-amd64.tar.gz.sha256
+incudal-v0.4.6-linux-arm64.tar.gz
+incudal-v0.4.6-linux-arm64.tar.gz.sha256
+incudal-v0.4.6-ota-manifest.json
 ota-manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
@@ -167,14 +172,14 @@ plugin-market-index.json
 Production OTA proof:
 
 ```text
-from: v0.4.4
-to: v0.4.5
-task: #54
-current target: /opt/incudal/current resolves to /opt/incudal/releases/v0.4.4-20260624204132
-version metadata: /opt/incudal/current/version.json reports v0.4.5, gitTag v0.4.5, gitCommit d0d0c0612c08, deployedAt 2026-06-24T21:00:30.363Z
-backup path: /opt/incudal/releases/v0.4.4-20260624204132.bak.20260624205952
+from: v0.4.5
+to: v0.4.6
+task: #55
+current target: /opt/incudal/current resolves to /opt/incudal/releases/v0.4.6-20260624212543
+version metadata: /opt/incudal/current/version.json reports v0.4.6, gitTag v0.4.6, gitCommit b92a5a093fca, deployedAt 2026-06-24T21:25:52.666Z
+backup path: /opt/incudal/releases/v0.4.4-20260624204132
 result: OTA completed successfully, backend health ready on attempt 2, split-host verification passed, production readiness passed, and log/header exposure verification passed
-note: task #54 was started from the CLI with cwd resolved to the real release directory, so the updater applied the artifact in-place and skipped old-release pruning as "not atomic current/releases layout"; the running version is v0.4.5 and backup is retained
+note: task #55 was started with INSTALL_DIR=/opt/incudal and INCUDAL_APP_DIR=/opt/incudal/current, so the updater created a new atomic release directory and switched current to v0.4.6
 ```
 
 Post-update checks:
@@ -182,38 +187,38 @@ Post-update checks:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/tickets: HTTP 200 app shell
+https://admin.payincus.com/admin/plugins: HTTP 200 app shell
 https://pay.payincus.com/tickets: HTTP 200 app shell
-https://payincus.com/release/version-log.html: contains v0.4.5 and 工单 AI 缓存 API 兜底
-https://payincus.com/en/release/version-log.html: contains v0.4.5 and ticket AI cached API fallback
-Production admin ticket chunk: contains generateAiDraft, sendAiReply, Bearer fallback, ticket-reply-textarea, and AI_TICKET_REPLY_HANDOFF_REQUIRED markers
-TLS probe: pay.payincus.com and admin.payincus.com matched *.payincus.com and certificate verification was OK
-Production update log: artifact SHA256 028ab24ceb8256f0f77d6bfd6a11731f35218c93dadb7e676e69d5ab6fe3ca58 verified, no pending Prisma migrations, backend health ready on attempt 2, split-host verification passed, production readiness passed, and log/header exposure passed
+Production update log: artifact SHA256 f04caae3e34e7d4b7496f5e08c5165c0fe39bd1259ac00438ebae89d088153c8 verified, no pending Prisma migrations, backend health ready on attempt 2, split-host verification passed, production readiness passed, and log/header exposure passed
 ```
 
-Local gates run for `v0.4.5`:
+Local gates run for `v0.4.6`:
 
 ```text
-pnpm --filter server test:ai-ticket-context-guards
-pnpm --filter server test:split-deploy-config
+pnpm --filter server test:plugin-market-governance-guards
+pnpm --filter server test:plugin-market-guards
+pnpm --filter server test:plugin-center-guards
+pnpm --filter server test:plugin-client-boundary-guards
 pnpm --filter client type-check
 pnpm --filter server type-check
 pnpm --filter client build
+pnpm --filter server build
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
 pnpm test
+pnpm test:agent
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The release was verified by GitHub Actions, release assets, production OTA version metadata, service health, split-host verification, production readiness, log/header exposure scan, split boundary guards, AI ticket context guard, full local tests, docs build, docs/version-log checks, and production ticket bundle marker checks.
+The release was verified by GitHub Actions, release assets, production OTA version metadata, service health, split-host verification, production readiness, log/header exposure scan, plugin market governance guards, split boundary guards, full local tests, agent tests, docs build, and docs/version-log checks.
 
 Current commercial operation progress:
 
 ```text
-10/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit, resource capacity and cost.
-Suggested next category: marketing conversion and growth experiments, or continue the next item in docs/commercial-operation-task-goals.md.
+11/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit, resource capacity and cost, plugin market governance.
+Suggested next category: production proof closure in docs/commercial-operation-task-goals.md.
 ```
 
 ## Product Split Status
