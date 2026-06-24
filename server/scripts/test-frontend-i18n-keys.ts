@@ -15,6 +15,7 @@ const localeSources = {
   zhCN: readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8'),
   zhTW: readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
 }
+const viteConfigSource = readFileSync(resolve(__dirname, '../../client/vite.config.ts'), 'utf8')
 
 const localeMessages = {
   en,
@@ -105,7 +106,7 @@ function collectFrontendTranslationKeys(): Set<string> {
     for (const pattern of keyPatterns) {
       for (const match of source.matchAll(pattern)) {
         const key = match[1]
-        if (key.startsWith('entertainment.admin.')) keys.add(key)
+        if (key.startsWith('entertainment.')) keys.add(key)
       }
     }
   }
@@ -125,6 +126,7 @@ function resolveMessage(source: unknown, key: string): unknown {
 function assertFrontendKeysExist(): void {
   const keys = collectFrontendTranslationKeys()
   assert.ok(keys.has('entertainment.admin.title'), 'frontend i18n guard must cover admin benefits page keys')
+  assert.ok(keys.has('entertainment.prizeTypes.badge'), 'frontend i18n guard must cover shared benefits prize type keys')
 
   for (const [localeName, messages] of Object.entries(localeMessages)) {
     for (const key of keys) {
@@ -137,10 +139,41 @@ function assertFrontendKeysExist(): void {
   }
 }
 
+function assertSplitLocalePruneKeepsAdminBenefits(): void {
+  const adminPruneStart = viteConfigSource.indexOf('function stripAdminOnlyLocaleMessages')
+  const userPruneStart = viteConfigSource.indexOf('function stripUserOnlyLocaleMessages')
+  assert.ok(adminPruneStart >= 0 && userPruneStart > adminPruneStart, 'Vite config must define split locale prune helpers')
+
+  const adminPruneSource = viteConfigSource.slice(adminPruneStart, userPruneStart)
+  const userPruneSource = viteConfigSource.slice(userPruneStart)
+  const userOnlyTopLevelMatch = /const userOnlyTopLevelKeys = \[([\s\S]*?)\]/.exec(adminPruneSource)
+  assert.ok(userOnlyTopLevelMatch, 'admin locale prune must define userOnlyTopLevelKeys')
+  const userOnlyTopLevelKeysSource = userOnlyTopLevelMatch[1]
+  const adminEntertainmentRemovedKeysMatch = /const adminEntertainmentRemovedKeys = \[([\s\S]*?)\]/.exec(adminPruneSource)
+  assert.ok(adminEntertainmentRemovedKeysMatch, 'admin locale prune must define adminEntertainmentRemovedKeys')
+  const adminEntertainmentRemovedKeysSource = adminEntertainmentRemovedKeysMatch[1]
+
+  assert.ok(
+    !userOnlyTopLevelKeysSource.includes("'entertainment'"),
+    'admin locale prune must not remove the whole entertainment namespace because the admin benefits page uses entertainment.admin'
+  )
+  assert.ok(
+    adminPruneSource.includes('adminEntertainmentRemovedKeys') &&
+      adminEntertainmentRemovedKeysSource.includes("'wonInstance'") === false &&
+      adminEntertainmentRemovedKeysSource.includes("'admin'") === false,
+    'admin locale prune must keep entertainment.admin plus shared prize result labels required by the admin benefits page'
+  )
+  assert.ok(
+    userPruneSource.includes("removeLocaleObjectProperty(stripped, 'admin', 8, entertainmentRange[0], entertainmentRange[1])"),
+    'customer locale prune must remove entertainment.admin from the customer bundle'
+  )
+}
+
 for (const [localeName, source] of Object.entries(localeSources)) {
   assertLocaleContainsKeys(localeName, source)
 }
 
 assertFrontendKeysExist()
+assertSplitLocalePruneKeepsAdminBenefits()
 
 console.log('frontend i18n key checks passed')

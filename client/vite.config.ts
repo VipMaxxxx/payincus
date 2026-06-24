@@ -140,7 +140,6 @@ function stripAdminOnlyLocaleMessages(source: string): string {
     'wallet',
     'aff',
     'vipBenefits',
-    'entertainment',
     'hostingWallet',
     'friends',
     'transfers',
@@ -150,6 +149,74 @@ function stripAdminOnlyLocaleMessages(source: string): string {
 
   for (const key of userOnlyTopLevelKeys) {
     stripped = removeLocaleObjectProperty(stripped, key, 4)
+  }
+
+  const adminEntertainmentRemovedKeys = [
+    'title',
+    'description',
+    'currentPoints',
+    'convertPoints',
+    'noPointsToConvert',
+    'convertSuccess',
+    'convertFailed',
+    'pointsUnit',
+    'tabs',
+    'mainTabs',
+    'comingSoon',
+    'blindbox',
+    'checkinSection',
+    'spin',
+    'spinCost',
+    'spinFailed',
+    'selectLottery',
+    'notEnoughPoints',
+    'noActiveLotteries',
+    'prizeList',
+    'probability',
+    'remaining',
+    'multiDraw',
+    'multiDrawAgain',
+    'multiDrawFailed',
+    'multiDrawResults',
+    'multiDrawStopped',
+    'notEnoughPointsForMulti',
+    'totalDraws',
+    'totalPointsSpent',
+    'badgeUnit',
+    'instanceUnit',
+    'multiDrawBadgesTitle',
+    'multiDrawBadgesSubtitle',
+    'continueToMultiResults',
+    'congratulations',
+    'betterLuckNextTime',
+    'wonPoints',
+    'wonBalance',
+    'wonBadge',
+    'wonCpu',
+    'wonMemory',
+    'wonDisk',
+    'wonTraffic',
+    'lotteryName',
+    'prize',
+    'prizeType',
+    'value',
+    'noRecords',
+    'loadRecordsFailed',
+    'loadLotteriesFailed',
+    'pointsLogType',
+    'pointsChange',
+    'pointsAfter',
+    'remark',
+    'noPointsLogs',
+    'loadPointsLogsFailed',
+    'pointsLogTypes',
+    'badges'
+  ]
+
+  for (const key of adminEntertainmentRemovedKeys) {
+    const latestEntertainmentRange = findLocaleObjectRange(stripped, 'entertainment', 4)
+    if (!latestEntertainmentRange) break
+    stripped = removeLocaleObjectProperty(stripped, key, 8, latestEntertainmentRange[0], latestEntertainmentRange[1])
   }
 
   const resourcesRange = findLocaleObjectRange(stripped, 'resources', 4)
@@ -255,6 +322,11 @@ function stripUserOnlyLocaleMessages(source: string): string {
     const latestNavRange = findLocaleObjectRange(stripped, 'nav', 4)
     if (!latestNavRange) break
     stripped = removeLocaleObjectProperty(stripped, key, 8, latestNavRange[0], latestNavRange[1])
+  }
+
+  const entertainmentRange = findLocaleObjectRange(stripped, 'entertainment', 4)
+  if (entertainmentRange) {
+    stripped = removeLocaleObjectProperty(stripped, 'admin', 8, entertainmentRange[0], entertainmentRange[1])
   }
 
   const adminRange = findLocaleObjectRange(stripped, 'admin', 4)
