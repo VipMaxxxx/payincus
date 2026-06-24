@@ -235,12 +235,6 @@ onBeforeUnmount(() => {
 const isHostOwner = computed(() => authStore.isAdmin || pendingCount.value.isHostOwner)
 
 type TicketAiAction = 'draft' | 'reply'
-type TicketAiApiFallback = {
-  tickets?: {
-    generateAiDraft?: (id: number) => Promise<TicketAiDraftResponse>
-    sendAiReply?: (id: number) => Promise<TicketAiReplyResponse>
-  }
-}
 
 async function postTicketAiAction<T>(ticketId: number, action: TicketAiAction): Promise<T> {
   const response = await fetch(buildApiUrl(`/tickets/${ticketId}/ai/${action}`), {
@@ -263,18 +257,10 @@ async function postTicketAiAction<T>(ticketId: number, action: TicketAiAction): 
 }
 
 async function requestAiDraft(ticketId: number): Promise<TicketAiDraftResponse> {
-  const ticketsApi = api as TicketAiApiFallback
-  if (typeof ticketsApi.tickets?.generateAiDraft === 'function') {
-    return ticketsApi.tickets.generateAiDraft(ticketId)
-  }
   return postTicketAiAction<TicketAiDraftResponse>(ticketId, 'draft')
 }
 
 async function requestAiReply(ticketId: number): Promise<TicketAiReplyResponse> {
-  const ticketsApi = api as TicketAiApiFallback
-  if (typeof ticketsApi.tickets?.sendAiReply === 'function') {
-    return ticketsApi.tickets.sendAiReply(ticketId)
-  }
   return postTicketAiAction<TicketAiReplyResponse>(ticketId, 'reply')
 }
 

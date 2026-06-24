@@ -619,12 +619,23 @@ assert.ok(nginxExample.includes("connect-src 'self' ws: wss:"), 'Nginx split exa
 assertBalancedNginxBraces('Nginx split example', nginxExample)
 assert.equal(countOccurrences(nginxExample, 'server {'), 2, 'Nginx split example must define customer and admin server blocks')
 assert.equal(countOccurrences(nginxExample, 'location = /healthz {'), 2, 'Nginx split example must define /healthz for both frontends')
+assert.equal(countOccurrences(nginxExample, 'location = /index.html {'), 2, 'Nginx split example must define no-cache SPA entry locations for both frontends')
+assert.equal(countOccurrences(nginxExample, 'location /assets/ {'), 2, 'Nginx split example must define static asset locations for both frontends')
+assert.equal(countOccurrences(nginxExample, 'expires epoch;'), 2, 'Nginx split example must prevent stale cached index.html after OTA')
+assert.equal(countOccurrences(nginxExample, 'expires 1y;'), 2, 'Nginx split example must allow hashed frontend assets to be cached separately')
 assert.equal(countOccurrences(nginxExample, 'location /api/ws/ {'), 2, 'Nginx split example must define /api/ws for both frontends')
 assert.equal(countOccurrences(nginxExample, 'location /api/ {'), 2, 'Nginx split example must define /api for both frontends')
 assert.equal(countOccurrences(nginxExample, 'location / {'), 2, 'Nginx split example must define SPA fallback for both frontends')
 assertWebSocketProxyConfig('Nginx split example', nginxExample, 'http://10.0.0.12:3001/api/ws/;')
 assertWebSocketProxyConfig('install script Nginx template', installPanel, 'http://127.0.0.1:${DEFAULT_PORT};')
 assert.ok(installPanel.includes("connect-src 'self' ws: wss:"), 'install script Nginx CSP must allow HTTP and HTTPS WebSocket terminals')
+assert.ok(
+  installPanel.includes('location = /index.html {') &&
+    installPanel.includes('location /assets/ {') &&
+    installPanel.includes('expires epoch;') &&
+    installPanel.includes('expires 1y;'),
+  'install script Nginx template must avoid stale SPA entry caches while caching hashed assets'
+)
 assertForwardedProxyHeaderConfig('Nginx split example', nginxExample)
 assertForwardedProxyHeaderConfig('install script Nginx template', installPanel)
 assert.ok(nginxExample.includes('proxy_pass http://10.0.0.12:3001/api/'), 'Nginx API proxy must target backend port 3001')

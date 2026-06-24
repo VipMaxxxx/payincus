@@ -264,8 +264,6 @@ assert.ok(
     ticketsViewSource.includes('sendAiReply') &&
     ticketsViewSource.includes('requestAiDraft(selectedTicket.value.id)') &&
     ticketsViewSource.includes('requestAiReply(selectedTicket.value.id)') &&
-    ticketsViewSource.includes("typeof ticketsApi.tickets?.generateAiDraft === 'function'") &&
-    ticketsViewSource.includes("typeof ticketsApi.tickets?.sendAiReply === 'function'") &&
     ticketsViewSource.includes("postTicketAiAction<TicketAiDraftResponse>(ticketId, 'draft')") &&
     ticketsViewSource.includes("postTicketAiAction<TicketAiReplyResponse>(ticketId, 'reply')") &&
     ticketsViewSource.includes("buildApiUrl(`/tickets/${ticketId}/ai/${action}`)") &&
@@ -273,8 +271,12 @@ assert.ok(
     ticketsViewSource.includes("code === 'AI_TICKET_REPLY_HANDOFF_REQUIRED'") &&
     ticketsViewSource.includes('replyContent.value = result.draft') &&
     ticketsViewSource.includes('ticket-reply-textarea') &&
+    !ticketsViewSource.includes('ticketsApi.tickets?.generateAiDraft') &&
+    !ticketsViewSource.includes('ticketsApi.tickets?.sendAiReply') &&
+    !ticketsViewSource.includes('api.tickets.generateAiDraft') &&
+    !ticketsViewSource.includes('api.tickets.sendAiReply') &&
     !ticketsViewSource.includes('api.tickets.reply(selectedTicket.value.id, result.draft'),
-  'Admin ticket UI must keep draft generation separate from explicit AI takeover replies and tolerate cached API chunks'
+  'Admin ticket UI must keep draft generation separate from explicit AI takeover replies and avoid cached API method mismatches'
 )
 
 console.log('AI ticket context guard tests passed')

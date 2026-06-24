@@ -1126,6 +1126,15 @@ server {
         return 200 "ok\n";
     }
 
+    location = /index.html {
+        expires epoch;
+    }
+
+    location /assets/ {
+        try_files \$uri =404;
+        expires 1y;
+    }
+
     location /api/ws/ {
         proxy_pass http://127.0.0.1:${DEFAULT_PORT};
         proxy_http_version 1.1;

@@ -102,6 +102,15 @@ http {
       return 200 "ok\n";
     }
 
+    location = /index.html {
+      expires epoch;
+    }
+
+    location /assets/ {
+      try_files \$uri =404;
+      expires 1y;
+    }
+
     location /api/ws/ {
       proxy_pass ${BACKEND_URL}/api/ws/;
       proxy_http_version 1.1;
@@ -151,6 +160,15 @@ http {
     location = /healthz {
       add_header Content-Type text/plain;
       return 200 "ok\n";
+    }
+
+    location = /index.html {
+      expires epoch;
+    }
+
+    location /assets/ {
+      try_files \$uri =404;
+      expires 1y;
     }
 
     location /api/ws/ {
