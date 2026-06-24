@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-02c8862 Update version log for v0.3.7 / 更新 v0.3.7 版本日志
+3dc1f66 Update version log for v0.4.0 / 更新 v0.4.0 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-02c8862 Update version log for v0.3.7 / 更新 v0.3.7 版本日志
+3dc1f66 Update version log for v0.4.0 / 更新 v0.4.0 版本日志
 ```
 
 Recently updated/released files include:
@@ -127,76 +127,68 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.3.7 Fix admin benefits localization bundle / 修复后台福利本地化打包
-feature commit: bbf36c9
-version-log commit: 02c8862
+v0.4.0 Add standalone plugin settings pages / 新增独立插件设置页
+feature commit: b4d4cce
+version-log commit: 3dc1f66
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28118700434: success for tag v0.3.7
-CI 28118697109: success for main commit 02c8862
-Deploy docs site to GitHub Pages 28118697104: success for main commit 02c8862
+Build & Release 28122325318: success for tag v0.4.0
+CI 28122395990: success for main commit 3dc1f66
+Deploy docs site to GitHub Pages 28122395969: success for main commit 3dc1f66
 ```
 
-Release assets for `v0.3.7` were present:
+Release assets for `v0.4.0` were present:
 
 ```text
-incudal-v0.3.7-linux-amd64.tar.gz
-incudal-v0.3.7-linux-amd64.tar.gz.sha256
-incudal-v0.3.7-linux-arm64.tar.gz
-incudal-v0.3.7-linux-arm64.tar.gz.sha256
-incudal-v0.3.7-ota-manifest.json
+incudal-v0.4.0-linux-amd64.tar.gz
+incudal-v0.4.0-linux-amd64.tar.gz.sha256
+incudal-v0.4.0-linux-arm64.tar.gz
+incudal-v0.4.0-linux-arm64.tar.gz.sha256
+incudal-v0.4.0-ota-manifest.json
 ota-manifest.json
+plugin-market-index.json
 ```
 
 Production OTA proof:
 
 ```text
-task: #47
-from: v0.3.6
-to: v0.3.7
-version metadata: /opt/incudal/current/version.json reports v0.3.7, gitTag v0.3.7, gitCommit bbf36c931487, deployedAt 2026-06-24T18:04:43.631Z
-result: System update completed successfully
+from: v0.3.9
+to: v0.4.0
+version metadata: /opt/incudal/current/version.json reports v0.4.0, gitTag v0.4.0, gitCommit b4d4cce11319, deployedAt 2026-06-24T19:02:35.403Z
+result: OTA completed and public health checks passed
 ```
 
-Post-update checks completed in the update log:
-
-```text
-Prisma migrate deploy: 154 migrations found, no pending migrations
-scripts/verify-split-host.sh passed
-pnpm verify:production passed with existing accepted warning: PAYMENT_CALLBACK_IP_WHITELIST is empty
-pnpm verify:log-header passed
-OTA download cache cleaned after update
-public admin assets contain the restored Benefits admin locale strings
-```
-
-Public checks after the OTA:
+Post-update checks:
 
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/entertainment: HTTP 200 app shell
-https://admin.payincus.com assets: contain restored 福利/Entertainment admin locale text and no longer rely on raw entertainment.admin.* keys
-https://payincus.com/release/version-log.html: contains v0.3.7
-https://payincus.com/en/release/version-log.html: contains v0.3.7
+https://admin.payincus.com/admin/plugins/com.payincus.ai-ticket-agent/settings: HTTP 200 app shell
+Production admin assets contain: AI 工单助手, 自动回复策略, OpenAI 兼容接口地址, 模型 API Key, 留空则保持不变
+Production admin assets no longer contain: 配置 JSON, 套用默认模板
+https://payincus.com/release/version-log.html: contains v0.4.0
+https://payincus.com/en/release/version-log.html: contains v0.4.0
 ```
 
-Local gates run for `v0.3.7`:
+Local gates run for `v0.4.0`:
 
 ```text
-pnpm --filter server test:frontend-i18n-keys
+pnpm --filter server test:plugin-center-guards
+pnpm --filter server test:plugin-package-guards
+pnpm --filter server test:plugin-market-guards
+pnpm --filter server test:ai-ticket-context-guards
 pnpm --filter client build
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
-split locale dist assertion: admin bundle contains 福利/Entertainment admin text; user bundle does not contain entertainment.admin text/key
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The release was verified by GitHub Actions, release assets, production OTA task status, update log, service health, public user/admin health, Prisma migration output, and docs/version-log checks.
+The release was verified by GitHub Actions, release assets, production OTA version metadata, service health, production admin static asset markers, split boundary guards, plugin guards, AI ticket context guard, docs build, and docs/version-log checks. SSH log reads were intermittent after OTA, but server-side `version.json` was successfully read once and public checks stayed healthy.
 
 Current commercial operation progress:
 
@@ -445,8 +437,20 @@ Official AI plugin Chinese UI proof:
 - Admin plugin center now:
   - displays the known AI plugin as `AI 工单助手` even when an older installed manifest still has English text;
   - shows Chinese description and permission labels;
-  - renders the plugin settings page before raw config JSON;
-  - provides a `套用默认模板` button for plugins with templates.
+  - links enabled plugins with `admin.plugins.settings` to standalone settings routes;
+  - no longer embeds the settings iframe or raw config JSON in the plugin center detail panel.
+
+Official AI plugin standalone settings proof:
+
+- Commit: `b4d4cce Add standalone plugin settings pages / 新增独立插件设置页`
+- Tag: `v0.4.0`
+- Release URL: `https://github.com/VipMaxxxx/payincus/releases/tag/v0.4.0`
+- Production version file reports `v0.4.0`, git commit `b4d4cce11319`.
+- Admin sidebar dynamically loads enabled plugins that declare `admin.plugins.settings` and inserts the settings entry after `插件中心`.
+- `AI 工单助手` now opens as `/admin/plugins/com.payincus.ai-ticket-agent/settings`.
+- The standalone page provides Chinese business controls for enablement, takeover mode, OpenAI-compatible model URL, model name, API key, temperature, timeout, auto-reply categories, confidence threshold, limits, cooldown, AI identity disclosure and custom system prompt.
+- Leaving the API key blank keeps the stored encrypted secret unchanged.
+- Production admin assets contain the standalone page markers `自动回复策略`, `OpenAI 兼容接口地址`, `模型 API Key`, and `留空则保持不变`, and no longer contain `配置 JSON` or `套用默认模板`.
 
 ## Documentation Site
 
@@ -681,7 +685,7 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.3.6 release, the product/docs baseline is `d92bdfe`.
+1. Keep local Git synced with remote `payincus/main`; after the v0.4.0 release, the product/docs baseline is `3dc1f66`.
 2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; current progress is 9/12 categories complete, 75%, and the suggested next category is resource capacity and cost.
 3. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
 4. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
