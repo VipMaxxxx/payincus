@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-3490fa1 Update version log for v0.4.3 / 更新 v0.4.3 版本日志
+6879d58 Update version log for v0.4.5 / 更新 v0.4.5 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,12 +29,20 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-3490fa1 Update version log for v0.4.3 / 更新 v0.4.3 版本日志
+6879d58 Update version log for v0.4.5 / 更新 v0.4.5 版本日志
 ```
 
 Recently updated/released files include:
 
 ```text
+server/prisma/migrations/20260625100000_add_capacity_cost_center/migration.sql
+server/src/routes/admin-capacity-cost.ts
+server/scripts/test-capacity-cost-guards.ts
+server/scripts/test-ai-ticket-context-guards.ts
+server/scripts/test-split-deploy-config.ts
+client/src/views/admin/CapacityCostView.vue
+client/src/components/layout/SideNav.vue
+client/src/views/TicketsView.vue
 client/vite.config.ts
 server/scripts/test-frontend-i18n-keys.ts
 docs-site/docs/release/version-log.md
@@ -127,40 +135,46 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.4.3 Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底
-hotfix commit: b186fa8
-version-log/docs commit: 3490fa1
+v0.4.5 Fix ticket AI cached API fallback / 修复工单 AI 缓存 API 兜底
+hotfix commit: d0d0c06
+version-log/docs commit: 6879d58
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28125918329: success for tag v0.4.3
-CI 28125915550: success for tag/main commit b186fa8
-Deploy docs site to GitHub Pages 28125989730: success for docs commit 3490fa1
+Build & Release 28128936618: success for tag v0.4.5
+CI 28128932543: success for tag/main commit d0d0c06
+CI 28129207221: success for docs commit 6879d58
+Deploy docs site to GitHub Pages 28129207232: success for docs commit 6879d58
 ```
 
-Release assets for `v0.4.3` were present:
+Release assets for `v0.4.5` were present:
 
 ```text
-incudal-v0.4.3-linux-amd64.tar.gz
-incudal-v0.4.3-linux-amd64.tar.gz.sha256
-incudal-v0.4.3-linux-arm64.tar.gz
-incudal-v0.4.3-linux-arm64.tar.gz.sha256
-incudal-v0.4.3-ota-manifest.json
+incudal-v0.4.5-linux-amd64.tar.gz
+incudal-v0.4.5-linux-amd64.tar.gz.sha256
+incudal-v0.4.5-linux-arm64.tar.gz
+incudal-v0.4.5-linux-arm64.tar.gz.sha256
+incudal-v0.4.5-ota-manifest.json
 ota-manifest.json
+payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
+payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
+payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 plugin-market-index.json
 ```
 
 Production OTA proof:
 
 ```text
-from: v0.4.2
-to: v0.4.3
-task: #52
-current symlink: /opt/incudal/current -> /opt/incudal/releases/v0.4.3-20260624200340
-version metadata: /opt/incudal/current/version.json reports v0.4.3, gitTag v0.4.3, gitCommit b186fa869726, deployedAt 2026-06-24T20:03:47.991Z
-result: OTA completed successfully, production readiness passed, log/header exposure verification passed, and public health checks passed
+from: v0.4.4
+to: v0.4.5
+task: #54
+current target: /opt/incudal/current resolves to /opt/incudal/releases/v0.4.4-20260624204132
+version metadata: /opt/incudal/current/version.json reports v0.4.5, gitTag v0.4.5, gitCommit d0d0c0612c08, deployedAt 2026-06-24T21:00:30.363Z
+backup path: /opt/incudal/releases/v0.4.4-20260624204132.bak.20260624205952
+result: OTA completed successfully, backend health ready on attempt 2, split-host verification passed, production readiness passed, and log/header exposure verification passed
+note: task #54 was started from the CLI with cwd resolved to the real release directory, so the updater applied the artifact in-place and skipped old-release pruning as "not atomic current/releases layout"; the running version is v0.4.5 and backup is retained
 ```
 
 Post-update checks:
@@ -169,31 +183,37 @@ Post-update checks:
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
 https://admin.payincus.com/admin/tickets: HTTP 200 app shell
-https://payincus.com/release/version-log.html: contains v0.4.3 and 修复工单 AI 运行时兜底
-https://payincus.com/en/release/version-log.html: contains v0.4.3 and ticket AI runtime fallback
-Production update log: artifact SHA256 verified, current release switched atomically, backend health ready on attempt 2, split-host verification passed, production readiness passed, log/header exposure passed
+https://pay.payincus.com/tickets: HTTP 200 app shell
+https://payincus.com/release/version-log.html: contains v0.4.5 and 工单 AI 缓存 API 兜底
+https://payincus.com/en/release/version-log.html: contains v0.4.5 and ticket AI cached API fallback
+Production admin ticket chunk: contains generateAiDraft, sendAiReply, Bearer fallback, ticket-reply-textarea, and AI_TICKET_REPLY_HANDOFF_REQUIRED markers
+TLS probe: pay.payincus.com and admin.payincus.com matched *.payincus.com and certificate verification was OK
+Production update log: artifact SHA256 028ab24ceb8256f0f77d6bfd6a11731f35218c93dadb7e676e69d5ab6fe3ca58 verified, no pending Prisma migrations, backend health ready on attempt 2, split-host verification passed, production readiness passed, and log/header exposure passed
 ```
 
-Local gates run for `v0.4.3`:
+Local gates run for `v0.4.5`:
 
 ```text
 pnpm --filter server test:ai-ticket-context-guards
+pnpm --filter server test:split-deploy-config
 pnpm --filter client type-check
+pnpm --filter server type-check
 pnpm --filter client build
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
+pnpm test
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The release was verified by GitHub Actions, release assets, production OTA version metadata, service health, split-host verification, production readiness, log/header exposure scan, split boundary guards, AI ticket context guard, docs build, and docs/version-log checks.
+The release was verified by GitHub Actions, release assets, production OTA version metadata, service health, split-host verification, production readiness, log/header exposure scan, split boundary guards, AI ticket context guard, full local tests, docs build, docs/version-log checks, and production ticket bundle marker checks.
 
 Current commercial operation progress:
 
 ```text
-9/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit.
-Suggested next category: resource capacity and cost.
+10/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit, resource capacity and cost.
+Suggested next category: marketing conversion and growth experiments, or continue the next item in docs/commercial-operation-task-goals.md.
 ```
 
 ## Product Split Status
