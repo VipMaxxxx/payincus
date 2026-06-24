@@ -25,12 +25,6 @@ import { checkJwtConfig, isAccessTokenInvalidated } from './lib/security.js'
 import { logSerializers } from './lib/log-sanitizer.js'
 import { getTrustProxyEnabled } from './lib/trust-proxy-config.js'
 import { getCorsOrigins } from './lib/origin-config.js'
-import {
-  DEMO_READ_ONLY_MESSAGE,
-  isDemoRequest,
-  redactDemoJsonPayload,
-  shouldBlockDemoMutation
-} from './lib/demo-safety.js'
 
 // 导入速率限制配置
 import {
@@ -328,40 +322,6 @@ fastify.addHook('onRoute', (routeOptions) => {
         timeWindow: rule.timeWindow
       }
     }
-  }
-})
-
-fastify.addHook('onRequest', async (request, reply) => {
-  if (shouldBlockDemoMutation(request)) {
-    return reply.code(403).send({
-      error: DEMO_READ_ONLY_MESSAGE,
-      code: 'DEMO_READ_ONLY'
-    })
-  }
-})
-
-fastify.addHook('onSend', async (request, reply, payload) => {
-  if (!isDemoRequest(request) || !request.url.startsWith('/api/')) {
-    return payload
-  }
-
-  const path = request.url.split('?')[0]
-  if (path === '/api/auth/login' || path === '/api/auth/refresh') {
-    return payload
-  }
-
-  const contentType = String(reply.getHeader('content-type') || '')
-  if (!contentType.includes('application/json') || payload === undefined || payload === null) {
-    return payload
-  }
-
-  const body = Buffer.isBuffer(payload) ? payload.toString('utf8') : String(payload)
-  if (!body) return payload
-
-  try {
-    return JSON.stringify(redactDemoJsonPayload(JSON.parse(body)))
-  } catch {
-    return payload
   }
 })
 

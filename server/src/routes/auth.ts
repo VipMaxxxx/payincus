@@ -53,12 +53,6 @@ import { getUserLoginRecords } from '../db/login-records.js'
 import { closeSessionTerminalSessions, closeUserSessions } from '../lib/terminal-proxy.js'
 import { revokeActionTicketsForSession } from '../lib/action-ticket.js'
 import { getUserHostingFeatureStatus } from '../lib/hosting-access.js'
-import {
-  DEMO_REDACTED_IP,
-  redactDemoLoginRecord,
-  shouldProtectDemoAccount,
-  shouldRedactDemoLoginRecords
-} from '../lib/demo-safety.js'
 
 const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/
 const LOGIN_IDENTIFIER_MAX_LENGTH = 254
@@ -317,8 +311,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
     // 在创建新会话之前检测异地登录（修复时序问题）
     const userAgent = request.headers['user-agent'] || 'unknown'
     let loginAlertInfo: { isNewIp: boolean; isNewDevice: boolean } | null = null
-    const protectDemoAccount = shouldProtectDemoAccount(request, user)
-    if (user.email && !protectDemoAccount) {
+    if (user.email) {
       try {
         loginAlertInfo = await detectNewLoginLocation(user.id, clientIp, userAgent)
       } catch (err) {
@@ -351,40 +344,30 @@ export default async function authRoutes(fastify: FastifyInstance) {
     })
 
     // 异步记录登录信息（后台执行，不阻塞登录流程）
-    if (protectDemoAccount) {
+    getGeoIpInfo(clientIp).then(geoInfo => {
       createLoginRecord({
         userId: user.id,
-        ip: DEMO_REDACTED_IP,
-        userAgent: null
+        ip: clientIp,
+        country: geoInfo.country,
+        region: geoInfo.region,
+        city: geoInfo.city,
+        isp: geoInfo.isp,
+        timezone: geoInfo.timezone,
+        userAgent: userAgent
       }).catch(err => {
         console.error('[Login Record] Failed to create login record:', err)
       })
-    } else {
-      getGeoIpInfo(clientIp).then(geoInfo => {
-        createLoginRecord({
-          userId: user.id,
-          ip: clientIp,
-          country: geoInfo.country,
-          region: geoInfo.region,
-          city: geoInfo.city,
-          isp: geoInfo.isp,
-          timezone: geoInfo.timezone,
-          userAgent: userAgent
-        }).catch(err => {
-          console.error('[Login Record] Failed to create login record:', err)
-        })
-      }).catch(err => {
-        // GeoIP 查询失败时仍然记录登录（没有地理信息）
-        console.error('[Login Record] GeoIP lookup failed:', err)
-        createLoginRecord({
-          userId: user.id,
-          ip: clientIp,
-          userAgent: userAgent
-        }).catch(err2 => {
-          console.error('[Login Record] Failed to create login record:', err2)
-        })
+    }).catch(err => {
+      // GeoIP 查询失败时仍然记录登录（没有地理信息）
+      console.error('[Login Record] GeoIP lookup failed:', err)
+      createLoginRecord({
+        userId: user.id,
+        ip: clientIp,
+        userAgent: userAgent
+      }).catch(err2 => {
+        console.error('[Login Record] Failed to create login record:', err2)
       })
-    }
+    })
 
     // 异地登录提醒（后台执行，不阻塞登录流程）
     // 修复：使用之前检测的结果，避免时序问题
@@ -1414,13 +1397,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const pageSize = Math.min(parsePositiveInteger(request.query.pageSize, 20), 50) // 最多50条
 
     const loginRecordsResult = await getUserLoginRecords(request.user.id, page, pageSize)
-    const shouldRedact = shouldRedactDemoLoginRecords(request, request.user)
-    const records = shouldRedact
-      ? loginRecordsResult.records.map(redactDemoLoginRecord)
-      : loginRecordsResult.records
 
     return {
-      records: records.map(r => ({
+      records: loginRecordsResult.records.map(r => ({
         id: r.id,
         ip: r.ip,
         country: r.country,
