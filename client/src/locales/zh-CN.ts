@@ -4449,6 +4449,7 @@ export default {
                 instances: '付费实例',
                 records: '扣费记录',
                 rechargeRecords: '充值记录',
+                reconciliation: '财务对账',
                 affConversions: 'AFF 转化',
                 paymentProviders: '支付渠道',
             },

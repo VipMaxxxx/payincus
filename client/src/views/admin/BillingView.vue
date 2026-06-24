@@ -2,7 +2,12 @@
 import { ref, onMounted, computed, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import api from '@/api/admin'
+import api, {
+  type FinancialReconciliationItem,
+  type FinancialReconciliationItemType,
+  type FinancialReconciliationRun,
+  type FinancialReconciliationStatus
+} from '@/api/admin'
 import { useToast } from '@/stores/toast'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
@@ -61,8 +66,8 @@ const { t } = useI18n()
 const toast = useToast()
 
 // Tab 切换
-type BillingTab = 'overview' | 'instances' | 'records' | 'rechargeRecords' | 'affConversions' | 'paymentProviders'
-const billingTabs: BillingTab[] = ['overview', 'instances', 'records', 'rechargeRecords', 'affConversions', 'paymentProviders']
+type BillingTab = 'overview' | 'instances' | 'records' | 'rechargeRecords' | 'reconciliation' | 'affConversions' | 'paymentProviders'
+const billingTabs: BillingTab[] = ['overview', 'instances', 'records', 'rechargeRecords', 'reconciliation', 'affConversions', 'paymentProviders']
 function normalizeTab(tab: unknown): BillingTab {
   return typeof tab === 'string' && billingTabs.includes(tab as BillingTab)
     ? tab as BillingTab
@@ -181,6 +186,15 @@ const rechargeRecordsPageSize = ref(100)
 const rechargeRecordsTotal = ref(0)
 const rechargeRecordsFilter = ref('')
 const syncingRecordId = ref<number | null>(null)
+
+const reconciliationDate = ref(new Date().toISOString().slice(0, 10))
+const reconciliation = ref<FinancialReconciliationRun | null>(null)
+const reconciliationLoading = ref(false)
+const reconciliationRunning = ref(false)
+const reconciliationSavingId = ref<number | null>(null)
+const reconciliationExporting = ref<string | null>(null)
+const reconciliationNotes = ref<Record<number, string>>({})
+const reconciliationStatusDrafts = ref<Record<number, FinancialReconciliationStatus>>({})
 
 // 操作弹窗
 const showActionModal = ref(false)
@@ -515,6 +529,9 @@ function loadTabData(tab: BillingTab) {
   if (tab === 'rechargeRecords' && rechargeRecords.value.length === 0) {
     loadRechargeRecords()
   }
+  if (tab === 'reconciliation' && !reconciliation.value) {
+    loadFinancialReconciliation()
+  }
 }
 
 onMounted(() => {
@@ -589,6 +606,87 @@ async function loadRechargeRecords() {
     toast.error(t('admin.billing.loadRechargeRecordsFailed') + ': ' + err.message)
   } finally {
     rechargeRecordsLoading.value = false
+  }
+}
+
+async function loadFinancialReconciliation() {
+  reconciliationLoading.value = true
+  try {
+    const res = await api.admin.getFinancialReconciliation({ date: reconciliationDate.value })
+    reconciliation.value = res.run
+    syncReconciliationDrafts()
+  } catch (err: any) {
+    toast.error('加载财务对账失败: ' + err.message)
+  } finally {
+    reconciliationLoading.value = false
+  }
+}
+
+async function runFinancialReconciliation() {
+  if (reconciliationRunning.value) return
+  reconciliationRunning.value = true
+  try {
+    const res = await api.admin.runFinancialReconciliation(reconciliationDate.value)
+    reconciliation.value = res.run
+    syncReconciliationDrafts()
+    toast.success('财务对账已完成')
+  } catch (err: any) {
+    toast.error('运行财务对账失败: ' + err.message)
+  } finally {
+    reconciliationRunning.value = false
+  }
+}
+
+function syncReconciliationDrafts() {
+  const notes: Record<number, string> = {}
+  const statuses: Record<number, FinancialReconciliationStatus> = {}
+  for (const item of reconciliation.value?.items || []) {
+    notes[item.id] = item.note || ''
+    statuses[item.id] = item.status
+  }
+  reconciliationNotes.value = notes
+  reconciliationStatusDrafts.value = statuses
+}
+
+async function saveReconciliationItem(item: FinancialReconciliationItem) {
+  if (reconciliationSavingId.value) return
+  reconciliationSavingId.value = item.id
+  try {
+    const res = await api.admin.updateFinancialReconciliationItem(item.id, {
+      status: reconciliationStatusDrafts.value[item.id] || item.status,
+      note: reconciliationNotes.value[item.id] || null
+    })
+    if (reconciliation.value) {
+      reconciliation.value.status = res.runStatus
+      const index = reconciliation.value.items.findIndex(current => current.id === item.id)
+      if (index >= 0) reconciliation.value.items[index] = res.item
+    }
+    syncReconciliationDrafts()
+    toast.success('差异项已更新')
+  } catch (err: any) {
+    toast.error('更新差异项失败: ' + err.message)
+  } finally {
+    reconciliationSavingId.value = null
+  }
+}
+
+async function exportFinancialReconciliation(type: 'orders' | 'balance_logs' | 'hosting_income' | 'adjustments') {
+  if (reconciliationExporting.value) return
+  reconciliationExporting.value = type
+  try {
+    const blob = await api.admin.exportFinancialReconciliationCsv(reconciliationDate.value, type)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `payincus-reconciliation-${reconciliationDate.value}-${type}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (err: any) {
+    toast.error('导出失败: ' + err.message)
+  } finally {
+    reconciliationExporting.value = null
   }
 }
 
@@ -997,6 +1095,54 @@ function formatSignedPercent(value: number | null): string {
   if (value === null) return '--'
   const rounded = Math.abs(value) >= 10 ? value.toFixed(0) : value.toFixed(1)
   return `${value > 0 ? '+' : ''}${rounded}%`
+}
+
+function getReconciliationStatusLabel(status: FinancialReconciliationStatus): string {
+  const labels: Record<FinancialReconciliationStatus, string> = {
+    normal: '正常',
+    discrepancy: '差异',
+    confirmed: '已确认',
+    ignored: '已忽略'
+  }
+  return labels[status] || status
+}
+
+function getReconciliationStatusBadge(status: FinancialReconciliationStatus): string {
+  const map: Record<FinancialReconciliationStatus, string> = {
+    normal: 'badge-success',
+    discrepancy: 'badge-error',
+    confirmed: 'badge-info',
+    ignored: 'badge-ghost'
+  }
+  return map[status] || ''
+}
+
+function getReconciliationItemTypeLabel(type: FinancialReconciliationItemType): string {
+  const labels: Record<FinancialReconciliationItemType, string> = {
+    recharge_missing_balance_log: '成功充值未入账',
+    orphan_balance_log: '流水缺少来源',
+    delivered_instance_missing_billing: '交付缺少扣费',
+    approved_adjustment_missing_balance_log: '审批缺少流水'
+  }
+  return labels[type] || type
+}
+
+function getReconciliationExportLabel(type: string): string {
+  const labels: Record<string, string> = {
+    orders: '订单',
+    balance_logs: '余额流水',
+    hosting_income: '托管收益',
+    adjustments: '调账审批'
+  }
+  return labels[type] || type
+}
+
+function getSummaryMoney(key: 'recharge' | 'balanceLogs' | 'instanceBilling' | 'approvedAdjustments' | 'hostingIncome'): number {
+  return Number(reconciliation.value?.summary?.[key]?.amount || 0)
+}
+
+function getSummaryCount(key: 'recharge' | 'balanceLogs' | 'instanceBilling' | 'approvedAdjustments' | 'hostingIncome'): number {
+  return Number(reconciliation.value?.summary?.[key]?.count || 0)
 }
 
 function calculateRatio(part: number, total: number): number {
@@ -2048,6 +2194,148 @@ function copyToClipboard(text: string) {
             {{ $t('common.nextPage') }}
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- 财务对账 Tab -->
+    <div v-show="activeTab === 'reconciliation'" class="space-y-5">
+      <div class="card p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 class="text-base font-semibold text-themed">日对账工作台</h2>
+            <p class="mt-1 text-sm text-themed-muted">按业务日汇总充值、余额流水、实例扣费、退款审批和托管收益。</p>
+          </div>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label class="block">
+              <span class="label">对账日期</span>
+              <input
+                v-model="reconciliationDate"
+                type="date"
+                class="input min-w-[180px]"
+                @change="loadFinancialReconciliation"
+              />
+            </label>
+            <button class="btn btn-ghost" :disabled="reconciliationLoading" @click="loadFinancialReconciliation">
+              刷新
+            </button>
+            <button class="btn btn-primary" :disabled="reconciliationRunning" @click="runFinancialReconciliation">
+              {{ reconciliationRunning ? '对账中...' : '运行对账' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="reconciliationLoading" class="grid gap-4 md:grid-cols-4">
+        <div v-for="i in 4" :key="`reconciliation-loading-${i}`" class="card h-28 animate-pulse p-4">
+          <div class="h-4 w-20 rounded bg-themed-secondary"></div>
+          <div class="mt-5 h-7 w-28 rounded bg-themed-secondary"></div>
+        </div>
+      </div>
+
+      <template v-else-if="reconciliation">
+        <div class="grid gap-4 md:grid-cols-5">
+          <div class="card p-4">
+            <div class="text-xs text-themed-muted">对账状态</div>
+            <div class="mt-3">
+              <span :class="['badge', getReconciliationStatusBadge(reconciliation.status)]">
+                {{ getReconciliationStatusLabel(reconciliation.status) }}
+              </span>
+            </div>
+            <div class="mt-3 text-xs text-themed-muted">{{ reconciliation.date }}</div>
+          </div>
+          <div class="card p-4">
+            <div class="text-xs text-themed-muted">成功充值</div>
+            <div class="mt-2 text-xl font-semibold text-themed">{{ formatMoney(getSummaryMoney('recharge')) }}</div>
+            <div class="mt-1 text-xs text-themed-muted">{{ formatCount(getSummaryCount('recharge')) }} 笔</div>
+          </div>
+          <div class="card p-4">
+            <div class="text-xs text-themed-muted">余额流水</div>
+            <div class="mt-2 text-xl font-semibold text-themed">{{ formatMoney(getSummaryMoney('balanceLogs')) }}</div>
+            <div class="mt-1 text-xs text-themed-muted">{{ formatCount(getSummaryCount('balanceLogs')) }} 条</div>
+          </div>
+          <div class="card p-4">
+            <div class="text-xs text-themed-muted">实例扣费</div>
+            <div class="mt-2 text-xl font-semibold text-themed">{{ formatMoney(getSummaryMoney('instanceBilling')) }}</div>
+            <div class="mt-1 text-xs text-themed-muted">{{ formatCount(getSummaryCount('instanceBilling')) }} 条</div>
+          </div>
+          <div class="card p-4">
+            <div class="text-xs text-themed-muted">差异项</div>
+            <div class="mt-2 text-xl font-semibold text-themed">{{ formatCount(reconciliation.summary?.discrepancies?.total || 0) }}</div>
+            <div class="mt-1 text-xs text-themed-muted">重跑不会重复写入</div>
+          </div>
+        </div>
+
+        <div class="card p-5">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 class="text-base font-semibold text-themed">CSV 导出</h3>
+              <p class="mt-1 text-sm text-themed-muted">导出内容已脱敏，不包含回调原文、支付密钥、token 或密码。</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="type in ['orders', 'balance_logs', 'hosting_income', 'adjustments']"
+                :key="type"
+                class="btn btn-sm btn-ghost"
+                :disabled="!!reconciliationExporting"
+                @click="exportFinancialReconciliation(type as 'orders' | 'balance_logs' | 'hosting_income' | 'adjustments')"
+              >
+                {{ reconciliationExporting === type ? '导出中...' : `导出${getReconciliationExportLabel(type)}` }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="border-b border-themed p-5">
+            <h3 class="text-base font-semibold text-themed">差异处理</h3>
+            <p class="mt-1 text-sm text-themed-muted">差异项可确认或忽略，备注和处理人会保留。</p>
+          </div>
+          <div v-if="reconciliation.items.length === 0" class="p-10 text-center">
+            <div class="text-base font-medium text-themed">没有发现差异</div>
+            <div class="mt-1 text-sm text-themed-muted">当前日期对账结果正常。</div>
+          </div>
+          <div v-else class="divide-y divide-themed">
+            <div v-for="item in reconciliation.items" :key="item.id" class="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span :class="['badge', getReconciliationStatusBadge(item.status)]">{{ getReconciliationStatusLabel(item.status) }}</span>
+                  <span class="badge badge-ghost">{{ getReconciliationItemTypeLabel(item.itemType) }}</span>
+                  <span class="text-xs text-themed-muted">#{{ item.id }}</span>
+                </div>
+                <div class="mt-3 text-sm font-medium text-themed">{{ item.title }}</div>
+                <div class="mt-2 grid gap-2 text-sm text-themed-muted sm:grid-cols-2 lg:grid-cols-4">
+                  <div>用户：{{ item.user?.username || item.userId || '-' }}</div>
+                  <div>来源：{{ item.sourceType }} {{ item.sourceId || '' }}</div>
+                  <div>金额：{{ item.amount !== null ? formatMoney(item.amount) : '-' }}</div>
+                  <div>处理人：{{ item.handledBy?.username || '-' }}</div>
+                </div>
+                <pre class="mt-3 max-h-28 overflow-auto rounded bg-themed-secondary p-3 text-xs text-themed-muted">{{ item.detail }}</pre>
+              </div>
+              <div class="space-y-3">
+                <label class="block">
+                  <span class="label">处理状态</span>
+                  <select v-model="reconciliationStatusDrafts[item.id]" class="input w-full">
+                    <option value="discrepancy">差异</option>
+                    <option value="confirmed">已确认</option>
+                    <option value="ignored">已忽略</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="label">处理备注</span>
+                  <textarea v-model="reconciliationNotes[item.id]" class="input w-full" rows="3" maxlength="500" placeholder="填写处理结论或忽略原因"></textarea>
+                </label>
+                <button class="btn btn-primary w-full" :disabled="reconciliationSavingId === item.id" @click="saveReconciliationItem(item)">
+                  {{ reconciliationSavingId === item.id ? '保存中...' : '保存处理结果' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div v-else class="card p-10 text-center">
+        <div class="text-base font-medium text-themed">还没有生成这一天的对账结果</div>
+        <div class="mt-1 text-sm text-themed-muted">点击“运行对账”生成日对账任务。</div>
       </div>
     </div>
 

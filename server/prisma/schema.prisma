@@ -356,6 +356,20 @@ enum OrderOperationStatus {
   closed         // 已关闭
 }
 
+enum FinancialReconciliationStatus {
+  normal      // 正常
+  discrepancy // 差异
+  confirmed   // 已确认
+  ignored     // 已忽略
+}
+
+enum FinancialReconciliationItemType {
+  recharge_missing_balance_log
+  orphan_balance_log
+  delivered_instance_missing_billing
+  approved_adjustment_missing_balance_log
+}
+
 // AFF余额变动类型
 enum AffLogType {
   new_purchase  // 新购返利
@@ -480,6 +494,10 @@ model User {
   orderOperationCases OrderOperationCase[] @relation("OrderOperationTarget")
   orderOperationCasesCreated OrderOperationCase[] @relation("OrderOperationCreator")
   orderOperationCasesUpdated OrderOperationCase[] @relation("OrderOperationUpdater")
+  financialReconciliationRunsCreated FinancialReconciliationRun[] @relation("FinancialReconciliationRunCreator")
+  financialReconciliationRunsUpdated FinancialReconciliationRun[] @relation("FinancialReconciliationRunUpdater")
+  financialReconciliationItems FinancialReconciliationItem[]
+  financialReconciliationItemsHandled FinancialReconciliationItem[] @relation("FinancialReconciliationItemHandler")
   badgeOwnerships UserBadgeOwnership[]
   vipBenefitClaims VipBenefitClaim[]
 
@@ -2375,6 +2393,58 @@ model OrderOperationCase {
   @@index([createdByUserId])
   @@index([updatedByUserId])
   @@map("order_operation_cases")
+}
+
+model FinancialReconciliationRun {
+  id              Int                           @id @default(autoincrement())
+  date            DateTime                      @db.Date
+  status          FinancialReconciliationStatus @default(normal)
+  summary         Json
+  createdByUserId Int?                          @map("created_by_user_id")
+  updatedByUserId Int?                          @map("updated_by_user_id")
+  createdAt       DateTime                      @default(now()) @map("created_at")
+  updatedAt       DateTime                      @updatedAt @map("updated_at")
+
+  createdBy User? @relation("FinancialReconciliationRunCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("FinancialReconciliationRunUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  items     FinancialReconciliationItem[]
+
+  @@unique([date])
+  @@index([status, date])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("financial_reconciliation_runs")
+}
+
+model FinancialReconciliationItem {
+  id              Int                           @id @default(autoincrement())
+  runId           Int                           @map("run_id")
+  itemKey         String                        @map("item_key")
+  itemType        FinancialReconciliationItemType @map("item_type")
+  status          FinancialReconciliationStatus @default(discrepancy)
+  sourceType      String                        @map("source_type")
+  sourceId        Int?                          @map("source_id")
+  userId          Int?                          @map("user_id")
+  amount          Decimal?                      @db.Decimal(10, 2)
+  title           String
+  detail          Json?
+  note            String?
+  handledByUserId Int?                          @map("handled_by_user_id")
+  handledAt       DateTime?                     @map("handled_at")
+  createdAt       DateTime                      @default(now()) @map("created_at")
+  updatedAt       DateTime                      @updatedAt @map("updated_at")
+
+  run       FinancialReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user      User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  handledBy User?                      @relation("FinancialReconciliationItemHandler", fields: [handledByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([runId, itemKey])
+  @@index([runId, status])
+  @@index([itemType])
+  @@index([sourceType, sourceId])
+  @@index([userId])
+  @@index([handledByUserId])
+  @@map("financial_reconciliation_items")
 }
 
 // 支付渠道配置

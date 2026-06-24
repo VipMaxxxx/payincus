@@ -33,6 +33,7 @@ https://admin.example.com
 
 - Billing center: `/admin/billing`.
 - Order center: `/admin/orders` aggregates recharge orders and instance billing records, with filters by type, status, user ID, order number, provider transaction ID and date range, order details, recharge exception handling, dispute status, refund or adjustment approval requests and approval execution.
+- Financial reconciliation: `/admin/billing?tab=reconciliation` generates one business-day reconciliation run, compares recharge, balance ledger, instance billing, adjustment approvals and hosting income, tracks differences and exports redacted CSV files.
 - Payment providers: `/admin/billing?tab=paymentProviders`.
 - Affiliate review: `/admin/billing?tab=affConversions`.
 - Entertainment management: `/admin/entertainment`.
@@ -63,6 +64,17 @@ The operations overview is returned only by the admin statistics API and is not 
 - Refunds, compensation credits and deductions still execute through balance-adjustment approval. A balance log is written only after approval.
 - The user order center does not expose admin operation records, refund approval controls or provider internal summaries.
 
+## Financial Reconciliation
+
+`/admin/billing?tab=reconciliation` provides a daily reconciliation workspace:
+
+- One run is stored per business date. Rerunning the same date updates that run and upserts stable difference keys, so differences are not duplicated.
+- The summary covers completed recharge, balance logs, instance billing, approved adjustment requests and hosting income.
+- Difference detection covers completed recharge without a balance log, key balance logs without a business source, delivered paid instances without billing, and approved adjustment requests without a balance log.
+- Differences can be kept as open, confirmed or ignored with notes and handler metadata.
+- CSV exports cover orders, balance logs, hosting income and adjustment approvals. Exports do not include raw callback payloads, payment secrets, tokens, passwords or provider configuration snapshots.
+- Reconciliation permissions are centralized. Administrators can view and handle runs now; the same entrypoint is reserved for a future read-only finance role.
+
 ## System Settings
 
 - Access and registration.
@@ -84,4 +96,4 @@ The operations overview is returned only by the admin statistics API and is not 
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
-Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes, and that the order center does not expose raw callback payloads, provider snapshots or payment secrets.
+Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.

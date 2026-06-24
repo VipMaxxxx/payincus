@@ -3,7 +3,7 @@
  */
 
 import { FastifyInstance } from 'fastify'
-import { Prisma, type InstanceStatus } from '@prisma/client'
+import { Prisma, type FinancialReconciliationItemType, type FinancialReconciliationStatus, type InstanceStatus } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import * as db from '../db/index.js'
 import { createLog } from '../db/logs.js'
@@ -24,7 +24,7 @@ import {
 } from '../lib/recharge-payment-details.js'
 import { resolveRechargeProviderConfigSnapshot } from '../lib/recharge-provider-snapshot.js'
 import { createInboxMessage } from '../db/inbox.js'
-import { getTodayRange, getThisMonthStart, getLastMonthRange } from '../lib/timezone.js'
+import { getDateStringInTimezone, getTodayRange, getThisMonthStart, getLastMonthRange } from '../lib/timezone.js'
 import { validateName, encryptSensitiveData } from '../lib/security.js'
 import { generateIncusConfig, generateRandomPassword } from '../lib/incus-config-generator.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
@@ -53,6 +53,10 @@ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
 const BILLING_RECORD_TYPES = new Set(['newPurchase', 'renew', 'upgrade', 'downgrade', 'refund', 'transfer_fee'])
 const INSTANCE_STATUSES = new Set(['creating', 'running', 'stopped', 'suspended', 'error', 'deleted'])
 const RECHARGE_STATUSES = new Set(['pending', 'paid', 'completed', 'failed', 'cancelled', 'refunded'])
+const RECONCILIATION_ITEM_STATUSES = new Set<FinancialReconciliationStatus>(['discrepancy', 'confirmed', 'ignored'])
+const RECONCILIATION_EXPORT_TYPES = new Set(['orders', 'balance_logs', 'hosting_income', 'adjustments'])
+const BUSINESS_TIMEZONE_OFFSET_MINUTES = 8 * 60
+const FINANCIAL_NOTE_MAX_LENGTH = 500
 
 interface RechargeAggregateRow {
   amount: unknown
@@ -98,6 +102,115 @@ function parsePositiveRouteId(value: string): number | null {
 
 function normalizeStringFilter(value: string | undefined, allowedValues: Set<string>): string | undefined {
   return value !== undefined && allowedValues.has(value) ? value : undefined
+}
+
+function canViewFinancialReconciliation(user: { role?: string }): boolean {
+  return user.role === 'admin'
+}
+
+function canManageFinancialReconciliation(user: { role?: string }): boolean {
+  return user.role === 'admin'
+}
+
+function parseBusinessDate(value: string | undefined): { dateString: string; date: Date; start: Date; end: Date } | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0))
+  if (Number.isNaN(date.getTime())) return null
+  const normalized = date.toISOString().slice(0, 10)
+  if (normalized !== value) return null
+  const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0))
+  start.setMinutes(start.getMinutes() - BUSINESS_TIMEZONE_OFFSET_MINUTES)
+  const end = new Date(start)
+  end.setUTCDate(end.getUTCDate() + 1)
+  return { dateString: value, date, start, end }
+}
+
+function normalizeReconciliationStatus(value: unknown): FinancialReconciliationStatus | null {
+  return typeof value === 'string' && RECONCILIATION_ITEM_STATUSES.has(value as FinancialReconciliationStatus)
+    ? value as FinancialReconciliationStatus
+    : null
+}
+
+function normalizeFinancialNote(value: unknown): string | null {
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string') throw new Error('备注必须是字符串')
+  const note = value.trim()
+  if (note.length > FINANCIAL_NOTE_MAX_LENGTH) throw new Error(`备注不能超过 ${FINANCIAL_NOTE_MAX_LENGTH} 字符`)
+  return note || null
+}
+
+function toDecimalMoney(value: unknown): Prisma.Decimal {
+  const numeric = Number(value)
+  return new Prisma.Decimal(Number.isFinite(numeric) ? numeric.toFixed(2) : '0.00')
+}
+
+function maskExportIdentifier(value: string | null | undefined): string {
+  if (!value) return ''
+  if (value.length <= 8) return `${value.slice(0, 2)}***`
+  return `${value.slice(0, 4)}***${value.slice(-4)}`
+}
+
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  const text = value instanceof Date ? value.toISOString() : String(value)
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+function buildCsv(rows: unknown[][]): string {
+  return `${rows.map(row => row.map(csvEscape).join(',')).join('\n')}\n`
+}
+
+interface ReconciliationCandidate {
+  itemKey: string
+  itemType: FinancialReconciliationItemType
+  sourceType: string
+  sourceId: number | null
+  userId: number | null
+  amount: Prisma.Decimal | null
+  title: string
+  detail: Prisma.InputJsonValue
+}
+
+function resolveRunStatus(items: Array<{ status: FinancialReconciliationStatus }>): FinancialReconciliationStatus {
+  if (items.length === 0) return 'normal'
+  if (items.some(item => item.status === 'discrepancy')) return 'discrepancy'
+  if (items.some(item => item.status === 'confirmed')) return 'confirmed'
+  return 'ignored'
+}
+
+function serializeReconciliationRun(run: any) {
+  if (!run) return null
+  return {
+    id: run.id,
+    date: run.date instanceof Date ? run.date.toISOString().slice(0, 10) : String(run.date).slice(0, 10),
+    status: run.status,
+    summary: run.summary,
+    createdBy: run.createdBy ? { id: run.createdBy.id, username: run.createdBy.username } : null,
+    updatedBy: run.updatedBy ? { id: run.updatedBy.id, username: run.updatedBy.username } : null,
+    createdAt: run.createdAt?.toISOString?.() ?? null,
+    updatedAt: run.updatedAt?.toISOString?.() ?? null,
+    items: Array.isArray(run.items)
+      ? run.items.map((item: any) => ({
+        id: item.id,
+        itemKey: item.itemKey,
+        itemType: item.itemType,
+        status: item.status,
+        sourceType: item.sourceType,
+        sourceId: item.sourceId,
+        userId: item.userId,
+        user: item.user ? { id: item.user.id, username: item.user.username } : null,
+        amount: item.amount === null || item.amount === undefined ? null : Number(item.amount),
+        title: item.title,
+        detail: item.detail,
+        note: item.note,
+        handledBy: item.handledBy ? { id: item.handledBy.id, username: item.handledBy.username } : null,
+        handledAt: item.handledAt?.toISOString?.() ?? null,
+        createdAt: item.createdAt?.toISOString?.() ?? null,
+        updatedAt: item.updatedAt?.toISOString?.() ?? null
+      }))
+      : []
+  }
 }
 
 async function claimInstanceForAdminDelete(instanceId: number, currentStatus: InstanceStatus): Promise<boolean> {
@@ -891,6 +1004,593 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
     } catch (error) {
       request.log.error(error, '获取扣费记录失败')
       return reply.status(500).send({ error: '获取扣费记录失败' })
+    }
+  })
+
+  // GET /api/admin/billing/reconciliation - 查看日对账结果
+  app.get('/api/admin/billing/reconciliation', {
+    onRequest: [app.authenticate, app.requireAdmin]
+  }, async (request, reply) => {
+    const actor = request.user!
+    if (!canViewFinancialReconciliation(actor)) {
+      return reply.code(403).send({ error: '需要财务只读或管理员权限', code: 'FINANCE_VIEW_REQUIRED' })
+    }
+
+    try {
+      const { date } = request.query as { date?: string }
+      const parsed = parseBusinessDate(date || getDateStringInTimezone())
+      if (!parsed) {
+        return reply.code(400).send({ error: '对账日期格式必须是 YYYY-MM-DD' })
+      }
+
+      const run = await prisma.financialReconciliationRun.findUnique({
+        where: { date: parsed.date },
+        include: {
+          createdBy: { select: { id: true, username: true } },
+          updatedBy: { select: { id: true, username: true } },
+          items: {
+            include: {
+              user: { select: { id: true, username: true } },
+              handledBy: { select: { id: true, username: true } }
+            },
+            orderBy: [{ status: 'asc' }, { id: 'asc' }]
+          }
+        }
+      })
+
+      return {
+        run: serializeReconciliationRun(run),
+        date: parsed.dateString,
+        exports: ['orders', 'balance_logs', 'hosting_income', 'adjustments']
+      }
+    } catch (error) {
+      request.log.error(error, '获取财务对账结果失败')
+      return reply.status(500).send({ error: '获取财务对账结果失败' })
+    }
+  })
+
+  // POST /api/admin/billing/reconciliation/run - 运行或重跑日对账
+  app.post('/api/admin/billing/reconciliation/run', {
+    onRequest: [app.authenticate, app.requireAdmin]
+  }, async (request, reply) => {
+    const actor = request.user!
+    if (!canManageFinancialReconciliation(actor)) {
+      return reply.code(403).send({ error: '财务只读角色不能运行或修改对账', code: 'FINANCE_READONLY' })
+    }
+
+    try {
+      const { date } = request.body as { date?: string }
+      const parsed = parseBusinessDate(date || getDateStringInTimezone())
+      if (!parsed) {
+        return reply.code(400).send({ error: '对账日期格式必须是 YYYY-MM-DD' })
+      }
+
+      const run = await prisma.$transaction(async (tx) => {
+        const [
+          completedRecharges,
+          businessBalanceLogs,
+          deliveredInstances,
+          approvedAdjustments,
+          rechargeSummary,
+          balanceSummary,
+          billingSummary,
+          adjustmentSummary,
+          hostingSummary
+        ] = await Promise.all([
+          tx.rechargeRecord.findMany({
+            where: {
+              status: 'completed',
+              OR: [
+                { completedAt: { gte: parsed.start, lt: parsed.end } },
+                { completedAt: null, callbackAt: { gte: parsed.start, lt: parsed.end } },
+                { completedAt: null, callbackAt: null, createdAt: { gte: parsed.start, lt: parsed.end } }
+              ]
+            },
+            select: { id: true, orderNo: true, userId: true, amount: true, actualAmount: true, fee: true, completedAt: true, callbackAt: true, createdAt: true }
+          }),
+          tx.balanceLog.findMany({
+            where: {
+              createdAt: { gte: parsed.start, lt: parsed.end },
+              type: { in: ['recharge', 'consume', 'refund', 'transfer_fee', 'transfer_refund', 'hosting_deduction'] }
+            },
+            select: { id: true, userId: true, type: true, amount: true, balanceBefore: true, balanceAfter: true, orderId: true, instanceId: true, remark: true, createdAt: true }
+          }),
+          tx.instance.findMany({
+            where: {
+              packagePlanId: { not: null },
+              status: { not: 'deleted' },
+              createdAt: { gte: parsed.start, lt: parsed.end },
+              billingRecords: { none: {} }
+            },
+            select: { id: true, name: true, userId: true, incusId: true, status: true, createdAt: true }
+          }),
+          tx.balanceAdjustmentRequest.findMany({
+            where: {
+              status: 'approved',
+              balanceLogId: null,
+              OR: [
+                { reviewedAt: { gte: parsed.start, lt: parsed.end } },
+                { reviewedAt: null, updatedAt: { gte: parsed.start, lt: parsed.end } }
+              ]
+            },
+            select: { id: true, userId: true, amount: true, requestType: true, orderNo: true, sourceType: true, sourceId: true, reviewedAt: true, updatedAt: true }
+          }),
+          tx.rechargeRecord.aggregate({
+            where: {
+              status: 'completed',
+              OR: [
+                { completedAt: { gte: parsed.start, lt: parsed.end } },
+                { completedAt: null, callbackAt: { gte: parsed.start, lt: parsed.end } },
+                { completedAt: null, callbackAt: null, createdAt: { gte: parsed.start, lt: parsed.end } }
+              ]
+            },
+            _sum: { actualAmount: true, amount: true, fee: true },
+            _count: { id: true }
+          }),
+          tx.balanceLog.aggregate({
+            where: { createdAt: { gte: parsed.start, lt: parsed.end } },
+            _sum: { amount: true },
+            _count: { id: true }
+          }),
+          tx.instanceBillingRecord.aggregate({
+            where: { createdAt: { gte: parsed.start, lt: parsed.end } },
+            _sum: { amount: true },
+            _count: { id: true }
+          }),
+          tx.balanceAdjustmentRequest.aggregate({
+            where: {
+              status: 'approved',
+              OR: [
+                { reviewedAt: { gte: parsed.start, lt: parsed.end } },
+                { reviewedAt: null, updatedAt: { gte: parsed.start, lt: parsed.end } }
+              ]
+            },
+            _sum: { amount: true },
+            _count: { id: true }
+          }),
+          tx.hostingBalanceLog.aggregate({
+            where: { createdAt: { gte: parsed.start, lt: parsed.end } },
+            _sum: { amount: true },
+            _count: { id: true }
+          })
+        ])
+
+        const rechargeOrderNos = completedRecharges.map(record => record.orderNo)
+        const rechargeBalanceLogs = rechargeOrderNos.length > 0
+          ? await tx.balanceLog.findMany({
+            where: { type: 'recharge', orderId: { in: rechargeOrderNos } },
+            select: { orderId: true }
+          })
+          : []
+        const rechargeLogOrderNos = new Set(rechargeBalanceLogs.map(log => log.orderId).filter(Boolean))
+
+        const candidates: ReconciliationCandidate[] = []
+
+        for (const record of completedRecharges) {
+          if (!rechargeLogOrderNos.has(record.orderNo)) {
+            candidates.push({
+              itemKey: `recharge:${record.id}:missing-balance-log`,
+              itemType: 'recharge_missing_balance_log',
+              sourceType: 'recharge',
+              sourceId: record.id,
+              userId: record.userId,
+              amount: toDecimalMoney(record.actualAmount ?? record.amount),
+              title: `成功充值未找到入账流水：${record.orderNo}`,
+              detail: {
+                orderNo: record.orderNo,
+                completedAt: record.completedAt?.toISOString() ?? null,
+                callbackAt: record.callbackAt?.toISOString() ?? null,
+                createdAt: record.createdAt.toISOString()
+              }
+            })
+          }
+        }
+
+        for (const log of businessBalanceLogs) {
+          if (!log.orderId && !log.instanceId) {
+            candidates.push({
+              itemKey: `balance-log:${log.id}:missing-source`,
+              itemType: 'orphan_balance_log',
+              sourceType: 'balance_log',
+              sourceId: log.id,
+              userId: log.userId,
+              amount: toDecimalMoney(log.amount),
+              title: `余额流水缺少业务来源：#${log.id}`,
+              detail: {
+                type: log.type,
+                remark: log.remark,
+                createdAt: log.createdAt.toISOString()
+              }
+            })
+          }
+        }
+
+        for (const instance of deliveredInstances) {
+          candidates.push({
+            itemKey: `instance:${instance.id}:missing-billing`,
+            itemType: 'delivered_instance_missing_billing',
+            sourceType: 'instance',
+            sourceId: instance.id,
+            userId: instance.userId,
+            amount: null,
+            title: `付费实例已交付但无扣费记录：${instance.name}`,
+            detail: {
+              incusId: instance.incusId,
+              status: instance.status,
+              createdAt: instance.createdAt.toISOString()
+            }
+          })
+        }
+
+        for (const request of approvedAdjustments) {
+          candidates.push({
+            itemKey: `adjustment:${request.id}:missing-balance-log`,
+            itemType: 'approved_adjustment_missing_balance_log',
+            sourceType: 'balance_adjustment_request',
+            sourceId: request.id,
+            userId: request.userId,
+            amount: toDecimalMoney(request.amount),
+            title: `已通过调账审批未找到余额流水：#${request.id}`,
+            detail: {
+              requestType: request.requestType,
+              orderNo: request.orderNo,
+              sourceType: request.sourceType,
+              sourceId: request.sourceId,
+              reviewedAt: request.reviewedAt?.toISOString() ?? null,
+              updatedAt: request.updatedAt.toISOString()
+            }
+          })
+        }
+
+        const payableRechargeAmount = completedRecharges.reduce((sum, record) => {
+          return sum + Number(record.actualAmount ?? record.amount)
+        }, 0)
+        const summary = {
+          timezone: 'Asia/Shanghai',
+          recharge: {
+            count: rechargeSummary._count.id,
+            amount: Number(payableRechargeAmount.toFixed(2)),
+            fee: Number(rechargeSummary._sum.fee ?? 0)
+          },
+          balanceLogs: {
+            count: balanceSummary._count.id,
+            amount: Number(balanceSummary._sum.amount ?? 0)
+          },
+          instanceBilling: {
+            count: billingSummary._count.id,
+            amount: Number(billingSummary._sum.amount ?? 0)
+          },
+          approvedAdjustments: {
+            count: adjustmentSummary._count.id,
+            amount: Number(adjustmentSummary._sum.amount ?? 0)
+          },
+          hostingIncome: {
+            count: hostingSummary._count.id,
+            amount: Number(hostingSummary._sum.amount ?? 0)
+          },
+          discrepancies: {
+            total: candidates.length,
+            byType: candidates.reduce<Record<string, number>>((acc, item) => {
+              acc[item.itemType] = (acc[item.itemType] || 0) + 1
+              return acc
+            }, {})
+          }
+        }
+
+        const runRecord = await tx.financialReconciliationRun.upsert({
+          where: { date: parsed.date },
+          update: {
+            summary,
+            updatedByUserId: actor.id
+          },
+          create: {
+            date: parsed.date,
+            summary,
+            createdByUserId: actor.id,
+            updatedByUserId: actor.id
+          }
+        })
+
+        const activeKeys = candidates.map(candidate => candidate.itemKey)
+        if (activeKeys.length > 0) {
+          await tx.financialReconciliationItem.deleteMany({
+            where: {
+              runId: runRecord.id,
+              status: 'discrepancy',
+              itemKey: { notIn: activeKeys }
+            }
+          })
+        } else {
+          await tx.financialReconciliationItem.deleteMany({
+            where: {
+              runId: runRecord.id,
+              status: 'discrepancy'
+            }
+          })
+        }
+
+        for (const candidate of candidates) {
+          await tx.financialReconciliationItem.upsert({
+            where: {
+              runId_itemKey: {
+                runId: runRecord.id,
+                itemKey: candidate.itemKey
+              }
+            },
+            update: {
+              itemType: candidate.itemType,
+              sourceType: candidate.sourceType,
+              sourceId: candidate.sourceId,
+              userId: candidate.userId,
+              amount: candidate.amount,
+              title: candidate.title,
+              detail: candidate.detail
+            },
+            create: {
+              runId: runRecord.id,
+              itemKey: candidate.itemKey,
+              itemType: candidate.itemType,
+              sourceType: candidate.sourceType,
+              sourceId: candidate.sourceId,
+              userId: candidate.userId,
+              amount: candidate.amount,
+              title: candidate.title,
+              detail: candidate.detail
+            }
+          })
+        }
+
+        const currentItems = activeKeys.length > 0
+          ? await tx.financialReconciliationItem.findMany({
+            where: { runId: runRecord.id, itemKey: { in: activeKeys } },
+            select: { status: true }
+          })
+          : []
+        const nextStatus = resolveRunStatus(currentItems)
+
+        await tx.financialReconciliationRun.update({
+          where: { id: runRecord.id },
+          data: { status: nextStatus }
+        })
+
+        return tx.financialReconciliationRun.findUniqueOrThrow({
+          where: { id: runRecord.id },
+          include: {
+            createdBy: { select: { id: true, username: true } },
+            updatedBy: { select: { id: true, username: true } },
+            items: {
+              include: {
+                user: { select: { id: true, username: true } },
+                handledBy: { select: { id: true, username: true } }
+              },
+              orderBy: [{ status: 'asc' }, { id: 'asc' }]
+            }
+          }
+        })
+      })
+
+      await createLog(actor.id, 'admin', 'billing.reconciliation.run', `运行 ${parsed.dateString} 财务对账，状态 ${run.status}`, 'success')
+
+      return { run: serializeReconciliationRun(run) }
+    } catch (error) {
+      request.log.error(error, '运行财务对账失败')
+      return reply.status(500).send({ error: '运行财务对账失败' })
+    }
+  })
+
+  // PATCH /api/admin/billing/reconciliation/items/:id - 处理差异项
+  app.patch('/api/admin/billing/reconciliation/items/:id', {
+    onRequest: [app.authenticate, app.requireAdmin]
+  }, async (request, reply) => {
+    const actor = request.user!
+    if (!canManageFinancialReconciliation(actor)) {
+      return reply.code(403).send({ error: '财务只读角色不能修改对账差异', code: 'FINANCE_READONLY' })
+    }
+
+    try {
+      const itemId = parsePositiveRouteId((request.params as { id: string }).id)
+      if (!itemId) {
+        return reply.code(400).send({ error: '差异项 ID 无效' })
+      }
+      const body = request.body as { status?: unknown; note?: unknown }
+      const status = normalizeReconciliationStatus(body.status)
+      if (!status) {
+        return reply.code(400).send({ error: '差异状态无效' })
+      }
+      const note = normalizeFinancialNote(body.note)
+
+      const result = await prisma.$transaction(async (tx) => {
+        const item = await tx.financialReconciliationItem.update({
+          where: { id: itemId },
+          data: {
+            status,
+            note,
+            handledByUserId: status === 'discrepancy' ? null : actor.id,
+            handledAt: status === 'discrepancy' ? null : new Date()
+          },
+          include: {
+            user: { select: { id: true, username: true } },
+            handledBy: { select: { id: true, username: true } }
+          }
+        })
+
+        const runItems = await tx.financialReconciliationItem.findMany({
+          where: { runId: item.runId },
+          select: { status: true }
+        })
+        const runStatus = resolveRunStatus(runItems)
+        await tx.financialReconciliationRun.update({
+          where: { id: item.runId },
+          data: {
+            status: runStatus,
+            updatedByUserId: actor.id
+          }
+        })
+
+        return { item, runStatus }
+      })
+
+      await createLog(actor.id, 'admin', 'billing.reconciliation.item.update', `更新财务对账差异 #${itemId} 为 ${status}`, 'success')
+
+      return {
+        item: serializeReconciliationRun({ items: [result.item] })!.items[0],
+        runStatus: result.runStatus
+      }
+    } catch (error) {
+      request.log.error(error, '更新财务对账差异失败')
+      const message = error instanceof Error ? error.message : '更新财务对账差异失败'
+      return reply.status(500).send({ error: message })
+    }
+  })
+
+  // GET /api/admin/billing/reconciliation/export - 导出对账 CSV
+  app.get('/api/admin/billing/reconciliation/export', {
+    onRequest: [app.authenticate, app.requireAdmin]
+  }, async (request, reply) => {
+    const actor = request.user!
+    if (!canViewFinancialReconciliation(actor)) {
+      return reply.code(403).send({ error: '需要财务只读或管理员权限', code: 'FINANCE_VIEW_REQUIRED' })
+    }
+
+    try {
+      const { date, type } = request.query as { date?: string; type?: string }
+      const parsed = parseBusinessDate(date || getDateStringInTimezone())
+      if (!parsed) {
+        return reply.code(400).send({ error: '对账日期格式必须是 YYYY-MM-DD' })
+      }
+      const exportType = type && RECONCILIATION_EXPORT_TYPES.has(type) ? type : null
+      if (!exportType) {
+        return reply.code(400).send({ error: '导出类型无效' })
+      }
+
+      let rows: unknown[][]
+      if (exportType === 'orders') {
+        const records = await prisma.rechargeRecord.findMany({
+          where: {
+            OR: [
+              { completedAt: { gte: parsed.start, lt: parsed.end } },
+              { completedAt: null, callbackAt: { gte: parsed.start, lt: parsed.end } },
+              { completedAt: null, callbackAt: null, createdAt: { gte: parsed.start, lt: parsed.end } }
+            ]
+          },
+          include: {
+            user: { select: { id: true, username: true } },
+            provider: { select: { id: true, name: true, type: true } }
+          },
+          orderBy: { createdAt: 'asc' }
+        })
+        rows = [
+          ['订单ID', '订单号', '用户ID', '用户名', '金额', '到账金额', '手续费', '状态', '支付渠道', '支付方式', '交易号(脱敏)', '创建时间', '完成时间'],
+          ...records.map(record => [
+            record.id,
+            record.orderNo,
+            record.userId,
+            record.user?.username ?? '',
+            Number(record.amount),
+            record.actualAmount === null ? '' : Number(record.actualAmount),
+            Number(record.fee),
+            record.status,
+            record.provider?.name ?? '',
+            record.paymentMethod ?? '',
+            maskExportIdentifier(record.tradeNo),
+            record.createdAt,
+            record.completedAt ?? ''
+          ])
+        ]
+      } else if (exportType === 'balance_logs') {
+        const logs = await prisma.balanceLog.findMany({
+          where: { createdAt: { gte: parsed.start, lt: parsed.end } },
+          include: { user: { select: { id: true, username: true } } },
+          orderBy: { createdAt: 'asc' }
+        })
+        rows = [
+          ['流水ID', '用户ID', '用户名', '类型', '金额', '变更前', '变更后', '订单号(脱敏)', '实例ID', '备注', '创建时间'],
+          ...logs.map(log => [
+            log.id,
+            log.userId,
+            log.user?.username ?? '',
+            log.type,
+            Number(log.amount),
+            Number(log.balanceBefore),
+            Number(log.balanceAfter),
+            maskExportIdentifier(log.orderId),
+            log.instanceId ?? '',
+            log.remark ?? '',
+            log.createdAt
+          ])
+        ]
+      } else if (exportType === 'hosting_income') {
+        const logs = await prisma.hostingBalanceLog.findMany({
+          where: { createdAt: { gte: parsed.start, lt: parsed.end } },
+          include: { user: { select: { id: true, username: true } } },
+          orderBy: { createdAt: 'asc' }
+        })
+        rows = [
+          ['托管流水ID', '机主ID', '机主用户名', '类型', '动作', '金额', '冻结', '解冻时间', '关联ID', '买家昵称', '实例名', '节点名', '套餐', '方案', '创建时间'],
+          ...logs.map(log => [
+            log.id,
+            log.userId,
+            log.user?.username ?? '',
+            log.type,
+            log.actionType ?? '',
+            Number(log.amount),
+            log.frozen ? '是' : '否',
+            log.unfreezeAt ?? '',
+            log.relatedId ?? '',
+            log.snapshotBuyerName ?? '',
+            log.snapshotInstanceName ?? '',
+            log.snapshotHostName ?? '',
+            log.snapshotPackageName ?? '',
+            log.snapshotPlanName ?? '',
+            log.createdAt
+          ])
+        ]
+      } else {
+        const requests = await prisma.balanceAdjustmentRequest.findMany({
+          where: {
+            OR: [
+              { reviewedAt: { gte: parsed.start, lt: parsed.end } },
+              { reviewedAt: null, updatedAt: { gte: parsed.start, lt: parsed.end } },
+              { createdAt: { gte: parsed.start, lt: parsed.end } }
+            ]
+          },
+          include: {
+            user: { select: { id: true, username: true } },
+            requestedBy: { select: { id: true, username: true } },
+            reviewedBy: { select: { id: true, username: true } }
+          },
+          orderBy: { createdAt: 'asc' }
+        })
+        rows = [
+          ['审批ID', '用户ID', '用户名', '金额', '类型', '状态', '来源类型', '来源ID', '订单号(脱敏)', '申请人', '审核人', '原因', '审核备注', '余额流水ID', '创建时间', '审核时间'],
+          ...requests.map(item => [
+            item.id,
+            item.userId,
+            item.user?.username ?? '',
+            Number(item.amount),
+            item.requestType,
+            item.status,
+            item.sourceType ?? '',
+            item.sourceId ?? '',
+            maskExportIdentifier(item.orderNo),
+            item.requestedBy?.username ?? '',
+            item.reviewedBy?.username ?? '',
+            item.reason,
+            item.reviewRemark ?? '',
+            item.balanceLogId ?? '',
+            item.createdAt,
+            item.reviewedAt ?? ''
+          ])
+        ]
+      }
+
+      const fileName = `payincus-reconciliation-${parsed.dateString}-${exportType}.csv`
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+      reply.header('Content-Disposition', `attachment; filename="${fileName}"`)
+      return reply.send(`\uFEFF${buildCsv(rows)}`)
+    } catch (error) {
+      request.log.error(error, '导出财务对账 CSV 失败')
+      return reply.status(500).send({ error: '导出财务对账 CSV 失败' })
     }
   })
 

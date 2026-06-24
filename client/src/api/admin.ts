@@ -113,6 +113,52 @@ export interface VipBenefitHallConfig {
   }
 }
 
+export type FinancialReconciliationStatus = 'normal' | 'discrepancy' | 'confirmed' | 'ignored'
+export type FinancialReconciliationItemType =
+  | 'recharge_missing_balance_log'
+  | 'orphan_balance_log'
+  | 'delivered_instance_missing_billing'
+  | 'approved_adjustment_missing_balance_log'
+
+export interface FinancialReconciliationItem {
+  id: number
+  itemKey: string
+  itemType: FinancialReconciliationItemType
+  status: FinancialReconciliationStatus
+  sourceType: string
+  sourceId: number | null
+  userId: number | null
+  user: { id: number; username: string } | null
+  amount: number | null
+  title: string
+  detail: Record<string, unknown> | null
+  note: string | null
+  handledBy: { id: number; username: string } | null
+  handledAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface FinancialReconciliationRun {
+  id: number
+  date: string
+  status: FinancialReconciliationStatus
+  summary: {
+    timezone?: string
+    recharge?: { count: number; amount: number; fee: number }
+    balanceLogs?: { count: number; amount: number }
+    instanceBilling?: { count: number; amount: number }
+    approvedAdjustments?: { count: number; amount: number }
+    hostingIncome?: { count: number; amount: number }
+    discrepancies?: { total: number; byType: Record<string, number> }
+  }
+  createdBy: { id: number; username: string } | null
+  updatedBy: { id: number; username: string } | null
+  createdAt: string | null
+  updatedAt: string | null
+  items: FinancialReconciliationItem[]
+}
+
 export interface VipLevelRule {
   id?: number
   type: VipRuleType
@@ -2888,6 +2934,30 @@ const api = {
       page: number
       pageSize: number
     }> => http.get('/admin/billing/records', { params }),
+
+    getFinancialReconciliation: (params?: { date?: string }): Promise<{
+      run: FinancialReconciliationRun | null
+      date: string
+      exports: string[]
+    }> => http.get('/admin/billing/reconciliation', { params }),
+
+    runFinancialReconciliation: (date: string): Promise<{ run: FinancialReconciliationRun }> =>
+      http.post('/admin/billing/reconciliation/run', { date }),
+
+    updateFinancialReconciliationItem: (
+      id: number,
+      data: { status: FinancialReconciliationStatus; note?: string | null }
+    ): Promise<{ item: FinancialReconciliationItem; runStatus: FinancialReconciliationStatus }> =>
+      http.patch(`/admin/billing/reconciliation/items/${id}`, data),
+
+    exportFinancialReconciliationCsv: (
+      date: string,
+      type: 'orders' | 'balance_logs' | 'hosting_income' | 'adjustments'
+    ): Promise<Blob> => http.get('/admin/billing/reconciliation/export', {
+      params: { date, type },
+      responseType: 'blob',
+      timeout: TIMEOUT.MEDIUM
+    }),
 
     // 获取付费实例列表
     getBillingInstances: (params?: { page?: number; pageSize?: number; status?: string; expiring?: boolean; hostId?: number | ''; search?: string }): Promise<{

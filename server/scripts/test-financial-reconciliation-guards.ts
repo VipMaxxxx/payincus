@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const root = resolve(__dirname, '..')
+const repoRoot = resolve(root, '..')
+
+const schema = readFileSync(resolve(root, 'prisma/schema.prisma'), 'utf8')
+const migration = readFileSync(resolve(root, 'prisma/migrations/20260624214500_add_financial_reconciliation/migration.sql'), 'utf8')
+const adminBillingRoute = readFileSync(resolve(root, 'src/routes/admin-billing.ts'), 'utf8')
+const adminApi = readFileSync(resolve(repoRoot, 'client/src/api/admin.ts'), 'utf8')
+const userApi = readFileSync(resolve(repoRoot, 'client/src/api/index.ts'), 'utf8')
+const billingView = readFileSync(resolve(repoRoot, 'client/src/views/admin/BillingView.vue'), 'utf8')
+const exportRoute = adminBillingRoute.slice(
+  adminBillingRoute.indexOf("'/api/admin/billing/reconciliation/export'"),
+  adminBillingRoute.indexOf('// ==================== 管理员封停/解封 ====================')
+)
+
+assert.ok(schema.includes('enum FinancialReconciliationStatus'), 'schema must define reconciliation status enum')
+assert.ok(schema.includes('normal') && schema.includes('discrepancy') && schema.includes('confirmed') && schema.includes('ignored'), 'reconciliation statuses must cover lifecycle')
+assert.ok(schema.includes('enum FinancialReconciliationItemType'), 'schema must define reconciliation item types')
+assert.ok(schema.includes('model FinancialReconciliationRun'), 'schema must define daily reconciliation run')
+assert.ok(schema.includes('model FinancialReconciliationItem'), 'schema must define reconciliation item')
+assert.ok(schema.includes('@@unique([date])'), 'one reconciliation run per business date is required')
+assert.ok(schema.includes('@@unique([runId, itemKey])'), 'reconciliation items must be idempotent per run')
+assert.ok(schema.includes('amount          Decimal?'), 'reconciliation item amount must use Decimal')
+
+assert.ok(migration.includes('CREATE TYPE "FinancialReconciliationStatus"'), 'migration must create status enum')
+assert.ok(migration.includes('CREATE TABLE "financial_reconciliation_runs"'), 'migration must create run table')
+assert.ok(migration.includes('CREATE TABLE "financial_reconciliation_items"'), 'migration must create item table')
+assert.ok(migration.includes('financial_reconciliation_runs_date_key'), 'migration must enforce one run per date')
+assert.ok(migration.includes('financial_reconciliation_items_run_id_item_key_key'), 'migration must enforce idempotent items')
+assert.ok(migration.includes('ON DELETE CASCADE'), 'items should be removed with their run')
+assert.ok(migration.includes('ON DELETE SET NULL'), 'handler/user references should preserve reconciliation history')
+
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation'"), 'view reconciliation route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/run'"), 'run reconciliation route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/items/:id'"), 'item handling route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/export'"), 'CSV export route missing')
+assert.ok(adminBillingRoute.includes('onRequest: [app.authenticate, app.requireAdmin]'), 'reconciliation admin routes must keep the admin guard')
+assert.ok(adminBillingRoute.includes('canViewFinancialReconciliation'), 'read permission entrypoint missing')
+assert.ok(adminBillingRoute.includes('canManageFinancialReconciliation'), 'write permission entrypoint missing')
+assert.ok(adminBillingRoute.includes('FINANCE_READONLY'), 'write routes must preserve read-only finance boundary')
+assert.ok(adminBillingRoute.includes('financialReconciliationRun.upsert'), 'rerun must upsert the daily run')
+assert.ok(adminBillingRoute.includes('financialReconciliationItem.upsert'), 'rerun must upsert stable difference items')
+assert.ok(adminBillingRoute.includes('itemKey'), 'difference detection must use stable item keys')
+assert.ok(adminBillingRoute.includes("status: 'discrepancy'") && adminBillingRoute.includes('deleteMany'), 'rerun must avoid duplicate stale open differences')
+assert.ok(adminBillingRoute.includes('recharge_missing_balance_log'), 'must detect completed recharge without balance log')
+assert.ok(adminBillingRoute.includes('orphan_balance_log'), 'must detect balance log without business source')
+assert.ok(adminBillingRoute.includes('delivered_instance_missing_billing'), 'must detect delivered paid instance without billing')
+assert.ok(adminBillingRoute.includes('approved_adjustment_missing_balance_log'), 'must detect approved adjustment without balance log')
+assert.ok(exportRoute.includes('maskExportIdentifier'), 'CSV export must mask sensitive identifiers')
+assert.ok(exportRoute.includes('text/csv; charset=utf-8'), 'CSV export must return csv content type')
+assert.ok(!exportRoute.includes('callbackData') && !exportRoute.includes('providerConfigSnapshot'), 'reconciliation export must not select raw callback or provider snapshots')
+assert.ok(!exportRoute.includes('adminPassword') && !exportRoute.includes('token'), 'reconciliation export must not expose passwords or tokens')
+
+assert.ok(adminApi.includes('FinancialReconciliationRun'), 'admin API must expose typed reconciliation run')
+assert.ok(adminApi.includes('getFinancialReconciliation'), 'admin API must expose reconciliation read')
+assert.ok(adminApi.includes('runFinancialReconciliation'), 'admin API must expose reconciliation run')
+assert.ok(adminApi.includes('updateFinancialReconciliationItem'), 'admin API must expose item handling')
+assert.ok(adminApi.includes('exportFinancialReconciliationCsv'), 'admin API must download CSV with auth')
+assert.ok(adminApi.includes("responseType: 'blob'"), 'CSV download must use authenticated blob request')
+assert.ok(!userApi.includes('reconciliation'), 'user API must not expose financial reconciliation')
+
+assert.ok(billingView.includes("'reconciliation'"), 'admin billing UI must include reconciliation tab')
+assert.ok(billingView.includes('日对账工作台'), 'admin UI must render reconciliation workspace')
+assert.ok(billingView.includes('runFinancialReconciliation'), 'admin UI must run reconciliation')
+assert.ok(billingView.includes('saveReconciliationItem'), 'admin UI must handle difference status')
+assert.ok(billingView.includes('exportFinancialReconciliation'), 'admin UI must expose CSV export')
+assert.ok(billingView.includes('导出内容已脱敏'), 'admin UI must state export redaction boundary')
+
+console.log('financial reconciliation guards passed')

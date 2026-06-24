@@ -4443,6 +4443,7 @@ export default {
                 instances: 'Paid Instances',
                 records: 'Billing Records',
                 rechargeRecords: 'Recharge Records',
+                reconciliation: 'Reconciliation',
                 affConversions: 'AFF Conversions',
                 paymentProviders: 'Payment Providers',
             },

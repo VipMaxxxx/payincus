@@ -18,6 +18,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 
 - Recharge order queries and callback diagnostics.
 - Order center at `/admin/orders` for unified recharge and instance billing records, with user, type, status, order number, provider transaction ID and date range filters, detail views, recharge exception handling, dispute status and refund or balance-adjustment approval requests.
+- Financial reconciliation at `/admin/billing?tab=reconciliation` summarizes recharge, balance logs, instance billing, adjustment approvals and hosting income by business date, then tracks differences and exports redacted CSV files.
 - Balance adjustment approval and audit. Refunds, compensation credits and deductions are submitted first, then executed only after approval.
 - Payment provider configuration, keys, callbacks and enablement.
 - Affiliate conversion review.
@@ -33,6 +34,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Manual completion and failure marking in the order center keep using the existing audited recharge flows. Refunds, compensation credits and deductions create balance-adjustment approval tasks, and approved tasks execute the existing balance-ledger flow.
 - Refund registration only creates an approval request. It does not call payment-provider refund APIs and does not directly modify the user balance.
 - Order details may show only redacted provider summaries. Raw callback payloads, provider configuration snapshots and secrets must not be returned.
+- Reconciliation exports may include only necessary business fields. Order numbers and transaction identifiers are masked, and exports must not include raw callback payloads, provider configuration snapshots, passwords, tokens or secrets.
 
 ## Verification
 
@@ -46,3 +48,6 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Admin order detail can set dispute status to pending review, confirmed, compensated or closed.
 - Duplicate refund registration is blocked while the order already has a pending refund approval request.
 - The balance-adjustment approval list shows up to 7 tasks per page. A balance log is created only after an administrator approves and executes the request.
+- Rerunning reconciliation for the same business date does not duplicate difference items.
+- Reconciliation differences can be traced to their source, user, amount, handling status, handler and note.
+- Financial CSV exports do not contain credentials, raw callback payloads or provider configuration snapshots.

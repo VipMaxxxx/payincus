@@ -5191,6 +5191,7 @@ export default {
                 instances: '付費實例',
                 records: '扣費紀錄',
                 rechargeRecords: '充值紀錄',
+                reconciliation: '財務對帳',
                 affConversions: 'AFF 轉化',
                 paymentProviders: '支付渠道',
             },
