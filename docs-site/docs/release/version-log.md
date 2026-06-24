@@ -6,16 +6,39 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `01731f6`
+- 当前 HEAD / Current HEAD: `e8cca39`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Fix installer static asset permissions / 修复安装器静态资源权限
-- 最新 tag / Latest tag: `v0.2.0`
+- 提交说明 / Commit subject: Allow installer to set initial admin email / 允许安装器设置初始管理员邮箱
+- 最新 tag / Latest tag: `v0.2.1`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.2.1
+
+- 发布提交 / Release commit: `e8cca39`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Allow installer to set initial admin email / 允许安装器设置初始管理员邮箱
+
+### 新增能力 / New Capabilities
+
+- 一键安装脚本支持设置初始管理员邮箱。
+- One-click installer now supports setting the initial admin email.
+
+### 改进与调整 / Improvements and Adjustments
+
+- 默认管理员初始化改为读取 ADMIN_EMAIL，兼容 ADMIN_INITIAL_EMAIL。
+- Default admin initialization now reads ADMIN_EMAIL and remains compatible with ADMIN_INITIAL_EMAIL.
+- 环境示例和中英文部署文档补充 ADMIN_EMAIL。
+- Environment examples and Chinese/English deployment docs now include ADMIN_EMAIL.
+
+### 其他变更 / Other Changes
+
+- 增加安装器和数据库初始化守卫测试，防止管理员邮箱再次硬编码。
+- Added installer and database initialization guards to prevent hardcoded admin email regressions.
 
 ## v0.2.0
 
