@@ -6,19 +6,37 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `d887b9d`
+- Current HEAD / 当前 HEAD: `92cda32`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Update handoff for v0.3.7 OTA proof / 更新 v0.3.7 OTA 证明交接
-- Latest tag / 最新 tag: `v0.3.7`
+- Commit subject / 提交说明: Publish AI ticket plugin market assets / 发布 AI 工单插件市场资产
+- Latest tag / 最新 tag: `v0.3.8`
 
 ## Unreleased Changes / 未发布变更
 
-### Improvements and Adjustments / 改进与调整
-
-- Update handoff for v0.3.7 OTA proof / 更新 v0.3.7 OTA 证明交接 `d887b9d`
-- Update version log for v0.3.7 / 更新 v0.3.7 版本日志 `02c8862`
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.3.8
+
+- Release commit / 发布提交: `92cda32`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Publish AI ticket plugin market assets / 发布 AI 工单插件市场资产
+
+### 新增能力 / New capabilities
+
+- Publish official AI Ticket Agent plugin market assets in GitHub Release.
+- 在 GitHub Release 中发布官方 AI 工单插件市场资产。
+
+### 其他变更 / Other changes
+
+- Add plugin market release guard coverage.
+- 增加插件市场 Release 资产守卫覆盖。
+
+### 改进与调整 / Improvements and adjustments
+
+- Document AI Ticket Agent installation from the plugin market in Chinese and English docs.
+- 在中英文文档中补充 AI 工单插件从插件市场安装的说明。
 
 ## v0.3.7
 

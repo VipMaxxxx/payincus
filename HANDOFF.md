@@ -413,6 +413,25 @@ Release proof:
 
 Production API proof has passed for the plugin center. Browser UI smoke for `/admin/plugins` iframe rendering and user `/plugins/smoke` rendering still needs a real session/Turnstile proof.
 
+Official AI plugin market proof:
+
+- Commit: `92cda32 Publish AI ticket plugin market assets / 发布 AI 工单插件市场资产`
+- Tag: `v0.3.8`
+- GitHub Actions Build & Release run: `28119821316`
+- CI run: `28119818074`
+- Docs Pages run: `28119818054`
+- Release URL: `https://github.com/VipMaxxxx/payincus/releases/tag/v0.3.8`
+- Release assets include:
+  - `payincus-plugin-ai-ticket-agent-0.1.0.tar.gz`
+  - `payincus-plugin-ai-ticket-agent-0.1.0.tar.gz.sha256`
+  - `payincus-plugin-ai-ticket-agent-0.1.0.manifest.json`
+  - `plugin-market-index.json`
+- Release plugin package SHA256: `5c00745af7c3371ec1dd9ac4a1385c8062b612998c73ec0ea8289432f200b71d`
+- Production OTA task: `#48`, `v0.3.7 -> v0.3.8`, completed successfully.
+- Production plugin market index URL is configured to `https://github.com/VipMaxxxx/payincus/releases/download/v0.3.8/plugin-market-index.json`.
+- Production server-side market proof returned one plugin id: `com.payincus.ai-ticket-agent`.
+- User can now open `/admin/plugins`, switch to "插件市场", refresh the market, and install `AI Ticket Agent`.
+
 ## Documentation Site
 
 Documentation site is implemented under `docs-site/`.
