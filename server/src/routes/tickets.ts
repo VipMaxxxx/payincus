@@ -810,15 +810,21 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     try {
       const result = await generateAiTicketReply(ticketId)
       if (!result.canSend) {
+        const code = result.mode === 'draft'
+          ? 'AI_TICKET_AGENT_REPLY_MODE_DISABLED'
+          : 'AI_TICKET_REPLY_HANDOFF_REQUIRED'
         await auditAiTicketReply({
           actorUserId: user.id,
           ticketId,
           result: 'denied',
-          reason: 'AI_TICKET_AGENT_REPLY_MODE_DISABLED'
+          reason: result.sendBlockedReasons.length > 0 ? result.sendBlockedReasons.join(',') : code
         })
-        return reply.code(409).send({
-          error: 'AI ticket agent is in draft mode',
-          code: 'AI_TICKET_AGENT_REPLY_MODE_DISABLED'
+        return reply.code(code === 'AI_TICKET_AGENT_REPLY_MODE_DISABLED' ? 409 : 422).send({
+          error: code === 'AI_TICKET_AGENT_REPLY_MODE_DISABLED'
+            ? 'AI ticket agent is in draft mode'
+            : 'AI reply requires human handling',
+          code,
+          blockedReasons: result.sendBlockedReasons
         })
       }
       if (!result.safety.passed) {

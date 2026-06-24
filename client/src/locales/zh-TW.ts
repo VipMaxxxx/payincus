@@ -6781,6 +6781,7 @@ export default {
             aiReplySent: 'AI 回覆已發送',
             aiReplyConfirm: '確認讓 AI 基於安全上下文生成並發送一條客服回覆？',
             aiReplyModeDisabled: 'AI 工單插件目前為草稿模式，不能直接接管回覆',
+            aiReplyHandoffRequired: '目前工單觸發敏感規則，需要人工接管處理',
             aiReplyBlocked: 'AI 回覆未通過安全檢查，已轉人工處理',
             aiPluginDisabled: 'AI 工單插件未啟用或缺少權限',
             aiModelNotConfigured: 'AI 模型未配置，請先在插件中心配置接口和密鑰',

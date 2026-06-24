@@ -38,6 +38,7 @@ assertStartGuard('server/src/services/hosting-scheduler.ts', 'startHostingSchedu
 assertStartGuard('server/src/services/status-scheduler.ts', 'startStatusScheduler', 'let schedulerStarted = false')
 assertStartGuard('server/src/services/system-monitor.ts', 'startSystemMonitor', 'let schedulerStarted = false')
 assertStartGuard('server/src/services/traffic-scheduler.ts', 'startTrafficScheduler', 'let schedulerStarted = false')
+assertStartGuard('server/src/services/ai-ticket-auto-reply-scheduler.ts', 'startAiTicketAutoReplyScheduler', 'let schedulerStarted = false')
 
 const mailExpirySource = readRepoFile('server/src/services/mail-expiry-scheduler.ts')
 const mailStartIndex = mailExpirySource.indexOf('export function startMailExpiryScheduler(')

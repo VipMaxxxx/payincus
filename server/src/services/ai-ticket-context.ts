@@ -16,6 +16,10 @@ const MAX_KNOWLEDGE_EXCERPT_LENGTH = 700
 const DEFAULT_AI_MODEL = 'gpt-4o-mini'
 const DEFAULT_AI_TIMEOUT_MS = 20_000
 const MAX_AI_DRAFT_LENGTH = 2000
+const DEFAULT_AI_AUTO_REPLY_CATEGORIES = ['general', 'billing']
+const DEFAULT_DAILY_AUTO_REPLY_LIMIT = 100
+const DEFAULT_TICKET_AUTO_REPLY_LIMIT = 3
+const DEFAULT_REPLY_COOLDOWN_SECONDS = 120
 
 type AiTicketPermission =
   | typeof AI_TICKET_CONTEXT_PERMISSION
@@ -40,6 +44,13 @@ export interface AiTicketDraftResult {
 export interface AiTicketReplyCandidate extends AiTicketDraftResult {
   mode: AiTicketAgentConfig['mode']
   canSend: boolean
+  sendBlockedReasons: string[]
+}
+
+export interface AiTicketAutomationStatus {
+  enabled: boolean
+  mode: AiTicketAgentConfig['mode']
+  autoReplyCategories: string[]
 }
 
 interface AiTicketAgentConfig {
@@ -50,6 +61,10 @@ interface AiTicketAgentConfig {
   model: string
   temperature: number
   timeoutMs: number
+  autoReplyCategories: string[]
+  dailyAutoReplyLimit: number
+  ticketAutoReplyLimit: number
+  cooldownSeconds: number
   showAiIdentity: boolean
   systemPrompt: string | null
 }
@@ -252,6 +267,18 @@ function getConfigNumber(configs: Map<string, unknown>, key: string, fallback: n
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+function getConfigStringArray(configs: Map<string, unknown>, key: string, fallback: string[]): string[] {
+  const value = configs.get(key)
+  if (!Array.isArray(value)) return fallback
+
+  const normalized = value
+    .filter(item => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean)
+
+  return normalized.length > 0 ? normalized : fallback
+}
+
 function normalizeAiMode(value: string): AiTicketAgentConfig['mode'] {
   return value === 'semi_auto' || value === 'auto' ? value : 'draft'
 }
@@ -285,6 +312,10 @@ async function loadAiTicketAgentConfig(): Promise<AiTicketAgentConfig> {
     model: getConfigString(configs, 'model', DEFAULT_AI_MODEL),
     temperature: Math.min(Math.max(getConfigNumber(configs, 'temperature', 0.2), 0), 1),
     timeoutMs: Math.min(Math.max(getConfigNumber(configs, 'timeoutMs', DEFAULT_AI_TIMEOUT_MS), 1000), 120_000),
+    autoReplyCategories: getConfigStringArray(configs, 'autoReplyCategories', DEFAULT_AI_AUTO_REPLY_CATEGORIES),
+    dailyAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'dailyAutoReplyLimit', DEFAULT_DAILY_AUTO_REPLY_LIMIT)), 0),
+    ticketAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'ticketAutoReplyLimit', DEFAULT_TICKET_AUTO_REPLY_LIMIT)), 0),
+    cooldownSeconds: Math.max(Math.floor(getConfigNumber(configs, 'cooldownSeconds', DEFAULT_REPLY_COOLDOWN_SECONDS)), 0),
     showAiIdentity: getConfigBoolean(configs, 'showAiIdentity', true),
     systemPrompt: getConfigString(configs, 'systemPrompt') || null
   }
@@ -336,6 +367,94 @@ function inspectAiDraftSafety(draft: string): { passed: boolean; blockedReasons:
     passed: blockedReasons.length === 0,
     blockedReasons
   }
+}
+
+function inspectAiReplySendEligibility(context: AiTicketContext, config: AiTicketAgentConfig): string[] {
+  const blockedReasons: string[] = []
+  const searchableText = [
+    context.ticket.subject,
+    context.ticket.category,
+    context.ticket.priority,
+    ...context.ticket.recentMessages.map(message => message.content)
+  ].join(' ')
+
+  const sensitivePatterns: Array<[string, RegExp]> = [
+    ['refund_or_dispute_requires_handoff', /退款|退费|争议|拒付|chargeback|dispute|refund/i],
+    ['risk_or_account_security_requires_handoff', /风控|封禁|解封|冻结|盗号|账号安全|risk|abuse|ban/i],
+    ['destructive_instance_operation_requires_handoff', /删除|销毁|重装|迁移|恢复数据|数据恢复|数据丢失|delete|destroy|reinstall|migrate|recovery/i],
+    ['credential_or_backend_request_requires_handoff', /root|密码|ssh|密钥|后台|数据库|路径|password|secret|token/i],
+    ['resource_delivery_exception_requires_handoff', /开通失败|交付失败|机器异常|实例异常|无法连接|故障|宕机|delivery failed|outage/i]
+  ]
+
+  if (context.ticket.category === 'abuse') {
+    blockedReasons.push('abuse_category_requires_handoff')
+  }
+  if (context.ticket.priority === 'urgent') {
+    blockedReasons.push('urgent_priority_requires_handoff')
+  }
+  if (config.mode === 'auto' && !config.autoReplyCategories.includes(context.ticket.category)) {
+    blockedReasons.push('category_not_allowed_for_auto_reply')
+  }
+
+  for (const [reason, pattern] of sensitivePatterns) {
+    if (pattern.test(searchableText)) {
+      blockedReasons.push(reason)
+    }
+  }
+
+  return Array.from(new Set(blockedReasons))
+}
+
+async function inspectAiReplySendLimits(ticketId: number, config: AiTicketAgentConfig): Promise<string[]> {
+  const blockedReasons: string[] = []
+  const ticketMarker = `ticket #${ticketId}`
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+
+  const [dailySuccessCount, ticketSuccessCount, latestTicketSuccess] = await Promise.all([
+    prisma.log.count({
+      where: {
+        module: LogModule.PLUGIN,
+        action: 'ai_ticket.reply_send',
+        result: LogResult.SUCCESS,
+        createdAt: { gte: todayStart }
+      }
+    }),
+    prisma.log.count({
+      where: {
+        module: LogModule.PLUGIN,
+        action: 'ai_ticket.reply_send',
+        result: LogResult.SUCCESS,
+        content: { contains: ticketMarker }
+      }
+    }),
+    prisma.log.findFirst({
+      where: {
+        module: LogModule.PLUGIN,
+        action: 'ai_ticket.reply_send',
+        result: LogResult.SUCCESS,
+        content: { contains: ticketMarker }
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true }
+    })
+  ])
+
+  if (config.dailyAutoReplyLimit > 0 && dailySuccessCount >= config.dailyAutoReplyLimit) {
+    blockedReasons.push('daily_auto_reply_limit_reached')
+  }
+  if (config.ticketAutoReplyLimit > 0 && ticketSuccessCount >= config.ticketAutoReplyLimit) {
+    blockedReasons.push('ticket_auto_reply_limit_reached')
+  }
+  if (
+    config.cooldownSeconds > 0 &&
+    latestTicketSuccess &&
+    latestTicketSuccess.createdAt.getTime() > Date.now() - (config.cooldownSeconds * 1000)
+  ) {
+    blockedReasons.push('ticket_auto_reply_cooldown_active')
+  }
+
+  return blockedReasons
 }
 
 async function requestAiTicketDraft(context: AiTicketContext, config: AiTicketAgentConfig): Promise<string> {
@@ -476,6 +595,15 @@ export async function getAiTicketPermission(permission: AiTicketPermission): Pro
 
 export async function getAiTicketContextPermission(): Promise<AiTicketContextPermissionResult> {
   return getAiTicketPermission(AI_TICKET_CONTEXT_PERMISSION)
+}
+
+export async function getAiTicketAutomationStatus(): Promise<AiTicketAutomationStatus> {
+  const config = await loadAiTicketAgentConfig()
+  return {
+    enabled: config.enabled,
+    mode: config.mode,
+    autoReplyCategories: config.autoReplyCategories
+  }
 }
 
 export async function auditAiTicketContextRead(input: {
@@ -782,13 +910,18 @@ async function generateAiTicketReplyCandidate(ticketId: number): Promise<AiTicke
 
   const draft = await requestAiTicketDraft(context, config)
   const safety = inspectAiDraftSafety(draft)
+  const sendBlockedReasons = [
+    ...inspectAiReplySendEligibility(context, config),
+    ...(config.mode === 'draft' ? [] : await inspectAiReplySendLimits(ticketId, config))
+  ]
 
   return {
     draft,
     model: config.model,
     safety,
     mode: config.mode,
-    canSend: config.mode === 'semi_auto' || config.mode === 'auto'
+    canSend: (config.mode === 'semi_auto' || config.mode === 'auto') && sendBlockedReasons.length === 0,
+    sendBlockedReasons
   }
 }
 

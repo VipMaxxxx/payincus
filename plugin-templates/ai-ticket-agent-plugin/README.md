@@ -24,4 +24,6 @@ Controlled AI takeover replies are available through:
 POST /api/tickets/:id/ai/reply
 ```
 
-The reply endpoint requires `ticket:ai:reply`, refuses pure `draft` mode, reuses the same safety checks, writes one support message only after the checks pass, notifies the user, and does not change ticket status.
+The reply endpoint requires `ticket:ai:reply`, refuses pure `draft` mode, reuses the same safety checks, blocks sensitive handoff cases such as refunds, disputes, account security, risk control, destructive instance actions, credential/backend requests, and delivery exceptions, enforces configured daily/per-ticket/cooldown limits from audit logs, writes one support message only after the checks pass, notifies the user, and does not change ticket status.
+
+When the plugin is enabled in `auto` mode, the backend scheduler scans every 2 minutes for official/system tickets whose latest message is from the customer. It still requires `ticket:ai:reply`, the configured `autoReplyCategories`, safety checks, handoff rules, and reply limits before sending.
