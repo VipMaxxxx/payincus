@@ -124,7 +124,7 @@ async function loadAdminPluginMenuItems(): Promise<void> {
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const data = await response.json() as { plugins?: PluginRecord[] }
     adminPluginMenuItems.value = (data.plugins || [])
-      .filter(plugin => plugin.enabled && plugin.status === 'enabled' && hasAdminSettingsPage(plugin))
+      .filter(plugin => plugin.status !== 'failed' && hasAdminSettingsPage(plugin))
       .map(plugin => ({
         name: `admin-plugin-settings-${plugin.pluginId}`,
         path: `/admin/plugins/${encodeURIComponent(plugin.pluginId)}/settings`,
@@ -132,7 +132,7 @@ async function loadAdminPluginMenuItems(): Promise<void> {
         labelText: displayPluginName(plugin)
       }))
   } catch {
-    adminPluginMenuItems.value = []
+    // 保留已有插件入口，避免一次网络抖动导致左侧菜单闪烁消失。
   }
 }
 

@@ -95,6 +95,10 @@ function openPluginSettings(plugin: PluginRecord) {
   router.push(`/admin/plugins/${encodeURIComponent(plugin.pluginId)}/settings`)
 }
 
+function refreshPluginNav() {
+  window.dispatchEvent(new Event('payincus:admin-plugin-nav-refresh'))
+}
+
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-'
   const date = new Date(value)
@@ -189,6 +193,7 @@ async function uploadPlugin() {
     if (response.task?.id) selectedTaskId.value = response.task.id
     activeTab.value = 'tasks'
     await refreshAll()
+    refreshPluginNav()
     await loadSelectedTaskLogs()
   } catch (err: any) {
     toast.error('上传安装失败：' + (err?.message || String(err)))
@@ -205,6 +210,7 @@ async function installMarketPlugin(entry: PluginMarketEntry) {
     if (response.task?.id) selectedTaskId.value = response.task.id
     activeTab.value = 'tasks'
     await refreshAll()
+    refreshPluginNav()
     await loadSelectedTaskLogs()
   } catch (err: any) {
     toast.error('市场安装失败：' + (err?.message || String(err)))
@@ -220,8 +226,8 @@ async function togglePlugin(plugin: PluginRecord) {
       await api.plugins.enable(plugin.pluginId)
       toast.success('插件已启用')
     }
-    window.dispatchEvent(new Event('payincus:admin-plugin-nav-refresh'))
     await refreshAll()
+    refreshPluginNav()
   } catch (err: any) {
     toast.error('插件状态更新失败：' + (err?.message || String(err)))
   }
@@ -234,8 +240,8 @@ async function uninstallSelectedPlugin() {
     await api.plugins.uninstall(selectedPlugin.value.pluginId)
     toast.success('插件已卸载')
     selectedPluginId.value = null
-    window.dispatchEvent(new Event('payincus:admin-plugin-nav-refresh'))
     await refreshAll()
+    refreshPluginNav()
   } catch (err: any) {
     toast.error('卸载失败：' + (err?.message || String(err)))
   }

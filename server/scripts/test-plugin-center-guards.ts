@@ -111,10 +111,12 @@ assert.ok(
 assert.ok(
   sideNav.includes('loadAdminPluginMenuItems') &&
     sideNav.includes("page.slot === 'admin.plugins.settings'") &&
+    sideNav.includes("plugin.status !== 'failed'") &&
+    !sideNav.includes("plugin.enabled && plugin.status === 'enabled'") &&
     sideNav.includes("path: `/admin/plugins/${encodeURIComponent(plugin.pluginId)}/settings`") &&
     sideNav.includes('payincus:admin-plugin-nav-refresh') &&
     sideNav.includes('labelText'),
-  'admin side nav must load enabled plugin settings entries dynamically'
+  'admin side nav must load installed plugin settings entries dynamically'
 )
 
 assert.ok(
