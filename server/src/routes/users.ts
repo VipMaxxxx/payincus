@@ -21,6 +21,12 @@ import { closeUserSessions } from '../lib/terminal-proxy.js'
 import { createVerificationCode, verifyCode } from '../db/email-verification.js'
 import { validateEmailDomain } from '../lib/email-domain.js'
 import { HOSTING_BALANCE_LOG_LOCK_NAMESPACE, USER_ADMIN_ROLE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import {
+  DEMO_ACCOUNT_PROTECTED_MESSAGE,
+  redactDemoLoginRecord,
+  shouldProtectDemoAccount,
+  shouldRedactDemoLoginRecords
+} from '../lib/demo-safety.js'
 
 const USER_SEARCH_FIELDS = ['username', 'id', 'email'] as const
 const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
@@ -276,12 +282,17 @@ export default async function userRoutes(fastify: FastifyInstance) {
             trafficStatus: user.traffic_status || 'NORMAL'
           },
           createdAt: user.created_at,
-          lastLogin: lastLoginMap.get(user.id) ? {
-            ip: lastLoginMap.get(user.id)!.ip,
-            country: lastLoginMap.get(user.id)!.country,
-            city: lastLoginMap.get(user.id)!.city,
-            createdAt: lastLoginMap.get(user.id)!.createdAt.toISOString()
-          } : null,
+          lastLogin: lastLoginMap.get(user.id) ? (() => {
+            const lastLogin = shouldRedactDemoLoginRecords(request, user)
+              ? redactDemoLoginRecord(lastLoginMap.get(user.id)!)
+              : lastLoginMap.get(user.id)!
+            return {
+              ip: lastLogin.ip,
+              country: lastLogin.country,
+              city: lastLogin.city,
+              createdAt: lastLogin.createdAt.toISOString()
+            }
+          })() : null,
           balance: balanceMap.get(user.id) || 0,
           totalConsume: consumeMap.get(user.id) || 0,
           points: pointsMap.get(user.id)?.points || 0,
@@ -520,6 +531,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
     }
 
     const { email, password, avatarStyle, currentPassword, emailCode } = request.body
+    if (password && shouldProtectDemoAccount(request, user)) {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, DEMO_ACCOUNT_PROTECTED_MESSAGE))
+    }
+
     const shouldClaimPasswordVerification = request.user.id === userId && Boolean(password)
     const shouldClaimEmailVerification = request.user.id === userId && email !== undefined && email !== user.email && Boolean(user.email)
 
@@ -1232,6 +1247,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.CANNOT_MODIFY_SELF))
     }
 
+    if (shouldProtectDemoAccount(request, user)) {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, DEMO_ACCOUNT_PROTECTED_MESSAGE))
+    }
+
     const passwordCheck = validatePassword(request.body.password)
     if (!passwordCheck.valid) {
       return reply.code(400).send(apiError(ErrorCode.PASSWORD_TOO_WEAK, passwordCheck.message))
@@ -1409,9 +1428,13 @@ export default async function userRoutes(fastify: FastifyInstance) {
     const pageSize = parseClampedPositiveIntegerQuery(request.query.pageSize, 20, 50)
 
     const loginRecordsResult = await db.getUserLoginRecords(userId, page, pageSize)
+    const shouldRedact = shouldRedactDemoLoginRecords(request, user)
+    const records = shouldRedact
+      ? loginRecordsResult.records.map(redactDemoLoginRecord)
+      : loginRecordsResult.records
 
     return {
-      records: loginRecordsResult.records.map(r => ({
+      records: records.map(r => ({
         id: r.id,
         ip: r.ip,
         country: r.country,

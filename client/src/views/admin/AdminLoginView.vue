@@ -9,6 +9,7 @@ import { getSafeRedirectUrl } from '@/utils/validation'
 import api from '@/api/admin'
 import { useBrand } from '@/composables/useBrand'
 import { buildApiUrl } from '@/utils/api-url'
+import { getDemoLoginAccount } from '@/utils/demo-login'
 
 const router = useRouter()
 const route = useRoute()
@@ -38,6 +39,7 @@ const contactEmailHref = computed(() => {
   if (!email) return null
   return email.startsWith('mailto:') ? email : `mailto:${email}`
 })
+const demoAccount = computed(() => getDemoLoginAccount('admin'))
 
 // OAuth 提供商
 const oauthProviders = ref<string[]>([])
@@ -136,6 +138,17 @@ async function handleLogin(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+async function loginWithDemoAccount(): Promise<void> {
+  const account = demoAccount.value
+  if (!account) return
+  username.value = account.username
+  password.value = account.password
+  totpCode.value = ''
+  recoveryCode.value = ''
+  useRecoveryCode.value = false
+  await handleLogin()
 }
 
 function loginWithOAuth(provider: string): void {
@@ -308,6 +321,35 @@ function getProviderInfo(provider: string): ProviderInfo {
           >
             {{ loading ? $t('auth.loggingIn') : $t('auth.continue') }}
           </button>
+
+          <div
+            v-if="demoAccount"
+            class="rounded-lg border p-3 text-sm"
+            :class="themeStore.isDark ? 'border-gray-800 bg-gray-900/60 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-700'"
+          >
+            <div class="mb-2 flex items-center justify-between gap-3">
+              <span class="font-medium" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+                {{ demoAccount.label }}
+              </span>
+              <button
+                type="button"
+                :disabled="loading"
+                class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="themeStore.isDark ? 'bg-gray-100 text-gray-950 hover:bg-white disabled:opacity-60' : 'bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60'"
+                @click="loginWithDemoAccount"
+              >
+                一键登录
+              </button>
+            </div>
+            <div class="grid grid-cols-[52px_1fr] gap-x-2 gap-y-1 font-mono text-xs">
+              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">账号</span>
+              <span>{{ demoAccount.username }}</span>
+              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">邮箱</span>
+              <span>{{ demoAccount.email }}</span>
+              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">密码</span>
+              <span>{{ demoAccount.password }}</span>
+            </div>
+          </div>
         </form>
 
         <!-- OAuth Quick Login -->
