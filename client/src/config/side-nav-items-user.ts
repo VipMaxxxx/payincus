@@ -19,6 +19,7 @@ export const navMenuItems: MenuItem[] = [
   { name: 'tickets', path: '/tickets', icon: 'ticket', label: 'nav.tickets' },
   { name: 'entertainment', path: '/entertainment', icon: 'gift', label: 'nav.entertainment' },
   { name: 'wallet', path: '/wallet', icon: 'wallet', label: 'nav.wallet' },
+  { name: 'orders', path: '/orders', icon: 'card', label: 'nav.orders' },
   { name: 'invites', path: '/invites', icon: 'key', label: 'nav.invites' },
   { divider: true, label: 'nav.expand' },
   { name: 'my-hosts', path: '/resources/hosts', icon: 'database', label: 'nav.hosts' },

@@ -10,12 +10,14 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 | Recharge | Create payment orders and continue to the payment provider. |
 | Recharge history | View amount, channel, order ID, status and completion time. |
 | Spending records | View instance creation, renewal and resource consumption. |
+| Order center | Use `/orders` to view unified recharge and instance billing order details. |
 | Redeem codes | Use admin-issued codes for balance or benefits. |
 | Affiliate rewards | View invites, conversions and rewards. |
 
 ## Admin Features
 
 - Recharge order queries and callback diagnostics.
+- Order center at `/admin/orders` for unified recharge and instance billing records, with user, type and status filters.
 - Balance adjustment and audit.
 - Payment provider configuration, keys, callbacks and enablement.
 - Affiliate conversion review.
@@ -36,3 +38,4 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Duplicate callbacks do not credit twice.
 - Invalid signature, amount or order ID is rejected.
 - Admin can audit orders, callbacks and balance records.
+- User and admin order centers must only return authorized order data and must not expose raw payment callback payloads or provider config snapshots.

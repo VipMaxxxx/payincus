@@ -19,6 +19,7 @@ export const navMenuItems: MenuItem[] = [
   { name: 'admin-delivery', path: '/admin/delivery', icon: 'pulse', label: 'nav.delivery' },
   { name: 'admin-tickets', path: '/admin/tickets', icon: 'ticket', label: 'nav.tickets' },
   { name: 'admin-billing', path: '/admin/billing', icon: 'wallet', label: 'nav.billing' },
+  { name: 'admin-orders', path: '/admin/orders', icon: 'card', label: 'nav.orders' },
   { name: 'admin-broadcast', path: '/admin/broadcast', icon: 'bell', label: 'nav.broadcast' },
   { name: 'admin-logs', path: '/admin/logs', icon: 'logs', label: 'nav.logs' },
   { name: 'admin-help', path: '/admin/help', icon: 'book', label: 'nav.helpManage' },

@@ -150,6 +150,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.wallet', title: '钱包' }
   },
   {
+    path: '/orders',
+    name: 'orders',
+    component: () => import('@/views/OrdersView.vue'),
+    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.orders', title: '订单' }
+  },
+  {
     path: '/invites',
     name: 'invites',
     component: () => import('@/views/InvitesView.vue'),
@@ -410,6 +416,7 @@ router.isReady().then(() => {
     import('@/views/InstanceDetailView.vue')
     import('@/views/ProfileView.vue')
     import('@/views/WalletView.vue')
+    import('@/views/OrdersView.vue')
     import('@/views/TicketsView.vue')
   }, 1000)
 })

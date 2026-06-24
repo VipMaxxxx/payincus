@@ -199,6 +199,7 @@ export default {
         inbox: '通知',
         settings: '设置',
         wallet: '钱包',
+        orders: '订单',
         invites: '邀请',
         help: '帮助',
         admin: '管理',

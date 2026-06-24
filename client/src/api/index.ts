@@ -3680,6 +3680,41 @@ const api = {
       http.post(`/plugins/${pluginId}/actions/${action}`, payload || {})
   },
 
+  orders: {
+    list: (params?: { page?: number; pageSize?: number; type?: string; status?: string }): Promise<{
+      orders: Array<{
+        id: string
+        sourceType: 'recharge' | 'instance_billing'
+        sourceId: number
+        orderNo: string
+        title: string
+        status: string
+        rawStatus: string
+        amount: number
+        actualAmount: number | null
+        fee: number
+        provider: { id: number; name: string; type: string } | null
+        paymentMethod: string | null
+        tradeNo: string | null
+        failReason: string | null
+        instance: any | null
+        months: number | null
+        periodStart: string | null
+        periodEnd: string | null
+        remark: string | null
+        createdAt: string
+        completedAt: string | null
+        expiredAt: string | null
+      }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/orders', { params }),
+
+    detail: (sourceType: 'recharge' | 'instance_billing', sourceId: number): Promise<{ order: any }> =>
+      http.get(`/orders/${sourceType}/${sourceId}`)
+  },
+
   mail: {
     // 获取可购买的邮箱源和方案
     getSources: (): Promise<{
