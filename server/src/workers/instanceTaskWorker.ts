@@ -79,6 +79,14 @@ let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null
 const runningTaskIds = new Set<number>()
 const dbBackoff = createWorkerDbBackoff('InstanceTaskWorker')
 
+type InstanceTaskFailureNotice = {
+  id: number
+  userId: number
+  instanceId: number
+  hostId: number
+  taskType: InstanceTaskType
+}
+
 function isAlpineImageAlias(imageAlias?: string | null): boolean {
   return typeof imageAlias === 'string' && imageAlias.toLowerCase().includes('alpine')
 }
@@ -157,6 +165,31 @@ async function cleanupRecreatedInstanceRecords(instanceId: number, hostId: numbe
   })
 }
 
+async function notifyInstanceTaskFailure(task: InstanceTaskFailureNotice, errorMessage: string): Promise<void> {
+  try {
+    const instance = await db.getInstanceById(task.instanceId)
+    const host = await db.getHostById(task.hostId)
+
+    await createLog(
+      task.userId,
+      'instance',
+      `instance.${task.taskType}`,
+      `实例「${instance?.name || task.instanceId}」的 ${task.taskType} 任务失败：${errorMessage}`,
+      'failed',
+      { instanceId: task.instanceId }
+    )
+
+    await sendNotification(task.userId, 'instance_task_failed', {
+      instanceName: instance?.name || `实例 #${task.instanceId}`,
+      hostName: host?.name || '未知',
+      taskType: task.taskType,
+      error: errorMessage
+    })
+  } catch (notifyErr) {
+    console.error('[InstanceTaskWorker] 发送失败通知/记录日志失败:', notifyErr)
+  }
+}
+
 /**
  * 服务启动时清理僵尸任务
  */
@@ -164,7 +197,7 @@ export async function cleanupStaleTasks(): Promise<void> {
   const lightTimeoutThreshold = new Date(Date.now() - LIGHT_TASK_TIMEOUT)
   const heavyTimeoutThreshold = new Date(Date.now() - HEAVY_TASK_TIMEOUT)
 
-  const result = await prisma.instanceTask.updateMany({
+  const staleTasks = await prisma.instanceTask.findMany({
     where: {
       status: 'PROCESSING',
       OR: [
@@ -181,6 +214,14 @@ export async function cleanupStaleTasks(): Promise<void> {
         }
       ]
     },
+    select: { id: true, userId: true, instanceId: true, hostId: true, taskType: true }
+  })
+
+  const result = await prisma.instanceTask.updateMany({
+    where: {
+      id: { in: staleTasks.map(task => task.id) },
+      status: 'PROCESSING'
+    },
     data: {
       status: 'FAILED',
       error: '系统启动清理超时任务',
@@ -189,6 +230,9 @@ export async function cleanupStaleTasks(): Promise<void> {
   })
   if (result.count > 0) {
     console.log(`[InstanceTaskWorker] 清理了 ${result.count} 个僵尸任务`)
+    await Promise.allSettled(
+      staleTasks.map(task => notifyInstanceTaskFailure(task, '系统启动清理超时任务'))
+    )
   }
 }
 
@@ -214,7 +258,7 @@ async function cleanupTimeoutTasks(): Promise<void> {
         }
       ]
     },
-    select: { id: true }
+    select: { id: true, userId: true, instanceId: true, hostId: true, taskType: true }
   })
   const timedOutTaskIds = timedOutTasks
     .map(task => task.id)
@@ -238,6 +282,11 @@ async function cleanupTimeoutTasks(): Promise<void> {
 
   if (result.count > 0) {
     console.log(`[InstanceTaskWorker] 清理了 ${result.count} 个超时任务`)
+    await Promise.allSettled(
+      timedOutTasks
+        .filter(task => timedOutTaskIds.includes(task.id))
+        .map(task => notifyInstanceTaskFailure(task, '任务执行超时'))
+    )
   }
 }
 
@@ -578,30 +627,7 @@ async function executeTask(taskId: number): Promise<void> {
     const taskDuration = Date.now() - taskStartTime
     console.error(`[InstanceTaskWorker] 任务 ${taskId} (${task.taskType}) 失败，耗时 ${taskDuration}ms: ${errorMessage}`)
 
-    // 发送失败通知并记录日志
-    try {
-      const instance = await db.getInstanceById(task.instanceId)
-      const host = await db.getHostById(task.hostId)
-
-      // 记录失败日志
-      await createLog(
-        task.userId,
-        'instance',
-        `instance.${task.taskType}`,
-        `Failed to ${task.taskType} instance "${instance?.name || task.instanceId}": ${errorMessage}`,
-        'failed',
-        { instanceId: task.instanceId }
-      )
-
-      await sendNotification(task.userId, 'instance_task_failed', {
-        instanceName: instance?.name || `实例 #${task.instanceId}`,
-        hostName: host?.name || '未知',
-        taskType: task.taskType,
-        error: errorMessage
-      })
-    } catch (notifyErr) {
-      console.error('[InstanceTaskWorker] 发送失败通知/记录日志失败:', notifyErr)
-    }
+    await notifyInstanceTaskFailure(task, errorMessage)
   } finally {
     runningTaskIds.delete(taskId)
   }

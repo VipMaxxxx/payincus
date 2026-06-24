@@ -148,30 +148,37 @@ Key tags:
 - `v0.0.21`: production artifact CLI OTA start command uses compiled dist entry.
 - `v0.0.22`: redacted production proof snapshot helper.
 - `v0.1.0`: admin version-update UI and plugin-center UI polish.
+- `v0.1.1`: update task and plugin-center UI pagination/market polish.
+- `v0.1.2`: admin update and plugin UI fixes.
+- `v0.1.3`: instance detail bandwidth rendering fix.
+- `v0.1.4`: incompatible VM package host-binding guard.
+- `v0.1.5`: user/admin operation logs localized to Chinese.
+- `v0.1.6`: admin instance detail loading fix.
 
 Latest production proof:
 
-- Production online-update task `#18` updated from `v0.0.20` to `v0.0.21`.
-- Current production symlink after the task: `/opt/incudal/current -> /opt/incudal/releases/v0.0.21-20260623175349`.
-- `version.json` reports version/tag `v0.0.21`, commit `71cdcff11008`, deployed at `2026-06-23T17:53:57.514Z`.
-- Post-OTA `verify-split-host`, `pnpm verify:production`, and `pnpm verify:log-header` passed.
-- Production `/opt/incudal/current/server/package.json` now reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
+- Production is now proven deployed at `v0.1.6`.
+- Current production symlink proof: `/opt/incudal/current -> /opt/incudal/releases/v0.1.6-20260623223702`.
+- `version.json` reports version/tag `v0.1.6`, commit `474ae022e5a1`, build time `2026-06-23T22:32:38.670Z`, deployed at `2026-06-23T22:37:10.984Z`.
+- Post-OTA public `verify-split-host`, public-only `pnpm verify:production` with `RUN_DB_CHECKS=0`, and `pnpm smoke:agent-release` passed.
+- A redacted server-side `PROOF_SINCE_HOURS=72 pnpm verify:production-proof-snapshot` emitted observational proof for two online hosts, two fresh online Agents, two ZFS storage pools, five running instances, one completed recharge/callback, SMTP/Lsky config presence, zero notification channels/logs, and missing lifecycle actions `instance.start`, `instance.restart`, `instance.recreate`, and `instance.delete`. The SSH session was manually interrupted after JSON output stopped, so treat it as observational evidence rather than a clean command-exit proof.
+- Production `/opt/incudal/current/server/package.json` reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
-- Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and its current admin JS assets contain `/admin/plugins` and `插件中心`.
-- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin static bundle markers for admin `/admin/plugins` and user `/plugins/smoke`, plugin API 401 protection, docs TLS, v0.1.0 Chinese/English version logs with bilingual headings, and public root/API security headers.
+- Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and current admin JS assets contain `/admin/plugins`, `插件中心`, and `admin-instance-detail` markers.
+- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin/update API 401 protection, Turnstile missing-token negative controls, docs TLS, `v0.1.6` Chinese/English version logs, and public root/API security headers.
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
-- GitHub Actions for `6c06bd8` completed successfully: CI, Docs Pages, and Build & Release all passed.
+- GitHub Actions for `v0.1.6` / `474ae02` completed successfully: Build & Release passed; CI and Docs Pages for `0696a45` passed.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
-- Remaining production warnings are still business-proof blockers, not deployment blockers: real stop/restart/reinstall-or-recreate/delete/cleanup proof, SMTP delivery, Lsky upload, Telegram/external notification delivery, Turnstile/session-gated browser smoke, and logged-in plugin rendering smoke.
+- Full-function audit progress is `12/13` categories complete, current category `13/13` is `7/13` items complete (`54%`). Remaining production blockers are business-proof blockers, not deployment blockers: Incus start/restart/recreate/delete/cleanup proof, SMTP delivery, Lsky upload, Telegram/external notification delivery, and real password+Turnstile browser smoke.
 
 Latest release proof:
 
-- `v0.1.0` was tagged from commit `6c06bd8 Polish update and plugin admin UI / 优化更新与插件后台界面`.
-- GitHub Build & Release run `28048819414` completed successfully.
-- GitHub Release assets are available for `ota-manifest.json`, `incudal-v0.1.0-ota-manifest.json`, linux amd64/arm64 tarballs, and both `.sha256` files.
-- The public OTA manifest reports version `v0.1.0`, commit `6c06bd873543`, changelog `Polish update and plugin admin UI / 优化更新与插件后台界面`, amd64 size `89855623` with SHA256 prefix `e3c40a9d15bbff82`, and arm64 size `88980892` with SHA256 prefix `1fb3a9ac750bbf80`.
-- Rechecked public `v0.1.0` OTA metadata after the UI polish release: both OTA manifests, both amd64/arm64 tarballs, and both `.sha256` files were available through GitHub Release.
-- Production has not yet been updated to `v0.1.0`; current live production proof remains `v0.0.21` until an online update task is run and verified.
+- `v0.1.6` was tagged from commit `474ae02 Fix admin instance detail loading / 修复后台实例详情加载`.
+- Version-log commit `0696a45 Update version log for v0.1.6 / 更新 v0.1.6 版本日志` is current `payincus/main`.
+- GitHub Build & Release run `28061486351` completed successfully for `v0.1.6`; CI run `28061494165` and Docs Pages run `28061494168` completed successfully for `0696a45`.
+- GitHub Release `v0.1.6` is public, not draft, not prerelease, and has six assets: `ota-manifest.json`, `incudal-v0.1.6-ota-manifest.json`, linux amd64/arm64 tarballs, and both `.sha256` files.
+- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.1.6`, `Fix admin instance detail loading`, and `修复后台实例详情加载`.
+- Production has already been updated to `v0.1.6` and server-side `version.json` proof is recorded above.
 
 Storage-pool note:
 
@@ -306,39 +313,42 @@ Known docs build behavior:
 
 ## Last Known Verification
 
-Recently passed locally after the Agent installer and ZFS guidance work:
+Recently passed locally for the latest shipped code path:
 
 ```text
-bash -n server/templates/agent-install.sh server/templates/install.sh
-pnpm --filter server test:agent-install-command-guards
-pnpm --filter server test:host-route-id-guards
-pnpm --filter server test:frontend-i18n-keys
-pnpm --filter server type-check
+pnpm --filter server test:frontend-route-guards
 pnpm --filter client type-check
+pnpm --filter client build
+pnpm --filter server test:frontend-dist-boundary-guards
+pnpm --filter client lint:check
+pnpm --filter server type-check
 pnpm build
+pnpm test
+pnpm test:agent
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-Recently passed on production `v0.0.17`:
+Recently refreshed public production checks after `v0.1.6` deployment:
 
 ```text
-ENV_FILE=/opt/incudal/.env FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=http://127.0.0.1:3001 pnpm verify:production
-ENV_FILE=/opt/incudal/.env FRONTEND_URL=https://pay.payincus.com BACKEND_URL=http://127.0.0.1:3001 pnpm verify:log-header
+FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=https://pay.payincus.com VERIFY_RETRIES=2 VERIFY_RETRY_DELAY=1 pnpm verify:split:host
+SMOKE_API_BASE_URL=https://pay.payincus.com pnpm smoke:agent-release
+RUN_DB_CHECKS=0 RUN_LIVE_CHECKS=1 NODE_ENV=production PORT=3001 SERVE_STATIC_CLIENT=false VITE_API_BASE_URL=/api TRUST_PROXY=true FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com SITE_URL=https://pay.payincus.com PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false BACKEND_URL=https://pay.payincus.com INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus pnpm verify:production
 ```
 
-Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.0.21-20260623175349`; `version.json` reports `v0.0.21`, commit `71cdcff11008`, and `deployedAt=2026-06-23T17:53:57.514Z`.
+Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.1.6-20260623223702`; `version.json` reports `v0.1.6`, commit `474ae022e5a1`, build time `2026-06-23T22:32:38.670Z`, and `deployedAt=2026-06-23T22:37:10.984Z`.
 
 Recent live business proof:
 
-- `ENV_FILE=/opt/incudal/.env pnpm --filter server verify:production-db` passed on production `v0.0.21`.
-- Production host `HKCMI-01` is online/installed/API-enabled, with one live storage pool and two running instances.
-- Host Agent for `HKCMI-01` is enabled and online with fresh `lastSeenAt`, version `v0.0.1`, and capabilities `heartbeat`, `report`, `host-metrics`, `instance-status`, and `traffic-counters`.
+- Server-side redacted snapshot on production `v0.1.6` emitted observational proof for two online hosts, two fresh online Agents, two ZFS storage pools, five running instances, one completed recharge/callback, SMTP/Lsky config presence, and zero notification channels/logs.
+- Production hosts `HKCMI-01` and `JPIIJ-01` are online/installed/API-enabled in the latest observational snapshot.
+- Host Agents are enabled and online with fresh `lastSeenAt`, version `v0.0.1`, and capabilities `heartbeat`, `report`, `host-metrics`, `instance-status`, and `traffic-counters`.
 - Agent `lastReport` contains `incus`, `metrics`, `resources`, and `runtime`; traffic snapshots and daily traffic rows exist for both running instances.
 - A completed real recharge exists with actual amount, fee, third-party trade number and callback timestamp; a processed payment callback row exists with callback IP present. Full order number, provider config and callback body were intentionally not printed.
-- Live operation logs show SSH key generation, recharge completion, instance create, terminal connect/disconnect, Agent install token consumption, a Debian 12 instance create, and NAT port-add successes.
-- Interpretation: real payment callback, Agent heartbeat/report, resource/instance/traffic reporting, Incus create, NAT port add, and Web terminal connect/disconnect are now live-proven.
+- Live operation logs show SSH key generation, recharge completion, instance create, instance stop, instance rebuild, terminal connect/disconnect, Agent install token consumption, Debian 12 instance create, and NAT port-add successes.
+- Interpretation: real payment callback, Agent heartbeat/report, resource/instance/traffic reporting, Incus create, stop, rebuild, NAT port add, storage, and Web terminal connect/disconnect are now live-proven. Start/restart/recreate/delete/cleanup remain missing.
 
 Manual plugin package proof also passed with `plugin-templates/admin-user-mixed-plugin` packaged as `.tar.gz` and validated by `validateAndExtractPluginPackage`; result had id `com.example.coupon`, one admin page, one user page, one template and 64-char SHA256.
 
@@ -377,7 +387,7 @@ Completed:
 - Panel-to-Incus storage-list proof for the registered host's existing `default` ZFS pool.
 - Live payment callback proof.
 - Live Agent heartbeat/resource/instance/traffic proof.
-- Live Incus create, NAT port add, Web terminal connect/disconnect, and Debian 12 instance proof.
+- Live Incus create, stop, rebuild, NAT port add, storage, Web terminal connect/disconnect, and Debian 12 instance proof.
 
 Not completed:
 
@@ -385,7 +395,7 @@ Not completed:
 
 Remaining production proof items:
 
-- Real Incus stop, restart, reinstall/recreate, delete, cleanup and resource-release proof.
+- Real Incus start, restart, recreate, delete, cleanup and resource-release proof.
 - Real backup/restore, suspend/unsuspend, IPv6, and host migration smoke if these features remain in the final acceptance scope.
 - Real SMTP delivery.
 - Real Lsky upload.
@@ -408,12 +418,53 @@ This is no longer the earlier local sandbox `Operation not permitted` result. Tr
 
 For server-side work while SSH is unstable, ask the user to run commands in their own terminal and paste redacted output. Do not ask them to put passwords into handoff notes.
 
+Safe proof paste template for the user:
+
+```text
+Proof date/time:
+Production version:
+Test actor: admin or test user only
+
+Incus lifecycle:
+- test instance ID/name:
+- host name:
+- actions completed: start / restart / recreate / delete / cleanup
+- task or log IDs:
+- final instance/resource state:
+
+SMTP:
+- recipient reference:
+- send timestamp:
+- backend/admin status:
+- inbox receipt reference:
+
+Lsky:
+- test ticket/message ID:
+- attachment count:
+- upload/proxy status:
+- safe provider reference:
+
+Telegram / notification:
+- channel name or ID:
+- send timestamp:
+- backend log/status:
+- external receipt reference:
+
+Turnstile/browser:
+- user login page proof reference:
+- admin login page proof reference:
+- pages opened after login:
+- refresh/session note:
+```
+
+Never paste passwords, API secrets, SMTP passwords, Telegram bot tokens, Lsky tokens, Turnstile tokens, session cookies, JWTs, root passwords, raw `.env`, provider private keys, raw callback bodies, raw notification channel config, or instance root credentials.
+
 ## Important Production Domains
 
 Current known domains:
 
 - Product/user production: `https://pay.payincus.com`
-- Admin production: previously `https://admin.payincus.com`
+- Admin production: `https://admin.payincus.com`
 - User site in docs: `https://pay.payincus.com`
 - Admin site in docs: `https://admin.payincus.com`
 - Documentation/root site: `https://payincus.com`
@@ -423,11 +474,11 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Sync local Git with remote `payincus/main`.
-2. Run the remaining real instance lifecycle proof on `HKCMI-01`: stop, restart, reinstall/recreate, delete, cleanup and resource-release verification.
+1. Keep local Git synced with remote `payincus/main`; current checked state is `0696a45` on local `master`, `payincus/main`, and `payincus/HEAD`.
+2. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
 3. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
 4. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
-5. Deploy `v0.1.0` through the admin OTA page when ready, then verify the version-update UI, plugin-center UI, split host checks, production preflight, and rollback availability.
+5. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
 6. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
 7. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.

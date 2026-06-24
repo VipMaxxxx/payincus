@@ -206,6 +206,7 @@ export default {
         system: 'System',
         systemUpdate: 'Version Update',
         plugins: 'Plugin Center',
+        delivery: 'Delivery Assurance',
         users: 'Users',
         statistics: 'Statistics',
         hosts: 'Hosts',

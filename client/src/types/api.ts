@@ -1444,6 +1444,67 @@ export interface InstanceTaskResponse {
   status: InstanceTaskStatus
 }
 
+export interface DeliveryTaskContext {
+  id: number
+  instanceId: number
+  hostId: number
+  userId: number
+  taskType: InstanceTaskType
+  status: InstanceTaskStatus
+  progress?: string | null
+  error?: string | null
+  createdAt: string
+  startedAt?: string | null
+  finishedAt?: string | null
+  newInstanceId?: number | null
+  instance: {
+    id: number
+    name: string
+    status: string
+    incusId: string
+    image: string
+  } | null
+  user: {
+    id: number
+    username: string
+    email: string | null
+    status: string
+  } | null
+  host: {
+    id: number
+    name: string
+    status: string
+    location: string | null
+    countryCode: string
+  } | null
+}
+
+export interface DeliveryOverview {
+  summary: {
+    pending: number
+    processing: number
+    completed: number
+    failed: number
+    completedLast24h: number
+    failedLast24h: number
+    staleProcessing: number
+    notificationSentLast24h: number
+    notificationFailedLast24h: number
+    notificationPendingLast24h: number
+    enabledUserChannels: number
+    enabledGlobalChannels: number
+  }
+  recentFailures: DeliveryTaskContext[]
+}
+
+export interface DeliveryTasksResponse {
+  tasks: DeliveryTaskContext[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
 // ==================== 站内信相关 ====================
 
 export interface InboxMessage {

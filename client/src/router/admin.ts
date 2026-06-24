@@ -180,6 +180,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.plugins', title: '插件中心' }
   },
   {
+    path: '/admin/delivery',
+    name: 'admin-delivery',
+    component: () => import('@/views/admin/DeliveryCenterView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.delivery', title: '交付保障' }
+  },
+  {
     path: '/admin/images',
     name: 'admin-images',
     component: () => import('@/views/admin/ImagesView.vue'),
