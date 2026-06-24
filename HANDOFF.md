@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-d92bdfe Update version log for v0.3.6 / 更新 v0.3.6 版本日志
+02c8862 Update version log for v0.3.7 / 更新 v0.3.7 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,12 +29,14 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-d92bdfe Update version log for v0.3.6 / 更新 v0.3.6 版本日志
+02c8862 Update version log for v0.3.7 / 更新 v0.3.7 版本日志
 ```
 
 Recently updated/released files include:
 
 ```text
+client/vite.config.ts
+server/scripts/test-frontend-i18n-keys.ts
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
 server/prisma/migrations/20260624233000_add_ticket_success_center/migration.sql
@@ -125,52 +127,49 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.3.6 Add risk audit logging center / 新增风控审计日志中心
-feature commit: 8b5ad55
-version-log commit: d92bdfe
+v0.3.7 Fix admin benefits localization bundle / 修复后台福利本地化打包
+feature commit: bbf36c9
+version-log commit: 02c8862
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28117284630: success for tag v0.3.6
-CI 28117280880: success for main commit d92bdfe
-Deploy docs site to GitHub Pages 28117280894: success for main commit d92bdfe
+Build & Release 28118700434: success for tag v0.3.7
+CI 28118697109: success for main commit 02c8862
+Deploy docs site to GitHub Pages 28118697104: success for main commit 02c8862
 ```
 
-Release assets for `v0.3.6` were present:
+Release assets for `v0.3.7` were present:
 
 ```text
-incudal-v0.3.6-linux-amd64.tar.gz
-incudal-v0.3.6-linux-amd64.tar.gz.sha256
-incudal-v0.3.6-linux-arm64.tar.gz
-incudal-v0.3.6-linux-arm64.tar.gz.sha256
-incudal-v0.3.6-ota-manifest.json
+incudal-v0.3.7-linux-amd64.tar.gz
+incudal-v0.3.7-linux-amd64.tar.gz.sha256
+incudal-v0.3.7-linux-arm64.tar.gz
+incudal-v0.3.7-linux-arm64.tar.gz.sha256
+incudal-v0.3.7-ota-manifest.json
 ota-manifest.json
 ```
 
 Production OTA proof:
 
 ```text
-task: #46
-from: v0.3.5
-to: v0.3.6
-current: /opt/incudal/releases/v0.3.6-20260624173541
-artifact sha256: 99d053b0b523abb44182bd70b0867fccbbb7b4ec6e9e66fca98486983b30506d
+task: #47
+from: v0.3.6
+to: v0.3.7
+version metadata: /opt/incudal/current/version.json reports v0.3.7, gitTag v0.3.7, gitCommit bbf36c931487, deployedAt 2026-06-24T18:04:43.631Z
 result: System update completed successfully
 ```
 
 Post-update checks completed in the update log:
 
 ```text
-OTA download cache cleaned before update
 Prisma migrate deploy: 154 migrations found, no pending migrations
-backend health ready after restart on attempt 2
 scripts/verify-split-host.sh passed
 pnpm verify:production passed with existing accepted warning: PAYMENT_CALLBACK_IP_WHITELIST is empty
 pnpm verify:log-header passed
 OTA download cache cleaned after update
-current release points to /opt/incudal/releases/v0.3.6-20260624173541
+public admin assets contain the restored Benefits admin locale strings
 ```
 
 Public checks after the OTA:
@@ -178,29 +177,20 @@ Public checks after the OTA:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/logs: HTTP 200 app shell
-https://admin.payincus.com/api/logs/risk-definitions without auth: 401
-https://payincus.com/release/version-log.html: contains v0.3.6 and risk-audit wording
-https://payincus.com/en/release/version-log.html: contains v0.3.6 and risk-audit wording
+https://admin.payincus.com/admin/entertainment: HTTP 200 app shell
+https://admin.payincus.com assets: contain restored 福利/Entertainment admin locale text and no longer rely on raw entertainment.admin.* keys
+https://payincus.com/release/version-log.html: contains v0.3.7
+https://payincus.com/en/release/version-log.html: contains v0.3.7
 ```
 
-Local gates run for `v0.3.6`:
+Local gates run for `v0.3.7`:
 
 ```text
-pnpm --filter server test:risk-audit-guards
-pnpm --filter server test:log-query-guards
-pnpm --filter server test:log-sanitizer
-pnpm --filter server test:admin-route-guards
-pnpm --filter server test:payment-provider-secret-redaction
 pnpm --filter server test:frontend-i18n-keys
-pnpm --filter server type-check
-pnpm --filter client type-check
 pnpm --filter client build
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
-pnpm build
-pnpm test
-pnpm test:agent
+split locale dist assertion: admin bundle contains 福利/Entertainment admin text; user bundle does not contain entertainment.admin text/key
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
