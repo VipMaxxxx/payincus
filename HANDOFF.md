@@ -161,18 +161,20 @@ Key tags:
 - `v0.1.6`: admin instance detail loading fix.
 - `v0.1.7`: delivery assurance center.
 - `v0.1.8`: delivery assurance sidebar icon fix.
+- `v0.1.9`: one-click installer pnpm bootstrap fix.
+- `v0.2.0`: one-click installer static asset permission fix.
 
 Latest production proof:
 
-- Operator reported the production upgrade completed after `v0.1.8`.
-- Public post-upgrade proof for `v0.1.8` passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public Chinese and English version-log pages contain `v0.1.8`, public GitHub OTA manifest reports version `v0.1.8` and commit `65dbc9d8aca5`, and a production admin asset scan from `/admin/delivery` scanned 58 text assets and found the delivery-center markers plus the `pulse` icon path for the `交付保障` sidebar icon.
-- Server-side `v0.1.8` symlink/version proof has now been captured. `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.1.8-20260624073309`; `version.json` reports version/tag `v0.1.8`, commit `65dbc9d8aca5`, build time `2026-06-24T07:31:09.066Z`, deployed at `2026-06-24T07:33:17.942Z`, and changelog `Fix delivery nav icon / 修复交付保障导航图标`.
-- Post-OTA public `verify-split-host`, public-only `pnpm verify:production` with `RUN_DB_CHECKS=0`, and `pnpm smoke:agent-release` passed.
+- Production OTA task `#29` updated production from `v0.1.9` to `v0.2.0` and completed successfully.
+- Server-side `v0.2.0` symlink/version proof has been captured. `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.2.0-20260624093816`; `version.json` reports version/tag `v0.2.0`, commit `01731f693610`, build time `2026-06-24T09:36:26.844Z`, deployed at `2026-06-24T09:38:25.047Z`, and changelog `Fix installer static asset permissions / 修复安装器静态资源权限`.
+- Update task `#29` used OTA artifact `incudal-v0.2.0-linux-amd64.tar.gz`, downloaded `89874906` bytes, verified SHA256 `9309600811edb148d3f4eb01c5be009764b9af1c7f6f0e623126535a00a3dfaf`, ran Prisma migrate deploy, switched `/opt/incudal/current`, restarted `incudal-backend`, passed `pnpm verify:production`, passed `pnpm verify:log-header`, and ended with `System update completed successfully`.
+- Public post-OTA proof for `v0.2.0` passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public Chinese and English version-log pages contain `v0.2.0`, public GitHub OTA manifest reports version `v0.2.0` and commit `01731f693610`, and the public raw installer contains the Nginx traversal permission marker plus `chmod 751 "$INSTALL_DIR"`.
 - A redacted server-side `PROOF_SINCE_HOURS=72 pnpm verify:production-proof-snapshot` emitted observational proof for two online hosts, two fresh online Agents, two ZFS storage pools, five running instances, one completed recharge/callback, SMTP/Lsky config presence, zero notification channels/logs, and missing lifecycle actions `instance.start`, `instance.restart`, `instance.recreate`, and `instance.delete`. The SSH session was manually interrupted after JSON output stopped, so treat it as observational evidence rather than a clean command-exit proof.
 - Production `/opt/incudal/current/server/package.json` reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
 - Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and current admin JS assets contain `/admin/plugins`, `插件中心`, and `admin-instance-detail` markers.
-- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin/update API 401 protection, Turnstile missing-token negative controls, docs TLS, `v0.1.8` Chinese/English version logs, public admin bundle marker scan, and public root/API security headers.
+- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin/update API 401 protection, Turnstile missing-token negative controls, docs TLS, `v0.2.0` Chinese/English version logs, public admin bundle marker scan, and public root/API security headers.
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - `v0.1.8` public release asset availability was verified directly. GitHub Actions API polling hit an anonymous rate limit during that check, so the latest fully recorded Actions run IDs in this handoff remain the earlier `v0.1.6` chain.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
@@ -180,12 +182,12 @@ Latest production proof:
 
 Latest release proof:
 
-- `v0.1.8` was tagged from commit `65dbc9d Fix delivery nav icon / 修复交付保障导航图标`.
-- Version-log commit `88bc89d Update version log for v0.1.8 / 更新 v0.1.8 版本日志` is current `payincus/main`.
-- GitHub Release `v0.1.8` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files. Direct release asset checks returned HTTP 200 for manifests and `.sha256` files, and HTTP 206 range responses for both tarballs.
-- Public `ota-manifest.json` reports version `v0.1.8`, commit `65dbc9d8aca5`, two artifacts, and changelog `Fix delivery nav icon / 修复交付保障导航图标`.
-- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.1.8` and the delivery icon fix wording.
-- Production has operator-reported `v0.1.8` upgrade completion, public static proof, and server-side `version.json` proof recorded above.
+- `v0.2.0` was tagged from commit `01731f6 Fix installer static asset permissions / 修复安装器静态资源权限`.
+- Version-log commit `81f0a39 Update version log for v0.2.0 / 更新 v0.2.0 版本日志` is current `payincus/main`.
+- GitHub Release `v0.2.0` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files. Direct release asset checks returned HTTP 200 for manifests and `.sha256` files, and HTTP 206 range responses for both tarballs.
+- Public `ota-manifest.json` reports version `v0.2.0`, commit `01731f693610`, two artifacts, and changelog `Fix installer static asset permissions / 修复安装器静态资源权限`.
+- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.2.0` and the installer static permission fix wording.
+- Production has OTA task `#29` completion, public split/docs proof, and server-side `version.json` proof recorded above.
 
 Storage-pool note:
 
@@ -337,15 +339,13 @@ pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-Recently refreshed public production checks after the operator-reported `v0.1.8` upgrade:
+Recently refreshed public production checks after the `v0.2.0` OTA upgrade:
 
 ```text
 FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=https://pay.payincus.com VERIFY_RETRIES=2 VERIFY_RETRY_DELAY=1 pnpm verify:split:host
-SMOKE_API_BASE_URL=https://pay.payincus.com pnpm smoke:agent-release
-RUN_DB_CHECKS=0 RUN_LIVE_CHECKS=1 NODE_ENV=production PORT=3001 SERVE_STATIC_CLIENT=false VITE_API_BASE_URL=/api TRUST_PROXY=true FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com SITE_URL=https://pay.payincus.com PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false BACKEND_URL=https://pay.payincus.com INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus pnpm verify:production
 ```
 
-Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.1.8-20260624073309`; `version.json` reports `v0.1.8`, commit `65dbc9d8aca5`, build time `2026-06-24T07:31:09.066Z`, and `deployedAt=2026-06-24T07:33:17.942Z`.
+Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.2.0-20260624093816`; `version.json` reports `v0.2.0`, commit `01731f693610`, build time `2026-06-24T09:36:26.844Z`, and `deployedAt=2026-06-24T09:38:25.047Z`. Production OTA task `#29` also ran `pnpm verify:production` and `pnpm verify:log-header` successfully during the update.
 
 Recent live business proof:
 
