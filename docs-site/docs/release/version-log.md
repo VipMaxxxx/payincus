@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `62825b8`
+- 当前 HEAD / Current HEAD: `a721de8`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Add delivery assurance operations workflow / 新增交付保障运营闭环
-- 最新 tag / Latest tag: `v0.2.9`
+- 提交说明 / Commit subject: Add SLA alert center / 新增 SLA 告警中心
+- 最新 tag / Latest tag: `v0.3.0`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.3.0
+
+- 发布提交 / Release commit: `a721de8`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Add SLA alert center / 新增 SLA 告警中心
+
+### 新增能力 / New Capabilities
+
+- Add SLA alert center / 新增 SLA 告警中心 `a721de8`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff for v0.2.9 OTA proof / 更新 v0.2.9 OTA 证明交接 `495cf5e`
+- Update version log for v0.2.9 / 更新 v0.2.9 版本日志 `9885685`
 
 ## v0.2.9
 
