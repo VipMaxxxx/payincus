@@ -952,10 +952,55 @@ model Host {
   instanceAuditIgnores   InstanceAuditIgnore[]
   instanceAuditScans     InstanceAuditScan[]
   instanceAuditActions   InstanceAuditAction[]
+  costProfile            HostCostProfile?
+  capacitySnapshots      CapacitySnapshot[]
 
   @@unique([userId, name]) // 同一用户下名称唯一
   @@index([userId])
   @@map("hosts")
+}
+
+model HostCostProfile {
+  id                 Int      @id @default(autoincrement())
+  hostId             Int      @unique @map("host_id")
+  monthlyCost        Decimal  @default(0) @map("monthly_cost") @db.Decimal(10, 2)
+  ipv4MonthlyCost    Decimal  @default(0) @map("ipv4_monthly_cost") @db.Decimal(10, 2)
+  trafficTbCost      Decimal  @default(0) @map("traffic_tb_cost") @db.Decimal(10, 2)
+  currency           String   @default("CNY")
+  notes              String?
+  updatedByUserId    Int?     @map("updated_by_user_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  host Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([updatedByUserId])
+  @@map("host_cost_profiles")
+}
+
+model CapacitySnapshot {
+  id               Int      @id @default(autoincrement())
+  hostId           Int      @map("host_id")
+  capturedDate     DateTime @map("captured_date") @db.Date
+  cpuTotal         Int      @map("cpu_total")
+  cpuUsed          Int      @map("cpu_used")
+  memoryTotal      Int      @map("memory_total")
+  memoryUsed       Int      @map("memory_used")
+  diskTotal        Int      @map("disk_total")
+  diskUsed         Int      @map("disk_used")
+  natPortTotal     Int      @map("nat_port_total")
+  natPortUsed      Int      @map("nat_port_used")
+  instanceCount    Int      @map("instance_count")
+  trafficUsedBytes BigInt   @default(0) @map("traffic_used_bytes")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  host Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@unique([hostId, capturedDate])
+  @@index([capturedDate])
+  @@index([hostId, capturedDate])
+  @@map("capacity_snapshots")
 }
 
 model HostAgent {

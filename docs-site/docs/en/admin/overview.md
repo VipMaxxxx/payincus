@@ -29,6 +29,7 @@ https://admin.example.com
 | Tickets & Customer Success | `/admin/tickets` | Handle support tickets with user context, SLA state, linked objects, internal notes, handling timeline and safe support shortcuts. |
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
+| Capacity & Cost | `/admin/capacity-cost` | Host sellable inventory, cost profiles, plan margin estimates, capacity alerts and 7/30-day trends. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
 | Logs and Audit | `/admin/logs` | Audit logs and system operation records with risk levels, approval or verification hints, and redacted CSV export. |
 
@@ -55,6 +56,18 @@ The top of `/admin/statistics` now gives administrators a commercial operations 
 - Risk alerts: missing active payment provider, SMTP disabled, missing notification channel, offline host or Agent, failed delivery, payment exception, OTA failure and OTA disk-space error.
 
 The operations overview is returned only by the admin statistics API and is not exposed through the user API.
+
+## Capacity and Cost
+
+`/admin/capacity-cost` consolidates resource headroom and cost assumptions for operators:
+
+- Summarizes Host CPU, memory, disk, NAT ports, instance count and traffic usage as sellable inventory.
+- Lets administrators maintain monthly host cost, monthly IPv4 cost, traffic cost per TB and notes per Host.
+- Estimates plan monthly margin from plan price and Host cost assumptions to highlight low-margin or negative-margin plans.
+- Capacity alerts are operational warnings only. They do not auto-disable sales, modify plans, affect instance creation or change billing.
+- Host pressure alerts are synced into SLA alert events and deduplicated with stable fingerprints.
+- Daily Host capacity snapshots are stored for 7/30-day trends and later operations review.
+- User package, instance and purchase APIs do not return Host cost, margin or internal capacity fields.
 
 ## Order and Payment Operations
 

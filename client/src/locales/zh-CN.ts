@@ -243,6 +243,7 @@ export default {
         myHostDetail: '节点详情',
         myPackageCreate: '创建套餐',
         myPackageEdit: '编辑套餐',
+        capacityCost: '容量与成本',
         telegramSettings: 'Telegram 设置',
         adminCreateInstance: '管理员创建实例',
     },

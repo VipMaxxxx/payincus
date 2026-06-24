@@ -12,6 +12,7 @@ export const navMenuItems: MenuItem[] = [
   { divider: true, label: 'nav.resources' },
   { name: 'admin-my-hosts', path: '/admin/resources/hosts', icon: 'database', label: 'nav.hosts' },
   { name: 'admin-my-packages', path: '/admin/resources/packages', icon: 'package', label: 'nav.packages' },
+  { name: 'admin-capacity-cost', path: '/admin/capacity-cost', icon: 'chart', label: 'nav.capacityCost' },
   { name: 'admin-images', path: '/admin/images', icon: 'image', label: 'nav.images' },
   { name: 'admin-instance-create', path: '/admin/instances/create', icon: 'gift', label: 'nav.create' },
   { name: 'admin-mail', path: '/admin/mail', icon: 'mail', label: 'nav.mail' },

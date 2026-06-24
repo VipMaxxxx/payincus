@@ -6,7 +6,6 @@ import api from '@/api'
 import { useToast } from '@/stores/toast'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import { buildApiUrl } from '@/utils/api-url'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
@@ -24,8 +23,6 @@ import type {
   TicketCategory,
   TicketObjectLinkType,
   TicketSupportContext,
-  TicketAiDraftResponse,
-  TicketAiReplyResponse,
   InstanceWithDetails
 } from '@/types/api'
 
@@ -397,42 +394,11 @@ async function loadSupportContext(ticketId = selectedTicket.value?.id): Promise<
   }
 }
 
-async function postTicketAiAction<T>(ticketId: number, action: 'draft' | 'reply'): Promise<T> {
-  const token = authStore.token || localStorage.getItem('token')
-  const response = await fetch(buildApiUrl(`/tickets/${ticketId}/ai/${action}`), {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    }
-  })
-
-  let payload: any = null
-  try {
-    payload = await response.json()
-  } catch {
-    payload = null
-  }
-
-  if (!response.ok) {
-    throw {
-      message: payload?.error || payload?.message || t('common.error'),
-      code: payload?.code || null,
-      details: payload?.details || null
-    }
-  }
-
-  return payload as T
-}
-
 async function generateAiDraft(): Promise<void> {
   if (!authStore.isAdmin || !selectedTicket.value) return
   aiDraftLoading.value = true
   try {
-    const result = typeof api.tickets.generateAiDraft === 'function'
-      ? await api.tickets.generateAiDraft(selectedTicket.value.id)
-      : await postTicketAiAction<TicketAiDraftResponse>(selectedTicket.value.id, 'draft')
+    const result = await api.tickets.generateAiDraft(selectedTicket.value.id)
     replyContent.value = result.draft
     toast.success(t('tickets.support.aiDraftReady'))
     await nextTick()
@@ -462,9 +428,7 @@ async function sendAiReply(): Promise<void> {
 
   aiReplyLoading.value = true
   try {
-    const result = typeof api.tickets.sendAiReply === 'function'
-      ? await api.tickets.sendAiReply(selectedTicket.value.id)
-      : await postTicketAiAction<TicketAiReplyResponse>(selectedTicket.value.id, 'reply')
+    const result = await api.tickets.sendAiReply(selectedTicket.value.id)
     messages.value.push(result.data)
     messagesTotal.value++
     await ensureMessageAttachmentUrls([result.data])

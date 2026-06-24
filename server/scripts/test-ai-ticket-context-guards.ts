@@ -262,11 +262,10 @@ assert.ok(
     ticketsViewSource.includes('aiReplyLoading') &&
     ticketsViewSource.includes('generateAiDraft') &&
     ticketsViewSource.includes('sendAiReply') &&
-    ticketsViewSource.includes('postTicketAiAction<TicketAiDraftResponse>') &&
-    ticketsViewSource.includes('postTicketAiAction<TicketAiReplyResponse>') &&
-    ticketsViewSource.includes("typeof api.tickets.generateAiDraft === 'function'") &&
-    ticketsViewSource.includes("typeof api.tickets.sendAiReply === 'function'") &&
-    ticketsViewSource.includes("buildApiUrl(`/tickets/${ticketId}/ai/${action}`)") &&
+    ticketsViewSource.includes('api.tickets.generateAiDraft(selectedTicket.value.id)') &&
+    ticketsViewSource.includes('api.tickets.sendAiReply(selectedTicket.value.id)') &&
+    !ticketsViewSource.includes('postTicketAiAction') &&
+    !ticketsViewSource.includes("buildApiUrl(`/tickets/${ticketId}/ai/${action}`)") &&
     ticketsViewSource.includes("code === 'AI_TICKET_REPLY_HANDOFF_REQUIRED'") &&
     ticketsViewSource.includes('replyContent.value = result.draft') &&
     ticketsViewSource.includes('ticket-reply-textarea') &&

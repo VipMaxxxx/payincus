@@ -76,6 +76,7 @@ import adminStatisticsRoutes from './routes/admin-statistics.js'
 import adminHostingRoutes from './routes/admin-hosting.js'
 import adminDeliveryRoutes from './routes/admin-delivery.js'
 import adminSlaAlertsRoutes from './routes/admin-sla-alerts.js'
+import adminCapacityCostRoutes from './routes/admin-capacity-cost.js'
 import affRoutes from './routes/aff.js'
 import entertainmentRoutes from './routes/entertainment.js'
 import adminEntertainmentRoutes from './routes/admin-entertainment.js'
@@ -490,6 +491,7 @@ await fastify.register(adminStatisticsRoutes)
 await fastify.register(adminHostingRoutes)
 await fastify.register(adminDeliveryRoutes, { prefix: '/api/admin/delivery' })
 await fastify.register(adminSlaAlertsRoutes, { prefix: '/api/admin/sla-alerts' })
+await fastify.register(adminCapacityCostRoutes, { prefix: '/api/admin/capacity-cost' })
 await fastify.register(affRoutes, { prefix: '/api/aff' })
 await fastify.register(entertainmentRoutes, { prefix: '/api/entertainment' })
 await fastify.register(adminEntertainmentRoutes, { prefix: '/api/admin/entertainment' })

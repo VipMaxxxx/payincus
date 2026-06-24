@@ -2884,6 +2884,110 @@ const api = {
       }
     }> => http.get('/admin/statistics/overview'),
 
+    getCapacityCostOverview: (): Promise<{
+      totals: {
+        cpuTotal: number
+        cpuUsed: number
+        cpuAvailable: number
+        cpuUsageRatio: number
+        memoryTotal: number
+        memoryUsed: number
+        memoryAvailable: number
+        memoryUsageRatio: number
+        diskTotal: number
+        diskUsed: number
+        diskAvailable: number
+        diskUsageRatio: number
+        natPortTotal: number
+        natPortUsed: number
+        natPortAvailable: number
+        natPortUsageRatio: number
+        instanceCount: number
+        monthlyCost: number
+      }
+      hosts: Array<{
+        id: number
+        name: string
+        location: string | null
+        countryCode: string
+        status: string
+        instanceType: string
+        capacity: {
+          cpuTotal: number
+          cpuUsed: number
+          cpuAvailable: number
+          cpuUsageRatio: number
+          memoryTotal: number
+          memoryUsed: number
+          memoryAvailable: number
+          memoryUsageRatio: number
+          diskTotal: number
+          diskUsed: number
+          diskAvailable: number
+          diskUsageRatio: number
+          natPortTotal: number
+          natPortUsed: number
+          natPortAvailable: number
+          natPortUsageRatio: number
+          instanceCount: number
+          trafficUsedBytes: string
+        }
+        costProfile: {
+          monthlyCost: number
+          ipv4MonthlyCost: number
+          trafficTbCost: number
+          currency: string
+          notes: string | null
+          updatedAt: string | null
+        }
+      }>
+      plans: Array<{
+        packageId: number
+        packageName: string
+        planId: number
+        planName: string
+        price: number
+        billingCycle: number
+        revenueMonthly: number
+        estimatedCostMonthly: number
+        estimatedMarginMonthly: number
+        marginRatio: number
+        availableSlots: number
+        soldCount: number
+      }>
+      alerts: Array<{
+        key: string
+        severity: 'warning' | 'critical'
+        objectType: 'host' | 'package_plan'
+        objectId: number
+        title: string
+        message: string
+      }>
+      trends: Array<{
+        label: string
+        instanceCount: number
+        cpuUsed: number
+        memoryUsed: number
+        diskUsed: number
+        trafficUsedBytes: string
+      }>
+    }> => http.get('/admin/capacity-cost/overview'),
+
+    updateHostCostProfile: (hostId: number, data: {
+      monthlyCost?: number
+      ipv4MonthlyCost?: number
+      trafficTbCost?: number
+      notes?: string | null
+    }): Promise<{
+      hostId: number
+      monthlyCost: number
+      ipv4MonthlyCost: number
+      trafficTbCost: number
+      currency: string
+      notes: string | null
+      updatedAt: string
+    }> => http.patch(`/admin/capacity-cost/hosts/${hostId}/cost-profile`, data),
+
     // ==================== VIP 等级规则 ====================
 
     getVipLevelRules: (type: VipRuleType): Promise<VipLevelRulesResponse> =>

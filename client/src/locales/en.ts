@@ -243,6 +243,7 @@ export default {
         myHostDetail: 'Host Details',
         myPackageCreate: 'Create Package',
         myPackageEdit: 'Edit Package',
+        capacityCost: 'Capacity & Cost',
         telegramSettings: 'Telegram Settings',
         adminCreateInstance: 'Admin Create Instance',
     },

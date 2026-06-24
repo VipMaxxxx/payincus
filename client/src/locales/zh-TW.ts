@@ -251,6 +251,7 @@ export default {
         myHostDetail: '節點詳情',
         myPackageCreate: '建立方案',
         myPackageEdit: '編輯方案',
+        capacityCost: '容量與成本',
         telegramSettings: 'Telegram 設定',
         adminCreateInstance: '管理員建立實例',
     },

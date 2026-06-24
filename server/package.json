@@ -46,6 +46,7 @@
     "test:backup-task-race-guards": "node --import tsx scripts/test-backup-task-race-guards.ts",
     "test:batch-config-route-guards": "node --import tsx scripts/test-batch-config-route-guards.ts",
     "test:commercial-operations-overview-guards": "node --import tsx scripts/test-commercial-operations-overview-guards.ts",
+    "test:capacity-cost-guards": "node --import tsx scripts/test-capacity-cost-guards.ts",
     "test:content-route-guards": "node --import tsx scripts/test-content-route-guards.ts",
     "test:cookie-config": "node --import tsx scripts/test-cookie-config.ts",
     "test:cors-origin-config": "node --import tsx scripts/test-cors-origin-config.ts",
