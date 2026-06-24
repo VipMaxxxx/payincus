@@ -210,6 +210,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.billing', title: '计费' }
   },
   {
+    path: '/admin/orders',
+    name: 'admin-orders',
+    component: () => import('@/views/admin/OrdersView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.orders', title: '订单' }
+  },
+  {
     path: '/admin/aff',
     name: 'admin-aff',
     redirect: { path: '/admin/billing', query: { tab: 'affConversions' } },
@@ -404,6 +410,7 @@ router.isReady().then(() => {
     // 预加载核心页面
     import('@/views/admin/UsersView.vue')
     import('@/views/admin/BillingView.vue')
+    import('@/views/admin/OrdersView.vue')
     import('@/views/admin/SystemConfigView.vue')
     import('@/views/admin/HostingView.vue')
   }, 1000)

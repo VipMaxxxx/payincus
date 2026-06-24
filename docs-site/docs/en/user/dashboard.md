@@ -25,6 +25,7 @@ https://panel.example.com
 | Instance detail | `/instances/:id` | Start, stop, reboot, delete, network and terminal. |
 | Terminal | `/terminal` | WebSocket terminal through `/api/ws`. |
 | Wallet | `/wallet` | Recharge, balance, orders and callback results. |
+| Orders | `/orders` | Unified read-only order center for recharge orders and instance billing records, including purchases, renewals, upgrades, refunds and transfer fees. |
 | Invites | `/invites` | Referral relationships and rewards. |
 | Tickets | `/tickets` | Create tickets, read replies and upload attachments. |
 | Inbox | `/inbox` | System notifications and delivery state. |

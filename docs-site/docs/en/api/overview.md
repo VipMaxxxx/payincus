@@ -25,6 +25,12 @@ wss://admin.example.com/api/ws/...
 - Agent APIs require signature and replay protection.
 - Payment callbacks require signature checks and callback source controls.
 
+## Order APIs
+
+- User portal: `GET /api/orders` and `GET /api/orders/:type/:id`, scoped to the current regular user.
+- Admin console: `GET /api/admin/orders` and `GET /api/admin/orders/:type/:id`, available only to administrators.
+- The order center aggregates `recharge_records` and `instance_billing_records` and does not return raw callback payloads, provider config snapshots or other sensitive fields.
+
 ## Boundary Rule
 
 Frontend separation does not replace backend authorization. Every route must still enforce identity, role and resource ownership on the backend.

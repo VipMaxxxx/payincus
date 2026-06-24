@@ -207,6 +207,7 @@ export default {
         inbox: '通知',
         settings: '設定',
         wallet: '錢包',
+        orders: '訂單',
         invites: '邀請',
         help: '說明',
         admin: '管理',

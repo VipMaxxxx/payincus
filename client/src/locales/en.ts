@@ -199,6 +199,7 @@ export default {
         inbox: 'Notifications',
         settings: 'Settings',
         wallet: 'Wallet',
+        orders: 'Orders',
         invites: 'Invites',
         help: 'Help',
         admin: 'Admin',

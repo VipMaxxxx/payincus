@@ -3621,6 +3621,43 @@ const api = {
   },
 
   // 域名邮箱
+  orders: {
+    list: (params?: { page?: number; pageSize?: number; type?: string; status?: string; userId?: number }): Promise<{
+      orders: Array<{
+        id: string
+        sourceType: 'recharge' | 'instance_billing'
+        sourceId: number
+        orderNo: string
+        title: string
+        status: string
+        rawStatus: string
+        amount: number
+        actualAmount: number | null
+        fee: number
+        userId: number
+        user: { id: number; username: string; email: string } | null
+        provider: { id: number; name: string; type: string } | null
+        paymentMethod: string | null
+        tradeNo: string | null
+        failReason: string | null
+        instance: any | null
+        months: number | null
+        periodStart: string | null
+        periodEnd: string | null
+        remark: string | null
+        createdAt: string
+        completedAt: string | null
+        expiredAt: string | null
+      }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/orders', { params }),
+
+    detail: (sourceType: 'recharge' | 'instance_billing', sourceId: number): Promise<{ order: any }> =>
+      http.get(`/admin/orders/${sourceType}/${sourceId}`)
+  },
+
   mail: {
     // 获取所有邮箱源
     adminGetSources: (): Promise<{

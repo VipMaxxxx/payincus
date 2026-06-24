@@ -1,0 +1,44 @@
+import { strict as assert } from 'assert'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
+
+const root = resolve(new URL('../..', import.meta.url).pathname)
+const ordersRoute = readFileSync(resolve(root, 'server/src/routes/orders.ts'), 'utf8')
+const app = readFileSync(resolve(root, 'server/src/app.ts'), 'utf8')
+const userRouter = readFileSync(resolve(root, 'client/src/router/user.ts'), 'utf8')
+const adminRouter = readFileSync(resolve(root, 'client/src/router/admin.ts'), 'utf8')
+const userNav = readFileSync(resolve(root, 'client/src/config/side-nav-items-user.ts'), 'utf8')
+const adminNav = readFileSync(resolve(root, 'client/src/config/side-nav-items-admin.ts'), 'utf8')
+const userApi = readFileSync(resolve(root, 'client/src/api/index.ts'), 'utf8')
+const adminApi = readFileSync(resolve(root, 'client/src/api/admin.ts'), 'utf8')
+
+assert.ok(app.includes("import orderRoutes from './routes/orders.js'"), 'app must import order routes')
+assert.ok(app.includes('await fastify.register(orderRoutes)'), 'app must register order routes')
+
+assert.ok(ordersRoute.includes("'/api/orders'"), 'user order list API route missing')
+assert.ok(ordersRoute.includes("'/api/orders/:type/:id'"), 'user order detail API route missing')
+assert.ok(ordersRoute.includes("'/api/admin/orders'"), 'admin order list API route missing')
+assert.ok(ordersRoute.includes("'/api/admin/orders/:type/:id'"), 'admin order detail API route missing')
+assert.ok(ordersRoute.includes('preHandler: [fastify.authenticateUser]'), 'user order routes must require user auth')
+assert.ok(ordersRoute.includes('preHandler: [fastify.authenticateAdmin]'), 'admin order routes must require admin auth')
+
+assert.ok(ordersRoute.includes('prisma.rechargeRecord.findMany'), 'orders must aggregate recharge records')
+assert.ok(ordersRoute.includes('prisma.instanceBillingRecord.findMany'), 'orders must aggregate instance billing records')
+assert.ok(ordersRoute.includes('where: { id, userId: request.user.id }'), 'user detail routes must scope records by owner')
+assert.ok(ordersRoute.includes('parsePageSize') && ordersRoute.includes('MAX_PAGE_SIZE = 100'), 'order list must clamp page size')
+assert.ok(!ordersRoute.includes('callbackData'), 'order API must not expose raw payment callback payloads')
+assert.ok(!ordersRoute.includes('providerConfigSnapshot'), 'order API must not expose provider config snapshots')
+
+assert.ok(userRouter.includes("path: '/orders'"), 'user router must expose /orders')
+assert.ok(userRouter.includes("component: () => import('@/views/OrdersView.vue')"), 'user router must lazy-load order page')
+assert.ok(adminRouter.includes("path: '/admin/orders'"), 'admin router must expose /admin/orders')
+assert.ok(adminRouter.includes("component: () => import('@/views/admin/OrdersView.vue')"), 'admin router must lazy-load admin order page')
+
+assert.ok(userNav.includes("path: '/orders'"), 'user sidebar must link to orders')
+assert.ok(adminNav.includes("path: '/admin/orders'"), 'admin sidebar must link to orders')
+assert.ok(userApi.includes("http.get('/orders'"), 'user API wrapper must include order list')
+assert.ok(userApi.includes("http.get(`/orders/${sourceType}/${sourceId}`)"), 'user API wrapper must include order detail')
+assert.ok(adminApi.includes("http.get('/admin/orders'"), 'admin API wrapper must include order list')
+assert.ok(adminApi.includes("http.get(`/admin/orders/${sourceType}/${sourceId}`)"), 'admin API wrapper must include order detail')
+
+console.log('order center guards passed')
