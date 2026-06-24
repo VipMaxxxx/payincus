@@ -65,6 +65,7 @@ import type {
   TicketObjectLinkType,
   TicketSupportContext,
   TicketInternalNote,
+  TicketAiStatusResponse,
   CreateTicketRequest,
   PaginatedTickets,
   PaginatedTicketMessages,
@@ -2599,6 +2600,10 @@ const api = {
     // 获取后台客服工作台上下文（仅管理员）
     getSupportContext: (id: number): Promise<TicketSupportContext> =>
       http.get(`/tickets/${id}/support-context`),
+
+    // 获取 AI 工单插件安全状态（仅管理员，不返回模型地址或密钥）
+    getAiStatus: (): Promise<TicketAiStatusResponse> =>
+      http.get('/tickets/ai/status'),
 
     // 创建内部备注（仅管理员）
     createInternalNote: (id: number, content: string): Promise<{ note: TicketInternalNote }> =>

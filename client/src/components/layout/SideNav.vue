@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -8,7 +8,9 @@ import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
 import { isAdminEntry, navMenuItems, type MenuItem } from '@/config/side-nav-items'
 import { dashboardPath } from '@/utils/app-paths'
+import { buildApiUrl } from '@/utils/api-url'
 import PluginSlot from '@/components/plugins/PluginSlot.vue'
+import type { PluginRecord } from '@/types/api'
 
 const { t } = useI18n()
 
@@ -41,6 +43,7 @@ const footerTelegramLink = computed(() => {
   return link || null
 })
 
+const adminPluginMenuItems = ref<MenuItem[]>([])
 const hiddenExpandMenuNames = new Set(['my-hosts', 'my-packages', 'hosting-wallet'])
 const hiddenWhenTicketDisabledMenuNames = new Set(['tickets'])
 const hiddenWhenMailUnavailableMenuNames = new Set(['mail'])
@@ -51,6 +54,16 @@ const shouldHideHostingFeature = computed(() =>
 
 const menuItems = computed<MenuItem[]>(() => {
   let baseItems = [...navMenuItems]
+
+  if (isAdminEntry && adminPluginMenuItems.value.length > 0) {
+    const pluginCenterIndex = baseItems.findIndex(item => item.name === 'admin-plugins')
+    const insertIndex = pluginCenterIndex >= 0 ? pluginCenterIndex + 1 : baseItems.length
+    baseItems = [
+      ...baseItems.slice(0, insertIndex),
+      ...adminPluginMenuItems.value,
+      ...baseItems.slice(insertIndex)
+    ]
+  }
 
   if (!isAdminEntry && !configStore.ticketEnabled) {
     baseItems = baseItems.filter(item => !item.name || !hiddenWhenTicketDisabledMenuNames.has(item.name))
@@ -75,6 +88,8 @@ const menuItems = computed<MenuItem[]>(() => {
 
 function isActive(item: MenuItem): boolean {
   if (item.name === 'dashboard') return route.path === navDashboardPath
+  if (item.name === 'admin-plugins') return route.path === '/admin/plugins'
+  if (item.name?.startsWith('admin-plugin-settings-')) return route.path === item.path
   if (!item.path) return false
   return route.path.startsWith(item.path)
 }
@@ -85,6 +100,61 @@ function handleLinkClick() {
     emit('closeMobile')
   }
 }
+
+function displayPluginName(plugin: PluginRecord): string {
+  if (plugin.pluginId === 'com.payincus.ai-ticket-agent') return 'AI 工单助手'
+  return plugin.latestVersion?.manifest.name || plugin.name
+}
+
+function hasAdminSettingsPage(plugin: PluginRecord): boolean {
+  return Boolean(plugin.latestVersion?.manifest.entrypoints.adminPages?.some(page => page.slot === 'admin.plugins.settings'))
+}
+
+async function loadAdminPluginMenuItems(): Promise<void> {
+  if (!isAdminEntry || !authStore.isAuthenticated || !authStore.isAdmin) {
+    adminPluginMenuItems.value = []
+    return
+  }
+
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(buildApiUrl('/admin/plugins'), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json() as { plugins?: PluginRecord[] }
+    adminPluginMenuItems.value = (data.plugins || [])
+      .filter(plugin => plugin.enabled && plugin.status === 'enabled' && hasAdminSettingsPage(plugin))
+      .map(plugin => ({
+        name: `admin-plugin-settings-${plugin.pluginId}`,
+        path: `/admin/plugins/${encodeURIComponent(plugin.pluginId)}/settings`,
+        icon: 'puzzle',
+        labelText: displayPluginName(plugin)
+      }))
+  } catch {
+    adminPluginMenuItems.value = []
+  }
+}
+
+function handlePluginNavRefresh(): void {
+  void loadAdminPluginMenuItems()
+}
+
+watch(
+  () => [authStore.isAuthenticated, authStore.isAdmin] as const,
+  () => {
+    void loadAdminPluginMenuItems()
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  window.addEventListener('payincus:admin-plugin-nav-refresh', handlePluginNavRefresh)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('payincus:admin-plugin-nav-refresh', handlePluginNavRefresh)
+})
 </script>
 
 <template>
@@ -291,7 +361,7 @@ function handleLinkClick() {
               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
-          <span v-if="!collapsed || mobileOpen" class="truncate">{{ t(item.label || '') }}</span>
+          <span v-if="!collapsed || mobileOpen" class="truncate">{{ item.labelText || t(item.label || '') }}</span>
         </RouterLink>
       </template>
       <PluginSlot v-if="!isAdminEntry" slot-name="user.sidebar.extra" :collapsed="collapsed && !mobileOpen" />
