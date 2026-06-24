@@ -51,6 +51,14 @@ POST /api/tickets/:id/ai/reply
 
 Both endpoints require an administrator session, the enabled `com.payincus.ai-ticket-agent` plugin, and explicit plugin permissions. The context is limited to a redacted summary for the ticket owner only. It does not expose internal admin notes, payment callback payloads, secrets, root passwords, or other users' data.
 
+The plugin settings page also reads a safe status endpoint:
+
+```text
+GET /api/tickets/ai/status
+```
+
+This endpoint only returns operational flags such as whether the plugin is enabled, current mode, whether the model is configured, permission availability, auto-reply categories, confidence threshold, and limit settings. It does not return the model endpoint, API key, backend paths, raw ticket content, or user data.
+
 ## Security Boundary
 
 - Only super administrators can install, enable, disable, or uninstall plugins.

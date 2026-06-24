@@ -9,6 +9,7 @@ const appSource = readFileSync(resolve(process.cwd(), 'src/app.ts'), 'utf8')
 const clientApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/index.ts'), 'utf8')
 const ticketsViewSource = readFileSync(resolve(process.cwd(), '../client/src/views/TicketsView.vue'), 'utf8')
 const clientTypesSource = readFileSync(resolve(process.cwd(), '../client/src/types/api.ts'), 'utf8')
+const pluginSettingsSource = readFileSync(resolve(process.cwd(), '../plugin-templates/ai-ticket-agent-plugin/dist/admin/settings.html'), 'utf8')
 
 assert.ok(
     serviceSource.includes("AI_TICKET_AGENT_PLUGIN_ID = 'com.payincus.ai-ticket-agent'") &&
@@ -41,6 +42,19 @@ assert.ok(
   'AI ticket draft endpoint must be plugin-gated, safety-aware and keep audit logic in the service'
 )
 
+assert.ok(
+  routeSource.includes("fastify.get('/ai/status'") &&
+    routeSource.includes('onRequest: [fastify.authenticate, fastify.requireAdmin]') &&
+    routeSource.includes('getAiTicketAutomationStatus()') &&
+    routeSource.includes('modelConfigured: automation.modelConfigured') &&
+    routeSource.includes('confidenceThreshold: automation.confidenceThreshold') &&
+    routeSource.includes('autoReplyActive') &&
+    routeSource.includes("'official_system_tickets_only'") &&
+    !routeSource.slice(routeSource.indexOf("fastify.get('/ai/status'"), routeSource.indexOf('获取工单详情')).includes('apiBaseUrl') &&
+    !routeSource.slice(routeSource.indexOf("fastify.get('/ai/status'"), routeSource.indexOf('获取工单详情')).includes('apiKey'),
+  'AI ticket status endpoint must be admin-only, safe, automation-aware, and must not expose model endpoint or API key'
+)
+
 const draftRouteIndex = routeSource.indexOf("}>('/:id/ai/draft'")
 const nextRouteIndex = routeSource.indexOf('由 AI 工单插件生成并发送一条客服回复', draftRouteIndex)
 assert.notEqual(draftRouteIndex, -1, 'AI draft route not found')
@@ -61,7 +75,9 @@ assert.ok(
     routeSource.includes('auditAiTicketReply') &&
     routeSource.includes("AI_TICKET_AGENT_REPLY_MODE_DISABLED") &&
     routeSource.includes("AI_TICKET_REPLY_HANDOFF_REQUIRED") &&
-    routeSource.includes("code: 'AI_TICKET_REPLY_BLOCKED'"),
+    routeSource.includes("code: 'AI_TICKET_REPLY_BLOCKED'") &&
+    routeSource.includes('confidence: result.confidence') &&
+    routeSource.includes('AI_TICKET_MODEL_DECISION_INVALID'),
   'AI reply endpoint must require the separate reply permission, mode gate, safety checks and audit logging'
 )
 
@@ -185,8 +201,22 @@ assert.ok(
 assert.ok(
   serviceSource.includes('export async function getAiTicketAutomationStatus') &&
     serviceSource.includes('mode: config.mode') &&
-    serviceSource.includes('autoReplyCategories: config.autoReplyCategories'),
+    serviceSource.includes('modelConfigured: Boolean(config.apiBaseUrl && config.apiKey)') &&
+    serviceSource.includes('autoReplyCategories: config.autoReplyCategories') &&
+    serviceSource.includes('confidenceThreshold: config.confidenceThreshold') &&
+    serviceSource.includes('dailyAutoReplyLimit: config.dailyAutoReplyLimit'),
   'AI ticket service must expose safe automation status without exposing model secrets'
+)
+
+assert.ok(
+  pluginSettingsSource.includes('/api/tickets/ai/status') &&
+    pluginSettingsSource.includes("window.localStorage.getItem('token')") &&
+    pluginSettingsSource.includes('function escapeHtml') &&
+    pluginSettingsSource.includes('${escapeHtml(value)}') &&
+    pluginSettingsSource.includes('状态接口不会返回模型地址、密钥、后台路径或用户数据') &&
+    pluginSettingsSource.includes('自动接管激活') &&
+    pluginSettingsSource.includes('置信度阈值'),
+  'AI ticket plugin settings page must show safe operational status without exposing secrets'
 )
 
 assert.ok(
@@ -217,6 +247,8 @@ assert.ok(
 assert.ok(
   clientTypesSource.includes('export interface TicketAiDraftResponse') &&
     clientTypesSource.includes('export interface TicketAiReplyResponse') &&
+    clientTypesSource.includes('confidence: number') &&
+    clientTypesSource.includes('confidenceThreshold: number') &&
     clientApiSource.includes('generateAiDraft') &&
     clientApiSource.includes("http.post(`/tickets/${id}/ai/draft`, {}, { timeout: TIMEOUT.MEDIUM })") &&
     clientApiSource.includes('sendAiReply') &&

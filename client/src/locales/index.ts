@@ -13,6 +13,16 @@ const supportedLocales: { code: Locale; name: string }[] = [
     { code: 'en', name: 'English' },
 ]
 
+function resolveMessageFallback(source: unknown, key: string): string | undefined {
+    let current: unknown = source
+    for (const part of key.split('.')) {
+        if (!current || typeof current !== 'object' || !(part in current)) return undefined
+        current = (current as Record<string, unknown>)[part]
+    }
+
+    return typeof current === 'string' ? current : undefined
+}
+
 // 檢測瀏覽器語言
 function detectBrowserLocale(): Locale {
     const browserLang = navigator.language || (navigator as { userLanguage?: string }).userLanguage || ''
@@ -47,6 +57,7 @@ const i18n = createI18n({
     legacy: false, // 使用 Composition API 模式
     locale: getInitialLocale(),
     fallbackLocale: 'en',
+    missing: (_locale, key) => resolveMessageFallback(zhCN, key),
     messages: {
         'zh-CN': zhCN,
         'zh-TW': zhTW,

@@ -2091,6 +2091,8 @@ export interface TicketAiReplyResponse {
   message: string
   data: TicketMessage
   model: string
+  confidence: number
+  confidenceThreshold: number
   safety: {
     passed: boolean
     blockedReasons: string[]
