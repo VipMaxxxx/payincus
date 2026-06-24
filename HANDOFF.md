@@ -166,19 +166,21 @@ Key tags:
 - `v0.2.1`: one-click installer initial admin email support.
 - `v0.2.2`: unified order center.
 - `v0.2.3`: order exception handling and manual balance adjustment from admin order detail.
+- `v0.2.4`: balance adjustment approval flow.
 
 Latest production proof:
 
-- Production OTA task `#32` updated production from `v0.2.2` to `v0.2.3` and completed successfully.
-- Server-side `v0.2.3` symlink/version proof has been captured. `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.2.3-20260624111838`; `version.json` reports version/tag `v0.2.3`, commit `21a678cb4d4f`, deployed at `2026-06-24T11:18:46.473Z`, and changelog `Add order exception handling / 新增订单异常处理`.
-- Update task `#32` used OTA artifact `incudal-v0.2.3-linux-amd64.tar.gz`, downloaded `89892971` bytes, verified SHA256 `54cc2f9eca40033d619844abe4c6a2569815292ed58e3152f4ef1408b4ba6e2c`, ran Prisma migrate deploy with no pending migrations, switched `/opt/incudal/current`, restarted `incudal-backend`, passed `verify-split-host`, passed `pnpm verify:production`, passed `pnpm verify:log-header`, and ended with `System update completed successfully`.
-- Public post-OTA proof for `v0.2.3` passed: `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned HTTP 200, anonymous `/api/orders` and `/api/admin/orders` returned HTTP 401, `https://admin.payincus.com/admin/orders` returned HTTP 200, public Chinese and English version-log pages contain `v0.2.3`, public GitHub OTA manifest reports version `v0.2.3` and commit `21a678cb4d4f`, and the public GitHub Release exposes amd64/arm64 tarballs, `.sha256` files, and OTA manifests.
-- The production admin bundle contains the new order-operation markers `充值订单处理`, `人工调账`, `手动完成并入账`, and `确认调账`.
+- Production OTA task `#35` updated production from `v0.2.3` to `v0.2.4`, ended with status `success`, and switched `/opt/incudal/current` to `/opt/incudal/releases/v0.2.4-20260624115836`.
+- Server-side `v0.2.4` symlink/version proof was captured during OTA. `version.json` reported version/tag `v0.2.4`, commit `0eb2178f76d4`, deployed at `2026-06-24T11:58:42.874Z`, and changelog `Add balance adjustment approval / 新增调账审批流`.
+- Update task `#35` used OTA artifact `incudal-v0.2.4-linux-amd64.tar.gz`, downloaded `89919195` bytes, verified SHA256 `6a4f9551fe3b5abde60bded0e672f1c1a4f0a09babd49b7fc66326ee757dd6b8`, applied migration `20260624193000_add_balance_adjustment_requests`, switched `/opt/incudal/current`, restarted `incudal-backend`, reached backend health on the second attempt, and passed live `verify-split-host` before the proof command tail.
+- Operational note: task `#33` first failed because the root filesystem was full while PostgreSQL applied the migration. OTA temp downloads under `/opt/incudal/.incudal-update-downloads` were cleaned, freeing about 9 GB. Task `#34` then hit Prisma `P3009` because the failed migration row remained. The database had no partial table or enum residue, so `prisma migrate resolve --rolled-back 20260624193000_add_balance_adjustment_requests` was applied before task `#35`.
+- Final database proof for migration `20260624193000_add_balance_adjustment_requests` shows one rolled-back failed row and one finished successful row, which is expected after the failed disk-space attempt and retry.
+- Public post-OTA proof for `v0.2.4` passed: `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned HTTP 200, `https://admin.payincus.com/admin/orders` returned HTTP 200, anonymous `https://admin.payincus.com/api/balance/admin/adjustment-requests` returned HTTP 401, and the public admin bundle contains the new `adjustment-requests` API marker.
 - A redacted server-side `PROOF_SINCE_HOURS=72 pnpm verify:production-proof-snapshot` emitted observational proof for two online hosts, two fresh online Agents, two ZFS storage pools, five running instances, one completed recharge/callback, SMTP/Lsky config presence, zero notification channels/logs, and missing lifecycle actions `instance.start`, `instance.restart`, `instance.recreate`, and `instance.delete`. The SSH session was manually interrupted after JSON output stopped, so treat it as observational evidence rather than a clean command-exit proof.
 - Production `/opt/incudal/current/server/package.json` reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
 - Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and current admin JS assets contain `/admin/plugins`, `插件中心`, and `admin-instance-detail` markers.
-- Latest public non-auth recheck passed: live `verify-split-host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, order/plugin/update API 401 protection, Turnstile missing-token negative controls, docs TLS, `v0.2.3` Chinese/English version logs, public admin bundle marker scan, and public root/API security headers.
+- Latest public non-auth recheck passed: live health endpoints, protected adjustment-request API 401 protection, admin order page HTTP 200, docs TLS, `v0.2.4` release assets, public admin bundle marker scan, and public root/API security headers.
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - `v0.1.8` public release asset availability was verified directly. GitHub Actions API polling hit an anonymous rate limit during that check, so the latest fully recorded Actions run IDs in this handoff remain the earlier `v0.1.6` chain.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
@@ -186,12 +188,12 @@ Latest production proof:
 
 Latest release proof:
 
-- `v0.2.3` was tagged from commit `21a678c Add order exception handling / 新增订单异常处理`.
-- Version-log commit `cd63437 Update version log for v0.2.3 / 更新 v0.2.3 版本日志` is current `payincus/main`.
-- GitHub Release `v0.2.3` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files.
-- Public `ota-manifest.json` reports version `v0.2.3`, commit `21a678cb4d4f`, two artifacts, and changelog `Add order exception handling / 新增订单异常处理`.
-- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.2.3`.
-- Production has OTA task `#32` completion, public health/docs/API-boundary/admin-bundle proof, and server-side `version.json` proof recorded above.
+- `v0.2.4` was tagged from commit `0eb2178 Add balance adjustment approval / 新增调账审批流`.
+- Version-log commit `a7de735 Update version log for v0.2.4 / 更新 v0.2.4 版本日志` is current `payincus/main`.
+- GitHub Release `v0.2.4` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files.
+- Public `ota-manifest.json` reports version `v0.2.4`, commit `0eb2178f76d4`, two artifacts, and changelog `Add balance adjustment approval / 新增调账审批流`.
+- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.2.4`.
+- Production has OTA task `#35` deployment proof, public health/API-boundary/admin-bundle proof, and server-side `version.json` proof recorded above.
 
 Storage-pool note:
 
