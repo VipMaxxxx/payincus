@@ -28,6 +28,7 @@ The primary delivery object in PayIncus is an Incus-backed LXC / KVM instance. T
 - View and manage all customer instances.
 - Create instances manually for delivery correction or migration.
 - Manage hosts, images, initialization commands and storage settings.
+- Use Delivery Assurance to inspect queued, processing, failed and stale delivery tasks with user, host and notification context.
 - Troubleshoot failed delivery through logs, Agent reports and task state.
 
 ## Backend Modules
@@ -39,6 +40,7 @@ The primary delivery object in PayIncus is an Incus-backed LXC / KVM instance. T
 ## Risks
 
 - Failed creation must compensate billing state.
+- Failed, timed out or stale delivery tasks must notify the user and leave an auditable admin log.
 - Deletion must clean Incus resources and local records.
 - Terminal WebSocket must verify identity and instance ownership.
 - Admin operations must be audited.

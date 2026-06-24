@@ -16,6 +16,7 @@ export const navMenuItems: MenuItem[] = [
   { name: 'admin-instance-create', path: '/admin/instances/create', icon: 'gift', label: 'nav.create' },
   { name: 'admin-mail', path: '/admin/mail', icon: 'mail', label: 'nav.mail' },
   { divider: true, label: 'nav.operations' },
+  { name: 'admin-delivery', path: '/admin/delivery', icon: 'pulse', label: 'nav.delivery' },
   { name: 'admin-tickets', path: '/admin/tickets', icon: 'ticket', label: 'nav.tickets' },
   { name: 'admin-billing', path: '/admin/billing', icon: 'wallet', label: 'nav.billing' },
   { name: 'admin-broadcast', path: '/admin/broadcast', icon: 'bell', label: 'nav.broadcast' },

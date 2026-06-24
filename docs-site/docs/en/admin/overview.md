@@ -23,6 +23,7 @@ https://admin.payincus.com
 | Users | `/admin/users` | Accounts, roles, status, balance and customer registration links. |
 | Instances | `/admin/instances` | Global instance list and lifecycle operations. |
 | Admin create instance | `/admin/instances/create` | Manual delivery or correction workflows. |
+| Delivery Assurance | `/admin/delivery` | Instance delivery task status, failed delivery details and notification delivery state for post-payment troubleshooting. |
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Statistics | `/admin/statistics` | Operational, resource and billing metrics. |
@@ -56,4 +57,4 @@ https://admin.payincus.com
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
-Verification must prove that regular users cannot enter the admin console and that the admin bundle does not include user self-service workflows.
+Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, and that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes.

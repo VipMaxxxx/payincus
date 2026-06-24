@@ -79,7 +79,9 @@ import type {
   PluginRecord,
   PluginTask,
   PluginMarketEntry,
-  PluginConfigValue
+  PluginConfigValue,
+  DeliveryOverview,
+  DeliveryTasksResponse
 } from '@/types/api.js'
 
 export type VipRuleType = 'user' | 'hosting'
@@ -2119,6 +2121,18 @@ const api = {
       http.get('/admin/plugins/tasks'),
     getTaskLogs: (id: number): Promise<{ logs: string }> =>
       http.get(`/admin/plugins/tasks/${id}/logs`)
+  },
+
+  delivery: {
+    overview: (): Promise<DeliveryOverview> =>
+      http.get('/admin/delivery/overview'),
+    tasks: (params: {
+      page?: number
+      pageSize?: number
+      status?: string
+      search?: string
+    } = {}): Promise<DeliveryTasksResponse> =>
+      http.get('/admin/delivery/tasks', { params })
   },
 
   // Storage Configs (远程存储配置)
