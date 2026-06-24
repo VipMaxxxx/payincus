@@ -6,16 +6,34 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `8b5ad55`
+- 当前 HEAD / Current HEAD: `bbf36c9`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Add risk audit logging center / 新增风控审计日志中心
-- 最新 tag / Latest tag: `v0.3.6`
+- 提交说明 / Commit subject: Fix admin benefits localization bundle / 修复后台福利本地化打包
+- 最新 tag / Latest tag: `v0.3.7`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.3.7
+
+- 发布提交 / Release commit: `bbf36c9`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Fix admin benefits localization bundle / 修复后台福利本地化打包
+
+### 新增能力 / New Capabilities
+
+- Added a release guard that checks all benefits translation keys used by the admin benefits page.
+- 新增后台福利页 i18n key 发布守卫，覆盖页面使用的全部福利文案。
+
+### 改进与调整 / Improvements and Adjustments
+
+- Keep the admin benefits translation namespace in the admin frontend bundle while continuing to strip admin-only benefits text from the customer bundle.
+- 后台前端包保留福利管理所需文案，同时用户端包继续剔除后台福利管理文案。
+- Prevent admin benefits pages from rendering raw translation keys such as entertainment.admin.title.
+- 避免后台福利页显示 entertainment.admin.title 等原始翻译 key。
 
 ## v0.3.6
 
