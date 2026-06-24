@@ -432,6 +432,22 @@ Official AI plugin market proof:
 - Production server-side market proof returned one plugin id: `com.payincus.ai-ticket-agent`.
 - User can now open `/admin/plugins`, switch to "插件市场", refresh the market, and install `AI Ticket Agent`.
 
+Official AI plugin Chinese UI proof:
+
+- Commit: `f009c7e Localize AI plugin settings UI / 中文化 AI 插件设置界面`
+- Tag: `v0.3.9`
+- Release URL: `https://github.com/VipMaxxxx/payincus/releases/tag/v0.3.9`
+- Release assets include `payincus-plugin-ai-ticket-agent-0.1.1.tar.gz`, `.sha256`, `.manifest.json`, and `plugin-market-index.json`.
+- Market index proof returned `AI 工单助手@0.1.1` with SHA256 `b378b0bfa16e2b7499267229d90223638a725ec6524430fc283ff3eb0df4aa23`.
+- Production OTA task: `#49`, `v0.3.8 -> v0.3.9`, completed successfully.
+- Production version file reports `v0.3.9`, git commit `f009c7e01b5a`.
+- Production plugin market index URL has been updated in `.env` to `https://github.com/VipMaxxxx/payincus/releases/download/v0.3.9/plugin-market-index.json`, and backend health passed after restart.
+- Admin plugin center now:
+  - displays the known AI plugin as `AI 工单助手` even when an older installed manifest still has English text;
+  - shows Chinese description and permission labels;
+  - renders the plugin settings page before raw config JSON;
+  - provides a `套用默认模板` button for plugins with templates.
+
 ## Documentation Site
 
 Documentation site is implemented under `docs-site/`.

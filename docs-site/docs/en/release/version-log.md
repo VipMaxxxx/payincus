@@ -6,16 +6,37 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `92cda32`
+- Current HEAD / 当前 HEAD: `f009c7e`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Publish AI ticket plugin market assets / 发布 AI 工单插件市场资产
-- Latest tag / 最新 tag: `v0.3.8`
+- Commit subject / 提交说明: Localize AI plugin settings UI / 中文化 AI 插件设置界面
+- Latest tag / 最新 tag: `v0.3.9`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.3.9
+
+- Release commit / 发布提交: `f009c7e`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Localize AI plugin settings UI / 中文化 AI 插件设置界面
+
+### 新增能力 / New capabilities
+
+- Localize the official AI ticket plugin package as AI 工单助手 and publish plugin version 0.1.1.
+- 将官方 AI 工单插件中文化为 AI 工单助手，并发布插件版本 0.1.1。
+
+### 修复与稳定性 / Fixes and stability
+
+- Show plugin settings pages before raw config JSON in the plugin detail panel.
+- 在插件详情中将插件设置页面前置到原始配置 JSON 之前。
+
+### 改进与调整 / Improvements and adjustments
+
+- Add Chinese permission labels and a default config template shortcut in the plugin center.
+- 在插件中心增加中文权限名和默认配置模板快捷入口。
 
 ## v0.3.8
 
