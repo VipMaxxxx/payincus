@@ -166,7 +166,7 @@ Latest production proof:
 
 - Operator reported the production upgrade completed after `v0.1.8`.
 - Public post-upgrade proof for `v0.1.8` passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public Chinese and English version-log pages contain `v0.1.8`, public GitHub OTA manifest reports version `v0.1.8` and commit `65dbc9d8aca5`, and a production admin asset scan from `/admin/delivery` scanned 58 text assets and found the delivery-center markers plus the `pulse` icon path for the `交付保障` sidebar icon.
-- Server-side `v0.1.8` symlink/version proof has not yet been recaptured. The latest server-side proof remains `/opt/incudal/current -> /opt/incudal/releases/v0.1.6-20260623223702`; `version.json` reports version/tag `v0.1.6`, commit `474ae022e5a1`, build time `2026-06-23T22:32:38.670Z`, deployed at `2026-06-23T22:37:10.984Z`.
+- Server-side `v0.1.8` symlink/version proof has now been captured. `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.1.8-20260624073309`; `version.json` reports version/tag `v0.1.8`, commit `65dbc9d8aca5`, build time `2026-06-24T07:31:09.066Z`, deployed at `2026-06-24T07:33:17.942Z`, and changelog `Fix delivery nav icon / 修复交付保障导航图标`.
 - Post-OTA public `verify-split-host`, public-only `pnpm verify:production` with `RUN_DB_CHECKS=0`, and `pnpm smoke:agent-release` passed.
 - A redacted server-side `PROOF_SINCE_HOURS=72 pnpm verify:production-proof-snapshot` emitted observational proof for two online hosts, two fresh online Agents, two ZFS storage pools, five running instances, one completed recharge/callback, SMTP/Lsky config presence, zero notification channels/logs, and missing lifecycle actions `instance.start`, `instance.restart`, `instance.recreate`, and `instance.delete`. The SSH session was manually interrupted after JSON output stopped, so treat it as observational evidence rather than a clean command-exit proof.
 - Production `/opt/incudal/current/server/package.json` reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
@@ -185,7 +185,7 @@ Latest release proof:
 - GitHub Release `v0.1.8` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files. Direct release asset checks returned HTTP 200 for manifests and `.sha256` files, and HTTP 206 range responses for both tarballs.
 - Public `ota-manifest.json` reports version `v0.1.8`, commit `65dbc9d8aca5`, two artifacts, and changelog `Fix delivery nav icon / 修复交付保障导航图标`.
 - Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.1.8` and the delivery icon fix wording.
-- Production has operator-reported `v0.1.8` upgrade completion and public static proof, but server-side `version.json` proof is still last captured at `v0.1.6`.
+- Production has operator-reported `v0.1.8` upgrade completion, public static proof, and server-side `version.json` proof recorded above.
 
 Storage-pool note:
 
@@ -345,9 +345,7 @@ SMOKE_API_BASE_URL=https://pay.payincus.com pnpm smoke:agent-release
 RUN_DB_CHECKS=0 RUN_LIVE_CHECKS=1 NODE_ENV=production PORT=3001 SERVE_STATIC_CLIENT=false VITE_API_BASE_URL=/api TRUST_PROXY=true FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com SITE_URL=https://pay.payincus.com PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false BACKEND_URL=https://pay.payincus.com INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus pnpm verify:production
 ```
 
-Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.1.6-20260623223702`; `version.json` reports `v0.1.6`, commit `474ae022e5a1`, build time `2026-06-23T22:32:38.670Z`, and `deployedAt=2026-06-23T22:37:10.984Z`.
-
-This is the latest captured server-side version proof. Public `v0.1.8` proof is newer and verifies split routing, docs, GitHub OTA manifest and the served admin bundle, but it has not yet been matched by a fresh server-side `readlink -f /opt/incudal/current && cat /opt/incudal/current/version.json` output.
+Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.1.8-20260624073309`; `version.json` reports `v0.1.8`, commit `65dbc9d8aca5`, build time `2026-06-24T07:31:09.066Z`, and `deployedAt=2026-06-24T07:33:17.942Z`.
 
 Recent live business proof:
 
