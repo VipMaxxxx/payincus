@@ -6,16 +6,37 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `0eb2178`
+- Current HEAD / 当前 HEAD: `49959a2`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Add balance adjustment approval / 新增调账审批流
-- Latest tag / 最新 tag: `v0.2.4`
+- Commit subject / 提交说明: Harden OTA cleanup and disk preflight / 加固 OTA 清理与磁盘预检
+- Latest tag / 最新 tag: `v0.2.5`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.2.5
+
+- Release commit / 发布提交: `49959a2`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Harden OTA cleanup and disk preflight / 加固 OTA 清理与磁盘预检
+
+### 新增能力 / New capabilities
+
+- Add OTA download-cache cleanup before and after update tasks.
+- Add disk-space preflight with actionable Chinese failure guidance.
+- Add atomic release pruning with protected current and rollback targets.
+
+### 改进与调整 / Improvements and adjustments
+
+- Preserve .incudal-update-downloads during legacy artifact application until cleanup finishes.
+- Document OTA retention environment variables in Chinese and English.
+
+### 其他变更 / Other changes
+
+- Extend system update guard coverage for cleanup, preflight and release pruning.
 
 ## v0.2.4
 

@@ -6,16 +6,37 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `0eb2178`
+- 当前 HEAD / Current HEAD: `49959a2`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Add balance adjustment approval / 新增调账审批流
-- 最新 tag / Latest tag: `v0.2.4`
+- 提交说明 / Commit subject: Harden OTA cleanup and disk preflight / 加固 OTA 清理与磁盘预检
+- 最新 tag / Latest tag: `v0.2.5`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.2.5
+
+- 发布提交 / Release commit: `49959a2`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Harden OTA cleanup and disk preflight / 加固 OTA 清理与磁盘预检
+
+### 新增能力 / New capabilities
+
+- Add OTA download-cache cleanup before and after update tasks.
+- Add disk-space preflight with actionable Chinese failure guidance.
+- Add atomic release pruning with protected current and rollback targets.
+
+### 改进与调整 / Improvements and adjustments
+
+- Preserve .incudal-update-downloads during legacy artifact application until cleanup finishes.
+- Document OTA retention environment variables in Chinese and English.
+
+### 其他变更 / Other changes
+
+- Extend system update guard coverage for cleanup, preflight and release pruning.
 
 ## v0.2.4
 
