@@ -1,6 +1,6 @@
 # PayIncus / Incudal Handoff
 
-Last updated: 2026-06-24 CST
+Last updated: 2026-06-25 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-6b8aa1f Update version log for v0.3.1 / 更新 v0.3.1 版本日志
+d92bdfe Update version log for v0.3.6 / 更新 v0.3.6 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-6b8aa1f Update version log for v0.3.1 / 更新 v0.3.1 版本日志
+d92bdfe Update version log for v0.3.6 / 更新 v0.3.6 版本日志
 ```
 
 Recently updated/released files include:
@@ -125,38 +125,38 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.3.1 Add customer success ticket workspace / 新增客服成功工单工作台
-feature commit: c71ade8
-version-log commit: 6b8aa1f
+v0.3.6 Add risk audit logging center / 新增风控审计日志中心
+feature commit: 8b5ad55
+version-log commit: d92bdfe
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28110336729: success for tag v0.3.1
-CI 28110333965: success for main commit 6b8aa1f
-Deploy docs site to GitHub Pages 28110333949: success for main commit 6b8aa1f
+Build & Release 28117284630: success for tag v0.3.6
+CI 28117280880: success for main commit d92bdfe
+Deploy docs site to GitHub Pages 28117280894: success for main commit d92bdfe
 ```
 
-Release assets for `v0.3.1` were present:
+Release assets for `v0.3.6` were present:
 
 ```text
-incudal-v0.3.1-linux-amd64.tar.gz
-incudal-v0.3.1-linux-amd64.tar.gz.sha256
-incudal-v0.3.1-linux-arm64.tar.gz
-incudal-v0.3.1-linux-arm64.tar.gz.sha256
-incudal-v0.3.1-ota-manifest.json
+incudal-v0.3.6-linux-amd64.tar.gz
+incudal-v0.3.6-linux-amd64.tar.gz.sha256
+incudal-v0.3.6-linux-arm64.tar.gz
+incudal-v0.3.6-linux-arm64.tar.gz.sha256
+incudal-v0.3.6-ota-manifest.json
 ota-manifest.json
 ```
 
 Production OTA proof:
 
 ```text
-task: #42
-from: v0.3.0
-to: v0.3.1
-current: /opt/incudal/releases/v0.3.1-20260624154031
-artifact sha256: c53c274af7b116a117308a4abcf80d9f6a2f4ba71051fe8c7ab31bc2ce3f6458
+task: #46
+from: v0.3.5
+to: v0.3.6
+current: /opt/incudal/releases/v0.3.6-20260624173541
+artifact sha256: 99d053b0b523abb44182bd70b0867fccbbb7b4ec6e9e66fca98486983b30506d
 result: System update completed successfully
 ```
 
@@ -164,12 +164,13 @@ Post-update checks completed in the update log:
 
 ```text
 OTA download cache cleaned before update
-old releases pruned before update; root filesystem available space improved from 14G to 17G
-backend health ready after restart
-Prisma migration 20260624233000_add_ticket_success_center applied
+Prisma migrate deploy: 154 migrations found, no pending migrations
+backend health ready after restart on attempt 2
 scripts/verify-split-host.sh passed
 pnpm verify:production passed with existing accepted warning: PAYMENT_CALLBACK_IP_WHITELIST is empty
 pnpm verify:log-header passed
+OTA download cache cleaned after update
+current release points to /opt/incudal/releases/v0.3.6-20260624173541
 ```
 
 Public checks after the OTA:
@@ -177,30 +178,29 @@ Public checks after the OTA:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/tickets: HTTP 200 app shell
-https://admin.payincus.com/api/tickets/1/support-context without auth: 401
-https://payincus.com/release/version-log.html: contains v0.3.1, c71ade8 and customer-success/ticket workspace wording
-https://payincus.com/en/release/version-log.html: contains v0.3.1, c71ade8 and customer-success/ticket workspace wording
+https://admin.payincus.com/admin/logs: HTTP 200 app shell
+https://admin.payincus.com/api/logs/risk-definitions without auth: 401
+https://payincus.com/release/version-log.html: contains v0.3.6 and risk-audit wording
+https://payincus.com/en/release/version-log.html: contains v0.3.6 and risk-audit wording
 ```
 
-Local gates run for `v0.3.1`:
+Local gates run for `v0.3.6`:
 
 ```text
-pnpm --filter server exec prisma generate
-pnpm --filter server test:ticket-success-guards
-pnpm --filter server test:ticket-query-guards
-pnpm --filter server test:ticket-image-security
+pnpm --filter server test:risk-audit-guards
+pnpm --filter server test:log-query-guards
+pnpm --filter server test:log-sanitizer
+pnpm --filter server test:admin-route-guards
+pnpm --filter server test:payment-provider-secret-redaction
 pnpm --filter server test:frontend-i18n-keys
 pnpm --filter server type-check
 pnpm --filter client type-check
 pnpm --filter client build
-pnpm --filter server build
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
-pnpm --filter server test:sla-alert-guards
-pnpm --filter server test:delivery-center-guards
 pnpm build
 pnpm test
+pnpm test:agent
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
@@ -211,8 +211,8 @@ The release was verified by GitHub Actions, release assets, production OTA task 
 Current commercial operation progress:
 
 ```text
-7/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success.
-Suggested next category: user lifecycle.
+9/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit.
+Suggested next category: resource capacity and cost.
 ```
 
 ## Product Split Status
@@ -317,6 +317,11 @@ Key tags:
 - `v0.2.9`: delivery assurance operations workflow.
 - `v0.3.0`: SLA alert center.
 - `v0.3.1`: customer success ticket workspace.
+- `v0.3.2`: user lifecycle operations center.
+- `v0.3.3`: AI ticket takeover safeguards.
+- `v0.3.4`: AI ticket reply confidence checks.
+- `v0.3.5`: plugin asset hardening and benefits localization.
+- `v0.3.6`: risk audit logging center.
 
 Latest production proof:
 
@@ -651,8 +656,8 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.3.1 release, the product/docs baseline is `6b8aa1f` and this handoff-only commit may exist on top.
-2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; current progress is 7/12 categories complete, 58%, and the suggested next category is user lifecycle.
+1. Keep local Git synced with remote `payincus/main`; after the v0.3.6 release, the product/docs baseline is `d92bdfe`.
+2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; current progress is 9/12 categories complete, 75%, and the suggested next category is resource capacity and cost.
 3. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
 4. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
 5. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
