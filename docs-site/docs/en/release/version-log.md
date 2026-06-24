@@ -6,16 +6,52 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `e282b63`
+- Current HEAD / 当前 HEAD: `5de795a`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Add commercial operations overview / 新增商业运营总览
-- Latest tag / 最新 tag: `v0.2.6`
+- Commit subject / 提交说明: Add order payment operations workflow / 新增订单支付运营闭环
+- Latest tag / 最新 tag: `v0.2.7`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.2.7
+
+- Release commit / 发布提交: `5de795a`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Add order payment operations workflow / 新增订单支付运营闭环
+
+### 新增能力 / New capabilities:
+
+- Add admin order operation cases with dispute states: pending review, confirmed, compensated and closed.
+- 新增后台订单运营处理记录，支持待核查、已确认、已补偿、已关闭争议状态。
+- Add manual refund registration that creates balance-adjustment approval requests without directly changing user balances.
+- 新增人工退款登记，只创建调账审批，不直接修改用户余额。
+- Add redacted provider status summaries and extended order search by keyword and date range.
+- 新增脱敏 provider 状态摘要，并扩展订单号、交易号、用户和时间范围搜索。
+
+### 改进与调整 / Improvements and adjustments:
+
+- Link order operation records to adjustment approvals and balance logs after approval.
+- 订单运营处理记录可关联调账审批，审批通过后继续关联余额流水。
+- Update admin billing documentation in Chinese and English.
+- 更新中英文后台与支付账务文档。
+
+验证 / Verification:
+- pnpm --filter server test:order-payment-operations-guards
+- pnpm --filter server test:order-center-guards
+- pnpm --filter server test:balance-adjustment-approval-guards
+- pnpm --filter server type-check
+- pnpm --filter client type-check
+- pnpm --filter client build
+- pnpm --filter server test:frontend-route-guards
+- pnpm --filter server test:frontend-dist-boundary-guards
+- pnpm --dir docs-site --ignore-workspace build
+- pnpm build
+- pnpm test
+- git diff --check
 
 ## v0.2.6
 
