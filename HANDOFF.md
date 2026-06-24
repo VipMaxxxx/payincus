@@ -18,7 +18,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-6d7641b Update version log for v0.2.6 / 更新 v0.2.6 版本日志
+2063fae Update version log for v0.2.7 / 更新 v0.2.7 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -28,7 +28,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-6d7641b Update version log for v0.2.6 / 更新 v0.2.6 版本日志
+2063fae Update version log for v0.2.7 / 更新 v0.2.7 版本日志
 ```
 
 Recently updated/released files include:
@@ -36,6 +36,10 @@ Recently updated/released files include:
 ```text
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
+server/prisma/schema.prisma
+server/prisma/migrations/20260624210000_add_order_operation_cases/migration.sql
+server/src/routes/orders.ts
+server/scripts/test-order-payment-operations-guards.ts
 README.md
 package.json
 server/package.json
@@ -86,39 +90,39 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.2.6 Add commercial operations overview / 新增商业运营总览
-feature commit: e282b63
-version-log commit: 6d7641b
+v0.2.7 Add order payment operations workflow / 新增订单支付运营闭环
+feature commit: 5de795a
+version-log commit: 2063fae
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28099831089: success
-CI 28099827506: success
-Deploy docs site to GitHub Pages 28099827446: success
+Build & Release 28101929322: success
+CI 28101926080: success
+Deploy docs site to GitHub Pages 28101926077: success
 ```
 
-Release assets for `v0.2.6` were present:
+Release assets for `v0.2.7` were present:
 
 ```text
-incudal-v0.2.6-linux-amd64.tar.gz
-incudal-v0.2.6-linux-amd64.tar.gz.sha256
-incudal-v0.2.6-linux-arm64.tar.gz
-incudal-v0.2.6-linux-arm64.tar.gz.sha256
-incudal-v0.2.6-ota-manifest.json
+incudal-v0.2.7-linux-amd64.tar.gz
+incudal-v0.2.7-linux-amd64.tar.gz.sha256
+incudal-v0.2.7-linux-arm64.tar.gz
+incudal-v0.2.7-linux-arm64.tar.gz.sha256
+incudal-v0.2.7-ota-manifest.json
 ota-manifest.json
 ```
 
 Production OTA proof:
 
 ```text
-task: #37
-from: v0.2.5
-to: v0.2.6
-current: /opt/incudal/releases/v0.2.6-20260624125722
-version.json: v0.2.6, commit e282b6346819, deployedAt 2026-06-24T12:57:31.325Z
-artifact sha256: 9cda75268379a7ee689a8f031c8827b307d5bb4df236b89791566e0a543f8b26
+task: #38
+from: v0.2.6
+to: v0.2.7
+current: /opt/incudal/releases/v0.2.7-20260624133147
+version.json: v0.2.7, commit 5de795a23e1e, deployedAt 2026-06-24T13:31:56.124Z
+artifact sha256: e36b8782316b37b87be470fcdb9a13463e10b041806f1f5b41f2f43f25ca6bc6
 result: System update completed successfully
 ```
 
@@ -128,6 +132,7 @@ Post-update checks completed in the update log:
 OTA download cache cleanup at update start
 disk-space preflight before update and before artifact download/extract/backup
 backend health ready after restart
+Prisma migration 20260624210000_add_order_operation_cases applied
 scripts/verify-split-host.sh passed
 pnpm verify:production passed
 pnpm verify:log-header passed
@@ -138,29 +143,30 @@ Public checks after the OTA:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/statistics: HTTP 200
-https://payincus.com/release/version-log.html: contains v0.2.6 and 商业运营总览
-https://payincus.com/en/release/version-log.html: contains v0.2.6 and commercial operations overview
+https://admin.payincus.com/admin/orders: HTTP 200
+https://payincus.com/release/version-log.html: contains v0.2.7 and 订单支付运营
+https://payincus.com/en/release/version-log.html: contains v0.2.7 and order payment operations
 ```
 
-Local gates run for `v0.2.6`:
+Local gates run for `v0.2.7`:
 
 ```text
-pnpm --filter server test:commercial-operations-overview-guards
+pnpm --filter server exec prisma generate
+pnpm --filter server test:order-payment-operations-guards
+pnpm --filter server test:order-center-guards
+pnpm --filter server test:balance-adjustment-approval-guards
 pnpm --filter server type-check
-pnpm --filter server test:frontend-i18n-keys
 pnpm --filter client type-check
 pnpm --filter client build
-pnpm --filter server test:admin-route-guards
-pnpm --filter server test:frontend-dist-boundary-guards
 pnpm --filter server test:frontend-route-guards
+pnpm --filter server test:frontend-dist-boundary-guards
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 pnpm build
 pnpm test
 ```
 
-One SSH grep after success was closed by the server, but the release had already been verified by `version.json`, update log, service health, public health, public admin page HTTP 200, and docs/version-log checks.
+The release was verified by GitHub Actions, release assets, production OTA task status, `version.json`, update log, service health, public user/admin health, public admin order page HTTP 200, and docs/version-log checks.
 
 ## Product Split Status
 
@@ -592,7 +598,7 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.2.6 release, the product/docs baseline is `6d7641b` and a handoff-only commit may exist on top.
+1. Keep local Git synced with remote `payincus/main`; after the v0.2.7 release, the product/docs baseline is `2063fae` and a handoff-only commit may exist on top.
 2. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
 3. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
 4. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
