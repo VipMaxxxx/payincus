@@ -104,6 +104,33 @@ function commitsBetween(fromRef, toRef) {
     .filter((item) => item.hash && item.subject)
 }
 
+function tagBody(tag) {
+  return safeGit(['tag', '--list', tag, '--format=%(contents:body)']).trim()
+}
+
+function tagBodyLines(tag) {
+  const body = tagBody(tag)
+  if (!body) return []
+
+  const lines = []
+  for (const rawLine of body.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line) {
+      if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
+      continue
+    }
+    if (!line.startsWith('- ') && /\/ (New capabilities|Other changes|Improvements and adjustments|新增能力|其他变更|改进与调整)/i.test(line)) {
+      lines.push(`### ${line}`)
+      lines.push('')
+    } else {
+      lines.push(line)
+    }
+  }
+
+  while (lines[lines.length - 1] === '') lines.pop()
+  return lines.length > 0 ? [...lines, ''] : []
+}
+
 function classify(subject, locale) {
   const text = subject.toLowerCase()
   if (/(fix|repair|rollback|tolerate|stabilize|harden)/.test(text)) return locale.groups.fixes
@@ -178,7 +205,8 @@ function render() {
     lines.push(`- ${locale.commitDate}: ${meta.date}`)
     lines.push(`- ${locale.commitSubject}: ${meta.subject}`)
     lines.push('')
-    lines.push(...groupedCommitLines(commits, locale))
+    const releaseNotes = tagBodyLines(tag)
+    lines.push(...(releaseNotes.length > 0 ? releaseNotes : groupedCommitLines(commits, locale)))
   }
 
   lines.push(`## ${locale.generation}`, '')

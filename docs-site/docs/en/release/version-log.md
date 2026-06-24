@@ -6,16 +6,40 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `474ae02`
+- Current HEAD / 当前 HEAD: `1e7a738`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Fix admin instance detail loading / 修复后台实例详情加载
-- Latest tag / 最新 tag: `v0.1.6`
+- Commit subject / 提交说明: Add delivery assurance center / 新增交付保障中心
+- Latest tag / 最新 tag: `v0.1.7`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.1.7
+
+- Release commit / 发布提交: `1e7a738`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Add delivery assurance center / 新增交付保障中心
+
+### 新增能力 / New capabilities
+
+- 新增后台交付保障中心，可查看实例交付任务、队列状态、失败原因、疑似卡住任务和通知投递统计。
+
+- Added the admin Delivery Assurance center for instance delivery tasks, queue state, failure details, stale processing tasks, and notification delivery metrics.
+
+### 其他变更 / Other changes
+
+- 实例任务失败、超时清理和启动清理僵尸任务时，会记录中文失败日志并触发用户失败通知。
+
+- Instance task failures, timeout cleanup, and startup stale-task cleanup now write Chinese failure logs and send user failure notifications.
+
+### 改进与调整 / Improvements and adjustments
+
+- 将交付保障守卫加入根级 pnpm test，校验 admin-only 路由、敏感字段不返回、前后台边界和任务失败通知。
+
+- Added Delivery Assurance guards to the root pnpm test chain, covering admin-only routes, sensitive-field redaction, frontend boundary, and failure notifications.
 
 ## v0.1.6
 
@@ -79,13 +103,21 @@ This page is generated from Git tags and commits to show system version history.
 - Commit date / 提交日期: 2026-06-24
 - Commit subject / 提交说明: Fix admin update and plugin UI / 修复更新与插件 UI
 
-### Fixes and Stability / 修复与稳定性
+### New capabilities / 新增能力
 
-- Fix admin update and plugin UI / 修复更新与插件 UI `004c84f`
+- Admin users can view latest release metadata while update execution remains super-admin only.
 
-### Improvements and Adjustments / 改进与调整
+- 后台管理员可查看最新 release 信息，实际更新执行仍仅限超级管理员。
 
-- Update version log for v0.1.1 / 更新 v0.1.1 版本日志 `48c8aea`
+### Improvements and adjustments / 改进与调整
+
+- Cap update and plugin task lists to 7 rows per page with stable pagination.
+
+- 将更新任务和插件安装任务固定为每页 7 条并稳定分页。
+
+- Rework plugin market and task logs into clearer plugin-center inner pages.
+
+- 将插件市场和安装任务日志整理为更清晰的插件中心内页。
 
 ## v0.1.1
 
@@ -93,10 +125,27 @@ This page is generated from Git tags and commits to show system version history.
 - Commit date / 提交日期: 2026-06-24
 - Commit subject / 提交说明: Polish update task and plugin center UI / 优化更新任务和插件中心界面
 
-### Improvements and Adjustments / 改进与调整
+### 新增能力 / New Capabilities:
 
-- Polish update task and plugin center UI / 优化更新任务和插件中心界面 `f2aaefa`
-- Update version log for v0.1.0 / 更新 v0.1.0 版本日志 `e22c4e3`
+- 插件市场在插件中心内作为独立内页呈现，保留 GitHub Release 包和 SHA256 校验上下文。
+
+- Plugin Market is presented as a dedicated in-center page with GitHub Release package and SHA256 verification context.
+
+### 其他变更 / Other Changes:
+
+- 版本更新页在未发现新版本时持续展示当前/latest 版本信息，并将主按钮显示为已更新至最新版本。
+
+- The system update page keeps latest/current version details visible when no newer release exists and marks the primary action as already up to date.
+
+### 改进与调整 / Improvements and Adjustments:
+
+- 更新任务和插件安装任务列表收口为每页最多 7 行，超出后通过分页查看。
+
+- 安装任务日志和市场页面布局改为更清晰的后台工作区，减少页面撑高和信息挤压。
+
+- Update and plugin install task lists are capped at 7 rows per page with pagination for overflow.
+
+- Install logs and market layout now use clearer admin workspace spacing to reduce page overflow and crowded content.
 
 ## v0.1.0
 
@@ -262,20 +311,11 @@ This page is generated from Git tags and commits to show system version history.
 - Commit date / 提交日期: 2026-06-23
 - Commit subject / 提交说明: Update version log for HSTS hardening
 
-### Fixes and Stability / 修复与稳定性
+- Add HSTS to split Nginx templates and installer-generated static frontend blocks.
 
-- Update version log for HSTS hardening `5bf4e9a`
-- Harden split deployment HSTS headers `79df25b`
+- Guard HSTS in split deployment and security header checks.
 
-### Improvements and Adjustments / 改进与调整
-
-- Update version log for production domain docs `b9b724f`
-- Update handoff for plugin release `7cd2baa`
-- Update version log for v0.0.12 `6e8ce21`
-
-### Other Changes / 其他变更
-
-- Align docs with production domains `bafe353`
+- Document the public Strict-Transport-Security production requirement.
 
 ## v0.0.12
 
