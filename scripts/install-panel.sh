@@ -28,6 +28,7 @@ readonly ENV_FILE="${INSTALL_DIR}/.env"
 readonly RUN_USER="incudal"
 readonly DEFAULT_PORT=3001
 readonly NODE_MAJOR=22
+readonly PNPM_VERSION="9.14.2"
 readonly PG_VERSION=16
 
 # ========================== 颜色定义 ==========================
@@ -298,6 +299,30 @@ install_nodejs() {
     apt-get install -y -qq nodejs >/dev/null 2>&1
 
     log "Node.js $(node -v) 安装完成"
+}
+
+# ========================== 安装 pnpm ==========================
+install_pnpm() {
+    step "安装 pnpm ${PNPM_VERSION}..."
+
+    if command -v pnpm &>/dev/null; then
+        log "pnpm $(pnpm --version) 已安装，跳过"
+        return 0
+    fi
+
+    if command -v corepack &>/dev/null; then
+        corepack enable >/dev/null 2>&1
+        corepack prepare "pnpm@${PNPM_VERSION}" --activate >/dev/null 2>&1
+    else
+        npm install -g "pnpm@${PNPM_VERSION}" >/dev/null 2>&1
+    fi
+
+    if ! command -v pnpm &>/dev/null; then
+        error "pnpm 安装失败，请检查 Node.js/Corepack 环境"
+        exit 1
+    fi
+
+    log "pnpm $(pnpm --version) 安装完成"
 }
 
 # ========================== 安装系统工具 ==========================
@@ -1487,6 +1512,7 @@ do_install() {
 
     install_system_tools
     install_nodejs
+    install_pnpm
     install_postgresql
     install_redis
 
