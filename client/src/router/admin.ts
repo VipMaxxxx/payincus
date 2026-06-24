@@ -198,6 +198,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.slaAlerts', title: 'SLA 与告警' }
   },
   {
+    path: '/admin/production-proof',
+    name: 'admin-production-proof',
+    component: () => import('@/views/admin/ProductionProofView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.productionProof', title: '生产验收' }
+  },
+  {
     path: '/admin/capacity-cost',
     name: 'admin-capacity-cost',
     component: () => import('@/views/admin/CapacityCostView.vue'),

@@ -2,6 +2,12 @@
 
 Local tests do not replace real production proof.
 
+## Admin Workspace
+
+`/admin/production-proof` provides a read-only Production Proof workspace for remaining proof items, risk order, command packs, and evidence-recording rules.
+
+The page does not execute real payments, resource deletion, Turnstile changes, or OTA rollback. High-risk actions still require an operator-run maintenance window or dedicated test resources. Commands on the page are production-server references only. The audit record must still use redacted logs, admin pages, database summaries, screenshot IDs, or ticket references.
+
 ## Split Host Checks
 
 ```bash
