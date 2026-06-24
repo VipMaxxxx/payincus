@@ -1,21 +1,21 @@
 {
   "id": "com.payincus.ai-ticket-agent",
-  "name": "AI Ticket Agent",
-  "version": "0.1.0",
+  "name": "AI 工单助手",
+  "version": "0.1.1",
   "payincus": ">=0.3.2",
-  "description": "AI-assisted ticket takeover with scoped context, admin review, and privacy-first defaults.",
+  "description": "用于工单草稿生成和受控接管回复的 AI 插件，默认人工审核，按最小脱敏上下文工作。",
   "author": "PayIncus",
   "entrypoints": {
     "adminPages": [
       {
         "slot": "admin.ticket.extra",
-        "title": "AI Ticket Agent",
+        "title": "AI 工单助手",
         "entry": "dist/admin/settings.html",
         "requiresAuth": true
       },
       {
         "slot": "admin.plugins.settings",
-        "title": "AI Ticket Settings",
+        "title": "AI 工单助手设置",
         "entry": "dist/admin/settings.html",
         "requiresAuth": true
       }
@@ -31,24 +31,24 @@
     "plugin:config:write"
   ],
   "configSchema": {
-    "enabled": { "type": "boolean", "title": "Enable AI ticket agent" },
-    "mode": { "type": "string", "title": "Takeover mode", "enum": ["draft", "semi_auto", "auto"] },
-    "model": { "type": "string", "title": "Model name" },
-    "apiBaseUrl": { "type": "string", "title": "OpenAI-compatible API base URL" },
-    "apiKey": { "type": "string", "title": "Model API key" },
-    "temperature": { "type": "number", "title": "Model temperature" },
-    "timeoutMs": { "type": "number", "title": "Model request timeout in milliseconds" },
-    "autoReplyCategories": { "type": "array", "title": "Auto-reply categories" },
-    "confidenceThreshold": { "type": "number", "title": "Auto-reply confidence threshold" },
-    "dailyAutoReplyLimit": { "type": "number", "title": "Daily auto-reply limit" },
-    "ticketAutoReplyLimit": { "type": "number", "title": "Per-ticket auto-reply limit" },
-    "cooldownSeconds": { "type": "number", "title": "Auto-reply cooldown seconds" },
-    "showAiIdentity": { "type": "boolean", "title": "Show AI identity in replies" },
-    "systemPrompt": { "type": "string", "title": "Custom system prompt" }
+    "enabled": { "type": "boolean", "title": "启用 AI 工单助手" },
+    "mode": { "type": "string", "title": "接管模式", "enum": ["draft", "semi_auto", "auto"] },
+    "model": { "type": "string", "title": "模型名称" },
+    "apiBaseUrl": { "type": "string", "title": "OpenAI 兼容接口地址" },
+    "apiKey": { "type": "string", "title": "模型 API Key" },
+    "temperature": { "type": "number", "title": "模型温度" },
+    "timeoutMs": { "type": "number", "title": "模型请求超时时间（毫秒）" },
+    "autoReplyCategories": { "type": "array", "title": "允许自动回复的工单分类" },
+    "confidenceThreshold": { "type": "number", "title": "自动回复置信度阈值" },
+    "dailyAutoReplyLimit": { "type": "number", "title": "每日自动回复上限" },
+    "ticketAutoReplyLimit": { "type": "number", "title": "单工单自动回复上限" },
+    "cooldownSeconds": { "type": "number", "title": "自动回复冷却时间（秒）" },
+    "showAiIdentity": { "type": "boolean", "title": "回复中展示 AI 身份" },
+    "systemPrompt": { "type": "string", "title": "自定义系统提示词" }
   },
   "templates": [
     {
-      "name": "Default AI ticket agent config",
+      "name": "默认 AI 工单助手配置",
       "path": "templates/default-config.json"
     }
   ]

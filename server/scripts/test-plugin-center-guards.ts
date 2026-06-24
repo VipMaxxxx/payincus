@@ -18,6 +18,8 @@ const adminRouter = read('client/src/router/admin.ts')
 const adminNav = read('client/src/config/side-nav-items-admin.ts')
 const adminApi = read('client/src/api/admin.ts')
 const userApi = read('client/src/api/index.ts')
+const pluginCenterView = read('client/src/views/admin/PluginCenterView.vue')
+const aiTicketManifest = read('plugin-templates/ai-ticket-agent-plugin/payincus.plugin.json')
 
 assert.ok(
   app.includes("import adminPluginRoutes from './routes/admin-plugins.js'") &&
@@ -75,6 +77,27 @@ assert.ok(
     adminApi.includes('/admin/plugins/market/install') &&
     !userApi.includes('/admin/plugins'),
   'admin frontend must expose plugin center while user API must not expose admin plugin management'
+)
+
+assert.ok(
+  pluginCenterView.indexOf('插件设置页面') > 0 &&
+    pluginCenterView.indexOf('插件设置页面') < pluginCenterView.indexOf('配置 JSON') &&
+    pluginCenterView.includes('selectedAdminSettingsPages') &&
+    pluginCenterView.includes('套用默认模板') &&
+    pluginCenterView.includes('AI 工单助手') &&
+    pluginCenterView.includes('读取脱敏工单上下文') &&
+    !pluginCenterView.includes('{{ permission }})'),
+  'plugin detail must show settings pages before raw JSON config, expose a default-template shortcut, and localize known plugin metadata'
+)
+
+assert.ok(
+  aiTicketManifest.includes('"name": "AI 工单助手"') &&
+    aiTicketManifest.includes('默认 AI 工单助手配置') &&
+    aiTicketManifest.includes('启用 AI 工单助手') &&
+    aiTicketManifest.includes('OpenAI 兼容接口地址') &&
+    !aiTicketManifest.includes('AI Ticket Agent') &&
+    !aiTicketManifest.includes('Enable AI ticket agent'),
+  'official AI ticket plugin manifest must present Chinese metadata and config labels'
 )
 
 console.log('plugin center guard tests passed')

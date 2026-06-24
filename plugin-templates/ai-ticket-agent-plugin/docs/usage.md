@@ -1,48 +1,38 @@
-# AI Ticket Agent
+# AI 工单助手使用说明
 
-This plugin is the PayIncus AI ticket takeover scaffold.
+安装后进入后台插件中心，在“已安装”页启用 `AI 工单助手`，再打开插件详情里的“插件设置页面”查看状态。
 
-It is designed around a privacy-first backend boundary:
+## 配置
 
-- The plugin does not read the database directly.
-- AI context must be fetched through the authenticated backend route.
-- Context is derived from `ticketId`, then scoped to `ticket.userId`.
-- Payment callbacks, provider secrets, root passwords, host certificates, internal notes, login IPs, user agents, and other users' data are excluded.
-- Draft mode is the default. Automatic replies should only be enabled for low-risk categories.
-- Store `apiKey` through the plugin center config editor; keys are detected as secret config and are not returned in plugin config responses.
+在插件详情的“配置 JSON”中填写模型参数：
 
-Draft generation endpoint:
+- `enabled`：是否启用 AI 工单助手。
+- `mode`：接管模式，支持 `draft`、`semi_auto`、`auto`。
+- `model`：模型名称。
+- `apiBaseUrl`：OpenAI 兼容接口地址。
+- `apiKey`：模型 API Key，保存时会按敏感配置处理。
+- `autoReplyCategories`：允许自动回复的工单分类。
+- `confidenceThreshold`：自动回复置信度阈值。
+- `dailyAutoReplyLimit`：每日自动回复上限。
+- `ticketAutoReplyLimit`：单工单自动回复上限。
+- `cooldownSeconds`：自动回复冷却时间。
 
-```text
-POST /api/tickets/:id/ai/draft
-```
+## 安全规则
 
-The draft endpoint only returns a suggested reply. It does not send a ticket message and does not change ticket status.
+- `draft` 模式只生成草稿，不发送工单消息。
+- `semi_auto` 和 `auto` 模式才允许调用受控接管回复接口。
+- 接管回复会重新生成内容并执行安全检查。
+- 退款、支付争议、账号安全、风控、数据恢复、删除/重装/迁移实例、凭据或后台细节、交付异常会强制转人工。
+- 自动回复只处理官方/系统工单，且最新消息必须来自用户。
+- 第三方托管节点工单不会被自动接管。
+- 回复不会修改工单状态，只写入一条客服侧消息。
 
-Controlled takeover reply endpoint:
+## 状态页
 
-```text
-POST /api/tickets/:id/ai/reply
-```
-
-The reply endpoint requires the separate `ticket:ai:reply` permission and only works when the plugin mode is `semi_auto` or `auto`. It requires a structured model decision with `confidence >= confidenceThreshold`, generates a fresh reply from the safe context, blocks unsafe output, blocks sensitive handoff cases, writes one support-side ticket message, sends the normal ticket notification, and leaves the ticket status unchanged.
-
-Direct takeover replies are blocked when the ticket is abuse-category, urgent, outside the configured `autoReplyCategories` in `auto` mode, or mentions refunds, payment disputes, account security, risk control, destructive instance actions, credentials/backend details, data recovery, outages, or delivery exceptions.
-
-The backend also enforces `dailyAutoReplyLimit`, `ticketAutoReplyLimit`, and `cooldownSeconds` from plugin config before sending a takeover reply. These limits are counted from successful `ai_ticket.reply_send` audit logs.
-
-In `auto` mode, the server scheduler scans every 2 minutes for official/system tickets whose latest message is from the customer. It skips hosted-market tickets owned by non-admin hosts, urgent tickets, abuse tickets, categories outside `autoReplyCategories`, low-confidence decisions, and anything that triggers the handoff rules.
-
-Operational status endpoint:
+插件设置页面会读取：
 
 ```text
 GET /api/tickets/ai/status
 ```
 
-The status endpoint is admin-only and returns safe flags such as mode, permission availability, confidence threshold, limits, and whether the model is configured. It does not return the model endpoint, API key, backend paths, raw ticket data, or user data.
-
-Package it from this directory:
-
-```bash
-tar -czf ai-ticket-agent-plugin.tar.gz payincus.plugin.json README.md dist templates docs
-```
+该接口只返回模式、权限、阈值、限流和模型是否已配置等状态，不返回模型地址、API key、后端路径、原始工单内容或用户数据。
