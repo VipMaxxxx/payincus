@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
-import type { PluginMarketEntry, PluginRecord, PluginTask } from '@/types/api'
+import type { PluginMarketEntry, PluginMarketGovernance, PluginRecord, PluginTask } from '@/types/api'
 
 const toast = useToast()
 const router = useRouter()
@@ -17,6 +17,7 @@ const selectedPluginId = ref<string | null>(null)
 const selectedFile = ref<File | null>(null)
 const plugins = ref<PluginRecord[]>([])
 const market = ref<PluginMarketEntry[]>([])
+const marketGovernance = ref<PluginMarketGovernance | null>(null)
 const tasks = ref<PluginTask[]>([])
 const taskLogs = ref('')
 const selectedTaskId = ref<number | null>(null)
@@ -71,6 +72,24 @@ const pluginPermissionLabels: Record<string, string> = {
   'plugin:config:write': '写入插件配置'
 }
 
+const marketReviewLabels: Record<PluginMarketEntry['reviewStatus'], string> = {
+  pending: '待审核',
+  listed: '已上架',
+  delisted: '已下架',
+  rejected: '已拒绝'
+}
+
+const marketTrustLabels: Record<PluginMarketEntry['trustLevel'], string> = {
+  official: '官方来源',
+  verified: '认证开发者',
+  third_party: '第三方'
+}
+
+const marketPricingLabels: Record<PluginMarketEntry['pricing']['type'], string> = {
+  free: '免费',
+  paid: '付费预留'
+}
+
 function displayPluginName(plugin: PluginRecord): string {
   if (plugin.pluginId === 'com.payincus.ai-ticket-agent') return 'AI 工单助手'
   return plugin.name
@@ -85,6 +104,54 @@ function displayPluginDescription(plugin: PluginRecord): string {
 
 function formatPermission(permission: string): string {
   return pluginPermissionLabels[permission] || permission
+}
+
+function formatMarketPermission(permission: string): string {
+  return formatPermission(permission)
+}
+
+function formatCompatibility(entry: PluginMarketEntry): string {
+  const min = entry.compatibility.minPayincus || '不限'
+  const max = entry.compatibility.maxPayincus || '不限'
+  return `${min} - ${max}`
+}
+
+function formatRating(entry: PluginMarketEntry): string {
+  if (!entry.rating.count) return '暂无评分'
+  return `${entry.rating.average.toFixed(1)} / 5 · ${entry.rating.count} 条`
+}
+
+function marketBadgeClass(entry: PluginMarketEntry): string {
+  if (entry.trustLevel === 'official') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (entry.trustLevel === 'verified') return 'border-blue-200 bg-blue-50 text-blue-700'
+  return 'border-amber-200 bg-amber-50 text-amber-700'
+}
+
+function reviewBadgeClass(entry: PluginMarketEntry): string {
+  if (entry.reviewStatus === 'listed') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (entry.reviewStatus === 'rejected') return 'border-red-200 bg-red-50 text-red-700'
+  return 'border-gray-200 bg-gray-50 text-gray-700'
+}
+
+function canInstallMarketEntry(entry: PluginMarketEntry): boolean {
+  return entry.reviewStatus === 'listed' && entry.security.checksumPinned
+}
+
+function buildMarketInstallConfirmation(entry: PluginMarketEntry): string {
+  const permissions = [
+    ...entry.permissions.adminPages.map(item => `后台页面：${item}`),
+    ...entry.permissions.userPages.map(item => `用户页面：${item}`),
+    ...entry.permissions.api.map(item => `接口权限：${formatMarketPermission(item)}`),
+    ...entry.permissions.storage.map(item => `存储目录：${item}`)
+  ]
+  return [
+    `确认安装 ${entry.name} ${entry.latest}？`,
+    `审核状态：${marketReviewLabels[entry.reviewStatus]}`,
+    `可信来源：${marketTrustLabels[entry.trustLevel]}`,
+    `兼容范围：${formatCompatibility(entry)}`,
+    `包校验：SHA256 ${entry.sha256.slice(0, 16)}...`,
+    `权限声明：${permissions.length ? permissions.join('；') : '无'}`
+  ].join('\n')
 }
 
 function hasAdminSettingsPage(plugin: PluginRecord): boolean {
@@ -171,6 +238,7 @@ async function loadMarket() {
   try {
     const response = await api.plugins.market()
     market.value = response.plugins
+    marketGovernance.value = response.governance || null
     if (market.value.length === 0) toast.success('插件市场暂无可安装插件')
   } catch (err: any) {
     toast.error('加载插件市场失败：' + (err?.message || String(err)))
@@ -203,7 +271,11 @@ async function uploadPlugin() {
 }
 
 async function installMarketPlugin(entry: PluginMarketEntry) {
-  if (!window.confirm(`确认从市场安装 ${entry.name} ${entry.latest}？`)) return
+  if (!canInstallMarketEntry(entry)) {
+    toast.error('该插件未满足市场安装策略，不能安装')
+    return
+  }
+  if (!window.confirm(buildMarketInstallConfirmation(entry))) return
   try {
     const response = await api.plugins.installFromMarket(entry.id)
     toast.success('市场插件安装完成')
@@ -499,9 +571,28 @@ onMounted(async () => {
         <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 class="text-lg font-semibold text-themed">GitHub 插件市场</h2>
-            <p class="mt-1 text-sm text-themed-muted">仅安装市场索引中的 GitHub Release 包，并使用 SHA256 校验。</p>
+            <p class="mt-1 text-sm text-themed-muted">仅展示已上架插件；安装前会校验 GitHub Release、SHA256 和 PayIncus 兼容范围。</p>
           </div>
           <button class="btn-primary" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
+        </div>
+
+        <div class="grid gap-3 border-b border-themed px-5 py-4 text-sm md:grid-cols-4">
+          <div class="rounded border border-themed bg-themed p-3">
+            <div class="text-xs text-themed-muted">已上架</div>
+            <div class="mt-1 font-semibold text-themed">{{ marketGovernance?.visibleEntries ?? market.length }} 个</div>
+          </div>
+          <div class="rounded border border-themed bg-themed p-3">
+            <div class="text-xs text-themed-muted">已隐藏</div>
+            <div class="mt-1 font-semibold text-themed">{{ marketGovernance?.hiddenEntries ?? 0 }} 个</div>
+          </div>
+          <div class="rounded border border-themed bg-themed p-3">
+            <div class="text-xs text-themed-muted">索引来源</div>
+            <div class="mt-1 truncate font-semibold text-themed">{{ marketGovernance?.indexHost || '-' }}</div>
+          </div>
+          <div class="rounded border border-themed bg-themed p-3">
+            <div class="text-xs text-themed-muted">索引指纹</div>
+            <div class="mt-1 truncate font-mono text-xs font-semibold text-themed">{{ marketGovernance?.fingerprint?.slice(0, 16) || '-' }}</div>
+          </div>
         </div>
 
         <div v-if="market.length === 0" class="px-5 py-16 text-center">
@@ -511,8 +602,8 @@ onMounted(async () => {
             <button class="btn-secondary mt-4" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
           </div>
         </div>
-        <div v-else class="grid gap-4 p-5 lg:grid-cols-2 2xl:grid-cols-3">
-          <article v-for="entry in market" :key="entry.id" class="flex min-h-[260px] flex-col rounded border border-themed bg-themed p-4">
+        <div v-else class="grid gap-4 p-5 xl:grid-cols-2">
+          <article v-for="entry in market" :key="entry.id" class="flex min-h-[420px] flex-col rounded border border-themed bg-themed p-4">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <h3 class="font-medium text-themed">{{ entry.name }}</h3>
@@ -520,22 +611,82 @@ onMounted(async () => {
               </div>
               <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ entry.latest }}</span>
             </div>
-            <p class="mt-3 line-clamp-3 min-h-[72px] text-sm leading-6 text-themed-muted">{{ entry.description || entry.repo }}</p>
-            <dl class="mt-4 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+
+            <div class="mt-3 flex flex-wrap gap-2">
+              <span class="rounded border px-2 py-1 text-xs" :class="reviewBadgeClass(entry)">{{ marketReviewLabels[entry.reviewStatus] }}</span>
+              <span class="rounded border px-2 py-1 text-xs" :class="marketBadgeClass(entry)">{{ marketTrustLabels[entry.trustLevel] }}</span>
+              <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ marketPricingLabels[entry.pricing.type] }}</span>
+              <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ formatRating(entry) }}</span>
+              <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">安装 {{ entry.installCount }}</span>
+            </div>
+
+            <p class="mt-3 line-clamp-2 min-h-[48px] text-sm leading-6 text-themed-muted">{{ entry.description || entry.repo }}</p>
+            <dl class="mt-4 grid gap-3 text-xs text-themed-muted sm:grid-cols-2">
               <div>
-                <dt>作者</dt>
-                <dd class="mt-1 text-themed">{{ entry.author || '-' }}</dd>
+                <dt>开发者</dt>
+                <dd class="mt-1 text-themed">{{ entry.developer.name }}{{ entry.developer.verified ? ' · 已认证' : '' }}</dd>
               </div>
               <div>
                 <dt>来源</dt>
                 <dd class="mt-1 truncate text-themed">{{ entry.repo }}</dd>
               </div>
+              <div>
+                <dt>兼容范围</dt>
+                <dd class="mt-1 text-themed">{{ formatCompatibility(entry) }}</dd>
+              </div>
+              <div>
+                <dt>签名状态</dt>
+                <dd class="mt-1 text-themed">{{ entry.security.signature?.status || 'unsigned' }}</dd>
+              </div>
               <div class="sm:col-span-2">
                 <dt>SHA256</dt>
                 <dd class="mt-1 font-mono text-themed">{{ entry.sha256.slice(0, 16) }}...</dd>
               </div>
+              <div class="sm:col-span-2">
+                <dt>权限声明</dt>
+                <dd class="mt-1 flex flex-wrap gap-1 text-themed">
+                  <span
+                    v-for="permission in entry.permissions.api"
+                    :key="`api-${permission}`"
+                    class="rounded bg-themed-hover px-2 py-1 text-xs"
+                  >
+                    {{ formatMarketPermission(permission) }}
+                  </span>
+                  <span
+                    v-for="page in entry.permissions.adminPages"
+                    :key="`admin-${page}`"
+                    class="rounded bg-themed-hover px-2 py-1 text-xs"
+                  >
+                    后台 {{ page }}
+                  </span>
+                  <span
+                    v-for="page in entry.permissions.userPages"
+                    :key="`user-${page}`"
+                    class="rounded bg-themed-hover px-2 py-1 text-xs"
+                  >
+                    用户端 {{ page }}
+                  </span>
+                  <span
+                    v-for="path in entry.permissions.storage"
+                    :key="`storage-${path}`"
+                    class="rounded bg-themed-hover px-2 py-1 text-xs"
+                  >
+                    存储 {{ path }}
+                  </span>
+                  <span v-if="!entry.permissions.api.length && !entry.permissions.adminPages.length && !entry.permissions.userPages.length && !entry.permissions.storage.length">无</span>
+                </dd>
+              </div>
+              <div v-if="entry.upgradeNotes || entry.rollbackNotes" class="sm:col-span-2">
+                <dt>升级与回滚</dt>
+                <dd class="mt-1 space-y-1 text-themed">
+                  <p v-if="entry.upgradeNotes">{{ entry.upgradeNotes }}</p>
+                  <p v-if="entry.rollbackNotes">{{ entry.rollbackNotes }}</p>
+                </dd>
+              </div>
             </dl>
-            <button class="btn-primary mt-auto w-full" @click="installMarketPlugin(entry)">安装</button>
+            <button class="btn-primary mt-auto w-full" :disabled="!canInstallMarketEntry(entry)" @click="installMarketPlugin(entry)">
+              {{ canInstallMarketEntry(entry) ? '安装' : '不可安装' }}
+            </button>
           </article>
         </div>
       </section>

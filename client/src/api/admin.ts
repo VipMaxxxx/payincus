@@ -86,6 +86,7 @@ import type {
   PluginRecord,
   PluginTask,
   PluginMarketEntry,
+  PluginMarketGovernance,
   PluginConfigValue,
   DeliveryAssuranceCase,
   DeliveryOverview,
@@ -2192,7 +2193,7 @@ const api = {
       eventLogs: Array<{ id: number; pluginId: string; userId: number | null; action: string; result: string; message: string | null; createdAt: string }>
     }> =>
       http.get(`/admin/plugins/${pluginId}`),
-    market: (): Promise<{ plugins: PluginMarketEntry[] }> =>
+    market: (): Promise<{ plugins: PluginMarketEntry[]; governance?: PluginMarketGovernance }> =>
       http.get('/admin/plugins/market'),
     upload: (file: File): Promise<{ task: PluginTask | null }> => {
       const form = new FormData()
