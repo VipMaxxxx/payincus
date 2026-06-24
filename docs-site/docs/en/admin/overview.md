@@ -23,7 +23,7 @@ https://admin.example.com
 | Users | `/admin/users` | Accounts, roles, status, balance and customer registration links. |
 | Instances | `/admin/instances` | Global instance list and lifecycle operations. |
 | Admin create instance | `/admin/instances/create` | Manual delivery or correction workflows. |
-| Delivery Assurance | `/admin/delivery` | Instance delivery task status, failed delivery details and notification delivery state for post-payment troubleshooting. |
+| Delivery Assurance | `/admin/delivery` | Instance delivery tasks, failure details, notification state, Agent/host/billing context and post-payment delivery troubleshooting actions. |
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
@@ -75,6 +75,18 @@ The operations overview is returned only by the admin statistics API and is not 
 - CSV exports cover orders, balance logs, hosting income and adjustment approvals. Exports do not include raw callback payloads, payment secrets, tokens, passwords or provider configuration snapshots.
 - Reconciliation permissions are centralized. Administrators can view and handle runs now; the same entrypoint is reserved for a future read-only finance role.
 
+## Delivery Assurance
+
+`/admin/delivery` handles paid resources that were not delivered, are stuck, or failed during delivery:
+
+- Delivery tasks are shown as pending, processing, failed or completed. Failed tasks and tasks processing for more than 30 minutes are turned into assurance cases.
+- Assurance statuses are pending manual handling, auto retryable, in progress, recovered and closed.
+- Only idempotent start, stop and restart tasks can be requeued automatically. Rebuild, recreate, clone and host-change tasks require manual takeover.
+- Task details include user, instance, host, Agent heartbeat, host resource usage, latest billing record and a redacted failure reason.
+- Administrators can take over a case, requeue retryable tasks, notify the user, mark recovered or close the issue.
+- User notifications cover delivery delayed, recovered and contact support states.
+- Delivery Assurance stores notes, handler metadata and action history without returning root passwords, host certificates, install tokens or password hashes.
+
 ## System Settings
 
 - Access and registration.
@@ -96,4 +108,4 @@ The operations overview is returned only by the admin statistics API and is not 
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
-Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.
+Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.

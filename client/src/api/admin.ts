@@ -80,6 +80,7 @@ import type {
   PluginTask,
   PluginMarketEntry,
   PluginConfigValue,
+  DeliveryAssuranceCase,
   DeliveryOverview,
   DeliveryTasksResponse
 } from '@/types/api.js'
@@ -2178,7 +2179,15 @@ const api = {
       status?: string
       search?: string
     } = {}): Promise<DeliveryTasksResponse> =>
-      http.get('/admin/delivery/tasks', { params })
+      http.get('/admin/delivery/tasks', { params }),
+    takeover: (taskId: number, note?: string | null): Promise<{ case: DeliveryAssuranceCase }> =>
+      http.post(`/admin/delivery/tasks/${taskId}/takeover`, { note }),
+    retry: (taskId: number, note?: string | null): Promise<{ case: DeliveryAssuranceCase; retryTaskId: number }> =>
+      http.post(`/admin/delivery/tasks/${taskId}/retry`, { note }),
+    notifyUser: (taskId: number, mode: 'delayed' | 'recovered' | 'contact_support', note?: string | null): Promise<{ message: string; case: DeliveryAssuranceCase }> =>
+      http.post(`/admin/delivery/tasks/${taskId}/notify`, { mode, note }),
+    resolve: (taskId: number, status: 'recovered' | 'closed', note?: string | null): Promise<{ case: DeliveryAssuranceCase }> =>
+      http.post(`/admin/delivery/tasks/${taskId}/resolve`, { status, note })
   },
 
   // Storage Configs (远程存储配置)

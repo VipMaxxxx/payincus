@@ -1444,6 +1444,31 @@ export interface InstanceTaskResponse {
   status: InstanceTaskStatus
 }
 
+export type DeliveryAssuranceCaseStatus = 'pending_manual' | 'auto_retryable' | 'in_progress' | 'recovered' | 'closed'
+export type DeliveryAssuranceIssueType = 'task_failed' | 'task_stale' | 'host_offline' | 'agent_offline' | 'resource_pressure'
+
+export interface DeliveryAssuranceCase {
+  id: number
+  taskId: number | null
+  instanceId: number
+  hostId: number
+  userId: number
+  status: DeliveryAssuranceCaseStatus
+  issueType: DeliveryAssuranceIssueType
+  severity: string
+  retryable: boolean
+  retryTaskId: number | null
+  title: string
+  lastError: string | null
+  detail: Record<string, unknown> | null
+  note: string | null
+  handledByUserId: number | null
+  handledByUsername: string | null
+  handledAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 export interface DeliveryTaskContext {
   id: number
   instanceId: number
@@ -1476,6 +1501,25 @@ export interface DeliveryTaskContext {
     status: string
     location: string | null
     countryCode: string
+    cpuUsed?: number
+    cpuAllowanceMax?: number
+    memoryUsed?: number
+    memoryMax?: number
+    diskUsed?: number
+    natPortsUsedCount?: number
+    agent?: {
+      status: string
+      version: string | null
+      lastSeenAt: string | null
+    } | null
+  } | null
+  assuranceCase: DeliveryAssuranceCase | null
+  billing: {
+    id: number
+    type: string
+    amount: number
+    createdAt: string
+    balanceLogId: number | null
   } | null
 }
 
@@ -1493,6 +1537,11 @@ export interface DeliveryOverview {
     notificationPendingLast24h: number
     enabledUserChannels: number
     enabledGlobalChannels: number
+    casesPendingManual: number
+    casesAutoRetryable: number
+    casesInProgress: number
+    casesRecovered: number
+    casesClosed: number
   }
   recentFailures: DeliveryTaskContext[]
 }
