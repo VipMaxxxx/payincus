@@ -1554,6 +1554,108 @@ export interface DeliveryTasksResponse {
   totalPages: number
 }
 
+// ==================== SLA 告警相关 ====================
+
+export type SlaAlertSeverity = 'info' | 'warning' | 'critical'
+export type SlaAlertStatus = 'open' | 'investigating' | 'recovered' | 'ignored'
+export type SlaAlertObjectType =
+  | 'host'
+  | 'agent'
+  | 'instance'
+  | 'order'
+  | 'task'
+  | 'notification_channel'
+  | 'system_update'
+  | 'smtp'
+  | 'telegram'
+  | 'disk'
+  | 'system'
+
+export interface SlaAlertAction {
+  id: number
+  actionType: string
+  actorUserId: number | null
+  actorUsername: string | null
+  note: string | null
+  detail: Record<string, unknown> | null
+  createdAt: string | null
+}
+
+export interface SlaAlertEvent {
+  id: number
+  ruleCode: string
+  module: string
+  severity: SlaAlertSeverity
+  status: SlaAlertStatus
+  objectType: SlaAlertObjectType
+  objectId: number | null
+  objectLabel: string | null
+  fingerprint: string
+  title: string
+  message: string
+  detail: Record<string, unknown> | null
+  triggerCount: number
+  firstTriggeredAt: string | null
+  lastTriggeredAt: string | null
+  recoveredAt: string | null
+  silencedUntil: string | null
+  handledByUserId: number | null
+  handledByUsername: string | null
+  handledAt: string | null
+  note: string | null
+  createdAt: string | null
+  updatedAt: string | null
+  actions: SlaAlertAction[]
+}
+
+export interface SlaAlertRule {
+  id: number
+  code: string
+  module: string
+  title: string
+  description: string | null
+  severity: SlaAlertSeverity
+  enabled: boolean
+  thresholdMinutes: number | null
+  thresholdCount: number | null
+  dedupeMinutes: number
+  notificationChannels: unknown[]
+  silenceUntil: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface SlaAlertOverview {
+  summary: {
+    open: number
+    investigating: number
+    recovered: number
+    ignored: number
+    critical: number
+    warning: number
+    info: number
+    openCritical: number
+    rulesEnabled: number
+    lastScanAt: string | null
+  }
+  recentAlerts: SlaAlertEvent[]
+}
+
+export interface SlaAlertListResponse {
+  alerts: SlaAlertEvent[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface SlaAlertScanResponse {
+  scanned: number
+  created: number
+  merged: number
+  skipped: number
+}
+
 // ==================== 站内信相关 ====================
 
 export interface InboxMessage {

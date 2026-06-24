@@ -24,6 +24,7 @@ https://admin.example.com
 | Instances | `/admin/instances` | Global instance list and lifecycle operations. |
 | Admin create instance | `/admin/instances/create` | Manual delivery or correction workflows. |
 | Delivery Assurance | `/admin/delivery` | Instance delivery tasks, failure details, notification state, Agent/host/billing context and post-payment delivery troubleshooting actions. |
+| SLA & Alerts | `/admin/sla-alerts` | Scan and handle host, Agent, delivery, payment, notification, mail and OTA incidents. |
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
@@ -87,6 +88,18 @@ The operations overview is returned only by the admin statistics API and is not 
 - User notifications cover delivery delayed, recovered and contact support states.
 - Delivery Assurance stores notes, handler metadata and action history without returning root passwords, host certificates, install tokens or password hashes.
 
+## SLA & Alerts
+
+`/admin/sla-alerts` turns platform incidents into operational alerts:
+
+- Default rules cover offline hosts, offline Agents, stale Agent heartbeat, failed instance tasks, failed recharge orders, failed notifications, failed mail delivery tasks and failed OTA updates.
+- Alert severities are info, warning and critical. Alert states are open, investigating, recovered and ignored.
+- The same rule and object use a stable fingerprint, so repeated scans merge records instead of creating unlimited duplicates.
+- Administrators can run scans, acknowledge alerts, mark recovered, ignore, silence alerts and enable or disable rules.
+- Alert details show the linked object, trigger count, first trigger time, latest trigger time, notes and action history.
+- Alert content stores only redacted summaries and linked object IDs. It does not store raw payment callbacks, provider configuration snapshots, host certificate paths, install tokens, passwords or secrets.
+- The alert center is admin-only. User APIs and the user build do not expose alert rules, alert events or internal handling notes.
+
 ## System Settings
 
 - Access and registration.
@@ -108,4 +121,4 @@ The operations overview is returned only by the admin statistics API and is not 
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
-Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.
+Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that SLA alerts are admin-only, deduplicated and redacted, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.

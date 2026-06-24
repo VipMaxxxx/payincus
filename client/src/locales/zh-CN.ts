@@ -208,6 +208,7 @@ export default {
         systemUpdate: '版本更新',
         plugins: '插件中心',
         delivery: '交付保障',
+        slaAlerts: 'SLA 与告警',
         users: '用户',
         statistics: '统计',
         hosts: '节点',

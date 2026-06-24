@@ -82,7 +82,13 @@ import type {
   PluginConfigValue,
   DeliveryAssuranceCase,
   DeliveryOverview,
-  DeliveryTasksResponse
+  DeliveryTasksResponse,
+  SlaAlertEvent,
+  SlaAlertListResponse,
+  SlaAlertOverview,
+  SlaAlertRule,
+  SlaAlertScanResponse,
+  SlaAlertSeverity
 } from '@/types/api.js'
 
 export type VipRuleType = 'user' | 'hosting'
@@ -2188,6 +2194,39 @@ const api = {
       http.post(`/admin/delivery/tasks/${taskId}/notify`, { mode, note }),
     resolve: (taskId: number, status: 'recovered' | 'closed', note?: string | null): Promise<{ case: DeliveryAssuranceCase }> =>
       http.post(`/admin/delivery/tasks/${taskId}/resolve`, { status, note })
+  },
+
+  slaAlerts: {
+    overview: (): Promise<SlaAlertOverview> =>
+      http.get('/admin/sla-alerts/overview'),
+    alerts: (params: {
+      page?: number
+      pageSize?: number
+      status?: string
+      severity?: string
+      module?: string
+      search?: string
+    } = {}): Promise<SlaAlertListResponse> =>
+      http.get('/admin/sla-alerts/alerts', { params }),
+    rules: (): Promise<{ rules: SlaAlertRule[] }> =>
+      http.get('/admin/sla-alerts/rules'),
+    scan: (): Promise<SlaAlertScanResponse> =>
+      http.post('/admin/sla-alerts/scan', {}, { timeout: TIMEOUT.LONG }),
+    acknowledge: (id: number, note?: string | null): Promise<{ alert: SlaAlertEvent }> =>
+      http.post(`/admin/sla-alerts/alerts/${id}/acknowledge`, { note }),
+    resolve: (id: number, status: 'recovered' | 'ignored', note?: string | null): Promise<{ alert: SlaAlertEvent }> =>
+      http.post(`/admin/sla-alerts/alerts/${id}/resolve`, { status, note }),
+    silence: (id: number, minutes: number, note?: string | null): Promise<{ alert: SlaAlertEvent }> =>
+      http.post(`/admin/sla-alerts/alerts/${id}/silence`, { minutes, note }),
+    updateRule: (code: string, data: {
+      enabled?: boolean
+      severity?: SlaAlertSeverity
+      thresholdMinutes?: number | null
+      thresholdCount?: number | null
+      dedupeMinutes?: number
+      silenceMinutes?: number | null
+    }): Promise<{ rule: SlaAlertRule }> =>
+      http.patch(`/admin/sla-alerts/rules/${encodeURIComponent(code)}`, data)
   },
 
   // Storage Configs (远程存储配置)

@@ -171,6 +171,44 @@ enum DeliveryAssuranceActionType {
   close
 }
 
+enum SlaAlertSeverity {
+  info
+  warning
+  critical
+}
+
+enum SlaAlertStatus {
+  open
+  investigating
+  recovered
+  ignored
+}
+
+enum SlaAlertObjectType {
+  host
+  agent
+  instance
+  order
+  task
+  notification_channel
+  system_update
+  smtp
+  telegram
+  disk
+  system
+}
+
+enum SlaAlertActionType {
+  detected
+  merged
+  notified
+  acknowledge
+  mark_recovered
+  ignore
+  silence
+  rule_update
+}
+
 enum HostNotificationEmailTaskStatus {
   PENDING
   PROCESSING
@@ -313,6 +351,79 @@ model DeliveryAssuranceAction {
   @@index([caseId, createdAt(sort: Desc)])
   @@index([actionType, createdAt(sort: Desc)])
   @@map("delivery_assurance_actions")
+}
+
+model SlaAlertRule {
+  id                   Int              @id @default(autoincrement())
+  code                 String           @unique
+  module               String
+  title                String
+  description          String?
+  severity             SlaAlertSeverity @default(warning)
+  enabled              Boolean          @default(true)
+  thresholdMinutes     Int?             @map("threshold_minutes")
+  thresholdCount       Int?             @map("threshold_count")
+  dedupeMinutes        Int              @default(30) @map("dedupe_minutes")
+  notificationChannels Json             @default("[]") @map("notification_channels")
+  silenceUntil         DateTime?        @map("silence_until")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  @@index([enabled, module])
+  @@index([severity])
+  @@map("sla_alert_rules")
+}
+
+model SlaAlertEvent {
+  id               Int                @id @default(autoincrement())
+  ruleCode         String             @map("rule_code")
+  module           String
+  severity         SlaAlertSeverity
+  status           SlaAlertStatus     @default(open)
+  objectType       SlaAlertObjectType @map("object_type")
+  objectId         Int?               @map("object_id")
+  objectLabel      String?            @map("object_label")
+  fingerprint      String
+  title            String
+  message          String
+  detail           Json?
+  triggerCount     Int                @default(1) @map("trigger_count")
+  firstTriggeredAt DateTime           @default(now()) @map("first_triggered_at")
+  lastTriggeredAt  DateTime           @default(now()) @map("last_triggered_at")
+  recoveredAt      DateTime?          @map("recovered_at")
+  silencedUntil    DateTime?          @map("silenced_until")
+  handledByUserId  Int?               @map("handled_by_user_id")
+  handledByUsername String?           @map("handled_by_username")
+  handledAt        DateTime?          @map("handled_at")
+  note             String?
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  actions          SlaAlertAction[]
+
+  @@unique([ruleCode, fingerprint])
+  @@index([status, severity, lastTriggeredAt(sort: Desc)])
+  @@index([module, status])
+  @@index([objectType, objectId])
+  @@index([ruleCode])
+  @@map("sla_alert_events")
+}
+
+model SlaAlertAction {
+  id            Int                @id @default(autoincrement())
+  eventId       Int                @map("event_id")
+  actionType    SlaAlertActionType @map("action_type")
+  actorUserId   Int?               @map("actor_user_id")
+  actorUsername String?            @map("actor_username")
+  note          String?
+  detail        Json?
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  event          SlaAlertEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, createdAt(sort: Desc)])
+  @@index([actionType, createdAt(sort: Desc)])
+  @@map("sla_alert_actions")
 }
 
 enum NotificationChannelType {
