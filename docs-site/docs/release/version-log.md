@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `5de795a`
+- 当前 HEAD / Current HEAD: `dc95c91`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Add order payment operations workflow / 新增订单支付运营闭环
-- 最新 tag / Latest tag: `v0.2.7`
+- 提交说明 / Commit subject: Add financial reconciliation workflow / 新增财务对账闭环
+- 最新 tag / Latest tag: `v0.2.8`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.2.8
+
+- 发布提交 / Release commit: `dc95c91`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Add financial reconciliation workflow / 新增财务对账闭环
+
+### 新增能力 / New Capabilities
+
+- Add financial reconciliation workflow / 新增财务对账闭环 `dc95c91`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff for v0.2.7 OTA proof / 更新 v0.2.7 OTA 证明交接 `522a67c`
+- Update version log for v0.2.7 / 更新 v0.2.7 版本日志 `2063fae`
 
 ## v0.2.7
 
