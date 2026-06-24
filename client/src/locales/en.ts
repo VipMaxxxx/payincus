@@ -208,6 +208,7 @@ export default {
         systemUpdate: 'Version Update',
         plugins: 'Plugin Center',
         delivery: 'Delivery Assurance',
+        slaAlerts: 'SLA & Alerts',
         users: 'Users',
         statistics: 'Statistics',
         hosts: 'Hosts',

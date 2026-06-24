@@ -216,6 +216,7 @@ export default {
         systemUpdate: '版本更新',
         plugins: '插件中心',
         delivery: '交付保障',
+        slaAlerts: 'SLA 與告警',
         users: '使用者',
         statistics: '統計',
         hosts: '節點',

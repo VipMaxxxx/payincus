@@ -186,6 +186,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.delivery', title: '交付保障' }
   },
   {
+    path: '/admin/sla-alerts',
+    name: 'admin-sla-alerts',
+    component: () => import('@/views/admin/SlaAlertsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.slaAlerts', title: 'SLA 与告警' }
+  },
+  {
     path: '/admin/images',
     name: 'admin-images',
     component: () => import('@/views/admin/ImagesView.vue'),

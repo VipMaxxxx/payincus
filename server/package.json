@@ -134,6 +134,7 @@
     "test:security-config": "node --import tsx scripts/test-security-config.ts",
     "test:security-headers": "node --import tsx scripts/test-security-headers.ts",
     "test:scheduler-startup-idempotency": "node --import tsx scripts/test-scheduler-startup-idempotency.ts",
+    "test:sla-alert-guards": "node --import tsx scripts/test-sla-alert-guards.ts",
     "test:startup-database-safety": "node --import tsx scripts/test-startup-database-safety.ts",
     "test:snapshot-route-guards": "node --import tsx scripts/test-snapshot-route-guards.ts",
     "test:ssh-key-route-id-guards": "node --import tsx scripts/test-ssh-key-route-id-guards.ts",
