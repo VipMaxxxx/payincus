@@ -59,6 +59,10 @@ import type {
   Ticket,
   TicketMessage,
   TicketStatus,
+  TicketObjectLink,
+  TicketObjectLinkType,
+  TicketSupportContext,
+  TicketInternalNote,
   CreateTicketRequest,
   PaginatedTickets,
   PaginatedTicketMessages,
@@ -2499,6 +2503,22 @@ const api = {
     getMessages: (id: number, params?: { page?: number; pageSize?: number }): Promise<PaginatedTicketMessages> =>
       http.get(`/tickets/${id}/messages`, { params }),
 
+    // 获取后台客服工作台上下文（仅管理员）
+    getSupportContext: (id: number): Promise<TicketSupportContext> =>
+      http.get(`/tickets/${id}/support-context`),
+
+    // 创建内部备注（仅管理员）
+    createInternalNote: (id: number, content: string): Promise<{ note: TicketInternalNote }> =>
+      http.post(`/tickets/${id}/internal-notes`, { content }),
+
+    // 关联客服处理对象（仅管理员）
+    linkObject: (id: number, objectType: TicketObjectLinkType, objectId: number): Promise<{ link: TicketObjectLink }> =>
+      http.post(`/tickets/${id}/links`, { objectType, objectId }),
+
+    // 从客服工作台发送用户通知（仅管理员）
+    notifyUser: (id: number, content: string): Promise<{ message: string }> =>
+      http.post(`/tickets/${id}/notify`, { content }),
+
     // 回复工单
     reply: (id: number, content: string, attachments?: File[]): Promise<{ message: string; data: TicketMessage }> =>
       (attachments && attachments.length > 0)
@@ -2526,7 +2546,7 @@ const api = {
       http.get(`/tickets/hosts/${hostId}`, { params }),
 
     // 获取所有宿主机的工单（汇总视图，支持 active 状态筛选和搜索）
-    getMyHostTickets: (params?: { status?: TicketStatus | 'active'; hostId?: number; sourceType?: 'all' | 'user' | 'official' | 'hosted'; search?: string; page?: number; pageSize?: number }): Promise<PaginatedTickets> =>
+    getMyHostTickets: (params?: { status?: TicketStatus | 'active'; hostId?: number; sourceType?: 'all' | 'user' | 'official' | 'hosted'; queue?: 'pending' | 'due_soon' | 'overdue' | 'waiting_user' | 'waiting_internal'; search?: string; page?: number; pageSize?: number }): Promise<PaginatedTickets> =>
       http.get('/tickets/my-hosts', { params }),
 
     // 获取待处理工单数量

@@ -4,11 +4,22 @@
  */
 
 import { prisma } from './prisma.js'
-import type { TicketStatus, TicketPriority } from '@prisma/client'
+import type { TicketStatus, TicketPriority, TicketObjectLinkType } from '@prisma/client'
 
 // ==================== 类型定义 ====================
 
 const TICKET_STATUSES = new Set<TicketStatus>(['open', 'in_progress', 'resolved', 'closed'])
+const TICKET_LINK_TYPES = new Set<TicketObjectLinkType>([
+  'recharge_record',
+  'order_operation_case',
+  'instance',
+  'host',
+  'delivery_case',
+  'sla_alert',
+  'plugin_task'
+])
+
+export type TicketSlaStatus = 'waiting_first_response' | 'waiting_user' | 'waiting_internal' | 'due_soon' | 'overdue' | 'met' | 'closed'
 
 function clampPagination(
   page: number | undefined,
@@ -36,6 +47,64 @@ function normalizeSearchTerm(search: string | undefined): string {
 function getSearchId(searchTerm: string): number | null {
   const parsed = Number(searchTerm)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function addMinutes(date: Date, minutes: number): Date {
+  return new Date(date.getTime() + minutes * 60 * 1000)
+}
+
+function getSlaMinutes(priority: TicketPriority): { firstResponse: number; resolution: number } {
+  switch (priority) {
+    case 'urgent':
+      return { firstResponse: 30, resolution: 240 }
+    case 'high':
+      return { firstResponse: 120, resolution: 720 }
+    case 'low':
+      return { firstResponse: 1440, resolution: 5760 }
+    case 'normal':
+    default:
+      return { firstResponse: 480, resolution: 2880 }
+  }
+}
+
+function computeSlaStatus(input: {
+  status: TicketStatus
+  firstResponseDueAt: Date | null
+  resolutionDueAt: Date | null
+  firstRespondedAt: Date | null
+  resolvedAt: Date | null
+  closedAt: Date | null
+  lastMessage?: { isFromOwner: boolean } | null
+}, now = new Date()): TicketSlaStatus {
+  if (input.status === 'closed') return 'closed'
+  if (input.resolvedAt || input.status === 'resolved') return 'met'
+
+  const hasFirstResponse = Boolean(input.firstRespondedAt)
+  if (!hasFirstResponse && input.firstResponseDueAt && input.firstResponseDueAt.getTime() < now.getTime()) {
+    return 'overdue'
+  }
+  if (input.resolutionDueAt && input.resolutionDueAt.getTime() < now.getTime()) {
+    return 'overdue'
+  }
+
+  const soonMs = 60 * 60 * 1000
+  if ((!hasFirstResponse && input.firstResponseDueAt && input.firstResponseDueAt.getTime() - now.getTime() <= soonMs) ||
+      (input.resolutionDueAt && input.resolutionDueAt.getTime() - now.getTime() <= soonMs)) {
+    return 'due_soon'
+  }
+
+  if (!hasFirstResponse) return 'waiting_first_response'
+  if (input.lastMessage?.isFromOwner) return 'waiting_user'
+  return 'waiting_internal'
+}
+
+function toIso(value: Date | null | undefined): string | null {
+  return value ? value.toISOString() : null
+}
+
+export function normalizeTicketObjectLinkType(type: string | undefined): TicketObjectLinkType | null {
+  if (!type || !TICKET_LINK_TYPES.has(type as TicketObjectLinkType)) return null
+  return type as TicketObjectLinkType
 }
 
 export interface CreateTicketData {
@@ -76,6 +145,11 @@ export interface TicketWithDetails {
   updatedAt: string
   resolvedAt: string | null
   closedAt: string | null
+  firstResponseDueAt: string | null
+  resolutionDueAt: string | null
+  firstRespondedAt: string | null
+  slaBreachedAt: string | null
+  slaStatus: TicketSlaStatus
   user: {
     id: number
     username: string
@@ -125,6 +199,26 @@ export interface TicketMessage {
     avatarStyle: string
     avatarBadgeId: string | null
   }
+}
+
+export interface TicketInternalNote {
+  id: number
+  ticketId: number
+  actorUserId: number
+  actorUsername: string
+  content: string
+  createdAt: string
+}
+
+export interface TicketObjectLink {
+  id: number
+  ticketId: number
+  objectType: TicketObjectLinkType
+  objectId: number
+  objectLabel: string | null
+  createdByUserId: number
+  createdByUsername: string
+  createdAt: string
 }
 
 export interface AutoClosedTicket {
@@ -197,6 +291,9 @@ function mapTicketMessageAttachment(attachment: {
  */
 export async function createTicket(data: CreateTicketData): Promise<{ ticketId: number; messageId: number }> {
   const result = await prisma.$transaction(async (tx) => {
+    const createdAt = new Date()
+    const priority = data.priority || 'normal'
+    const sla = getSlaMinutes(priority)
     // 创建工单
     const ticket = await tx.ticket.create({
       data: {
@@ -205,8 +302,10 @@ export async function createTicket(data: CreateTicketData): Promise<{ ticketId: 
         instanceId: data.instanceId ?? null,
         subject: data.subject,
         category: data.category || 'general',
-        priority: data.priority || 'normal',
-        status: 'open'
+        priority,
+        status: 'open',
+        firstResponseDueAt: addMinutes(createdAt, sla.firstResponse),
+        resolutionDueAt: addMinutes(createdAt, sla.resolution)
       }
     })
 
@@ -328,8 +427,21 @@ export async function getTicketById(ticketId: number): Promise<TicketWithDetails
     status: ticket.status,
     createdAt: ticket.createdAt.toISOString(),
     updatedAt: ticket.updatedAt.toISOString(),
-    resolvedAt: ticket.resolvedAt?.toISOString() || null,
-    closedAt: ticket.closedAt?.toISOString() || null,
+    resolvedAt: toIso(ticket.resolvedAt),
+    closedAt: toIso(ticket.closedAt),
+    firstResponseDueAt: toIso(ticket.firstResponseDueAt),
+    resolutionDueAt: toIso(ticket.resolutionDueAt),
+    firstRespondedAt: toIso(ticket.firstRespondedAt),
+    slaBreachedAt: toIso(ticket.slaBreachedAt),
+    slaStatus: computeSlaStatus({
+      status: ticket.status,
+      firstResponseDueAt: ticket.firstResponseDueAt,
+      resolutionDueAt: ticket.resolutionDueAt,
+      firstRespondedAt: ticket.firstRespondedAt,
+      resolvedAt: ticket.resolvedAt,
+      closedAt: ticket.closedAt,
+      lastMessage: ticket.messages[0] ?? null
+    }),
     user: ticket.user,
     host: ticket.host,
       instance: ticket.instance ? {
@@ -469,8 +581,21 @@ export async function getUserTickets(
         status: ticket.status,
         createdAt: ticket.createdAt.toISOString(),
         updatedAt: ticket.updatedAt.toISOString(),
-        resolvedAt: ticket.resolvedAt?.toISOString() || null,
-        closedAt: ticket.closedAt?.toISOString() || null,
+        resolvedAt: toIso(ticket.resolvedAt),
+        closedAt: toIso(ticket.closedAt),
+        firstResponseDueAt: toIso(ticket.firstResponseDueAt),
+        resolutionDueAt: toIso(ticket.resolutionDueAt),
+        firstRespondedAt: toIso(ticket.firstRespondedAt),
+        slaBreachedAt: toIso(ticket.slaBreachedAt),
+        slaStatus: computeSlaStatus({
+          status: ticket.status,
+          firstResponseDueAt: ticket.firstResponseDueAt,
+          resolutionDueAt: ticket.resolutionDueAt,
+          firstRespondedAt: ticket.firstRespondedAt,
+          resolvedAt: ticket.resolvedAt,
+          closedAt: ticket.closedAt,
+          lastMessage: lastMsg ?? null
+        }),
         user: ticket.user,
         host: ticket.host,
         instance: ticket.instance,
@@ -606,8 +731,21 @@ export async function getHostTickets(
       status: ticket.status,
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString(),
-      resolvedAt: ticket.resolvedAt?.toISOString() || null,
-      closedAt: ticket.closedAt?.toISOString() || null,
+      resolvedAt: toIso(ticket.resolvedAt),
+      closedAt: toIso(ticket.closedAt),
+      firstResponseDueAt: toIso(ticket.firstResponseDueAt),
+      resolutionDueAt: toIso(ticket.resolutionDueAt),
+      firstRespondedAt: toIso(ticket.firstRespondedAt),
+      slaBreachedAt: toIso(ticket.slaBreachedAt),
+      slaStatus: computeSlaStatus({
+        status: ticket.status,
+        firstResponseDueAt: ticket.firstResponseDueAt,
+        resolutionDueAt: ticket.resolutionDueAt,
+        firstRespondedAt: ticket.firstRespondedAt,
+        resolvedAt: ticket.resolvedAt,
+        closedAt: ticket.closedAt,
+        lastMessage: lastMsg ?? null
+      }),
       user: ticket.user,
       host: ticket.host,
       instance: ticket.instance,
@@ -657,6 +795,7 @@ export async function getOwnerAllTickets(
     status?: TicketStatus | 'active'
     hostId?: number
     sourceType?: 'user' | 'official' | 'hosted'
+    queue?: 'pending' | 'due_soon' | 'overdue' | 'waiting_user' | 'waiting_internal'
     search?: string
     page?: number
     pageSize?: number
@@ -764,7 +903,7 @@ export async function getOwnerAllTickets(
   ])
 
   // 构建返回数据，添加 needsReply 字段
-  const ticketsWithNeedsReply = tickets.map(ticket => {
+  let ticketsWithNeedsReply = tickets.map(ticket => {
     const lastMsg = ticket.messages[0]
     // 宿主机视角：如果最后一条消息来自用户（isFromOwner=false），说明需要宿主机主人回复
     const needsReply = ticket.status !== 'closed' && lastMsg?.isFromOwner === false
@@ -780,8 +919,21 @@ export async function getOwnerAllTickets(
       status: ticket.status,
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString(),
-      resolvedAt: ticket.resolvedAt?.toISOString() || null,
-      closedAt: ticket.closedAt?.toISOString() || null,
+      resolvedAt: toIso(ticket.resolvedAt),
+      closedAt: toIso(ticket.closedAt),
+      firstResponseDueAt: toIso(ticket.firstResponseDueAt),
+      resolutionDueAt: toIso(ticket.resolutionDueAt),
+      firstRespondedAt: toIso(ticket.firstRespondedAt),
+      slaBreachedAt: toIso(ticket.slaBreachedAt),
+      slaStatus: computeSlaStatus({
+        status: ticket.status,
+        firstResponseDueAt: ticket.firstResponseDueAt,
+        resolutionDueAt: ticket.resolutionDueAt,
+        firstRespondedAt: ticket.firstRespondedAt,
+        resolvedAt: ticket.resolvedAt,
+        closedAt: ticket.closedAt,
+        lastMessage: lastMsg ?? null
+      }),
       user: ticket.user,
       host: ticket.host,
       instance: ticket.instance,
@@ -794,6 +946,13 @@ export async function getOwnerAllTickets(
       needsReply
     }
   })
+
+  if (options.queue) {
+    ticketsWithNeedsReply = ticketsWithNeedsReply.filter(ticket => {
+      if (options.queue === 'pending') return ticket.needsReply
+      return ticket.slaStatus === options.queue
+    })
+  }
 
   // 智能排序：需要回复的排前面，再按优先级和更新时间
   const priorityOrder: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 }
@@ -906,6 +1065,18 @@ export async function addTicketMessage(
 
     if (ticketUpdate.count === 0) {
       throw new Error('Cannot reply to a closed ticket')
+    }
+
+    if (isFromOwner) {
+      await tx.ticket.updateMany({
+        where: {
+          id: ticketId,
+          firstRespondedAt: null
+        },
+        data: {
+          firstRespondedAt: new Date()
+        }
+      })
     }
 
     const createdMessage = await tx.ticketMessage.create({
@@ -1274,4 +1445,428 @@ export async function getTicketMessageAttachmentById(attachmentId: number): Prom
       url: true
     }
   })
+}
+
+function maskEmail(email: string | null | undefined): string | null {
+  if (!email) return null
+  const [name, domain] = email.split('@')
+  if (!name || !domain) return null
+  const visible = name.slice(0, Math.min(2, name.length))
+  return `${visible}${'*'.repeat(Math.max(2, name.length - visible.length))}@${domain}`
+}
+
+function decimalToString(value: { toString(): string } | number | string | null | undefined): string | null {
+  if (value === null || value === undefined) return null
+  return value.toString()
+}
+
+function getKnowledgeSuggestions(category: string): Array<{ title: string; steps: string[] }> {
+  const suggestions: Record<string, Array<{ title: string; steps: string[] }>> = {
+    billing: [
+      { title: '核对充值与余额', steps: ['检查最近充值状态', '查看余额流水', '如需补偿只跳转调账审批'] },
+      { title: '支付异常处理', steps: ['核对 provider 摘要', '检查是否存在重复回调', '必要时登记订单争议'] }
+    ],
+    technical: [
+      { title: '实例故障处理', steps: ['确认实例状态和宿主机在线状态', '检查最近任务失败原因', '必要时转交付保障处理'] },
+      { title: '终端或网络问题', steps: ['确认实例运行中', '检查 NAT/端口映射', '保留用户侧报错截图'] }
+    ],
+    abuse: [
+      { title: '风控处理', steps: ['保留用户说明和证据', '只做内部备注', '高风险限制需走人工审核'] }
+    ],
+    general: [
+      { title: '通用客服处理', steps: ['先确认用户账户状态', '核对关联实例或订单', '用户可见回复与内部备注分开记录'] }
+    ]
+  }
+
+  return suggestions[category] ?? suggestions.general
+}
+
+async function validateTicketObjectLink(ticket: { userId: number; hostId: number | null; instanceId: number | null }, objectType: TicketObjectLinkType, objectId: number): Promise<string | null> {
+  switch (objectType) {
+    case 'recharge_record': {
+      const record = await prisma.rechargeRecord.findFirst({
+        where: { id: objectId, userId: ticket.userId },
+        select: { orderNo: true, status: true, amount: true }
+      })
+      return record ? `充值 ${record.orderNo} · ${record.status} · ¥${decimalToString(record.amount)}` : null
+    }
+    case 'order_operation_case': {
+      const item = await prisma.orderOperationCase.findFirst({
+        where: { id: objectId, userId: ticket.userId },
+        select: { orderNo: true, status: true, reason: true }
+      })
+      return item ? `订单处理 ${item.orderNo ?? `#${objectId}`} · ${item.status}` : null
+    }
+    case 'instance': {
+      const instance = await prisma.instance.findFirst({
+        where: { id: objectId, userId: ticket.userId },
+        select: { name: true, status: true }
+      })
+      return instance ? `实例 ${instance.name} · ${instance.status}` : null
+    }
+    case 'host': {
+      const hostOr: Array<Record<string, unknown>> = [
+        { instances: { some: { userId: ticket.userId } } }
+      ]
+      if (ticket.hostId) {
+        hostOr.unshift({ id: ticket.hostId })
+      }
+      const host = await prisma.host.findFirst({
+        where: {
+          id: objectId,
+          OR: hostOr
+        },
+        select: { name: true, status: true }
+      })
+      return host ? `节点 ${host.name} · ${host.status}` : null
+    }
+    case 'delivery_case': {
+      const item = await prisma.deliveryAssuranceCase.findFirst({
+        where: { id: objectId, userId: ticket.userId },
+        select: { title: true, status: true }
+      })
+      return item ? `交付保障 ${item.title} · ${item.status}` : null
+    }
+    case 'sla_alert': {
+      const alertOr: Array<Record<string, unknown>> = []
+      if (ticket.hostId) {
+        alertOr.push({ objectType: 'host', objectId: ticket.hostId })
+      }
+      if (ticket.instanceId) {
+        alertOr.push({ objectType: 'instance', objectId: ticket.instanceId })
+      }
+      if (alertOr.length === 0) return null
+      const event = await prisma.slaAlertEvent.findFirst({
+        where: {
+          id: objectId,
+          OR: alertOr
+        },
+        select: { title: true, status: true, severity: true }
+      })
+      return event ? `告警 ${event.title} · ${event.severity}/${event.status}` : null
+    }
+    case 'plugin_task': {
+      const task = await prisma.pluginInstallTask.findUnique({
+        where: { id: objectId },
+        select: { pluginId: true, action: true, status: true }
+      })
+      return task ? `插件任务 ${task.pluginId ?? `#${objectId}`} · ${task.action}/${task.status}` : null
+    }
+    default:
+      return null
+  }
+}
+
+export async function getAdminTicketSuccessContext(ticketId: number): Promise<any | null> {
+  const ticket = await getTicketById(ticketId)
+  if (!ticket) return null
+
+  const [user, recentOrders, recentOrderCases, recentInstances, recentDeliveryCases, links, notes, messages] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: ticket.userId },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        status: true,
+        balance: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            instances: true,
+            ticketsCreated: true,
+            rechargeRecords: true,
+            balanceLogs: true
+          }
+        }
+      }
+    }),
+    prisma.rechargeRecord.findMany({
+      where: { userId: ticket.userId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        orderNo: true,
+        tradeNo: true,
+        amount: true,
+        actualAmount: true,
+        status: true,
+        failReason: true,
+        paymentMethod: true,
+        createdAt: true,
+        completedAt: true
+      }
+    }),
+    prisma.orderOperationCase.findMany({
+      where: { userId: ticket.userId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        sourceType: true,
+        sourceId: true,
+        orderNo: true,
+        status: true,
+        reason: true,
+        result: true,
+        refundAmount: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    }),
+    prisma.instance.findMany({
+      where: { userId: ticket.userId, status: { not: 'deleted' } },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        hostId: true,
+        cpu: true,
+        memory: true,
+        disk: true,
+        createdAt: true,
+        expiresAt: true,
+        host: { select: { id: true, name: true, status: true } },
+        package: { select: { id: true, name: true } }
+      }
+    }),
+    prisma.deliveryAssuranceCase.findMany({
+      where: { userId: ticket.userId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        issueType: true,
+        severity: true,
+        instanceId: true,
+        hostId: true,
+        lastError: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    }),
+    prisma.ticketObjectLink.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: 'desc' }
+    }),
+    prisma.ticketInternalNote.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: 'asc' }
+    }),
+    prisma.ticketMessage.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        senderId: true,
+        content: true,
+        isFromOwner: true,
+        createdAt: true,
+        sender: { select: { username: true } }
+      }
+    })
+  ])
+
+  const instanceIds = recentInstances.map(instance => instance.id)
+  const hostIds = [...new Set(recentInstances.map(instance => instance.hostId).filter((id): id is number => Number.isInteger(id)))]
+  const alertOr: Array<Record<string, unknown>> = []
+  if (instanceIds.length > 0) {
+    alertOr.push({ objectType: 'instance', objectId: { in: instanceIds } })
+  }
+  if (hostIds.length > 0) {
+    alertOr.push({ objectType: 'host', objectId: { in: hostIds } })
+  }
+  const recentAlerts = alertOr.length > 0
+    ? await prisma.slaAlertEvent.findMany({
+        where: { OR: alertOr },
+        orderBy: { lastTriggeredAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          ruleCode: true,
+          module: true,
+          severity: true,
+          status: true,
+          objectType: true,
+          objectId: true,
+          objectLabel: true,
+          title: true,
+          message: true,
+          lastTriggeredAt: true
+        }
+      })
+    : []
+
+  const timeline = [
+    ...messages.map(message => ({
+      type: 'message',
+      id: message.id,
+      title: message.isFromOwner ? '客服回复' : '用户回复',
+      actor: message.sender.username,
+      content: message.content,
+      createdAt: message.createdAt.toISOString()
+    })),
+    ...notes.map(note => ({
+      type: 'internal_note',
+      id: note.id,
+      title: '内部备注',
+      actor: note.actorUsername,
+      content: note.content,
+      createdAt: note.createdAt.toISOString()
+    })),
+    ...links.map(link => ({
+      type: 'object_link',
+      id: link.id,
+      title: `关联 ${link.objectType}`,
+      actor: link.createdByUsername,
+      content: link.objectLabel ?? `#${link.objectId}`,
+      createdAt: link.createdAt.toISOString()
+    }))
+  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+  return {
+    ticket,
+    userContext: user ? {
+      id: user.id,
+      username: user.username,
+      emailMasked: maskEmail(user.email),
+      role: user.role,
+      status: user.status,
+      balance: decimalToString(user.balance),
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+      counts: user._count
+    } : null,
+    recentOrders: recentOrders.map(order => ({
+      ...order,
+      tradeNo: order.tradeNo ? `${order.tradeNo.slice(0, 4)}***${order.tradeNo.slice(-4)}` : null,
+      amount: decimalToString(order.amount),
+      actualAmount: decimalToString(order.actualAmount),
+      createdAt: order.createdAt.toISOString(),
+      completedAt: toIso(order.completedAt)
+    })),
+    recentOrderCases: recentOrderCases.map(item => ({
+      ...item,
+      refundAmount: decimalToString(item.refundAmount),
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString()
+    })),
+    recentInstances: recentInstances.map(instance => ({
+      ...instance,
+      createdAt: instance.createdAt.toISOString(),
+      expiresAt: toIso(instance.expiresAt)
+    })),
+    recentDeliveryCases: recentDeliveryCases.map(item => ({
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString()
+    })),
+    recentAlerts: recentAlerts.map(alert => ({
+      ...alert,
+      lastTriggeredAt: alert.lastTriggeredAt.toISOString()
+    })),
+    links: links.map(link => ({
+      id: link.id,
+      ticketId: link.ticketId,
+      objectType: link.objectType,
+      objectId: link.objectId,
+      objectLabel: link.objectLabel,
+      createdByUserId: link.createdByUserId,
+      createdByUsername: link.createdByUsername,
+      createdAt: link.createdAt.toISOString()
+    })),
+    internalNotes: notes.map(note => ({
+      id: note.id,
+      ticketId: note.ticketId,
+      actorUserId: note.actorUserId,
+      actorUsername: note.actorUsername,
+      content: note.content,
+      createdAt: note.createdAt.toISOString()
+    })),
+    timeline,
+    knowledgeSuggestions: getKnowledgeSuggestions(ticket.category),
+    quickActions: {
+      notifyUser: true,
+      balanceAdjustmentPath: `/admin/billing?userId=${ticket.userId}&source=ticket&ticketId=${ticket.id}`,
+      deliveryCenterPath: ticket.instanceId ? `/admin/delivery?instanceId=${ticket.instanceId}&ticketId=${ticket.id}` : '/admin/delivery',
+      userPath: `/admin/users/${ticket.userId}`,
+      instancePath: ticket.instanceId ? `/admin/instances/${ticket.instanceId}` : null,
+      hostPath: ticket.hostId ? `/admin/resources/hosts/${ticket.hostId}` : null
+    }
+  }
+}
+
+export async function createTicketInternalNote(ticketId: number, actorUserId: number, actorUsername: string, content: string): Promise<TicketInternalNote> {
+  const note = await prisma.ticketInternalNote.create({
+    data: {
+      ticketId,
+      actorUserId,
+      actorUsername,
+      content
+    }
+  })
+  return {
+    id: note.id,
+    ticketId: note.ticketId,
+    actorUserId: note.actorUserId,
+    actorUsername: note.actorUsername,
+    content: note.content,
+    createdAt: note.createdAt.toISOString()
+  }
+}
+
+export async function createTicketObjectLink(
+  ticketId: number,
+  objectType: TicketObjectLinkType,
+  objectId: number,
+  createdByUserId: number,
+  createdByUsername: string
+): Promise<TicketObjectLink | null> {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: { userId: true, hostId: true, instanceId: true }
+  })
+  if (!ticket) return null
+
+  const objectLabel = await validateTicketObjectLink(ticket, objectType, objectId)
+  if (!objectLabel) return null
+
+  const link = await prisma.ticketObjectLink.upsert({
+    where: {
+      ticketId_objectType_objectId: {
+        ticketId,
+        objectType,
+        objectId
+      }
+    },
+    create: {
+      ticketId,
+      objectType,
+      objectId,
+      objectLabel,
+      createdByUserId,
+      createdByUsername
+    },
+    update: {
+      objectLabel
+    }
+  })
+
+  return {
+    id: link.id,
+    ticketId: link.ticketId,
+    objectType: link.objectType,
+    objectId: link.objectId,
+    objectLabel: link.objectLabel,
+    createdByUserId: link.createdByUserId,
+    createdByUsername: link.createdByUsername,
+    createdAt: link.createdAt.toISOString()
+  }
 }

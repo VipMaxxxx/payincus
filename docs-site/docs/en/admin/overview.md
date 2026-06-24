@@ -25,6 +25,7 @@ https://admin.example.com
 | Admin create instance | `/admin/instances/create` | Manual delivery or correction workflows. |
 | Delivery Assurance | `/admin/delivery` | Instance delivery tasks, failure details, notification state, Agent/host/billing context and post-payment delivery troubleshooting actions. |
 | SLA & Alerts | `/admin/sla-alerts` | Scan and handle host, Agent, delivery, payment, notification, mail and OTA incidents. |
+| Tickets & Customer Success | `/admin/tickets` | Handle support tickets with user context, SLA state, linked objects, internal notes, handling timeline and safe support shortcuts. |
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
@@ -100,6 +101,19 @@ The operations overview is returned only by the admin statistics API and is not 
 - Alert content stores only redacted summaries and linked object IDs. It does not store raw payment callbacks, provider configuration snapshots, host certificate paths, install tokens, passwords or secrets.
 - The alert center is admin-only. User APIs and the user build do not expose alert rules, alert events or internal handling notes.
 
+## Tickets and Customer Success
+
+`/admin/tickets` now provides a customer success workspace:
+
+- Ticket lists can be filtered by active state, source and support queue. Support queues include pending, due soon, overdue, waiting for user and waiting for internal handling.
+- Tickets receive first-response and resolution SLA deadlines from their priority. The admin list and detail page show the SLA state and due times.
+- The admin ticket detail aggregates user context: account status, masked email, balance, recent orders, recent instances, recent Delivery Assurance cases and recent SLA alerts.
+- Support staff can link payment orders, order operation cases, instances, hosts, delivery cases, SLA alerts and plugin tasks. Linked objects are validated against the current ticket context.
+- Internal notes are stored separately from user-visible replies. They are returned only by admin endpoints and are not included in user ticket details or message lists.
+- Quick actions only send user notices or open the adjustment, delivery, user, instance and host pages. They do not directly mutate balances or resources.
+- The handling timeline merges user replies, support replies, internal notes and linked objects.
+- Support context does not return raw payment callbacks, provider snapshots, IP addresses, User-Agent values, instance root passwords, 2FA secrets, tokens, certificates or other secrets.
+
 ## System Settings
 
 - Access and registration.
@@ -121,4 +135,4 @@ The operations overview is returned only by the admin statistics API and is not 
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
-Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that SLA alerts are admin-only, deduplicated and redacted, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.
+Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that SLA alerts are admin-only, deduplicated and redacted, that ticket support context and internal notes are admin-only and cannot bypass adjustment or delivery workflows, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.

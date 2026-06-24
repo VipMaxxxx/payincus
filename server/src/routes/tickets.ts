@@ -557,6 +557,137 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
   })
 
   /**
+   * 获取后台客服工作台上下文（仅管理员）
+   * GET /tickets/:id/support-context
+   */
+  fastify.get<{
+    Params: { id: string }
+  }>('/:id/support-context', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async (request: FastifyRequest<{
+    Params: { id: string }
+  }>, reply: FastifyReply) => {
+    const ticketId = parsePositiveId(request.params.id)
+
+    if (ticketId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const context = await ticketDb.getAdminTicketSuccessContext(ticketId)
+    if (!context) {
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+    }
+
+    return reply.send(context)
+  })
+
+  /**
+   * 创建内部备注（仅管理员，用户端不可见）
+   * POST /tickets/:id/internal-notes
+   */
+  fastify.post<{
+    Params: { id: string }
+    Body: { content?: string }
+  }>('/:id/internal-notes', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async (request: FastifyRequest<{
+    Params: { id: string }
+    Body: { content?: string }
+  }>, reply: FastifyReply) => {
+    const { user } = request
+    const ticketId = parsePositiveId(request.params.id)
+    const content = sanitizeContent(request.body?.content)
+
+    if (ticketId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+    if (content.length < 1 || content.length > 3000) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Internal note must be 1-3000 characters'))
+    }
+
+    const ticket = await ticketDb.getTicketById(ticketId)
+    if (!ticket) {
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+    }
+
+    const note = await ticketDb.createTicketInternalNote(ticketId, user.id, user.username, content)
+    return reply.code(201).send({ note })
+  })
+
+  /**
+   * 关联客服处理对象（仅管理员）
+   * POST /tickets/:id/links
+   */
+  fastify.post<{
+    Params: { id: string }
+    Body: { objectType?: string; objectId?: number | string }
+  }>('/:id/links', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async (request: FastifyRequest<{
+    Params: { id: string }
+    Body: { objectType?: string; objectId?: number | string }
+  }>, reply: FastifyReply) => {
+    const { user } = request
+    const ticketId = parsePositiveId(request.params.id)
+    const objectId = parsePositiveId(request.body?.objectId)
+    const objectType = ticketDb.normalizeTicketObjectLinkType(request.body?.objectType)
+
+    if (ticketId === null || objectId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+    if (!objectType) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid object type'))
+    }
+
+    const link = await ticketDb.createTicketObjectLink(ticketId, objectType, objectId, user.id, user.username)
+    if (!link) {
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+    }
+
+    return reply.code(201).send({ link })
+  })
+
+  /**
+   * 从客服工作台发送一条站内通知（仅管理员）
+   * POST /tickets/:id/notify
+   */
+  fastify.post<{
+    Params: { id: string }
+    Body: { content?: string }
+  }>('/:id/notify', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async (request: FastifyRequest<{
+    Params: { id: string }
+    Body: { content?: string }
+  }>, reply: FastifyReply) => {
+    const { user } = request
+    const ticketId = parsePositiveId(request.params.id)
+    const content = sanitizeContent(request.body?.content)
+
+    if (ticketId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+    if (content.length < 1 || content.length > 1000) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Notification must be 1-1000 characters'))
+    }
+
+    const ticket = await ticketDb.getTicketById(ticketId)
+    if (!ticket) {
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+    }
+
+    await sendNotification(ticket.userId, 'ticket_replied', {
+      subject: ticket.subject,
+      hostName: ticket.host?.name || '系统',
+      message: content,
+      replyFrom: user.username
+    })
+    await ticketDb.createTicketInternalNote(ticketId, user.id, user.username, `已向用户发送通知：${content}`)
+
+    return reply.send({ message: 'Notification sent successfully' })
+  })
+
+  /**
    * 获取工单消息列表
    * GET /tickets/:id/messages
    */
@@ -948,6 +1079,7 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       status?: ExtendedTicketStatus
       hostId?: number
       sourceType?: 'all' | 'user' | 'official' | 'hosted'
+      queue?: 'pending' | 'due_soon' | 'overdue' | 'waiting_user' | 'waiting_internal'
       search?: string
       page?: number
       pageSize?: number
@@ -959,13 +1091,14 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       status?: ExtendedTicketStatus
       hostId?: number
       sourceType?: 'all' | 'user' | 'official' | 'hosted'
+      queue?: 'pending' | 'due_soon' | 'overdue' | 'waiting_user' | 'waiting_internal'
       search?: string
       page?: number
       pageSize?: number
     }
   }>, reply: FastifyReply) => {
     const { user } = request
-    const { status, hostId, sourceType, search, page, pageSize } = request.query
+    const { status, hostId, sourceType, queue, search, page, pageSize } = request.query
     const isAdmin = user.role === 'admin'
     const parsedHostId = parseOptionalPositiveId(hostId)
 
@@ -980,6 +1113,12 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
 
     if (sourceType && !['all', 'user', 'official', 'hosted'].includes(sourceType)) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid source type'))
+    }
+    if (queue && !['pending', 'due_soon', 'overdue', 'waiting_user', 'waiting_internal'].includes(queue)) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid queue'))
+    }
+    if (queue && !isAdmin) {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
     if (!isAdmin && sourceType && sourceType !== 'all' && sourceType !== 'hosted') {
@@ -1003,6 +1142,7 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       status: status as TicketStatus | 'active' | undefined,
       hostId: parsedHostId,
       sourceType: sourceType && sourceType !== 'all' ? sourceType : undefined,
+      queue,
       search,
       page: parsePositiveInteger(page, 1),
       pageSize: parsePositiveInteger(pageSize, 10, 100)

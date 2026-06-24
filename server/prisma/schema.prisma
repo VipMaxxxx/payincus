@@ -2295,17 +2295,68 @@ model Ticket {
   updatedAt   DateTime       @updatedAt @map("updated_at")
   resolvedAt  DateTime?      @map("resolved_at")
   closedAt    DateTime?      @map("closed_at")
+  firstResponseDueAt DateTime? @map("first_response_due_at")
+  resolutionDueAt    DateTime? @map("resolution_due_at")
+  firstRespondedAt   DateTime? @map("first_responded_at")
+  slaBreachedAt      DateTime? @map("sla_breached_at")
   
   user        User           @relation("TicketCreator", fields: [userId], references: [id], onDelete: Cascade)
   host        Host?          @relation("HostTickets", fields: [hostId], references: [id], onDelete: Cascade)
   instance    Instance?      @relation("InstanceTickets", fields: [instanceId], references: [id], onDelete: SetNull)
   messages    TicketMessage[]
   attachments TicketMessageAttachment[]
+  internalNotes TicketInternalNote[]
+  links       TicketObjectLink[]
   
   @@index([userId, status])
   @@index([hostId, status])
   @@index([status, createdAt(sort: Desc)])
+  @@index([status, firstResponseDueAt])
+  @@index([status, resolutionDueAt])
   @@map("tickets")
+}
+
+enum TicketObjectLinkType {
+  recharge_record
+  order_operation_case
+  instance
+  host
+  delivery_case
+  sla_alert
+  plugin_task
+}
+
+model TicketInternalNote {
+  id            Int      @id @default(autoincrement())
+  ticketId      Int      @map("ticket_id")
+  actorUserId   Int      @map("actor_user_id")
+  actorUsername String   @map("actor_username")
+  content       String   @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt(sort: Desc)])
+  @@index([actorUserId])
+  @@map("ticket_internal_notes")
+}
+
+model TicketObjectLink {
+  id            Int                  @id @default(autoincrement())
+  ticketId      Int                  @map("ticket_id")
+  objectType    TicketObjectLinkType @map("object_type")
+  objectId      Int                  @map("object_id")
+  objectLabel   String?              @map("object_label")
+  createdByUserId Int                @map("created_by_user_id")
+  createdByUsername String           @map("created_by_username")
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, objectType, objectId])
+  @@index([ticketId, createdAt(sort: Desc)])
+  @@index([objectType, objectId])
+  @@map("ticket_object_links")
 }
 
 // 工单消息表
