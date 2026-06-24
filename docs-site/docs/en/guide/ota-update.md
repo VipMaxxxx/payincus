@@ -29,13 +29,16 @@ The page checks the latest release tag when it opens. If the current deployment 
 
 1. Read `ota-manifest.json` from GitHub Release.
 2. Select the artifact for the current Linux architecture.
-3. Download outside the install directory.
-4. Verify size and SHA256.
-5. Extract to staging.
-6. Create a new atomic release under `/opt/incudal/releases`.
-7. Run Prisma migrations.
-8. Restart the backend and wait for `/api/health`.
-9. Run split host and production verification scripts.
+3. Clean the old `.incudal-update-downloads` cache.
+4. Run the disk-space preflight.
+5. Download the artifact to the managed cache directory.
+6. Verify size and SHA256.
+7. Extract to staging.
+8. Create a new atomic release under `/opt/incudal/releases`.
+9. Run Prisma migrations.
+10. Restart the backend and wait for `/api/health`.
+11. Run split host and production verification scripts.
+12. Clean the download cache and prune old releases after a successful update.
 
 ## Atomic Layout
 
@@ -46,6 +49,36 @@ The page checks the latest release tag when it opens. If the current deployment 
 ```
 
 Rollback switches the `current` symlink back to the previous release, restarts the backend and reruns verification.
+
+After a successful update, old releases are pruned automatically. The cleanup protects:
+
+- The release currently targeted by `current`.
+- The current update task `backupPath`.
+- Recent successful or rolled-back update task `backupPath` values.
+
+Unprotected releases keep the newest 8 directories by default. Older directories are removed.
+
+## Disk and Retention
+
+Recommended production variables:
+
+```dotenv
+SYSTEM_UPDATE_MIN_FREE_MB=4096
+SYSTEM_UPDATE_RELEASES_KEEP=8
+SYSTEM_UPDATE_BACKUP_TASKS_KEEP=3
+```
+
+| Variable | Default | Description |
+| --- | ---: | --- |
+| `SYSTEM_UPDATE_MIN_FREE_MB` | `4096` | Minimum free disk space before an update, in MB. Artifact mode also reserves extra space based on the package size. |
+| `SYSTEM_UPDATE_RELEASES_KEEP` | `8` | Number of unprotected old releases to keep in atomic layout. |
+| `SYSTEM_UPDATE_BACKUP_TASKS_KEEP` | `3` | Number of recent successful or rolled-back update task `backupPath` values to protect for rollback. |
+
+When disk space is insufficient, the update fails before download or migration and writes an actionable Chinese message to the task log. Typical remediation:
+
+- Clean `/opt/incudal/.incudal-update-downloads`.
+- Check `/opt/incudal/releases` for obsolete releases.
+- Expand the system disk and retry the OTA.
 
 ## Notes
 
