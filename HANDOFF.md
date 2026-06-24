@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-3dc1f66 Update version log for v0.4.0 / 更新 v0.4.0 版本日志
+3490fa1 Update version log for v0.4.3 / 更新 v0.4.3 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-3dc1f66 Update version log for v0.4.0 / 更新 v0.4.0 版本日志
+3490fa1 Update version log for v0.4.3 / 更新 v0.4.3 版本日志
 ```
 
 Recently updated/released files include:
@@ -127,27 +127,27 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.4.2 Fix ticket AI actions and panel cert paths / 修复工单 AI 与面板证书路径
-hotfix commit: 7f574ae
-version-log/docs commit: this documentation commit
+v0.4.3 Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底
+hotfix commit: b186fa8
+version-log/docs commit: 3490fa1
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28124355269: success for tag v0.4.2
-CI 28124350941: success for main commit 7f574ae
-Deploy docs site to GitHub Pages: pending this documentation push
+Build & Release 28125918329: success for tag v0.4.3
+CI 28125915550: success for tag/main commit b186fa8
+Deploy docs site to GitHub Pages 28125989730: success for docs commit 3490fa1
 ```
 
-Release assets for `v0.4.2` were present:
+Release assets for `v0.4.3` were present:
 
 ```text
-incudal-v0.4.2-linux-amd64.tar.gz
-incudal-v0.4.2-linux-amd64.tar.gz.sha256
-incudal-v0.4.2-linux-arm64.tar.gz
-incudal-v0.4.2-linux-arm64.tar.gz.sha256
-incudal-v0.4.2-ota-manifest.json
+incudal-v0.4.3-linux-amd64.tar.gz
+incudal-v0.4.3-linux-amd64.tar.gz.sha256
+incudal-v0.4.3-linux-arm64.tar.gz
+incudal-v0.4.3-linux-arm64.tar.gz.sha256
+incudal-v0.4.3-ota-manifest.json
 ota-manifest.json
 plugin-market-index.json
 ```
@@ -155,12 +155,12 @@ plugin-market-index.json
 Production OTA proof:
 
 ```text
-from: v0.4.0
-to: v0.4.2
-task: #51
-current symlink: /opt/incudal/current -> /opt/incudal/releases/v0.4.2-20260624193731
-version metadata: /opt/incudal/current/version.json reports v0.4.2, gitTag v0.4.2, gitCommit 7f574ae8e9ca, deployedAt 2026-06-24T19:37:40.080Z
-result: OTA completed successfully and public health checks passed
+from: v0.4.2
+to: v0.4.3
+task: #52
+current symlink: /opt/incudal/current -> /opt/incudal/releases/v0.4.3-20260624200340
+version metadata: /opt/incudal/current/version.json reports v0.4.3, gitTag v0.4.3, gitCommit b186fa869726, deployedAt 2026-06-24T20:03:47.991Z
+result: OTA completed successfully, production readiness passed, log/header exposure verification passed, and public health checks passed
 ```
 
 Post-update checks:
@@ -169,20 +169,16 @@ Post-update checks:
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
 https://admin.payincus.com/admin/tickets: HTTP 200 app shell
-https://admin.payincus.com/admin/plugins: HTTP 200 app shell
-Production admin assets contain: /ai/draft, /ai/reply, contentTooShort
-Production hosts now use stable panel cert paths: /opt/incudal/server/certs/client.crt and /opt/incudal/server/certs/client.key
-https://payincus.com/release/version-log.html: pending this documentation push for v0.4.2
-https://payincus.com/en/release/version-log.html: pending this documentation push for v0.4.2
+https://payincus.com/release/version-log.html: contains v0.4.3 and 修复工单 AI 运行时兜底
+https://payincus.com/en/release/version-log.html: contains v0.4.3 and ticket AI runtime fallback
+Production update log: artifact SHA256 verified, current release switched atomically, backend health ready on attempt 2, split-host verification passed, production readiness passed, log/header exposure passed
 ```
 
-Local gates run for `v0.4.2`:
+Local gates run for `v0.4.3`:
 
 ```text
 pnpm --filter server test:ai-ticket-context-guards
-pnpm --filter server test:ticket-success-guards
-pnpm --filter server test:host-install-script-guards
-pnpm --filter server type-check
+pnpm --filter client type-check
 pnpm --filter client build
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
@@ -191,7 +187,7 @@ pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The release was verified by GitHub Actions, release assets, production OTA version metadata, service health, production admin static asset markers, split boundary guards, plugin guards, AI ticket context guard, docs build, and docs/version-log checks. SSH log reads were intermittent after OTA, but server-side `version.json` was successfully read once and public checks stayed healthy.
+The release was verified by GitHub Actions, release assets, production OTA version metadata, service health, split-host verification, production readiness, log/header exposure scan, split boundary guards, AI ticket context guard, docs build, and docs/version-log checks.
 
 Current commercial operation progress:
 
