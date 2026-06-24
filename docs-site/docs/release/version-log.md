@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `b92a5a0`
+- 当前 HEAD / Current HEAD: `4f5995d`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Add plugin market governance / 新增插件市场治理
-- 最新 tag / Latest tag: `v0.4.6`
+- 提交说明 / Commit subject: Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
+- 最新 tag / Latest tag: `v0.4.7`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.4.7
+
+- 发布提交 / Release commit: `4f5995d`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头 `4f5995d`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.4.6 / 更新 v0.4.6 版本日志 `07f1e34`
 
 ## v0.4.6
 

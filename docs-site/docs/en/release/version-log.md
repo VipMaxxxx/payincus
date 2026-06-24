@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `b92a5a0`
+- Current HEAD / 当前 HEAD: `4f5995d`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Add plugin market governance / 新增插件市场治理
-- Latest tag / 最新 tag: `v0.4.6`
+- Commit subject / 提交说明: Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
+- Latest tag / 最新 tag: `v0.4.7`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.4.7
+
+- Release commit / 发布提交: `4f5995d`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
+
+### Fixes and Stability / 修复与稳定性
+
+- Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头 `4f5995d`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.4.6 / 更新 v0.4.6 版本日志 `07f1e34`
 
 ## v0.4.6
 
