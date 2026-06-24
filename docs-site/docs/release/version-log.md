@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `3c641c9`
+- 当前 HEAD / Current HEAD: `21a678c`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Add unified order center / 新增统一订单中心
-- 最新 tag / Latest tag: `v0.2.2`
+- 提交说明 / Commit subject: Add order exception handling / 新增订单异常处理
+- 最新 tag / Latest tag: `v0.2.3`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.2.3
+
+- 发布提交 / Release commit: `21a678c`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Add order exception handling / 新增订单异常处理
+
+### 新增能力 / New Capabilities
+
+- Add order exception handling / 新增订单异常处理 `21a678c`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff for v0.2.2 OTA proof / 更新 v0.2.2 OTA 证明交接 `7a244bc`
+- Update version log for v0.2.2 / 更新 v0.2.2 版本日志 `fca61a1`
 
 ## v0.2.2
 
