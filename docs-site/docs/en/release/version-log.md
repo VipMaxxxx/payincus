@@ -6,16 +6,24 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `326cab1`
+- Current HEAD / 当前 HEAD: `7ae4967`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Add production proof workspace / 新增生产验收工作台
-- Latest tag / 最新 tag: `v0.4.8`
+- Commit subject / 提交说明: Fix Lsky upload cleanup identifier / 修复 Lsky 上传清理标识
+- Latest tag / 最新 tag: `v0.4.9`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.4.9
+
+- Release commit / 发布提交: `7ae4967`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Fix Lsky upload cleanup identifier / 修复 Lsky 上传清理标识
+
+Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can be cleaned up when provider responses omit id/key/hash.
 
 ## v0.4.8
 
