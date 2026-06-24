@@ -2541,6 +2541,87 @@ export default {
                 paidInstances: '付费实例',
                 freeInstances: '免费实例',
             },
+            operations: {
+                title: '运营总览',
+                description: '按业务日汇总收入、订单、交付、节点和待处理风险。',
+                agentFreshness: 'Agent 在线按最近 {minutes} 分钟心跳计算',
+                todayTitle: '今日变化',
+                todayDescription: '当日新增、活跃和交付任务。',
+                riskTitle: '运营风险',
+                riskDescription: '需要管理员优先处理的支付、交付、通知和部署问题。',
+                riskCount: '{count} 项风险',
+                noRisk: '暂无风险',
+                healthyTitle: '当前未发现阻断风险',
+                healthyDescription: '支付、节点、Agent、通知和 OTA 风险项均未命中。',
+                cards: {
+                    todayRevenue: '今日收入',
+                    last7DaysRevenue: '近 7 日收入',
+                    todayOrders: '今日订单',
+                    runningInstances: '运行实例',
+                    onlineHosts: '在线节点',
+                    openTickets: '待处理工单',
+                },
+                captions: {
+                    yesterday: '昨日 {value}',
+                    last30Days: '近 30 日 {value}',
+                    completedRevenue: '已完成充值订单',
+                    orderBreakdown: '成功 {success} / 失败 {failed} / 待处理 {pending}',
+                    instanceBreakdown: '异常 {abnormal} / 7 日内到期 {expiring}',
+                    hostBreakdown: '共 {total} 个节点 / 在线 Agent {agents}',
+                    supportBreakdown: '未读 {unread} / 24h 通知失败 {failed}',
+                },
+                facts: {
+                    newUsers: '新增用户',
+                    activeUsers: '活跃用户',
+                    paidUsers: '付费用户',
+                    newInstances: '新购实例',
+                    pendingDelivery: '待执行交付任务',
+                    failedDelivery: '24h 失败交付任务',
+                },
+                severity: {
+                    info: '提示',
+                    warning: '警告',
+                    critical: '严重',
+                },
+                risks: {
+                    payment_provider_missing: {
+                        title: '未启用支付渠道',
+                        description: '没有 active 状态支付 Provider，用户无法完成真实充值。',
+                    },
+                    smtp_missing: {
+                        title: 'SMTP 未启用',
+                        description: '邮件验证、密码找回和邮件通知会不可用。',
+                    },
+                    notification_channel_missing: {
+                        title: '通知通道未启用',
+                        description: '没有可用通知通道，交付和运维告警无法触达。',
+                    },
+                    host_offline: {
+                        title: '{count} 个节点离线',
+                        description: '存在离线宿主机，实例创建和运维操作可能失败。',
+                    },
+                    agent_stale: {
+                        title: '{count} 个 Agent 离线或心跳过期',
+                        description: 'Agent 最近心跳超过阈值或状态异常，资源与流量上报可能不准确。',
+                    },
+                    delivery_failed: {
+                        title: '24h 内 {count} 个交付任务失败',
+                        description: '存在失败的实例交付任务，需要查看任务日志并补偿。',
+                    },
+                    payment_attention: {
+                        title: '{count} 个支付订单需要处理',
+                        description: '存在已支付处理中或失败订单，需要核对回调和入账状态。',
+                    },
+                    ota_failed: {
+                        title: '近 7 日 {count} 个 OTA 任务失败',
+                        description: '系统更新存在失败记录，需要检查发布包、磁盘和任务日志。',
+                    },
+                    disk_update_error: {
+                        title: '检测到 OTA 磁盘空间错误',
+                        description: '更新任务曾出现磁盘空间不足，需要清理缓存或扩容后再更新。',
+                    },
+                },
+            },
         },
         hosting: {
             title: '托管',

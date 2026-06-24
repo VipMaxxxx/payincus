@@ -2541,6 +2541,87 @@ export default {
                 paidInstances: 'Paid instances',
                 freeInstances: 'Free instances',
             },
+            operations: {
+                title: 'Operations overview',
+                description: 'Business-day revenue, orders, delivery, hosts, and risks.',
+                agentFreshness: 'Agent online state uses heartbeat within the last {minutes} minutes',
+                todayTitle: 'Today',
+                todayDescription: 'Daily users, activity, and delivery workload.',
+                riskTitle: 'Operational risks',
+                riskDescription: 'Payment, delivery, notification, and deployment issues that need admin attention.',
+                riskCount: '{count} risks',
+                noRisk: 'No risks',
+                healthyTitle: 'No blocking risk detected',
+                healthyDescription: 'Payment, host, Agent, notification, and OTA risk checks are clear.',
+                cards: {
+                    todayRevenue: 'Today revenue',
+                    last7DaysRevenue: '7-day revenue',
+                    todayOrders: 'Today orders',
+                    runningInstances: 'Running instances',
+                    onlineHosts: 'Online hosts',
+                    openTickets: 'Open tickets',
+                },
+                captions: {
+                    yesterday: 'Yesterday {value}',
+                    last30Days: '30 days {value}',
+                    completedRevenue: 'Completed recharge orders',
+                    orderBreakdown: 'Success {success} / failed {failed} / pending {pending}',
+                    instanceBreakdown: 'Abnormal {abnormal} / expires in 7d {expiring}',
+                    hostBreakdown: '{total} hosts / online Agents {agents}',
+                    supportBreakdown: 'Unread {unread} / 24h notification failures {failed}',
+                },
+                facts: {
+                    newUsers: 'New users',
+                    activeUsers: 'Active users',
+                    paidUsers: 'Paid users',
+                    newInstances: 'New instances',
+                    pendingDelivery: 'Pending delivery tasks',
+                    failedDelivery: '24h failed delivery tasks',
+                },
+                severity: {
+                    info: 'Info',
+                    warning: 'Warning',
+                    critical: 'Critical',
+                },
+                risks: {
+                    payment_provider_missing: {
+                        title: 'No active payment provider',
+                        description: 'No payment Provider is active, so users cannot complete real recharge payments.',
+                    },
+                    smtp_missing: {
+                        title: 'SMTP is disabled',
+                        description: 'Email verification, password reset, and email notifications will be unavailable.',
+                    },
+                    notification_channel_missing: {
+                        title: 'No notification channel enabled',
+                        description: 'Delivery and operations alerts cannot reach administrators.',
+                    },
+                    host_offline: {
+                        title: '{count} hosts offline',
+                        description: 'Offline hosts may break instance creation and operations.',
+                    },
+                    agent_stale: {
+                        title: '{count} Agents offline or stale',
+                        description: 'Agent heartbeat is stale or unhealthy, so resource and traffic reports may be inaccurate.',
+                    },
+                    delivery_failed: {
+                        title: '{count} delivery tasks failed in 24h',
+                        description: 'Failed instance delivery tasks need log review and compensation.',
+                    },
+                    payment_attention: {
+                        title: '{count} payment orders need attention',
+                        description: 'Paid-processing or failed orders need callback and accounting review.',
+                    },
+                    ota_failed: {
+                        title: '{count} OTA tasks failed in 7 days',
+                        description: 'System update failures require release package, disk, and task log checks.',
+                    },
+                    disk_update_error: {
+                        title: 'OTA disk-space error detected',
+                        description: 'An update task reported insufficient disk space; clean caches or expand disk before updating.',
+                    },
+                },
+            },
         },
         hosting: {
             title: 'Hosting',

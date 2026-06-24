@@ -3664,6 +3664,87 @@ export default {
                 paidInstances: '付費實例',
                 freeInstances: '免費實例',
             },
+            operations: {
+                title: '營運總覽',
+                description: '按業務日彙總收入、訂單、交付、節點和待處理風險。',
+                agentFreshness: 'Agent 線上按最近 {minutes} 分鐘心跳計算',
+                todayTitle: '今日變化',
+                todayDescription: '當日新增、活躍和交付任務。',
+                riskTitle: '營運風險',
+                riskDescription: '需要管理員優先處理的支付、交付、通知和部署問題。',
+                riskCount: '{count} 項風險',
+                noRisk: '暫無風險',
+                healthyTitle: '目前未發現阻斷風險',
+                healthyDescription: '支付、節點、Agent、通知和 OTA 風險項均未命中。',
+                cards: {
+                    todayRevenue: '今日收入',
+                    last7DaysRevenue: '近 7 日收入',
+                    todayOrders: '今日訂單',
+                    runningInstances: '運行實例',
+                    onlineHosts: '線上節點',
+                    openTickets: '待處理工單',
+                },
+                captions: {
+                    yesterday: '昨日 {value}',
+                    last30Days: '近 30 日 {value}',
+                    completedRevenue: '已完成儲值訂單',
+                    orderBreakdown: '成功 {success} / 失敗 {failed} / 待處理 {pending}',
+                    instanceBreakdown: '異常 {abnormal} / 7 日內到期 {expiring}',
+                    hostBreakdown: '共 {total} 個節點 / 線上 Agent {agents}',
+                    supportBreakdown: '未讀 {unread} / 24h 通知失敗 {failed}',
+                },
+                facts: {
+                    newUsers: '新增使用者',
+                    activeUsers: '活躍使用者',
+                    paidUsers: '付費使用者',
+                    newInstances: '新購實例',
+                    pendingDelivery: '待執行交付任務',
+                    failedDelivery: '24h 失敗交付任務',
+                },
+                severity: {
+                    info: '提示',
+                    warning: '警告',
+                    critical: '嚴重',
+                },
+                risks: {
+                    payment_provider_missing: {
+                        title: '未啟用支付渠道',
+                        description: '沒有 active 狀態支付 Provider，使用者無法完成真實儲值。',
+                    },
+                    smtp_missing: {
+                        title: 'SMTP 未啟用',
+                        description: '郵件驗證、密碼找回和郵件通知會不可用。',
+                    },
+                    notification_channel_missing: {
+                        title: '通知通道未啟用',
+                        description: '沒有可用通知通道，交付和維運告警無法觸達。',
+                    },
+                    host_offline: {
+                        title: '{count} 個節點離線',
+                        description: '存在離線宿主機，實例建立和維運操作可能失敗。',
+                    },
+                    agent_stale: {
+                        title: '{count} 個 Agent 離線或心跳過期',
+                        description: 'Agent 最近心跳超過閾值或狀態異常，資源與流量上報可能不準確。',
+                    },
+                    delivery_failed: {
+                        title: '24h 內 {count} 個交付任務失敗',
+                        description: '存在失敗的實例交付任務，需要查看任務日誌並補償。',
+                    },
+                    payment_attention: {
+                        title: '{count} 個支付訂單需要處理',
+                        description: '存在已支付處理中或失敗訂單，需要核對回調和入帳狀態。',
+                    },
+                    ota_failed: {
+                        title: '近 7 日 {count} 個 OTA 任務失敗',
+                        description: '系統更新存在失敗記錄，需要檢查發布包、磁碟和任務日誌。',
+                    },
+                    disk_update_error: {
+                        title: '偵測到 OTA 磁碟空間錯誤',
+                        description: '更新任務曾出現磁碟空間不足，需要清理快取或擴容後再更新。',
+                    },
+                },
+            },
         },
         hosting: {
             title: '託管',

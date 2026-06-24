@@ -2669,6 +2669,53 @@ const api = {
         dailyDestroyFee: Array<{ label: string; value: number }>
         monthlyDestroyFee: Array<{ label: string; value: number }>
       }
+      operations: {
+        revenue: {
+          today: number
+          yesterday: number
+          last7Days: number
+          last30Days: number
+        }
+        orders: {
+          todayTotal: number
+          todaySuccess: number
+          todayFailed: number
+          todayPending: number
+          needsAttention: number
+        }
+        users: {
+          newToday: number
+          activeToday: number
+          paidTotal: number
+        }
+        instances: {
+          newToday: number
+          running: number
+          abnormal: number
+          expiringSoon: number
+        }
+        delivery: {
+          pendingTasks: number
+          failedTasks24h: number
+        }
+        infrastructure: {
+          hostsTotal: number
+          hostsOnline: number
+          agentsOnline: number
+          agentsStale: number
+        }
+        support: {
+          openTickets: number
+          unreadInboxMessages: number
+          failedNotifications24h: number
+          failedEmails24h: number
+        }
+        risks: Array<{
+          key: string
+          severity: 'info' | 'warning' | 'critical'
+          count: number
+        }>
+      }
     }> => http.get('/admin/statistics/overview'),
 
     // ==================== VIP 等级规则 ====================
