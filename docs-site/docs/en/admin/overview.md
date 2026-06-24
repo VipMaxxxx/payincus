@@ -32,7 +32,7 @@ https://admin.example.com
 ## Billing and Commercial Features
 
 - Billing center: `/admin/billing`.
-- Order center: `/admin/orders` aggregates recharge orders and instance billing records, with filters by type, status and user ID, order details, recharge exception handling, balance-adjustment approval requests and approval execution.
+- Order center: `/admin/orders` aggregates recharge orders and instance billing records, with filters by type, status, user ID, order number, provider transaction ID and date range, order details, recharge exception handling, dispute status, refund or adjustment approval requests and approval execution.
 - Payment providers: `/admin/billing?tab=paymentProviders`.
 - Affiliate review: `/admin/billing?tab=affConversions`.
 - Entertainment management: `/admin/entertainment`.
@@ -51,6 +51,17 @@ The top of `/admin/statistics` now gives administrators a commercial operations 
 - Risk alerts: missing active payment provider, SMTP disabled, missing notification channel, offline host or Agent, failed delivery, payment exception, OTA failure and OTA disk-space error.
 
 The operations overview is returned only by the admin statistics API and is not exposed through the user API.
+
+## Order and Payment Operations
+
+`/admin/orders` records the operational lifecycle for abnormal orders from review to compensation or closure:
+
+- Order details show a redacted provider status summary: raw status, provider, masked transaction ID and callback time. Raw callback payloads and provider configuration snapshots are not returned.
+- Dispute states are pending review, confirmed, compensated and closed.
+- Refund registration creates a balance-adjustment approval request only. It does not directly modify the user balance.
+- If the order already has a pending refund approval request, the admin UI blocks duplicate registration.
+- Refunds, compensation credits and deductions still execute through balance-adjustment approval. A balance log is written only after approval.
+- The user order center does not expose admin operation records, refund approval controls or provider internal summaries.
 
 ## System Settings
 
@@ -73,4 +84,4 @@ The operations overview is returned only by the admin statistics API and is not 
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
-Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, and that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes.
+Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes, and that the order center does not expose raw callback payloads, provider snapshots or payment secrets.

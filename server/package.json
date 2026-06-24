@@ -100,6 +100,7 @@
     "test:operation-verification-code-storage": "node --import tsx scripts/test-operation-verification-code-storage.ts",
     "test:operation-verification-route-guards": "node --import tsx scripts/test-operation-verification-route-guards.ts",
     "test:order-center-guards": "node --import tsx scripts/test-order-center-guards.ts",
+    "test:order-payment-operations-guards": "node --import tsx scripts/test-order-payment-operations-guards.ts",
     "test:package-input-guards": "node --import tsx scripts/test-package-input-guards.ts",
     "test:package-host-type-guards": "node --import tsx scripts/test-package-host-type-guards.ts",
     "test:package-route-id-guards": "node --import tsx scripts/test-package-route-id-guards.ts",

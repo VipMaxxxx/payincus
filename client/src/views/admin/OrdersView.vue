@@ -3,6 +3,26 @@ import { computed, onMounted, ref } from 'vue'
 import api from '@/api/admin'
 
 type OrderSourceType = 'recharge' | 'instance_billing'
+type OrderOperationStatus = 'pending_review' | 'confirmed' | 'compensated' | 'closed'
+
+interface OrderOperationCase {
+  id: number
+  sourceType: OrderSourceType
+  sourceId: number
+  orderNo: string | null
+  userId: number
+  status: OrderOperationStatus
+  reason: string
+  result: string | null
+  refundAmount: number | null
+  providerSummary: Record<string, any> | null
+  createdBy: { id: number; username: string } | null
+  updatedBy: { id: number; username: string } | null
+  balanceAdjustmentRequestId: number | null
+  balanceAdjustmentRequest: BalanceAdjustmentRequest | null
+  createdAt: string
+  updatedAt: string
+}
 
 interface AdminOrderItem {
   id: string
@@ -18,6 +38,13 @@ interface AdminOrderItem {
   userId: number
   user: { id: number; username: string; email: string } | null
   provider: { id: number; name: string; type: string } | null
+  providerStatusSummary: {
+    provider: { id: number; name: string; type: string } | null
+    rawStatus: string
+    paymentMethod: string | null
+    tradeNo: string | null
+    callbackAt: string | null
+  } | null
   paymentMethod: string | null
   tradeNo: string | null
   failReason: string | null
@@ -34,6 +61,7 @@ interface AdminOrderItem {
   createdAt: string
   completedAt: string | null
   expiredAt: string | null
+  operationCase: OrderOperationCase | null
 }
 
 interface BalanceAdjustmentRequest {
@@ -81,6 +109,9 @@ const requestStatus = ref('pending')
 const type = ref('')
 const status = ref('')
 const userId = ref('')
+const keyword = ref('')
+const createdFrom = ref('')
+const createdTo = ref('')
 const actionLoading = ref(false)
 const reviewLoadingId = ref<number | null>(null)
 const actionMessage = ref('')
@@ -90,6 +121,11 @@ const completeActualAmount = ref('')
 const failReason = ref('')
 const adjustmentAmount = ref('')
 const adjustmentRemark = ref('')
+const operationStatus = ref<OrderOperationStatus>('pending_review')
+const operationReason = ref('')
+const operationResult = ref('')
+const operationRefundAmount = ref('')
+const operationCreateRefundRequest = ref(false)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const requestTotalPages = computed(() => Math.max(1, Math.ceil(requestTotal.value / requestPageSize)))
@@ -131,6 +167,13 @@ const requestStatusOptions = [
   { value: '', label: '全部' }
 ]
 
+const operationStatusOptions: Array<{ value: OrderOperationStatus; label: string }> = [
+  { value: 'pending_review', label: '待核查' },
+  { value: 'confirmed', label: '已确认' },
+  { value: 'compensated', label: '已补偿' },
+  { value: 'closed', label: '已关闭' }
+]
+
 function formatMoney(value: number | null | undefined): string {
   return `¥${Number(value || 0).toFixed(2)}`
 }
@@ -156,6 +199,24 @@ function statusClass(statusValue: string): string {
   if (statusValue === 'pending') return 'bg-yellow-50 text-yellow-700 border-yellow-200'
   if (statusValue === 'refunded') return 'bg-blue-50 text-blue-700 border-blue-200'
   if (statusValue === 'failed' || statusValue === 'cancelled') return 'bg-red-50 text-red-700 border-red-200'
+  return 'bg-gray-50 text-gray-700 border-gray-200'
+}
+
+function operationStatusLabel(statusValue: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    pending_review: '待核查',
+    confirmed: '已确认',
+    compensated: '已补偿',
+    closed: '已关闭'
+  }
+  return statusValue ? labels[statusValue] || statusValue : '未登记'
+}
+
+function operationStatusClass(statusValue: string | null | undefined): string {
+  if (statusValue === 'pending_review') return 'bg-yellow-50 text-yellow-700 border-yellow-200'
+  if (statusValue === 'confirmed') return 'bg-blue-50 text-blue-700 border-blue-200'
+  if (statusValue === 'compensated') return 'bg-green-50 text-green-700 border-green-200'
+  if (statusValue === 'closed') return 'bg-gray-50 text-gray-700 border-gray-200'
   return 'bg-gray-50 text-gray-700 border-gray-200'
 }
 
@@ -206,6 +267,22 @@ function parsedUserId(): number | undefined {
   return Number(trimmed)
 }
 
+function syncOperationForm(order: AdminOrderItem) {
+  const operationCase = order.operationCase
+  operationStatus.value = operationCase?.status || 'pending_review'
+  operationReason.value = operationCase?.reason || (order.sourceType === 'recharge'
+    ? `充值订单 ${order.orderNo} 待核查`
+    : `实例账单 ${order.orderNo} 待核查`)
+  operationResult.value = operationCase?.result || ''
+  operationRefundAmount.value = operationCase?.refundAmount ? String(operationCase.refundAmount) : ''
+  operationCreateRefundRequest.value = false
+}
+
+const hasPendingRefundRequest = computed(() => {
+  const request = selectedOrder.value?.operationCase?.balanceAdjustmentRequest
+  return request?.requestType === 'refund' && request.status === 'pending'
+})
+
 async function loadOrders() {
   loading.value = true
   error.value = ''
@@ -215,7 +292,10 @@ async function loadOrders() {
       pageSize: pageSize.value,
       type: type.value || undefined,
       status: status.value || undefined,
-      userId: parsedUserId()
+      userId: parsedUserId(),
+      keyword: keyword.value.trim() || undefined,
+      createdFrom: createdFrom.value || undefined,
+      createdTo: createdTo.value || undefined
     })
     orders.value = res.orders as AdminOrderItem[]
     total.value = res.total
@@ -255,12 +335,14 @@ async function openDetail(order: AdminOrderItem) {
   adjustmentRemark.value = order.sourceType === 'recharge'
     ? `订单 ${order.orderNo} 人工处理`
     : `账单 ${order.orderNo} 人工处理`
+  syncOperationForm(order)
   detailLoading.value = true
   try {
     const res = await api.orders.detail(order.sourceType, order.sourceId)
     selectedOrder.value = res.order as AdminOrderItem
     completeTradeNo.value = selectedOrder.value.tradeNo || ''
     completeActualAmount.value = selectedOrder.value.actualAmount ? String(selectedOrder.value.actualAmount) : ''
+    syncOperationForm(selectedOrder.value)
   } finally {
     detailLoading.value = false
   }
@@ -376,6 +458,52 @@ async function adjustBalance() {
   }
 }
 
+async function saveOperationCase() {
+  if (!selectedOrder.value) return
+  const reason = operationReason.value.trim()
+  const result = operationResult.value.trim()
+  if (!reason) {
+    actionError.value = '请填写运营处理原因'
+    return
+  }
+  const refundAmount = parseOptionalPositiveAmount(operationRefundAmount.value)
+  if (operationCreateRefundRequest.value && refundAmount === undefined) {
+    actionError.value = '勾选退款登记时必须填写退款金额'
+    return
+  }
+  if (refundAmount === null) {
+    actionError.value = '退款金额必须是大于 0 的金额，最多两位小数'
+    return
+  }
+  if (operationCreateRefundRequest.value && hasPendingRefundRequest.value) {
+    actionError.value = '该订单已有待审核退款审批，不能重复登记'
+    return
+  }
+
+  actionLoading.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const response = await api.orders.recordOperation(selectedOrder.value.sourceType, selectedOrder.value.sourceId, {
+      status: operationStatus.value,
+      reason,
+      result: result || undefined,
+      refundAmount,
+      createRefundRequest: operationCreateRefundRequest.value
+    })
+    actionMessage.value = response.message || '订单运营处理记录已保存'
+    operationCreateRefundRequest.value = false
+    requestStatus.value = 'pending'
+    requestPage.value = 1
+    await loadAdjustmentRequests()
+    await refreshSelectedOrder()
+  } catch (err: any) {
+    actionError.value = err?.message || '订单运营处理保存失败'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
 async function approveAdjustmentRequest(request: BalanceAdjustmentRequest) {
   if (request.status !== 'pending') return
   reviewLoadingId.value = request.id
@@ -414,6 +542,9 @@ function clearFilters() {
   type.value = ''
   status.value = ''
   userId.value = ''
+  keyword.value = ''
+  createdFrom.value = ''
+  createdTo.value = ''
   applyFilters()
 }
 
@@ -451,7 +582,7 @@ onMounted(() => {
     </header>
 
     <section class="rounded-lg border border-themed bg-themed-secondary p-4">
-      <div class="grid gap-3 md:grid-cols-[180px_180px_180px_auto]">
+      <div class="grid gap-3 lg:grid-cols-[160px_160px_140px_minmax(220px,1fr)_150px_150px_auto]">
         <select v-model="type" class="input" @change="status = ''; applyFilters()">
           <option v-for="item in typeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
@@ -459,6 +590,9 @@ onMounted(() => {
           <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
         <input v-model="userId" class="input" placeholder="用户 ID" @keyup.enter="applyFilters" />
+        <input v-model="keyword" class="input" placeholder="订单号、交易号、用户名、实例名" @keyup.enter="applyFilters" />
+        <input v-model="createdFrom" class="input" type="date" title="开始日期" @change="applyFilters" />
+        <input v-model="createdTo" class="input" type="date" title="结束日期" @change="applyFilters" />
         <button class="btn btn-outline justify-self-start" @click="clearFilters">重置</button>
       </div>
     </section>
@@ -496,6 +630,12 @@ onMounted(() => {
               <td class="px-4 py-3 font-medium text-themed">{{ formatMoney(order.amount) }}</td>
               <td class="px-4 py-3">
                 <span :class="['inline-flex rounded-full border px-2 py-0.5 text-xs', statusClass(order.status)]">{{ statusLabel(order) }}</span>
+                <span
+                  v-if="order.operationCase"
+                  :class="['ml-2 inline-flex rounded-full border px-2 py-0.5 text-xs', operationStatusClass(order.operationCase.status)]"
+                >
+                  {{ operationStatusLabel(order.operationCase.status) }}
+                </span>
               </td>
               <td class="px-4 py-3 text-themed-muted">{{ instanceName(order) }}</td>
               <td class="px-4 py-3 text-themed-muted">{{ formatTime(order.createdAt) }}</td>
@@ -610,6 +750,14 @@ onMounted(() => {
           <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">实际到账</dt><dd class="col-span-2 text-themed">{{ selectedOrder.actualAmount === null ? '-' : formatMoney(selectedOrder.actualAmount) }}</dd></div>
           <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">手续费</dt><dd class="col-span-2 text-themed">{{ formatMoney(selectedOrder.fee) }}</dd></div>
           <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">支付渠道</dt><dd class="col-span-2 text-themed">{{ selectedOrder.provider?.name || selectedOrder.paymentMethod || '-' }}</dd></div>
+          <div v-if="selectedOrder.providerStatusSummary" class="grid grid-cols-3 gap-3">
+            <dt class="text-themed-muted">Provider 摘要</dt>
+            <dd class="col-span-2 text-themed">
+              <div>原始状态：{{ selectedOrder.providerStatusSummary.rawStatus }}</div>
+              <div>交易号：{{ selectedOrder.providerStatusSummary.tradeNo || '-' }}</div>
+              <div>回调时间：{{ formatTime(selectedOrder.providerStatusSummary.callbackAt) }}</div>
+            </dd>
+          </div>
           <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">交易号</dt><dd class="col-span-2 break-all text-themed">{{ selectedOrder.tradeNo || '-' }}</dd></div>
           <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">关联实例</dt><dd class="col-span-2 text-themed">{{ instanceName(selectedOrder) }}</dd></div>
           <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">账期</dt><dd class="col-span-2 text-themed">{{ selectedOrder.months ? `${selectedOrder.months} 个月` : '-' }}</dd></div>
@@ -623,6 +771,57 @@ onMounted(() => {
 
         <div v-if="actionMessage" class="mt-5 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{{ actionMessage }}</div>
         <div v-if="actionError" class="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</div>
+
+        <section class="mt-6 border-t border-themed pt-5">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-semibold text-themed">订单运营处理</h3>
+              <p class="mt-1 text-sm text-themed-muted">登记争议状态和人工退款申请。退款登记只创建调账审批，不会直接修改余额。</p>
+            </div>
+            <span :class="['shrink-0 rounded-full border px-2 py-0.5 text-xs', operationStatusClass(selectedOrder.operationCase?.status)]">
+              {{ operationStatusLabel(selectedOrder.operationCase?.status) }}
+            </span>
+          </div>
+
+          <div v-if="selectedOrder.operationCase" class="mt-4 rounded-lg border border-themed bg-themed-secondary p-3 text-sm">
+            <div class="grid gap-2 text-themed-muted">
+              <div>最近处理：{{ selectedOrder.operationCase.updatedBy?.username || selectedOrder.operationCase.createdBy?.username || '-' }} · {{ formatTime(selectedOrder.operationCase.updatedAt) }}</div>
+              <div>处理原因：<span class="text-themed">{{ selectedOrder.operationCase.reason }}</span></div>
+              <div v-if="selectedOrder.operationCase.result">处理结果：<span class="text-themed">{{ selectedOrder.operationCase.result }}</span></div>
+              <div v-if="selectedOrder.operationCase.balanceAdjustmentRequest">
+                关联审批：
+                <span class="text-themed">#{{ selectedOrder.operationCase.balanceAdjustmentRequest.id }} · {{ adjustmentTypeLabel(selectedOrder.operationCase.balanceAdjustmentRequest.requestType) }} · {{ adjustmentStatusLabel(selectedOrder.operationCase.balanceAdjustmentRequest.status) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-3">
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">争议状态</span>
+              <select v-model="operationStatus" class="input" :disabled="actionLoading">
+                <option v-for="item in operationStatusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              </select>
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">处理原因</span>
+              <textarea v-model="operationReason" class="input min-h-[84px]" placeholder="写明订单异常、核查依据或退款原因" :disabled="actionLoading" />
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">处理结果</span>
+              <textarea v-model="operationResult" class="input min-h-[72px]" placeholder="可选，例如已联系用户、等待 provider 对账、已补偿" :disabled="actionLoading" />
+            </label>
+            <label class="flex items-center gap-2 text-sm text-themed">
+              <input v-model="operationCreateRefundRequest" type="checkbox" :disabled="actionLoading || hasPendingRefundRequest" />
+              <span>同时登记退款审批</span>
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">退款金额</span>
+              <input v-model="operationRefundAmount" class="input" placeholder="勾选退款登记时必填，例如 10.00" :disabled="actionLoading || !operationCreateRefundRequest" />
+            </label>
+            <p v-if="hasPendingRefundRequest" class="text-sm text-yellow-700">该订单已有待审核退款审批，需处理完成后才能再次登记。</p>
+            <button class="btn btn-primary justify-self-start" :disabled="actionLoading" @click="saveOperationCase">保存运营处理</button>
+          </div>
+        </section>
 
         <section v-if="selectedOrder.sourceType === 'recharge'" class="mt-6 border-t border-themed pt-5">
           <h3 class="text-base font-semibold text-themed">充值订单处理</h3>

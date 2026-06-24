@@ -349,6 +349,13 @@ enum BillingRecordType {
   transfer_fee  // 转移手续费
 }
 
+enum OrderOperationStatus {
+  pending_review // 待核查
+  confirmed      // 已确认
+  compensated    // 已补偿
+  closed         // 已关闭
+}
+
 // AFF余额变动类型
 enum AffLogType {
   new_purchase  // 新购返利
@@ -470,6 +477,9 @@ model User {
   balanceAdjustmentTargets BalanceAdjustmentRequest[] @relation("BalanceAdjustmentTarget")
   balanceAdjustmentRequests BalanceAdjustmentRequest[] @relation("BalanceAdjustmentRequester")
   balanceAdjustmentReviews BalanceAdjustmentRequest[] @relation("BalanceAdjustmentReviewer")
+  orderOperationCases OrderOperationCase[] @relation("OrderOperationTarget")
+  orderOperationCasesCreated OrderOperationCase[] @relation("OrderOperationCreator")
+  orderOperationCasesUpdated OrderOperationCase[] @relation("OrderOperationUpdater")
   badgeOwnerships UserBadgeOwnership[]
   vipBenefitClaims VipBenefitClaim[]
 
@@ -2326,6 +2336,7 @@ model BalanceAdjustmentRequest {
   requestedBy User        @relation("BalanceAdjustmentRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   reviewedBy  User?       @relation("BalanceAdjustmentReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
   balanceLog  BalanceLog? @relation(fields: [balanceLogId], references: [id], onDelete: SetNull)
+  orderOperationCase OrderOperationCase?
 
   @@index([status, createdAt])
   @@index([userId, createdAt])
@@ -2333,6 +2344,37 @@ model BalanceAdjustmentRequest {
   @@index([reviewedByUserId])
   @@index([orderNo])
   @@map("balance_adjustment_requests")
+}
+
+model OrderOperationCase {
+  id                         Int                  @id @default(autoincrement())
+  sourceType                 String               @map("source_type")
+  sourceId                   Int                  @map("source_id")
+  orderNo                    String?              @map("order_no")
+  userId                     Int                  @map("user_id")
+  createdByUserId            Int                  @map("created_by_user_id")
+  updatedByUserId            Int?                 @map("updated_by_user_id")
+  balanceAdjustmentRequestId Int?                 @unique @map("balance_adjustment_request_id")
+  status                     OrderOperationStatus @default(pending_review)
+  reason                     String
+  result                     String?
+  refundAmount               Decimal?             @map("refund_amount") @db.Decimal(10, 2)
+  providerSummary            Json?                @map("provider_summary")
+  createdAt                  DateTime             @default(now()) @map("created_at")
+  updatedAt                  DateTime             @updatedAt @map("updated_at")
+
+  user                     User                      @relation("OrderOperationTarget", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy                User                      @relation("OrderOperationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedBy                User?                     @relation("OrderOperationUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  balanceAdjustmentRequest BalanceAdjustmentRequest? @relation(fields: [balanceAdjustmentRequestId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceType, sourceId])
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([orderNo])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("order_operation_cases")
 }
 
 // 支付渠道配置

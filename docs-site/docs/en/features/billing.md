@@ -17,7 +17,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 ## Admin Features
 
 - Recharge order queries and callback diagnostics.
-- Order center at `/admin/orders` for unified recharge and instance billing records, with user, type and status filters, detail views, recharge exception handling and balance-adjustment approval requests.
+- Order center at `/admin/orders` for unified recharge and instance billing records, with user, type, status, order number, provider transaction ID and date range filters, detail views, recharge exception handling, dispute status and refund or balance-adjustment approval requests.
 - Balance adjustment approval and audit. Refunds, compensation credits and deductions are submitted first, then executed only after approval.
 - Payment provider configuration, keys, callbacks and enablement.
 - Affiliate conversion review.
@@ -31,6 +31,8 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Verify signature, order ID, amount, status and idempotency.
 - Payment secrets must never enter frontend bundles or logs.
 - Manual completion and failure marking in the order center keep using the existing audited recharge flows. Refunds, compensation credits and deductions create balance-adjustment approval tasks, and approved tasks execute the existing balance-ledger flow.
+- Refund registration only creates an approval request. It does not call payment-provider refund APIs and does not directly modify the user balance.
+- Order details may show only redacted provider summaries. Raw callback payloads, provider configuration snapshots and secrets must not be returned.
 
 ## Verification
 
@@ -41,4 +43,6 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Admin can audit orders, callbacks and balance records.
 - User and admin order centers must only return authorized order data and must not expose raw payment callback payloads or provider config snapshots.
 - Admin order detail can manually complete or fail pending/paid recharge orders and submit reasoned balance-adjustment approval requests for the related user.
+- Admin order detail can set dispute status to pending review, confirmed, compensated or closed.
+- Duplicate refund registration is blocked while the order already has a pending refund approval request.
 - The balance-adjustment approval list shows up to 7 tasks per page. A balance log is created only after an administrator approves and executes the request.

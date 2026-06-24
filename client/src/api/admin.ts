@@ -3756,7 +3756,16 @@ const api = {
 
   // 域名邮箱
   orders: {
-    list: (params?: { page?: number; pageSize?: number; type?: string; status?: string; userId?: number }): Promise<{
+    list: (params?: {
+      page?: number
+      pageSize?: number
+      type?: string
+      status?: string
+      userId?: number
+      keyword?: string
+      createdFrom?: string
+      createdTo?: string
+    }): Promise<{
       orders: Array<{
         id: string
         sourceType: 'recharge' | 'instance_billing'
@@ -3771,6 +3780,7 @@ const api = {
         userId: number
         user: { id: number; username: string; email: string } | null
         provider: { id: number; name: string; type: string } | null
+        providerStatusSummary: any | null
         paymentMethod: string | null
         tradeNo: string | null
         failReason: string | null
@@ -3789,7 +3799,23 @@ const api = {
     }> => http.get('/admin/orders', { params }),
 
     detail: (sourceType: 'recharge' | 'instance_billing', sourceId: number): Promise<{ order: any }> =>
-      http.get(`/admin/orders/${sourceType}/${sourceId}`)
+      http.get(`/admin/orders/${sourceType}/${sourceId}`),
+
+    recordOperation: (
+      sourceType: 'recharge' | 'instance_billing',
+      sourceId: number,
+      data: {
+        status: 'pending_review' | 'confirmed' | 'compensated' | 'closed'
+        reason: string
+        result?: string
+        refundAmount?: number
+        createRefundRequest?: boolean
+      }
+    ): Promise<{
+      message: string
+      operationCase: any
+      adjustmentRequest: any | null
+    }> => http.post(`/admin/orders/${sourceType}/${sourceId}/operation`, data)
   },
 
   mail: {
