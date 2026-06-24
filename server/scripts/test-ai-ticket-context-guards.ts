@@ -109,6 +109,13 @@ assert.ok(
     serviceSource.includes('inspectAiDraftSafety') &&
     serviceSource.includes('inspectAiReplySendEligibility') &&
     serviceSource.includes("autoReplyCategories: getConfigStringArray(configs, 'autoReplyCategories'") &&
+    serviceSource.includes("confidenceThreshold: Math.min(Math.max(getConfigNumber(configs, 'confidenceThreshold'") &&
+    serviceSource.includes('buildAiTicketDecisionPrompt') &&
+    serviceSource.includes('parseAiDecisionJson') &&
+    serviceSource.includes('handoffWhenInsufficientContext') &&
+    serviceSource.includes('AI_TICKET_MODEL_DECISION_INVALID') &&
+    serviceSource.includes('confidence_below_threshold') &&
+    serviceSource.includes('model_handoff_required') &&
     serviceSource.includes("dailyAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'dailyAutoReplyLimit'") &&
     serviceSource.includes("ticketAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'ticketAutoReplyLimit'") &&
     serviceSource.includes("cooldownSeconds: Math.max(Math.floor(getConfigNumber(configs, 'cooldownSeconds'") &&

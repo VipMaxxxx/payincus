@@ -20,6 +20,7 @@ const DEFAULT_AI_AUTO_REPLY_CATEGORIES = ['general', 'billing']
 const DEFAULT_DAILY_AUTO_REPLY_LIMIT = 100
 const DEFAULT_TICKET_AUTO_REPLY_LIMIT = 3
 const DEFAULT_REPLY_COOLDOWN_SECONDS = 120
+const DEFAULT_CONFIDENCE_THRESHOLD = 0.82
 
 type AiTicketPermission =
   | typeof AI_TICKET_CONTEXT_PERMISSION
@@ -43,6 +44,8 @@ export interface AiTicketDraftResult {
 
 export interface AiTicketReplyCandidate extends AiTicketDraftResult {
   mode: AiTicketAgentConfig['mode']
+  confidence: number
+  confidenceThreshold: number
   canSend: boolean
   sendBlockedReasons: string[]
 }
@@ -62,6 +65,7 @@ interface AiTicketAgentConfig {
   temperature: number
   timeoutMs: number
   autoReplyCategories: string[]
+  confidenceThreshold: number
   dailyAutoReplyLimit: number
   ticketAutoReplyLimit: number
   cooldownSeconds: number
@@ -313,6 +317,7 @@ async function loadAiTicketAgentConfig(): Promise<AiTicketAgentConfig> {
     temperature: Math.min(Math.max(getConfigNumber(configs, 'temperature', 0.2), 0), 1),
     timeoutMs: Math.min(Math.max(getConfigNumber(configs, 'timeoutMs', DEFAULT_AI_TIMEOUT_MS), 1000), 120_000),
     autoReplyCategories: getConfigStringArray(configs, 'autoReplyCategories', DEFAULT_AI_AUTO_REPLY_CATEGORIES),
+    confidenceThreshold: Math.min(Math.max(getConfigNumber(configs, 'confidenceThreshold', DEFAULT_CONFIDENCE_THRESHOLD), 0), 1),
     dailyAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'dailyAutoReplyLimit', DEFAULT_DAILY_AUTO_REPLY_LIMIT)), 0),
     ticketAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'ticketAutoReplyLimit', DEFAULT_TICKET_AUTO_REPLY_LIMIT)), 0),
     cooldownSeconds: Math.max(Math.floor(getConfigNumber(configs, 'cooldownSeconds', DEFAULT_REPLY_COOLDOWN_SECONDS)), 0),
@@ -343,6 +348,58 @@ function buildAiTicketUserPrompt(context: AiTicketContext, config: AiTicketAgent
     },
     context
   })
+}
+
+function buildAiTicketDecisionPrompt(context: AiTicketContext, config: AiTicketAgentConfig): string {
+  return JSON.stringify({
+    task: '根据安全上下文生成工单回复决策。只输出 JSON 对象，不要输出 Markdown。',
+    outputSchema: {
+      reply: 'string，给用户看的回复正文',
+      confidence: 'number，0 到 1，表示基于安全上下文直接回复的把握',
+      handoffRequired: 'boolean，是否需要人工接管',
+      handoffReason: 'string|null，转人工原因'
+    },
+    replyPolicy: {
+      mode: config.mode,
+      showAiIdentity: config.showAiIdentity,
+      confidenceThreshold: config.confidenceThreshold,
+      noBackendDetails: true,
+      noUnsafePromises: true,
+      handoffWhenInsufficientContext: true,
+      handoffWhenSensitive: true
+    },
+    context
+  })
+}
+
+function parseAiDecisionJson(content: string): { reply: string; confidence: number; handoffRequired: boolean; handoffReason: string | null } | null {
+  const trimmed = content.trim()
+  const jsonText = trimmed.startsWith('{')
+    ? trimmed
+    : trimmed.match(/\{[\s\S]*\}/)?.[0]
+  if (!jsonText) return null
+
+  try {
+    const parsed = JSON.parse(jsonText) as {
+      reply?: unknown
+      confidence?: unknown
+      handoffRequired?: unknown
+      handoffReason?: unknown
+    }
+    const reply = typeof parsed.reply === 'string' ? parsed.reply.trim() : ''
+    const confidence = typeof parsed.confidence === 'number' && Number.isFinite(parsed.confidence)
+      ? Math.min(Math.max(parsed.confidence, 0), 1)
+      : NaN
+    const handoffRequired = typeof parsed.handoffRequired === 'boolean' ? parsed.handoffRequired : true
+    const handoffReason = typeof parsed.handoffReason === 'string' && parsed.handoffReason.trim()
+      ? parsed.handoffReason.trim().slice(0, 160)
+      : null
+
+    if (!reply || Number.isNaN(confidence)) return null
+    return { reply, confidence, handoffRequired, handoffReason }
+  } catch {
+    return null
+  }
 }
 
 function inspectAiDraftSafety(draft: string): { passed: boolean; blockedReasons: string[] } {
@@ -497,6 +554,64 @@ async function requestAiTicketDraft(context: AiTicketContext, config: AiTicketAg
     }
 
     return draft.slice(0, MAX_AI_DRAFT_LENGTH)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function requestAiTicketDecision(
+  context: AiTicketContext,
+  config: AiTicketAgentConfig
+): Promise<{ draft: string; confidence: number; handoffRequired: boolean; handoffReason: string | null }> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs)
+
+  try {
+    let response: Response
+    try {
+      response = await fetch(resolveChatCompletionsUrl(config.apiBaseUrl), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model,
+          temperature: Math.min(config.temperature, 0.2),
+          messages: [
+            { role: 'system', content: buildAiTicketSystemPrompt(config) },
+            { role: 'user', content: buildAiTicketDecisionPrompt(context, config) }
+          ]
+        }),
+        signal: controller.signal
+      })
+    } catch {
+      throw new Error('AI_TICKET_MODEL_REQUEST_FAILED')
+    }
+
+    if (!response.ok) {
+      throw new Error('AI_TICKET_MODEL_REQUEST_FAILED')
+    }
+
+    const body = await response.json() as {
+      choices?: Array<{ message?: { content?: string } }>
+    }
+    const content = body.choices?.[0]?.message?.content?.trim()
+    if (!content) {
+      throw new Error('AI_TICKET_MODEL_EMPTY_RESPONSE')
+    }
+
+    const decision = parseAiDecisionJson(content)
+    if (!decision) {
+      throw new Error('AI_TICKET_MODEL_DECISION_INVALID')
+    }
+
+    return {
+      draft: decision.reply.slice(0, MAX_AI_DRAFT_LENGTH),
+      confidence: decision.confidence,
+      handoffRequired: decision.handoffRequired,
+      handoffReason: decision.handoffReason
+    }
   } finally {
     clearTimeout(timeout)
   }
@@ -908,10 +1023,20 @@ async function generateAiTicketReplyCandidate(ticketId: number): Promise<AiTicke
     throw new Error('TICKET_NOT_FOUND')
   }
 
-  const draft = await requestAiTicketDraft(context, config)
+  const decision = config.mode === 'draft'
+    ? {
+        draft: await requestAiTicketDraft(context, config),
+        confidence: 1,
+        handoffRequired: false,
+        handoffReason: null
+      }
+    : await requestAiTicketDecision(context, config)
+  const draft = decision.draft
   const safety = inspectAiDraftSafety(draft)
   const sendBlockedReasons = [
     ...inspectAiReplySendEligibility(context, config),
+    ...(decision.handoffRequired ? [`model_handoff_required${decision.handoffReason ? `:${decision.handoffReason}` : ''}`] : []),
+    ...(decision.confidence < config.confidenceThreshold ? ['confidence_below_threshold'] : []),
     ...(config.mode === 'draft' ? [] : await inspectAiReplySendLimits(ticketId, config))
   ]
 
@@ -920,17 +1045,32 @@ async function generateAiTicketReplyCandidate(ticketId: number): Promise<AiTicke
     model: config.model,
     safety,
     mode: config.mode,
+    confidence: decision.confidence,
+    confidenceThreshold: config.confidenceThreshold,
     canSend: (config.mode === 'semi_auto' || config.mode === 'auto') && sendBlockedReasons.length === 0,
     sendBlockedReasons
   }
 }
 
 export async function generateAiTicketDraft(ticketId: number): Promise<AiTicketDraftResult> {
-  const result = await generateAiTicketReplyCandidate(ticketId)
+  const config = await loadAiTicketAgentConfig()
+  if (!config.enabled) {
+    throw new Error('AI_TICKET_AGENT_DISABLED')
+  }
+  if (!config.apiBaseUrl || !config.apiKey) {
+    throw new Error('AI_TICKET_AGENT_MODEL_NOT_CONFIGURED')
+  }
+
+  const context = await buildAiTicketContext(ticketId)
+  if (!context) {
+    throw new Error('TICKET_NOT_FOUND')
+  }
+
+  const draft = await requestAiTicketDraft(context, config)
   return {
-    draft: result.draft,
-    model: result.model,
-    safety: result.safety
+    draft,
+    model: config.model,
+    safety: inspectAiDraftSafety(draft)
   }
 }
 
