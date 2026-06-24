@@ -6,18 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `62f4aef`
+- 当前 HEAD / Current HEAD: `b4d4cce`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Update version log for v0.3.9 / 更新 v0.3.9 版本日志
-- 最新 tag / Latest tag: `v0.3.9`
+- 提交说明 / Commit subject: Add standalone plugin settings pages / 新增独立插件设置页
+- 最新 tag / Latest tag: `v0.4.0`
 
 ## 未发布变更 / Unreleased Changes
+
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+
+## 历史版本 / Historical Versions
+
+## v0.4.0
+
+- 发布提交 / Release commit: `b4d4cce`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Add standalone plugin settings pages / 新增独立插件设置页
+
+### 新增能力 / New Capabilities
+
+- Add standalone plugin settings pages / 新增独立插件设置页 `b4d4cce`
 
 ### 改进与调整 / Improvements and Adjustments
 
 - Update version log for v0.3.9 / 更新 v0.3.9 版本日志 `62f4aef`
-
-## 历史版本 / Historical Versions
 
 ## v0.3.9
 

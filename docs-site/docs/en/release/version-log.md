@@ -6,18 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `62f4aef`
+- Current HEAD / 当前 HEAD: `b4d4cce`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Update version log for v0.3.9 / 更新 v0.3.9 版本日志
-- Latest tag / 最新 tag: `v0.3.9`
+- Commit subject / 提交说明: Add standalone plugin settings pages / 新增独立插件设置页
+- Latest tag / 最新 tag: `v0.4.0`
 
 ## Unreleased Changes / 未发布变更
+
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+
+## Historical Versions / 历史版本
+
+## v0.4.0
+
+- Release commit / 发布提交: `b4d4cce`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Add standalone plugin settings pages / 新增独立插件设置页
+
+### New Capabilities / 新增能力
+
+- Add standalone plugin settings pages / 新增独立插件设置页 `b4d4cce`
 
 ### Improvements and Adjustments / 改进与调整
 
 - Update version log for v0.3.9 / 更新 v0.3.9 版本日志 `62f4aef`
-
-## Historical Versions / 历史版本
 
 ## v0.3.9
 
