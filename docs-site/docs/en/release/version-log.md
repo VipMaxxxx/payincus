@@ -6,18 +6,34 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `6aa34a1`
+- Current HEAD / 当前 HEAD: `326cab1`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Update version log for v0.4.7 / 更新 v0.4.7 版本日志
-- Latest tag / 最新 tag: `v0.4.7`
+- Commit subject / 提交说明: Add production proof workspace / 新增生产验收工作台
+- Latest tag / 最新 tag: `v0.4.8`
 
 ## Unreleased Changes / 未发布变更
+
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+
+## Historical Versions / 历史版本
+
+## v0.4.8
+
+- Release commit / 发布提交: `326cab1`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Add production proof workspace / 新增生产验收工作台
+
+### New Capabilities / 新增能力
+
+- Add production proof workspace / 新增生产验收工作台 `326cab1`
+
+### Other Changes / 其他变更
+
+- Document v0.4.7 cache deployment notes / 记录 v0.4.7 缓存部署说明 `4ce40ba`
 
 ### Improvements and Adjustments / 改进与调整
 
 - Update version log for v0.4.7 / 更新 v0.4.7 版本日志 `6aa34a1`
-
-## Historical Versions / 历史版本
 
 ## v0.4.7
 

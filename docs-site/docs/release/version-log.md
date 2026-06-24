@@ -6,18 +6,34 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `6aa34a1`
+- 当前 HEAD / Current HEAD: `326cab1`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Update version log for v0.4.7 / 更新 v0.4.7 版本日志
-- 最新 tag / Latest tag: `v0.4.7`
+- 提交说明 / Commit subject: Add production proof workspace / 新增生产验收工作台
+- 最新 tag / Latest tag: `v0.4.8`
 
 ## 未发布变更 / Unreleased Changes
+
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+
+## 历史版本 / Historical Versions
+
+## v0.4.8
+
+- 发布提交 / Release commit: `326cab1`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Add production proof workspace / 新增生产验收工作台
+
+### 新增能力 / New Capabilities
+
+- Add production proof workspace / 新增生产验收工作台 `326cab1`
+
+### 其他变更 / Other Changes
+
+- Document v0.4.7 cache deployment notes / 记录 v0.4.7 缓存部署说明 `4ce40ba`
 
 ### 改进与调整 / Improvements and Adjustments
 
 - Update version log for v0.4.7 / 更新 v0.4.7 版本日志 `6aa34a1`
-
-## 历史版本 / Historical Versions
 
 ## v0.4.7
 
