@@ -40,13 +40,13 @@ features:
 ## 快速入口
 
 <div class="payincus-links">
-  <a class="payincus-link" href="https://pay.payincus.com">
+  <a class="payincus-link" href="https://demo.payincus.com">
     <strong>测试用户端</strong>
-    pay.payincus.com
+    demo.payincus.com
   </a>
-  <a class="payincus-link" href="https://admin.payincus.com">
+  <a class="payincus-link" href="https://demoadmin.payincus.com">
     <strong>测试后台</strong>
-    admin.payincus.com
+    demoadmin.payincus.com
   </a>
   <a class="payincus-link" href="https://t.me/Payincus">
     <strong>Telegram 交流群</strong>
@@ -57,6 +57,13 @@ features:
     VipMaxxxx/payincus
   </a>
 </div>
+
+## 演示账号
+
+| 入口 | 地址 | 用户名 | 密码 |
+| --- | --- | --- | --- |
+| 用户端 | <https://demo.payincus.com> | `demo` | `demo123` |
+| 管理后台 | <https://demoadmin.payincus.com> | `admin` | `admin123` |
 
 ## 推荐阅读顺序
 

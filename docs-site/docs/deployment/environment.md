@@ -11,13 +11,13 @@ PORT=3001
 TRUST_PROXY=true
 SERVE_STATIC_CLIENT=false
 
-FRONTEND_URL=https://pay.payincus.com
-ADMIN_FRONTEND_URL=https://admin.payincus.com
-SITE_URL=https://pay.payincus.com
-PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com
+FRONTEND_URL=https://demo.payincus.com
+ADMIN_FRONTEND_URL=https://demoadmin.payincus.com
+SITE_URL=https://demo.payincus.com
+PAYMENT_CALLBACK_BASE_URL=https://demo.payincus.com
 VITE_API_BASE_URL=/api
-VITE_CUSTOMER_BASE_URL=https://pay.payincus.com
-VITE_ADMIN_BASE_URL=https://admin.payincus.com
+VITE_CUSTOMER_BASE_URL=https://demo.payincus.com
+VITE_ADMIN_BASE_URL=https://demoadmin.payincus.com
 ```
 
 ## Cookie

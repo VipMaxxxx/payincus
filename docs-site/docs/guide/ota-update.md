@@ -5,7 +5,7 @@
 后台页面：
 
 ```text
-https://admin.payincus.com/admin/system-update
+https://demoadmin.payincus.com/admin/system-update
 ```
 
 ## 更新模式

@@ -5,7 +5,14 @@ The user portal is for regular customers only. It must not expose admin entrypoi
 Entry:
 
 ```text
-https://pay.payincus.com
+https://demo.payincus.com
+```
+
+Demo account:
+
+```text
+Username: demo
+Password: demo123
 ```
 
 ## Access Boundary

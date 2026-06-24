@@ -3,8 +3,8 @@
 PayIncus frontends call the backend through same-origin `/api`.
 
 ```text
-https://pay.payincus.com/api
-https://admin.payincus.com/api
+https://demo.payincus.com/api
+https://demoadmin.payincus.com/api
 ```
 
 Both domains proxy `/api` to the same backend.
@@ -14,8 +14,8 @@ Both domains proxy `/api` to the same backend.
 Terminal WebSocket also uses same-origin `/api/ws`:
 
 ```text
-wss://pay.payincus.com/api/ws/...
-wss://admin.payincus.com/api/ws/...
+wss://demo.payincus.com/api/ws/...
+wss://demoadmin.payincus.com/api/ws/...
 ```
 
 ## Permissions

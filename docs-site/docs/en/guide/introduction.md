@@ -6,11 +6,18 @@ It is based on `qwer-xyz/incudal` and focuses on non-Docker production deploymen
 
 ## Entrypoints
 
-- User portal: `https://pay.payincus.com`
-- Admin console: `https://admin.payincus.com`
+- User portal: `https://demo.payincus.com`
+- Admin console: `https://demoadmin.payincus.com`
 - Documentation: `https://payincus.com`
 - Telegram group: `https://t.me/Payincus`
 - GitHub repository: `https://github.com/VipMaxxxx/payincus`
+
+## Demo Accounts
+
+| Entry | Username | Password |
+| --- | --- | --- |
+| User portal | `demo` | `demo123` |
+| Admin console | `admin` | `admin123` |
 
 ## Main Capabilities
 
