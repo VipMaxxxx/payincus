@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `5de795a`
+- Current HEAD / 当前 HEAD: `dc95c91`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Add order payment operations workflow / 新增订单支付运营闭环
-- Latest tag / 最新 tag: `v0.2.7`
+- Commit subject / 提交说明: Add financial reconciliation workflow / 新增财务对账闭环
+- Latest tag / 最新 tag: `v0.2.8`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.2.8
+
+- Release commit / 发布提交: `dc95c91`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Add financial reconciliation workflow / 新增财务对账闭环
+
+### New Capabilities / 新增能力
+
+- Add financial reconciliation workflow / 新增财务对账闭环 `dc95c91`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff for v0.2.7 OTA proof / 更新 v0.2.7 OTA 证明交接 `522a67c`
+- Update version log for v0.2.7 / 更新 v0.2.7 版本日志 `2063fae`
 
 ## v0.2.7
 
