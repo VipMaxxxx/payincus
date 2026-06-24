@@ -7,6 +7,7 @@ import { prisma } from './prisma.js'
 import type { Log } from '../types/database.js'
 import type { Prisma } from '@prisma/client'
 import { normalizeLogContentForStorage } from '../lib/log-localization.js'
+import { classifyLogRisk, redactAuditText, type RiskLevel } from '../lib/risk-audit.js'
 
 // ==================== 日志模块常量 ====================
 
@@ -120,6 +121,15 @@ export const LogResult = {
 
 export type CreateLogOptions = {
   instanceId?: number | null
+}
+
+export type AuditLogRow = Log & {
+  username?: string | null
+  risk_level: RiskLevel
+  risk_title: string
+  approval_required: boolean
+  verification_required: boolean
+  batch_sensitive: boolean
 }
 
 const INSTANCE_NAME_PATTERN = /instance\s+"([^"]+)"/gi
@@ -274,6 +284,80 @@ function combineWhereWithAnd(where: Prisma.LogWhereInput, condition: Prisma.LogW
   }
 }
 
+function buildLogWhere(options: {
+  module?: string
+  userId?: number
+  startDate?: string
+  endDate?: string
+  search?: string
+  instanceId?: number
+  instanceName?: string
+}): Prisma.LogWhereInput {
+  const safeModule = normalizeLogFilterValue(options.module, LOG_MODULE_FILTER_MAX_LENGTH)
+  const safeSearch = normalizeLogFilterValue(options.search, LOG_SEARCH_FILTER_MAX_LENGTH)
+  const safeInstanceName = normalizeLogFilterValue(options.instanceName, LOG_INSTANCE_NAME_FILTER_MAX_LENGTH)
+  const safeStartDate = parseValidDateFilter(options.startDate)
+  const safeEndDate = parseValidDateFilter(options.endDate)
+
+  const where: Prisma.LogWhereInput = {}
+
+  if (safeModule) {
+    where.module = safeModule
+  }
+
+  if (options.userId !== undefined) {
+    where.userId = options.userId
+  }
+
+  if (safeStartDate || safeEndDate) {
+    where.createdAt = {
+      ...(safeStartDate ? { gte: safeStartDate } : {}),
+      ...(safeEndDate ? { lte: safeEndDate } : {})
+    }
+  }
+
+  if (safeSearch) {
+    where.OR = [
+      { content: { contains: safeSearch, mode: 'insensitive' } },
+      { action: { contains: safeSearch, mode: 'insensitive' } },
+      { user: { username: { contains: safeSearch, mode: 'insensitive' } } }
+    ]
+  }
+
+  if (options.instanceId !== undefined) {
+    combineWhereWithAnd(where, { instanceId: options.instanceId })
+  } else if (safeInstanceName) {
+    combineWhereWithAnd(where, { content: { contains: `instance "${safeInstanceName}"`, mode: 'insensitive' } })
+  }
+
+  return where
+}
+
+function mapLogWithRisk(log: Prisma.LogGetPayload<{ include: { user: { select: { username: true } } } }>): AuditLogRow {
+  const risk = classifyLogRisk({
+    module: log.module,
+    action: log.action,
+    content: log.content
+  })
+
+  return {
+    id: log.id,
+    user_id: log.userId,
+    instance_id: log.instanceId,
+    username: redactAuditText(log.user?.username || '') || null,
+    module: log.module,
+    action: log.action,
+    content: redactAuditText(log.content),
+    result: log.result,
+    created_at: log.createdAt.toISOString(),
+    risk_level: risk.riskLevel,
+    risk_title: risk.riskTitle,
+    approval_required: risk.approvalRequired,
+    verification_required: risk.verificationRequired,
+    batch_sensitive: risk.batchSensitive
+  }
+}
+
 /**
  * 分页获取日志
  */
@@ -307,42 +391,7 @@ export async function getLogsPaginated(options: {
   } = options
   const safePage = Number.isInteger(page) && page > 0 ? page : 1
   const safePageSize = Number.isInteger(pageSize) ? Math.min(Math.max(pageSize, 1), 100) : 20
-  const safeModule = normalizeLogFilterValue(module, LOG_MODULE_FILTER_MAX_LENGTH)
-  const safeSearch = normalizeLogFilterValue(search, LOG_SEARCH_FILTER_MAX_LENGTH)
-  const safeInstanceName = normalizeLogFilterValue(instanceName, LOG_INSTANCE_NAME_FILTER_MAX_LENGTH)
-  const safeStartDate = parseValidDateFilter(startDate)
-  const safeEndDate = parseValidDateFilter(endDate)
-
-  const where: Prisma.LogWhereInput = {}
-
-  if (safeModule) {
-    where.module = safeModule
-  }
-
-  if (userId !== undefined) {
-    where.userId = userId
-  }
-
-  if (safeStartDate || safeEndDate) {
-    where.createdAt = {
-      ...(safeStartDate ? { gte: safeStartDate } : {}),
-      ...(safeEndDate ? { lte: safeEndDate } : {})
-    }
-  }
-
-  if (safeSearch) {
-    where.OR = [
-      { content: { contains: safeSearch, mode: 'insensitive' } },
-      { action: { contains: safeSearch, mode: 'insensitive' } },
-      { user: { username: { contains: safeSearch, mode: 'insensitive' } } }
-    ]
-  }
-
-  if (instanceId !== undefined) {
-    combineWhereWithAnd(where, { instanceId })
-  } else if (safeInstanceName) {
-    combineWhereWithAnd(where, { content: { contains: `instance "${safeInstanceName}"`, mode: 'insensitive' } })
-  }
+  const where = buildLogWhere({ module, userId, startDate, endDate, search, instanceId, instanceName })
 
   // 获取总数
   const total = await prisma.log.count({ where })
@@ -365,22 +414,42 @@ export async function getLogsPaginated(options: {
   })
 
   return {
-    items: logs.map(log => ({
-      id: log.id,
-      user_id: log.userId,
-      instance_id: log.instanceId,
-      username: log.user?.username || null,
-      module: log.module,
-      action: log.action,
-      content: log.content,
-      result: log.result,
-      created_at: log.createdAt.toISOString()
-    })),
+    items: logs.map(mapLogWithRisk),
     total,
     page: safePage,
     pageSize: safePageSize,
     totalPages: Math.ceil(total / safePageSize)
   }
+}
+
+export async function getLogsForAuditExport(options: {
+  module?: string
+  startDate?: string
+  endDate?: string
+  search?: string
+  instanceId?: number
+  instanceName?: string
+  limit?: number
+} = {}): Promise<AuditLogRow[]> {
+  const safeLimit = Number.isInteger(options.limit) ? Math.min(Math.max(options.limit ?? 500, 1), 1000) : 500
+  const where = buildLogWhere(options)
+
+  const logs = await prisma.log.findMany({
+    where,
+    include: {
+      user: {
+        select: {
+          username: true
+        }
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: safeLimit
+  })
+
+  return logs.map(mapLogWithRisk)
 }
 
 /**

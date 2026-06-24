@@ -30,7 +30,7 @@ https://admin.example.com
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
-| Logs | `/admin/logs` | Audit logs and system operation records. In the Chinese UI, modules, actions, results and common log content are localized to Chinese. |
+| Logs and Audit | `/admin/logs` | Audit logs and system operation records with risk levels, approval or verification hints, and redacted CSV export. |
 
 ## Billing and Commercial Features
 
@@ -129,6 +129,18 @@ The operations overview is returned only by the admin statistics API and is not 
 - The user portal only shows the current user's available targeted redeem codes. It does not expose admin tags, segments, internal events or action records.
 - Lifecycle APIs do not return raw payment callbacks, provider snapshots, IP addresses, User-Agent values, instance root passwords, 2FA secrets, tokens or secrets.
 
+## Logs and Audit
+
+`/admin/logs` tracks admin actions, system events and high-risk operations:
+
+- The log table shows risk levels: low, medium, high and critical.
+- The high-risk catalog covers system updates, payment providers, balance adjustments, batch instance deletion, hosts, packages, admin role changes and plugin installation.
+- The top summary shows risk catalog size, high-risk records on the current page, records that need approval and records that need verification.
+- Administrators can export the currently filtered audit CSV, capped at 1000 rows per export.
+- Audit export masks emails, IP addresses, tokens and JWT-like values. It does not export passwords, certificates, raw payment callbacks or secrets.
+- Every audit export writes an `audit.export` operation log.
+- The risk catalog and full audit export are admin-only. Regular users can only read logs scoped to their own account.
+
 ## System Settings
 
 - Access and registration.
@@ -150,4 +162,4 @@ The operations overview is returned only by the admin statistics API and is not 
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
-Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that SLA alerts are admin-only, deduplicated and redacted, that ticket support context and internal notes are admin-only and cannot bypass adjustment or delivery workflows, that user lifecycle admin data is admin-only while users can only read their own offers, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.
+Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that SLA alerts are admin-only, deduplicated and redacted, that ticket support context and internal notes are admin-only and cannot bypass adjustment or delivery workflows, that user lifecycle admin data is admin-only while users can only read their own offers, that logs and audit exports are admin-only, redacted and recorded as export actions, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.
