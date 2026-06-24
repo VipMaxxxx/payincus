@@ -7,6 +7,7 @@ const serviceSource = readFileSync(resolve(process.cwd(), 'src/services/ai-ticke
 const autoReplySchedulerSource = readFileSync(resolve(process.cwd(), 'src/services/ai-ticket-auto-reply-scheduler.ts'), 'utf8')
 const appSource = readFileSync(resolve(process.cwd(), 'src/app.ts'), 'utf8')
 const clientApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/index.ts'), 'utf8')
+const adminApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/admin.ts'), 'utf8')
 const ticketsViewSource = readFileSync(resolve(process.cwd(), '../client/src/views/TicketsView.vue'), 'utf8')
 const clientTypesSource = readFileSync(resolve(process.cwd(), '../client/src/types/api.ts'), 'utf8')
 const pluginSettingsSource = readFileSync(resolve(process.cwd(), '../plugin-templates/ai-ticket-agent-plugin/dist/admin/settings.html'), 'utf8')
@@ -253,6 +254,10 @@ assert.ok(
     clientApiSource.includes("http.post(`/tickets/${id}/ai/draft`, {}, { timeout: TIMEOUT.MEDIUM })") &&
     clientApiSource.includes('sendAiReply') &&
     clientApiSource.includes("http.post(`/tickets/${id}/ai/reply`, {}, { timeout: TIMEOUT.MEDIUM })") &&
+    adminApiSource.includes('generateAiDraft') &&
+    adminApiSource.includes("http.post(`/tickets/${id}/ai/draft`, {}, { timeout: TIMEOUT.MEDIUM })") &&
+    adminApiSource.includes('sendAiReply') &&
+    adminApiSource.includes("http.post(`/tickets/${id}/ai/reply`, {}, { timeout: TIMEOUT.MEDIUM })") &&
     ticketsViewSource.includes('aiDraftLoading') &&
     ticketsViewSource.includes('aiReplyLoading') &&
     ticketsViewSource.includes('generateAiDraft') &&

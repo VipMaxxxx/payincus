@@ -825,7 +825,7 @@ async function submitCreate() {
     return
   }
   if (createAttachments.value.length === 0 && createForm.value.content.trim().length < 10) {
-    toast.error(t('tickets.content') + ' ' + t('common.error'))
+    toast.error(t('tickets.contentTooShort'))
     return
   }
   

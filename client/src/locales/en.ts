@@ -6359,6 +6359,7 @@ export default {
         confirmCloseHint: 'You will not be able to reply after closing',
         // Messages
         createSuccess: 'Ticket created successfully',
+        contentTooShort: 'Ticket content must be at least 10 characters, or upload an image attachment',
         replySuccess: 'Reply sent successfully',
         closeSuccess: 'Ticket closed',
         deleteMessage: 'Delete message',

@@ -10,6 +10,8 @@ const apiSource = readFileSync(resolve(process.cwd(), '../client/src/api/index.t
 const adminApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/admin.ts'), 'utf8')
 const ticketsViewSource = readFileSync(resolve(process.cwd(), '../client/src/views/TicketsView.vue'), 'utf8')
 const typesSource = readFileSync(resolve(process.cwd(), '../client/src/types/api.ts'), 'utf8')
+const zhCnLocale = readFileSync(resolve(process.cwd(), '../client/src/locales/zh-CN.ts'), 'utf8')
+const enLocale = readFileSync(resolve(process.cwd(), '../client/src/locales/en.ts'), 'utf8')
 
 assert.ok(
   schemaSource.includes('firstResponseDueAt DateTime? @map("first_response_due_at")') &&
@@ -98,6 +100,15 @@ assert.ok(
     ticketsViewSource.includes('tickets.support.internalNotes') &&
     ticketsViewSource.includes('tickets.support.timeline'),
   'Admin ticket UI must show support context, queues, notes, links, timeline and admin-only controls'
+)
+
+assert.ok(
+  ticketsViewSource.includes("toast.error(t('tickets.contentTooShort'))") &&
+    !ticketsViewSource.includes("toast.error(t('tickets.content') + ' ' + t('common.error'))") &&
+    zhCnLocale.includes('contentTooShort:') &&
+    zhCnLocale.includes('工单内容至少需要 10 个字符') &&
+    enLocale.includes('Ticket content must be at least 10 characters'),
+  'Ticket create validation must show a specific content length message instead of a generic operation failure'
 )
 
 console.log('Ticket success guard tests passed')

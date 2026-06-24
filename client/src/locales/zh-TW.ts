@@ -6736,6 +6736,7 @@ export default {
         confirmClose: '確認關閉工單？',
         confirmCloseHint: '關閉後將無法繼續回覆',
         createSuccess: '工單建立成功',
+        contentTooShort: '工單內容至少需要 10 個字元，或上傳一張圖片附件',
         replySuccess: '回覆成功',
         closeSuccess: '工單已關閉',
         statusUpdated: '狀態已更新',
