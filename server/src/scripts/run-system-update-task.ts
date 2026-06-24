@@ -1,8 +1,8 @@
 import '../config/env.js'
 import { createHash } from 'crypto'
-import { appendFile, mkdir, cp, rm, writeFile, readdir, stat, lstat, readlink, symlink, rename } from 'fs/promises'
+import { appendFile, mkdir, cp, rm, writeFile, readdir, stat, lstat, readlink, symlink, rename, statfs } from 'fs/promises'
 import { createReadStream, createWriteStream, existsSync } from 'fs'
-import { dirname, join, resolve } from 'path'
+import { dirname, join, resolve, sep } from 'path'
 import { spawn } from 'child_process'
 import { Readable } from 'stream'
 import { pipeline } from 'stream/promises'
@@ -27,6 +27,15 @@ const logDir = resolve(process.env.SYSTEM_UPDATE_LOG_DIR || join(installDir, 'up
 const logPath = resolve(process.env.SYSTEM_UPDATE_LOG_PATH || join(logDir, `system-update-${taskId}.log`))
 const updateDownloadDir = resolve(process.env.SYSTEM_UPDATE_DOWNLOAD_DIR || join(installDir, '.incudal-update-downloads'))
 const updateApplyMode = process.env.SYSTEM_UPDATE_APPLY_MODE || 'auto'
+const minimumDiskFreeMb = parseNonNegativeIntegerEnv(process.env.SYSTEM_UPDATE_MIN_FREE_MB, 4096)
+const releaseRetentionCount = parseNonNegativeIntegerEnv(process.env.SYSTEM_UPDATE_RELEASES_KEEP, 8)
+const backupTaskRetentionCount = parseNonNegativeIntegerEnv(process.env.SYSTEM_UPDATE_BACKUP_TASKS_KEEP, 3)
+
+function parseNonNegativeIntegerEnv(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback
+}
 
 function now(): string {
   return new Date().toISOString()
@@ -35,6 +44,18 @@ function now(): string {
 async function log(message: string): Promise<void> {
   await mkdir(dirname(logPath), { recursive: true })
   await appendFile(logPath, `[${now()}] ${message}\n`)
+}
+
+function isSafeChildPath(parent: string, child: string): boolean {
+  const normalizedParent = resolve(parent)
+  const normalizedChild = resolve(child)
+  return normalizedChild !== normalizedParent && normalizedChild.startsWith(`${normalizedParent}${sep}`)
+}
+
+function assertSafeManagedPath(path: string, parent: string, label: string): void {
+  if (!isSafeChildPath(parent, path)) {
+    throw new Error(`${label} must be inside ${parent}`)
+  }
 }
 
 async function run(command: string, args: string[], options: { timeoutMs?: number; env?: NodeJS.ProcessEnv; cwd?: string } = {}): Promise<void> {
@@ -70,6 +91,46 @@ async function run(command: string, args: string[], options: { timeoutMs?: numbe
         resolvePromise()
       } else {
         reject(new Error(`Command failed with exit code ${code}: ${command} ${args.join(' ')}`))
+      }
+    })
+  })
+}
+
+async function runCapture(command: string, args: string[], options: { timeoutMs?: number; env?: NodeJS.ProcessEnv; cwd?: string } = {}): Promise<string> {
+  await log(`$ ${command} ${args.join(' ')}`)
+  return await new Promise<string>((resolvePromise, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd || appDir,
+      env: {
+        ...process.env,
+        ...options.env
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+
+    let stdout = ''
+    let stderr = ''
+    let timeout: NodeJS.Timeout | null = null
+    if (options.timeoutMs) {
+      timeout = setTimeout(() => {
+        child.kill('SIGTERM')
+        reject(new Error(`Command timed out: ${command} ${args.join(' ')}`))
+      }, options.timeoutMs)
+    }
+
+    child.stdout.on('data', data => {
+      stdout += String(data)
+    })
+    child.stderr.on('data', data => {
+      stderr += String(data)
+    })
+    child.on('error', reject)
+    child.on('close', code => {
+      if (timeout) clearTimeout(timeout)
+      if (code === 0) {
+        resolvePromise(stdout)
+      } else {
+        reject(new Error(`Command failed with exit code ${code}: ${command} ${args.join(' ')}${stderr ? `\n${stderr}` : ''}`))
       }
     })
   })
@@ -124,6 +185,146 @@ async function resolveSymlinkTarget(path: string): Promise<string> {
 async function getCurrentReleaseTarget(): Promise<string | null> {
   if (!(await isAtomicReleaseLayout())) return null
   return await resolveSymlinkTarget(getCurrentLinkPath())
+}
+
+async function cleanupUpdateDownloadDir(reason: string): Promise<void> {
+  assertSafeManagedPath(updateDownloadDir, installDir, 'SYSTEM_UPDATE_DOWNLOAD_DIR')
+  await rm(updateDownloadDir, { recursive: true, force: true })
+  await mkdir(updateDownloadDir, { recursive: true })
+  await log(`已清理 OTA 下载缓存（${reason}）：${updateDownloadDir}`)
+}
+
+async function getAvailableDiskMb(path: string): Promise<number> {
+  const stats = await statfs(path)
+  return Math.floor((stats.bavail * stats.bsize) / 1024 / 1024)
+}
+
+async function getInstallDirectorySizeMb(): Promise<number | null> {
+  try {
+    const output = await runCapture('du', ['-sm', installDir], { timeoutMs: 120000, cwd: dirname(installDir) })
+    const size = Number(output.trim().split(/\s+/)[0])
+    return Number.isSafeInteger(size) && size >= 0 ? size : null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await log(`安装目录大小统计失败，磁盘预检将只使用最低保留空间：${message}`)
+    return null
+  }
+}
+
+async function assertEnoughDiskSpace(stage: string, requiredMb: number): Promise<void> {
+  const availableMb = await getAvailableDiskMb(installDir)
+  await log(`磁盘空间预检：${stage}，可用 ${availableMb} MB，要求 ${requiredMb} MB`)
+  if (availableMb < requiredMb) {
+    throw new Error(
+      `磁盘空间不足，无法继续 OTA 更新：${stage} 至少需要 ${requiredMb} MB 可用空间，当前仅 ${availableMb} MB。请清理 ${updateDownloadDir}、旧 release 或扩容后重试。`
+    )
+  }
+}
+
+function getArtifactDiskRequirementMb(artifact: OtaArtifactInfo): number {
+  const artifactMb = artifact.size ? Math.ceil(artifact.size / 1024 / 1024) : 0
+  return Math.max(minimumDiskFreeMb, minimumDiskFreeMb + artifactMb * 3)
+}
+
+async function getRecentProtectedBackupPaths(): Promise<Set<string>> {
+  const protectedPaths = new Set<string>()
+  if (backupTaskRetentionCount <= 0) return protectedPaths
+
+  const tasks = await prisma.systemUpdateTask.findMany({
+    where: {
+      backupPath: { not: null },
+      status: { in: ['success', 'rolled_back'] }
+    },
+    orderBy: [
+      { finishedAt: 'desc' },
+      { id: 'desc' }
+    ],
+    take: backupTaskRetentionCount,
+    select: { backupPath: true }
+  })
+
+  for (const task of tasks) {
+    if (task.backupPath) protectedPaths.add(resolve(task.backupPath))
+  }
+
+  return protectedPaths
+}
+
+async function cleanupOldReleases(currentBackupPath?: string): Promise<void> {
+  if (!(await isAtomicReleaseLayout())) {
+    await log('旧 release 清理已跳过：当前部署不是原子 current/releases 布局')
+    return
+  }
+
+  const releasesDir = getReleasesDir()
+  assertSafeManagedPath(releasesDir, installDir, 'SYSTEM_UPDATE_RELEASES_DIR')
+  if (!existsSync(releasesDir)) return
+
+  const protectedPaths = await getRecentProtectedBackupPaths()
+  const currentTarget = await getCurrentReleaseTarget()
+  if (currentTarget) protectedPaths.add(resolve(currentTarget))
+  if (currentBackupPath) protectedPaths.add(resolve(currentBackupPath))
+
+  const entries = await readdir(releasesDir)
+  const releaseDirs: Array<{ path: string; mtimeMs: number; name: string }> = []
+  for (const name of entries) {
+    if (name.startsWith('.next-current-')) continue
+    const fullPath = join(releasesDir, name)
+    try {
+      const entryStat = await lstat(fullPath)
+      if (!entryStat.isDirectory()) continue
+      releaseDirs.push({ path: fullPath, mtimeMs: entryStat.mtimeMs, name })
+    } catch {
+      continue
+    }
+  }
+
+  releaseDirs.sort((a, b) => b.mtimeMs - a.mtimeMs)
+  let keptUnprotected = 0
+  let deleted = 0
+
+  for (const release of releaseDirs) {
+    const normalizedPath = resolve(release.path)
+    if (!isSafeChildPath(releasesDir, normalizedPath)) continue
+    if (protectedPaths.has(normalizedPath)) {
+      await log(`保留受保护 release：${release.name}`)
+      continue
+    }
+    if (keptUnprotected < releaseRetentionCount) {
+      keptUnprotected += 1
+      continue
+    }
+    await rm(normalizedPath, { recursive: true, force: true })
+    deleted += 1
+    await log(`已删除旧 release：${release.name}`)
+  }
+
+  await log(`旧 release 清理完成：保留 ${keptUnprotected} 个非保护 release，删除 ${deleted} 个旧 release，保护 ${protectedPaths.size} 个路径`)
+}
+
+async function runPostUpdateCleanup(currentBackupPath: string): Promise<void> {
+  try {
+    await cleanupUpdateDownloadDir('更新任务结束后')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await log(`OTA 下载缓存清理失败：${message}`)
+  }
+
+  try {
+    await cleanupOldReleases(currentBackupPath)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await log(`旧 release 清理失败：${message}`)
+  }
+}
+
+async function runFailedUpdateCleanup(): Promise<void> {
+  try {
+    await cleanupUpdateDownloadDir('更新失败后')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await log(`失败更新缓存清理失败：${message}`)
+  }
 }
 
 async function switchCurrentRelease(targetDir: string): Promise<void> {
@@ -232,6 +433,7 @@ async function clearInstallDirForArtifact(): Promise<void> {
     'plugin-data',
     'plugin-logs',
     'plugin-staging',
+    '.incudal-update-downloads',
     'update-logs'
   ])
 }
@@ -517,6 +719,8 @@ async function main(): Promise<void> {
   await mkdir(logDir, { recursive: true })
   await updateTask({ status: 'running', startedAt: new Date(), logPath })
   await log(`Starting system update task ${taskId} -> ${targetVersion}`)
+  await cleanupUpdateDownloadDir('更新开始前')
+  await assertEnoughDiskSpace('更新开始前', minimumDiskFreeMb)
   await configureGitSafeDirectory()
 
   const currentVersion = await getCurrentVersionMetadata(appDir)
@@ -529,8 +733,11 @@ async function main(): Promise<void> {
   try {
     const artifact = await getRuntimeArtifact(targetVersion)
     if (artifact) {
+      const backupRequirementMb = (await isAtomicReleaseLayout()) ? 0 : (await getInstallDirectorySizeMb()) || 0
+      await assertEnoughDiskSpace('下载、解压 OTA 包并备份当前版本', getArtifactDiskRequirementMb(artifact) + backupRequirementMb)
       backupPath = await applyArtifactUpdate(artifact, backupDir, timestamp)
     } else {
+      await assertEnoughDiskSpace('Git 构建并备份当前版本', minimumDiskFreeMb + ((await getInstallDirectorySizeMb()) || 0))
       backupPath = await applyGitUpdate(backupDir)
     }
     await verifyUpdatedRuntime(Boolean(artifact))
@@ -542,6 +749,7 @@ async function main(): Promise<void> {
       errorMessage: null
     })
     await log('System update completed successfully')
+    await runPostUpdateCleanup(backupPath)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await log(`ERROR: ${message}`)
@@ -558,6 +766,7 @@ async function main(): Promise<void> {
       finishedAt: new Date(),
       errorMessage: (rolledBack ? `Update failed and was auto-rolled back: ${message}` : message).slice(0, 5000)
     })
+    await runFailedUpdateCleanup()
     process.exitCode = 1
   } finally {
     await closePrismaDatabase()

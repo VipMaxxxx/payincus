@@ -127,10 +127,23 @@ assert.ok(
     runTask.includes("join(installDir, '.incudal-update-downloads')") &&
     runTask.includes("join(installDir, 'current')") &&
     runTask.includes("join(installDir, 'releases')") &&
+    runTask.includes('SYSTEM_UPDATE_MIN_FREE_MB') &&
+    runTask.includes('SYSTEM_UPDATE_RELEASES_KEEP') &&
+    runTask.includes('SYSTEM_UPDATE_BACKUP_TASKS_KEEP') &&
+    runTask.includes("cleanupUpdateDownloadDir('更新开始前')") &&
+    runTask.includes('assertEnoughDiskSpace') &&
+    runTask.includes('磁盘空间不足，无法继续 OTA 更新') &&
+    runTask.includes('runPostUpdateCleanup(backupPath)') &&
+    runTask.includes('runFailedUpdateCleanup()') &&
+    runTask.includes('cleanupOldReleases') &&
+    runTask.includes('getRecentProtectedBackupPaths') &&
+    runTask.includes('getCurrentReleaseTarget') &&
+    runTask.includes('已删除旧 release') &&
+    runTask.includes("'.incudal-update-downloads'") &&
     runTask.includes('Auto rollback completed successfully') &&
     runTask.includes("status: rolledBack ? 'rolled_back' : 'failed'") &&
     runTask.includes('failed-update'),
-  'online updater must prefer checksum-verified OTA release artifacts, support atomic current/release switching, and preserve Git fallback mode'
+  'online updater must prefer checksum-verified OTA release artifacts, support atomic current/release switching, clean OTA caches, preflight disk space, prune old releases safely, and preserve Git fallback mode'
 )
 
 assert.ok(

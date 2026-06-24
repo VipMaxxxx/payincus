@@ -237,9 +237,11 @@ pnpm verify:split:host
 - 默认 `SYSTEM_UPDATE_APPLY_MODE=auto`：如果目标 tag 有匹配当前 Linux 架构的 OTA artifact，更新任务会下载 release tar.gz、校验 SHA256、解压并替换安装内容；没有可用 artifact 时回退到 Git tag 兼容构建模式。也可设置为 `artifact` 强制只允许 OTA 包，或设置为 `git` 强制走旧的 Git 构建路径。
 - Artifact 模式会校验 release 包完整性并应用预构建产物：旧布局会先备份当前目录，原子 OTA 布局会创建新的 release 目录并切换 `current`。两种布局都会执行 Prisma migration、split host 验证、生产预检和响应头/日志检查。前后台边界守卫在 GitHub Release 打包前执行。
 - Git 兼容模式会先备份当前目录，再执行 `git checkout --force <tag>`、依赖安装、构建、Prisma migration、前后台边界守卫、split host 验证、生产预检、响应头/日志检查和 Agent release smoke。
+- 更新开始前会清理旧的 `.incudal-update-downloads` 下载缓存，并检查磁盘空间；默认至少要求 4096 MB 可用空间，artifact 更新还会按包大小预留下载、解压和旧布局备份空间。
 - 如果更新已创建备份但后续应用、重启或验证失败，worker 会尝试自动回滚到备份版本，并把失败现场保存在 `/opt/incudal.failed-update.<timestamp>` 便于排查。
 - 可执行 `bash scripts/migrate-ota-atomic-layout.sh` 将部署迁移为原子 OTA 布局：`/opt/incudal/current` 指向当前 release，`/opt/incudal/releases/<version>` 保存各版本，systemd 运行 `current` 指针。迁移后 artifact 更新会先解压到新的 release 目录，再切换 `current`；失败回滚只需切回上一版 release。
 - 原子 OTA 布局下，成功更新会把上一版 release 路径记录到任务 `backupPath`；管理后台回滚会把 `current` 切回该路径，重启后端，并重新执行 split host 验证。
+- 原子 OTA 布局下，更新成功后会清理本次下载缓存，并按保留策略删除旧 release；`current` 指向版本、当前任务回滚目标和最近成功/已回滚任务的 `backupPath` 会被保护，不会被自动删除。
 - 更新期间会保留 `.env`、`server/certs`、`agent-release`、`plugins`、`plugin-data`、`plugin-logs`、`plugin-staging`、`.npm` 和 `.cache` 等运行态资产。
 
 推荐生产环境变量：
@@ -250,6 +252,9 @@ SYSTEM_UPDATE_LOG_DIR=/opt/incudal/update-logs
 SYSTEM_UPDATE_STARTED_BY_USER_ID=1
 SYSTEM_UPDATE_RELEASE_REPOSITORY=VipMaxxxx/payincus
 SYSTEM_UPDATE_APPLY_MODE=auto
+SYSTEM_UPDATE_MIN_FREE_MB=4096
+SYSTEM_UPDATE_RELEASES_KEEP=8
+SYSTEM_UPDATE_BACKUP_TASKS_KEEP=3
 # 私有仓库或 API 限流时配置，public release 可留空
 SYSTEM_UPDATE_RELEASE_TOKEN=
 ```
