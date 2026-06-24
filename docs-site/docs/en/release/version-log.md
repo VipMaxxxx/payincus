@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `b186fa8`
+- Current HEAD / 当前 HEAD: `68abb17`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底
-- Latest tag / 最新 tag: `v0.4.3`
+- Commit subject / 提交说明: Add capacity and cost operations view / 新增容量与成本运营视图
+- Latest tag / 最新 tag: `v0.4.4`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.4.4
+
+- Release commit / 发布提交: `68abb17`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Add capacity and cost operations view / 新增容量与成本运营视图
+
+### New Capabilities / 新增能力
+
+- Add capacity and cost operations view / 新增容量与成本运营视图 `68abb17`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff for v0.4.3 OTA proof / 更新 v0.4.3 OTA 交接证明 `7b9e3b2`
+- Update version log for v0.4.3 / 更新 v0.4.3 版本日志 `3490fa1`
 
 ## v0.4.3
 

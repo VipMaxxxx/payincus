@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `b186fa8`
+- 当前 HEAD / Current HEAD: `68abb17`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底
-- 最新 tag / Latest tag: `v0.4.3`
+- 提交说明 / Commit subject: Add capacity and cost operations view / 新增容量与成本运营视图
+- 最新 tag / Latest tag: `v0.4.4`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.4.4
+
+- 发布提交 / Release commit: `68abb17`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Add capacity and cost operations view / 新增容量与成本运营视图
+
+### 新增能力 / New Capabilities
+
+- Add capacity and cost operations view / 新增容量与成本运营视图 `68abb17`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff for v0.4.3 OTA proof / 更新 v0.4.3 OTA 交接证明 `7b9e3b2`
+- Update version log for v0.4.3 / 更新 v0.4.3 版本日志 `3490fa1`
 
 ## v0.4.3
 
