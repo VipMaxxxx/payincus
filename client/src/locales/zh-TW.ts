@@ -217,6 +217,7 @@ export default {
         plugins: '插件中心',
         delivery: '交付保障',
         slaAlerts: 'SLA 與告警',
+        productionProof: '生產驗收',
         userLifecycle: '使用者生命週期',
         users: '使用者',
         statistics: '統計',

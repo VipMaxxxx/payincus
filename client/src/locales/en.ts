@@ -209,6 +209,7 @@ export default {
         plugins: 'Plugin Center',
         delivery: 'Delivery Assurance',
         slaAlerts: 'SLA & Alerts',
+        productionProof: 'Production Proof',
         userLifecycle: 'User Lifecycle',
         users: 'Users',
         statistics: 'Statistics',
