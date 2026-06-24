@@ -2095,6 +2095,7 @@ export interface TicketAiReplyResponse {
     passed: boolean
     blockedReasons: string[]
   }
+  sendBlockedReasons?: string[]
 }
 
 export interface CreateTicketRequest {

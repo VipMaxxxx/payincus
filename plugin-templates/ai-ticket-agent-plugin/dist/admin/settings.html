@@ -66,14 +66,20 @@
         <code>POST /api/tickets/:id/ai/context</code>
         <p>当前后端草稿生成接口：</p>
         <code>POST /api/tickets/:id/ai/draft</code>
+        <p>当前后端受控接管回复接口：</p>
+        <code>POST /api/tickets/:id/ai/reply</code>
         <ul>
           <li>需要管理员会话。</li>
           <li>需要插件已启用。</li>
           <li>读取上下文需要声明 <code>ticket:ai:read-context</code> 权限。</li>
           <li>生成草稿需要声明 <code>ticket:ai:generate-draft</code> 权限。</li>
+          <li>接管回复需要声明 <code>ticket:ai:reply</code> 权限，且插件模式不能是纯草稿。</li>
+          <li>退款、争议、账号安全、风控、数据恢复、删除/重装/迁移实例、凭据或后台细节、交付异常会强制转人工。</li>
+          <li>每日上限、单工单上限和冷却时间会基于 <code>ai_ticket.reply_send</code> 成功审计日志执行。</li>
+          <li><code>auto</code> 模式下后端每 2 分钟扫描一次，仅处理官方/系统工单且最后一条消息来自用户的低风险工单。</li>
           <li>只返回当前工单用户自己的脱敏摘要。</li>
           <li>草稿接口不会发送工单消息，也不会修改工单状态。</li>
-          <li>管理员必须人工检查草稿后再发送正式回复。</li>
+          <li>接管回复接口会重新生成并安全检查回复，只写入一条客服侧消息，不会修改工单状态。</li>
         </ul>
       </section>
     </main>

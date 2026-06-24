@@ -446,6 +446,8 @@ async function sendAiReply(): Promise<void> {
       toast.error(t('tickets.support.aiModelNotConfigured'))
     } else if (code === 'AI_TICKET_AGENT_REPLY_MODE_DISABLED') {
       toast.error(t('tickets.support.aiReplyModeDisabled'))
+    } else if (code === 'AI_TICKET_REPLY_HANDOFF_REQUIRED') {
+      toast.error(t('tickets.support.aiReplyHandoffRequired'))
     } else if (code === 'AI_TICKET_REPLY_BLOCKED') {
       toast.error(t('tickets.support.aiReplyBlocked'))
     } else {

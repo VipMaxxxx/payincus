@@ -6408,6 +6408,7 @@ export default {
             aiReplySent: 'AI reply sent',
             aiReplyConfirm: 'Let AI generate and send a support reply from the safe context?',
             aiReplyModeDisabled: 'AI ticket plugin is in draft mode and cannot send takeover replies',
+            aiReplyHandoffRequired: 'This ticket triggered sensitive rules and needs human handling',
             aiReplyBlocked: 'AI reply failed safety checks and needs human handling',
             aiPluginDisabled: 'AI ticket plugin is disabled or missing permission',
             aiModelNotConfigured: 'AI model is not configured. Set the endpoint and key in Plugin Center first.',

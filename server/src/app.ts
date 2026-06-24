@@ -956,6 +956,10 @@ const start = async (): Promise<void> => {
     const { startTicketAutoCloseScheduler } = await import('./services/ticket-auto-close-scheduler.js')
     startTicketAutoCloseScheduler()
 
+    // 启动 AI 工单自动接管调度器（仅插件 auto 模式实际处理）
+    const { startAiTicketAutoReplyScheduler } = await import('./services/ai-ticket-auto-reply-scheduler.js')
+    startAiTicketAutoReplyScheduler()
+
     // 启动节点连接地址监控（启动即回填，之后每 30 分钟轮训域名型地址）
     const { startHostAddressMonitor } = await import('./services/host-address-monitor.js')
     startHostAddressMonitor()

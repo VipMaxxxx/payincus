@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 
 const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/tickets.ts'), 'utf8')
 const serviceSource = readFileSync(resolve(process.cwd(), 'src/services/ai-ticket-context.ts'), 'utf8')
+const autoReplySchedulerSource = readFileSync(resolve(process.cwd(), 'src/services/ai-ticket-auto-reply-scheduler.ts'), 'utf8')
+const appSource = readFileSync(resolve(process.cwd(), 'src/app.ts'), 'utf8')
 const clientApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/index.ts'), 'utf8')
 const ticketsViewSource = readFileSync(resolve(process.cwd(), '../client/src/views/TicketsView.vue'), 'utf8')
 const clientTypesSource = readFileSync(resolve(process.cwd(), '../client/src/types/api.ts'), 'utf8')
@@ -57,7 +59,8 @@ assert.ok(
     routeSource.includes('getAiTicketPermission(AI_TICKET_REPLY_PERMISSION)') &&
     routeSource.includes('generateAiTicketReply(ticketId)') &&
     routeSource.includes('auditAiTicketReply') &&
-    routeSource.includes("code: 'AI_TICKET_AGENT_REPLY_MODE_DISABLED'") &&
+    routeSource.includes("AI_TICKET_AGENT_REPLY_MODE_DISABLED") &&
+    routeSource.includes("AI_TICKET_REPLY_HANDOFF_REQUIRED") &&
     routeSource.includes("code: 'AI_TICKET_REPLY_BLOCKED'"),
   'AI reply endpoint must require the separate reply permission, mode gate, safety checks and audit logging'
 )
@@ -104,9 +107,21 @@ assert.ok(
     serviceSource.includes("apiKey: getConfigString(configs, 'apiKey')") &&
     serviceSource.includes('Authorization: `Bearer ${config.apiKey}`') &&
     serviceSource.includes('inspectAiDraftSafety') &&
+    serviceSource.includes('inspectAiReplySendEligibility') &&
+    serviceSource.includes("autoReplyCategories: getConfigStringArray(configs, 'autoReplyCategories'") &&
+    serviceSource.includes("dailyAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'dailyAutoReplyLimit'") &&
+    serviceSource.includes("ticketAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'ticketAutoReplyLimit'") &&
+    serviceSource.includes("cooldownSeconds: Math.max(Math.floor(getConfigNumber(configs, 'cooldownSeconds'") &&
+    serviceSource.includes('category_not_allowed_for_auto_reply') &&
+    serviceSource.includes('inspectAiReplySendLimits') &&
+    serviceSource.includes('daily_auto_reply_limit_reached') &&
+    serviceSource.includes('ticket_auto_reply_limit_reached') &&
+    serviceSource.includes('ticket_auto_reply_cooldown_active') &&
+    serviceSource.includes('refund_or_dispute_requires_handoff') &&
+    serviceSource.includes('credential_or_backend_request_requires_handoff') &&
     serviceSource.includes('generateAiTicketDraft') &&
     serviceSource.includes('generateAiTicketReply'),
-  'AI draft generation must read encrypted plugin config server-side and safety-check model output'
+  'AI draft and reply generation must read encrypted plugin config server-side, safety-check output, and enforce handoff rules before sending'
 )
 
 const forbiddenSelections = [
@@ -161,6 +176,38 @@ assert.ok(
 )
 
 assert.ok(
+  serviceSource.includes('export async function getAiTicketAutomationStatus') &&
+    serviceSource.includes('mode: config.mode') &&
+    serviceSource.includes('autoReplyCategories: config.autoReplyCategories'),
+  'AI ticket service must expose safe automation status without exposing model secrets'
+)
+
+assert.ok(
+  autoReplySchedulerSource.includes('let schedulerStarted = false') &&
+    autoReplySchedulerSource.includes('export function startAiTicketAutoReplyScheduler') &&
+    autoReplySchedulerSource.includes("schedule('*/2 * * * *'") &&
+    autoReplySchedulerSource.includes('getAiTicketPermission(AI_TICKET_REPLY_PERMISSION)') &&
+    autoReplySchedulerSource.includes("status.mode !== 'auto'") &&
+    autoReplySchedulerSource.includes("role: 'admin'") &&
+    autoReplySchedulerSource.includes("status: 'active'") &&
+    autoReplySchedulerSource.includes("OR: [\n        { hostId: null },\n        { host: { user: { role: 'admin' } } }") &&
+    autoReplySchedulerSource.includes("ticket.messages[0]?.isFromOwner === false") &&
+    autoReplySchedulerSource.includes('isStillAutoReplyEligible(ticketId)') &&
+    autoReplySchedulerSource.includes('generateAiTicketReply(ticketId)') &&
+    autoReplySchedulerSource.includes('ticketDb.addTicketMessage(ticketId, actor.id, result.draft, true, [])') &&
+    autoReplySchedulerSource.includes('sendNotification(ticket.userId') &&
+    autoReplySchedulerSource.includes('ai_ticket.auto_reply') &&
+    !autoReplySchedulerSource.includes('updateTicketStatus'),
+  'AI auto reply scheduler must be idempotent, plugin-gated, auto-mode-only, official-ticket-only, last-message-checked, audited and status-neutral'
+)
+
+assert.ok(
+  appSource.includes("import('./services/ai-ticket-auto-reply-scheduler.js')") &&
+    appSource.includes('startAiTicketAutoReplyScheduler()'),
+  'Server startup must register the AI ticket auto reply scheduler'
+)
+
+assert.ok(
   clientTypesSource.includes('export interface TicketAiDraftResponse') &&
     clientTypesSource.includes('export interface TicketAiReplyResponse') &&
     clientApiSource.includes('generateAiDraft') &&
@@ -171,6 +218,7 @@ assert.ok(
     ticketsViewSource.includes('aiReplyLoading') &&
     ticketsViewSource.includes('generateAiDraft') &&
     ticketsViewSource.includes('sendAiReply') &&
+    ticketsViewSource.includes("code === 'AI_TICKET_REPLY_HANDOFF_REQUIRED'") &&
     ticketsViewSource.includes('replyContent.value = result.draft') &&
     ticketsViewSource.includes('ticket-reply-textarea') &&
     !ticketsViewSource.includes('api.tickets.reply(selectedTicket.value.id, result.draft'),
