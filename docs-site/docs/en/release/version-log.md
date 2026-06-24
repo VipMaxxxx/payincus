@@ -6,14 +6,17 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `bbf36c9`
+- Current HEAD / 当前 HEAD: `d887b9d`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Fix admin benefits localization bundle / 修复后台福利本地化打包
+- Commit subject / 提交说明: Update handoff for v0.3.7 OTA proof / 更新 v0.3.7 OTA 证明交接
 - Latest tag / 最新 tag: `v0.3.7`
 
 ## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff for v0.3.7 OTA proof / 更新 v0.3.7 OTA 证明交接 `d887b9d`
+- Update version log for v0.3.7 / 更新 v0.3.7 版本日志 `02c8862`
 
 ## Historical Versions / 历史版本
 

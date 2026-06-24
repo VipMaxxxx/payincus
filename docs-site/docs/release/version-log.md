@@ -6,14 +6,17 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `bbf36c9`
+- 当前 HEAD / Current HEAD: `d887b9d`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Fix admin benefits localization bundle / 修复后台福利本地化打包
+- 提交说明 / Commit subject: Update handoff for v0.3.7 OTA proof / 更新 v0.3.7 OTA 证明交接
 - 最新 tag / Latest tag: `v0.3.7`
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff for v0.3.7 OTA proof / 更新 v0.3.7 OTA 证明交接 `d887b9d`
+- Update version log for v0.3.7 / 更新 v0.3.7 版本日志 `02c8862`
 
 ## 历史版本 / Historical Versions
 
