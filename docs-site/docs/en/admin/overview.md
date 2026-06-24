@@ -25,6 +25,7 @@ https://admin.example.com
 | Admin create instance | `/admin/instances/create` | Manual delivery or correction workflows. |
 | Delivery Assurance | `/admin/delivery` | Instance delivery tasks, failure details, notification state, Agent/host/billing context and post-payment delivery troubleshooting actions. |
 | SLA & Alerts | `/admin/sla-alerts` | Scan and handle host, Agent, delivery, payment, notification, mail and OTA incidents. |
+| User Lifecycle | `/admin/user-lifecycle` | User lifecycle overview, tags, segments, commercial summary, targeted redeem codes, reminders and win-back actions. |
 | Tickets & Customer Success | `/admin/tickets` | Handle support tickets with user context, SLA state, linked objects, internal notes, handling timeline and safe support shortcuts. |
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
@@ -114,6 +115,20 @@ The operations overview is returned only by the admin statistics API and is not 
 - The handling timeline merges user replies, support replies, internal notes and linked objects.
 - Support context does not return raw payment callbacks, provider snapshots, IP addresses, User-Agent values, instance root passwords, 2FA secrets, tokens, certificates or other secrets.
 
+## User Lifecycle
+
+`/admin/user-lifecycle` turns user operations into an auditable workspace:
+
+- The overview shows total users, active users, expiring instances, tag counts, segment counts and recent lifecycle actions.
+- Built-in tags cover new users, paid users, high-value users, expiring users, churn risk and risk flags. Adding or removing tags writes an action record.
+- Built-in segments cover new registrations, paid users, high-value users, expiring users and churn-risk users. Admins can refresh segment membership.
+- The user list supports filters by tag, segment, total recharge, instance count and active state.
+- The user summary shows masked email, total recharge, total spend, instance counts, earliest expiry, tickets, lifecycle events and action history.
+- Admins can issue targeted resource redeem codes to one user. The code stores `target_user_id`, so other users cannot redeem it.
+- Bulk reminders require selected users and explicit confirmation. They are delivered as inbox messages and written to action history.
+- The user portal only shows the current user's available targeted redeem codes. It does not expose admin tags, segments, internal events or action records.
+- Lifecycle APIs do not return raw payment callbacks, provider snapshots, IP addresses, User-Agent values, instance root passwords, 2FA secrets, tokens or secrets.
+
 ## System Settings
 
 - Access and registration.
@@ -135,4 +150,4 @@ The operations overview is returned only by the admin statistics API and is not 
 
 OTA updates and rollbacks preserve `plugins`, `plugin-data`, `plugin-logs` and `plugin-staging`.
 
-Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that SLA alerts are admin-only, deduplicated and redacted, that ticket support context and internal notes are admin-only and cannot bypass adjustment or delivery workflows, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.
+Verification must prove that regular users cannot enter the admin console, that the admin bundle does not include user self-service workflows, that Delivery Assurance does not expose root passwords, certificates, tokens or password hashes and does not auto-retry non-idempotent delivery tasks, that SLA alerts are admin-only, deduplicated and redacted, that ticket support context and internal notes are admin-only and cannot bypass adjustment or delivery workflows, that user lifecycle admin data is admin-only while users can only read their own offers, that the order center does not expose raw callback payloads, provider snapshots or payment secrets, and that reconciliation exports remain redacted.

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Ticket Agent</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        color: #111827;
+        background: #ffffff;
+      }
+      main {
+        display: grid;
+        gap: 16px;
+        padding: 20px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.3;
+      }
+      p {
+        margin: 0;
+        color: #4b5563;
+        line-height: 1.6;
+      }
+      .panel {
+        display: grid;
+        gap: 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+      }
+      code {
+        border-radius: 4px;
+        background: #f3f4f6;
+        padding: 2px 6px;
+      }
+      ul {
+        margin: 0;
+        padding-left: 18px;
+        color: #374151;
+        line-height: 1.7;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { color: #f9fafb; background: #111827; }
+        p, ul { color: #d1d5db; }
+        .panel { border-color: #374151; }
+        code { background: #1f2937; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="panel">
+        <h1>AI 工单接管助手</h1>
+        <p>该插件通过 PayIncus 后端受控接口读取脱敏后的工单上下文，默认只生成草稿。开启自动回复前，请先在插件配置中填写模型接口和密钥。</p>
+      </section>
+      <section class="panel">
+        <p>当前后端安全上下文接口：</p>
+        <code>POST /api/tickets/:id/ai/context</code>
+        <p>当前后端草稿生成接口：</p>
+        <code>POST /api/tickets/:id/ai/draft</code>
+        <ul>
+          <li>需要管理员会话。</li>
+          <li>需要插件已启用。</li>
+          <li>读取上下文需要声明 <code>ticket:ai:read-context</code> 权限。</li>
+          <li>生成草稿需要声明 <code>ticket:ai:generate-draft</code> 权限。</li>
+          <li>只返回当前工单用户自己的脱敏摘要。</li>
+          <li>草稿接口不会发送工单消息，也不会修改工单状态。</li>
+          <li>管理员必须人工检查草稿后再发送正式回复。</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

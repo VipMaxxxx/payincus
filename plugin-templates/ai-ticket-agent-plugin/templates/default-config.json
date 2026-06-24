@@ -1,0 +1,25 @@
+{
+  "enabled": false,
+  "mode": "draft",
+  "model": "gpt-4o-mini",
+  "apiBaseUrl": "",
+  "apiKey": "",
+  "temperature": 0.2,
+  "timeoutMs": 20000,
+  "autoReplyCategories": ["general", "billing"],
+  "confidenceThreshold": 0.82,
+  "dailyAutoReplyLimit": 100,
+  "ticketAutoReplyLimit": 3,
+  "cooldownSeconds": 120,
+  "showAiIdentity": true,
+  "systemPrompt": "",
+  "sensitiveHandoffRules": [
+    "refund",
+    "payment_dispute",
+    "account_security",
+    "risk_control",
+    "data_recovery",
+    "resource_delivery_exception",
+    "delete_or_reinstall_instance"
+  ]
+}

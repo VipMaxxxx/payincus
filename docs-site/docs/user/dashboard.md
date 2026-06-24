@@ -48,15 +48,25 @@ https://panel.example.com
 ## 关联后端能力
 
 - 实例交付：`instances`、`instance-billing`、`terminal`、`traffic`、`snapshots`。
-- 账务支付：`orders`、`balance`、`recharge`、`redeem-codes`、`aff`、`vip-levels`。
+- 账务支付：`orders`、`balance`、`recharge`、`redeem-codes`、`aff`、`vip-levels`、`user-lifecycle`。
 - 工单通知：`tickets`、`inbox`、`notifications`、`help`。
 - 邮箱服务：`mail`。
 - 托管资源：`hosting`、`resource-pool`、`packages`。
+
+## 生命周期优惠
+
+用户仪表盘会展示管理员定向发放给当前用户的可用资源兑换码：
+
+- 只展示当前登录用户自己的兑换码。
+- 展示兑换码、节点、资源类型、资源数值和有效期。
+- 兑换仍通过原有兑换入口执行，资源变更仍走现有兑换码和实例资源流程。
+- 不展示后台运营标签、用户分群、内部生命周期事件或运营动作记录。
 
 ## 验证重点
 
 - 普通用户可以登录用户端并完成常规自助操作。
 - 用户端页面不出现 `/admin` 导航、后台 API 入口或后台文案。
+- 用户端只能读取自己的生命周期优惠，不能读取其他用户优惠或后台生命周期数据。
 - 管理员账号不能进入用户端业务页面。
 - `/api/health` 和 `/api/ws` 在用户端域名下可用。
 - 支付回调、实例创建、终端连接、通知投递需要做真实线上 proof。

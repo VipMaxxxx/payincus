@@ -8,7 +8,7 @@ import { useThemeStore } from '@/stores/theme'
 import api, { type VipLevelProgress, type VipProgressCondition, type VipProgressMetric } from '@/api'
 import Skeleton from '@/components/Skeleton.vue'
 import { formatMemory, formatDisk, getStatusInfo } from '@/utils/formatters'
-import type { Instance, UserBalance } from '@/types/api'
+import type { Instance, UserBalance, UserLifecycleOffer } from '@/types/api'
 import DistroIcon from '@/components/icons/DistroIcon.vue'
 import FlagIcon from '@/components/FlagIcon.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
@@ -134,6 +134,7 @@ const userVipLevel = ref(0)
 const userVipBadgeStyle = ref<VipBadgeStyle | null>(null)
 const userVipProgress = ref<VipLevelProgress | null>(null)
 const userPoints = ref(0)
+const lifecycleOffers = ref<UserLifecycleOffer[]>([])
 const loading = ref(true)
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null
@@ -178,12 +179,13 @@ async function loadData(): Promise<void> {
       return
     }
     
-    const [instancesRes, meRes, balanceRes, vipRes, pointsRes] = await Promise.all([
+    const [instancesRes, meRes, balanceRes, vipRes, pointsRes, offersRes] = await Promise.all([
       api.instances.list({ pageSize: 1000 }),  // 获取所有实例以确保统计准确
       api.auth.me(),
       api.billing.getUserBalance().catch(() => null),
       api.vipLevels.getMyOverview().catch(() => null),
-      api.entertainment.getPoints().catch(() => null)
+      api.entertainment.getPoints().catch(() => null),
+      api.userLifecycle.myOffers().catch(() => null)
     ])
     const res = instancesRes as { instances?: Instance[] }
     instances.value = res.instances || []
@@ -199,6 +201,7 @@ async function loadData(): Promise<void> {
       : null
     userVipProgress.value = vipRes?.userVipProgress || null
     userPoints.value = Number(pointsRes?.points || 0)
+    lifecycleOffers.value = offersRes?.offers || []
   } catch (error: any) {
     console.error('Failed to load dashboard:', error)
     // 如果是认证错误（401），停止定时刷新
@@ -226,6 +229,7 @@ const stats = computed(() => {
 })
 
 const recentInstances = computed(() => instances.value.slice(0, 5))
+const availableLifecycleOffers = computed(() => lifecycleOffers.value.filter(offer => !offer.used).slice(0, 3))
 
 const statusOverviewItems = computed(() => [
   {
@@ -335,6 +339,10 @@ const vipProgressConditionGridClass = computed(() => vipProgressConditions.value
 
 function formatCurrency(amount: number): string {
   return `¥${amount.toFixed(2)}`
+}
+
+function getLifecycleOfferUnit(type: string): string {
+  return type === 'c' ? '%' : type === 'r' || type === 'd' ? 'MB' : 'GB'
 }
 
 function formatPoints(points: number): string {
@@ -599,6 +607,38 @@ function getInstanceRowClass(): string {
                       {{ formatVipProgressRemaining(condition) }}
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="availableLifecycleOffers.length > 0" class="rounded-lg border p-4" :class="subtlePanelClass">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div class="text-sm font-semibold text-themed">可用运营优惠</div>
+                <div class="mt-1 text-xs text-themed-muted">管理员为您定向发放的资源兑换码。</div>
+              </div>
+              <RouterLink
+                to="/checkin"
+                class="inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
+                :class="themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-200 hover:bg-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'"
+              >
+                去兑换
+              </RouterLink>
+            </div>
+            <div class="mt-3 grid gap-2">
+              <div
+                v-for="offer in availableLifecycleOffers"
+                :key="offer.id"
+                class="rounded-lg border px-3 py-2"
+                :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/50' : 'border-gray-200 bg-white'"
+              >
+                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div class="min-w-0">
+                    <div class="truncate text-sm font-semibold text-themed">{{ offer.code }}</div>
+                    <div class="text-xs text-themed-muted">{{ offer.host.name }} · {{ offer.codeType }} +{{ offer.codeValue }}{{ getLifecycleOfferUnit(offer.codeType) }}</div>
+                  </div>
+                  <div class="text-xs text-themed-muted">{{ offer.expiresAt ? new Date(offer.expiresAt).toLocaleDateString() : '长期有效' }}</div>
                 </div>
               </div>
             </div>

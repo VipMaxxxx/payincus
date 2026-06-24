@@ -62,6 +62,8 @@ import type {
   TicketObjectLink,
   TicketObjectLinkType,
   TicketSupportContext,
+  TicketAiDraftResponse,
+  TicketAiReplyResponse,
   TicketInternalNote,
   CreateTicketRequest,
   PaginatedTickets,
@@ -73,6 +75,7 @@ import type {
   TelegramBindTokenResponse,
   UserInvite,
   UserInviteSummary,
+  UserLifecycleOffer,
   PluginClientExtension
 } from '@/types/api.js'
 
@@ -2507,6 +2510,14 @@ const api = {
     getSupportContext: (id: number): Promise<TicketSupportContext> =>
       http.get(`/tickets/${id}/support-context`),
 
+    // 生成 AI 回复草稿（仅管理员，插件启用后可用，不会自动发送）
+    generateAiDraft: (id: number): Promise<TicketAiDraftResponse> =>
+      http.post(`/tickets/${id}/ai/draft`, {}, { timeout: TIMEOUT.MEDIUM }),
+
+    // 由 AI 工单插件生成并发送回复（仅管理员，要求插件 reply 权限和非草稿模式）
+    sendAiReply: (id: number): Promise<TicketAiReplyResponse> =>
+      http.post(`/tickets/${id}/ai/reply`, {}, { timeout: TIMEOUT.MEDIUM }),
+
     // 创建内部备注（仅管理员）
     createInternalNote: (id: number, content: string): Promise<{ note: TicketInternalNote }> =>
       http.post(`/tickets/${id}/internal-notes`, { content }),
@@ -3688,6 +3699,11 @@ const api = {
       claims: VipBenefitClaim[]
       overview: VipBenefitOverviewResponse
     }> => http.post('/vip-benefits/claim-all')
+  },
+
+  userLifecycle: {
+    myOffers: (): Promise<{ offers: UserLifecycleOffer[] }> =>
+      http.get('/user-lifecycle/my-offers')
   },
 
   // 域名邮箱

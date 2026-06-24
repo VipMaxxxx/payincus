@@ -190,6 +190,10 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.REDEEM_CODE_DISABLED))
     }
 
+    if (systemCodeRecord.targetUserId !== null && systemCodeRecord.targetUserId !== user.id) {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'This redeem code is assigned to another user'))
+    }
+
     // 检查兑换码是否过期
     if (systemCodeRecord.expiresAt && systemCodeRecord.expiresAt < new Date()) {
       return reply.code(400).send(apiError(ErrorCode.REDEEM_CODE_EXPIRED))
@@ -250,6 +254,9 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
         }
         if (!currentCodeRecord.enabled) {
           throw new Error('REDEEM_CODE_DISABLED')
+        }
+        if (currentCodeRecord.targetUserId !== null && currentCodeRecord.targetUserId !== user.id) {
+          throw new Error('REDEEM_CODE_TARGET_USER_MISMATCH')
         }
         if (currentCodeRecord.expiresAt && currentCodeRecord.expiresAt < new Date()) {
           throw new Error('REDEEM_CODE_EXPIRED')
@@ -439,6 +446,9 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
       }
       if (errorMessage === 'FORBIDDEN') {
         return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+      }
+      if (errorMessage === 'REDEEM_CODE_TARGET_USER_MISMATCH') {
+        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'This redeem code is assigned to another user'))
       }
       if (errorMessage === 'INSTANCE_STATUS_INVALID') {
         return reply.code(400).send(apiError(ErrorCode.INSTANCE_STATUS_INVALID))

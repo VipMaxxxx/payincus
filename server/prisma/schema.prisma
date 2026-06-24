@@ -721,6 +721,11 @@ model User {
   pluginInstallTasks PluginInstallTask[] @relation("PluginInstallTaskStarter")
   pluginEventLogs PluginEventLog[] @relation("PluginEventLogUser")
   pluginUserData PluginUserData[] @relation("PluginUserDataUser")
+  lifecycleTags UserLifecycleTag[]
+  lifecycleSegmentMembers UserLifecycleSegmentMember[]
+  lifecycleEvents UserLifecycleEvent[]
+  lifecycleActionsTargeted UserLifecycleAction[] @relation("UserLifecycleActionTarget")
+  lifecycleActionsCreated UserLifecycleAction[] @relation("UserLifecycleActionActor")
 
   @@map("users")
 }
@@ -2102,6 +2107,133 @@ model DistributedLock {
   @@map("distributed_locks")
 }
 
+// ==================== 用户生命周期运营模型 ====================
+
+enum UserLifecycleTagKey {
+  new_user
+  paid_user
+  high_value
+  expiring_soon
+  churn_risk
+  risk_flag
+}
+
+enum UserLifecycleEventType {
+  registered
+  first_login
+  first_recharge
+  first_purchase
+  renewed
+  expiring
+  churn_risk
+  winback
+}
+
+enum UserLifecycleActionType {
+  add_tag
+  remove_tag
+  assign_segment
+  remove_segment
+  issue_redeem_code
+  send_reminder
+}
+
+enum UserLifecycleActionStatus {
+  success
+  failed
+}
+
+model UserLifecycleTag {
+  id                 Int                 @id @default(autoincrement())
+  userId             Int                 @map("user_id")
+  tagKey             UserLifecycleTagKey @map("tag_key")
+  active             Boolean             @default(true)
+  note               String?
+  assignedByUserId   Int?                @map("assigned_by_user_id")
+  assignedByUsername String?             @map("assigned_by_username")
+  assignedAt         DateTime            @default(now()) @map("assigned_at")
+  removedAt          DateTime?           @map("removed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagKey])
+  @@index([tagKey, active])
+  @@index([assignedByUserId])
+  @@map("user_lifecycle_tags")
+}
+
+model UserLifecycleSegmentRule {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  name        String
+  description String?
+  rule        Json
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members UserLifecycleSegmentMember[]
+
+  @@index([enabled])
+  @@map("user_lifecycle_segment_rules")
+}
+
+model UserLifecycleSegmentMember {
+  id            Int      @id @default(autoincrement())
+  segmentRuleId Int      @map("segment_rule_id")
+  userId        Int      @map("user_id")
+  snapshot      Json
+  matchedAt     DateTime @default(now()) @map("matched_at")
+
+  segmentRule UserLifecycleSegmentRule @relation(fields: [segmentRuleId], references: [id], onDelete: Cascade)
+  user        User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([segmentRuleId, userId])
+  @@index([userId])
+  @@index([matchedAt])
+  @@map("user_lifecycle_segment_members")
+}
+
+model UserLifecycleEvent {
+  id          Int                    @id @default(autoincrement())
+  userId      Int                    @map("user_id")
+  eventType   UserLifecycleEventType @map("event_type")
+  eventKey    String                 @unique @map("event_key")
+  sourceType  String?                @map("source_type")
+  sourceId    Int?                   @map("source_id")
+  metadata    Json?
+  occurredAt  DateTime               @default(now()) @map("occurred_at")
+  createdAt   DateTime               @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eventType])
+  @@index([eventType, occurredAt])
+  @@index([sourceType, sourceId])
+  @@map("user_lifecycle_events")
+}
+
+model UserLifecycleAction {
+  id              Int                       @id @default(autoincrement())
+  actionType      UserLifecycleActionType   @map("action_type")
+  status          UserLifecycleActionStatus @default(success)
+  targetUserId    Int?                      @map("target_user_id")
+  actorUserId     Int                       @map("actor_user_id")
+  actorUsername   String                    @map("actor_username")
+  payload         Json?
+  result          Json?
+  message         String?
+  createdAt       DateTime                  @default(now()) @map("created_at")
+
+  targetUser User? @relation("UserLifecycleActionTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  actor      User  @relation("UserLifecycleActionActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([actionType, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([actorUserId])
+  @@map("user_lifecycle_actions")
+}
+
 // ==================== 系统镜像模型 ====================
 
 model SystemImage {
@@ -2469,6 +2601,7 @@ model RedeemCode {
   enabled     Boolean        @default(true)                 // 是否启用
   remark      String?                                       // 备注
   batchId     String?        @map("batch_id")               // 批次ID，同批次码每用户只能用一张
+  targetUserId Int?           @map("target_user_id")         // 生命周期运营定向用户，null=所有用户
   createdAt   DateTime       @default(now()) @map("created_at")
 
   host        Host             @relation(fields: [hostId], references: [id], onDelete: Cascade)
@@ -2479,6 +2612,7 @@ model RedeemCode {
   @@index([createdById])
   @@index([enabled])
   @@index([batchId])
+  @@index([targetUserId])
   @@map("redeem_codes")
 }
 

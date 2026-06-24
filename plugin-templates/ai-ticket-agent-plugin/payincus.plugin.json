@@ -1,0 +1,55 @@
+{
+  "id": "com.payincus.ai-ticket-agent",
+  "name": "AI Ticket Agent",
+  "version": "0.1.0",
+  "payincus": ">=0.3.2",
+  "description": "AI-assisted ticket takeover with scoped context, admin review, and privacy-first defaults.",
+  "author": "PayIncus",
+  "entrypoints": {
+    "adminPages": [
+      {
+        "slot": "admin.ticket.extra",
+        "title": "AI Ticket Agent",
+        "entry": "dist/admin/settings.html",
+        "requiresAuth": true
+      },
+      {
+        "slot": "admin.plugins.settings",
+        "title": "AI Ticket Settings",
+        "entry": "dist/admin/settings.html",
+        "requiresAuth": true
+      }
+    ],
+    "userPages": []
+  },
+  "permissions": [
+    "ticket:ai:read-context",
+    "ticket:ai:generate-draft",
+    "ticket:ai:reply",
+    "ticket:ai:handoff",
+    "plugin:config:read",
+    "plugin:config:write"
+  ],
+  "configSchema": {
+    "enabled": { "type": "boolean", "title": "Enable AI ticket agent" },
+    "mode": { "type": "string", "title": "Takeover mode", "enum": ["draft", "semi_auto", "auto"] },
+    "model": { "type": "string", "title": "Model name" },
+    "apiBaseUrl": { "type": "string", "title": "OpenAI-compatible API base URL" },
+    "apiKey": { "type": "string", "title": "Model API key" },
+    "temperature": { "type": "number", "title": "Model temperature" },
+    "timeoutMs": { "type": "number", "title": "Model request timeout in milliseconds" },
+    "autoReplyCategories": { "type": "array", "title": "Auto-reply categories" },
+    "confidenceThreshold": { "type": "number", "title": "Auto-reply confidence threshold" },
+    "dailyAutoReplyLimit": { "type": "number", "title": "Daily auto-reply limit" },
+    "ticketAutoReplyLimit": { "type": "number", "title": "Per-ticket auto-reply limit" },
+    "cooldownSeconds": { "type": "number", "title": "Auto-reply cooldown seconds" },
+    "showAiIdentity": { "type": "boolean", "title": "Show AI identity in replies" },
+    "systemPrompt": { "type": "string", "title": "Custom system prompt" }
+  },
+  "templates": [
+    {
+      "name": "Default AI ticket agent config",
+      "path": "templates/default-config.json"
+    }
+  ]
+}

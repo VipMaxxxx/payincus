@@ -207,6 +207,114 @@ export interface SystemUpdateTask {
   updatedAt: string
 }
 
+export type UserLifecycleTagKey =
+  | 'new_user'
+  | 'paid_user'
+  | 'high_value'
+  | 'expiring_soon'
+  | 'churn_risk'
+  | 'risk_flag'
+
+export interface UserLifecycleMetric {
+  totalRecharge: number
+  totalConsume: number
+  instanceCount: number
+  runningInstances: number
+  expiringSoonInstances: number
+  earliestExpiry: string | null
+  lastLoginAt: string | null
+}
+
+export interface UserLifecycleTagDefinition {
+  key: UserLifecycleTagKey
+  label: string
+  description: string
+  count?: number
+}
+
+export interface UserLifecycleSegment {
+  id?: number
+  key: string
+  name: string
+  description: string | null
+  enabled?: boolean
+  count?: number
+  matchedAt?: string
+  snapshot?: Record<string, unknown>
+}
+
+export interface UserLifecycleAction {
+  id: number
+  actionType: string
+  status: string
+  targetUserId: number | null
+  actorUserId: number
+  actorUsername: string
+  payload: Record<string, unknown> | null
+  result: Record<string, unknown> | null
+  message: string | null
+  createdAt: string
+}
+
+export interface UserLifecycleEvent {
+  id: number
+  userId: number
+  eventType: string
+  eventKey: string
+  sourceType: string | null
+  sourceId: number | null
+  metadata: Record<string, unknown> | null
+  occurredAt: string
+  createdAt: string
+}
+
+export interface UserLifecycleOffer {
+  id: number
+  code: string
+  codeType: 'c' | 'r' | 'd' | 't'
+  codeValue: number
+  expiresAt: string | null
+  remark: string | null
+  host: { id: number; name: string }
+  used: boolean
+  usedAt: string | null
+}
+
+export interface UserLifecycleListUser {
+  id: number
+  username: string
+  emailMasked: string | null
+  status: string
+  createdAt: string
+  metrics: UserLifecycleMetric
+  tags: Array<{ tagKey: UserLifecycleTagKey; active?: boolean; note: string | null; assignedAt: string }>
+  segments: UserLifecycleSegment[]
+}
+
+export interface UserLifecycleOverview {
+  totalUsers: number
+  activeUsers: number
+  expiringInstances: number
+  tags: UserLifecycleTagDefinition[]
+  segments: UserLifecycleSegment[]
+  recentActions: UserLifecycleAction[]
+}
+
+export interface UserLifecycleUsersResponse {
+  users: UserLifecycleListUser[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface UserLifecycleUserSummary extends UserLifecycleListUser {
+  tickets: { total: number; open: number }
+  events: UserLifecycleEvent[]
+  actions: UserLifecycleAction[]
+  offers: UserLifecycleOffer[]
+}
+
 export type PluginStatus = 'installed' | 'enabled' | 'disabled' | 'failed'
 export type PluginSourceType = 'upload' | 'market'
 export type PluginTaskStatus = 'pending' | 'running' | 'success' | 'failed'
@@ -1967,6 +2075,25 @@ export interface TicketSupportContext {
     userPath: string
     instancePath: string | null
     hostPath: string | null
+  }
+}
+
+export interface TicketAiDraftResponse {
+  draft: string
+  model: string
+  safety: {
+    passed: boolean
+    blockedReasons: string[]
+  }
+}
+
+export interface TicketAiReplyResponse {
+  message: string
+  data: TicketMessage
+  model: string
+  safety: {
+    passed: boolean
+    blockedReasons: string[]
   }
 }
 

@@ -78,6 +78,7 @@ export async function createRedeemCode(data: {
   maxUses?: number
   expiresAt?: Date | null
   remark?: string
+  targetUserId?: number | null
 }) {
   const code = generateSystemCode()
 
@@ -90,7 +91,8 @@ export async function createRedeemCode(data: {
       codeValue: data.codeValue,
       maxUses: data.maxUses ?? 1,
       expiresAt: data.expiresAt,
-      remark: data.remark
+      remark: data.remark,
+      targetUserId: data.targetUserId ?? null
     }
   })
 }
@@ -106,6 +108,7 @@ export async function createRedeemCodeBatch(data: {
   count: number
   expiresAt?: Date | null
   remark?: string
+  targetUserId?: number | null
 }): Promise<{ codes: string[]; batchId: string }> {
   const codes: string[] = []
   const createData = []
@@ -124,7 +127,8 @@ export async function createRedeemCodeBatch(data: {
       maxUses: 1,
       expiresAt: data.expiresAt,
       remark: data.remark,
-      batchId
+      batchId,
+      targetUserId: data.targetUserId ?? null
     })
   }
 
@@ -181,6 +185,7 @@ export async function getRedeemCodesByHost(
       enabled: c.enabled,
       remark: c.remark,
       batchId: c.batchId,
+      targetUserId: c.targetUserId,
       createdBy: c.createdBy,
       createdAt: c.createdAt.toISOString(),
       isExpired: c.expiresAt ? c.expiresAt < new Date() : false,
@@ -285,6 +290,7 @@ export async function useSystemRedeemCode(
         UPDATE "redeem_codes" 
         SET "used_count" = "used_count" + 1 
         WHERE "id" = ${redeemCodeId} 
+          AND ("target_user_id" IS NULL OR "target_user_id" = ${userId})
           AND "used_count" < "max_uses"
       `
 
@@ -372,6 +378,7 @@ export async function applySystemRedeemCodeToInstance(data: {
       WHERE "id" = ${data.redeemCodeId}
         AND "enabled" = true
         AND ("expires_at" IS NULL OR "expires_at" > ${now})
+        AND ("target_user_id" IS NULL OR "target_user_id" = ${data.userId})
         AND "used_count" < "max_uses"
     `
 

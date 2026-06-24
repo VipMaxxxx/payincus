@@ -16,6 +16,18 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 import { deleteTicketImageFromLsky, uploadTicketImageToLsky } from '../lib/lsky.js'
 import { sendNotification } from '../lib/notifier.js'
 import { assertSafeHttpUrl } from '../lib/outbound-security.js'
+import {
+  AI_TICKET_DRAFT_PERMISSION,
+  AI_TICKET_REPLY_PERMISSION,
+  auditAiTicketContextRead,
+  auditAiTicketDraft,
+  auditAiTicketReply,
+  buildAiTicketContext,
+  generateAiTicketDraft,
+  generateAiTicketReply,
+  getAiTicketPermission,
+  getAiTicketContextPermission
+} from '../services/ai-ticket-context.js'
 
 // 工单状态类型
 type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
@@ -579,6 +591,300 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     }
 
     return reply.send(context)
+  })
+
+  /**
+   * 获取 AI 工单安全上下文（仅管理员 + 已启用 AI 工单插件）
+   * POST /tickets/:id/ai/context
+   */
+  fastify.post<{
+    Params: { id: string }
+  }>('/:id/ai/context', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin],
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', pattern: '^[1-9]\\d*$' }
+        }
+      }
+    }
+  }, async (request: FastifyRequest<{
+    Params: { id: string }
+  }>, reply: FastifyReply) => {
+    const { user } = request
+    const ticketId = parsePositiveId(request.params.id)
+
+    if (ticketId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const permission = await getAiTicketContextPermission()
+    if (!permission.allowed) {
+      await auditAiTicketContextRead({
+        actorUserId: user.id,
+        ticketId,
+        result: 'denied',
+        reason: permission.code
+      })
+      return reply.code(403).send({
+        error: permission.message || 'AI ticket context is not available',
+        code: permission.code || 'AI_TICKET_CONTEXT_DENIED'
+      })
+    }
+
+    const context = await buildAiTicketContext(ticketId)
+    if (!context) {
+      await auditAiTicketContextRead({
+        actorUserId: user.id,
+        ticketId,
+        result: 'not_found',
+        reason: 'TICKET_NOT_FOUND'
+      })
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+    }
+
+    await auditAiTicketContextRead({
+      actorUserId: user.id,
+      ticketId,
+      result: 'success'
+    })
+
+    return reply.send({ context })
+  })
+
+  /**
+   * 生成 AI 工单回复草稿（仅管理员 + 已启用 AI 工单插件）
+   * POST /tickets/:id/ai/draft
+   */
+  fastify.post<{
+    Params: { id: string }
+  }>('/:id/ai/draft', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin],
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', pattern: '^[1-9]\\d*$' }
+        }
+      }
+    }
+  }, async (request: FastifyRequest<{
+    Params: { id: string }
+  }>, reply: FastifyReply) => {
+    const { user } = request
+    const ticketId = parsePositiveId(request.params.id)
+
+    if (ticketId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const permission = await getAiTicketPermission(AI_TICKET_DRAFT_PERMISSION)
+    if (!permission.allowed) {
+      await auditAiTicketDraft({
+        actorUserId: user.id,
+        ticketId,
+        result: 'denied',
+        reason: permission.code
+      })
+      return reply.code(403).send({
+        error: permission.message || 'AI ticket draft is not available',
+        code: permission.code || 'AI_TICKET_DRAFT_DENIED'
+      })
+    }
+
+    try {
+      const result = await generateAiTicketDraft(ticketId)
+      if (!result.safety.passed) {
+        await auditAiTicketDraft({
+          actorUserId: user.id,
+          ticketId,
+          result: 'blocked',
+          reason: result.safety.blockedReasons.join(',')
+        })
+        return reply.code(422).send({
+          error: 'AI draft failed safety checks',
+          code: 'AI_TICKET_DRAFT_BLOCKED',
+          safety: result.safety
+        })
+      }
+
+      await auditAiTicketDraft({
+        actorUserId: user.id,
+        ticketId,
+        result: 'success'
+      })
+      return reply.send(result)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const knownStatus: Record<string, number> = {
+        AI_TICKET_AGENT_DISABLED: 403,
+        AI_TICKET_AGENT_MODEL_NOT_CONFIGURED: 400,
+        TICKET_NOT_FOUND: 404
+      }
+      const statusCode = knownStatus[message] || 502
+      await auditAiTicketDraft({
+        actorUserId: user.id,
+        ticketId,
+        result: 'failed',
+        reason: message
+      })
+
+      if (message === 'TICKET_NOT_FOUND') {
+        return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+      }
+
+      return reply.code(statusCode).send({
+        error: statusCode === 502 ? 'AI draft generation failed' : message,
+        code: message.startsWith('AI_TICKET_') ? message : 'AI_TICKET_DRAFT_FAILED'
+      })
+    }
+  })
+
+  /**
+   * 由 AI 工单插件生成并发送一条客服回复（仅管理员 + 已启用 AI 工单插件 + reply 权限）
+   * POST /tickets/:id/ai/reply
+   */
+  fastify.post<{
+    Params: { id: string }
+  }>('/:id/ai/reply', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin],
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', pattern: '^[1-9]\\d*$' }
+        }
+      }
+    }
+  }, async (request: FastifyRequest<{
+    Params: { id: string }
+  }>, reply: FastifyReply) => {
+    const { user } = request
+    const ticketId = parsePositiveId(request.params.id)
+
+    if (ticketId === null) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const permission = await getAiTicketPermission(AI_TICKET_REPLY_PERMISSION)
+    if (!permission.allowed) {
+      await auditAiTicketReply({
+        actorUserId: user.id,
+        ticketId,
+        result: 'denied',
+        reason: permission.code
+      })
+      return reply.code(403).send({
+        error: permission.message || 'AI ticket reply is not available',
+        code: permission.code || 'AI_TICKET_REPLY_DENIED'
+      })
+    }
+
+    const ticket = await ticketDb.getTicketById(ticketId)
+    if (!ticket) {
+      await auditAiTicketReply({
+        actorUserId: user.id,
+        ticketId,
+        result: 'failed',
+        reason: 'TICKET_NOT_FOUND'
+      })
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+    }
+    if (ticket.status === 'closed') {
+      await auditAiTicketReply({
+        actorUserId: user.id,
+        ticketId,
+        result: 'denied',
+        reason: 'AI_TICKET_CLOSED'
+      })
+      return reply.code(400).send({
+        error: 'Cannot reply to a closed ticket',
+        code: 'AI_TICKET_CLOSED'
+      })
+    }
+
+    try {
+      const result = await generateAiTicketReply(ticketId)
+      if (!result.canSend) {
+        await auditAiTicketReply({
+          actorUserId: user.id,
+          ticketId,
+          result: 'denied',
+          reason: 'AI_TICKET_AGENT_REPLY_MODE_DISABLED'
+        })
+        return reply.code(409).send({
+          error: 'AI ticket agent is in draft mode',
+          code: 'AI_TICKET_AGENT_REPLY_MODE_DISABLED'
+        })
+      }
+      if (!result.safety.passed) {
+        await auditAiTicketReply({
+          actorUserId: user.id,
+          ticketId,
+          result: 'blocked',
+          reason: result.safety.blockedReasons.join(',')
+        })
+        return reply.code(422).send({
+          error: 'AI reply failed safety checks',
+          code: 'AI_TICKET_REPLY_BLOCKED',
+          safety: result.safety
+        })
+      }
+
+      const message = await ticketDb.addTicketMessage(ticketId, user.id, result.draft, true, [])
+
+      try {
+        await sendNotification(ticket.userId, 'ticket_replied', {
+          subject: ticket.subject,
+          hostName: ticket.host?.name || '系统',
+          replyFrom: user.username
+        })
+      } catch (err) {
+        console.error('[Tickets] Failed to send AI ticket reply notification:', err)
+      }
+
+      await auditAiTicketReply({
+        actorUserId: user.id,
+        ticketId,
+        result: 'success'
+      })
+
+      return reply.code(201).send({
+        message: 'AI reply sent successfully',
+        data: message,
+        model: result.model,
+        safety: result.safety
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const knownStatus: Record<string, number> = {
+        AI_TICKET_AGENT_DISABLED: 403,
+        AI_TICKET_AGENT_MODEL_NOT_CONFIGURED: 400,
+        AI_TICKET_MODEL_REQUEST_FAILED: 502,
+        AI_TICKET_MODEL_EMPTY_RESPONSE: 502,
+        TICKET_NOT_FOUND: 404
+      }
+      const statusCode = knownStatus[message] || 502
+      await auditAiTicketReply({
+        actorUserId: user.id,
+        ticketId,
+        result: 'failed',
+        reason: message
+      })
+
+      if (message === 'TICKET_NOT_FOUND') {
+        return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+      }
+
+      return reply.code(statusCode).send({
+        error: statusCode === 502 ? 'AI reply generation failed' : message,
+        code: message.startsWith('AI_TICKET_') ? message : 'AI_TICKET_REPLY_FAILED'
+      })
+    }
   })
 
   /**

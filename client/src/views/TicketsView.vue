@@ -79,6 +79,8 @@ const internalNoteContent = ref('')
 const internalNoteSubmitting = ref(false)
 const notifyContent = ref('')
 const notifySubmitting = ref(false)
+const aiDraftLoading = ref(false)
+const aiReplyLoading = ref(false)
 const linkForm = ref({
   objectType: 'instance' as TicketObjectLinkType,
   objectId: ''
@@ -314,6 +316,8 @@ function resetDetailState() {
   supportContextLoading.value = false
   internalNoteContent.value = ''
   notifyContent.value = ''
+  aiDraftLoading.value = false
+  aiReplyLoading.value = false
   linkForm.value = {
     objectType: 'instance',
     objectId: ''
@@ -387,6 +391,68 @@ async function loadSupportContext(ticketId = selectedTicket.value?.id): Promise<
     toast.error(error?.message || t('common.error'))
   } finally {
     supportContextLoading.value = false
+  }
+}
+
+async function generateAiDraft(): Promise<void> {
+  if (!authStore.isAdmin || !selectedTicket.value) return
+  aiDraftLoading.value = true
+  try {
+    const result = await api.tickets.generateAiDraft(selectedTicket.value.id)
+    replyContent.value = result.draft
+    toast.success(t('tickets.support.aiDraftReady'))
+    await nextTick()
+    const textarea = document.getElementById('ticket-reply-textarea')
+    if (textarea instanceof HTMLTextAreaElement) {
+      textarea.focus()
+    }
+  } catch (error: any) {
+    const code = error?.code
+    if (code === 'AI_TICKET_PLUGIN_DISABLED') {
+      toast.error(t('tickets.support.aiPluginDisabled'))
+    } else if (code === 'AI_TICKET_AGENT_MODEL_NOT_CONFIGURED') {
+      toast.error(t('tickets.support.aiModelNotConfigured'))
+    } else if (code === 'AI_TICKET_DRAFT_BLOCKED') {
+      toast.error(t('tickets.support.aiDraftBlocked'))
+    } else {
+      toast.error(error?.message || t('common.error'))
+    }
+  } finally {
+    aiDraftLoading.value = false
+  }
+}
+
+async function sendAiReply(): Promise<void> {
+  if (!authStore.isAdmin || !selectedTicket.value || aiReplyLoading.value) return
+  if (!window.confirm(t('tickets.support.aiReplyConfirm'))) return
+
+  aiReplyLoading.value = true
+  try {
+    const result = await api.tickets.sendAiReply(selectedTicket.value.id)
+    messages.value.push(result.data)
+    messagesTotal.value++
+    await ensureMessageAttachmentUrls([result.data])
+    replyContent.value = ''
+    toast.success(t('tickets.support.aiReplySent'))
+    await loadSupportContext()
+    await nextTick()
+    const container = document.getElementById('messages-container')
+    if (container) container.scrollTop = container.scrollHeight
+  } catch (error: any) {
+    const code = error?.code
+    if (code === 'AI_TICKET_PLUGIN_DISABLED' || code === 'AI_TICKET_PLUGIN_PERMISSION_MISSING') {
+      toast.error(t('tickets.support.aiPluginDisabled'))
+    } else if (code === 'AI_TICKET_AGENT_MODEL_NOT_CONFIGURED') {
+      toast.error(t('tickets.support.aiModelNotConfigured'))
+    } else if (code === 'AI_TICKET_AGENT_REPLY_MODE_DISABLED') {
+      toast.error(t('tickets.support.aiReplyModeDisabled'))
+    } else if (code === 'AI_TICKET_REPLY_BLOCKED') {
+      toast.error(t('tickets.support.aiReplyBlocked'))
+    } else {
+      toast.error(error?.message || t('common.error'))
+    }
+  } finally {
+    aiReplyLoading.value = false
   }
 }
 
@@ -1246,6 +1312,12 @@ function formatDateShort(dateString: string) {
                 <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
                   <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.quickActions') }}</h3>
                   <div class="grid grid-cols-2 gap-2">
+                    <button class="px-3 py-2 text-sm rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket" @click="generateAiDraft">
+                      {{ aiDraftLoading ? t('tickets.support.aiDraftGenerating') : t('tickets.support.generateAiDraft') }}
+                    </button>
+                    <button class="px-3 py-2 text-sm rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket" @click="sendAiReply">
+                      {{ aiReplyLoading ? t('tickets.support.aiReplySending') : t('tickets.support.sendAiReply') }}
+                    </button>
                     <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700" @click="openAdminPath(supportContext.quickActions.balanceAdjustmentPath)">
                       {{ t('tickets.support.adjustment') }}
                     </button>
@@ -1415,7 +1487,7 @@ function formatDateShort(dateString: string) {
             </template>
             <template v-else>
               <div class="flex gap-3">
-                <textarea v-model="replyContent" :placeholder="t('tickets.replyPlaceholder')" rows="3" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent resize-none" />
+                <textarea id="ticket-reply-textarea" v-model="replyContent" :placeholder="t('tickets.replyPlaceholder')" rows="3" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent resize-none" />
               </div>
               <div class="mt-4">
                 <TicketImageUploader v-model="replyAttachments" :disabled="replying" />

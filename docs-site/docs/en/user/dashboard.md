@@ -41,9 +41,19 @@ https://panel.example.com
 - Hosting wallet: `/hosting-wallet`.
 - Entertainment: `/entertainment`.
 
+## Lifecycle Offers
+
+The user dashboard can show targeted resource redeem codes issued by administrators:
+
+- Only offers assigned to the current signed-in user are shown.
+- The card shows the redeem code, host, resource type, resource value and expiry.
+- Redemption still uses the existing redeem-code flow, so resource changes go through the existing instance resource path.
+- Admin lifecycle tags, segments, internal lifecycle events and action records are not shown in the user portal.
+
 ## Verification
 
 - Regular user login works.
 - Admin user cannot use user-only pages.
 - The user portal contains no admin navigation or admin API entry.
+- Users can only read their own lifecycle offers and cannot read admin lifecycle data.
 - Real payment, instance delivery, terminal and notification proof are completed.

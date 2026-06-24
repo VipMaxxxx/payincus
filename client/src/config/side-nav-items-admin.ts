@@ -18,6 +18,7 @@ export const navMenuItems: MenuItem[] = [
   { divider: true, label: 'nav.operations' },
   { name: 'admin-delivery', path: '/admin/delivery', icon: 'pulse', label: 'nav.delivery' },
   { name: 'admin-sla-alerts', path: '/admin/sla-alerts', icon: 'bell', label: 'nav.slaAlerts' },
+  { name: 'admin-user-lifecycle', path: '/admin/user-lifecycle', icon: 'users', label: 'nav.userLifecycle' },
   { name: 'admin-tickets', path: '/admin/tickets', icon: 'ticket', label: 'nav.tickets' },
   { name: 'admin-billing', path: '/admin/billing', icon: 'wallet', label: 'nav.billing' },
   { name: 'admin-orders', path: '/admin/orders', icon: 'card', label: 'nav.orders' },

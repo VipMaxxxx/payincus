@@ -92,7 +92,11 @@ import type {
   SlaAlertOverview,
   SlaAlertRule,
   SlaAlertScanResponse,
-  SlaAlertSeverity
+  SlaAlertSeverity,
+  UserLifecycleOffer,
+  UserLifecycleOverview,
+  UserLifecycleUserSummary,
+  UserLifecycleUsersResponse
 } from '@/types/api.js'
 
 export type VipRuleType = 'user' | 'hosting'
@@ -828,6 +832,39 @@ const api = {
         }>
       }>
     }> => http.get('/users/detect-linked-accounts', { params: { days } })
+  },
+
+  userLifecycle: {
+    overview: (): Promise<UserLifecycleOverview> =>
+      http.get('/admin/user-lifecycle/overview'),
+    tags: (): Promise<{ tags: Array<{ key: string; label: string; description: string }> }> =>
+      http.get('/admin/user-lifecycle/tags'),
+    users: (params: Record<string, unknown> = {}): Promise<UserLifecycleUsersResponse> =>
+      http.get('/admin/user-lifecycle/users', { params }),
+    summary: (userId: number): Promise<UserLifecycleUserSummary> =>
+      http.get(`/admin/user-lifecycle/users/${userId}/summary`),
+    addTag: (userId: number, data: { tagKey: string; note?: string }): Promise<{ message: string }> =>
+      http.post(`/admin/user-lifecycle/users/${userId}/tags`, data),
+    removeTag: (userId: number, tagKey: string): Promise<{ message: string }> =>
+      http.delete(`/admin/user-lifecycle/users/${userId}/tags/${encodeURIComponent(tagKey)}`),
+    refreshSegments: (): Promise<{ refreshedAt: string; segmentCount: number }> =>
+      http.post('/admin/user-lifecycle/segments/refresh'),
+    syncEvents: (): Promise<{ synced: number; syncedAt: string }> =>
+      http.post('/admin/user-lifecycle/events/sync'),
+    issueRedeemCode: (userId: number, data: {
+      hostId: number
+      codeType: 'c' | 'r' | 'd' | 't'
+      codeValue: number
+      expiresInDays: number
+      remark?: string
+    }): Promise<{ message: string; code: { id: number; code: string; expiresAt: string } }> =>
+      http.post(`/admin/user-lifecycle/users/${userId}/redeem-codes`, data),
+    sendReminder: (data: { userIds: number[]; title: string; content: string; confirm: boolean }): Promise<{ sent: number }> =>
+      http.post('/admin/user-lifecycle/reminders', data),
+    sendSegmentReminder: (segmentKey: string, data: { title: string; content: string; confirm: boolean }): Promise<{ sent: number }> =>
+      http.post(`/admin/user-lifecycle/segments/${encodeURIComponent(segmentKey)}/reminders`, data),
+    myOffers: (): Promise<{ offers: UserLifecycleOffer[] }> =>
+      http.get('/user-lifecycle/my-offers')
   },
 
   // 终端快捷命令
