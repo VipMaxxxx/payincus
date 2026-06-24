@@ -363,6 +363,7 @@ COOKIE_DOMAIN=
 JWT_SECRET=change_me_generate_with_openssl_rand_base64_48
 COOKIE_SECRET=change_me_generate_with_openssl_rand_base64_48
 ENCRYPTION_KEY=change_me_generate_with_openssl_rand_base64_48
+ADMIN_EMAIL=admin@payincus.local
 ADMIN_PASSWORD=change_me_admin_password
 ```
 

@@ -31,5 +31,6 @@ sudo bash install-panel.sh --uninstall
 
 - User portal domain, for example `demo.payincus.com`.
 - Admin console domain, for example `demoadmin.payincus.com`.
+- Initial admin email: enter a real email when prompted, or leave blank to use `admin@payincus.local`.
 
 The two domains must be separate.

@@ -62,6 +62,12 @@ assert.ok(
     initSource.includes('change[_-]?me'),
   '.env.example admin password placeholder must be rejected by production initialization'
 )
+assert.ok(
+  envExample.includes('ADMIN_EMAIL=admin@payincus.local') &&
+    initSource.includes("process.env.ADMIN_EMAIL || process.env.ADMIN_INITIAL_EMAIL || 'admin@payincus.local'") &&
+    !initSource.includes("email: 'admin@isvoro.com'"),
+  'initial admin email must be configurable through ADMIN_EMAIL instead of being hardcoded'
+)
 
 assert.ok(
   serverPackage.includes('"reset:admin-password": "node --import tsx scripts/reset-admin-password.ts"') &&

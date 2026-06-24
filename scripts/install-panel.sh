@@ -61,6 +61,36 @@ gen_secret() {
     printf 'A1!%s' "$(openssl rand -hex 64)" | cut -c "1-${1:-48}"
 }
 
+is_valid_email() {
+    local email="$1"
+    [[ "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]
+}
+
+prompt_initial_admin_email() {
+    local default_email="${ADMIN_EMAIL:-admin@payincus.local}"
+    local input
+
+    if [[ -f "$ENV_FILE" ]]; then
+        local existing_email
+        existing_email="$(get_env_value "ADMIN_EMAIL")"
+        if [[ -n "$existing_email" ]]; then
+            printf '%s' "$existing_email"
+            return 0
+        fi
+    fi
+
+    echo -ne "  ${BOLD}请输入初始管理员邮箱 [${default_email}]: ${NC}" >&2
+    read -r input
+    input="${input:-$default_email}"
+
+    if ! is_valid_email "$input"; then
+        error "管理员邮箱格式不正确: ${input}"
+        exit 1
+    fi
+
+    printf '%s' "$input"
+}
+
 get_env_value() {
     local key="$1"
     if [[ ! -f "$ENV_FILE" ]]; then
@@ -153,6 +183,7 @@ ensure_env_keys() {
     set_env_if_missing "JWT_SECRET" "$(gen_secret 48)" "JWT 密钥"
     set_env_if_missing "COOKIE_SECRET" "$(gen_secret 48)" "Cookie 密钥"
     set_env_if_missing "ENCRYPTION_KEY" "$(openssl rand -base64 32)" "敏感数据加密密钥"
+    set_env_if_missing "ADMIN_EMAIL" "admin@payincus.local" "管理员初始邮箱"
     set_env_if_missing "ADMIN_PASSWORD" "$(gen_password 16)" "管理员初始密码"
     local current_admin_password
     current_admin_password="$(get_env_value "ADMIN_PASSWORD")"
@@ -775,6 +806,7 @@ generate_env() {
     local db_password="$1"
     local redis_password="$2"
     local admin_password="${3:-$(gen_password 16)}"
+    local admin_email="${4:-admin@payincus.local}"
 
     step "生成环境配置..."
 
@@ -817,6 +849,7 @@ COOKIE_SECRET=${cookie_secret}
 ENCRYPTION_KEY=${encryption_key}
 
 # ============ 应用配置 ============
+ADMIN_EMAIL=${admin_email}
 ADMIN_PASSWORD=${admin_password}
 SERVE_STATIC_CLIENT=false
 VITE_API_BASE_URL=/api
@@ -1346,6 +1379,8 @@ start_service() {
 show_result() {
     local admin_password
     admin_password="$(get_env_value "ADMIN_PASSWORD")"
+    local admin_email
+    admin_email="$(get_env_value "ADMIN_EMAIL")"
 
     echo ""
     divider
@@ -1360,6 +1395,7 @@ show_result() {
     echo ""
     echo -e "  ${BOLD}默认账号${NC}"
     echo -e "  用户名    :  ${GREEN}admin${NC}"
+    echo -e "  邮箱      :  ${GREEN}${admin_email:-admin@payincus.local}${NC}"
     if [[ -n "$admin_password" ]]; then
         echo -e "  密码      :  ${GREEN}${admin_password}${NC}  ${YELLOW}（请在首次登录后立即修改！）${NC}"
     else
@@ -1488,6 +1524,7 @@ do_install() {
     # 密码处理：如果 .env 已存在则复用旧密码，避免密码不一致
     local db_password
     local redis_password
+    local admin_email
 
     if [[ -f "$ENV_FILE" ]]; then
         info "检测到已有 .env 配置，复用现有密码"
@@ -1507,6 +1544,12 @@ do_install() {
     else
         db_password=$(gen_password 24)
         redis_password=$(gen_password 24)
+    fi
+
+    # 初始管理员邮箱
+    admin_email="$(prompt_initial_admin_email)"
+    if [[ -f "$ENV_FILE" && -z "$(get_env_value "ADMIN_EMAIL")" ]]; then
+        set_env_value "ADMIN_EMAIL" "$admin_email" "管理员初始邮箱"
     fi
 
     # 安装依赖
@@ -1550,7 +1593,7 @@ do_install() {
     setup_redis "$redis_password"
 
     # 生成 .env
-    generate_env "$db_password" "$redis_password"
+    generate_env "$db_password" "$redis_password" "$(gen_password 16)" "$admin_email"
 
     # 创建 systemd 服务
     create_service
