@@ -6,16 +6,37 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `49959a2`
+- Current HEAD / 当前 HEAD: `e282b63`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Harden OTA cleanup and disk preflight / 加固 OTA 清理与磁盘预检
-- Latest tag / 最新 tag: `v0.2.5`
+- Commit subject / 提交说明: Add commercial operations overview / 新增商业运营总览
+- Latest tag / 最新 tag: `v0.2.6`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.2.6
+
+- Release commit / 发布提交: `e282b63`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Add commercial operations overview / 新增商业运营总览
+
+### New capabilities / 新增能力:
+
+- Add admin commercial operations overview for revenue, orders, users, instances, delivery, infrastructure, support, and risk alerts.
+- 新增后台商业运营总览，覆盖收入、订单、用户、实例、交付、基础设施、支持与风险提醒。
+
+### Other changes / 其他变更:
+
+- Update admin documentation for the operations overview.
+- 更新后台文档，说明运营总览指标与边界。
+
+### Improvements and adjustments / 改进与调整:
+
+- Add commercial operations overview guard and include it in pnpm test.
+- 新增商业运营总览守卫，并纳入 pnpm test。
 
 ## v0.2.5
 
