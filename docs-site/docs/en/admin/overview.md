@@ -32,7 +32,7 @@ https://admin.example.com
 ## Billing and Commercial Features
 
 - Billing center: `/admin/billing`.
-- Order center: `/admin/orders` aggregates recharge orders and instance billing records, with filters by type, status and user ID plus order details.
+- Order center: `/admin/orders` aggregates recharge orders and instance billing records, with filters by type, status and user ID, order details, recharge exception handling and manual adjustments.
 - Payment providers: `/admin/billing?tab=paymentProviders`.
 - Affiliate review: `/admin/billing?tab=affConversions`.
 - Entertainment management: `/admin/entertainment`.
