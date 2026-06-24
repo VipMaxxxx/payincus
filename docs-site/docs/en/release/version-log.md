@@ -6,16 +6,71 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `c71ade8`
-- Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Add customer success ticket workspace / 新增客服成功工单工作台
-- Latest tag / 最新 tag: `v0.3.1`
+- Current HEAD / 当前 HEAD: `a28cf91`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Harden plugin assets and benefits localization / 加固插件资产并修复福利本地化
+- Latest tag / 最新 tag: `v0.3.5`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.3.5
+
+- Release commit / 发布提交: `a28cf91`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Harden plugin assets and benefits localization / 加固插件资产并修复福利本地化
+
+### 新增能力 / New capabilities
+
+- Add authenticated plugin asset token flow for protected plugin pages.
+- Add safe AI ticket plugin status endpoint for admin settings.
+
+### 改进与调整 / Improvements
+
+- Fix benefits admin localization fallback and missing English keys.
+- Extend guards for benefits i18n, plugin protected assets, and AI ticket status safety.
+
+### 其他变更 / Other changes
+
+- Update AI ticket plugin template docs and settings UI for safe status visibility.
+
+## v0.3.4
+
+- Release commit / 发布提交: `2babf9d`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Require AI ticket reply confidence checks / 增加 AI 工单回复置信度检查
+
+### Other Changes / 其他变更
+
+- Require AI ticket reply confidence checks / 增加 AI 工单回复置信度检查 `2babf9d`
+
+## v0.3.3
+
+- Release commit / 发布提交: `28dd2de`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Harden AI ticket takeover safeguards / 加固 AI 工单接管安全边界
+
+### Fixes and Stability / 修复与稳定性
+
+- Harden AI ticket takeover safeguards / 加固 AI 工单接管安全边界 `28dd2de`
+
+## v0.3.2
+
+- Release commit / 发布提交: `651f0ba`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Add user lifecycle operations center / 新增用户生命周期运营中心
+
+### New Capabilities / 新增能力
+
+- Add user lifecycle operations center / 新增用户生命周期运营中心 `651f0ba`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff for v0.3.1 OTA proof / 更新 v0.3.1 OTA 证明交接 `bd4d60d`
+- Update version log for v0.3.1 / 更新 v0.3.1 版本日志 `6b8aa1f`
 
 ## v0.3.1
 
@@ -83,7 +138,7 @@ This page is generated from Git tags and commits to show system version history.
 - Commit date / 提交日期: 2026-06-24
 - Commit subject / 提交说明: Add order payment operations workflow / 新增订单支付运营闭环
 
-### 新增能力 / New capabilities:
+### 新增能力 / New capabilities
 
 - Add admin order operation cases with dispute states: pending review, confirmed, compensated and closed.
 - 新增后台订单运营处理记录，支持待核查、已确认、已补偿、已关闭争议状态。
@@ -92,14 +147,15 @@ This page is generated from Git tags and commits to show system version history.
 - Add redacted provider status summaries and extended order search by keyword and date range.
 - 新增脱敏 provider 状态摘要，并扩展订单号、交易号、用户和时间范围搜索。
 
-### 改进与调整 / Improvements and adjustments:
+### 改进与调整 / Improvements and adjustments
 
 - Link order operation records to adjustment approvals and balance logs after approval.
 - 订单运营处理记录可关联调账审批，审批通过后继续关联余额流水。
 - Update admin billing documentation in Chinese and English.
 - 更新中英文后台与支付账务文档。
 
-验证 / Verification:
+### 验证 / Verification
+
 - pnpm --filter server test:order-payment-operations-guards
 - pnpm --filter server test:order-center-guards
 - pnpm --filter server test:balance-adjustment-approval-guards
@@ -119,17 +175,17 @@ This page is generated from Git tags and commits to show system version history.
 - Commit date / 提交日期: 2026-06-24
 - Commit subject / 提交说明: Add commercial operations overview / 新增商业运营总览
 
-### New capabilities / 新增能力:
+### New capabilities / 新增能力
 
 - Add admin commercial operations overview for revenue, orders, users, instances, delivery, infrastructure, support, and risk alerts.
 - 新增后台商业运营总览，覆盖收入、订单、用户、实例、交付、基础设施、支持与风险提醒。
 
-### Other changes / 其他变更:
+### Other changes / 其他变更
 
 - Update admin documentation for the operations overview.
 - 更新后台文档，说明运营总览指标与边界。
 
-### Improvements and adjustments / 改进与调整:
+### Improvements and adjustments / 改进与调整
 
 - Add commercial operations overview guard and include it in pnpm test.
 - 新增商业运营总览守卫，并纳入 pnpm test。
@@ -389,19 +445,19 @@ This page is generated from Git tags and commits to show system version history.
 - Commit date / 提交日期: 2026-06-24
 - Commit subject / 提交说明: Polish update task and plugin center UI / 优化更新任务和插件中心界面
 
-### 新增能力 / New Capabilities:
+### 新增能力 / New Capabilities
 
 - 插件市场在插件中心内作为独立内页呈现，保留 GitHub Release 包和 SHA256 校验上下文。
 
 - Plugin Market is presented as a dedicated in-center page with GitHub Release package and SHA256 verification context.
 
-### 其他变更 / Other Changes:
+### 其他变更 / Other Changes
 
 - 版本更新页在未发现新版本时持续展示当前/latest 版本信息，并将主按钮显示为已更新至最新版本。
 
 - The system update page keeps latest/current version details visible when no newer release exists and marks the primary action as already up to date.
 
-### 改进与调整 / Improvements and Adjustments:
+### 改进与调整 / Improvements and Adjustments
 
 - 更新任务和插件安装任务列表收口为每页最多 7 行，超出后通过分页查看。
 

@@ -108,13 +108,17 @@ function tagContent(tag, format) {
   return safeGit(['tag', '--list', tag, `--format=${format}`]).trim()
 }
 
+function normalizeTagNote(value) {
+  return value.replace(/\\n/g, '\n')
+}
+
 function tagBodyLines(tag) {
-  const fullContent = tagContent(tag, '%(contents)')
-  const body = tagContent(tag, '%(contents:body)')
+  const fullContent = normalizeTagNote(tagContent(tag, '%(contents)'))
+  const body = normalizeTagNote(tagContent(tag, '%(contents:body)'))
   const firstLine = fullContent.split(/\r?\n/).find((line) => line.trim())
   const startsWithGroupHeading =
     firstLine && /\/ (Fixes and stability|New capabilities|Other changes|Improvements and adjustments|修复与稳定性|新增能力|其他变更|改进与调整)/i.test(firstLine.trim())
-  const note = startsWithGroupHeading ? fullContent : body
+  const note = startsWithGroupHeading ? fullContent : (body || fullContent.split(/\r?\n/).slice(1).join('\n'))
   if (!note) return []
 
   const lines = []
@@ -124,8 +128,8 @@ function tagBodyLines(tag) {
       if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
       continue
     }
-    if (!line.startsWith('- ') && /\/ (Fixes and stability|New capabilities|Other changes|Improvements and adjustments|修复与稳定性|新增能力|其他变更|改进与调整)/i.test(line)) {
-      lines.push(`### ${line}`)
+    if (!line.startsWith('- ') && / \/ /.test(line)) {
+      lines.push(`### ${line.replace(/:$/, '')}`)
       lines.push('')
     } else {
       lines.push(line)
