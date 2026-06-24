@@ -158,6 +158,18 @@ assert.ok(
   'backend runtime must honor SERVE_STATIC_CLIENT=false before registering static frontend routes'
 )
 assert.match(installPanel, /^readonly DEFAULT_PORT=3001$/m, 'install script must default backend port to 3001')
+assert.match(installPanel, /^readonly PNPM_VERSION="9\.14\.2"$/m, 'install script must pin the pnpm version used for production migrations')
+assert.ok(installPanel.includes('install_pnpm()'), 'install script must install pnpm for clean servers before running migrations')
+assert.ok(
+  installPanel.includes('corepack prepare "pnpm@${PNPM_VERSION}" --activate') &&
+    installPanel.includes('npm install -g "pnpm@${PNPM_VERSION}"'),
+  'install script must enable pnpm through Corepack and keep an npm fallback'
+)
+assert.ok(
+  installPanel.indexOf('install_nodejs') < installPanel.indexOf('install_pnpm') &&
+    installPanel.indexOf('install_pnpm') < installPanel.indexOf('install_postgresql'),
+  'install script must install pnpm after Node.js and before migrations'
+)
 assert.ok(initEnv.includes('set_env_if_missing "PORT" "3001" "后端监听端口"'), 'init-env script must default backend PORT to 3001')
 assert.ok(initEnv.includes('set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"'), 'init-env script must default SERVE_STATIC_CLIENT=false')
 assert.ok(initEnv.includes('set_env_if_missing "VITE_API_BASE_URL" "/api" "前端 API 基础路径"'), 'init-env script must default VITE_API_BASE_URL=/api')

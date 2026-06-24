@@ -1,6 +1,6 @@
 # 一键安装
 
-生产安装推荐使用 `scripts/install-panel.sh`。脚本会安装运行依赖、初始化 `.env`、执行 Prisma migration、生成 systemd 服务、配置 Nginx，并从 GitHub Release 下载预构建产物。
+生产安装推荐使用 `scripts/install-panel.sh`。脚本会安装 Node.js、pnpm、PostgreSQL、Redis 等运行依赖，初始化 `.env`、执行 Prisma migration、生成 systemd 服务、配置 Nginx，并从 GitHub Release 下载预构建产物。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/VipMaxxxx/payincus/main/scripts/install-panel.sh -o install-panel.sh

@@ -498,4 +498,3 @@ pnpm docs:changelog
 ```
 
 如果 CI 或 GitHub Pages 使用浅克隆，可能拿不到完整 tag。需要在构建前拉取 tags，或改用 GitHub Release API 作为数据源。
-

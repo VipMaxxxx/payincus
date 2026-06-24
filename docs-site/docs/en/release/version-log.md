@@ -498,4 +498,3 @@ pnpm docs:changelog
 ```
 
 If CI or GitHub Pages uses a shallow clone, the build may not have the full tag history. Fetch tags before building, or switch the data source to the GitHub Release API.
-

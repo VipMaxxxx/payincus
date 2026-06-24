@@ -110,7 +110,7 @@ http://10.0.0.12:3001
 
 ## 一键安装
 
-`scripts/install-panel.sh` 是生产安装脚本，会安装 Node.js、PostgreSQL、Redis，创建 `.env`，执行 Prisma migration，生成 systemd 服务，并配置 Nginx。
+`scripts/install-panel.sh` 是生产安装脚本，会安装 Node.js、pnpm、PostgreSQL、Redis，创建 `.env`，执行 Prisma migration，生成 systemd 服务，并配置 Nginx。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/VipMaxxxx/payincus/main/scripts/install-panel.sh -o install-panel.sh
