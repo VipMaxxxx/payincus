@@ -92,6 +92,7 @@ set_env_if_missing "REDIS_URL" "redis://:${redis_password}@127.0.0.1:6379" "Redi
 set_env_if_missing "JWT_SECRET" "$(gen_secret 48)" "JWT 密钥"
 set_env_if_missing "COOKIE_SECRET" "$(gen_secret 48)" "Cookie 密钥"
 set_env_if_missing "ENCRYPTION_KEY" "$(openssl rand -base64 32)" "敏感数据加密密钥"
+set_env_if_missing "ADMIN_EMAIL" "admin@payincus.local" "管理员初始邮箱"
 set_env_if_missing "ADMIN_PASSWORD" "$(gen_password 16)" "管理员初始密码"
 set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"
 set_env_if_missing "VITE_API_BASE_URL" "/api" "前端 API 基础路径"

@@ -58,6 +58,10 @@ function getInitialAdminPassword(): string {
   return configuredPassword || 'admin123'
 }
 
+function getInitialAdminEmail(): string {
+  return (process.env.ADMIN_EMAIL || process.env.ADMIN_INITIAL_EMAIL || 'admin@payincus.local').trim()
+}
+
 function assertDatabaseResetAllowed(shouldReset: boolean): void {
   if (!shouldReset || process.env.NODE_ENV !== 'production') {
     return
@@ -125,7 +129,7 @@ async function createDefaultAdmin() {
     await prisma.user.create({
       data: {
         username: 'admin',
-        email: 'admin@isvoro.com',
+        email: getInitialAdminEmail(),
         passwordHash,
         role: 'admin',
         status: 'active',

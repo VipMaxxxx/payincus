@@ -171,6 +171,15 @@ assert.ok(
   'install script must install pnpm after Node.js and before migrations'
 )
 assert.ok(
+  installPanel.includes('prompt_initial_admin_email()') &&
+    installPanel.includes('set_env_if_missing "ADMIN_EMAIL" "admin@payincus.local" "管理员初始邮箱"') &&
+    installPanel.includes('set_env_value "ADMIN_EMAIL" "$admin_email" "管理员初始邮箱"') &&
+    installPanel.includes('ADMIN_EMAIL=${admin_email}') &&
+    installPanel.includes('邮箱      :') &&
+    initEnv.includes('set_env_if_missing "ADMIN_EMAIL" "admin@payincus.local" "管理员初始邮箱"'),
+  'installer and env initializer must allow setting the initial admin email'
+)
+assert.ok(
   installPanel.includes('Nginx runs as www-data and must be able to traverse the install root') &&
     countOccurrences(installPanel, 'chmod 751 "$INSTALL_DIR"') >= 2 &&
     countOccurrences(installPanel, 'chmod 600 "${ENV_FILE}" 2>/dev/null || true') >= 2,
@@ -592,8 +601,8 @@ assert.ok(
     readme.includes('/api, /api/ws -> http://10.0.0.12:3001'),
   'README architecture must document separate user/admin frontends and backend port 3001'
 )
-assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://admin.payincus.com') && readme.includes('/opt/incudal/current/client/dist/admin'), 'README architecture must document the separate admin frontend')
-assert.ok(readme.includes('VITE_CUSTOMER_BASE_URL=https://pay.payincus.com'), 'README env example must document admin-generated customer links')
+assert.ok(readme.includes('ADMIN_FRONTEND_URL=https://demoadmin.payincus.com') && readme.includes('/opt/incudal/current/client/dist/admin'), 'README architecture must document the separate admin frontend')
+assert.ok(readme.includes('VITE_CUSTOMER_BASE_URL=https://demo.payincus.com'), 'README env example must document admin-generated customer links')
 assert.ok(readme.includes('PORT=3001'), 'README env example must use backend port 3001')
 assert.ok(
   readme.includes('PORT=3001') &&
