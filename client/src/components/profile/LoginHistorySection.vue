@@ -29,7 +29,6 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 3
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
-const HIDDEN_LOGIN_VALUE = '已隐藏'
 const normalizedCountryLabels = computed(() => ({
   mainlandChina: t('common.countries.cn'),
   hongKong: t('common.countries.hk'),
@@ -79,13 +78,7 @@ function getCountryCode(country: string | null): string | null {
   return countryCodeMap[country] || null
 }
 
-function isHiddenRecord(record: LoginRecord): boolean {
-  return record.ip === HIDDEN_LOGIN_VALUE
-}
-
 function formatLocation(record: LoginRecord): string {
-  if (isHiddenRecord(record)) return HIDDEN_LOGIN_VALUE
-
   const parts: string[] = []
   const normalizedCountry = normalizeCountryName(record.country, normalizedCountryLabels.value)
   if (normalizedCountry) parts.push(normalizedCountry)
@@ -188,7 +181,7 @@ onMounted(loadRecords)
             <!-- IP 和位置 -->
             <div class="flex items-center gap-2 mb-1">
               <FlagIcon
-                v-if="!isHiddenRecord(record) && getCountryCode(record.country)"
+                v-if="getCountryCode(record.country)"
                 :code="getCountryCode(record.country)!"
                 class="w-4 h-3 flex-shrink-0"
               />
@@ -198,11 +191,11 @@ onMounted(loadRecords)
             <!-- 地理位置 -->
             <div class="text-sm text-themed-muted mb-1">
               {{ formatLocation(record) }}
-              <span v-if="!isHiddenRecord(record) && record.isp" class="text-themed-faint"> · {{ record.isp }}</span>
+              <span v-if="record.isp" class="text-themed-faint"> · {{ record.isp }}</span>
             </div>
             
             <!-- 设备和浏览器 -->
-            <div v-if="!isHiddenRecord(record)" class="text-xs text-themed-faint">
+            <div class="text-xs text-themed-faint">
               {{ formatDevice(record.userAgent) }} · {{ formatBrowser(record.userAgent) }}
             </div>
           </div>

@@ -8,7 +8,6 @@ import * as db from '../db/index.js'
 import * as announcementsDb from '../db/announcements.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { isSmtpEnabled, sendHostAnnouncementEmail } from '../lib/mailer.js'
-import { redactDemoInboxMessage, shouldRedactDemoLoginRecords } from '../lib/demo-safety.js'
 
 const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/
 
@@ -100,13 +99,6 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       pageSize: Math.min(100, parsePositiveInteger(request.query.pageSize, 20)),
       isRead: isReadFilter
     })
-
-    if (shouldRedactDemoLoginRecords(request, request.user)) {
-      return {
-        ...result,
-        messages: result.messages.map(redactDemoInboxMessage)
-      }
-    }
 
     return result
   })
