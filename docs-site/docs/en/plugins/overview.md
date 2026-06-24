@@ -35,7 +35,7 @@ The plugin center is split into three internal pages:
 
 `plugin-templates/ai-ticket-agent-plugin` is the official template for third-party AI ticket assistant plugins. It requires PayIncus `v0.3.2` or later.
 
-The official market can publish the `AI Ticket Agent` plugin package. Administrators should configure `PLUGIN_MARKET_INDEX_URL` in production, refresh the Plugin Market tab in the admin plugin center, and install it from there. After installation, enable the plugin from Installed and configure the OpenAI-compatible model endpoint, model name, API key, takeover mode, auto categories, confidence threshold, and rate limits.
+The official market can publish the `AI 工单助手` (`AI Ticket Assistant`) plugin package. Administrators should configure `PLUGIN_MARKET_INDEX_URL` in production, refresh the Plugin Market tab in the admin plugin center, and install it from there. After installation, enable the plugin from Installed and inspect its status in the plugin detail settings page. The config JSON can apply the default template first, then operators can fill the OpenAI-compatible model endpoint, model name, API key, takeover mode, auto categories, confidence threshold, and rate limits.
 
 After the plugin is enabled, the admin ticket detail view can generate an AI reply draft. The draft is only inserted into the reply box; an administrator must review and send it manually.
 

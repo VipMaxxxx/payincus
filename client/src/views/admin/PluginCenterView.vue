@@ -63,6 +63,45 @@ const paginatedTasks = computed(() => {
   return tasks.value.slice(start, start + TASKS_PER_PAGE)
 })
 
+const selectedAdminSettingsPages = computed(() =>
+  (selectedPlugin.value?.latestVersion?.manifest.entrypoints.adminPages || [])
+    .filter(page => page.slot === 'admin.plugins.settings')
+)
+
+const selectedOtherAdminPages = computed(() =>
+  (selectedPlugin.value?.latestVersion?.manifest.entrypoints.adminPages || [])
+    .filter(page => page.slot !== 'admin.plugins.settings')
+)
+
+const selectedPluginTemplates = computed(() =>
+  selectedPlugin.value?.latestVersion?.manifest.templates || []
+)
+
+const pluginPermissionLabels: Record<string, string> = {
+  'ticket:ai:read-context': '读取脱敏工单上下文',
+  'ticket:ai:generate-draft': '生成 AI 回复草稿',
+  'ticket:ai:reply': '发送受控接管回复',
+  'ticket:ai:handoff': '触发人工接管',
+  'plugin:config:read': '读取插件配置',
+  'plugin:config:write': '写入插件配置'
+}
+
+function displayPluginName(plugin: PluginRecord): string {
+  if (plugin.pluginId === 'com.payincus.ai-ticket-agent') return 'AI 工单助手'
+  return plugin.name
+}
+
+function displayPluginDescription(plugin: PluginRecord): string {
+  if (plugin.pluginId === 'com.payincus.ai-ticket-agent') {
+    return '用于工单草稿生成和受控接管回复的 AI 插件，默认人工审核，按最小脱敏上下文工作。'
+  }
+  return plugin.latestVersion?.manifest.description || '-'
+}
+
+function formatPermission(permission: string): string {
+  return pluginPermissionLabels[permission] || permission
+}
+
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-'
   const date = new Date(value)
@@ -233,6 +272,31 @@ async function saveConfig() {
   }
 }
 
+async function applyDefaultConfigTemplate() {
+  if (!selectedPluginTemplates.value.length) return
+  const defaults: Record<string, unknown> = {}
+  const schema = selectedPlugin.value?.latestVersion?.manifest.configSchema || {}
+  for (const key of Object.keys(schema)) {
+    if (key === 'enabled') defaults[key] = false
+    else if (key === 'mode') defaults[key] = 'draft'
+    else if (key === 'model') defaults[key] = 'gpt-4o-mini'
+    else if (key === 'apiBaseUrl') defaults[key] = ''
+    else if (key === 'apiKey') defaults[key] = ''
+    else if (key === 'temperature') defaults[key] = 0.2
+    else if (key === 'timeoutMs') defaults[key] = 20000
+    else if (key === 'autoReplyCategories') defaults[key] = ['general', 'billing']
+    else if (key === 'confidenceThreshold') defaults[key] = 0.82
+    else if (key === 'dailyAutoReplyLimit') defaults[key] = 100
+    else if (key === 'ticketAutoReplyLimit') defaults[key] = 3
+    else if (key === 'cooldownSeconds') defaults[key] = 120
+    else if (key === 'showAiIdentity') defaults[key] = true
+    else if (key === 'systemPrompt') defaults[key] = ''
+    else defaults[key] = null
+  }
+  configDraft.value = JSON.stringify(defaults, null, 2)
+  toast.success('已套用默认配置模板，请按实际模型信息修改后保存')
+}
+
 async function selectTask(task: PluginTask) {
   selectedTaskId.value = task.id
   activeTab.value = 'tasks'
@@ -401,7 +465,7 @@ onMounted(async () => {
               <tbody>
                 <tr v-for="plugin in plugins" :key="plugin.pluginId" class="border-t border-themed">
                   <td class="py-3 pr-4">
-                    <button class="text-left font-medium text-themed hover:underline" @click="selectPlugin(plugin)">{{ plugin.name }}</button>
+                    <button class="text-left font-medium text-themed hover:underline" @click="selectPlugin(plugin)">{{ displayPluginName(plugin) }}</button>
                     <div class="font-mono text-xs text-themed-muted">{{ plugin.pluginId }}</div>
                   </td>
                   <td class="py-3 pr-4 text-themed">{{ plugin.currentVersion || '-' }}</td>
@@ -435,11 +499,16 @@ onMounted(async () => {
             <dl class="mt-4 space-y-3 text-sm">
               <div>
                 <dt class="text-themed-muted">描述</dt>
-                <dd class="text-themed">{{ selectedPlugin.latestVersion.manifest.description || '-' }}</dd>
+                <dd class="text-themed">{{ displayPluginDescription(selectedPlugin) }}</dd>
               </div>
               <div>
                 <dt class="text-themed-muted">权限</dt>
-                <dd class="text-themed">{{ selectedPlugin.latestVersion.manifest.permissions?.join(', ') || '-' }}</dd>
+                <dd class="space-y-1 text-themed">
+                  <div v-for="permission in selectedPlugin.latestVersion.manifest.permissions || []" :key="permission">
+                    {{ formatPermission(permission) }}
+                  </div>
+                  <span v-if="!(selectedPlugin.latestVersion.manifest.permissions || []).length">无</span>
+                </dd>
               </div>
               <div>
                 <dt class="text-themed-muted">客户端影响</dt>
@@ -452,16 +521,42 @@ onMounted(async () => {
               </div>
             </dl>
 
+            <div v-if="selectedPlugin.enabled && selectedAdminSettingsPages.length" class="mt-5 space-y-3">
+              <h3 class="text-sm font-medium text-themed">插件设置页面</h3>
+              <PluginFrame
+                v-for="page in selectedAdminSettingsPages"
+                :key="page.entry"
+                :title="page.title"
+                :url="`/api/plugins/assets/${encodeURIComponent(selectedPlugin.pluginId)}/${page.entry}`"
+              />
+            </div>
+            <div v-else-if="selectedPlugin.enabled" class="mt-5 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">
+              该插件未声明后台设置页面，可直接维护下方配置 JSON。
+            </div>
+            <div v-else class="mt-5 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">
+              插件启用后会显示后台设置页面。
+            </div>
+
             <div class="mt-5">
-              <h3 class="text-sm font-medium text-themed">配置 JSON</h3>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-sm font-medium text-themed">配置 JSON</h3>
+                <button
+                  v-if="selectedPluginTemplates.length"
+                  class="btn-secondary"
+                  type="button"
+                  @click="applyDefaultConfigTemplate"
+                >
+                  套用默认模板
+                </button>
+              </div>
               <textarea v-model="configDraft" class="mt-2 h-44 w-full rounded border border-themed bg-transparent p-3 font-mono text-xs text-themed"></textarea>
               <button class="btn-primary mt-3" @click="saveConfig">保存配置</button>
             </div>
 
-            <div v-if="selectedPlugin.enabled && (selectedPlugin.latestVersion.manifest.entrypoints.adminPages || []).length" class="mt-5 space-y-3">
-              <h3 class="text-sm font-medium text-themed">后台页面预览</h3>
+            <div v-if="selectedPlugin.enabled && selectedOtherAdminPages.length" class="mt-5 space-y-3">
+              <h3 class="text-sm font-medium text-themed">其他后台页面</h3>
               <PluginFrame
-                v-for="page in selectedPlugin.latestVersion.manifest.entrypoints.adminPages || []"
+                v-for="page in selectedOtherAdminPages"
                 :key="page.entry"
                 :title="page.title"
                 :url="`/api/plugins/assets/${encodeURIComponent(selectedPlugin.pluginId)}/${page.entry}`"
