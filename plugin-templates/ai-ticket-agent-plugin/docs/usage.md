@@ -25,13 +25,21 @@ Controlled takeover reply endpoint:
 POST /api/tickets/:id/ai/reply
 ```
 
-The reply endpoint requires the separate `ticket:ai:reply` permission and only works when the plugin mode is `semi_auto` or `auto`. It generates a fresh reply from the safe context, blocks unsafe output, blocks sensitive handoff cases, writes one support-side ticket message, sends the normal ticket notification, and leaves the ticket status unchanged.
+The reply endpoint requires the separate `ticket:ai:reply` permission and only works when the plugin mode is `semi_auto` or `auto`. It requires a structured model decision with `confidence >= confidenceThreshold`, generates a fresh reply from the safe context, blocks unsafe output, blocks sensitive handoff cases, writes one support-side ticket message, sends the normal ticket notification, and leaves the ticket status unchanged.
 
 Direct takeover replies are blocked when the ticket is abuse-category, urgent, outside the configured `autoReplyCategories` in `auto` mode, or mentions refunds, payment disputes, account security, risk control, destructive instance actions, credentials/backend details, data recovery, outages, or delivery exceptions.
 
 The backend also enforces `dailyAutoReplyLimit`, `ticketAutoReplyLimit`, and `cooldownSeconds` from plugin config before sending a takeover reply. These limits are counted from successful `ai_ticket.reply_send` audit logs.
 
-In `auto` mode, the server scheduler scans every 2 minutes for official/system tickets whose latest message is from the customer. It skips hosted-market tickets owned by non-admin hosts, urgent tickets, abuse tickets, categories outside `autoReplyCategories`, and anything that triggers the handoff rules.
+In `auto` mode, the server scheduler scans every 2 minutes for official/system tickets whose latest message is from the customer. It skips hosted-market tickets owned by non-admin hosts, urgent tickets, abuse tickets, categories outside `autoReplyCategories`, low-confidence decisions, and anything that triggers the handoff rules.
+
+Operational status endpoint:
+
+```text
+GET /api/tickets/ai/status
+```
+
+The status endpoint is admin-only and returns safe flags such as mode, permission availability, confidence threshold, limits, and whether the model is configured. It does not return the model endpoint, API key, backend paths, raw ticket data, or user data.
 
 Package it from this directory:
 

@@ -7359,6 +7359,8 @@ export default {
             searchUser: 'Search username',
             noRecords: 'No win records',
             loadRecordsFailed: 'Failed to load win records',
+            prize: 'Prize',
+            value: 'Value',
             // User points
             currentPoints: 'Current Points',
             totalEarned: 'Total Earned',

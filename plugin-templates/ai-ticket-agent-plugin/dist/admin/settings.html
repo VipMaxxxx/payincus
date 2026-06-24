@@ -29,12 +29,50 @@
         color: #4b5563;
         line-height: 1.6;
       }
+      button {
+        width: fit-content;
+        border: 1px solid #111827;
+        border-radius: 6px;
+        background: #111827;
+        color: #ffffff;
+        padding: 8px 12px;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: .6;
+      }
       .panel {
         display: grid;
         gap: 10px;
         border: 1px solid #e5e7eb;
         border-radius: 8px;
         padding: 16px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 10px;
+      }
+      .metric {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .label {
+        color: #6b7280;
+        font-size: 12px;
+      }
+      .value {
+        margin-top: 4px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .muted {
+        color: #6b7280;
+        font-size: 13px;
       }
       code {
         border-radius: 4px;
@@ -49,8 +87,10 @@
       }
       @media (prefers-color-scheme: dark) {
         body { color: #f9fafb; background: #111827; }
-        p, ul { color: #d1d5db; }
-        .panel { border-color: #374151; }
+        p, ul, .muted { color: #d1d5db; }
+        button { border-color: #f9fafb; background: #f9fafb; color: #111827; }
+        .panel, .metric { border-color: #374151; }
+        .label { color: #9ca3af; }
         code { background: #1f2937; }
       }
     </style>
@@ -60,6 +100,12 @@
       <section class="panel">
         <h1>AI 工单接管助手</h1>
         <p>该插件通过 PayIncus 后端受控接口读取脱敏后的工单上下文，默认只生成草稿。开启自动回复前，请先在插件配置中填写模型接口和密钥。</p>
+      </section>
+      <section class="panel">
+        <h1>当前安全状态</h1>
+        <p id="status-message" class="muted">正在读取插件状态...</p>
+        <div id="status-grid" class="grid" hidden></div>
+        <button id="refresh-status" type="button">刷新状态</button>
       </section>
       <section class="panel">
         <p>当前后端安全上下文接口：</p>
@@ -74,6 +120,7 @@
           <li>读取上下文需要声明 <code>ticket:ai:read-context</code> 权限。</li>
           <li>生成草稿需要声明 <code>ticket:ai:generate-draft</code> 权限。</li>
           <li>接管回复需要声明 <code>ticket:ai:reply</code> 权限，且插件模式不能是纯草稿。</li>
+          <li>接管回复要求模型返回结构化决策，置信度低于 <code>confidenceThreshold</code> 或模型建议转人工时不会发送。</li>
           <li>退款、争议、账号安全、风控、数据恢复、删除/重装/迁移实例、凭据或后台细节、交付异常会强制转人工。</li>
           <li>每日上限、单工单上限和冷却时间会基于 <code>ai_ticket.reply_send</code> 成功审计日志执行。</li>
           <li><code>auto</code> 模式下后端每 2 分钟扫描一次，仅处理官方/系统工单且最后一条消息来自用户的低风险工单。</li>
@@ -83,5 +130,64 @@
         </ul>
       </section>
     </main>
+    <script>
+      const statusMessage = document.getElementById('status-message')
+      const statusGrid = document.getElementById('status-grid')
+      const refreshButton = document.getElementById('refresh-status')
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;')
+      }
+
+      function metric(label, value) {
+        return `<div class="metric"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div></div>`
+      }
+
+      function yesNo(value) {
+        return value ? '是' : '否'
+      }
+
+      async function loadStatus() {
+        refreshButton.disabled = true
+        statusMessage.textContent = '正在读取插件状态...'
+        statusGrid.hidden = true
+        const token = window.localStorage.getItem('token')
+        try {
+          const response = await fetch('/api/tickets/ai/status', {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          })
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+          }
+          const data = await response.json()
+          statusGrid.innerHTML = [
+            metric('插件启用', yesNo(data.config.enabled)),
+            metric('当前模式', data.config.mode),
+            metric('模型已配置', yesNo(data.config.modelConfigured)),
+            metric('自动接管激活', yesNo(data.automation.autoReplyActive)),
+            metric('置信度阈值', data.config.confidenceThreshold),
+            metric('自动分类', (data.config.autoReplyCategories || []).join(', ') || '-'),
+            metric('每日上限', data.config.dailyAutoReplyLimit),
+            metric('单工单上限', data.config.ticketAutoReplyLimit),
+            metric('冷却秒数', data.config.cooldownSeconds),
+            metric('回复权限', yesNo(data.permissions.reply))
+          ].join('')
+          statusMessage.textContent = '状态接口不会返回模型地址、密钥、后台路径或用户数据。'
+          statusGrid.hidden = false
+        } catch (error) {
+          statusMessage.textContent = `状态读取失败：${error.message || error}。请确认管理员已登录并启用插件。`
+        } finally {
+          refreshButton.disabled = false
+        }
+      }
+
+      refreshButton.addEventListener('click', loadStatus)
+      loadStatus()
+    </script>
   </body>
 </html>

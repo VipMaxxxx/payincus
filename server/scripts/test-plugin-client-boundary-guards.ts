@@ -12,7 +12,9 @@ const userRouter = read('client/src/router/user.ts')
 const adminRouter = read('client/src/router/admin.ts')
 const pluginSlot = read('client/src/components/plugins/PluginSlot.vue')
 const pluginFrame = read('client/src/components/plugins/PluginFrame.vue')
+const pluginAssets = read('client/src/utils/plugin-assets.ts')
 const pluginPage = read('client/src/views/PluginPageView.vue')
+const pluginRoutes = read('server/src/routes/plugins.ts')
 const sideNav = read('client/src/components/layout/SideNav.vue')
 const userApi = read('client/src/api/index.ts')
 const adminApi = read('client/src/api/admin.ts')
@@ -30,11 +32,39 @@ assert.ok(
 
 assert.ok(
   pluginFrame.includes('sandbox=') &&
+    pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+    pluginFrame.includes('requestPluginAssetToken(asset)') &&
+    pluginFrame.includes('assetToken') &&
+    pluginFrame.includes('encodeURIComponent(data.assetToken)') &&
+    !pluginFrame.includes('token=${encodeURIComponent(token)}') &&
+    pluginAssets.includes("window.localStorage.getItem('token')") &&
+    pluginAssets.includes("buildApiUrl('/plugins/asset-token')") &&
+    pluginAssets.includes('axios.post<PluginAssetTokenResponse>') &&
     pluginSlot.includes('getEnabledClientExtensions') &&
     pluginPage.includes('currentExtension') &&
     sideNav.includes('v-if="!isAdminEntry"') &&
     sideNav.includes('slot-name="user.sidebar.extra"'),
   'client plugin rendering must use sandbox frames and only inject user sidebar entries in the user entry'
+)
+
+assert.ok(
+  pluginRoutes.includes('function getProtectedAssetPolicy') &&
+    pluginRoutes.includes("fastify.post<{ Body: AssetTokenBody }>('/asset-token'") &&
+    pluginRoutes.includes("kind: 'plugin_asset'") &&
+    pluginRoutes.includes("expiresIn: '60s'") &&
+    pluginRoutes.includes('manifest.entrypoints?.adminPages') &&
+    pluginRoutes.includes('return { requiresAuth: true, adminOnly: true }') &&
+    pluginRoutes.includes('page.requiresAuth === true') &&
+    pluginRoutes.includes('function authenticateProtectedAsset') &&
+    pluginRoutes.includes('request.query.assetToken') &&
+    pluginRoutes.includes('fastify.jwt.verify') &&
+    pluginRoutes.includes('isAccessTokenInvalidated') &&
+    pluginRoutes.includes("user.role !== 'admin'") &&
+    pluginRoutes.includes('assetPolicy.requiresAuth') &&
+    pluginRoutes.includes("'private, no-store'") &&
+    pluginRoutes.includes("'no-referrer'") &&
+    pluginRoutes.includes("'X-Robots-Tag', 'noindex'"),
+  'plugin asset route must protect authenticated entry pages and enforce admin-only access for admin plugin pages'
 )
 
 assert.ok(

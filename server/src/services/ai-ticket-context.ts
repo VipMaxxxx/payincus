@@ -53,7 +53,13 @@ export interface AiTicketReplyCandidate extends AiTicketDraftResult {
 export interface AiTicketAutomationStatus {
   enabled: boolean
   mode: AiTicketAgentConfig['mode']
+  modelConfigured: boolean
   autoReplyCategories: string[]
+  confidenceThreshold: number
+  dailyAutoReplyLimit: number
+  ticketAutoReplyLimit: number
+  cooldownSeconds: number
+  showAiIdentity: boolean
 }
 
 interface AiTicketAgentConfig {
@@ -717,7 +723,13 @@ export async function getAiTicketAutomationStatus(): Promise<AiTicketAutomationS
   return {
     enabled: config.enabled,
     mode: config.mode,
-    autoReplyCategories: config.autoReplyCategories
+    modelConfigured: Boolean(config.apiBaseUrl && config.apiKey),
+    autoReplyCategories: config.autoReplyCategories,
+    confidenceThreshold: config.confidenceThreshold,
+    dailyAutoReplyLimit: config.dailyAutoReplyLimit,
+    ticketAutoReplyLimit: config.ticketAutoReplyLimit,
+    cooldownSeconds: config.cooldownSeconds,
+    showAiIdentity: config.showAiIdentity
   }
 }
 

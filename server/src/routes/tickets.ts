@@ -17,6 +17,7 @@ import { deleteTicketImageFromLsky, uploadTicketImageToLsky } from '../lib/lsky.
 import { sendNotification } from '../lib/notifier.js'
 import { assertSafeHttpUrl } from '../lib/outbound-security.js'
 import {
+  AI_TICKET_CONTEXT_PERMISSION,
   AI_TICKET_DRAFT_PERMISSION,
   AI_TICKET_REPLY_PERMISSION,
   auditAiTicketContextRead,
@@ -25,6 +26,7 @@ import {
   buildAiTicketContext,
   generateAiTicketDraft,
   generateAiTicketReply,
+  getAiTicketAutomationStatus,
   getAiTicketPermission,
   getAiTicketContextPermission
 } from '../services/ai-ticket-context.js'
@@ -533,6 +535,62 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
   })
 
   /**
+   * 获取 AI 工单插件安全状态（仅管理员，不返回模型地址或密钥）
+   * GET /tickets/ai/status
+   */
+  fastify.get('/ai/status', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async () => {
+    const [contextPermission, draftPermission, replyPermission, automation] = await Promise.all([
+      getAiTicketPermission(AI_TICKET_CONTEXT_PERMISSION),
+      getAiTicketPermission(AI_TICKET_DRAFT_PERMISSION),
+      getAiTicketPermission(AI_TICKET_REPLY_PERMISSION),
+      getAiTicketAutomationStatus()
+    ])
+
+    const autoReplyActive = automation.enabled &&
+      automation.mode === 'auto' &&
+      automation.modelConfigured &&
+      replyPermission.allowed
+
+    return {
+      pluginId: 'com.payincus.ai-ticket-agent',
+      permissions: {
+        readContext: contextPermission.allowed,
+        generateDraft: draftPermission.allowed,
+        reply: replyPermission.allowed
+      },
+      config: {
+        enabled: automation.enabled,
+        mode: automation.mode,
+        modelConfigured: automation.modelConfigured,
+        autoReplyCategories: automation.autoReplyCategories,
+        confidenceThreshold: automation.confidenceThreshold,
+        dailyAutoReplyLimit: automation.dailyAutoReplyLimit,
+        ticketAutoReplyLimit: automation.ticketAutoReplyLimit,
+        cooldownSeconds: automation.cooldownSeconds,
+        showAiIdentity: automation.showAiIdentity
+      },
+      automation: {
+        autoReplyActive,
+        scanIntervalSeconds: 120,
+        scope: 'official_system_tickets_only',
+        requiresLatestCustomerMessage: true,
+        safeguards: [
+          'admin_only_status',
+          'plugin_permission_required',
+          'ticket_user_scoped_context',
+          'confidence_threshold',
+          'sensitive_handoff_rules',
+          'daily_and_per_ticket_limits',
+          'cooldown',
+          'no_ticket_status_mutation'
+        ]
+      }
+    }
+  })
+
+  /**
    * 获取工单详情
    * GET /tickets/:id
    */
@@ -824,6 +882,8 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
             ? 'AI ticket agent is in draft mode'
             : 'AI reply requires human handling',
           code,
+          confidence: result.confidence,
+          confidenceThreshold: result.confidenceThreshold,
           blockedReasons: result.sendBlockedReasons
         })
       }
@@ -863,7 +923,9 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
         message: 'AI reply sent successfully',
         data: message,
         model: result.model,
-        safety: result.safety
+        safety: result.safety,
+        confidence: result.confidence,
+        confidenceThreshold: result.confidenceThreshold
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -872,6 +934,7 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
         AI_TICKET_AGENT_MODEL_NOT_CONFIGURED: 400,
         AI_TICKET_MODEL_REQUEST_FAILED: 502,
         AI_TICKET_MODEL_EMPTY_RESPONSE: 502,
+        AI_TICKET_MODEL_DECISION_INVALID: 502,
         TICKET_NOT_FOUND: 404
       }
       const statusCode = knownStatus[message] || 502
