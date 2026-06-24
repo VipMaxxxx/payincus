@@ -18,7 +18,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-6c06bd8 Polish update and plugin admin UI / 优化更新与插件后台界面
+88bc89d Update version log for v0.1.8 / 更新 v0.1.8 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -28,7 +28,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-6c06bd8 Polish update and plugin admin UI / 优化更新与插件后台界面
+88bc89d Update version log for v0.1.8 / 更新 v0.1.8 版本日志
 ```
 
 Recently updated/released files include:
@@ -47,6 +47,11 @@ docs-site/docs/guide/ota-update.md
 docs-site/docs/en/guide/ota-update.md
 docs-site/docs/plugins/overview.md
 docs-site/docs/en/plugins/overview.md
+client/src/components/layout/SideNav.vue
+client/src/router/admin.ts
+client/src/views/admin/DeliveryAssuranceView.vue
+server/src/routes/admin/delivery.ts
+server/scripts/test-delivery-center-guards.ts
 ```
 
 Recommended first step in a new session or user terminal:
@@ -154,31 +159,33 @@ Key tags:
 - `v0.1.4`: incompatible VM package host-binding guard.
 - `v0.1.5`: user/admin operation logs localized to Chinese.
 - `v0.1.6`: admin instance detail loading fix.
+- `v0.1.7`: delivery assurance center.
+- `v0.1.8`: delivery assurance sidebar icon fix.
 
 Latest production proof:
 
-- Production is now proven deployed at `v0.1.6`.
-- Current production symlink proof: `/opt/incudal/current -> /opt/incudal/releases/v0.1.6-20260623223702`.
-- `version.json` reports version/tag `v0.1.6`, commit `474ae022e5a1`, build time `2026-06-23T22:32:38.670Z`, deployed at `2026-06-23T22:37:10.984Z`.
+- Operator reported the production upgrade completed after `v0.1.8`.
+- Public post-upgrade proof for `v0.1.8` passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public Chinese and English version-log pages contain `v0.1.8`, public GitHub OTA manifest reports version `v0.1.8` and commit `65dbc9d8aca5`, and a production admin asset scan from `/admin/delivery` scanned 58 text assets and found the delivery-center markers plus the `pulse` icon path for the `交付保障` sidebar icon.
+- Server-side `v0.1.8` symlink/version proof has not yet been recaptured. The latest server-side proof remains `/opt/incudal/current -> /opt/incudal/releases/v0.1.6-20260623223702`; `version.json` reports version/tag `v0.1.6`, commit `474ae022e5a1`, build time `2026-06-23T22:32:38.670Z`, deployed at `2026-06-23T22:37:10.984Z`.
 - Post-OTA public `verify-split-host`, public-only `pnpm verify:production` with `RUN_DB_CHECKS=0`, and `pnpm smoke:agent-release` passed.
 - A redacted server-side `PROOF_SINCE_HOURS=72 pnpm verify:production-proof-snapshot` emitted observational proof for two online hosts, two fresh online Agents, two ZFS storage pools, five running instances, one completed recharge/callback, SMTP/Lsky config presence, zero notification channels/logs, and missing lifecycle actions `instance.start`, `instance.restart`, `instance.recreate`, and `instance.delete`. The SSH session was manually interrupted after JSON output stopped, so treat it as observational evidence rather than a clean command-exit proof.
 - Production `/opt/incudal/current/server/package.json` reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
 - Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and current admin JS assets contain `/admin/plugins`, `插件中心`, and `admin-instance-detail` markers.
-- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin/update API 401 protection, Turnstile missing-token negative controls, docs TLS, `v0.1.6` Chinese/English version logs, and public root/API security headers.
+- Latest public non-auth recheck passed: live `pnpm verify:split:host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin/update API 401 protection, Turnstile missing-token negative controls, docs TLS, `v0.1.8` Chinese/English version logs, public admin bundle marker scan, and public root/API security headers.
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
-- GitHub Actions for `v0.1.6` / `474ae02` completed successfully: Build & Release passed; CI and Docs Pages for `0696a45` passed.
+- `v0.1.8` public release asset availability was verified directly. GitHub Actions API polling hit an anonymous rate limit during that check, so the latest fully recorded Actions run IDs in this handoff remain the earlier `v0.1.6` chain.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
 - Full-function audit progress is `12/13` categories complete, current category `13/13` is `7/13` items complete (`54%`). Remaining production blockers are business-proof blockers, not deployment blockers: Incus start/restart/recreate/delete/cleanup proof, SMTP delivery, Lsky upload, Telegram/external notification delivery, and real password+Turnstile browser smoke.
 
 Latest release proof:
 
-- `v0.1.6` was tagged from commit `474ae02 Fix admin instance detail loading / 修复后台实例详情加载`.
-- Version-log commit `0696a45 Update version log for v0.1.6 / 更新 v0.1.6 版本日志` is current `payincus/main`.
-- GitHub Build & Release run `28061486351` completed successfully for `v0.1.6`; CI run `28061494165` and Docs Pages run `28061494168` completed successfully for `0696a45`.
-- GitHub Release `v0.1.6` is public, not draft, not prerelease, and has six assets: `ota-manifest.json`, `incudal-v0.1.6-ota-manifest.json`, linux amd64/arm64 tarballs, and both `.sha256` files.
-- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.1.6`, `Fix admin instance detail loading`, and `修复后台实例详情加载`.
-- Production has already been updated to `v0.1.6` and server-side `version.json` proof is recorded above.
+- `v0.1.8` was tagged from commit `65dbc9d Fix delivery nav icon / 修复交付保障导航图标`.
+- Version-log commit `88bc89d Update version log for v0.1.8 / 更新 v0.1.8 版本日志` is current `payincus/main`.
+- GitHub Release `v0.1.8` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files. Direct release asset checks returned HTTP 200 for manifests and `.sha256` files, and HTTP 206 range responses for both tarballs.
+- Public `ota-manifest.json` reports version `v0.1.8`, commit `65dbc9d8aca5`, two artifacts, and changelog `Fix delivery nav icon / 修复交付保障导航图标`.
+- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.1.8` and the delivery icon fix wording.
+- Production has operator-reported `v0.1.8` upgrade completion and public static proof, but server-side `version.json` proof is still last captured at `v0.1.6`.
 
 Storage-pool note:
 
@@ -330,7 +337,7 @@ pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-Recently refreshed public production checks after `v0.1.6` deployment:
+Recently refreshed public production checks after the operator-reported `v0.1.8` upgrade:
 
 ```text
 FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=https://pay.payincus.com VERIFY_RETRIES=2 VERIFY_RETRY_DELAY=1 pnpm verify:split:host
@@ -339,6 +346,8 @@ RUN_DB_CHECKS=0 RUN_LIVE_CHECKS=1 NODE_ENV=production PORT=3001 SERVE_STATIC_CLI
 ```
 
 Production `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.1.6-20260623223702`; `version.json` reports `v0.1.6`, commit `474ae022e5a1`, build time `2026-06-23T22:32:38.670Z`, and `deployedAt=2026-06-23T22:37:10.984Z`.
+
+This is the latest captured server-side version proof. Public `v0.1.8` proof is newer and verifies split routing, docs, GitHub OTA manifest and the served admin bundle, but it has not yet been matched by a fresh server-side `readlink -f /opt/incudal/current && cat /opt/incudal/current/version.json` output.
 
 Recent live business proof:
 
