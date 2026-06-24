@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
-import api from '@/api'
+import api, { type RiskOperationDefinition } from '@/api'
 import { useToast } from '@/stores/toast'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import type { Log } from '@/types/api'
@@ -25,6 +25,7 @@ const logs = ref<Log[]>([])
 const loading = ref<boolean>(true)   // 首次加载
 const refreshing = ref<boolean>(false)  // 后台刷新
 const modules = ref<string[]>([])
+const riskDefinitions = ref<RiskOperationDefinition[]>([])
 
 // 分页
 const page = ref<number>(1)
@@ -38,6 +39,10 @@ const searchQuery = ref<string>('')
 
 // 展开的内容行
 const expandedRows = ref<Set<number>>(new Set())
+
+const highRiskLogs = computed(() => logs.value.filter(log => log.risk_level === 'high' || log.risk_level === 'critical'))
+const approvalRequiredCount = computed(() => logs.value.filter(log => log.approval_required).length)
+const verificationRequiredCount = computed(() => logs.value.filter(log => log.verification_required).length)
 
 // 加载日志
 async function loadLogs(silent = false): Promise<void> {
@@ -75,6 +80,15 @@ async function loadModules(): Promise<void> {
     modules.value = (response as { modules?: string[] }).modules || []
   } catch {
     // 静默失败
+  }
+}
+
+async function loadRiskDefinitions(): Promise<void> {
+  try {
+    const response = await api.logs.getRiskDefinitions()
+    riskDefinitions.value = response.definitions || []
+  } catch {
+    riskDefinitions.value = []
   }
 }
 
@@ -130,6 +144,46 @@ function getResultClass(result: string): string {
   }
 }
 
+function getRiskClass(level: string | undefined): string {
+  if (level === 'critical') return 'badge-error'
+  if (level === 'high') return 'badge-warning'
+  if (level === 'medium') return 'badge-default'
+  return 'badge-success'
+}
+
+function formatRiskLevel(level: string | undefined): string {
+  const map: Record<string, string> = {
+    low: t('logs.risk.low'),
+    medium: t('logs.risk.medium'),
+    high: t('logs.risk.high'),
+    critical: t('logs.risk.critical')
+  }
+  return map[level || 'low'] || map.low
+}
+
+async function exportAuditCsv(): Promise<void> {
+  try {
+    const params: Record<string, unknown> = {
+      limit: 1000
+    }
+    if (selectedModule.value) params.module = selectedModule.value
+    if (searchQuery.value) params.search = searchQuery.value
+
+    const blob = await api.logs.exportAuditCsv(params)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `payincus-audit-logs-${Date.now()}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    toast.success(t('logs.auditExportSuccess'))
+  } catch (err: any) {
+    toast.error(t('logs.auditExportFailed') + ': ' + (err?.message || String(err)))
+  }
+}
+
 function formatResult(result: string): string {
   return formatLogResult(result, tm('logResults') as Record<string, unknown>)
 }
@@ -161,7 +215,7 @@ function isContentLong(content: string): boolean {
 }
 
 onMounted(async () => {
-  await Promise.all([loadModules(), loadLogs()])
+  await Promise.all([loadModules(), loadRiskDefinitions(), loadLogs()])
 })
 </script>
 
@@ -169,6 +223,28 @@ onMounted(async () => {
   <div class="space-y-6 animate-fade-in">
     <div class="page-header">
       <h1 class="page-title">{{ $t('logs.title') }}</h1>
+      <button class="btn-primary" @click="exportAuditCsv">
+        {{ $t('logs.exportAudit') }}
+      </button>
+    </div>
+
+    <div class="grid gap-3 md:grid-cols-4">
+      <div class="card p-4">
+        <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.riskDefinitions') }}</div>
+        <div class="mt-2 text-2xl font-semibold text-themed">{{ riskDefinitions.length }}</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.highRiskCurrentPage') }}</div>
+        <div class="mt-2 text-2xl font-semibold text-themed">{{ highRiskLogs.length }}</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.approvalRequired') }}</div>
+        <div class="mt-2 text-2xl font-semibold text-themed">{{ approvalRequiredCount }}</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.verificationRequired') }}</div>
+        <div class="mt-2 text-2xl font-semibold text-themed">{{ verificationRequiredCount }}</div>
+      </div>
     </div>
 
     <!-- Filters -->
@@ -210,20 +286,21 @@ onMounted(async () => {
 
     <div v-else class="card overflow-x-auto">
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[800px]">
+        <table class="w-full min-w-[920px]">
           <thead>
             <tr class="border-b border-themed">
               <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.time') }}</th>
               <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.user') }}</th>
               <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.module') }}</th>
               <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.action') }}</th>
+              <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.riskLevel') }}</th>
               <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.content') }}</th>
               <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.result') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="logs.length === 0" class="border-b border-themed">
-              <td colspan="6" class="py-8 text-center text-themed-secondary">
+              <td colspan="7" class="py-8 text-center text-themed-secondary">
                 {{ $t('logs.noLogs') }}
               </td>
             </tr>
@@ -243,6 +320,14 @@ onMounted(async () => {
               </td>
               <td class="py-3 px-4 text-sm text-themed whitespace-nowrap">
                 {{ formatAction(log.action) }}
+              </td>
+              <td class="py-3 px-4 text-sm text-themed whitespace-nowrap">
+                <span :class="['badge whitespace-nowrap', getRiskClass(log.risk_level)]">
+                  {{ formatRiskLevel(log.risk_level) }}
+                </span>
+                <div v-if="log.risk_title" class="mt-1 max-w-[120px] truncate text-xs text-themed-muted">
+                  {{ log.risk_title }}
+                </div>
               </td>
               <td class="py-3 px-4 text-sm">
                 <div class="max-w-xs lg:max-w-md">

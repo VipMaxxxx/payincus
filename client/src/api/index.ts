@@ -133,6 +133,17 @@ export interface VipLevelRulesResponse {
   rules: VipLevelRule[]
 }
 
+export interface RiskOperationDefinition {
+  action: string
+  module?: string
+  level: 'low' | 'medium' | 'high' | 'critical'
+  title: string
+  description: string
+  approvalRequired: boolean
+  verificationRequired: boolean
+  batchSensitive: boolean
+}
+
 export type VipProgressMetric = 'totalRecharge' | 'totalConsume' | 'totalHostingIncome' | 'instanceCount'
 
 export interface VipProgressCondition {
@@ -1976,7 +1987,11 @@ const api = {
   logs: {
     list: (params: Record<string, unknown> = {}): Promise<PaginatedResponse<Log>> =>
       http.get('/logs', { params }),
-    getModules: (): Promise<string[]> => http.get('/logs/modules')
+    getModules: (): Promise<string[]> => http.get('/logs/modules'),
+    getRiskDefinitions: (): Promise<{ success: boolean; definitions: RiskOperationDefinition[] }> =>
+      http.get('/logs/risk-definitions'),
+    exportAuditCsv: (params: Record<string, unknown> = {}): Promise<Blob> =>
+      http.get('/logs/audit/export', { params, responseType: 'blob' })
   },
 
   // 健康检查

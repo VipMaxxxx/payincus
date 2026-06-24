@@ -1914,6 +1914,11 @@ export interface Log {
   content: string
   result: string
   created_at: string
+  risk_level?: 'low' | 'medium' | 'high' | 'critical'
+  risk_title?: string
+  approval_required?: boolean
+  verification_required?: boolean
+  batch_sensitive?: boolean
 }
 
 // ==================== 工单相关 ====================

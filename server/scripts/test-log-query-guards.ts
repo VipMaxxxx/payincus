@@ -77,9 +77,9 @@ assert.ok(
 )
 
 assert.ok(
-  logsDbSource.includes('const safeSearch = normalizeLogFilterValue(search, LOG_SEARCH_FILTER_MAX_LENGTH)') &&
+  logsDbSource.includes('const safeSearch = normalizeLogFilterValue(options.search, LOG_SEARCH_FILTER_MAX_LENGTH)') &&
     logsDbSource.includes('contains: safeSearch') &&
-    logsDbSource.includes('const safeInstanceName = normalizeLogFilterValue(instanceName, LOG_INSTANCE_NAME_FILTER_MAX_LENGTH)') &&
+    logsDbSource.includes('const safeInstanceName = normalizeLogFilterValue(options.instanceName, LOG_INSTANCE_NAME_FILTER_MAX_LENGTH)') &&
     logsDbSource.includes('`instance "${safeInstanceName}"`'),
   'log search and instance-name filters must use capped values in database filters'
 )
@@ -87,8 +87,8 @@ assert.ok(
 assert.ok(
   logsDbSource.includes('function parseValidDateFilter') &&
     logsDbSource.includes('return Number.isNaN(date.getTime()) ? undefined : date') &&
-    logsDbSource.includes('const safeStartDate = parseValidDateFilter(startDate)') &&
-    logsDbSource.includes('const safeEndDate = parseValidDateFilter(endDate)'),
+    logsDbSource.includes('const safeStartDate = parseValidDateFilter(options.startDate)') &&
+    logsDbSource.includes('const safeEndDate = parseValidDateFilter(options.endDate)'),
   'log date filters must ignore invalid dates before building Prisma filters'
 )
 

@@ -131,6 +131,7 @@
     "test:recharge-state-transitions": "node --import tsx scripts/test-recharge-state-transitions.ts",
     "test:redeem-code-management-guards": "node --import tsx scripts/test-redeem-code-management-guards.ts",
     "test:registration-concurrency-guards": "node --import tsx scripts/test-registration-concurrency-guards.ts",
+    "test:risk-audit-guards": "node --import tsx scripts/test-risk-audit-guards.ts",
     "test:resource-quota-bigint-guards": "node --import tsx scripts/test-resource-quota-bigint-guards.ts",
     "test:refresh-token-storage": "node --import tsx scripts/test-refresh-token-storage.ts",
     "test:resource-pool-apply-consistency": "node --import tsx scripts/test-resource-pool-apply-consistency.ts",
