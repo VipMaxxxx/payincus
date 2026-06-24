@@ -167,9 +167,17 @@ Key tags:
 - `v0.2.2`: unified order center.
 - `v0.2.3`: order exception handling and manual balance adjustment from admin order detail.
 - `v0.2.4`: balance adjustment approval flow.
+- `v0.2.5`: OTA download cache cleanup, disk-space preflight and atomic release pruning safeguards.
 
 Latest production proof:
 
+- Production OTA task `#36` updated production from `v0.2.4` to `v0.2.5`, ended with status `success`, and switched `/opt/incudal/current` to `/opt/incudal/releases/v0.2.5-20260624122951`.
+- Server-side `v0.2.5` symlink/version proof was captured after OTA. `version.json` reported version/tag `v0.2.5`, commit `49959a2e76c2`, build time `2026-06-24T12:26:34.260Z`, deployed at `2026-06-24T12:30:00.233Z`, and changelog `Harden OTA cleanup and disk preflight / 加固 OTA 清理与磁盘预检`.
+- Update task `#36` used OTA artifact `incudal-v0.2.5-linux-amd64.tar.gz`, downloaded `89922287` bytes, verified SHA256 `0882b2854fc146c0a333930256617505769e92e38e92fcc0985c5eb536141005`, found no pending migrations, switched `/opt/incudal/current`, restarted `incudal-backend`, reached backend health on the second attempt, passed live `verify-split-host`, `pnpm verify:production`, and `pnpm verify:log-header`.
+- Production database proof for task `#36` reported status `success`, `fromVersion=v0.2.4`, `targetVersion=v0.2.5`, `backupPath=/opt/incudal/releases/v0.2.4-20260624115836`, no error message, started at `2026-06-24T12:29:51.674Z`, and finished at `2026-06-24T12:31:28.467Z`.
+- Production `/opt/incudal/current/server/dist/scripts/run-system-update-task.js` now contains the `SYSTEM_UPDATE_MIN_FREE_MB`, `SYSTEM_UPDATE_RELEASES_KEEP`, Chinese disk-space error, and `cleanupOldReleases` markers. This means the cleanup/preflight behavior is deployed and will be used by the next online update task. Task `#36` itself was launched by the previous `v0.2.4` updater, so it does not show the new cleanup log lines.
+- Public post-OTA proof for `v0.2.5` passed: `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned HTTP 200, `https://admin.payincus.com/admin/system-update` returned HTTP 200 with production security headers, and public docs version-log pages `https://payincus.com/release/version-log.html` plus `https://payincus.com/en/release/version-log.html` contain `v0.2.5`.
+- A manual attempt to query and clean `/opt/incudal/.incudal-update-downloads` after OTA hit repeated SSH connection closures. The last successful disk snapshot before that attempt showed `/` at `30G/40G` used with `8.1G` available, `.incudal-update-downloads` at `930M`, and `/opt/incudal/releases` at `9.4G`. Avoid rapid repeated SSH connections; use one longer session or wait before retrying operational cleanup checks.
 - Production OTA task `#35` updated production from `v0.2.3` to `v0.2.4`, ended with status `success`, and switched `/opt/incudal/current` to `/opt/incudal/releases/v0.2.4-20260624115836`.
 - Server-side `v0.2.4` symlink/version proof was captured during OTA. `version.json` reported version/tag `v0.2.4`, commit `0eb2178f76d4`, deployed at `2026-06-24T11:58:42.874Z`, and changelog `Add balance adjustment approval / 新增调账审批流`.
 - Update task `#35` used OTA artifact `incudal-v0.2.4-linux-amd64.tar.gz`, downloaded `89919195` bytes, verified SHA256 `6a4f9551fe3b5abde60bded0e672f1c1a4f0a09babd49b7fc66326ee757dd6b8`, applied migration `20260624193000_add_balance_adjustment_requests`, switched `/opt/incudal/current`, restarted `incudal-backend`, reached backend health on the second attempt, and passed live `verify-split-host` before the proof command tail.
@@ -188,6 +196,13 @@ Latest production proof:
 
 Latest release proof:
 
+- `v0.2.5` was tagged from commit `49959a2 Harden OTA cleanup and disk preflight / 加固 OTA 清理与磁盘预检`.
+- Version-log commit `4ae29d8 Update version log for v0.2.5 / 更新 v0.2.5 版本日志` is current `payincus/main`.
+- GitHub Release `v0.2.5` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files.
+- Public `ota-manifest.json` reports version `v0.2.5`, two artifacts, linux amd64 SHA256 `0882b2854fc146c0a333930256617505769e92e38e92fcc0985c5eb536141005`, and linux arm64 SHA256 `5528a13063e305a962ad005887d1c8342906f8d82fc484e19a04a8042a1c913d`.
+- GitHub Actions proof: Build & Release run `28098233274` completed successfully for tag `v0.2.5`, CI run `28098230303` completed successfully for main commit `4ae29d8`, and GitHub Pages run `28098230219` completed successfully for main commit `4ae29d8`.
+- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.2.5`.
+- Production has OTA task `#36` deployment proof, public health/admin/docs proof, and server-side `version.json` proof recorded above.
 - `v0.2.4` was tagged from commit `0eb2178 Add balance adjustment approval / 新增调账审批流`.
 - Version-log commit `a7de735 Update version log for v0.2.4 / 更新 v0.2.4 版本日志` is current `payincus/main`.
 - GitHub Release `v0.2.4` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files.
