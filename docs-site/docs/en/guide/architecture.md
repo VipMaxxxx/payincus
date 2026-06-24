@@ -30,6 +30,8 @@ Backend API
 
 The Fastify backend listens on `127.0.0.1:3001` or an internal IP in production. Nginx serves static assets and proxies only `/api/` and `/api/ws/`.
 
+For OTA-safe frontend delivery, configure Nginx so `index.html` uses `expires epoch`. This prevents browsers or a CDN from keeping an old SPA entry after an OTA switch. Hashed `/assets/` files can use a separate static location with long-lived caching because their filenames change when the build changes.
+
 Production should set:
 
 ```dotenv

@@ -20,6 +20,8 @@ admin.example.com
 - Do not serve the user build from the admin domain.
 - Keep backend traffic same-origin through `/api`.
 - Ensure WebSocket upgrade headers are set for `/api/ws`.
+- Serve `index.html` with `expires epoch` so OTA switches do not leave browsers on a stale SPA entry.
+- Serve `/assets/` through a dedicated static location with long-lived caching; Vite asset filenames are hashed and change when the build changes.
 - Keep CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and HSTS on public responses. If Cloudflare/CDN is in front, confirm `Strict-Transport-Security` is still preserved.
 
 Use the repository template:

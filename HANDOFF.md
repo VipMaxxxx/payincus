@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-b92a5a0 Add plugin market governance / 新增插件市场治理
+4f5995d Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,12 +29,16 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked product commit at the time of this refresh:
 
 ```text
-b92a5a0 Add plugin market governance / 新增插件市场治理
+4f5995d Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
 ```
 
 Recently updated/released files include:
 
 ```text
+client/src/views/TicketsView.vue
+scripts/install-panel.sh
+deploy/nginx-split-intranet.conf.example
+scripts/smoke-local-nginx-split.sh
 server/prisma/migrations/20260625100000_add_capacity_cost_center/migration.sql
 server/src/routes/admin-capacity-cost.ts
 server/scripts/test-capacity-cost-guards.ts
@@ -141,78 +145,58 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.4.6 Plugin market governance / 插件市场治理
-feature commit: b92a5a0
-version-log/docs commit: this handoff refresh commit
+v0.4.7 Ticket AI runtime calls and SPA cache headers / 工单 AI 运行时调用与 SPA 缓存头
+feature commit: 4f5995d
+version-log commit: 6aa34a1
+docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28130354066: success for tag v0.4.6
-CI 28130351224: success for main commit b92a5a0
-Deploy docs site to GitHub Pages 28130351235: success for main commit b92a5a0
+Build & Release for tag v0.4.7: release assets were publicly available; later anonymous GitHub API polling was rate-limited.
+CI for main commit 4f5995d: started before API polling became rate-limited.
+Deploy docs site to GitHub Pages: pending or not rechecked for this handoff refresh.
 ```
 
-Release assets for `v0.4.6` were present:
+Release assets confirmed publicly for `v0.4.7`:
 
 ```text
-incudal-v0.4.6-linux-amd64.tar.gz
-incudal-v0.4.6-linux-amd64.tar.gz.sha256
-incudal-v0.4.6-linux-arm64.tar.gz
-incudal-v0.4.6-linux-arm64.tar.gz.sha256
-incudal-v0.4.6-ota-manifest.json
 ota-manifest.json
-payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
-payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
-payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
+incudal-v0.4.7-linux-amd64.tar.gz
 plugin-market-index.json
 ```
 
 Production OTA proof:
 
 ```text
-from: v0.4.5
-to: v0.4.6
-task: #55
-current target: /opt/incudal/current resolves to /opt/incudal/releases/v0.4.6-20260624212543
-version metadata: /opt/incudal/current/version.json reports v0.4.6, gitTag v0.4.6, gitCommit b92a5a093fca, deployedAt 2026-06-24T21:25:52.666Z
-backup path: /opt/incudal/releases/v0.4.4-20260624204132
-result: OTA completed successfully, backend health ready on attempt 2, split-host verification passed, production readiness passed, and log/header exposure verification passed
-note: task #55 was started with INSTALL_DIR=/opt/incudal and INCUDAL_APP_DIR=/opt/incudal/current, so the updater created a new atomic release directory and switched current to v0.4.6
+latest proven production version remains: v0.4.6 from task #55
+v0.4.7 production apply status: not proven from this Codex environment
+reason: SSH to 147.125.252.103:22 was closed by the remote host before command execution, and the Chrome existing-session channel was unavailable because Codex Chrome Extension communication failed
+operator action needed: run the admin version update page to v0.4.7, or provide fresh redacted task/log proof after applying it
 ```
 
 Post-update checks:
 
 ```text
-https://pay.payincus.com/api/health: ok
-https://admin.payincus.com/api/health: ok
-https://admin.payincus.com/admin/plugins: HTTP 200 app shell
-https://pay.payincus.com/tickets: HTTP 200 app shell
-Production update log: artifact SHA256 f04caae3e34e7d4b7496f5e08c5165c0fe39bd1259ac00438ebae89d088153c8 verified, no pending Prisma migrations, backend health ready on attempt 2, split-host verification passed, production readiness passed, and log/header exposure passed
+Local build output no longer contains direct calls to tickets.generateAiDraft or tickets.sendAiReply in admin assets.
+The v0.4.7 release package is available for OTA, but production browser proof must be repeated after the server is updated.
 ```
 
-Local gates run for `v0.4.6`:
+Local gates run for `v0.4.7`:
 
 ```text
-pnpm --filter server test:plugin-market-governance-guards
-pnpm --filter server test:plugin-market-guards
-pnpm --filter server test:plugin-center-guards
-pnpm --filter server test:plugin-client-boundary-guards
-pnpm --filter client type-check
-pnpm --filter server type-check
+pnpm --filter server test:ai-ticket-context-guards
+pnpm --filter server test:split-deploy-config
 pnpm --filter client build
-pnpm --filter server build
-pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
-pnpm test
-pnpm test:agent
+RUN_SPLIT_AUTH_SMOKE=false RUN_RECHARGE_CALLBACK_SMOKE=false RUN_AGENT_HEARTBEAT_SMOKE=false RUN_AGENT_RELEASE_SMOKE=false pnpm smoke:split:nginx
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The release was verified by GitHub Actions, release assets, production OTA version metadata, service health, split-host verification, production readiness, log/header exposure scan, plugin market governance guards, split boundary guards, full local tests, agent tests, docs build, and docs/version-log checks.
+The release was verified locally by targeted AI ticket guards, split deploy config guards, client build, admin dist scan, split nginx smoke, docs version-log generation, docs build, diff hygiene, and public release asset availability. Production OTA apply and live browser proof remain pending until the operator updates production to v0.4.7.
 
 Current commercial operation progress:
 

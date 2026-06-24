@@ -6,14 +6,16 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `4f5995d`
+- 当前 HEAD / Current HEAD: `6aa34a1`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
+- 提交说明 / Commit subject: Update version log for v0.4.7 / 更新 v0.4.7 版本日志
 - 最新 tag / Latest tag: `v0.4.7`
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.4.7 / 更新 v0.4.7 版本日志 `6aa34a1`
 
 ## 历史版本 / Historical Versions
 

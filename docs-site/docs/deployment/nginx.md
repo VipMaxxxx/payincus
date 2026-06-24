@@ -25,6 +25,11 @@ deploy/nginx-split-intranet.conf.example
 /api/ws/ -> 后端 /api/ws/
 ```
 
+缓存规则：
+
+- `index.html` 使用 `expires epoch`，确保 OTA 切换 release 后浏览器重新读取新的入口文件。
+- `/assets/` 使用独立 `location`，只服务真实静态文件并使用长期缓存；Vite 构建文件名带 hash，内容变化会生成新路径。
+
 模板会设置 CSP、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy` 和 HSTS。若前面还有 Cloudflare/CDN，应确认公网响应也保留 `Strict-Transport-Security`。
 
 部署后执行：
