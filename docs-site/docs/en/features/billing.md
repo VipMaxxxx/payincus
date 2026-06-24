@@ -17,7 +17,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 ## Admin Features
 
 - Recharge order queries and callback diagnostics.
-- Order center at `/admin/orders` for unified recharge and instance billing records, with user, type and status filters.
+- Order center at `/admin/orders` for unified recharge and instance billing records, with user, type and status filters, detail views, recharge exception handling and manual balance adjustments.
 - Balance adjustment and audit.
 - Payment provider configuration, keys, callbacks and enablement.
 - Affiliate conversion review.
@@ -30,6 +30,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Do not use the admin domain or internal backend URL for callbacks.
 - Verify signature, order ID, amount, status and idempotency.
 - Payment secrets must never enter frontend bundles or logs.
+- Manual completion, failure marking and balance adjustments in the order center must keep using the existing audited recharge and balance-ledger flows.
 
 ## Verification
 
@@ -39,3 +40,4 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Invalid signature, amount or order ID is rejected.
 - Admin can audit orders, callbacks and balance records.
 - User and admin order centers must only return authorized order data and must not expose raw payment callback payloads or provider config snapshots.
+- Admin order detail can manually complete or fail pending/paid recharge orders and create reasoned balance adjustments for the related user.

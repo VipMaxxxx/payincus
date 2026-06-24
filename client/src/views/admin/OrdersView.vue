@@ -47,6 +47,14 @@ const total = ref(0)
 const type = ref('')
 const status = ref('')
 const userId = ref('')
+const actionLoading = ref(false)
+const actionMessage = ref('')
+const actionError = ref('')
+const completeTradeNo = ref('')
+const completeActualAmount = ref('')
+const failReason = ref('')
+const adjustmentAmount = ref('')
+const adjustmentRemark = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
@@ -112,6 +120,18 @@ function sourceLabel(sourceType: OrderSourceType): string {
   return sourceType === 'recharge' ? '充值订单' : '实例账单'
 }
 
+const canCompleteRecharge = computed(() => {
+  return selectedOrder.value?.sourceType === 'recharge' && ['pending', 'paid'].includes(selectedOrder.value.rawStatus)
+})
+
+const canFailRecharge = computed(() => {
+  return selectedOrder.value?.sourceType === 'recharge' && ['pending', 'paid'].includes(selectedOrder.value.rawStatus)
+})
+
+const canAdjustBalance = computed(() => {
+  return Boolean(selectedOrder.value?.userId)
+})
+
 function instanceName(order: AdminOrderItem): string {
   if (!order.instance) return '-'
   return order.instance.displayName || order.instance.name
@@ -145,12 +165,123 @@ async function loadOrders() {
 
 async function openDetail(order: AdminOrderItem) {
   selectedOrder.value = order
+  actionMessage.value = ''
+  actionError.value = ''
+  completeTradeNo.value = order.tradeNo || ''
+  completeActualAmount.value = order.actualAmount ? String(order.actualAmount) : ''
+  failReason.value = order.failReason || ''
+  adjustmentAmount.value = ''
+  adjustmentRemark.value = order.sourceType === 'recharge'
+    ? `订单 ${order.orderNo} 人工处理`
+    : `账单 ${order.orderNo} 人工处理`
   detailLoading.value = true
   try {
     const res = await api.orders.detail(order.sourceType, order.sourceId)
     selectedOrder.value = res.order as AdminOrderItem
+    completeTradeNo.value = selectedOrder.value.tradeNo || ''
+    completeActualAmount.value = selectedOrder.value.actualAmount ? String(selectedOrder.value.actualAmount) : ''
   } finally {
     detailLoading.value = false
+  }
+}
+
+function parseActionAmount(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (!/^-?\d+(\.\d{1,2})?$/.test(trimmed)) return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed !== 0 ? parsed : null
+}
+
+function parseOptionalPositiveAmount(value: string): number | undefined | null {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+async function refreshSelectedOrder() {
+  if (!selectedOrder.value) return
+  const current = selectedOrder.value
+  const res = await api.orders.detail(current.sourceType, current.sourceId)
+  selectedOrder.value = res.order as AdminOrderItem
+  await loadOrders()
+}
+
+async function completeRecharge() {
+  if (!selectedOrder.value || !canCompleteRecharge.value) return
+  const actualAmount = parseOptionalPositiveAmount(completeActualAmount.value)
+  if (actualAmount === null) {
+    actionError.value = '实际入账金额必须是大于 0 的金额，最多两位小数'
+    return
+  }
+
+  actionLoading.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const result = await api.admin.completeRechargeOrder(
+      selectedOrder.value.orderNo,
+      completeTradeNo.value.trim() || undefined,
+      actualAmount
+    )
+    actionMessage.value = result.message || '订单已手动完成'
+    await refreshSelectedOrder()
+  } catch (err: any) {
+    actionError.value = err?.message || '手动完成失败'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function failRecharge() {
+  if (!selectedOrder.value || !canFailRecharge.value) return
+  const reason = failReason.value.trim()
+  if (!reason) {
+    actionError.value = '请填写失败原因'
+    return
+  }
+
+  actionLoading.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const result = await api.admin.failRechargeOrder(selectedOrder.value.orderNo, reason)
+    actionMessage.value = result.message || '订单已标记失败'
+    await refreshSelectedOrder()
+  } catch (err: any) {
+    actionError.value = err?.message || '标记失败失败'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function adjustBalance() {
+  if (!selectedOrder.value || !canAdjustBalance.value) return
+  const amount = parseActionAmount(adjustmentAmount.value)
+  const remark = adjustmentRemark.value.trim()
+  if (amount === null) {
+    actionError.value = '调账金额必须是非 0 金额，最多两位小数；退款/补款填正数，扣款填负数'
+    return
+  }
+  if (!remark) {
+    actionError.value = '请填写调账原因'
+    return
+  }
+
+  actionLoading.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const result = await api.admin.adjustUserBalance(selectedOrder.value.userId, amount, remark)
+    actionMessage.value = `调账成功，用户新余额 ${formatMoney(result.newBalance)}`
+    adjustmentAmount.value = ''
+    await refreshSelectedOrder()
+  } catch (err: any) {
+    actionError.value = err?.message || '调账失败'
+  } finally {
+    actionLoading.value = false
   }
 }
 
@@ -280,6 +411,48 @@ onMounted(loadOrders)
           <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">失败原因</dt><dd class="col-span-2 text-themed">{{ selectedOrder.failReason || '-' }}</dd></div>
           <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">备注</dt><dd class="col-span-2 text-themed">{{ selectedOrder.remark || '-' }}</dd></div>
         </dl>
+
+        <div v-if="actionMessage" class="mt-5 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{{ actionMessage }}</div>
+        <div v-if="actionError" class="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ actionError }}</div>
+
+        <section v-if="selectedOrder.sourceType === 'recharge'" class="mt-6 border-t border-themed pt-5">
+          <h3 class="text-base font-semibold text-themed">充值订单处理</h3>
+          <p class="mt-1 text-sm text-themed-muted">仅待支付或处理中订单允许人工完成或标记失败，入账仍走原有充值完成逻辑。</p>
+          <div class="mt-4 grid gap-3">
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">交易号</span>
+              <input v-model="completeTradeNo" class="input" placeholder="可选，第三方交易号或线下凭证号" :disabled="!canCompleteRecharge || actionLoading" />
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">实际入账金额</span>
+              <input v-model="completeActualAmount" class="input" placeholder="留空则按订单金额入账" :disabled="!canCompleteRecharge || actionLoading" />
+            </label>
+            <div class="flex flex-wrap gap-2">
+              <button class="btn btn-primary" :disabled="!canCompleteRecharge || actionLoading" @click="completeRecharge">手动完成并入账</button>
+            </div>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">失败原因</span>
+              <textarea v-model="failReason" class="input min-h-[84px]" placeholder="标记失败时必须填写原因" :disabled="!canFailRecharge || actionLoading" />
+            </label>
+            <button class="btn btn-outline justify-self-start text-red-600" :disabled="!canFailRecharge || actionLoading" @click="failRecharge">标记失败</button>
+          </div>
+        </section>
+
+        <section class="mt-6 border-t border-themed pt-5">
+          <h3 class="text-base font-semibold text-themed">人工调账 / 退款</h3>
+          <p class="mt-1 text-sm text-themed-muted">用于补款、退款或扣款。正数增加用户余额，负数扣减用户余额，操作会写入余额日志和管理员日志。</p>
+          <div class="mt-4 grid gap-3">
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">调账金额</span>
+              <input v-model="adjustmentAmount" class="input" placeholder="例如 10.00 或 -5.00" :disabled="actionLoading" />
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">调账原因</span>
+              <textarea v-model="adjustmentRemark" class="input min-h-[84px]" placeholder="必须写明订单、原因和处理结论" :disabled="actionLoading" />
+            </label>
+            <button class="btn btn-primary justify-self-start" :disabled="actionLoading" @click="adjustBalance">确认调账</button>
+          </div>
+        </section>
       </aside>
     </div>
   </div>

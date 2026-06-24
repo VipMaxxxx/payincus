@@ -99,6 +99,7 @@ http://10.0.0.12:3001
 约定：
 
 - 用户端和管理端必须使用两个独立公网域名：用户端 `FRONTEND_URL`，管理端 `ADMIN_FRONTEND_URL`。
+- 演示环境示例：`FRONTEND_URL=https://demo.payincus.com`、`ADMIN_FRONTEND_URL=https://demoadmin.payincus.com`、`VITE_CUSTOMER_BASE_URL=https://demo.payincus.com`。
 - 用户端构建入口是 `VITE_APP_ENTRY=user`，产物目录是 `client/dist/user`。
 - 管理端构建入口是 `VITE_APP_ENTRY=admin`，产物目录是 `client/dist/admin`。
 - 两个前端都使用 `VITE_API_BASE_URL=/api`，浏览器只访问同源 `/api` 和 `/api/ws`。

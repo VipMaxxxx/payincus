@@ -30,6 +30,7 @@ wss://admin.example.com/api/ws/...
 - User portal: `GET /api/orders` and `GET /api/orders/:type/:id`, scoped to the current regular user.
 - Admin console: `GET /api/admin/orders` and `GET /api/admin/orders/:type/:id`, available only to administrators.
 - The order center aggregates `recharge_records` and `instance_billing_records` and does not return raw callback payloads, provider config snapshots or other sensitive fields.
+- Manual completion, failure marking and balance adjustments in admin order detail reuse the existing recharge and balance endpoints: `POST /api/admin/recharge/orders/:orderNo/complete`, `POST /api/admin/recharge/orders/:orderNo/fail`, and `POST /api/balance/admin/:userId/adjust`.
 
 ## Boundary Rule
 

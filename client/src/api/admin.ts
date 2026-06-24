@@ -3136,10 +3136,10 @@ const api = {
     }> => http.get('/admin/recharge/stats'),
 
     // 手动完成充值订单
-    completeRechargeOrder: (orderNo: string, tradeNo?: string): Promise<{
+    completeRechargeOrder: (orderNo: string, tradeNo?: string, actualAmount?: number): Promise<{
       success: boolean
       message: string
-    }> => http.post(`/admin/recharge/orders/${orderNo}/complete`, { tradeNo }),
+    }> => http.post(`/admin/recharge/orders/${orderNo}/complete`, { tradeNo, actualAmount }),
 
     // 手动失败充值订单
     failRechargeOrder: (orderNo: string, reason: string): Promise<{
