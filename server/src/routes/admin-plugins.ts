@@ -22,7 +22,7 @@ import {
   updatePluginConfigs
 } from '../db/plugins.js'
 import { createLog, LogModule, LogResult } from '../db/logs.js'
-import { downloadMarketPlugin, fetchPluginMarketIndex } from '../lib/plugin-market.js'
+import { assertMarketEntryInstallable, downloadMarketPlugin, fetchPluginMarketIndex } from '../lib/plugin-market.js'
 import { getPluginLogDir, getPluginPackageMaxBytes, getPluginStagingDir, validateAndExtractPluginPackage } from '../lib/plugin-package.js'
 
 interface PluginParams {
@@ -262,6 +262,7 @@ export default async function adminPluginRoutes(fastify: FastifyInstance) {
     const entry = market.plugins.find(item => item.id === pluginId)
     if (!entry) return reply.code(404).send({ error: 'Plugin not found in market', code: 'PLUGIN_MARKET_ENTRY_NOT_FOUND' })
     try {
+      await assertMarketEntryInstallable(entry)
       const packagePath = await downloadMarketPlugin(entry)
       const user = getRequestUser(request)
       const task = await installPackage({
@@ -271,7 +272,13 @@ export default async function adminPluginRoutes(fastify: FastifyInstance) {
         sourceRepo: entry.repo,
         userId: user.id
       })
-      await createLog(user.id, LogModule.PLUGIN, 'plugin.market_install', `Installed market plugin ${entry.id}`, LogResult.SUCCESS)
+      await createLog(
+        user.id,
+        LogModule.PLUGIN,
+        'plugin.market_install',
+        `Installed market plugin ${entry.id} (${entry.reviewStatus}/${entry.trustLevel}, sha256 ${entry.sha256.slice(0, 12)})`,
+        LogResult.SUCCESS
+      )
       return reply.code(202).send({ task: task ? serializePluginTask(task) : null })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

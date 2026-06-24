@@ -414,6 +414,55 @@ export interface PluginMarketEntry {
   sha256: string
   description?: string
   author?: string
+  reviewStatus: 'pending' | 'listed' | 'delisted' | 'rejected'
+  trustLevel: 'official' | 'verified' | 'third_party'
+  developer: {
+    name: string
+    homepage?: string
+    github?: string
+    verified: boolean
+    contact?: string
+  }
+  permissions: {
+    adminPages: string[]
+    userPages: string[]
+    api: string[]
+    storage: string[]
+  }
+  compatibility: {
+    minPayincus?: string
+    maxPayincus?: string
+  }
+  security: {
+    checksumPinned: boolean
+    signature?: {
+      status: 'unsigned' | 'valid' | 'missing' | 'invalid'
+      algorithm?: string
+      keyId?: string
+    }
+    notes: string[]
+  }
+  pricing: {
+    type: 'free' | 'paid'
+    price?: string
+    currency?: string
+    revenueSharePercent?: number | null
+  }
+  rating: { average: number; count: number }
+  installCount: number
+  releaseNotes?: string
+  upgradeNotes?: string
+  rollbackNotes?: string
+}
+
+export interface PluginMarketGovernance {
+  totalEntries: number
+  visibleEntries: number
+  hiddenEntries: number
+  indexHost: string | null
+  fingerprint: string
+  defaultReviewStatus: 'pending' | 'listed' | 'delisted' | 'rejected'
+  installPolicy: string[]
 }
 
 export interface PluginClientExtension {

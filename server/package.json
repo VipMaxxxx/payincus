@@ -99,6 +99,7 @@
     "test:plugin-center-guards": "node --import tsx scripts/test-plugin-center-guards.ts",
     "test:plugin-package-guards": "node --import tsx scripts/test-plugin-package-guards.ts",
     "test:plugin-market-guards": "node --import tsx scripts/test-plugin-market-guards.ts",
+    "test:plugin-market-governance-guards": "node --import tsx scripts/test-plugin-market-governance-guards.ts",
     "test:plugin-client-boundary-guards": "node --import tsx scripts/test-plugin-client-boundary-guards.ts",
     "test:email-verification-code-storage": "node --import tsx scripts/test-email-verification-code-storage.ts",
     "test:operation-verification-code-storage": "node --import tsx scripts/test-operation-verification-code-storage.ts",

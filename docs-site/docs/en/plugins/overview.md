@@ -16,7 +16,7 @@ These directories are preserved across OTA updates and rollbacks.
 ## Capabilities
 
 - Install uploaded `.tar.gz` plugin packages
-- Install from a GitHub plugin market
+- Install from a governed GitHub plugin market
 - Enable, disable, and uninstall plugins
 - Inspect plugin task logs
 - Show installed plugin settings entries in the admin sidebar
@@ -33,6 +33,23 @@ The plugin center is split into three internal pages:
 - Install Tasks: inspect upload installs, market installs, enable, disable and uninstall tasks. The task list is fixed to at most 7 rows per page, and the log panel beside it shows the selected task output.
 
 The plugin center handles installation, enablement, disablement, uninstall and task logs only. After a plugin is installed, PayIncus adds a left-sidebar settings entry when its manifest declares an `admin.plugins.settings` admin page. Operators can open the settings page before enabling the plugin; the page shows the current enablement state. Settings open through a standalone route instead of being embedded in the plugin center detail panel.
+
+## Plugin Market Governance
+
+The market index is still hosted on GitHub, but every plugin entry must publish governance metadata. The admin UI only lists entries with `reviewStatus = listed` by default. `pending`, `delisted`, and `rejected` entries are hidden from the default market and cannot bypass the install endpoint.
+
+The market page shows:
+
+- Review status: pending, listed, delisted, rejected
+- Trust source: official, verified developer, third party
+- Developer profile: name, homepage, GitHub, verification state, contact
+- Version compatibility: minimum and maximum PayIncus versions
+- Permission declarations: admin pages, user pages, API capabilities, storage directories
+- Security metadata: pinned SHA256, signature state, index fingerprint
+- Commercial reserve fields: free/paid, price, currency, revenue share
+- Operational metrics: rating, rating count, install count, upgrade notes, rollback notes
+
+Before installation, the admin UI shows a security confirmation with source, review status, compatibility, SHA256, and permissions. The server validates the GitHub Release download URL, SHA256, review status, and PayIncus compatibility again, so the install policy does not rely on browser-side checks.
 
 ## AI Ticket Plugin Template
 
@@ -72,6 +89,8 @@ This endpoint only returns operational flags such as whether the plugin is enabl
 - User plugins cannot access `/api/admin/*`.
 - Plugin packages cannot contain absolute paths, `../`, symlinks, or hard links.
 - Market plugins must come from GitHub Release artifacts and pass SHA256 verification.
+- Unlisted market plugins are not shown in the default market and cannot be installed directly.
+- Market installs validate the PayIncus version compatibility range.
 - This version does not execute plugin shell scripts or load arbitrary backend code.
 - AI ticket takeover replies require the separate `ticket:ai:reply` permission and force human handoff for refunds, disputes, account security, risk control, destructive instance actions, credential/backend requests, and delivery exceptions.
 - AI ticket endpoints cannot adjust balances, delete instances, change ticket status, or perform other resource operations.

@@ -326,6 +326,8 @@ jobs:
           const fs = require('fs')
           const manifest = JSON.parse(fs.readFileSync(process.env.PLUGIN_MANIFEST, 'utf8'))
           const assetBase = `https://github.com/${process.env.REPO}/releases/download/${process.env.VERSION}`
+          const adminPages = (manifest.entrypoints?.adminPages || []).map(page => page.slot).filter(Boolean)
+          const userPages = (manifest.entrypoints?.userPages || []).map(page => page.slot).filter(Boolean)
           fs.writeFileSync('plugin-market-index.json', JSON.stringify({
             plugins: [
               {
@@ -337,7 +339,42 @@ jobs:
                 downloadUrl: `${assetBase}/${process.env.PLUGIN_PACKAGE}`,
                 sha256: process.env.PLUGIN_SHA256,
                 description: manifest.description,
-                author: manifest.author
+                author: manifest.author,
+                reviewStatus: 'listed',
+                trustLevel: 'official',
+                developer: {
+                  name: 'PayIncus',
+                  homepage: 'https://payincus.com',
+                  github: `https://github.com/${process.env.REPO}`,
+                  verified: true,
+                  contact: ''
+                },
+                permissions: {
+                  adminPages,
+                  userPages,
+                  api: manifest.permissions || [],
+                  storage: ['plugin:config']
+                },
+                compatibility: {
+                  minPayincus: manifest.payincus?.minVersion || 'v0.4.0',
+                  maxPayincus: manifest.payincus?.maxVersion || null
+                },
+                security: {
+                  checksumPinned: true,
+                  signature: { status: 'unsigned' },
+                  notes: ['GitHub Release artifact with SHA256 verification']
+                },
+                pricing: {
+                  type: 'free',
+                  price: null,
+                  currency: null,
+                  revenueSharePercent: null
+                },
+                rating: { average: 5, count: 1 },
+                installCount: 0,
+                releaseNotes: '官方 AI 工单助手插件，支持工单草稿生成和受控接管回复。',
+                upgradeNotes: '从插件中心市场页安装新版本，安装前会校验 GitHub Release 包和 SHA256。',
+                rollbackNotes: '如需回退，请在插件中心卸载后安装上一版插件包。'
               }
             ]
           }, null, 2) + '\n')
