@@ -305,6 +305,46 @@ jobs:
           cp "incudal-${VERSION}-ota-manifest.json" ota-manifest.json
           ls -lh incudal-*.tar.gz incudal-*.sha256 *ota-manifest.json
 
+      - name: 生成官方插件市场资产
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          REPO="${{ github.repository }}"
+          PLUGIN_ID="com.payincus.ai-ticket-agent"
+          PLUGIN_SOURCE_DIR="plugin-templates/ai-ticket-agent-plugin"
+          PLUGIN_VERSION="$(node -e "console.log(require('./${PLUGIN_SOURCE_DIR}/payincus.plugin.json').version)")"
+          PLUGIN_PACKAGE="payincus-plugin-ai-ticket-agent-${PLUGIN_VERSION}.tar.gz"
+          PLUGIN_MANIFEST="payincus-plugin-ai-ticket-agent-${PLUGIN_VERSION}.manifest.json"
+
+          tar -czf "${PLUGIN_PACKAGE}" -C "${PLUGIN_SOURCE_DIR}" payincus.plugin.json README.md dist templates docs
+          cp "${PLUGIN_SOURCE_DIR}/payincus.plugin.json" "${PLUGIN_MANIFEST}"
+          sha256sum "${PLUGIN_PACKAGE}" > "${PLUGIN_PACKAGE}.sha256"
+
+          export VERSION REPO PLUGIN_ID PLUGIN_VERSION PLUGIN_PACKAGE PLUGIN_MANIFEST
+          export PLUGIN_SHA256="$(cut -d ' ' -f1 "${PLUGIN_PACKAGE}.sha256")"
+          node <<'NODE'
+          const fs = require('fs')
+          const manifest = JSON.parse(fs.readFileSync(process.env.PLUGIN_MANIFEST, 'utf8'))
+          const assetBase = `https://github.com/${process.env.REPO}/releases/download/${process.env.VERSION}`
+          fs.writeFileSync('plugin-market-index.json', JSON.stringify({
+            plugins: [
+              {
+                id: process.env.PLUGIN_ID,
+                name: manifest.name,
+                latest: process.env.PLUGIN_VERSION,
+                repo: `https://github.com/${process.env.REPO}`,
+                manifestUrl: `${assetBase}/${process.env.PLUGIN_MANIFEST}`,
+                downloadUrl: `${assetBase}/${process.env.PLUGIN_PACKAGE}`,
+                sha256: process.env.PLUGIN_SHA256,
+                description: manifest.description,
+                author: manifest.author
+              }
+            ]
+          }, null, 2) + '\n')
+          NODE
+
+          ls -lh payincus-plugin-* plugin-market-index.json
+
       # 创建 Release 并上传所有架构的产物
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
@@ -314,6 +354,10 @@ jobs:
             incudal-*.tar.gz.sha256
             incudal-*-ota-manifest.json
             ota-manifest.json
+            payincus-plugin-*.tar.gz
+            payincus-plugin-*.tar.gz.sha256
+            payincus-plugin-*.manifest.json
+            plugin-market-index.json
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}

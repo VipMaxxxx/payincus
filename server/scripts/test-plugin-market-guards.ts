@@ -11,6 +11,7 @@ function read(path: string): string {
 const market = read('server/src/lib/plugin-market.ts')
 const adminRoute = read('server/src/routes/admin-plugins.ts')
 const envExample = read('.env.example')
+const releaseWorkflow = read('.github/workflows/release.yml')
 
 assert.ok(
   market.includes('PLUGIN_MARKET_INDEX_URL') &&
@@ -36,6 +37,15 @@ assert.ok(
     envExample.includes('PLUGIN_INSTALL_DIR=/opt/incudal/plugins') &&
     envExample.includes('PLUGIN_MAX_PACKAGE_SIZE_MB=20'),
   'plugin market and install settings must be documented in env example'
+)
+
+assert.ok(
+  releaseWorkflow.includes('生成官方插件市场资产') &&
+    releaseWorkflow.includes('plugin-market-index.json') &&
+    releaseWorkflow.includes('payincus-plugin-ai-ticket-agent') &&
+    releaseWorkflow.includes('com.payincus.ai-ticket-agent') &&
+    releaseWorkflow.includes('sha256sum "${PLUGIN_PACKAGE}"'),
+  'release workflow must publish the official AI plugin package, manifest, and market index assets'
 )
 
 console.log('plugin market guard tests passed')
