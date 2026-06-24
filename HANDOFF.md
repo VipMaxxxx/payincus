@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-4f5995d Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
+326cab1 Add production proof workspace / 新增生产验收工作台
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,13 +29,23 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked product commit at the time of this refresh:
 
 ```text
-4f5995d Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头
+326cab1 Add production proof workspace / 新增生产验收工作台
 ```
 
 Recently updated/released files include:
 
 ```text
 client/src/views/TicketsView.vue
+client/src/views/admin/ProductionProofView.vue
+server/scripts/test-production-proof-center-guards.ts
+docs-site/docs/deployment/production-checklist.md
+docs-site/docs/en/deployment/production-checklist.md
+client/src/router/admin.ts
+client/src/config/side-nav-items-admin.ts
+client/src/locales/zh-CN.ts
+client/src/locales/zh-TW.ts
+client/src/locales/en.ts
+client/vite.config.ts
 scripts/install-panel.sh
 deploy/nginx-split-intranet.conf.example
 scripts/smoke-local-nginx-split.sh
@@ -145,64 +155,75 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.4.7 Ticket AI runtime calls and SPA cache headers / 工单 AI 运行时调用与 SPA 缓存头
-feature commit: 4f5995d
-version-log commit: 6aa34a1
+v0.4.8 Production proof workspace / 生产验收工作台
+feature commit: 326cab1
+version-log commit: 6ebc30a
 docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.4.7: release assets were publicly available; later anonymous GitHub API polling was rate-limited.
-CI for main commit 4f5995d: started before API polling became rate-limited.
-Deploy docs site to GitHub Pages: pending or not rechecked for this handoff refresh.
+Build & Release for tag v0.4.8: 28132922573 completed success.
+CI for main commit 6ebc30a: 28132950002 completed success.
+Deploy docs site to GitHub Pages for 6ebc30a: 28132949998 completed success.
 ```
 
-Release assets confirmed publicly for `v0.4.7`:
+Release assets confirmed publicly for `v0.4.8`:
 
 ```text
 ota-manifest.json
-incudal-v0.4.7-linux-amd64.tar.gz
+incudal-v0.4.8-linux-amd64.tar.gz
+incudal-v0.4.8-linux-amd64.tar.gz.sha256
+incudal-v0.4.8-linux-arm64.tar.gz
+incudal-v0.4.8-linux-arm64.tar.gz.sha256
+incudal-v0.4.8-ota-manifest.json
 plugin-market-index.json
+payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
+payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
+payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 ```
 
 Production OTA proof:
 
 ```text
 latest proven production version remains: v0.4.6 from task #55
-v0.4.7 production apply status: not proven from this Codex environment
+v0.4.7/v0.4.8 production apply status: not proven from this Codex environment
 reason: SSH to 147.125.252.103:22 was closed by the remote host before command execution, and the Chrome existing-session channel was unavailable because Codex Chrome Extension communication failed
-operator action needed: run the admin version update page to v0.4.7, or provide fresh redacted task/log proof after applying it
+operator action needed: run the admin version update page to v0.4.8, or provide fresh redacted task/log proof after applying it
 ```
 
 Post-update checks:
 
 ```text
-Local build output no longer contains direct calls to tickets.generateAiDraft or tickets.sendAiReply in admin assets.
-The v0.4.7 release package is available for OTA, but production browser proof must be repeated after the server is updated.
+The admin console contains a read-only Production Proof workspace at /admin/production-proof.
+The user build output does not contain the production-proof route, nav key, or page content.
+The v0.4.8 release package is available for OTA, but production browser proof must be repeated after the server is updated.
 ```
 
-Local gates run for `v0.4.7`:
+Local gates run for `v0.4.8`:
 
 ```text
-pnpm --filter server test:ai-ticket-context-guards
-pnpm --filter server test:split-deploy-config
+pnpm --filter server test:production-proof-center-guards
+pnpm --filter client type-check
 pnpm --filter client build
+pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
-RUN_SPLIT_AUTH_SMOKE=false RUN_RECHARGE_CALLBACK_SMOKE=false RUN_AGENT_HEARTBEAT_SMOKE=false RUN_AGENT_RELEASE_SMOKE=false pnpm smoke:split:nginx
+pnpm --filter server test:frontend-i18n-keys
+pnpm --filter server type-check
+pnpm build
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The release was verified locally by targeted AI ticket guards, split deploy config guards, client build, admin dist scan, split nginx smoke, docs version-log generation, docs build, diff hygiene, and public release asset availability. Production OTA apply and live browser proof remain pending until the operator updates production to v0.4.7.
+The release was verified locally by targeted production-proof guards, client type-check/build, frontend route and dist boundary guards, i18n key guards, server type-check, full build, docs version-log generation, docs build, diff hygiene, GitHub CI, GitHub Pages, and public release asset availability. Production OTA apply and live browser proof remain pending until the operator updates production to v0.4.8.
 
 Current commercial operation progress:
 
 ```text
-11/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit, resource capacity and cost, plugin market governance.
-Suggested next category: production proof closure in docs/commercial-operation-task-goals.md.
+12/12 categories have local feature coverage: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit, resource capacity and cost, plugin market governance, and production proof workspace.
+Important caveat: final production proof is not complete until real payment, Incus, terminal, Agent, delivery, notification, Turnstile, OTA rollback, and backup-restore evidence is collected and recorded.
 ```
 
 ## Product Split Status
