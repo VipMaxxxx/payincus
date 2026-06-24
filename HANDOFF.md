@@ -164,18 +164,19 @@ Key tags:
 - `v0.1.9`: one-click installer pnpm bootstrap fix.
 - `v0.2.0`: one-click installer static asset permission fix.
 - `v0.2.1`: one-click installer initial admin email support.
+- `v0.2.2`: unified order center.
 
 Latest production proof:
 
-- Production OTA task `#30` updated production from `v0.2.0` to `v0.2.1` and completed successfully.
-- Server-side `v0.2.1` symlink/version proof has been captured. `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.2.1-20260624100408`; `version.json` reports version/tag `v0.2.1`, commit `e8cca3906549`, deployed at `2026-06-24T10:04:17.602Z`, and changelog `Allow installer to set initial admin email / 允许安装器设置初始管理员邮箱`.
-- Update task `#30` used OTA artifact `incudal-v0.2.1-linux-amd64.tar.gz`, downloaded `89874120` bytes, verified SHA256 `3886de37dc98c72ee80003f10d6a1d98a3221de99fa5d56878c9a062612dc50d`, ran Prisma migrate deploy, switched `/opt/incudal/current`, restarted `incudal-backend`, passed `verify-split-host`, passed `pnpm verify:production`, passed `pnpm verify:log-header`, and ended with `System update completed successfully`.
-- Public post-OTA proof for `v0.2.1` passed: `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned HTTP 200, public Chinese and English version-log pages contain `v0.2.1` and initial-admin-email wording, public GitHub OTA manifest reports version `v0.2.1` and commit `e8cca3906549`, and GitHub Actions `Build & Release`, `CI`, and `Deploy docs site to GitHub Pages` completed successfully.
+- Production OTA task `#31` updated production from `v0.2.1` to `v0.2.2` and completed successfully.
+- Server-side `v0.2.2` symlink/version proof has been captured. `/opt/incudal/current` resolves to `/opt/incudal/releases/v0.2.2-20260624105633`; `version.json` reports version/tag `v0.2.2`, commit `3c641c9b6a32`, deployed at `2026-06-24T10:56:43.103Z`, and changelog `Add unified order center / 新增统一订单中心`.
+- Update task `#31` used OTA artifact `incudal-v0.2.2-linux-amd64.tar.gz`, downloaded `89900284` bytes, verified SHA256 `060ba9f0a318ce0edf99d2fd337e005cf95868778ec44381c200db5fa23df880`, ran Prisma migrate deploy with no pending migrations, switched `/opt/incudal/current`, restarted `incudal-backend`, passed `verify-split-host`, passed `pnpm verify:production`, passed `pnpm verify:log-header`, and ended with `System update completed successfully`.
+- Public post-OTA proof for `v0.2.2` passed: `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned HTTP 200, anonymous `/api/orders` and `/api/admin/orders` returned HTTP 401, public Chinese and English version-log pages contain `v0.2.2`, public GitHub OTA manifest reports version `v0.2.2` and commit `3c641c9b6a32`, and the public GitHub Release exposes amd64/arm64 tarballs, `.sha256` files, and OTA manifests.
 - A redacted server-side `PROOF_SINCE_HOURS=72 pnpm verify:production-proof-snapshot` emitted observational proof for two online hosts, two fresh online Agents, two ZFS storage pools, five running instances, one completed recharge/callback, SMTP/Lsky config presence, zero notification channels/logs, and missing lifecycle actions `instance.start`, `instance.restart`, `instance.recreate`, and `instance.delete`. The SSH session was manually interrupted after JSON output stopped, so treat it as observational evidence rather than a clean command-exit proof.
 - Production `/opt/incudal/current/server/package.json` reports `update:online:start` as `node dist/scripts/start-system-update-task.js`.
 - Production Nginx roots now point at `/opt/incudal/current/client/dist/user` and `/opt/incudal/current/client/dist/admin`, so frontend static assets follow atomic OTA releases.
 - Public `https://admin.payincus.com/admin/plugins` returns HTTP 200 and current admin JS assets contain `/admin/plugins`, `插件中心`, and `admin-instance-detail` markers.
-- Latest public non-auth recheck passed: live `verify-split-host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, plugin/update API 401 protection, Turnstile missing-token negative controls, docs TLS, `v0.2.1` Chinese/English version logs, public admin bundle marker scan, and public root/API security headers.
+- Latest public non-auth recheck passed: live `verify-split-host` against `https://pay.payincus.com` / `https://admin.payincus.com`, public health endpoints, order/plugin/update API 401 protection, Turnstile missing-token negative controls, docs TLS, `v0.2.2` Chinese/English version logs, public admin bundle marker scan, and public root/API security headers.
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - `v0.1.8` public release asset availability was verified directly. GitHub Actions API polling hit an anonymous rate limit during that check, so the latest fully recorded Actions run IDs in this handoff remain the earlier `v0.1.6` chain.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
@@ -183,12 +184,12 @@ Latest production proof:
 
 Latest release proof:
 
-- `v0.2.1` was tagged from commit `e8cca39 Allow installer to set initial admin email / 允许安装器设置初始管理员邮箱`.
-- Version-log commit `7f2ac52 Update version log for v0.2.1 / 更新 v0.2.1 版本日志` is current `payincus/main`.
-- GitHub Release `v0.2.1` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files.
-- Public `ota-manifest.json` reports version `v0.2.1`, commit `e8cca3906549`, two artifacts, and changelog `Allow installer to set initial admin email / 允许安装器设置初始管理员邮箱`.
-- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.2.1` and the initial-admin-email wording.
-- Production has OTA task `#30` completion, public health/docs proof, and server-side `version.json` proof recorded above.
+- `v0.2.2` was tagged from commit `3c641c9 Add unified order center / 新增统一订单中心`.
+- Version-log commit `fca61a1 Update version log for v0.2.2 / 更新 v0.2.2 版本日志` is current `payincus/main`.
+- GitHub Release `v0.2.2` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files.
+- Public `ota-manifest.json` reports version `v0.2.2`, commit `3c641c9b6a32`, two artifacts, and changelog `Add unified order center / 新增统一订单中心`.
+- Public docs version-log pages `https://payincus.com/release/version-log.html` and `https://payincus.com/en/release/version-log.html` contain `v0.2.2`.
+- Production has OTA task `#31` completion, public health/docs/API-boundary proof, and server-side `version.json` proof recorded above.
 
 Storage-pool note:
 
