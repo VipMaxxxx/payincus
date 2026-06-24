@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-9885685 Update version log for v0.2.9 / 更新 v0.2.9 版本日志
+2443c77 Update version log for v0.3.0 / 更新 v0.3.0 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked handoff/rule commit at the time of this refresh:
 
 ```text
-9885685 Update version log for v0.2.9 / 更新 v0.2.9 版本日志
+2443c77 Update version log for v0.3.0 / 更新 v0.3.0 版本日志
 ```
 
 Recently updated/released files include:
@@ -37,6 +37,14 @@ Recently updated/released files include:
 ```text
 docs-site/docs/release/version-log.md
 docs-site/docs/en/release/version-log.md
+server/prisma/migrations/20260624230000_add_sla_alert_center/migration.sql
+server/src/routes/admin-sla-alerts.ts
+server/scripts/test-sla-alert-guards.ts
+client/src/views/admin/SlaAlertsView.vue
+client/src/config/side-nav-items-admin.ts
+client/src/router/admin.ts
+docs-site/docs/admin/overview.md
+docs-site/docs/en/admin/overview.md
 server/prisma/schema.prisma
 server/prisma/migrations/20260624222000_add_delivery_assurance_cases/migration.sql
 server/src/routes/admin-delivery.ts
@@ -103,38 +111,38 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.2.9 Add delivery assurance operations workflow / 新增交付保障运营闭环
-feature commit: 62825b8
-version-log commit: 9885685
+v0.3.0 Add SLA alert center / 新增 SLA 告警中心
+feature commit: a721de8
+version-log commit: 2443c77
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release 28106031495: success
-CI 28106027364: success
-Deploy docs site to GitHub Pages 28106027434: success
+Build & Release 28108119921: release assets available
+CI 28108115564: started for main push; public API was rate-limited during polling
+Deploy docs site to GitHub Pages 28108115502: public docs pages showed v0.3.0 after cache refresh
 ```
 
-Release assets for `v0.2.9` were present:
+Release assets for `v0.3.0` were present:
 
 ```text
-incudal-v0.2.9-linux-amd64.tar.gz
-incudal-v0.2.9-linux-amd64.tar.gz.sha256
-incudal-v0.2.9-linux-arm64.tar.gz
-incudal-v0.2.9-linux-arm64.tar.gz.sha256
-incudal-v0.2.9-ota-manifest.json
+incudal-v0.3.0-linux-amd64.tar.gz
+incudal-v0.3.0-linux-amd64.tar.gz.sha256
+incudal-v0.3.0-linux-arm64.tar.gz
+incudal-v0.3.0-linux-arm64.tar.gz.sha256
+incudal-v0.3.0-ota-manifest.json
 ota-manifest.json
 ```
 
 Production OTA proof:
 
 ```text
-task: #40
-from: v0.2.8
-to: v0.2.9
-current: /opt/incudal/releases/v0.2.9-20260624143538
-artifact sha256: 121b87c94b2cb9ecc8b329cf54776d4a7ca2e567950f09b02cd32d7b91cbe469
+task: #41
+from: v0.2.9
+to: v0.3.0
+current: /opt/incudal/releases/v0.3.0-20260624150720
+artifact sha256: affcd8a89c49046e9c7323d25fc7e943e62a721b6aec0f72cd68ff368bc69601
 result: System update completed successfully
 ```
 
@@ -144,7 +152,7 @@ Post-update checks completed in the update log:
 OTA download cache cleanup at update start
 disk-space preflight before update and before artifact download/extract/backup
 backend health ready after restart
-Prisma migration 20260624222000_add_delivery_assurance_cases applied
+Prisma migration 20260624230000_add_sla_alert_center applied
 scripts/verify-split-host.sh passed
 pnpm verify:production passed
 pnpm verify:log-header passed
@@ -155,18 +163,21 @@ Public checks after the OTA:
 ```text
 https://pay.payincus.com/api/health: ok
 https://admin.payincus.com/api/health: ok
-https://payincus.com/release/version-log.html: contains v0.2.9, 62825b8 and 交付保障
-https://payincus.com/en/release/version-log.html: contains v0.2.9, 62825b8 and delivery assurance
+https://admin.payincus.com/admin/sla-alerts: HTTP 200 app shell
+https://admin.payincus.com/api/admin/sla-alerts/overview without auth: 401
+https://payincus.com/release/version-log.html: contains v0.3.0, a721de8 and SLA/告警
+https://payincus.com/en/release/version-log.html: contains v0.3.0, a721de8 and SLA/告警
 ```
 
-Local gates run for `v0.2.9`:
+Local gates run for `v0.3.0`:
 
 ```text
 pnpm --filter server exec prisma generate
-pnpm --filter server test:delivery-center-guards
+pnpm --filter server test:sla-alert-guards
 pnpm --filter server type-check
 pnpm --filter client type-check
 pnpm --filter client build
+pnpm --filter server test:delivery-center-guards
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
 pnpm --filter server test:frontend-i18n-keys
@@ -182,8 +193,8 @@ The release was verified by GitHub Actions, release assets, production OTA task 
 Current commercial operation progress:
 
 ```text
-5/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement.
-Suggested next category: SLA and alerting.
+6/12 categories complete: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting.
+Suggested next category: customer success.
 ```
 
 ## Product Split Status
