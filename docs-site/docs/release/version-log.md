@@ -6,14 +6,16 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `f009c7e`
+- 当前 HEAD / Current HEAD: `62f4aef`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Localize AI plugin settings UI / 中文化 AI 插件设置界面
+- 提交说明 / Commit subject: Update version log for v0.3.9 / 更新 v0.3.9 版本日志
 - 最新 tag / Latest tag: `v0.3.9`
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.3.9 / 更新 v0.3.9 版本日志 `62f4aef`
 
 ## 历史版本 / Historical Versions
 

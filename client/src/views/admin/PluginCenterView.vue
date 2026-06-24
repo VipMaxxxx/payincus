@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
-import PluginFrame from '@/components/plugins/PluginFrame.vue'
-import type { PluginConfigValue, PluginMarketEntry, PluginRecord, PluginTask } from '@/types/api'
+import type { PluginMarketEntry, PluginRecord, PluginTask } from '@/types/api'
 
 const toast = useToast()
+const router = useRouter()
 
 const loading = ref(true)
 const marketLoading = ref(false)
@@ -20,11 +21,9 @@ const tasks = ref<PluginTask[]>([])
 const taskLogs = ref('')
 const selectedTaskId = ref<number | null>(null)
 const taskPage = ref(1)
-const configs = ref<PluginConfigValue[]>([])
-const configDraft = ref('')
 const TASKS_PER_PAGE = 7
 const tabs = [
-  { key: 'installed', label: '已安装', description: '上传插件包、启用停用、维护配置和查看插件页面。' },
+  { key: 'installed', label: '已安装', description: '上传插件包、启用停用和查看插件详情。插件设置会作为独立页面显示在左侧菜单。' },
   { key: 'market', label: '插件市场', description: '从已配置的 GitHub 市场索引读取插件并安装。' },
   { key: 'tasks', label: '安装任务', description: '查看上传安装、市场安装、启用、禁用和卸载任务日志。' }
 ] as const
@@ -63,20 +62,6 @@ const paginatedTasks = computed(() => {
   return tasks.value.slice(start, start + TASKS_PER_PAGE)
 })
 
-const selectedAdminSettingsPages = computed(() =>
-  (selectedPlugin.value?.latestVersion?.manifest.entrypoints.adminPages || [])
-    .filter(page => page.slot === 'admin.plugins.settings')
-)
-
-const selectedOtherAdminPages = computed(() =>
-  (selectedPlugin.value?.latestVersion?.manifest.entrypoints.adminPages || [])
-    .filter(page => page.slot !== 'admin.plugins.settings')
-)
-
-const selectedPluginTemplates = computed(() =>
-  selectedPlugin.value?.latestVersion?.manifest.templates || []
-)
-
 const pluginPermissionLabels: Record<string, string> = {
   'ticket:ai:read-context': '读取脱敏工单上下文',
   'ticket:ai:generate-draft': '生成 AI 回复草稿',
@@ -100,6 +85,14 @@ function displayPluginDescription(plugin: PluginRecord): string {
 
 function formatPermission(permission: string): string {
   return pluginPermissionLabels[permission] || permission
+}
+
+function hasAdminSettingsPage(plugin: PluginRecord): boolean {
+  return Boolean(plugin.latestVersion?.manifest.entrypoints.adminPages?.some(page => page.slot === 'admin.plugins.settings'))
+}
+
+function openPluginSettings(plugin: PluginRecord) {
+  router.push(`/admin/plugins/${encodeURIComponent(plugin.pluginId)}/settings`)
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -161,7 +154,6 @@ async function refreshAll() {
     if (selectedTaskId.value && !tasks.value.some(task => task.id === selectedTaskId.value)) selectedTaskId.value = null
     if (!selectedTaskId.value && tasks.value.length > 0) selectedTaskId.value = tasks.value[0].id
     ensureSelectedTaskVisible()
-    await loadSelectedPluginConfig()
   } catch (err: any) {
     toast.error('加载插件中心失败：' + (err?.message || String(err)))
   } finally {
@@ -183,20 +175,8 @@ async function loadMarket() {
   }
 }
 
-async function loadSelectedPluginConfig() {
-  if (!selectedPlugin.value) {
-    configs.value = []
-    configDraft.value = ''
-    return
-  }
-  const response = await api.plugins.getConfig(selectedPlugin.value.pluginId)
-  configs.value = response.configs
-  configDraft.value = JSON.stringify(Object.fromEntries(configs.value.map(config => [config.key, config.value])), null, 2)
-}
-
-async function selectPlugin(plugin: PluginRecord) {
+function selectPlugin(plugin: PluginRecord) {
   selectedPluginId.value = plugin.pluginId
-  await loadSelectedPluginConfig()
 }
 
 async function uploadPlugin() {
@@ -240,6 +220,7 @@ async function togglePlugin(plugin: PluginRecord) {
       await api.plugins.enable(plugin.pluginId)
       toast.success('插件已启用')
     }
+    window.dispatchEvent(new Event('payincus:admin-plugin-nav-refresh'))
     await refreshAll()
   } catch (err: any) {
     toast.error('插件状态更新失败：' + (err?.message || String(err)))
@@ -253,48 +234,11 @@ async function uninstallSelectedPlugin() {
     await api.plugins.uninstall(selectedPlugin.value.pluginId)
     toast.success('插件已卸载')
     selectedPluginId.value = null
+    window.dispatchEvent(new Event('payincus:admin-plugin-nav-refresh'))
     await refreshAll()
   } catch (err: any) {
     toast.error('卸载失败：' + (err?.message || String(err)))
   }
-}
-
-async function saveConfig() {
-  if (!selectedPlugin.value) return
-  try {
-    const parsed = JSON.parse(configDraft.value || '{}') as Record<string, unknown>
-    const updates = Object.entries(parsed).map(([key, value]) => ({ key, value, isSecret: /token|secret|password|key/i.test(key) }))
-    await api.plugins.updateConfig(selectedPlugin.value.pluginId, updates)
-    toast.success('插件配置已保存')
-    await loadSelectedPluginConfig()
-  } catch (err: any) {
-    toast.error('保存配置失败：' + (err?.message || String(err)))
-  }
-}
-
-async function applyDefaultConfigTemplate() {
-  if (!selectedPluginTemplates.value.length) return
-  const defaults: Record<string, unknown> = {}
-  const schema = selectedPlugin.value?.latestVersion?.manifest.configSchema || {}
-  for (const key of Object.keys(schema)) {
-    if (key === 'enabled') defaults[key] = false
-    else if (key === 'mode') defaults[key] = 'draft'
-    else if (key === 'model') defaults[key] = 'gpt-4o-mini'
-    else if (key === 'apiBaseUrl') defaults[key] = ''
-    else if (key === 'apiKey') defaults[key] = ''
-    else if (key === 'temperature') defaults[key] = 0.2
-    else if (key === 'timeoutMs') defaults[key] = 20000
-    else if (key === 'autoReplyCategories') defaults[key] = ['general', 'billing']
-    else if (key === 'confidenceThreshold') defaults[key] = 0.82
-    else if (key === 'dailyAutoReplyLimit') defaults[key] = 100
-    else if (key === 'ticketAutoReplyLimit') defaults[key] = 3
-    else if (key === 'cooldownSeconds') defaults[key] = 120
-    else if (key === 'showAiIdentity') defaults[key] = true
-    else if (key === 'systemPrompt') defaults[key] = ''
-    else defaults[key] = null
-  }
-  configDraft.value = JSON.stringify(defaults, null, 2)
-  toast.success('已套用默认配置模板，请按实际模型信息修改后保存')
 }
 
 async function selectTask(task: PluginTask) {
@@ -475,6 +419,13 @@ onMounted(async () => {
                   </td>
                   <td class="py-3 pr-4">
                     <button class="btn-secondary mr-2" @click="togglePlugin(plugin)">{{ plugin.enabled ? '禁用' : '启用' }}</button>
+                    <button
+                      v-if="plugin.enabled && hasAdminSettingsPage(plugin)"
+                      class="btn-secondary mr-2"
+                      @click="openPluginSettings(plugin)"
+                    >
+                      设置
+                    </button>
                     <button class="btn-secondary" @click="selectPlugin(plugin)">详情</button>
                   </td>
                 </tr>
@@ -521,46 +472,18 @@ onMounted(async () => {
               </div>
             </dl>
 
-            <div v-if="selectedPlugin.enabled && selectedAdminSettingsPages.length" class="mt-5 space-y-3">
-              <h3 class="text-sm font-medium text-themed">插件设置页面</h3>
-              <PluginFrame
-                v-for="page in selectedAdminSettingsPages"
-                :key="page.entry"
-                :title="page.title"
-                :url="`/api/plugins/assets/${encodeURIComponent(selectedPlugin.pluginId)}/${page.entry}`"
-              />
+            <div v-if="selectedPlugin.enabled && hasAdminSettingsPage(selectedPlugin)" class="mt-5 rounded border border-themed bg-themed p-4">
+              <h3 class="text-sm font-medium text-themed">插件设置</h3>
+              <p class="mt-2 text-sm leading-6 text-themed-muted">
+                该插件的设置入口会显示在左侧菜单中，也可以从这里打开独立设置页。
+              </p>
+              <button class="btn-primary mt-3" @click="openPluginSettings(selectedPlugin)">打开设置</button>
             </div>
             <div v-else-if="selectedPlugin.enabled" class="mt-5 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">
-              该插件未声明后台设置页面，可直接维护下方配置 JSON。
+              该插件未声明后台设置页。
             </div>
             <div v-else class="mt-5 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">
-              插件启用后会显示后台设置页面。
-            </div>
-
-            <div class="mt-5">
-              <div class="flex items-center justify-between gap-3">
-                <h3 class="text-sm font-medium text-themed">配置 JSON</h3>
-                <button
-                  v-if="selectedPluginTemplates.length"
-                  class="btn-secondary"
-                  type="button"
-                  @click="applyDefaultConfigTemplate"
-                >
-                  套用默认模板
-                </button>
-              </div>
-              <textarea v-model="configDraft" class="mt-2 h-44 w-full rounded border border-themed bg-transparent p-3 font-mono text-xs text-themed"></textarea>
-              <button class="btn-primary mt-3" @click="saveConfig">保存配置</button>
-            </div>
-
-            <div v-if="selectedPlugin.enabled && selectedOtherAdminPages.length" class="mt-5 space-y-3">
-              <h3 class="text-sm font-medium text-themed">其他后台页面</h3>
-              <PluginFrame
-                v-for="page in selectedOtherAdminPages"
-                :key="page.entry"
-                :title="page.title"
-                :url="`/api/plugins/assets/${encodeURIComponent(selectedPlugin.pluginId)}/${page.entry}`"
-              />
+              启用插件后，声明了后台设置页的插件会出现在左侧菜单。
             </div>
           </template>
         </aside>

@@ -2105,6 +2105,33 @@ export interface TicketAiReplyResponse {
   sendBlockedReasons?: string[]
 }
 
+export interface TicketAiStatusResponse {
+  pluginId: string
+  permissions: {
+    readContext: boolean
+    generateDraft: boolean
+    reply: boolean
+  }
+  config: {
+    enabled: boolean
+    mode: 'draft' | 'semi_auto' | 'auto'
+    modelConfigured: boolean
+    autoReplyCategories: string[]
+    confidenceThreshold: number
+    dailyAutoReplyLimit: number
+    ticketAutoReplyLimit: number
+    cooldownSeconds: number
+    showAiIdentity: boolean
+  }
+  automation: {
+    autoReplyActive: boolean
+    scanIntervalSeconds: number
+    scope: string
+    requiresLatestCustomerMessage: boolean
+    safeguards: string[]
+  }
+}
+
 export interface CreateTicketRequest {
   instanceId?: number | null  // 可选：不选实例时工单直接发给管理员
   subject: string

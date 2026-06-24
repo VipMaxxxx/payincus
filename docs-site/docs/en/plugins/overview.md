@@ -19,23 +19,28 @@ These directories are preserved across OTA updates and rollbacks.
 - Install from a GitHub plugin market
 - Enable, disable, and uninstall plugins
 - Inspect plugin task logs
-- Manage plugin config from `configSchema`
-- Render plugin pages in sandboxed iframes
+- Show enabled plugin settings entries in the admin sidebar
+- Manage business configuration from standalone plugin settings pages
+- Render third-party admin or user plugin pages in sandboxed iframes
 - Build plugins from built-in templates, including `plugin-templates/ai-ticket-agent-plugin` for AI ticket draft assistance
 
 ## Admin UI
 
 The plugin center is split into three internal pages:
 
-- Installed: upload plugin packages, inspect plugins, enable/disable/uninstall plugins and edit plugin configuration.
+- Installed: upload plugin packages, inspect plugins, enable/disable/uninstall plugins and open plugin settings.
 - Plugin Market: open a dedicated GitHub market index page, refresh the market and install market plugins.
 - Install Tasks: inspect upload installs, market installs, enable, disable and uninstall tasks. The task list is fixed to at most 7 rows per page, and the log panel beside it shows the selected task output.
+
+The plugin center handles installation, enablement, disablement, uninstall and task logs only. After a plugin is enabled, PayIncus adds a left-sidebar settings entry when its manifest declares an `admin.plugins.settings` admin page. Settings open through a standalone route instead of being embedded in the plugin center detail panel.
 
 ## AI Ticket Plugin Template
 
 `plugin-templates/ai-ticket-agent-plugin` is the official template for third-party AI ticket assistant plugins. It requires PayIncus `v0.3.2` or later.
 
-The official market can publish the `AI 工单助手` (`AI Ticket Assistant`) plugin package. Administrators should configure `PLUGIN_MARKET_INDEX_URL` in production, refresh the Plugin Market tab in the admin plugin center, and install it from there. After installation, enable the plugin from Installed and inspect its status in the plugin detail settings page. The config JSON can apply the default template first, then operators can fill the OpenAI-compatible model endpoint, model name, API key, takeover mode, auto categories, confidence threshold, and rate limits.
+The official market can publish the `AI 工单助手` (`AI Ticket Assistant`) plugin package. Administrators should configure `PLUGIN_MARKET_INDEX_URL` in production, refresh the Plugin Market tab in the admin plugin center, and install it from there. After installation, enable the plugin from Installed; the admin sidebar will then show the `AI 工单助手` settings entry.
+
+`AI 工单助手` uses a standalone Chinese settings form instead of raw JSON editing. Operators can configure enablement, takeover mode, OpenAI-compatible model endpoint, model name, API key, temperature, timeout, auto-reply categories, confidence threshold, daily limit, per-ticket limit, cooldown, AI identity disclosure and custom system prompt. The API key is encrypted after saving and is never rendered back to the page; leaving it empty keeps the existing key.
 
 After the plugin is enabled, the admin ticket detail view can generate an AI reply draft. The draft is only inserted into the reply box; an administrator must review and send it manually.
 

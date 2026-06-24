@@ -6,14 +6,16 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `f009c7e`
+- Current HEAD / 当前 HEAD: `62f4aef`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Localize AI plugin settings UI / 中文化 AI 插件设置界面
+- Commit subject / 提交说明: Update version log for v0.3.9 / 更新 v0.3.9 版本日志
 - Latest tag / 最新 tag: `v0.3.9`
 
 ## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.3.9 / 更新 v0.3.9 版本日志 `62f4aef`
 
 ## Historical Versions / 历史版本
 

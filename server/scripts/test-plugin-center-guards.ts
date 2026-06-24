@@ -19,6 +19,8 @@ const adminNav = read('client/src/config/side-nav-items-admin.ts')
 const adminApi = read('client/src/api/admin.ts')
 const userApi = read('client/src/api/index.ts')
 const pluginCenterView = read('client/src/views/admin/PluginCenterView.vue')
+const pluginSettingsView = read('client/src/views/admin/PluginSettingsView.vue')
+const sideNav = read('client/src/components/layout/SideNav.vue')
 const aiTicketManifest = read('plugin-templates/ai-ticket-agent-plugin/payincus.plugin.json')
 
 assert.ok(
@@ -72,6 +74,7 @@ assert.ok(
 
 assert.ok(
   adminRouter.includes("path: '/admin/plugins'") &&
+    adminRouter.includes("path: '/admin/plugins/:pluginId/settings'") &&
     adminNav.includes("path: '/admin/plugins'") &&
     adminApi.includes('/admin/plugins/upload') &&
     adminApi.includes('/admin/plugins/market/install') &&
@@ -80,14 +83,38 @@ assert.ok(
 )
 
 assert.ok(
-  pluginCenterView.indexOf('插件设置页面') > 0 &&
-    pluginCenterView.indexOf('插件设置页面') < pluginCenterView.indexOf('配置 JSON') &&
-    pluginCenterView.includes('selectedAdminSettingsPages') &&
-    pluginCenterView.includes('套用默认模板') &&
+  pluginCenterView.includes('openPluginSettings') &&
+    pluginCenterView.includes('打开设置') &&
+    pluginCenterView.includes('插件设置会作为独立页面显示在左侧菜单') &&
+    !pluginCenterView.includes('配置 JSON') &&
+    !pluginCenterView.includes('套用默认模板') &&
+    !pluginCenterView.includes('<PluginFrame') &&
     pluginCenterView.includes('AI 工单助手') &&
     pluginCenterView.includes('读取脱敏工单上下文') &&
     !pluginCenterView.includes('{{ permission }})'),
-  'plugin detail must show settings pages before raw JSON config, expose a default-template shortcut, and localize known plugin metadata'
+  'plugin center must link to standalone settings pages, avoid embedded frames/raw JSON config, and localize known plugin metadata'
+)
+
+assert.ok(
+  pluginSettingsView.includes('AI 工单助手') &&
+    pluginSettingsView.includes('OpenAI 兼容接口地址') &&
+    pluginSettingsView.includes('模型 API Key') &&
+    pluginSettingsView.includes('留空则保持不变') &&
+    pluginSettingsView.includes('自动回复策略') &&
+    pluginSettingsView.includes('api.plugins.updateConfig') &&
+    pluginSettingsView.includes("key: 'apiKey'") &&
+    !pluginSettingsView.includes('配置 JSON') &&
+    !pluginSettingsView.includes('套用默认模板'),
+  'standalone plugin settings page must provide a Chinese business form and must not expose JSON/template editing'
+)
+
+assert.ok(
+  sideNav.includes('loadAdminPluginMenuItems') &&
+    sideNav.includes("page.slot === 'admin.plugins.settings'") &&
+    sideNav.includes("path: `/admin/plugins/${encodeURIComponent(plugin.pluginId)}/settings`") &&
+    sideNav.includes('payincus:admin-plugin-nav-refresh') &&
+    sideNav.includes('labelText'),
+  'admin side nav must load enabled plugin settings entries dynamically'
 )
 
 assert.ok(

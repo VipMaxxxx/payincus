@@ -180,6 +180,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.plugins', title: '插件中心' }
   },
   {
+    path: '/admin/plugins/:pluginId/settings',
+    name: 'admin-plugin-settings',
+    component: () => import('@/views/admin/PluginSettingsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '插件设置' }
+  },
+  {
     path: '/admin/delivery',
     name: 'admin-delivery',
     component: () => import('@/views/admin/DeliveryCenterView.vue'),

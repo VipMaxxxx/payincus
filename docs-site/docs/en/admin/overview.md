@@ -154,7 +154,7 @@ The operations overview is returned only by the admin statistics API and is not 
 
 ## Plugin Center
 
-`/admin/plugins` splits plugin management into Installed, Plugin Market and Install Tasks pages. Administrators can upload plugin packages, install from a GitHub-hosted market index, enable or disable plugins, edit plugin configuration and inspect paginated install task logs.
+`/admin/plugins` splits plugin management into Installed, Plugin Market and Install Tasks pages. Administrators can upload plugin packages, install from a GitHub-hosted market index, enable or disable plugins, open standalone plugin settings pages from the left sidebar and inspect paginated install task logs.
 
 ## OTA
 
