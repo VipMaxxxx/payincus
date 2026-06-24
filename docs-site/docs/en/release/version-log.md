@@ -6,16 +6,40 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `a28cf91`
+- Current HEAD / 当前 HEAD: `8b5ad55`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Harden plugin assets and benefits localization / 加固插件资产并修复福利本地化
-- Latest tag / 最新 tag: `v0.3.5`
+- Commit subject / 提交说明: Add risk audit logging center / 新增风控审计日志中心
+- Latest tag / 最新 tag: `v0.3.6`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.3.6
+
+- Release commit / 发布提交: `8b5ad55`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Add risk audit logging center / 新增风控审计日志中心
+
+### 新增能力 / New Capabilities
+
+- 后台日志页新增风险审计概览，显示风险动作数量、本页高风险、需要审批和需要验证码的记录数。 / Added an audit summary to the admin logs page with risk catalog count, high-risk records, approval-required records, and verification-required records.
+
+- 日志列表新增风险等级与风险说明，覆盖低、中、高、严重四级。 / Added risk level and risk title display to log rows with low, medium, high, and critical levels.
+
+- 新增高风险操作目录，覆盖系统更新、支付通道、余额调账、批量删除实例、节点、套餐、管理员权限和插件安装等动作。 / Added a high-risk operation catalog covering system updates, payment providers, balance adjustments, batch instance deletion, hosts, packages, admin role changes, and plugin installation.
+
+- 新增管理员审计 CSV 导出，单次最多 1000 条，并记录 audit.export 操作日志。 / Added admin-only audit CSV export capped at 1000 rows and recorded as an audit.export operation log.
+
+### 改进与调整 / Improvements and Adjustments
+
+- 日志接口返回前脱敏用户名、邮箱、IP、token 和 JWT 类内容。 / Redacted usernames, emails, IP addresses, tokens, and JWT-like values before returning log data.
+
+- 根目录全量测试纳入 risk-audit 守卫。 / Included the risk-audit guard in the root full test command.
+
+- 更新中英文后台文档和商业运营目标进度。 / Updated Chinese and English admin docs plus commercial operation progress notes.
 
 ## v0.3.5
 
