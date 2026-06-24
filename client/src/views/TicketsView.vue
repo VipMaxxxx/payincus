@@ -14,6 +14,7 @@ import TicketImageLightbox from '@/components/tickets/TicketImageLightbox.vue'
 import TicketImageUploader from '@/components/tickets/TicketImageUploader.vue'
 import TicketInstanceOwnerCard from '@/components/tickets/TicketInstanceOwnerCard.vue'
 import { ticketsPath } from '@/utils/app-paths'
+import { buildApiUrl } from '@/utils/api-url'
 import type {
   Ticket,
   TicketMessage,
@@ -23,6 +24,8 @@ import type {
   TicketCategory,
   TicketObjectLinkType,
   TicketSupportContext,
+  TicketAiDraftResponse,
+  TicketAiReplyResponse,
   InstanceWithDetails
 } from '@/types/api'
 
@@ -231,6 +234,50 @@ onBeforeUnmount(() => {
 // 管理员或拥有节点的用户可以查看收到的工单
 const isHostOwner = computed(() => authStore.isAdmin || pendingCount.value.isHostOwner)
 
+type TicketAiAction = 'draft' | 'reply'
+type TicketAiApiFallback = {
+  tickets?: {
+    generateAiDraft?: (id: number) => Promise<TicketAiDraftResponse>
+    sendAiReply?: (id: number) => Promise<TicketAiReplyResponse>
+  }
+}
+
+async function postTicketAiAction<T>(ticketId: number, action: TicketAiAction): Promise<T> {
+  const response = await fetch(buildApiUrl(`/tickets/${ticketId}/ai/${action}`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {})
+    },
+    body: '{}'
+  })
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const error = new Error(payload?.error || payload?.message || response.statusText) as Error & { code?: string }
+    error.code = payload?.code
+    throw error
+  }
+
+  return payload as T
+}
+
+async function requestAiDraft(ticketId: number): Promise<TicketAiDraftResponse> {
+  const ticketsApi = api as TicketAiApiFallback
+  if (typeof ticketsApi.tickets?.generateAiDraft === 'function') {
+    return ticketsApi.tickets.generateAiDraft(ticketId)
+  }
+  return postTicketAiAction<TicketAiDraftResponse>(ticketId, 'draft')
+}
+
+async function requestAiReply(ticketId: number): Promise<TicketAiReplyResponse> {
+  const ticketsApi = api as TicketAiApiFallback
+  if (typeof ticketsApi.tickets?.sendAiReply === 'function') {
+    return ticketsApi.tickets.sendAiReply(ticketId)
+  }
+  return postTicketAiAction<TicketAiReplyResponse>(ticketId, 'reply')
+}
+
 const hostEmptyState = computed(() => {
   if (activeTab.value !== 'host') {
     return {
@@ -398,7 +445,7 @@ async function generateAiDraft(): Promise<void> {
   if (!authStore.isAdmin || !selectedTicket.value) return
   aiDraftLoading.value = true
   try {
-    const result = await api.tickets.generateAiDraft(selectedTicket.value.id)
+    const result = await requestAiDraft(selectedTicket.value.id)
     replyContent.value = result.draft
     toast.success(t('tickets.support.aiDraftReady'))
     await nextTick()
@@ -428,7 +475,7 @@ async function sendAiReply(): Promise<void> {
 
   aiReplyLoading.value = true
   try {
-    const result = await api.tickets.sendAiReply(selectedTicket.value.id)
+    const result = await requestAiReply(selectedTicket.value.id)
     messages.value.push(result.data)
     messagesTotal.value++
     await ensureMessageAttachmentUrls([result.data])
