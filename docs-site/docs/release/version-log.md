@@ -6,16 +6,34 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `1e7a738`
+- 当前 HEAD / Current HEAD: `65dbc9d`
 - 提交日期 / Commit date: 2026-06-24
-- 提交说明 / Commit subject: Add delivery assurance center / 新增交付保障中心
-- 最新 tag / Latest tag: `v0.1.7`
+- 提交说明 / Commit subject: Fix delivery nav icon / 修复交付保障导航图标
+- 最新 tag / Latest tag: `v0.1.8`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.1.8
+
+- 发布提交 / Release commit: `65dbc9d`
+- 提交日期 / Commit date: 2026-06-24
+- 提交说明 / Commit subject: Fix delivery nav icon / 修复交付保障导航图标
+
+### 修复与稳定性 / Fixes and stability
+
+- 修复后台交付保障菜单没有侧边栏小图标的问题。
+
+- Fixed the missing sidebar icon for the admin Delivery Assurance menu item.
+
+### 改进与调整 / Improvements and adjustments
+
+- 扩展交付保障守卫，确保菜单使用的 pulse 图标已被侧边栏组件支持。
+
+- Extended the Delivery Assurance guard to ensure the pulse menu icon is supported by the sidebar component.
 
 ## v0.1.7
 

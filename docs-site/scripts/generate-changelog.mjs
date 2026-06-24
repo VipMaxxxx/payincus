@@ -119,7 +119,7 @@ function tagBodyLines(tag) {
       if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
       continue
     }
-    if (!line.startsWith('- ') && /\/ (New capabilities|Other changes|Improvements and adjustments|新增能力|其他变更|改进与调整)/i.test(line)) {
+    if (!line.startsWith('- ') && /\/ (Fixes and stability|New capabilities|Other changes|Improvements and adjustments|修复与稳定性|新增能力|其他变更|改进与调整)/i.test(line)) {
       lines.push(`### ${line}`)
       lines.push('')
     } else {
