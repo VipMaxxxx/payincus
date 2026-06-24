@@ -26,7 +26,7 @@ https://admin.example.com
 | Delivery Assurance | `/admin/delivery` | Instance delivery task status, failed delivery details and notification delivery state for post-payment troubleshooting. |
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
-| Statistics | `/admin/statistics` | Operational, resource and billing metrics. |
+| Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
 | Logs | `/admin/logs` | Audit logs and system operation records. In the Chinese UI, modules, actions, results and common log content are localized to Chinese. |
 
 ## Billing and Commercial Features
@@ -36,6 +36,21 @@ https://admin.example.com
 - Payment providers: `/admin/billing?tab=paymentProviders`.
 - Affiliate review: `/admin/billing?tab=affConversions`.
 - Entertainment management: `/admin/entertainment`.
+
+## Operations Overview
+
+The top of `/admin/statistics` now gives administrators a commercial operations view before the user, instance and billing trend tabs:
+
+- Revenue: today, yesterday, last 7 days and last 30 days completed recharge revenue.
+- Orders: today total, successful, failed, pending and payment orders needing review.
+- Users: today new users, today active users and historical paid users.
+- Instances: today new instances, currently running, abnormal and expiring within 7 days.
+- Delivery: pending delivery tasks and delivery failures in the last 24 hours.
+- Infrastructure: online hosts, online Agents, and stale or offline Agents.
+- Support and notifications: open tickets, unread inbox messages and notification delivery failures in the last 24 hours.
+- Risk alerts: missing active payment provider, SMTP disabled, missing notification channel, offline host or Agent, failed delivery, payment exception, OTA failure and OTA disk-space error.
+
+The operations overview is returned only by the admin statistics API and is not exposed through the user API.
 
 ## System Settings
 

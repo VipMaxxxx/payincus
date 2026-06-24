@@ -25,6 +25,10 @@ interface SummaryCard {
   tone: Tone
 }
 
+interface OperationCard extends SummaryCard {
+  detail?: string
+}
+
 const toast = useToast()
 const { t, locale } = useI18n()
 const loading = ref(true)
@@ -209,6 +213,98 @@ const billingCards = computed<SummaryCard[]>(() => [
   }
 ])
 
+const operationCards = computed<OperationCard[]>(() => [
+  {
+    label: t('admin.statistics.operations.cards.todayRevenue'),
+    value: stats.value?.operations.revenue.today || 0,
+    type: 'money',
+    caption: t('admin.statistics.operations.captions.yesterday', {
+      value: formatCompactValue(stats.value?.operations.revenue.yesterday || 0, 'money')
+    }),
+    detail: t('admin.statistics.operations.captions.last30Days', {
+      value: formatCompactValue(stats.value?.operations.revenue.last30Days || 0, 'money')
+    }),
+    tone: 'blue'
+  },
+  {
+    label: t('admin.statistics.operations.cards.last7DaysRevenue'),
+    value: stats.value?.operations.revenue.last7Days || 0,
+    type: 'money',
+    caption: t('admin.statistics.operations.captions.completedRevenue'),
+    tone: 'emerald'
+  },
+  {
+    label: t('admin.statistics.operations.cards.todayOrders'),
+    value: stats.value?.operations.orders.todayTotal || 0,
+    type: 'number',
+    caption: t('admin.statistics.operations.captions.orderBreakdown', {
+      success: stats.value?.operations.orders.todaySuccess || 0,
+      failed: stats.value?.operations.orders.todayFailed || 0,
+      pending: stats.value?.operations.orders.todayPending || 0
+    }),
+    tone: 'amber'
+  },
+  {
+    label: t('admin.statistics.operations.cards.runningInstances'),
+    value: stats.value?.operations.instances.running || 0,
+    type: 'number',
+    caption: t('admin.statistics.operations.captions.instanceBreakdown', {
+      abnormal: stats.value?.operations.instances.abnormal || 0,
+      expiring: stats.value?.operations.instances.expiringSoon || 0
+    }),
+    tone: (stats.value?.operations.instances.abnormal || 0) > 0 ? 'rose' : 'emerald'
+  },
+  {
+    label: t('admin.statistics.operations.cards.onlineHosts'),
+    value: stats.value?.operations.infrastructure.hostsOnline || 0,
+    type: 'number',
+    caption: t('admin.statistics.operations.captions.hostBreakdown', {
+      total: stats.value?.operations.infrastructure.hostsTotal || 0,
+      agents: stats.value?.operations.infrastructure.agentsOnline || 0
+    }),
+    tone: (stats.value?.operations.infrastructure.agentsStale || 0) > 0 ? 'rose' : 'blue'
+  },
+  {
+    label: t('admin.statistics.operations.cards.openTickets'),
+    value: stats.value?.operations.support.openTickets || 0,
+    type: 'number',
+    caption: t('admin.statistics.operations.captions.supportBreakdown', {
+      unread: stats.value?.operations.support.unreadInboxMessages || 0,
+      failed: (stats.value?.operations.support.failedNotifications24h || 0) + (stats.value?.operations.support.failedEmails24h || 0)
+    }),
+    tone: (stats.value?.operations.support.openTickets || 0) > 0 ? 'amber' : 'emerald'
+  }
+])
+
+const operationFacts = computed(() => [
+  {
+    label: t('admin.statistics.operations.facts.newUsers'),
+    value: formatValue(stats.value?.operations.users.newToday || 0, 'number')
+  },
+  {
+    label: t('admin.statistics.operations.facts.activeUsers'),
+    value: formatValue(stats.value?.operations.users.activeToday || 0, 'number')
+  },
+  {
+    label: t('admin.statistics.operations.facts.paidUsers'),
+    value: formatValue(stats.value?.operations.users.paidTotal || 0, 'number')
+  },
+  {
+    label: t('admin.statistics.operations.facts.newInstances'),
+    value: formatValue(stats.value?.operations.instances.newToday || 0, 'number')
+  },
+  {
+    label: t('admin.statistics.operations.facts.pendingDelivery'),
+    value: formatValue(stats.value?.operations.delivery.pendingTasks || 0, 'number')
+  },
+  {
+    label: t('admin.statistics.operations.facts.failedDelivery'),
+    value: formatValue(stats.value?.operations.delivery.failedTasks24h || 0, 'number')
+  }
+])
+
+const operationRisks = computed(() => stats.value?.operations.risks || [])
+
 const paidFreeTotal = computed(() =>
   (stats.value?.instances.paid || 0) + (stats.value?.instances.free || 0)
 )
@@ -305,6 +401,12 @@ function barToneClass(tone: Tone): string {
       return 'chart-bar-blue'
   }
 }
+
+function riskToneClass(severity: string): string {
+  if (severity === 'critical') return 'text-rose-600 bg-rose-500/10 border-rose-500/25'
+  if (severity === 'warning') return 'text-amber-600 bg-amber-500/10 border-amber-500/25'
+  return 'text-blue-600 bg-blue-500/10 border-blue-500/25'
+}
 </script>
 
 <template>
@@ -331,6 +433,82 @@ function barToneClass(tone: Tone): string {
     </div>
 
     <div v-else-if="stats" class="space-y-6">
+      <section class="space-y-5">
+        <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-themed">{{ t('admin.statistics.operations.title') }}</h2>
+            <p class="text-sm text-themed-muted mt-1">{{ t('admin.statistics.operations.description') }}</p>
+          </div>
+          <div class="text-xs text-themed-faint">
+            {{ t('admin.statistics.operations.agentFreshness', { minutes: 30 }) }}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div v-for="card in operationCards" :key="card.label" class="card p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-sm text-themed-muted">{{ card.label }}</p>
+                <p class="mt-2 text-2xl font-semibold text-themed">{{ formatCompactValue(card.value, card.type) }}</p>
+                <p class="mt-1 text-xs text-themed-faint">{{ card.caption }}</p>
+                <p v-if="card.detail" class="mt-1 text-xs text-themed-faint">{{ card.detail }}</p>
+              </div>
+              <div :class="['w-10 h-10 rounded-lg border flex items-center justify-center shrink-0', cardToneClass(card.tone)]">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 19V5m4 14v-7m4 7V8m4 11v-4m4 4H3" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-5">
+          <div class="card p-5">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h3 class="text-base font-semibold text-themed">{{ t('admin.statistics.operations.riskTitle') }}</h3>
+                <p class="text-sm text-themed-muted mt-1">{{ t('admin.statistics.operations.riskDescription') }}</p>
+              </div>
+              <span :class="['px-2.5 py-1 rounded-full text-xs border', operationRisks.length ? 'text-amber-600 bg-amber-500/10 border-amber-500/25' : 'text-emerald-600 bg-emerald-500/10 border-emerald-500/25']">
+                {{ operationRisks.length ? t('admin.statistics.operations.riskCount', { count: operationRisks.length }) : t('admin.statistics.operations.noRisk') }}
+              </span>
+            </div>
+
+            <div v-if="operationRisks.length" class="mt-5 space-y-3">
+              <div
+                v-for="risk in operationRisks"
+                :key="risk.key"
+                :class="['border rounded-lg p-3', riskToneClass(risk.severity)]"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-medium">{{ t(`admin.statistics.operations.risks.${risk.key}.title`, { count: risk.count }) }}</p>
+                    <p class="text-xs mt-1 opacity-80">{{ t(`admin.statistics.operations.risks.${risk.key}.description`, { count: risk.count }) }}</p>
+                  </div>
+                  <span class="text-xs font-medium uppercase">{{ t(`admin.statistics.operations.severity.${risk.severity}`) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="mt-5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-5">
+              <p class="text-sm font-medium text-emerald-600">{{ t('admin.statistics.operations.healthyTitle') }}</p>
+              <p class="text-xs text-themed-muted mt-1">{{ t('admin.statistics.operations.healthyDescription') }}</p>
+            </div>
+          </div>
+
+          <div class="card p-5">
+            <h3 class="text-base font-semibold text-themed">{{ t('admin.statistics.operations.todayTitle') }}</h3>
+            <p class="text-sm text-themed-muted mt-1">{{ t('admin.statistics.operations.todayDescription') }}</p>
+            <div class="mt-5 divide-y divide-themed">
+              <div v-for="fact in operationFacts" :key="fact.label" class="flex items-center justify-between gap-4 py-3">
+                <span class="text-sm text-themed-muted">{{ fact.label }}</span>
+                <span class="text-sm font-semibold text-themed">{{ fact.value }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div class="inline-flex rounded-lg border border-themed p-1 bg-themed-tertiary">
         <button
           v-for="tab in tabItems"
