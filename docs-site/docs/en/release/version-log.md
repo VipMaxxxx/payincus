@@ -6,16 +6,34 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `65dbc9d`
+- Current HEAD / 当前 HEAD: `8f2d2f3`
 - Commit date / 提交日期: 2026-06-24
-- Commit subject / 提交说明: Fix delivery nav icon / 修复交付保障导航图标
-- Latest tag / 最新 tag: `v0.1.8`
+- Commit subject / 提交说明: Ensure installer enables pnpm / 确保安装脚本启用 pnpm
+- Latest tag / 最新 tag: `v0.1.9`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.1.9
+
+- Release commit / 发布提交: `8f2d2f3`
+- Commit date / 提交日期: 2026-06-24
+- Commit subject / 提交说明: Ensure installer enables pnpm / 确保安装脚本启用 pnpm
+
+### 修复与稳定性 / Fixes and stability
+
+- Ensure the one-click production installer enables pnpm before Prisma migrations and systemd startup.
+- 确保一键生产安装脚本在 Prisma 迁移和 systemd 启动前启用 pnpm。
+
+### 改进与调整 / Improvements and adjustments
+
+- Pin pnpm 9.14.2 in the installer and keep a Corepack-first, npm-fallback bootstrap path.
+- 在安装脚本中固定 pnpm 9.14.2，并保留 Corepack 优先、npm 兜底的初始化路径。
+- Extend split deployment guards to prevent clean-server installer regressions.
+- 扩展前后台分离部署守卫，防止干净服务器安装路径回退。
 
 ## v0.1.8
 
