@@ -35,10 +35,10 @@ const proofItems: ProofItem[] = [
   {
     key: 'incus',
     title: 'Incus 完整生命周期',
-    status: 'pending',
+    status: 'verified',
     risk: 'high',
-    evidence: '仍缺 start、restart、recreate/delete、清理和资源释放 proof。',
-    safeNote: '必须使用测试实例，完成后删除资源并记录清理结果。'
+    evidence: '专用生产测试实例已完成 stop、start、restart、recreate、delete、清理和资源释放 proof。',
+    safeNote: '只记录测试实例、任务/日志编号和清理结果；不触碰客户实例。'
   },
   {
     key: 'terminal',
@@ -59,33 +59,33 @@ const proofItems: ProofItem[] = [
   {
     key: 'smtp',
     title: 'SMTP 真实投递',
-    status: 'pending',
+    status: 'partial',
     risk: 'medium',
-    evidence: '当前只有配置存在 proof，缺真实收件箱投递 proof。',
+    evidence: '生产 SMTP 测试邮件已被 provider 接受，仍缺收件箱回执或 provider message/log 引用。',
     safeNote: '记录测试收件引用、发送时间和成功状态，不记录 SMTP 密码。'
   },
   {
     key: 'lsky',
     title: 'Lsky 图片上传',
-    status: 'pending',
+    status: 'partial',
     risk: 'medium',
-    evidence: '当前只有配置存在 proof，缺工单图片真实上传 proof。',
-    safeNote: '使用安全测试图片，只记录脱敏文件引用和代理访问结果。'
+    evidence: '生产上传和 providerFileId 保留已证明；当前 token 访问 user-gallery API 返回 403，删除/清理未证明。',
+    safeNote: '再次测试前先确认 delete-capable token 或 provider 侧清理路径。'
   },
   {
     key: 'notification',
     title: 'Telegram / 站内通知投递',
-    status: 'pending',
+    status: 'verified',
     risk: 'medium',
-    evidence: '通知渠道和投递日志仍需真实发送 proof。',
+    evidence: 'Telegram 生产机器人已向公开群组 @Payincus 投递 proof 消息并返回 message_id。',
     safeNote: '记录渠道名称或脱敏 ID、发送时间、后台状态和外部回执。'
   },
   {
     key: 'turnstile',
     title: 'Turnstile 与登录会话',
-    status: 'operator',
+    status: 'verified',
     risk: 'high',
-    evidence: '缺真实浏览器手动登录和刷新会话 proof。',
+    evidence: '已完成经授权的临时 disable-and-restore 登录 smoke；用户和管理员页面均通过会话渲染，配置已恢复。',
     safeNote: '不记录密码、Turnstile token、session cookie 或 JWT。'
   },
   {
@@ -106,9 +106,9 @@ const proofItems: ProofItem[] = [
   }
 ]
 
-const completedProofItems = 8
+const completedProofItems = 12
 const totalProofItems = 13
-const remainingProofItems = totalProofItems - completedProofItems
+const remainingProofItems = 2
 
 const commands: CommandItem[] = [
   {
@@ -235,12 +235,12 @@ async function copyCommand(key: string, command: string): Promise<void> {
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">待补真实证据</div>
         <div class="mt-2 text-3xl font-semibold text-themed">{{ remainingProofItems }}</div>
-        <div class="mt-2 text-xs text-themed-muted">SMTP、Lsky、通知和资源动作仍需执行</div>
+        <div class="mt-2 text-xs text-themed-muted">SMTP 收件回执和 Lsky 删除清理仍需补齐</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">高风险操作窗口</div>
         <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.operator }}</div>
-        <div class="mt-2 text-xs text-themed-muted">Turnstile 和回滚需单独确认</div>
+        <div class="mt-2 text-xs text-themed-muted">回滚仍需维护窗口单独确认</div>
       </div>
     </section>
 
@@ -256,7 +256,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">2. 真实投递 proof</div>
-          <p class="mt-2 text-sm text-themed-muted">用测试邮箱、测试图片、测试通知渠道完成 SMTP、Lsky、站内通知和 Telegram proof。</p>
+          <p class="mt-2 text-sm text-themed-muted">补齐 SMTP 收件回执或 provider 日志，并在具备删除权限后完成 Lsky 清理 proof。</p>
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">3. 高风险业务 proof</div>

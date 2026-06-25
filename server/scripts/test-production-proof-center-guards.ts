@@ -58,14 +58,16 @@ assert.ok(
     view.includes('不会执行支付、资源删除、Turnstile 变更或 OTA 回滚') &&
     view.includes('备份恢复演练') &&
     view.includes('不能覆盖生产数据') &&
-    view.includes('const completedProofItems = 8') &&
+    view.includes('const completedProofItems = 12') &&
     view.includes('const totalProofItems = 13') &&
+    view.includes('const remainingProofItems = 2') &&
     view.includes('completedProofItems / totalProofItems') &&
     view.includes('项真实 proof 已有证据') &&
+    view.includes('SMTP 收件回执和 Lsky 删除清理仍需补齐') &&
     view.includes('ENV_FILE=/opt/incudal/.env PROOF_SINCE_HOURS=24 pnpm verify:production-proof-snapshot') &&
     view.includes('REQUIRE_LIVE_PROOF_REFS=1 pnpm verify:live-acceptance') &&
     view.includes('禁止写入审计记录的内容'),
-  'production proof workspace must explain read-only behavior, backup/restore boundaries, 8/13 proof progress, proof commands, final refs, and redaction rules'
+  'production proof workspace must explain read-only behavior, backup/restore boundaries, current proof progress, proof commands, final refs, and redaction rules'
 )
 
 const forbiddenExecutionMarkers = [
