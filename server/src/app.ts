@@ -92,6 +92,7 @@ import adminPluginRoutes from './routes/admin-plugins.js'
 import pluginRoutes from './routes/plugins.js'
 import orderRoutes from './routes/orders.js'
 import userLifecycleRoutes from './routes/user-lifecycle.js'
+import giftCardsRoutes from './routes/gift-cards.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -507,6 +508,7 @@ await fastify.register(adminPluginRoutes, { prefix: '/api/admin/plugins' })
 await fastify.register(pluginRoutes, { prefix: '/api/plugins' })
 await fastify.register(orderRoutes)
 await fastify.register(userLifecycleRoutes)
+await fastify.register(giftCardsRoutes, { prefix: '/api/gift-cards' })
 
 const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
 
