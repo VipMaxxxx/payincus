@@ -6,16 +6,24 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `4f5b3f0`
+- 当前 HEAD / Current HEAD: `2e99abc`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Add Lsky delete diagnostics
-- 最新 tag / Latest tag: `v0.5.2`
+- 提交说明 / Commit subject: Add production DB restore drill proof
+- 最新 tag / Latest tag: `v0.5.3`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.5.3
+
+- 发布提交 / Release commit: `2e99abc`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Add production DB restore drill proof
+
+Add a repeatable production database restore drill script and update the production proof workspace to 8/13 after the temporary restore proof.
 
 ## v0.5.2
 
