@@ -6,16 +6,28 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `54aa45a`
+- Current HEAD / 当前 HEAD: `5eff38f`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Harden Lsky commit proof permissions / 加固 Lsky 提交证明权限检查
-- Latest tag / 最新 tag: `v0.6.3`
+- Commit subject / 提交说明: Update production proof workspace status / 更新生产验收工作台状态
+- Latest tag / 最新 tag: `v0.6.4`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.4
+
+- Release commit / 发布提交: `5eff38f`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Update production proof workspace status / 更新生产验收工作台状态
+
+### Improvements and Adjustments / 改进与调整
+
+- Update production proof workspace status / 更新生产验收工作台状态 `5eff38f`
+- Update handoff after v0.6.3 production OTA / 更新 v0.6.3 生产 OTA 交接 `d253b4a`
+- Update version log for v0.6.3 / 更新 v0.6.3 版本日志 `91d9c9d`
 
 ## v0.6.3
 

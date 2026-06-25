@@ -27,9 +27,9 @@ const proofItems: ProofItem[] = [
   {
     key: 'payment',
     title: '真实支付下单与回调',
-    status: 'partial',
+    status: 'verified',
     risk: 'high',
-    evidence: '已有低额支付与回调历史 proof；新增或变更支付渠道后必须复核。',
+    evidence: '生产账本已有真实充值、provider 交易号、回调时间和处理记录 proof；新增或变更支付渠道后必须复核。',
     safeNote: '只记录订单状态、金额匹配、回调处理结果和脱敏引用。'
   },
   {
@@ -43,17 +43,17 @@ const proofItems: ProofItem[] = [
   {
     key: 'terminal',
     title: 'Web terminal /api/ws',
-    status: 'partial',
+    status: 'verified',
     risk: 'medium',
-    evidence: '已有历史连接/断开 proof；最新生产窗口需跟随测试实例复核。',
+    evidence: '生产审计已记录 WebSocket terminal connect/disconnect proof，公开 invalid-ticket verifier 也通过。',
     safeNote: '只记录连接成功和会话引用，不记录终端敏感输出。'
   },
   {
     key: 'agent',
     title: '生产 Agent 心跳与上报',
-    status: 'partial',
+    status: 'verified',
     risk: 'medium',
-    evidence: '已有 Agent 在线、资源、实例和流量上报 proof；新增宿主机需复核。',
+    evidence: '生产审计已记录 Agent 在线、资源、实例和流量上报 proof；新增宿主机需复核。',
     safeNote: '不记录 Agent secret、安装 Token、宿主机 URL 或证书路径。'
   },
   {
@@ -67,10 +67,10 @@ const proofItems: ProofItem[] = [
   {
     key: 'lsky',
     title: 'Lsky 图片上传',
-    status: 'partial',
+    status: 'pending',
     risk: 'medium',
-    evidence: '生产上传和 providerFileId 保留已证明；当前 token 访问 user-gallery API 返回 403，删除/清理未证明。',
-    safeNote: '再次测试前先确认 delete-capable token 或 provider 侧清理路径。'
+    evidence: '上传和 providerFileId 保留已证明；最新 preflight 显示 token 仅有 upload:write，缺 user:photo:read / user:photo:write，user-gallery API 返回 403，删除/清理未证明。',
+    safeNote: '先配置 delete-capable token 或完成 provider 侧清理；v0.6.3 会在缺权限时拒绝 commit-mode 上传。'
   },
   {
     key: 'notification',
@@ -128,10 +128,20 @@ const commands: CommandItem[] = [
     ].join('\n')
   },
   {
+    title: 'Lsky 只读预检',
+    description: '确认 Lsky token 是否具备 user:photo:read / user:photo:write。只有通过后才能运行 commit-mode。',
+    command: [
+      'cd /opt/incudal/current',
+      'ENV_FILE=/opt/incudal/.env NODE_ENV=production node server/dist/scripts/lsky-production-proof.js'
+    ].join('\n')
+  },
+  {
     title: '最终验收 report 模板',
     description: '把真实 proof refs 填成脱敏工单、日志或截图编号。占位符不能用于最终通过。',
     command: [
       'cd /opt/incudal/current',
+      'FRONTEND_URL=https://pay.payincus.com \\',
+      'BACKEND_URL=http://127.0.0.1:3001 \\',
       'LIVE_ACCEPTANCE_REPORT=/tmp/incudal-proof/final-acceptance.md \\',
       'LIVE_PAYMENT_PROOF_REF="payment proof ref" \\',
       'LIVE_INCUS_PROOF_REF="incus lifecycle proof ref" \\',
@@ -256,11 +266,11 @@ async function copyCommand(key: string, command: string): Promise<void> {
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">2. 真实投递 proof</div>
-          <p class="mt-2 text-sm text-themed-muted">SMTP 投递证据已记录；具备删除权限后完成 Lsky 清理 proof。</p>
+          <p class="mt-2 text-sm text-themed-muted">SMTP 与 Telegram 已证明；具备删除权限后完成 Lsky 清理 proof。</p>
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">3. 高风险业务 proof</div>
-          <p class="mt-2 text-sm text-themed-muted">使用测试订单和测试实例，完成支付、Incus 生命周期、终端和回滚复核。</p>
+          <p class="mt-2 text-sm text-themed-muted">支付、Incus 生命周期和终端已有测试证据；回滚复核只在维护窗口执行。</p>
         </div>
       </div>
     </section>
@@ -298,7 +308,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
       </div>
     </section>
 
-    <section class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <section class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4">
       <div v-for="command in commands" :key="command.title" class="rounded-lg border border-themed bg-themed-surface">
         <div class="border-b border-themed px-5 py-4">
           <div class="flex items-start justify-between gap-3">
