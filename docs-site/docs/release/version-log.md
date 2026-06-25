@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `bbae57c`
+- 当前 HEAD / Current HEAD: `80d353e`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Update production proof workspace status
-- 最新 tag / Latest tag: `v0.5.4`
+- 提交说明 / Commit subject: Expose SMTP provider proof metadata
+- 最新 tag / Latest tag: `v0.5.5`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.5.5
+
+- 发布提交 / Release commit: `80d353e`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Expose SMTP provider proof metadata
+
+### 其他变更 / Other Changes
+
+- Expose SMTP provider proof metadata `80d353e`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after v0.5.4 production proof `89eb644`
+- Update version log for v0.5.4 `f630dac`
 
 ## v0.5.4
 

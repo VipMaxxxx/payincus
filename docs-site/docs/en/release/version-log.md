@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `bbae57c`
+- Current HEAD / 当前 HEAD: `80d353e`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Update production proof workspace status
-- Latest tag / 最新 tag: `v0.5.4`
+- Commit subject / 提交说明: Expose SMTP provider proof metadata
+- Latest tag / 最新 tag: `v0.5.5`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.5.5
+
+- Release commit / 发布提交: `80d353e`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Expose SMTP provider proof metadata
+
+### Other Changes / 其他变更
+
+- Expose SMTP provider proof metadata `80d353e`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.5.4 production proof `89eb644`
+- Update version log for v0.5.4 `f630dac`
 
 ## v0.5.4
 
