@@ -145,8 +145,25 @@ function joinUrl(baseUrl: string, pathname: string | null): string | null {
 }
 
 function pickProviderFileId(...values: unknown[]): string | null {
-  const picked = pickString(...values)
-  return picked?.replace(/^\/+/, '') ?? null
+  for (const value of values) {
+    const picked = typeof value === 'number' && Number.isFinite(value)
+      ? String(value)
+      : asNullableString(value)
+    if (picked) {
+      return picked.replace(/^\/+/, '')
+    }
+  }
+
+  return null
+}
+
+function parseProviderNumericId(providerFileId: string): number | null {
+  if (!/^[1-9][0-9]*$/.test(providerFileId)) {
+    return null
+  }
+
+  const id = Number(providerFileId)
+  return Number.isSafeInteger(id) ? id : null
 }
 
 function extractLskyErrorMessage(payload: any, fallback: string): string {
@@ -383,15 +400,24 @@ export async function deleteTicketImageFromLsky(providerVersion: string, provide
     return false
   }
 
-  const apiBase = resolveLskyApiBase(config.baseUrl, providerVersion === 'v2' ? 'v2' : 'v1')
-  const deleteUrl = providerVersion === 'v2'
-    ? `${apiBase}/user/photos/${encodeURIComponent(providerFileId)}`
+  const apiVersion = providerVersion === 'v2' ? 'v2' : 'v1'
+  const apiBase = resolveLskyApiBase(config.baseUrl, apiVersion)
+  const numericId = apiVersion === 'v2' ? parseProviderNumericId(providerFileId) : null
+  if (apiVersion === 'v2' && numericId === null) {
+    return false
+  }
+
+  const deleteUrl = apiVersion === 'v2'
+    ? `${apiBase}/user/photos`
     : `${apiBase}/images/${encodeURIComponent(providerFileId)}`
   const response = await fetch(deleteUrl, {
     method: 'DELETE',
     redirect: 'manual',
     signal: AbortSignal.timeout(LSKY_DELETE_TIMEOUT_MS),
-    headers: buildLskyAuthHeaders(config.token)
+    headers: apiVersion === 'v2'
+      ? { ...buildLskyAuthHeaders(config.token), 'Content-Type': 'application/json' }
+      : buildLskyAuthHeaders(config.token),
+    body: apiVersion === 'v2' ? JSON.stringify([numericId]) : undefined
   })
 
   return response.ok

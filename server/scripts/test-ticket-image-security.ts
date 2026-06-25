@@ -40,9 +40,18 @@ assert.ok(
 )
 assert.ok(
   lskySource.includes('function pickProviderFileId') &&
+    lskySource.includes("typeof value === 'number' && Number.isFinite(value)") &&
     lskySource.includes('pickProviderFileId(data?.id, data?.key, data?.hash, data?.pathname, data?.path)') &&
     lskySource.includes('pickProviderFileId(data?.key, data?.id, data?.hash, data?.pathname, data?.path)'),
-  'Lsky upload results must preserve pathname/path fallback identifiers so uploaded images can be cleaned up'
+  'Lsky upload results must preserve numeric IDs and pathname/path fallback identifiers so uploaded images can be cleaned up'
+)
+assert.ok(
+  lskySource.includes('function parseProviderNumericId') &&
+    lskySource.includes("const deleteUrl = apiVersion === 'v2'") &&
+    lskySource.includes('`${apiBase}/user/photos`') &&
+    lskySource.includes("'Content-Type': 'application/json'") &&
+    lskySource.includes('JSON.stringify([numericId])'),
+  'Lsky v2 delete must call the batch /user/photos endpoint with a JSON numeric ID array'
 )
 assert.equal(
   (lskySource.match(/redirect: 'manual'/g) ?? []).length,
