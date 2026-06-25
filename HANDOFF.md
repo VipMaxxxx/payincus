@@ -226,7 +226,7 @@ The admin console contains a read-only Production Proof workspace at /admin/prod
 The user build output does not contain the production-proof route, nav key, or page content.
 Production `v0.5.6` is live after the Lsky production proof script release. Current proof progress is still `12/13`, but the remaining proof count is now `1`: Lsky confirmed deletion/provider cleanup.
 Production `v0.5.3` showed the production DB backup/restore drill as verified in the read-only proof workspace and is now task `#61` rollback backup.
-Production Lsky proof script is deployed at `server/dist/scripts/lsky-production-proof.js`. Read-only proof `lsky-upload-delete-proof-2026-06-25T09:15:46.527Z` confirmed config present, API v2 host `kkksr.com`, group endpoint HTTP 200, existing Lsky attachment count 0, and `/api/v2/user/photos?page=1&per_page=1` HTTP 403 with token-permission denial. Previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
+Production Lsky proof script is deployed at `server/dist/scripts/lsky-production-proof.js`. Latest read-only proof `lsky-upload-delete-proof-2026-06-25T10:00:53.898Z` confirmed config present, API v2 host `kkksr.com`, group endpoint HTTP 200, existing Lsky attachment count 0, and `/api/v2/user/photos?page=1&per_page=1` HTTP 403 with token-permission denial. Previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
 Official Lsky Pro+ API docs confirm `DELETE /api/v2/user/photos` expects a JSON numeric ID array and returns HTTP 204 on successful deletion. The current production code matches this endpoint/body shape. A later production DB-only known-ID search `lsky-db-known-id-readonly-search-2026-06-25T04:54:26.080Z` found `attachmentCount=0` and no Lsky providerFileId in matched business log rows, so there is no safe persisted proof image ID to delete from the app side.
 Production DB backup/restore drill is now proven through a temporary database restore and cleanup check.
 Production Incus lifecycle is now proven on dedicated test instance #9: stop task #5, start task #6, restart task #7, recreate task #8, delete cleanup, DB status deleted, Incus object not found, and host CPU/memory/disk resources returned to baseline.
@@ -716,7 +716,7 @@ Optional follow-up if final acceptance scope expands:
 
 Password-authenticated SSH was available again during the 2026-06-25 proof pass. A read-only recheck at `2026-06-25T03:57:08.849Z` confirmed Turnstile restored, temp secret file removed, and temporary test users banned.
 
-SSH has still been intermittently closed by the remote service during non-interactive commands. A 2026-06-25 09:34 UTC retry for the read-only Lsky preflight and a shorter version check both closed at SSH before command execution, so the Lsky preflight was not refreshed in that pass. Public user/admin health endpoints still returned HTTP 200, and public `v0.5.6` Release/OTA manifest assets remained available. Prefer short read-only commands or an interactive shell for production proof, and never paste server passwords into handoff notes.
+SSH has still been intermittently closed by the remote service during non-interactive commands. A 2026-06-25 09:34 UTC retry closed before command execution, but a later 2026-06-25 10:00 UTC retry succeeded: `/opt/incudal/current` still pointed to `v0.5.6`, and the read-only Lsky preflight ran but still returned HTTP 403 for `/api/v2/user/photos`. Prefer short read-only commands or an interactive shell for production proof, and never paste server passwords into handoff notes.
 
 Safe proof paste template for the user:
 
@@ -776,7 +776,7 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `1bacbc2`.
+1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `6c086cd`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 12/13 items, 92%.
 3. Treat `v0.5.6` production deployment/readiness as proven from the 2026-06-25 SSH proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.6-20260625091326`, version commit `79d00defc716`, deployed at `2026-06-25T09:13:34.875Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and OTA task `#63` completed successfully.
 4. Current latest-production boundary: `v0.5.6` is live, the production-proof workspace status correction and DB restore-drill verified state are live, SMTP provider-reference metadata is live, Lsky numeric provider-file-ID preservation is live, non-sensitive Lsky delete diagnostics are live, and the repeatable `lsky-production-proof` script is deployed. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete.
