@@ -11,6 +11,7 @@ Group=root
 WorkingDirectory=/opt/incudal/current
 EnvironmentFile=/opt/incudal/.env
 Environment=HOME=/opt/incudal
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm
 Environment=XDG_CACHE_HOME=/opt/incudal/.cache
 Environment=INCUDAL_APP_DIR=/opt/incudal/current

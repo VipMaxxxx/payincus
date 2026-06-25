@@ -130,6 +130,9 @@ assert.ok(
     runTask.includes('SYSTEM_UPDATE_MIN_FREE_MB') &&
     runTask.includes('SYSTEM_UPDATE_RELEASES_KEEP') &&
     runTask.includes('SYSTEM_UPDATE_BACKUP_TASKS_KEEP') &&
+    runTask.includes('assertRequiredCommands()') &&
+    runTask.includes('defaultExecutionPath') &&
+    runTask.includes("PATH: executionPath") &&
     runTask.includes("cleanupUpdateDownloadDir('更新开始前')") &&
     runTask.includes('assertEnoughDiskSpace') &&
     runTask.includes('磁盘空间不足，无法继续 OTA 更新') &&
@@ -140,6 +143,8 @@ assert.ok(
     runTask.includes('getCurrentReleaseTarget') &&
     runTask.includes('已删除旧 release') &&
     runTask.includes("'.incudal-update-downloads'") &&
+    !runTask.includes("cp -a ${JSON.stringify(stagingDir)}/.") &&
+    !runTask.includes("cp -a ${JSON.stringify(backupDir)}/.") &&
     runTask.includes('Auto rollback completed successfully') &&
     runTask.includes("status: rolledBack ? 'rolled_back' : 'failed'") &&
     runTask.includes('failed-update'),
@@ -161,6 +166,9 @@ assert.ok(
     installPanel.includes('SYSTEM_UPDATE_RELEASE_TOKEN') &&
     installPanel.includes('SYSTEM_UPDATE_APPLY_MODE=auto') &&
     installPanel.includes('app_dir="${INSTALL_DIR}/current"') &&
+    updateService.includes('Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') &&
+    rollbackService.includes('Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') &&
+    installPanel.includes('Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') &&
     installPanel.includes('NoNewPrivileges=false') &&
     backendService.includes('NoNewPrivileges=false') &&
     backendService.includes('/opt/incudal/.git /opt/incudal/update-logs'),
@@ -180,6 +188,8 @@ assert.ok(
     runTask.includes("'.npm'") &&
     runTask.includes("'.cache'") &&
     rollbackTask.includes('pre-rollback') &&
+    rollbackTask.includes('PATH: executionPath') &&
+    rollbackTask.includes("chown', ['-R', 'incudal:incudal', installDir]") &&
     rollbackTask.includes('waitForBackendHealth()') &&
     rollbackTask.includes('verify-split-host.sh'),
   'online update and rollback must preserve runtime assets and verify the split deployment'
