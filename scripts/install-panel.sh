@@ -1041,6 +1041,7 @@ Group=root
 WorkingDirectory=${app_dir}
 EnvironmentFile=${ENV_FILE}
 Environment=HOME=${INSTALL_DIR}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
 Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
 Environment=INCUDAL_APP_DIR=${app_dir}
@@ -1067,6 +1068,7 @@ Group=root
 WorkingDirectory=${app_dir}
 EnvironmentFile=${ENV_FILE}
 Environment=HOME=${INSTALL_DIR}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
 Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
 Environment=INCUDAL_APP_DIR=${app_dir}

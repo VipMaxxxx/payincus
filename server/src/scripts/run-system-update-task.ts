@@ -1,7 +1,7 @@
 import '../config/env.js'
 import { createHash } from 'crypto'
-import { appendFile, mkdir, cp, rm, writeFile, readdir, stat, lstat, readlink, symlink, rename, statfs } from 'fs/promises'
-import { createReadStream, createWriteStream, existsSync } from 'fs'
+import { appendFile, mkdir, cp, rm, writeFile, readdir, stat, lstat, readlink, symlink, rename, statfs, access } from 'fs/promises'
+import { constants, createReadStream, createWriteStream, existsSync } from 'fs'
 import { dirname, join, resolve, sep } from 'path'
 import { spawn } from 'child_process'
 import { Readable } from 'stream'
@@ -30,6 +30,8 @@ const updateApplyMode = process.env.SYSTEM_UPDATE_APPLY_MODE || 'auto'
 const minimumDiskFreeMb = parseNonNegativeIntegerEnv(process.env.SYSTEM_UPDATE_MIN_FREE_MB, 4096)
 const releaseRetentionCount = parseNonNegativeIntegerEnv(process.env.SYSTEM_UPDATE_RELEASES_KEEP, 8)
 const backupTaskRetentionCount = parseNonNegativeIntegerEnv(process.env.SYSTEM_UPDATE_BACKUP_TASKS_KEEP, 3)
+const defaultExecutionPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+const executionPath = process.env.PATH ? `${process.env.PATH}:${defaultExecutionPath}` : defaultExecutionPath
 
 function parseNonNegativeIntegerEnv(value: string | undefined, fallback: number): number {
   if (!value) return fallback
@@ -65,6 +67,7 @@ async function run(command: string, args: string[], options: { timeoutMs?: numbe
       cwd: options.cwd || appDir,
       env: {
         ...process.env,
+        PATH: executionPath,
         ...options.env
       },
       stdio: ['ignore', 'pipe', 'pipe']
@@ -103,6 +106,7 @@ async function runCapture(command: string, args: string[], options: { timeoutMs?
       cwd: options.cwd || appDir,
       env: {
         ...process.env,
+        PATH: executionPath,
         ...options.env
       },
       stdio: ['ignore', 'pipe', 'pipe']
@@ -138,6 +142,38 @@ async function runCapture(command: string, args: string[], options: { timeoutMs?
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolvePromise => setTimeout(resolvePromise, ms))
+}
+
+async function commandExists(command: string): Promise<boolean> {
+  for (const dir of executionPath.split(':')) {
+    if (!dir) continue
+    try {
+      await access(join(dir, command), constants.X_OK)
+      return true
+    } catch {
+      // Try the next PATH entry.
+    }
+  }
+  return false
+}
+
+async function assertRequiredCommands(): Promise<void> {
+  const requiredCommands = ['bash', 'corepack', 'curl', 'git', 'systemctl', 'tar']
+  if (process.platform === 'linux') {
+    requiredCommands.push('chown', 'id')
+  }
+
+  const missing: string[] = []
+  for (const command of requiredCommands) {
+    if (!(await commandExists(command))) missing.push(command)
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `OTA runtime preflight failed: missing required command(s): ${missing.join(', ')}. ` +
+        'Install the missing command(s) or add them to PATH before starting the update.'
+    )
+  }
 }
 
 async function waitForBackendHealth(): Promise<void> {
@@ -461,9 +497,13 @@ async function restoreRuntimeAssets(backupDir: string, targetDir = installDir): 
 
 async function chownInstallDir(): Promise<void> {
   if (process.platform !== 'linux') return
-  await run('bash', ['-lc', `if id incudal >/dev/null 2>&1; then chown -R incudal:incudal ${JSON.stringify(installDir)}; fi`], {
-    timeoutMs: 120000
-  })
+  try {
+    await run('id', ['incudal'], { timeoutMs: 30000 })
+  } catch {
+    await log('Skipping ownership fix: user incudal does not exist')
+    return
+  }
+  await run('chown', ['-R', 'incudal:incudal', installDir], { timeoutMs: 120000 })
 }
 
 async function writeVersionFile(root = appDir): Promise<void> {
@@ -508,11 +548,7 @@ async function getRuntimeArtifact(targetVersion: string): Promise<OtaArtifactInf
 async function copyStagingToRelease(stagingDir: string, releaseDir: string): Promise<void> {
   await rm(releaseDir, { recursive: true, force: true })
   await mkdir(dirname(releaseDir), { recursive: true })
-  await mkdir(releaseDir, { recursive: true })
-  await run('bash', ['-lc', `cp -a ${JSON.stringify(stagingDir)}/. ${JSON.stringify(releaseDir)}/`], {
-    timeoutMs: 180000,
-    cwd: installDir
-  })
+  await cp(stagingDir, releaseDir, { recursive: true, preserveTimestamps: true })
 }
 
 async function applyArtifactAtomic(stagingDir: string, timestamp: string): Promise<string> {
@@ -542,7 +578,7 @@ async function applyArtifactLegacy(stagingDir: string, backupDir: string): Promi
   await cp(installDir, backupDir, { recursive: true, preserveTimestamps: true })
 
   await clearInstallDirForArtifact()
-  await run('bash', ['-lc', `cp -a ${JSON.stringify(stagingDir)}/. ${JSON.stringify(installDir)}/`], { timeoutMs: 180000 })
+  await cp(stagingDir, installDir, { recursive: true, preserveTimestamps: true })
   await restoreRuntimeAssets(backupDir)
 
   await run('corepack', ['enable'], { timeoutMs: 120000 })
@@ -678,7 +714,7 @@ async function autoRollbackFromBackup(backupDir: string, timestamp: string): Pro
   }
 
   await clearInstallDirPreserving(['update-logs', 'plugins', 'plugin-data', 'plugin-logs', 'plugin-staging'])
-  await run('bash', ['-lc', `cp -a ${JSON.stringify(backupDir)}/. ${JSON.stringify(installDir)}/`], { timeoutMs: 180000 })
+  await cp(backupDir, installDir, { recursive: true, preserveTimestamps: true })
   await mkdir(join(installDir, '.npm'), { recursive: true })
   await mkdir(join(installDir, '.cache'), { recursive: true })
   await mkdir(join(installDir, 'plugins'), { recursive: true })
@@ -719,6 +755,7 @@ async function main(): Promise<void> {
   await mkdir(logDir, { recursive: true })
   await updateTask({ status: 'running', startedAt: new Date(), logPath })
   await log(`Starting system update task ${taskId} -> ${targetVersion}`)
+  await assertRequiredCommands()
   await cleanupUpdateDownloadDir('更新开始前')
   await assertEnoughDiskSpace('更新开始前', minimumDiskFreeMb)
   await configureGitSafeDirectory()

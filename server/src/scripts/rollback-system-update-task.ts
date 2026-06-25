@@ -14,6 +14,8 @@ const adminFrontendUrl = process.env.ADMIN_FRONTEND_URL || 'https://admin.payinc
 const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:3001'
 const logDir = resolve(process.env.SYSTEM_UPDATE_LOG_DIR || join(installDir, 'update-logs'))
 const logPath = resolve(process.env.SYSTEM_UPDATE_LOG_PATH || join(logDir, `system-update-${taskId}-rollback.log`))
+const defaultExecutionPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+const executionPath = process.env.PATH ? `${process.env.PATH}:${defaultExecutionPath}` : defaultExecutionPath
 
 function now(): string {
   return new Date().toISOString()
@@ -29,7 +31,7 @@ async function run(command: string, args: string[], options: { timeoutMs?: numbe
   await new Promise<void>((resolvePromise, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd || installDir,
-      env: { ...process.env, ...options.env },
+      env: { ...process.env, PATH: executionPath, ...options.env },
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let timeout: NodeJS.Timeout | null = null
@@ -111,6 +113,17 @@ async function switchCurrentRelease(targetDir: string): Promise<void> {
   await log(`Switched current release to ${targetDir}`)
 }
 
+async function chownInstallDir(): Promise<void> {
+  if (process.platform !== 'linux') return
+  try {
+    await run('id', ['incudal'], { timeoutMs: 30000 })
+  } catch {
+    await log('Skipping ownership fix: user incudal does not exist')
+    return
+  }
+  await run('chown', ['-R', 'incudal:incudal', installDir], { timeoutMs: 120000 })
+}
+
 async function main(): Promise<void> {
   if (!Number.isSafeInteger(taskId) || taskId <= 0) {
     throw new Error('Invalid task id')
@@ -156,7 +169,7 @@ async function main(): Promise<void> {
     await mkdir(join(installDir, 'plugin-logs'), { recursive: true })
     await mkdir(join(installDir, 'plugin-staging'), { recursive: true })
     await mkdir(join(installDir, 'server/certs'), { recursive: true })
-    await run('bash', ['-lc', `if id incudal >/dev/null 2>&1; then chown -R incudal:incudal ${JSON.stringify(installDir)}; fi`], { timeoutMs: 120000 })
+    await chownInstallDir()
     await run('systemctl', ['restart', serviceName], { timeoutMs: 120000 })
     await waitForBackendHealth()
     await run('bash', ['scripts/verify-split-host.sh'], {
