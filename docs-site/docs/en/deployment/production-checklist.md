@@ -43,9 +43,8 @@ pnpm verify:production-proof-snapshot
 - Real payment callback.
 - Real Incus create, start, stop, restart, recreate/rebuild, delete, cleanup and terminal.
 - Agent heartbeat and resource reporting.
-- SMTP delivery.
-- Lsky upload or attachment delivery, including confirmed deletion or cleanup of the test attachment. A bare image URL is not enough proof.
-- Notification delivery through configured channels.
+- SMTP provider reference and notification delivery through configured channels.
+- Lsky upload is already covered by production proof; if the operator excludes Lsky deletion/cleanup from final scope, record the waiver reference in the acceptance report and do not describe it as confirmed deletion.
 - Real Turnstile login and session-refresh smoke.
 - Backup/restore drill, preferably restoring to a temporary directory or temporary database without overwriting production data.
 - Public responses include CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and `Strict-Transport-Security`.
