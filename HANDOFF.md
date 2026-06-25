@@ -19,17 +19,17 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-3671deb Update version log for v0.5.0
+ad45707 Update version log for v0.5.3
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
 
 The tracked tree should be clean against `payincus/main` after pulling. The local audit ledger under `docs/production-audit.md` is ignored by git and may contain newer operational notes.
 
-Latest tracked product commit at the time of this refresh:
+Latest tracked repository commit at the time of this refresh:
 
 ```text
-cd8797b Fix production proof workspace progress
+d3c675a Update handoff after v0.5.3 production proof
 ```
 
 Recently updated/released files include:
@@ -229,7 +229,8 @@ The user build output does not contain the production-proof route, nav key, or p
 Production `v0.5.3` shows the production DB backup/restore drill as verified in the read-only proof workspace and is live.
 Production Lsky user-gallery list probe returned HTTP 403 with the configured token; previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
 Production DB backup/restore drill is now proven through a temporary database restore and cleanup check.
-Remaining production proof is still incomplete: Incus start/restart/recreate/delete/cleanup, SMTP receipt/provider-log proof, Lsky confirmed deletion, Telegram/in-app notification delivery, and Turnstile/session browser smoke.
+Production Incus lifecycle is now proven on dedicated test instance #9: stop task #5, start task #6, restart task #7, recreate task #8, delete cleanup, DB status deleted, Incus object not found, and host CPU/memory/disk resources returned to baseline.
+Remaining production proof is still incomplete: SMTP receipt/provider-log proof, Lsky confirmed deletion, Telegram/in-app notification delivery, and Turnstile/session browser smoke.
 Current follow-up: configure a delete-capable Lsky token or use provider-side cleanup before more upload attempts; previous proof images may still need cleanup.
 ```
 
@@ -255,7 +256,7 @@ Current commercial operation progress:
 
 ```text
 12/12 categories have local feature coverage: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit, resource capacity and cost, plugin market governance, and production proof workspace.
-Important caveat: final production proof is not complete until the remaining Incus lifecycle, delivery, notification, Turnstile, and final accepted live references are collected and recorded.
+Important caveat: final production proof is not complete until the remaining delivery, notification, Turnstile, and final accepted live references are collected and recorded.
 ```
 
 ## Product Split Status
@@ -389,7 +390,7 @@ Latest production proof:
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - `v0.1.8` public release asset availability was verified directly. GitHub Actions API polling hit an anonymous rate limit during that check, so the latest fully recorded Actions run IDs in this handoff remain the earlier `v0.1.6` chain.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
-- Full-function audit progress is `12/13` categories complete, current category `13/13` is `8/13` items complete (`62%`). Remaining production blockers are business-proof blockers, not deployment blockers: Incus start/restart/recreate/delete/cleanup proof, SMTP delivery, Lsky upload/delete cleanup, Telegram/external notification delivery, and real password+Turnstile browser smoke.
+- Full-function audit progress is `12/13` categories complete, current category `13/13` is `10/13` items complete (`77%`). Remaining production blockers are business-proof blockers, not deployment blockers: SMTP delivery, Lsky upload/delete cleanup, Telegram/external notification delivery, and real password+Turnstile browser smoke.
 
 Latest release proof:
 
@@ -620,7 +621,7 @@ Recent live business proof:
 - Agent `lastReport` contains `incus`, `metrics`, `resources`, and `runtime`; traffic snapshots and daily traffic rows exist for both running instances.
 - A completed real recharge exists with actual amount, fee, third-party trade number and callback timestamp; a processed payment callback row exists with callback IP present. Full order number, provider config and callback body were intentionally not printed.
 - Live operation logs show SSH key generation, recharge completion, instance create, instance stop, instance rebuild, terminal connect/disconnect, Agent install token consumption, Debian 12 instance create, and NAT port-add successes.
-- Interpretation: real payment callback, Agent heartbeat/report, resource/instance/traffic reporting, Incus create, stop, rebuild, NAT port add, storage, and Web terminal connect/disconnect are now live-proven. Start/restart/recreate/delete/cleanup remain missing.
+- Interpretation: real payment callback, Agent heartbeat/report, resource/instance/traffic reporting, Incus create, stop, start, restart, rebuild, recreate, delete/cleanup, NAT port add, storage, and Web terminal connect/disconnect are now live-proven.
 
 Manual plugin package proof also passed with `plugin-templates/admin-user-mixed-plugin` packaged as `.tar.gz` and validated by `validateAndExtractPluginPackage`; result had id `com.example.coupon`, one admin page, one user page, one template and 64-char SHA256.
 
@@ -667,7 +668,6 @@ Not completed:
 
 Remaining production proof items:
 
-- Real Incus start, restart, recreate, delete, cleanup and resource-release proof.
 - Real suspend/unsuspend, IPv6, and host migration smoke if these features remain in the final acceptance scope.
 - Real SMTP delivery.
 - Real Lsky upload.
@@ -698,11 +698,11 @@ Production version:
 Test actor: admin or test user only
 
 Incus lifecycle:
-- test instance ID/name:
-- host name:
-- actions completed: start / restart / recreate / delete / cleanup
-- task or log IDs:
-- final instance/resource state:
+- test instance ID/name: #9 / production-proof-20260625031054
+- host name: #2 HKCMI-01
+- actions completed: stop / start / restart / recreate / delete / cleanup
+- task or log IDs: tasks #5-#8; operation logs #276-#284
+- final instance/resource state: DB status deleted; Incus object u26-qf9iaavw not found; CPU/memory/disk returned to baseline; NAT count recalculated to 5
 
 SMTP:
 - recipient reference:
@@ -746,11 +746,11 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.5.3 version-log refresh, the tracked baseline is `ad45707`.
-2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 8/13 items, 62%.
+1. Keep local Git synced with remote `payincus/main`; before this Incus-proof handoff refresh, the tracked baseline is `d3c675a`.
+2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 10/13 items, 77%.
 3. Treat `v0.5.3` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.3-20260625024633`, version commit `2e99abc73234`, deployed at `2026-06-25T02:46:41.873Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and public user/admin health returned OK.
 4. Current latest-production boundary: `v0.5.3` is live, the production-proof workspace KPI correction and DB restore-drill verified state are live, Lsky numeric provider-file-ID preservation is live, and non-sensitive Lsky delete diagnostics are live. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API.
-5. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
+5. Treat the core Incus lifecycle as proven on a dedicated test instance: #9 on host #2 completed stop/start/restart/recreate/delete cleanup, and existing proof already covers create, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic. Only run suspend/unsuspend, IPv6, or host-migration smoke if these remain in final acceptance scope.
 6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram/external notification cannot be proven until a test notification channel is configured; Lsky needs a delete-capable token or provider-side cleanup before more upload attempts.
 7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
 8. Complete a logged-in browser smoke through Turnstile/session-gated UI, including admin `/admin/production-proof` and representative user/admin pages.
