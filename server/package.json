@@ -159,6 +159,8 @@
     "test:ticket-query-guards": "node --import tsx scripts/test-ticket-query-guards.ts",
     "test:ticket-auto-close-guards": "node --import tsx scripts/test-ticket-auto-close-guards.ts",
     "test:ticket-image-security": "node --import tsx scripts/test-ticket-image-security.ts",
+    "test:lsky-production-proof-guards": "node --import tsx scripts/test-lsky-production-proof-guards.ts",
+    "proof:lsky": "node --import tsx scripts/lsky-production-proof.ts",
     "test:transfer-query-guards": "node --import tsx scripts/test-transfer-query-guards.ts",
     "test:trust-proxy-config": "node --import tsx scripts/test-trust-proxy-config.ts",
     "test:user-route-id-guards": "node --import tsx scripts/test-user-route-id-guards.ts",
