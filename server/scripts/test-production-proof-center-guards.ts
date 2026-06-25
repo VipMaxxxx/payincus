@@ -60,10 +60,11 @@ assert.ok(
     view.includes('不能覆盖生产数据') &&
     view.includes('const completedProofItems = 12') &&
     view.includes('const totalProofItems = 13') &&
-    view.includes('const remainingProofItems = 2') &&
+    view.includes('const remainingProofItems = 1') &&
     view.includes('completedProofItems / totalProofItems') &&
     view.includes('项真实 proof 已有证据') &&
-    view.includes('SMTP 收件回执和 Lsky 删除清理仍需补齐') &&
+    view.includes('仅剩 Lsky 删除清理 proof') &&
+    view.includes('SMTP 投递证据已记录；具备删除权限后完成 Lsky 清理 proof。') &&
     view.includes('ENV_FILE=/opt/incudal/.env PROOF_SINCE_HOURS=24 pnpm verify:production-proof-snapshot') &&
     view.includes('REQUIRE_LIVE_PROOF_REFS=1 pnpm verify:live-acceptance') &&
     view.includes('禁止写入审计记录的内容'),
