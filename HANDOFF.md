@@ -233,7 +233,7 @@ Public health checks returned HTTP 200 with TLS verify result 0 for https://pay.
 The public admin route https://admin.payincus.com/admin/production-proof returned HTTP 200.
 Public admin asset scan found v0.4.8 production-proof markers in current hashed assets: /assets/28Cvyvon.js, /assets/OnPAze1M.js, and /assets/DbBP0PUF.js.
 Remaining production proof is still incomplete: Incus start/restart/recreate/delete/cleanup, SMTP delivery, Lsky upload, Telegram/in-app notification delivery, Turnstile/session browser smoke, and backup/restore drill.
-Current follow-up: a production Lsky 1x1 PNG upload succeeded, but cleanup failed because the v2 upload metadata did not persist a provider file ID. The fix was first published as `v0.4.9` and is also included in latest release `v0.5.0`: `server/src/lib/lsky.ts` preserves `pathname/path` fallback IDs and `server/scripts/test-ticket-image-security.ts` guards this behavior. Production OTA for `v0.5.0` is not proven in this session; do not count Lsky proof complete until a post-OTA upload+delete proof confirms cleanup.
+Current follow-up: production is now proven on `v0.5.0`, and the Lsky upload metadata fallback is live: a new production 1x1 PNG upload preserved a provider file ID. Cleanup still returned `cleanupDeleted=false`, so do not count Lsky proof complete until provider-side deletion succeeds and the proof images are cleaned up.
 ```
 
 Local gates run for `v0.4.9`:
@@ -247,7 +247,7 @@ pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The latest release chain was verified locally by the targeted guards, client build/type-check, docs version-log generation, docs build, diff hygiene, GitHub CI, GitHub Pages, and public Release artifact availability. Final production acceptance still remains pending until `v0.5.0` is applied and the remaining real business proofs are captured.
+The latest release chain was verified locally by the targeted guards, client build/type-check, docs version-log generation, docs build, diff hygiene, GitHub CI, GitHub Pages, public Release artifact availability, and later production `v0.5.0` deployment/readiness proof. Final production acceptance still remains pending until the remaining real business proofs are captured.
 
 Current commercial operation progress:
 
@@ -746,10 +746,10 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 1. Keep local Git synced with remote `payincus/main`; after the v0.5.0 version-log refresh, the tracked baseline is `3671deb`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof remains 7/13 items, 54%.
-3. Treat `v0.4.8` production OTA as complete from task `#56`; do not spend the next session proving the server is still on `v0.4.6` unless new evidence contradicts task `#56`.
-4. Current published/latest-production boundary: latest release `v0.5.0` includes the Lsky cleanup metadata fix and the production-proof workspace KPI correction, but production is only proven through `v0.4.8` task `#56`. Apply `v0.5.0` by OTA before claiming either as live behavior.
+3. Treat `v0.5.0` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.0-20260625011155`, version commit `cd8797b4594b`, deployed at `2026-06-25T01:12:04.299Z`, production readiness/DB/split-host/Agent manifest/log-header passed.
+4. Current latest-production boundary: `v0.5.0` is live, the production-proof workspace KPI correction is live, and Lsky provider-file-ID fallback is live. Lsky cleanup is still not proven because production deletion returned `cleanupDeleted=false`.
 5. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
-6. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof only against explicit test recipients, test channels, or test tickets, then record redacted receipt/log references. For Lsky, first apply latest release `v0.5.0` by OTA and confirm the earlier test artifact is cleaned up or superseded by a successful upload+delete proof.
+6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram/external notification cannot be proven until a test notification channel is configured; Lsky needs a deletion-path fix/provider cleanup before more upload attempts.
 7. Complete backup/restore drill proof in a temporary directory or temporary database only; do not overwrite production data.
 8. Complete a logged-in browser smoke through Turnstile/session-gated UI, including admin `/admin/production-proof` and representative user/admin pages.
 9. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
