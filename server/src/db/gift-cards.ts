@@ -44,8 +44,7 @@ export interface GiftCardUserListOptions {
 }
 
 function generateGiftCardCode(): string {
-  const bytes = crypto.randomBytes(16)
-  const encoded = bytes.toString('base64url')
+  const encoded = crypto.randomBytes(18).toString('base64url')
   return GIFT_CARD_CODE_PREFIX + encoded.substring(0, GIFT_CARD_CODE_LENGTH)
 }
 

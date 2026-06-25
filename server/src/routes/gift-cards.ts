@@ -499,6 +499,6 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
 }
 
 function generateCode(): string {
-  const encoded = crypto.randomBytes(16).toString('base64url')
+  const encoded = crypto.randomBytes(18).toString('base64url')
   return 'gc-' + encoded.substring(0, 24)
 }
