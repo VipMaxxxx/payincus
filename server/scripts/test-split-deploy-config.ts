@@ -519,6 +519,8 @@ assert.ok(
     verifyLiveAcceptance.includes('ACCEPTED_WARNINGS_DATE must use YYYY-MM-DD') &&
     verifyLiveAcceptance.includes('## Accepted Warnings') &&
     verifyLiveAcceptance.includes('LIVE_PAYMENT_PROOF_REF="${LIVE_PAYMENT_PROOF_REF:-}"') &&
+    verifyLiveAcceptance.includes('LIVE_LSKY_CLEANUP_WAIVER_REF="${LIVE_LSKY_CLEANUP_WAIVER_REF:-}"') &&
+    verifyLiveAcceptance.includes('append_live_proof_ref lsky_cleanup_scope_decision "$LIVE_LSKY_CLEANUP_WAIVER_REF"') &&
     verifyLiveAcceptance.includes('## Live Proof References') &&
     verifyLiveAcceptance.includes('final_go_status: pending_live_proof') &&
     verifyLiveAcceptance.includes('final_go_status: live_proof_references_documented') &&

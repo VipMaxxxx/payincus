@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useToast } from '@/stores/toast'
 
-type ProofStatus = 'verified' | 'partial' | 'pending' | 'operator'
+type ProofStatus = 'verified' | 'partial' | 'pending' | 'operator' | 'waived'
 type RiskLevel = 'low' | 'medium' | 'high'
 
 type ProofItem = {
@@ -67,10 +67,10 @@ const proofItems: ProofItem[] = [
   {
     key: 'lsky',
     title: 'Lsky 图片上传',
-    status: 'pending',
+    status: 'waived',
     risk: 'medium',
-    evidence: '上传和 providerFileId 保留已证明；最新 preflight 显示 token 仅有 upload:write，缺 user:photo:read / user:photo:write，user-gallery API 返回 403，删除/清理未证明。',
-    safeNote: '先配置 delete-capable token 或完成 provider 侧清理；v0.6.3 会在缺权限时拒绝 commit-mode 上传。'
+    evidence: '上传和 providerFileId 保留已证明；删除/清理 proof 按运营方决定不纳入最终 Go 阻塞项。最新 preflight 仍显示 token 仅有 upload:write，缺 user:photo:read / user:photo:write，user-gallery API 返回 403。',
+    safeNote: '不要记录为已删除；如后续重新纳入范围，先配置 delete-capable token 或 provider 侧清理证明。'
   },
   {
     key: 'notification',
@@ -106,9 +106,9 @@ const proofItems: ProofItem[] = [
   }
 ]
 
-const completedProofItems = 12
+const completedProofItems = 13
 const totalProofItems = 13
-const remainingProofItems = 1
+const remainingProofItems = 0
 
 const commands: CommandItem[] = [
   {
@@ -129,7 +129,7 @@ const commands: CommandItem[] = [
   },
   {
     title: 'Lsky 只读预检',
-    description: '确认 Lsky token 是否具备 user:photo:read / user:photo:write。只有通过后才能运行 commit-mode。',
+    description: '可选复核：仅当 Lsky 删除/清理 proof 重新纳入范围时，确认 token 是否具备 user:photo:read / user:photo:write。',
     command: [
       'cd /opt/incudal/current',
       'ENV_FILE=/opt/incudal/.env NODE_ENV=production node server/dist/scripts/lsky-production-proof.js'
@@ -141,12 +141,13 @@ const commands: CommandItem[] = [
     command: [
       'cd /opt/incudal/current',
       'FRONTEND_URL=https://pay.payincus.com \\',
-      'BACKEND_URL=http://127.0.0.1:3001 \\',
+      'BACKEND_URL="$PRODUCTION_BACKEND_LOOPBACK_URL" \\',
       'LIVE_ACCEPTANCE_REPORT=/tmp/incudal-proof/final-acceptance.md \\',
       'LIVE_PAYMENT_PROOF_REF="payment proof ref" \\',
       'LIVE_INCUS_PROOF_REF="incus lifecycle proof ref" \\',
       'LIVE_AGENT_PROOF_REF="agent report proof ref" \\',
-      'LIVE_MAIL_PROOF_REF="smtp/lsky/notification proof ref" \\',
+      'LIVE_MAIL_PROOF_REF="smtp/notification proof ref" \\',
+      'LIVE_LSKY_CLEANUP_WAIVER_REF="operator waiver ref" \\',
       'LIVE_LOG_HEADER_PROOF_REF="log/header proof ref" \\',
       'REQUIRE_LIVE_PROOF_REFS=1 pnpm verify:live-acceptance'
     ].join('\n')
@@ -159,7 +160,8 @@ const proofStats = computed(() => {
   const partial = proofItems.filter(item => item.status === 'partial').length
   const pending = proofItems.filter(item => item.status === 'pending').length
   const operator = proofItems.filter(item => item.status === 'operator').length
-  return { total, verified, partial, pending, operator }
+  const waived = proofItems.filter(item => item.status === 'waived').length
+  return { total, verified, partial, pending, operator, waived }
 })
 
 const progressPercent = computed(() => Math.round((completedProofItems / totalProofItems) * 100))
@@ -169,7 +171,8 @@ function statusLabel(status: ProofStatus): string {
     verified: '已证明',
     partial: '部分证明',
     pending: '待补证据',
-    operator: '需操作窗口'
+    operator: '需操作窗口',
+    waived: '已豁免'
   }
   return labels[status]
 }
@@ -179,7 +182,8 @@ function statusClass(status: ProofStatus): string {
     verified: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     partial: 'border-blue-200 bg-blue-50 text-blue-700',
     pending: 'border-amber-200 bg-amber-50 text-amber-700',
-    operator: 'border-rose-200 bg-rose-50 text-rose-700'
+    operator: 'border-rose-200 bg-rose-50 text-rose-700',
+    waived: 'border-slate-200 bg-slate-50 text-slate-700'
   }
   return classes[status]
 }
@@ -235,7 +239,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
         <div class="mt-2 h-2 rounded-full bg-themed-muted">
           <div class="h-2 rounded-full bg-blue-500" :style="{ width: `${progressPercent}%` }"></div>
         </div>
-        <div class="mt-2 text-xs text-themed-muted">{{ completedProofItems }}/{{ totalProofItems }} 项真实 proof 已有证据</div>
+        <div class="mt-2 text-xs text-themed-muted">{{ completedProofItems }}/{{ totalProofItems }} 项验收口径已收口</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">已有证据项</div>
@@ -245,7 +249,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">待补真实证据</div>
         <div class="mt-2 text-3xl font-semibold text-themed">{{ remainingProofItems }}</div>
-        <div class="mt-2 text-xs text-themed-muted">仅剩 Lsky 删除清理 proof</div>
+        <div class="mt-2 text-xs text-themed-muted">当前无最终 Go blocker</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">高风险操作窗口</div>
@@ -266,7 +270,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">2. 真实投递 proof</div>
-          <p class="mt-2 text-sm text-themed-muted">SMTP 与 Telegram 已证明；具备删除权限后完成 Lsky 清理 proof。</p>
+          <p class="mt-2 text-sm text-themed-muted">SMTP 与 Telegram 已证明；Lsky 删除清理 proof 已按运营方决定排除出最终阻塞项。</p>
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">3. 高风险业务 proof</div>

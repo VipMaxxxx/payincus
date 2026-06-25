@@ -58,15 +58,18 @@ assert.ok(
     view.includes('不会执行支付、资源删除、Turnstile 变更或 OTA 回滚') &&
     view.includes('备份恢复演练') &&
     view.includes('不能覆盖生产数据') &&
-    view.includes('const completedProofItems = 12') &&
+    view.includes('const completedProofItems = 13') &&
     view.includes('const totalProofItems = 13') &&
-    view.includes('const remainingProofItems = 1') &&
+    view.includes('const remainingProofItems = 0') &&
     view.includes('completedProofItems / totalProofItems') &&
-    view.includes('项真实 proof 已有证据') &&
-    view.includes('仅剩 Lsky 删除清理 proof') &&
-    view.includes('SMTP 与 Telegram 已证明；具备删除权限后完成 Lsky 清理 proof。') &&
+    view.includes('项验收口径已收口') &&
+    view.includes('当前无最终 Go blocker') &&
+    view.includes("status: 'waived'") &&
+    view.includes('Lsky 删除清理 proof 已按运营方决定排除出最终阻塞项。') &&
+    view.includes('不要记录为已删除') &&
     view.includes('ENV_FILE=/opt/incudal/.env NODE_ENV=production node server/dist/scripts/lsky-production-proof.js') &&
-    view.includes('BACKEND_URL=http://127.0.0.1:3001') &&
+    view.includes('LIVE_LSKY_CLEANUP_WAIVER_REF="operator waiver ref"') &&
+    view.includes('BACKEND_URL="$PRODUCTION_BACKEND_LOOPBACK_URL"') &&
     view.includes('ENV_FILE=/opt/incudal/.env PROOF_SINCE_HOURS=24 pnpm verify:production-proof-snapshot') &&
     view.includes('REQUIRE_LIVE_PROOF_REFS=1 pnpm verify:live-acceptance') &&
     view.includes('禁止写入审计记录的内容'),

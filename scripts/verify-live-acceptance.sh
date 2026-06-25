@@ -19,6 +19,7 @@ LIVE_PAYMENT_PROOF_REF="${LIVE_PAYMENT_PROOF_REF:-}"
 LIVE_INCUS_PROOF_REF="${LIVE_INCUS_PROOF_REF:-}"
 LIVE_AGENT_PROOF_REF="${LIVE_AGENT_PROOF_REF:-}"
 LIVE_MAIL_PROOF_REF="${LIVE_MAIL_PROOF_REF:-}"
+LIVE_LSKY_CLEANUP_WAIVER_REF="${LIVE_LSKY_CLEANUP_WAIVER_REF:-}"
 LIVE_LOG_HEADER_PROOF_REF="${LIVE_LOG_HEADER_PROOF_REF:-}"
 LIVE_PROOF_MISSING=0
 REPORT_INITIALIZED=0
@@ -48,7 +49,8 @@ is_live_proof_placeholder() {
     'provider order/callback evidence URL or ticket' | \
     'Incus lifecycle evidence URL or ticket' | \
     'Agent install/report evidence URL or ticket' | \
-    'SMTP/Lsky/notification evidence URL or ticket' | \
+    'SMTP/notification evidence and Lsky cleanup waiver URL or ticket' | \
+    'Lsky cleanup waiver evidence URL or ticket' | \
     'header/log exposure evidence URL or ticket')
       return 0
       ;;
@@ -296,6 +298,7 @@ if [[ -n "$LIVE_ACCEPTANCE_REPORT" ]]; then
   append_live_proof_ref incus_resource_delivery "$LIVE_INCUS_PROOF_REF"
   append_live_proof_ref agent_install_reports "$LIVE_AGENT_PROOF_REF"
   append_live_proof_ref mail_lsky_notifications "$LIVE_MAIL_PROOF_REF"
+  append_live_proof_ref lsky_cleanup_scope_decision "$LIVE_LSKY_CLEANUP_WAIVER_REF"
   append_live_proof_ref log_header_exposure "$LIVE_LOG_HEADER_PROOF_REF"
 
   if [[ "$LIVE_PROOF_MISSING" == "0" ]]; then
@@ -313,7 +316,7 @@ if [[ "$PRINT_MANUAL_CHECKLIST" == "1" ]]; then
 - Real payment sandbox or low-value payment: valid callback completes once, replay/wrong signature rejected, credited amount matches records.
 - Real Incus lifecycle: create, start, stop, restart, reinstall/recreate, terminal, NAT/IPv6, traffic collection, delete.
 - Real Agent install: sha256-verified binary, fresh heartbeat, resources, metrics, instance report, traffic snapshots.
-- Real SMTP/mail source/Lsky/notification delivery with production credentials.
+- Real SMTP/mail source/notification delivery with production credentials; document the operator decision when Lsky cleanup proof is excluded from final scope.
 - Production log/header check: CSP/nosniff/frame/referrer headers, backend not public, no sensitive secrets in logs.
 CHECKLIST
   append_report ''
@@ -322,7 +325,7 @@ CHECKLIST
   append_report '- Real payment sandbox or low-value payment: valid callback completes once, replay/wrong signature rejected, credited amount matches records.'
   append_report '- Real Incus lifecycle: create, start, stop, restart, reinstall/recreate, terminal, NAT/IPv6, traffic collection, delete.'
   append_report '- Real Agent install: sha256-verified binary, fresh heartbeat, resources, metrics, instance report, traffic snapshots.'
-  append_report '- Real SMTP/mail source/Lsky/notification delivery with production credentials.'
+  append_report '- Real SMTP/mail source/notification delivery with production credentials; document the operator decision when Lsky cleanup proof is excluded from final scope.'
   append_report '- Production log/header check: CSP/nosniff/frame/referrer headers, backend not public, no sensitive secrets in logs.'
 fi
 
