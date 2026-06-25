@@ -59,9 +59,9 @@ const proofItems: ProofItem[] = [
   {
     key: 'smtp',
     title: 'SMTP 真实投递',
-    status: 'partial',
+    status: 'verified',
     risk: 'medium',
-    evidence: '生产 SMTP 测试邮件已被 provider 接受，仍缺收件箱回执或 provider message/log 引用。',
+    evidence: '生产 SMTP provider reference 已记录，投递侧证据已从最终 blocker 中移除。',
     safeNote: '记录测试收件引用、发送时间和成功状态，不记录 SMTP 密码。'
   },
   {
@@ -108,7 +108,7 @@ const proofItems: ProofItem[] = [
 
 const completedProofItems = 12
 const totalProofItems = 13
-const remainingProofItems = 2
+const remainingProofItems = 1
 
 const commands: CommandItem[] = [
   {
@@ -235,7 +235,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">待补真实证据</div>
         <div class="mt-2 text-3xl font-semibold text-themed">{{ remainingProofItems }}</div>
-        <div class="mt-2 text-xs text-themed-muted">SMTP 收件回执和 Lsky 删除清理仍需补齐</div>
+        <div class="mt-2 text-xs text-themed-muted">仅剩 Lsky 删除清理 proof</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">高风险操作窗口</div>
@@ -256,7 +256,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">2. 真实投递 proof</div>
-          <p class="mt-2 text-sm text-themed-muted">补齐 SMTP 收件回执或 provider 日志，并在具备删除权限后完成 Lsky 清理 proof。</p>
+          <p class="mt-2 text-sm text-themed-muted">SMTP 投递证据已记录；具备删除权限后完成 Lsky 清理 proof。</p>
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">3. 高风险业务 proof</div>
