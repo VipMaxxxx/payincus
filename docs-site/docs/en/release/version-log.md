@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `cefd77a`
+- Current HEAD / 当前 HEAD: `9fcbe28`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Update final proof scope waiver / 更新最终验收豁免口径
-- Latest tag / 最新 tag: `v0.6.5`
+- Commit subject / 提交说明: Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke
+- Latest tag / 最新 tag: `v0.6.6`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.6
+
+- Release commit / 发布提交: `9fcbe28`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke
+
+### Other Changes / 其他变更
+
+- Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke `9fcbe28`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.6.5 / 更新 v0.6.5 版本日志 `0e55c41`
 
 ## v0.6.5
 
