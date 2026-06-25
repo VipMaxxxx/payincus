@@ -6,16 +6,35 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `80d353e`
+- 当前 HEAD / Current HEAD: `79d00de`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Expose SMTP provider proof metadata
-- 最新 tag / Latest tag: `v0.5.5`
+- 提交说明 / Commit subject: Add Lsky production proof script
+- 最新 tag / Latest tag: `v0.5.6`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.5.6
+
+- 发布提交 / Release commit: `79d00de`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Add Lsky production proof script
+
+### 新增能力 / New Capabilities
+
+- Add Lsky production proof script `79d00de`
+
+### 其他变更 / Other Changes
+
+- Document Lsky cleanup blocker evidence `9c04f22`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after SMTP provider proof `6c191a9`
+- Update version log for v0.5.5 `d5989fe`
 
 ## v0.5.5
 

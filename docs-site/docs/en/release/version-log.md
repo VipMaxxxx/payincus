@@ -6,16 +6,35 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `80d353e`
+- Current HEAD / 当前 HEAD: `79d00de`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Expose SMTP provider proof metadata
-- Latest tag / 最新 tag: `v0.5.5`
+- Commit subject / 提交说明: Add Lsky production proof script
+- Latest tag / 最新 tag: `v0.5.6`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.5.6
+
+- Release commit / 发布提交: `79d00de`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Add Lsky production proof script
+
+### New Capabilities / 新增能力
+
+- Add Lsky production proof script `79d00de`
+
+### Other Changes / 其他变更
+
+- Document Lsky cleanup blocker evidence `9c04f22`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after SMTP provider proof `6c191a9`
+- Update version log for v0.5.5 `d5989fe`
 
 ## v0.5.5
 
