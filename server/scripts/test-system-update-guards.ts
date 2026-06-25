@@ -155,9 +155,10 @@ assert.ok(
 
 assert.ok(
   runTask.includes("pnpm', ['install', '--prod', '--frozen-lockfile']") &&
-    runTask.includes("timeoutMs: 600000, cwd: releaseDir") &&
-    runTask.includes("timeoutMs: 600000 })"),
-  'artifact updates must recreate production dependency symlinks inside the applied release, not keep links into temporary staging'
+    runTask.includes("timeoutMs: 600000,") &&
+    runTask.includes('cwd: releaseDir') &&
+    (runTask.match(/env: \{ CI: '1' \}/g) ?? []).length >= 2,
+  'artifact updates must recreate production dependency symlinks non-interactively inside the applied release, not keep links into temporary staging'
 )
 
 assert.ok(

@@ -114,12 +114,14 @@ async function probeLskyEndpoint(pathname: string): Promise<{
     const responseText = await response.text()
     const payload = parseJsonObject(responseText)
 
+    const isTokenPermissionsProbe = pathname === '/api/v2/user/tokens/permissions'
+
     return {
       ok: response.ok,
       status: response.status,
       contentType: response.headers.get('content-type'),
-      bodyPreview: sanitizePreview(responseText),
-      tokenAbilities: pathname === '/api/v2/user/tokens/permissions' && payload
+      bodyPreview: isTokenPermissionsProbe ? '[token-permissions-summary]' : sanitizePreview(responseText),
+      tokenAbilities: isTokenPermissionsProbe && payload
         ? summarizeTokenAbilities(payload)
         : undefined
     }
