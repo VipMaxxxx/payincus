@@ -716,7 +716,7 @@ Optional follow-up if final acceptance scope expands:
 
 Password-authenticated SSH was available again during the 2026-06-25 proof pass. A read-only recheck at `2026-06-25T03:57:08.849Z` confirmed Turnstile restored, temp secret file removed, and temporary test users banned.
 
-SSH has still been intermittently closed by the remote service during longer non-interactive commands. Prefer short read-only commands or an interactive shell for production proof, and never paste server passwords into handoff notes.
+SSH has still been intermittently closed by the remote service during non-interactive commands. A 2026-06-25 09:34 UTC retry for the read-only Lsky preflight and a shorter version check both closed at SSH before command execution, so the Lsky preflight was not refreshed in that pass. Public user/admin health endpoints still returned HTTP 200, and public `v0.5.6` Release/OTA manifest assets remained available. Prefer short read-only commands or an interactive shell for production proof, and never paste server passwords into handoff notes.
 
 Safe proof paste template for the user:
 
@@ -776,7 +776,7 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `7c530ca`.
+1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `1bacbc2`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 12/13 items, 92%.
 3. Treat `v0.5.6` production deployment/readiness as proven from the 2026-06-25 SSH proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.6-20260625091326`, version commit `79d00defc716`, deployed at `2026-06-25T09:13:34.875Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and OTA task `#63` completed successfully.
 4. Current latest-production boundary: `v0.5.6` is live, the production-proof workspace status correction and DB restore-drill verified state are live, SMTP provider-reference metadata is live, Lsky numeric provider-file-ID preservation is live, non-sensitive Lsky delete diagnostics are live, and the repeatable `lsky-production-proof` script is deployed. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete.
