@@ -155,62 +155,62 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.5.4 Update production proof workspace status
-feature commit: bbae57c
-version-log commit: f630dac
+v0.5.5 Expose SMTP provider proof metadata
+feature commit: 80d353e
+version-log commit: d5989fe
 docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.5.4: 28146079848 completed success.
-CI for main/version-log commit: 28146077728 completed success.
-Docs Pages for main/version-log commit: 28146077726 completed success.
+Build & Release for tag v0.5.5: 28146897806 completed success.
+CI for main/version-log commit: 28146896140 completed success.
+Docs Pages for main/version-log commit: 28146896144 completed success.
 ```
 
-Release assets confirmed publicly for `v0.5.4`:
+Release assets confirmed publicly for `v0.5.5`:
 
 ```text
 ota-manifest.json
-incudal-v0.5.4-linux-amd64.tar.gz
-incudal-v0.5.4-linux-amd64.tar.gz.sha256
-incudal-v0.5.4-linux-arm64.tar.gz
-incudal-v0.5.4-linux-arm64.tar.gz.sha256
-incudal-v0.5.4-ota-manifest.json
+incudal-v0.5.5-linux-amd64.tar.gz
+incudal-v0.5.5-linux-amd64.tar.gz.sha256
+incudal-v0.5.5-linux-arm64.tar.gz
+incudal-v0.5.5-linux-arm64.tar.gz.sha256
+incudal-v0.5.5-ota-manifest.json
 plugin-market-index.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 ```
 
-Published `v0.5.4` OTA manifest:
+Published `v0.5.5` OTA manifest:
 
 ```text
-version: v0.5.4
-gitCommit: bbae57c1b6dd
-buildTime: 2026-06-25T04:08:02.554Z
-amd64 artifact: incudal-v0.5.4-linux-amd64.tar.gz
-amd64 size: 90274617
-amd64 sha256: 2b704ea790a69bb87a5467bd8b5bdc7e6d7b6031688d82f1bd606c74d4919b91
-arm64 artifact: incudal-v0.5.4-linux-arm64.tar.gz
-arm64 size: 89396640
-arm64 sha256: 40b3a4776fa12d15d3ba34b67d65bbea12c6c20b3c177fa9b6575e42f2ff2e6e
+version: v0.5.5
+gitCommit: 80d353edbc80
+buildTime: 2026-06-25T04:31:26.372Z
+amd64 artifact: incudal-v0.5.5-linux-amd64.tar.gz
+amd64 size: 90272936
+amd64 sha256: 7a4de6c2fc52e0f50d18aa27eefa2b538bcd04387f7d86c2998df25a19666d8d
+arm64 artifact: incudal-v0.5.5-linux-arm64.tar.gz
+arm64 size: 89396289
+arm64 sha256: d3d849f245ffe79703939717f67cea8b11adf19e49e36b1b5b1996d789848806
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.5.4 from task #61
-task: #61
-target: v0.5.4
-fromVersion: v0.5.3
-started: 2026-06-25T04:09:31.938Z
-finished: 2026-06-25T04:10:48.920Z
-backup path: /opt/incudal/releases/v0.5.3-20260625024633
-release dir: /opt/incudal/releases/v0.5.4-20260625040931
-current release: /opt/incudal/releases/v0.5.4-20260625040931
-version.json: version/tag v0.5.4, commit bbae57c1b6dd, buildTime 2026-06-25T04:07:16.302Z, deployedAt 2026-06-25T04:09:41.074Z
+latest proven production version: v0.5.5 from task #62
+task: #62
+target: v0.5.5
+fromVersion: v0.5.4
+started: 2026-06-25T04:32:44.195Z
+finished: 2026-06-25T04:33:59.583Z
+backup path: /opt/incudal/releases/v0.5.4-20260625040931
+release dir: /opt/incudal/releases/v0.5.5-20260625043244
+current release: /opt/incudal/releases/v0.5.5-20260625043244
+version.json: version/tag v0.5.5, commit 80d353edbc80, buildTime 2026-06-25T04:30:59.426Z, deployedAt 2026-06-25T04:32:52.504Z
 verify-split-host: passed
 pnpm verify:production: passed
 verify-production-db: passed
@@ -226,14 +226,15 @@ Post-update checks:
 ```text
 The admin console contains a read-only Production Proof workspace at /admin/production-proof.
 The user build output does not contain the production-proof route, nav key, or page content.
-Production `v0.5.4` shows the production proof workspace status correction live: current progress is `12/13`, remaining proof count is `2`, and the remaining text is SMTP receipt plus Lsky cleanup.
+Production `v0.5.5` is live after the SMTP provider proof metadata release. Current proof progress is still `12/13`, but the remaining proof count is now `1`: Lsky confirmed deletion/provider cleanup.
 Production `v0.5.3` showed the production DB backup/restore drill as verified in the read-only proof workspace and is now task `#61` rollback backup.
-Production Lsky user-gallery list probe returned HTTP 403 with the configured token; previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
+Production Lsky user-gallery list probe returned HTTP 403 with the configured token; the later `v0.5.5` read-only probe confirmed config present, API v2 host `kkksr.com`, group endpoint HTTP 200, attachment count 0, and user-gallery HTTP 403. Previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
 Production DB backup/restore drill is now proven through a temporary database restore and cleanup check.
 Production Incus lifecycle is now proven on dedicated test instance #9: stop task #5, start task #6, restart task #7, recreate task #8, delete cleanup, DB status deleted, Incus object not found, and host CPU/memory/disk resources returned to baseline.
 Telegram delivery is proven by production bot message #339 to public group @Payincus.
 Turnstile/session browser smoke is proven through the approved temporary disable-and-restore path: user /dashboard and admin /admin/production-proof rendered after login, config restored, temp secret file removed, and test users #31/#32 banned.
-Remaining production proof is still incomplete: SMTP receipt/provider-log proof and Lsky confirmed deletion/provider cleanup.
+SMTP provider reference is proven by production send-test proof `smtp-provider-reference-2026-06-25T04:34:51.773Z`: recipient domain `qq.com`, provider reference `35bd2e0d-e817-1e31-ffde-de033e861c7e@qq.com`, accepted=1, rejected=0, pending=0, response `250 OK: queued as.`.
+Remaining production proof is still incomplete: Lsky confirmed deletion/provider cleanup.
 Current follow-up: configure a delete-capable Lsky token or use provider-side cleanup before more upload attempts; previous proof images may still need cleanup.
 ```
 
@@ -405,9 +406,9 @@ Latest production proof:
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - `v0.1.8` public release asset availability was verified directly. GitHub Actions API polling hit an anonymous rate limit during that check, so the latest fully recorded Actions run IDs in this handoff remain the earlier `v0.1.6` chain.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
-- Full-function audit progress is `12/13` categories complete, current category `13/13` is `12/13` items complete (`92%`). Remaining production blockers are business-proof blockers, not deployment blockers: SMTP receipt/provider-log proof and Lsky confirmed deletion/provider cleanup.
+- Full-function audit progress is `12/13` categories complete, current category `13/13` is `12/13` items complete (`92%`). Remaining production blocker is a business-proof/provider blocker, not a deployment blocker: Lsky confirmed deletion/provider cleanup.
 
-Latest release proof:
+Previous `v0.5.4` release proof:
 
 - `v0.5.4` was tagged from commit `bbae57c Update production proof workspace status`.
 - Version-log commit `f630dac Update version log for v0.5.4` is current `payincus/main`.
@@ -689,9 +690,8 @@ Not completed:
 
 - Final real production business proof.
 
-Remaining production proof items:
+Remaining production proof item:
 
-- Real SMTP receipt/provider-log proof.
 - Real Lsky confirmed deletion/provider cleanup.
 
 Optional follow-up if final acceptance scope expands:
@@ -761,12 +761,12 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `f630dac`.
+1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `d5989fe`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 12/13 items, 92%.
-3. Treat `v0.5.4` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.4-20260625040931`, version commit `bbae57c1b6dd`, deployed at `2026-06-25T04:09:41.074Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and public user/admin health returned OK.
-4. Current latest-production boundary: `v0.5.4` is live, the production-proof workspace status correction and DB restore-drill verified state are live, Lsky numeric provider-file-ID preservation is live, and non-sensitive Lsky delete diagnostics are live. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API.
+3. Treat `v0.5.5` production deployment/readiness as proven from the 2026-06-25 SSH proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.5-20260625043244`, version commit `80d353edbc80`, deployed at `2026-06-25T04:32:52.504Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and OTA task `#62` completed successfully.
+4. Current latest-production boundary: `v0.5.5` is live, the production-proof workspace status correction and DB restore-drill verified state are live, SMTP provider-reference metadata is live, Lsky numeric provider-file-ID preservation is live, and non-sensitive Lsky delete diagnostics are live. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API.
 5. Treat the core Incus lifecycle as proven on a dedicated test instance: #9 on host #2 completed stop/start/restart/recreate/delete cleanup, and existing proof already covers create, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic. Only run suspend/unsuspend, IPv6, or host-migration smoke if these remain in final acceptance scope.
-6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram delivery is proven by message `#339` to `@Payincus`; Lsky needs a delete-capable token or provider-side cleanup before more upload attempts.
+6. Complete delivery proof: SMTP provider reference is proven by `smtp-provider-reference-2026-06-25T04:34:51.773Z`; Telegram delivery is proven by message `#339` to `@Payincus`; Lsky still needs a delete-capable token or provider-side cleanup before more upload attempts.
 7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
 8. Treat the approved temporary Turnstile disable-and-restore smoke as proven unless final acceptance specifically requires a human-solved Cloudflare challenge UX.
 9. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` with the approved disable-and-restore auth smoke reference, or with an additional human-solved Turnstile reference if final acceptance scope requires it.
