@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-ad45707 Update version log for v0.5.3
+f630dac Update version log for v0.5.4
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-d3c675a Update handoff after v0.5.3 production proof
+f630dac Update version log for v0.5.4
 ```
 
 Recently updated/released files include:
@@ -155,62 +155,62 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.5.3 Add production DB restore drill proof
-feature commit: 2e99abc
-version-log commit: ad45707
+v0.5.4 Update production proof workspace status
+feature commit: bbae57c
+version-log commit: f630dac
 docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.5.3: 28143281742 completed success.
-CI for main/version-log commit: 28143279779 completed success.
-Docs Pages for main/version-log commit: 28143279788 completed success.
+Build & Release for tag v0.5.4: 28146079848 completed success.
+CI for main/version-log commit: 28146077728 completed success.
+Docs Pages for main/version-log commit: 28146077726 completed success.
 ```
 
-Release assets confirmed publicly for `v0.5.3`:
+Release assets confirmed publicly for `v0.5.4`:
 
 ```text
 ota-manifest.json
-incudal-v0.5.3-linux-amd64.tar.gz
-incudal-v0.5.3-linux-amd64.tar.gz.sha256
-incudal-v0.5.3-linux-arm64.tar.gz
-incudal-v0.5.3-linux-arm64.tar.gz.sha256
-incudal-v0.5.3-ota-manifest.json
+incudal-v0.5.4-linux-amd64.tar.gz
+incudal-v0.5.4-linux-amd64.tar.gz.sha256
+incudal-v0.5.4-linux-arm64.tar.gz
+incudal-v0.5.4-linux-arm64.tar.gz.sha256
+incudal-v0.5.4-ota-manifest.json
 plugin-market-index.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 ```
 
-Published `v0.5.3` OTA manifest:
+Published `v0.5.4` OTA manifest:
 
 ```text
-version: v0.5.3
-gitCommit: 2e99abc73234
-buildTime: 2026-06-25T02:44:34.111Z
-amd64 artifact: incudal-v0.5.3-linux-amd64.tar.gz
-amd64 size: 90270425
-amd64 sha256: c821cb4e7a83e996d09e0d83d87e54c26607a9e25d95ae051aff6267cb6abaf9
-arm64 artifact: incudal-v0.5.3-linux-arm64.tar.gz
-arm64 size: 89384211
-arm64 sha256: af97ac13056c2444cfb9facbfecf568774482d88220d1f990d37c923bc1a7f19
+version: v0.5.4
+gitCommit: bbae57c1b6dd
+buildTime: 2026-06-25T04:08:02.554Z
+amd64 artifact: incudal-v0.5.4-linux-amd64.tar.gz
+amd64 size: 90274617
+amd64 sha256: 2b704ea790a69bb87a5467bd8b5bdc7e6d7b6031688d82f1bd606c74d4919b91
+arm64 artifact: incudal-v0.5.4-linux-arm64.tar.gz
+arm64 size: 89396640
+arm64 sha256: 40b3a4776fa12d15d3ba34b67d65bbea12c6c20b3c177fa9b6575e42f2ff2e6e
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.5.3 from task #60
-task: #60
-target: v0.5.3
-fromVersion: v0.5.2
-started: 2026-06-25T02:46:33.257Z
-finished: 2026-06-25T02:47:50.677Z
-backup path: /opt/incudal/releases/v0.5.2-20260625020602
-release dir: /opt/incudal/releases/v0.5.3-20260625024633
-current release: /opt/incudal/releases/v0.5.3-20260625024633
-version.json: version/tag v0.5.3, commit 2e99abc73234, buildTime 2026-06-25T02:43:53.259Z, deployedAt 2026-06-25T02:46:41.873Z
+latest proven production version: v0.5.4 from task #61
+task: #61
+target: v0.5.4
+fromVersion: v0.5.3
+started: 2026-06-25T04:09:31.938Z
+finished: 2026-06-25T04:10:48.920Z
+backup path: /opt/incudal/releases/v0.5.3-20260625024633
+release dir: /opt/incudal/releases/v0.5.4-20260625040931
+current release: /opt/incudal/releases/v0.5.4-20260625040931
+version.json: version/tag v0.5.4, commit bbae57c1b6dd, buildTime 2026-06-25T04:07:16.302Z, deployedAt 2026-06-25T04:09:41.074Z
 verify-split-host: passed
 pnpm verify:production: passed
 verify-production-db: passed
@@ -226,7 +226,8 @@ Post-update checks:
 ```text
 The admin console contains a read-only Production Proof workspace at /admin/production-proof.
 The user build output does not contain the production-proof route, nav key, or page content.
-Production `v0.5.3` shows the production DB backup/restore drill as verified in the read-only proof workspace and is live.
+Production `v0.5.4` shows the production proof workspace status correction live: current progress is `12/13`, remaining proof count is `2`, and the remaining text is SMTP receipt plus Lsky cleanup.
+Production `v0.5.3` showed the production DB backup/restore drill as verified in the read-only proof workspace and is now task `#61` rollback backup.
 Production Lsky user-gallery list probe returned HTTP 403 with the configured token; previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
 Production DB backup/restore drill is now proven through a temporary database restore and cleanup check.
 Production Incus lifecycle is now proven on dedicated test instance #9: stop task #5, start task #6, restart task #7, recreate task #8, delete cleanup, DB status deleted, Incus object not found, and host CPU/memory/disk resources returned to baseline.
@@ -252,7 +253,19 @@ pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The latest release chain was verified locally by the targeted guards, client/server build/type-check, docs version-log generation, docs build, diff hygiene, remote main/tag refs, public Release artifact availability, GitHub Build & Release/CI/Pages success, and production `v0.5.3` deployment/readiness proof. Final production acceptance still remains pending until the remaining real business proofs are captured.
+The previous `v0.5.3` release chain was verified locally by the targeted guards, client/server build/type-check, docs version-log generation, docs build, diff hygiene, remote main/tag refs, public Release artifact availability, GitHub Build & Release/CI/Pages success, and production deployment/readiness proof. Final production acceptance still remains pending until the remaining real business proofs are captured.
+
+Local gates run for `v0.5.4`:
+
+```text
+pnpm --filter server test:production-proof-center-guards
+pnpm --filter client type-check
+pnpm --filter client build
+pnpm --dir docs-site --ignore-workspace build
+git diff --check
+```
+
+The latest release chain was refreshed for `v0.5.4`: GitHub Build & Release/CI/Pages succeeded, production OTA task `#61` completed successfully, public user/admin health checks passed, docs version-log pages contain `v0.5.4`, and server-side admin dist grep confirmed the live production-proof chunk contains the new `12/13` progress plus SMTP/Lsky remaining-proof wording.
 
 Current commercial operation progress:
 
@@ -396,6 +409,14 @@ Latest production proof:
 
 Latest release proof:
 
+- `v0.5.4` was tagged from commit `bbae57c Update production proof workspace status`.
+- Version-log commit `f630dac Update version log for v0.5.4` is current `payincus/main`.
+- GitHub Release `v0.5.4` is public and has OTA manifests, linux amd64/arm64 tarballs, both `.sha256` files, and plugin market assets.
+- Public `ota-manifest.json` reports version `v0.5.4`, commit `bbae57c1b6dd`, linux amd64 SHA256 `2b704ea790a69bb87a5467bd8b5bdc7e6d7b6031688d82f1bd606c74d4919b91`, and amd64 size `90274617`.
+- GitHub Actions proof: Build & Release run `28146079848`, CI run `28146077728`, and GitHub Pages run `28146077726` completed successfully.
+- Production OTA task `#61` updated `v0.5.3 -> v0.5.4`, ended `success`, switched `/opt/incudal/current` to `/opt/incudal/releases/v0.5.4-20260625040931`, and `version.json` reports commit `bbae57c1b6dd`, build time `2026-06-25T04:07:16.302Z`, deployed at `2026-06-25T04:09:41.074Z`.
+- OTA task `#61` log recorded backend health, split-host, production readiness, DB readiness, Agent manifest, log/header secret scan, OTA cache cleanup, release retention/prune, and `System update completed successfully`.
+- Public follow-up checks returned HTTP 200 for user/admin `/api/health`; docs version-log pages contain `v0.5.4`; server-side admin dist grep confirmed the live production-proof chunk contains the new `12/13` progress, SMTP/Lsky remaining wording, Telegram proof wording, and Turnstile disable-and-restore wording.
 - `v0.2.5` was tagged from commit `49959a2 Harden OTA cleanup and disk preflight / 加固 OTA 清理与磁盘预检`.
 - Version-log commit `4ae29d8 Update version log for v0.2.5 / 更新 v0.2.5 版本日志` is current `payincus/main`.
 - GitHub Release `v0.2.5` is public and has the OTA manifest, versioned manifest, linux amd64/arm64 tarballs, and both `.sha256` files.
@@ -740,10 +761,10 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; before this Incus-proof handoff refresh, the tracked baseline is `d3c675a`.
+1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `f630dac`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 12/13 items, 92%.
-3. Treat `v0.5.3` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.3-20260625024633`, version commit `2e99abc73234`, deployed at `2026-06-25T02:46:41.873Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and public user/admin health returned OK.
-4. Current latest-production boundary: `v0.5.3` is live, the production-proof workspace KPI correction and DB restore-drill verified state are live, Lsky numeric provider-file-ID preservation is live, and non-sensitive Lsky delete diagnostics are live. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API.
+3. Treat `v0.5.4` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.4-20260625040931`, version commit `bbae57c1b6dd`, deployed at `2026-06-25T04:09:41.074Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and public user/admin health returned OK.
+4. Current latest-production boundary: `v0.5.4` is live, the production-proof workspace status correction and DB restore-drill verified state are live, Lsky numeric provider-file-ID preservation is live, and non-sensitive Lsky delete diagnostics are live. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API.
 5. Treat the core Incus lifecycle as proven on a dedicated test instance: #9 on host #2 completed stop/start/restart/recreate/delete cleanup, and existing proof already covers create, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic. Only run suspend/unsuspend, IPv6, or host-migration smoke if these remain in final acceptance scope.
 6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram delivery is proven by message `#339` to `@Payincus`; Lsky needs a delete-capable token or provider-side cleanup before more upload attempts.
 7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
