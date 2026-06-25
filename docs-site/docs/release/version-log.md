@@ -6,16 +6,24 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `7ae4967`
+- 当前 HEAD / Current HEAD: `cd8797b`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Fix Lsky upload cleanup identifier / 修复 Lsky 上传清理标识
-- 最新 tag / Latest tag: `v0.4.9`
+- 提交说明 / Commit subject: Fix production proof workspace progress
+- 最新 tag / Latest tag: `v0.5.0`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.5.0
+
+- 发布提交 / Release commit: `cd8797b`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Fix production proof workspace progress
+
+Use the ledger-backed 7/13 Category 13 proof count in the admin production proof workspace instead of deriving progress from grouped display rows.
 
 ## v0.4.9
 
