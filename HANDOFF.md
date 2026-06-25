@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-f630dac Update version log for v0.5.4
+f6094bf Update version log for v0.6.2 / 更新 v0.6.2 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-f630dac Update version log for v0.5.4
+f6094bf Update version log for v0.6.2 / 更新 v0.6.2 版本日志
 ```
 
 Recently updated/released files include:
@@ -155,59 +155,57 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.5.9 Harden artifact OTA install directory handling
-feature commit: 800c509
-version-log commit: 2360bde
+v0.6.2 Force artifact OTA dependency install
+feature commit: 0f67f1d
+version-log commit: f6094bf
 docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.5.9: run 28166024694 completed successfully.
-CI for feature commit 800c509: run 28166021879 completed successfully.
-CI for version-log commit 2360bde: run 28166039786 completed successfully.
-Docs Pages for version-log commit 2360bde: run 28166039793 completed successfully.
+Build & Release for tag v0.6.2: run 28173791822 completed successfully.
+CI for version-log commit f6094bf: run 28173791846 completed successfully.
+Docs Pages for version-log commit f6094bf: run 28173792049 completed successfully.
 ```
 
-Release assets confirmed publicly for `v0.5.9`:
+Release assets confirmed publicly for `v0.6.2`:
 
 ```text
 ota-manifest.json
-incudal-v0.5.9-linux-amd64.tar.gz
-incudal-v0.5.9-linux-amd64.tar.gz.sha256
-incudal-v0.5.9-linux-arm64.tar.gz
-incudal-v0.5.9-linux-arm64.tar.gz.sha256
-incudal-v0.5.9-ota-manifest.json
+incudal-v0.6.2-linux-amd64.tar.gz
+incudal-v0.6.2-linux-amd64.tar.gz.sha256
+incudal-v0.6.2-linux-arm64.tar.gz
+incudal-v0.6.2-linux-arm64.tar.gz.sha256
+incudal-v0.6.2-ota-manifest.json
 ```
 
-Published `v0.5.9` OTA manifest:
+Published `v0.6.2` OTA manifest:
 
 ```text
-version: v0.5.9
-gitCommit: 800c5092ece2
-buildTime: 2026-06-25T11:14:51.678Z
-amd64 artifact: incudal-v0.5.9-linux-amd64.tar.gz
-amd64 size: 90286453
-amd64 sha256: 4d4b628219798cab...
-arm64 artifact: incudal-v0.5.9-linux-arm64.tar.gz
-arm64 size: 89408643
-arm64 sha256: 583d3ab78c97be5b...
+version: v0.6.2
+gitCommit: 0f67f1d2fe54
+buildTime: 2026-06-25T13:33:57.748Z
+amd64 artifact: incudal-v0.6.2-linux-amd64.tar.gz
+amd64 size: 90287909
+amd64 sha256: 3fdad10bf3fe2c7222f965997d2d9aaf8498204039b2556515bc2d832a1e6628
+arm64 artifact: incudal-v0.6.2-linux-arm64.tar.gz
+arm64 size: 89412338
+arm64 sha256: 1c9a9b09a3f4def7e32d712e5819efd21e17dd9f7ef76c14bca04f97fd26e227
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.5.9 from task #66
-task: #66
-target: v0.5.9
-fromVersion: v0.5.8
-started: 2026-06-25T11:19:08.498Z
-finished: 2026-06-25T11:20:29.065Z
-backup path: /opt/incudal/releases/v0.5.7-20260625102424
-release dir: /opt/incudal/releases/v0.5.9-20260625111908
-current release: /opt/incudal/releases/v0.5.9-20260625111908
-version.json: version/tag v0.5.9, commit 800c5092ece2, buildTime 2026-06-25T11:14:20.627Z, deployedAt 2026-06-25T11:19:22.468Z
+latest proven production version: v0.6.2 from task #69
+task: #69
+target: v0.6.2
+fromVersion: v0.6.1
+started: 2026-06-25T13:35:27.101Z
+finished: 2026-06-25T13:36:52.712Z
+release dir: /opt/incudal/releases/v0.6.2-20260625133527
+current release: /opt/incudal/releases/v0.6.2-20260625133527
+version.json: version/tag v0.6.2, commit 0f67f1d2fe54, buildTime 2026-06-25T13:33:18.702Z, deployedAt 2026-06-25T13:35:46.736Z
 verify-split-host: passed
 pnpm verify:production: passed
 verify-production-db: passed
@@ -216,21 +214,23 @@ pnpm verify:log-header: passed
 secret log/header scan: passed
 update result: System update completed successfully
 cleanup: OTA download cache cleaned; old release pruning executed with protected-release retention
-post-OTA dependency repair: CI=1 pnpm install --prod --frozen-lockfile recreated production node_modules symlinks inside the current release, Prisma client resolved, backend restarted, local health returned ok
+post-OTA dependency check: SERVER_NODE_MODULES_OK passed from /opt/incudal/current/server
+deployed updater marker: /opt/incudal/current/server/dist/scripts/run-system-update-task.js contains pnpm install --prod --frozen-lockfile --force for future artifact OTAs
 ```
 
-Production OTA follow-up for `v0.5.9`:
+Production OTA follow-up for `v0.6.2`:
 
 ```text
-task: #66
-target: v0.5.9
+task: #69
+target: v0.6.2
 status: success
-fromVersion: v0.5.8
-logPath: /opt/incudal/update-logs/system-update-66.log
+fromVersion: v0.6.1
+logPath: /opt/incudal/update-logs/system-update-69.log
 public health after update: user/admin /api/health returned HTTP 200
 production readiness: passed
 log/header exposure check: passed
-runner marker proof: deriveInstallDir handles /current and /releases/<version>; artifact mode runs pnpm install --prod --frozen-lockfile in the applied release
+runner marker proof: deployed v0.6.2 updater has --force in both artifact production dependency install paths
+runner nuance: task #69 itself was started by the previous v0.6.1 updater, so its log still shows pnpm install --prod --frozen-lockfile without --force; the --force change is deployed for the next OTA boundary
 update result: System update completed successfully
 cleanup: OTA download cache cleaned; old release pruning executed with protected-release retention
 ```
@@ -240,9 +240,9 @@ Post-update checks:
 ```text
 The admin console contains a read-only Production Proof workspace at /admin/production-proof.
 The user build output does not contain the production-proof route, nav key, or page content.
-Production `v0.5.9` is live after the artifact OTA install-dir/dependency-symlink hardening release. Current proof progress is still `12/13`, but the remaining proof count is now `1`: Lsky confirmed deletion/provider cleanup.
+Production `v0.6.2` is live after the Lsky proof redaction and artifact dependency install hardening releases. Current proof progress is still `12/13`, but the remaining proof count is now `1`: Lsky confirmed deletion/provider cleanup.
 Production `v0.5.3` showed the production DB backup/restore drill as verified in the read-only proof workspace and is now task `#61` rollback backup.
-Production Lsky proof script is deployed at `server/dist/scripts/lsky-production-proof.js`. Latest read-only proof `lsky-upload-delete-proof-2026-06-25T11:29:54.576Z` confirmed config present, API v2 host `kkksr.com`, group endpoint HTTP 200, existing Lsky attachment count 0, and `/api/v2/user/photos?page=1&per_page=1` HTTP 403 with token-permission denial. Previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
+Production Lsky proof script is deployed at `server/dist/scripts/lsky-production-proof.js`. Latest read-only proof `lsky-upload-delete-proof-2026-06-25T13:37:40.242Z` confirmed config present, API v2 host `kkksr.com`, group endpoint HTTP 200, token permission endpoint HTTP 200 with redacted summary output, token abilities only include `upload:write`, missing `user:photo:read` and `user:photo:write`, and `/api/v2/user/photos?page=1&per_page=1` returned HTTP 403. Previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
 Official Lsky Pro+ API docs confirm `DELETE /api/v2/user/photos` expects a JSON numeric ID array and returns HTTP 204 on successful deletion. The current production code matches this endpoint/body shape. A later production DB-only known-ID search `lsky-db-known-id-readonly-search-2026-06-25T04:54:26.080Z` found `attachmentCount=0` and no Lsky providerFileId in matched business log rows, so there is no safe persisted proof image ID to delete from the app side.
 Current code review confirms there is no safe no-upload/no-known-ID deletion proof path: `deleteTicketImageFromLsky()` requires a numeric Lsky v2 provider ID before it sends `DELETE /api/v2/user/photos`, and the proof script refuses commit mode while `/api/v2/user/photos` returns HTTP 403. Do not probe production with guessed IDs, empty delete arrays, or invalid-ID delete requests.
 Production DB backup/restore drill is now proven through a temporary database restore and cleanup check.
@@ -251,7 +251,7 @@ Telegram delivery is proven by production bot message #339 to public group @Payi
 Turnstile/session browser smoke is proven through the approved temporary disable-and-restore path: user /dashboard and admin /admin/production-proof rendered after login, config restored, temp secret file removed, and test users #31/#32 banned.
 SMTP provider reference is proven by production send-test proof `smtp-provider-reference-2026-06-25T04:34:51.773Z`: recipient domain `qq.com`, provider reference `35bd2e0d-e817-1e31-ffde-de033e861c7e@qq.com`, accepted=1, rejected=0, pending=0, response `250 OK: queued as.`.
 Remaining production proof is still incomplete: Lsky confirmed deletion/provider cleanup.
-Current follow-up: configure a delete-capable Lsky token or use provider-side cleanup before commit-mode proof; previous proof images may still need cleanup. Once that is available, run `LSKY_PROOF_COMMIT=1 ENV_FILE=/opt/incudal/.env NODE_ENV=production node server/dist/scripts/lsky-production-proof.js` and prove `DELETE /api/v2/user/photos` returns success/204 for its numeric provider ID.
+Current follow-up: configure a delete-capable Lsky token with `user:photo:read` and `user:photo:write`, use a wildcard token, or perform provider-side cleanup before commit-mode proof; previous proof images may still need cleanup. Once that is available, run `LSKY_PROOF_COMMIT=1 ENV_FILE=/opt/incudal/.env NODE_ENV=production node server/dist/scripts/lsky-production-proof.js` and prove `DELETE /api/v2/user/photos` returns success/204 for its numeric provider ID.
 ```
 
 Local gates run for `v0.5.3`:
@@ -335,6 +335,22 @@ git diff --check
 ```
 
 The `v0.5.9` release fixes the artifact OTA issue: start/update/rollback scripts now derive `installDir` correctly when `process.cwd()` resolves to `/opt/incudal/releases/<version>`, and artifact updates run `pnpm install --prod --frozen-lockfile` inside the applied release so node_modules symlinks do not point into temporary staging. GitHub Build & Release run `28166024694`, product CI run `28166021879`, version-log CI run `28166039786`, and Pages run `28166039793` succeeded. Production task `#66` completed successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v0.5.9-20260625111908`; a post-OTA production `CI=1 pnpm install --prod --frozen-lockfile` repaired the one remaining old-runner symlink issue, backend restart passed local health, and public user/admin `/api/health` returned HTTP 200.
+
+Local gates run for `v0.6.0-v0.6.2`:
+
+```text
+pnpm --filter server test:lsky-production-proof-guards
+pnpm --filter server test:ticket-image-security
+pnpm --filter server test:system-update-guards
+pnpm --filter server type-check
+pnpm --filter server build
+pnpm build
+pnpm docs:changelog
+pnpm --dir docs-site --ignore-workspace build
+git diff --check
+```
+
+The `v0.6.0-v0.6.2` release chain redacts Lsky token permission previews, reports missing Lsky abilities explicitly, and hardens future artifact OTA dependency installs by adding `--force` to both production install paths. GitHub Build & Release run `28173791822`, CI run `28173791846`, and Pages run `28173792049` succeeded for the latest `v0.6.2` boundary. Production task `#69` completed successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v0.6.2-20260625133527`; `SERVER_NODE_MODULES_OK`, public user/admin `/api/health`, deployed updater `--force` marker grep, split-host, production readiness, DB readiness, Agent manifest, and log/header checks passed. Latest Lsky preflight `lsky-upload-delete-proof-2026-06-25T13:37:40.242Z` still blocks commit-mode cleanup because the production Lsky token only has `upload:write` and is missing `user:photo:read` plus `user:photo:write`.
 
 Current commercial operation progress:
 
@@ -831,10 +847,10 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `233cfe6`.
+1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `f6094bf`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 12/13 items, 92%.
-3. Treat `v0.5.9` production deployment/readiness as the latest proven production deployment from the 2026-06-25 SSH proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.9-20260625111908`, version commit `800c5092ece2`, deployed at `2026-06-25T11:19:22.468Z`, production readiness/DB/split-host/Agent manifest/log-header passed, dependency symlink repair and backend restart health passed, and OTA task `#66` completed successfully.
-4. Current latest-production boundary: `v0.5.9` is live and proven via task `#66`. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete.
+3. Treat `v0.6.2` production deployment/readiness as the latest proven production deployment from the 2026-06-25 SSH proof: `/opt/incudal/current -> /opt/incudal/releases/v0.6.2-20260625133527`, version commit `0f67f1d2fe54`, deployed at `2026-06-25T13:35:46.736Z`, production readiness/DB/split-host/Agent manifest/log-header passed, `SERVER_NODE_MODULES_OK` passed, deployed updater `--force` marker grep passed, and OTA task `#69` completed successfully.
+4. Current latest-production boundary: `v0.6.2` is live and proven via task `#69`. Lsky cleanup is still not proven because the configured production Lsky token only has `upload:write`, is missing `user:photo:read` and `user:photo:write`, returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete.
 5. Treat the core Incus lifecycle as proven on a dedicated test instance: #9 on host #2 completed stop/start/restart/recreate/delete cleanup, and existing proof already covers create, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic. Only run suspend/unsuspend, IPv6, or host-migration smoke if these remain in final acceptance scope.
 6. Complete delivery proof: SMTP provider reference is proven by `smtp-provider-reference-2026-06-25T04:34:51.773Z`; Telegram delivery is proven by message `#339` to `@Payincus`; Lsky still needs a delete-capable token or provider-side cleanup before commit-mode proof. The target endpoint is `DELETE /api/v2/user/photos` with a JSON numeric ID array; do not use guessed IDs or invalid/empty delete probes as proof.
 7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
