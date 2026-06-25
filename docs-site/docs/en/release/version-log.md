@@ -6,16 +6,24 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `7ae4967`
+- Current HEAD / 当前 HEAD: `cd8797b`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Fix Lsky upload cleanup identifier / 修复 Lsky 上传清理标识
-- Latest tag / 最新 tag: `v0.4.9`
+- Commit subject / 提交说明: Fix production proof workspace progress
+- Latest tag / 最新 tag: `v0.5.0`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.5.0
+
+- Release commit / 发布提交: `cd8797b`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Fix production proof workspace progress
+
+Use the ledger-backed 7/13 Category 13 proof count in the admin production proof workspace instead of deriving progress from grouped display rows.
 
 ## v0.4.9
 
