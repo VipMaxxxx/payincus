@@ -155,63 +155,61 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.4.9 Lsky upload cleanup identifier / Lsky 上传清理标识
-feature commit: 7ae4967
-version-log commit: 59152d3
+v0.5.1 Fix Lsky v2 image deletion / 修复 Lsky v2 图片删除
+feature commit: b8eabc0
+version-log commit: d2f423b
 docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.4.9: 28137207222 completed success.
-CI for main commit 59152d3: 28137213612 completed success.
-Deploy docs site to GitHub Pages for 59152d3: 28137213593 completed success.
+GitHub API checks were rate-limited in the final v0.5.1 refresh.
+Use the public Release assets and remote refs below as the authoritative proof captured in this handoff.
 ```
 
-Release assets confirmed publicly for `v0.4.9`:
+Release assets confirmed publicly for `v0.5.1`:
 
 ```text
 ota-manifest.json
-incudal-v0.4.9-linux-amd64.tar.gz
-incudal-v0.4.9-linux-amd64.tar.gz.sha256
-incudal-v0.4.9-linux-arm64.tar.gz
-incudal-v0.4.9-linux-arm64.tar.gz.sha256
-incudal-v0.4.9-ota-manifest.json
+incudal-v0.5.1-linux-amd64.tar.gz
+incudal-v0.5.1-linux-amd64.tar.gz.sha256
+incudal-v0.5.1-linux-arm64.tar.gz
+incudal-v0.5.1-linux-arm64.tar.gz.sha256
+incudal-v0.5.1-ota-manifest.json
 plugin-market-index.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 ```
 
-Published `v0.4.9` OTA manifest:
+Published `v0.5.1` OTA manifest:
 
 ```text
-version: v0.4.9
-gitCommit: 7ae4967315b9
-buildTime: 2026-06-24T23:55:17.892Z
-amd64 artifact: incudal-v0.4.9-linux-amd64.tar.gz
-amd64 size: 90274410
-amd64 sha256: 434a8b553aaddc5f983242b30536cdf6f38155c3de6092deec42b00231815875
-arm64 artifact: incudal-v0.4.9-linux-arm64.tar.gz
-arm64 size: 89384768
-arm64 sha256: 07a1b51bb55aca7690d50899b52204f34ab387cd50a5d01bd94f7c7b34ca8e60
+version: v0.5.1
+gitCommit: b8eabc0972f2
+buildTime: 2026-06-25T01:40:28.261Z
+amd64 artifact: incudal-v0.5.1-linux-amd64.tar.gz
+amd64 size: 90272158
+amd64 sha256: c42a56f6b9b6ba19ff8fdbfbfb53cd8d10bcfb453dd270dce5ddf5fe8913031e
+arm64 artifact: incudal-v0.5.1-linux-arm64.tar.gz
+arm64 size: 89388840
+arm64 sha256: d746a9d0ae6c9afc5c07a9cf8f58b07577ca8ca59e870bbb3ca731ae230c5803
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.4.8 from task #56
-task: #56
-target: v0.4.8
-started: 2026-06-24T23:27:07.761Z
-artifact: incudal-v0.4.8-linux-amd64.tar.gz
-artifact size: 90272197 bytes
-artifact sha256: ab02dcaa5c7aa72de1dd9a9bd1b0511aea8de036a7b6a1ce486b54ccd91884e3
-release dir: /opt/incudal/releases/v0.4.8-20260624232707
-current release: /opt/incudal/releases/v0.4.8-20260624232707
-prisma: 155 migrations found, no pending migrations
-post-restart health: passed on attempt 2
+latest proven production version: v0.5.1 from task #58
+task: #58
+target: v0.5.1
+fromVersion: v0.5.0
+started: 2026-06-25T01:46:06.430Z
+finished: 2026-06-25T01:47:24.956Z
+backup path: /opt/incudal/releases/v0.5.0-20260625011155
+release dir: /opt/incudal/releases/v0.5.1-20260625014606
+current release: /opt/incudal/releases/v0.5.1-20260625014606
+version.json: version/tag v0.5.1, commit b8eabc0972f2, buildTime 2026-06-25T01:40:00.341Z, deployedAt 2026-06-25T01:46:14.872Z
 verify-split-host: passed
 pnpm verify:production: passed
 verify-production-db: passed
@@ -219,9 +217,7 @@ agent manifest check: passed
 pnpm verify:log-header: passed
 secret log/header scan: passed
 update result: System update completed successfully
-cleanup: OTA download cache cleaned; old release v0.3.4-20260624164225 removed
-v0.4.9 production apply status: not run/proven in this session
-reason: no safe non-recording production credential channel was available for running the OTA command; do not write the server password into commands or logs
+cleanup: OTA download cache cleaned; old release pruning executed with protected-release retention
 ```
 
 Post-update checks:
@@ -229,14 +225,13 @@ Post-update checks:
 ```text
 The admin console contains a read-only Production Proof workspace at /admin/production-proof.
 The user build output does not contain the production-proof route, nav key, or page content.
-Public health checks returned HTTP 200 with TLS verify result 0 for https://pay.payincus.com/api/health and https://admin.payincus.com/api/health.
-The public admin route https://admin.payincus.com/admin/production-proof returned HTTP 200.
-Public admin asset scan found v0.4.8 production-proof markers in current hashed assets: /assets/28Cvyvon.js, /assets/OnPAze1M.js, and /assets/DbBP0PUF.js.
-Remaining production proof is still incomplete: Incus start/restart/recreate/delete/cleanup, SMTP delivery, Lsky upload, Telegram/in-app notification delivery, Turnstile/session browser smoke, and backup/restore drill.
-Current follow-up: production is now proven on `v0.5.0`, and the Lsky upload metadata fallback is live: a new production 1x1 PNG upload preserved a provider file ID. Cleanup still returned `cleanupDeleted=false`, so do not count Lsky proof complete until provider-side deletion succeeds and the proof images are cleaned up.
+Production `v0.5.1` Lsky upload proof preserved a numeric providerFileId, so the numeric-ID hotfix is live.
+Cleanup still returned `cleanupDeleted=false`, and delete-endpoint diagnostics hung before status output.
+Remaining production proof is still incomplete: Incus start/restart/recreate/delete/cleanup, SMTP receipt/provider-log proof, Lsky confirmed deletion, Telegram/in-app notification delivery, Turnstile/session browser smoke, and backup/restore drill.
+Current follow-up: stop repeated Lsky upload attempts until the provider delete behavior is understood or provider-side cleanup is available; previous proof images may still need cleanup.
 ```
 
-Local gates run for `v0.4.9`:
+Local gates run for `v0.5.1`:
 
 ```text
 pnpm --filter server test:ticket-image-security
@@ -247,7 +242,7 @@ pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The latest release chain was verified locally by the targeted guards, client build/type-check, docs version-log generation, docs build, diff hygiene, GitHub CI, GitHub Pages, public Release artifact availability, and later production `v0.5.0` deployment/readiness proof. Final production acceptance still remains pending until the remaining real business proofs are captured.
+The latest release chain was verified locally by the targeted guards, server build/type-check, docs version-log generation, docs build, diff hygiene, remote main/tag refs, public Release artifact availability, and production `v0.5.1` deployment/readiness proof. Final production acceptance still remains pending until the remaining real business proofs are captured.
 
 Current commercial operation progress:
 
@@ -744,12 +739,12 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.5.0 version-log refresh, the tracked baseline is `3671deb`.
+1. Keep local Git synced with remote `payincus/main`; after the v0.5.1 version-log refresh, the tracked baseline is `d2f423b`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof remains 7/13 items, 54%.
-3. Treat `v0.5.0` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.0-20260625011155`, version commit `cd8797b4594b`, deployed at `2026-06-25T01:12:04.299Z`, production readiness/DB/split-host/Agent manifest/log-header passed.
-4. Current latest-production boundary: `v0.5.0` is live, the production-proof workspace KPI correction is live, and Lsky provider-file-ID fallback is live. Lsky cleanup is still not proven because production deletion returned `cleanupDeleted=false`.
+3. Treat `v0.5.1` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.1-20260625014606`, version commit `b8eabc0972f2`, deployed at `2026-06-25T01:46:14.872Z`, production readiness/DB/split-host/Agent manifest/log-header passed.
+4. Current latest-production boundary: `v0.5.1` is live, the production-proof workspace KPI correction is live, and Lsky numeric provider-file-ID preservation is live. Lsky cleanup is still not proven because production deletion returned `cleanupDeleted=false` and delete diagnostics hung before status output.
 5. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
-6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram/external notification cannot be proven until a test notification channel is configured; Lsky needs a deletion-path fix/provider cleanup before more upload attempts.
+6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram/external notification cannot be proven until a test notification channel is configured; Lsky needs provider delete behavior investigation/provider cleanup before more upload attempts.
 7. Complete backup/restore drill proof in a temporary directory or temporary database only; do not overwrite production data.
 8. Complete a logged-in browser smoke through Turnstile/session-gated UI, including admin `/admin/production-proof` and representative user/admin pages.
 9. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
