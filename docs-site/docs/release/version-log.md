@@ -6,16 +6,37 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `79d00de`
+- 当前 HEAD / Current HEAD: `d470e7b`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Add Lsky production proof script
-- 最新 tag / Latest tag: `v0.5.6`
+- 提交说明 / Commit subject: Harden online update runner environment
+- 最新 tag / Latest tag: `v0.5.7`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.5.7
+
+- 发布提交 / Release commit: `d470e7b`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Harden online update runner environment
+
+### 修复与稳定性 / Fixes and Stability
+
+- Harden online update runner environment `d470e7b`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff with latest Lsky preflight `75636e8`
+- Update handoff after v0.5.6 proof tooling `f712679`
+- Update version log for v0.5.6 `7c530ca`
+
+### 其他变更 / Other Changes
+
+- Record latest Lsky proof access attempt `6c086cd`
+- Tighten remaining proof handoff scope `1bacbc2`
 
 ## v0.5.6
 
