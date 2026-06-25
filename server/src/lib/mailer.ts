@@ -32,6 +32,19 @@ export interface SmtpConfig {
     brandLogoUrl: string
 }
 
+export interface SmtpTestDeliveryInfo {
+    providerMessageId?: string
+    acceptedRecipientCount: number
+    rejectedRecipientCount: number
+    pendingRecipientCount: number
+    providerResponse?: string
+}
+
+export interface SmtpTestDeliveryResult extends SmtpTestDeliveryInfo {
+    success: boolean
+    error?: string
+}
+
 // 缓存 transporter 实例
 let transporterCache: Transporter | null = null
 let configCacheTime: number = 0
@@ -215,6 +228,43 @@ function formatDate(date: Date): string {
         month: '2-digit',
         day: '2-digit'
     })
+}
+
+function redactEmailLikeValues(value: string): string {
+    return value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+}
+
+function normalizeStringArray(value: unknown): string[] {
+    return Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string')
+        : []
+}
+
+function buildSmtpTestDeliveryInfo(info: any): SmtpTestDeliveryInfo {
+    const accepted = normalizeStringArray(info?.accepted)
+    const rejected = normalizeStringArray(info?.rejected)
+    const pending = normalizeStringArray(info?.pending)
+    const response = typeof info?.response === 'string'
+        ? redactEmailLikeValues(info.response).slice(0, 240)
+        : undefined
+
+    return {
+        providerMessageId: typeof info?.messageId === 'string' ? info.messageId : undefined,
+        acceptedRecipientCount: accepted.length,
+        rejectedRecipientCount: rejected.length,
+        pendingRecipientCount: pending.length,
+        providerResponse: response
+    }
+}
+
+function buildFailedSmtpTestDeliveryResult(error: string): SmtpTestDeliveryResult {
+    return {
+        success: false,
+        error,
+        acceptedRecipientCount: 0,
+        rejectedRecipientCount: 0,
+        pendingRecipientCount: 0
+    }
 }
 
 /**
@@ -673,18 +723,18 @@ export async function testSmtpConnection(): Promise<{ success: boolean; error?: 
  * 此函数允许在 smtp_enabled 为 false 时发送测试邮件，
  * 只要提供了配置信息即可
  */
-export async function sendTestEmail(to: string): Promise<{ success: boolean; error?: string }> {
+export async function sendTestEmail(to: string): Promise<SmtpTestDeliveryResult> {
     try {
         const { config, brandName, brandLogoUrl } = await getMailContext()
 
         // 检查必需字段是否已提供（即使未启用）
         if (!config.host || !config.username || !config.password || !config.fromEmail) {
-            return { success: false, error: 'SMTP configuration incomplete. Please fill in host, username, password, and sender email.' }
+            return buildFailedSmtpTestDeliveryResult('SMTP configuration incomplete. Please fill in host, username, password, and sender email.')
         }
 
         // 验证邮箱格式
         if (!to || !to.includes('@')) {
-            return { success: false, error: 'Invalid recipient email address' }
+            return buildFailedSmtpTestDeliveryResult('Invalid recipient email address')
         }
 
         // 创建临时 transporter 用于测试（忽略启用状态）
@@ -741,7 +791,7 @@ export async function sendTestEmail(to: string): Promise<{ success: boolean; err
         brandLogoUrl
         })
 
-        await testTransporter.sendMail({
+        const info = await testTransporter.sendMail({
             from: config.fromName ? `"${config.fromName}" <${config.fromEmail}>` : config.fromEmail,
             to: to,
             subject: formatBrandSubject(brandName, 'SMTP 配置测试成功'),
@@ -749,11 +799,11 @@ export async function sendTestEmail(to: string): Promise<{ success: boolean; err
             html: htmlContent
         })
 
-        return { success: true }
+        return { success: true, ...buildSmtpTestDeliveryInfo(info) }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         console.error('Failed to send test email:', errorMessage)
-        return { success: false, error: errorMessage }
+        return buildFailedSmtpTestDeliveryResult(errorMessage)
     }
 }
 

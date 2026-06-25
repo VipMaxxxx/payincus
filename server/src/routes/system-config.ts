@@ -47,6 +47,11 @@ const decimalMoneyPattern = /^\d+(?:\.\d{1,2})?$/
 const positiveIntegerConfigPattern = /^[1-9]\d*$/
 const nonNegativeIntegerConfigPattern = /^(?:0|[1-9]\d*)$/
 
+function getEmailDomainForAudit(email: string): string {
+    const domain = email.split('@').pop()?.trim().toLowerCase() || 'unknown'
+    return domain.replace(/[^a-z0-9.-]/g, '').slice(0, 120) || 'unknown'
+}
+
 function isHttpImageUrl(value: string): boolean {
     try {
         const imageUrl = new URL(value)
@@ -679,20 +684,33 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
         const result = await sendTestEmail(to)
 
         if (result.success) {
+            const recipientDomain = getEmailDomainForAudit(to)
+            const providerReference = result.providerMessageId
+                ? ` providerMessageId=${result.providerMessageId}`
+                : ''
             await createLog(
                 request.user.id,
                 'system',
                 'smtp.send_test',
-                `Test email sent to ${to}`,
+                `SMTP test email accepted for recipient domain ${recipientDomain}; accepted=${result.acceptedRecipientCount}; rejected=${result.rejectedRecipientCount}; pending=${result.pendingRecipientCount};${providerReference}`,
                 'success'
             )
-            return { success: true, message: `Test email sent to ${to}` }
+            return {
+                success: true,
+                message: `Test email accepted for recipient domain ${recipientDomain}`,
+                providerMessageId: result.providerMessageId,
+                acceptedRecipientCount: result.acceptedRecipientCount,
+                rejectedRecipientCount: result.rejectedRecipientCount,
+                pendingRecipientCount: result.pendingRecipientCount,
+                providerResponse: result.providerResponse
+            }
         } else {
+            const recipientDomain = getEmailDomainForAudit(to)
             await createLog(
                 request.user.id,
                 'system',
                 'smtp.send_test',
-                `Failed to send test email to ${to}: ${result.error}`,
+                `Failed to send SMTP test email for recipient domain ${recipientDomain}: ${result.error}`,
                 'failed'
             )
             return reply.code(400).send({ success: false, error: result.error })

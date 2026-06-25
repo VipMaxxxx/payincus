@@ -2155,7 +2155,16 @@ const api = {
     testSmtp: (): Promise<{ success: boolean; message?: string; error?: string }> =>
       http.post('/system-config/smtp/test'),
     // 发送测试邮件
-    sendTestEmail: (to: string): Promise<{ success: boolean; message?: string; error?: string }> =>
+    sendTestEmail: (to: string): Promise<{
+      success: boolean
+      message?: string
+      error?: string
+      providerMessageId?: string
+      acceptedRecipientCount?: number
+      rejectedRecipientCount?: number
+      pendingRecipientCount?: number
+      providerResponse?: string
+    }> =>
       http.post('/system-config/smtp/send-test', { to }),
     list: (): Promise<{ configs: Array<{ id: number; key: string; value: string; type: string; label: string | null; description: string | null }> }> =>
       http.get('/system-config'),
