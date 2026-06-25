@@ -6,16 +6,24 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `b8eabc0`
+- Current HEAD / 当前 HEAD: `4f5b3f0`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Fix Lsky v2 image deletion
-- Latest tag / 最新 tag: `v0.5.1`
+- Commit subject / 提交说明: Add Lsky delete diagnostics
+- Latest tag / 最新 tag: `v0.5.2`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.5.2
+
+- Release commit / 发布提交: `4f5b3f0`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Add Lsky delete diagnostics
+
+Log non-sensitive Lsky delete status/body/error diagnostics and avoid treating provider status:false responses as successful cleanup.
 
 ## v0.5.1
 
