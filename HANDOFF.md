@@ -155,45 +155,43 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.5.6 Add Lsky production proof script
-feature commit: 79d00de
-version-log commit: 7c530ca
+v0.5.7 Harden online update runner environment
+feature commit: d470e7b
+version-log commit: 233cfe6
 docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.5.6: 28159286516 completed success.
-CI for main/version-log commit: 28159283976 completed success.
-Docs Pages for main/version-log commit: 28159284077 completed success.
+Build & Release for tag v0.5.7: Release assets confirmed publicly.
+CI for main/version-log commit: GitHub API rate-limited during this handoff; public docs/version assets were verified instead.
+Docs Pages for main/version-log commit: public docs version-log contains v0.5.7.
 ```
 
-Release assets confirmed publicly for `v0.5.6`:
+Release assets confirmed publicly for `v0.5.7`:
 
 ```text
 ota-manifest.json
-incudal-v0.5.6-linux-amd64.tar.gz
-incudal-v0.5.6-linux-amd64.tar.gz.sha256
-incudal-v0.5.6-linux-arm64.tar.gz
-incudal-v0.5.6-linux-arm64.tar.gz.sha256
-incudal-v0.5.6-ota-manifest.json
-plugin-market-index.json
-payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
-payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
-payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
+incudal-v0.5.7-linux-amd64.tar.gz
+incudal-v0.5.7-linux-amd64.tar.gz.sha256
+incudal-v0.5.7-linux-arm64.tar.gz
+incudal-v0.5.7-linux-arm64.tar.gz.sha256
+incudal-v0.5.7-ota-manifest.json
 ```
 
-Published `v0.5.6` OTA manifest:
+Published `v0.5.7` OTA manifest:
 
 ```text
-version: v0.5.6
-gitCommit: 79d00defc716
-buildTime: 2026-06-25T09:08:49.508Z
-amd64 artifact: incudal-v0.5.6-linux-amd64.tar.gz
-amd64 size: 90275115
-arm64 artifact: incudal-v0.5.6-linux-arm64.tar.gz
-arm64 size: 89390317
+version: v0.5.7
+gitCommit: d470e7b36925
+buildTime: 2026-06-25T10:07:50.727Z
+amd64 artifact: incudal-v0.5.7-linux-amd64.tar.gz
+amd64 size: 90276649
+amd64 sha256: 2e0cd6572067158a76ba2ffe1c4caaba40c022814fdcd1fc37ba15a1fbc97ac0
+arm64 artifact: incudal-v0.5.7-linux-arm64.tar.gz
+arm64 size: 89397183
+arm64 sha256: 283d549434e5693b83607dd22e824ba81054cc744c9b74c45debf6670774c6d7
 ```
 
 Production OTA proof:
@@ -217,6 +215,20 @@ pnpm verify:log-header: passed
 secret log/header scan: passed
 update result: System update completed successfully
 cleanup: OTA download cache cleaned; old release pruning executed with protected-release retention
+```
+
+Production OTA follow-up for `v0.5.7`:
+
+```text
+task created: #64
+target: v0.5.7
+createdAt: 2026-06-25T10:16:22.875Z
+initial status returned by start script: pending
+initial fromVersion returned by old starter: v0.0.8
+logPath: /opt/incudal/update-logs/system-update-64.log
+current limitation: subsequent SSH commands were closed by the remote service before task #64 status or runner execution could be verified
+public health after task creation: user/admin /api/health returned HTTP 200
+latest proven production deployment remains: v0.5.6 task #63
 ```
 
 Post-update checks:
@@ -280,6 +292,19 @@ git diff --check
 ```
 
 The latest release chain was refreshed for `v0.5.6`: GitHub Build & Release/CI/Pages succeeded, production OTA task `#63` completed successfully after running the official updater runner manually, public user/admin health checks passed, docs version-log pages contain `v0.5.6`, and production now includes the repeatable read-only/commit-mode Lsky proof script. The script remains in read-only preflight mode by default and refuses commit-mode upload while the configured Lsky token cannot list user photos.
+
+Local gates run for `v0.5.7`:
+
+```text
+pnpm --filter server test:system-update-guards
+pnpm --filter server type-check
+pnpm --filter server build
+pnpm --filter server test:lsky-production-proof-guards
+pnpm --dir docs-site --ignore-workspace build
+git diff --check
+```
+
+The `v0.5.7` release hardens the online update/rollback runner environment: systemd update units now set a stable PATH, the runner checks required commands before mutating state, child processes inherit the stable PATH, ownership repair avoids shell interpolation, and artifact copies no longer depend on shell `cp -a`. Public Release assets and docs version-log proof passed. Production task `#64` was created for `v0.5.7`, but production deployment is not proven yet because SSH closed before task status and runner execution could be verified.
 
 Current commercial operation progress:
 
@@ -776,10 +801,10 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `6c086cd`.
+1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `233cfe6`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 12/13 items, 92%.
-3. Treat `v0.5.6` production deployment/readiness as proven from the 2026-06-25 SSH proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.6-20260625091326`, version commit `79d00defc716`, deployed at `2026-06-25T09:13:34.875Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and OTA task `#63` completed successfully.
-4. Current latest-production boundary: `v0.5.6` is live, the production-proof workspace status correction and DB restore-drill verified state are live, SMTP provider-reference metadata is live, Lsky numeric provider-file-ID preservation is live, non-sensitive Lsky delete diagnostics are live, and the repeatable `lsky-production-proof` script is deployed. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete.
+3. Treat `v0.5.6` production deployment/readiness as the latest proven production deployment from the 2026-06-25 SSH proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.6-20260625091326`, version commit `79d00defc716`, deployed at `2026-06-25T09:13:34.875Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and OTA task `#63` completed successfully.
+4. Current latest-production boundary: `v0.5.6` is live and proven. `v0.5.7` is released with public OTA assets and task `#64` was created, but applying/verifying it is pending because SSH closed before task status and runner execution could be confirmed. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete.
 5. Treat the core Incus lifecycle as proven on a dedicated test instance: #9 on host #2 completed stop/start/restart/recreate/delete cleanup, and existing proof already covers create, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic. Only run suspend/unsuspend, IPv6, or host-migration smoke if these remain in final acceptance scope.
 6. Complete delivery proof: SMTP provider reference is proven by `smtp-provider-reference-2026-06-25T04:34:51.773Z`; Telegram delivery is proven by message `#339` to `@Payincus`; Lsky still needs a delete-capable token or provider-side cleanup before commit-mode proof. The target endpoint is `DELETE /api/v2/user/photos` with a JSON numeric ID array.
 7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
