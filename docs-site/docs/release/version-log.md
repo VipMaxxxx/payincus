@@ -6,16 +6,29 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `2e99abc`
+- 当前 HEAD / Current HEAD: `bbae57c`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Add production DB restore drill proof
-- 最新 tag / Latest tag: `v0.5.3`
+- 提交说明 / Commit subject: Update production proof workspace status
+- 最新 tag / Latest tag: `v0.5.4`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.5.4
+
+- 发布提交 / Release commit: `bbae57c`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Update production proof workspace status
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update production proof workspace status `bbae57c`
+- Update handoff after Incus lifecycle production proof `5433e70`
+- Update handoff after v0.5.3 production proof `d3c675a`
+- Update version log for v0.5.3 `ad45707`
 
 ## v0.5.3
 

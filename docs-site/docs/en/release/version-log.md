@@ -6,16 +6,29 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `2e99abc`
+- Current HEAD / 当前 HEAD: `bbae57c`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Add production DB restore drill proof
-- Latest tag / 最新 tag: `v0.5.3`
+- Commit subject / 提交说明: Update production proof workspace status
+- Latest tag / 最新 tag: `v0.5.4`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.5.4
+
+- Release commit / 发布提交: `bbae57c`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Update production proof workspace status
+
+### Improvements and Adjustments / 改进与调整
+
+- Update production proof workspace status `bbae57c`
+- Update handoff after Incus lifecycle production proof `5433e70`
+- Update handoff after v0.5.3 production proof `d3c675a`
+- Update version log for v0.5.3 `ad45707`
 
 ## v0.5.3
 
