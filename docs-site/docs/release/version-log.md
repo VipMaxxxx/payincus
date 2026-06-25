@@ -6,16 +6,32 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `5eff38f`
+- 当前 HEAD / Current HEAD: `cefd77a`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Update production proof workspace status / 更新生产验收工作台状态
-- 最新 tag / Latest tag: `v0.6.4`
+- 提交说明 / Commit subject: Update final proof scope waiver / 更新最终验收豁免口径
+- 最新 tag / Latest tag: `v0.6.5`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.5
+
+- 发布提交 / Release commit: `cefd77a`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Update final proof scope waiver / 更新最终验收豁免口径
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update final proof scope waiver / 更新最终验收豁免口径 `cefd77a`
+- Update handoff after v0.6.4 production OTA / 更新 v0.6.4 生产 OTA 交接 `108e089`
+- Update version log for v0.6.4 / 更新 v0.6.4 版本日志 `6b2e7d4`
+
+### 其他变更 / Other Changes
+
+- Refresh handoff Lsky preflight status / 刷新 Lsky 预检交接状态 `375c524`
 
 ## v0.6.4
 
