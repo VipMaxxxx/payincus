@@ -106,6 +106,10 @@ const proofItems: ProofItem[] = [
   }
 ]
 
+const completedProofItems = 7
+const totalProofItems = 13
+const remainingProofItems = totalProofItems - completedProofItems
+
 const commands: CommandItem[] = [
   {
     title: '只读 proof 快照',
@@ -148,7 +152,7 @@ const proofStats = computed(() => {
   return { total, verified, partial, pending, operator }
 })
 
-const progressPercent = computed(() => Math.round(((proofStats.value.verified + proofStats.value.partial * 0.5) / proofStats.value.total) * 100))
+const progressPercent = computed(() => Math.round((completedProofItems / totalProofItems) * 100))
 
 function statusLabel(status: ProofStatus): string {
   const labels: Record<ProofStatus, string> = {
@@ -221,15 +225,16 @@ async function copyCommand(key: string, command: string): Promise<void> {
         <div class="mt-2 h-2 rounded-full bg-themed-muted">
           <div class="h-2 rounded-full bg-blue-500" :style="{ width: `${progressPercent}%` }"></div>
         </div>
+        <div class="mt-2 text-xs text-themed-muted">{{ completedProofItems }}/{{ totalProofItems }} 项真实 proof 已有证据</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">部分或已证明</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.verified + proofStats.partial }}</div>
+        <div class="text-sm text-themed-muted">已有证据项</div>
+        <div class="mt-2 text-3xl font-semibold text-themed">{{ completedProofItems }}</div>
         <div class="mt-2 text-xs text-themed-muted">历史 proof 需跟随版本和配置变化复核</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">待补真实证据</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.pending }}</div>
+        <div class="mt-2 text-3xl font-semibold text-themed">{{ remainingProofItems }}</div>
         <div class="mt-2 text-xs text-themed-muted">SMTP、Lsky、通知和资源动作仍需执行</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
