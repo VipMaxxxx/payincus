@@ -733,16 +733,18 @@ Incus lifecycle:
 - final instance/resource state: DB status deleted; Incus object u26-qf9iaavw not found; CPU/memory/disk returned to baseline; NAT count recalculated to 5
 
 SMTP:
-- recipient reference:
-- send timestamp:
-- backend/admin status:
-- inbox receipt reference:
+- proof ID: smtp-provider-reference-2026-06-25T04:34:51.773Z
+- recipient domain: qq.com
+- backend/admin status: accepted=1, rejected=0, pending=0
+- provider response: 250 OK: queued as.
 
 Lsky:
-- test ticket/message ID:
-- attachment count:
-- upload/proxy status:
-- safe provider reference:
+- preflight proof ID:
+- commit proof ID:
+- test ticket/message/attachment IDs:
+- upload/delete status:
+- safe provider ID summary:
+- cleanup result:
 
 Telegram / notification:
 - channel name or ID: public group @Payincus
