@@ -410,15 +410,42 @@ export async function deleteTicketImageFromLsky(providerVersion: string, provide
   const deleteUrl = apiVersion === 'v2'
     ? `${apiBase}/user/photos`
     : `${apiBase}/images/${encodeURIComponent(providerFileId)}`
-  const response = await fetch(deleteUrl, {
-    method: 'DELETE',
-    redirect: 'manual',
-    signal: AbortSignal.timeout(LSKY_DELETE_TIMEOUT_MS),
-    headers: apiVersion === 'v2'
-      ? { ...buildLskyAuthHeaders(config.token), 'Content-Type': 'application/json' }
-      : buildLskyAuthHeaders(config.token),
-    body: apiVersion === 'v2' ? JSON.stringify([numericId]) : undefined
-  })
 
-  return response.ok
+  try {
+    const response = await fetch(deleteUrl, {
+      method: 'DELETE',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(LSKY_DELETE_TIMEOUT_MS),
+      headers: apiVersion === 'v2'
+        ? { ...buildLskyAuthHeaders(config.token), 'Content-Type': 'application/json' }
+        : buildLskyAuthHeaders(config.token),
+      body: apiVersion === 'v2' ? JSON.stringify([numericId]) : undefined
+    })
+    const responseText = await response.text()
+    const payload: any = parseJsonResponse(responseText)
+
+    if (!response.ok || payload?.status === false) {
+      console.warn('[Lsky] Delete did not confirm success', {
+        apiVersion,
+        deleteUrl,
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        providerFileIdLength: providerFileId.length,
+        numericIdPresent: numericId !== null,
+        bodyPreview: sanitizeResponsePreview(responseText)
+      })
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.warn('[Lsky] Delete request failed', {
+      apiVersion,
+      deleteUrl,
+      providerFileIdLength: providerFileId.length,
+      numericIdPresent: numericId !== null,
+      errorMessage: sanitizeTokensInString(error instanceof Error ? error.message : String(error))
+    })
+    return false
+  }
 }

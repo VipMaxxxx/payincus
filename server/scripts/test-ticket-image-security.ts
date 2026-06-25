@@ -53,6 +53,15 @@ assert.ok(
     lskySource.includes('JSON.stringify([numericId])'),
   'Lsky v2 delete must call the batch /user/photos endpoint with a JSON numeric ID array'
 )
+assert.ok(
+  lskySource.includes("console.warn('[Lsky] Delete did not confirm success'") &&
+    lskySource.includes('payload?.status === false') &&
+    lskySource.includes('providerFileIdLength: providerFileId.length') &&
+    lskySource.includes('bodyPreview: sanitizeResponsePreview(responseText)') &&
+    lskySource.includes("console.warn('[Lsky] Delete request failed'") &&
+    lskySource.includes('errorMessage: sanitizeTokensInString'),
+  'Lsky delete failures must log non-sensitive status/body/error diagnostics and must not treat status:false as success'
+)
 assert.equal(
   (lskySource.match(/redirect: 'manual'/g) ?? []).length,
   3,
