@@ -18,6 +18,14 @@ assert.ok(
 )
 
 assert.ok(
+  scriptSource.includes('/api/v2/user/tokens/permissions') &&
+    scriptSource.includes('summarizeTokenAbilities') &&
+    scriptSource.includes('missingForCommitProof') &&
+    scriptSource.includes("'upload:write', 'user:photo:read', 'user:photo:write'"),
+  'Lsky production proof script must summarize current token abilities without printing raw token material'
+)
+
+assert.ok(
   scriptSource.includes('uploadTicketImageToLsky') &&
     scriptSource.includes('prisma.ticketMessageAttachment.create') &&
     scriptSource.includes('deleteTicketImageFromLsky(upload.providerVersion, upload.providerFileId)'),
