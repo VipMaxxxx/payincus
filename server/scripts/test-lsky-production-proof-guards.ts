@@ -13,6 +13,7 @@ assert.ok(
 
 assert.ok(
   scriptSource.includes("preflight.userPhotos?.status === 403") &&
+    scriptSource.includes('tokenAbilities.missingForCommitProof.length > 0') &&
     scriptSource.includes('refusing to create another proof upload'),
   'Lsky production proof script must refuse uploads when user-photo permissions are missing'
 )
