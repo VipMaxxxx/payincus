@@ -88,6 +88,11 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Missing command: $1"
 }
 
+can_run_agent_release_source_smoke() {
+  [[ -f "server/scripts/smoke-agent-release.ts" ]] || return 1
+  node -e "require.resolve('tsx/package.json')" >/dev/null 2>&1
+}
+
 trim_slash() {
   local value="$1"
   printf '%s' "${value%/}"
@@ -229,12 +234,17 @@ else
 fi
 
 if [[ "$RUN_AGENT_RELEASE_SMOKE" == "1" ]]; then
-  log "Running Agent release endpoint smoke"
-  ENV_FILE="$ENV_FILE" \
-    SMOKE_API_BASE_URL="$FRONTEND_URL_VALUE" \
-    BACKEND_URL="$BACKEND_URL_VALUE" \
-    pnpm smoke:agent-release
-  append_report "- agent_release_smoke: passed"
+  if can_run_agent_release_source_smoke; then
+    log "Running Agent release endpoint smoke"
+    ENV_FILE="$ENV_FILE" \
+      SMOKE_API_BASE_URL="$FRONTEND_URL_VALUE" \
+      BACKEND_URL="$BACKEND_URL_VALUE" \
+      pnpm smoke:agent-release
+    append_report "- agent_release_smoke: passed"
+  else
+    warn "Agent release source smoke skipped in production artifact mode; production preflight already verifies the Agent manifest"
+    append_report "- agent_release_smoke: skipped (artifact mode; production preflight verifies Agent manifest)"
+  fi
 else
   warn "Agent release smoke skipped because RUN_AGENT_RELEASE_SMOKE=${RUN_AGENT_RELEASE_SMOKE}"
   append_report "- agent_release_smoke: skipped (${RUN_AGENT_RELEASE_SMOKE})"

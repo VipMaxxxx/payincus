@@ -512,6 +512,9 @@ assert.ok(
     verifyLiveAcceptance.includes('RUN_LOG_HEADER_CHECK must be 1 when FINAL_ACCEPTANCE_MODE=1') &&
     verifyLiveAcceptance.includes('REQUIRE_LIVE_PROOF_REFS must be 1 when FINAL_ACCEPTANCE_MODE=1') &&
     verifyLiveAcceptance.includes('is_live_proof_placeholder()') &&
+    verifyLiveAcceptance.includes('can_run_agent_release_source_smoke()') &&
+    verifyLiveAcceptance.includes("require.resolve('tsx/package.json')") &&
+    verifyLiveAcceptance.includes('Agent release source smoke skipped in production artifact mode') &&
     verifyLiveAcceptance.includes('append_report "- ${key}: placeholder"') &&
     verifyLiveAcceptance.includes('REPORT_FRONTEND_URL="${FRONTEND_URL_VALUE:-<missing>}"') &&
     verifyLiveAcceptance.includes('ACCEPTED_WARNINGS_NOTE="${ACCEPTED_WARNINGS_NOTE:-}"') &&
