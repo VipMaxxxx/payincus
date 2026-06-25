@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-326cab1 Add production proof workspace / 新增生产验收工作台
+59152d3 Update version log for v0.4.9 / 更新 v0.4.9 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked product commit at the time of this refresh:
 
 ```text
-326cab1 Add production proof workspace / 新增生产验收工作台
+7ae4967 Fix Lsky upload cleanup identifier / 修复 Lsky 上传清理标识
 ```
 
 Recently updated/released files include:
@@ -155,42 +155,73 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.4.8 Production proof workspace / 生产验收工作台
-feature commit: 326cab1
-version-log commit: 6ebc30a
+v0.4.9 Lsky upload cleanup identifier / Lsky 上传清理标识
+feature commit: 7ae4967
+version-log commit: 59152d3
 docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.4.8: 28132922573 completed success.
-CI for main commit 6ebc30a: 28132950002 completed success.
-Deploy docs site to GitHub Pages for 6ebc30a: 28132949998 completed success.
+Build & Release for tag v0.4.9: 28137207222 completed success.
+CI for main commit 59152d3: 28137213612 completed success.
+Deploy docs site to GitHub Pages for 59152d3: 28137213593 completed success.
 ```
 
-Release assets confirmed publicly for `v0.4.8`:
+Release assets confirmed publicly for `v0.4.9`:
 
 ```text
 ota-manifest.json
-incudal-v0.4.8-linux-amd64.tar.gz
-incudal-v0.4.8-linux-amd64.tar.gz.sha256
-incudal-v0.4.8-linux-arm64.tar.gz
-incudal-v0.4.8-linux-arm64.tar.gz.sha256
-incudal-v0.4.8-ota-manifest.json
+incudal-v0.4.9-linux-amd64.tar.gz
+incudal-v0.4.9-linux-amd64.tar.gz.sha256
+incudal-v0.4.9-linux-arm64.tar.gz
+incudal-v0.4.9-linux-arm64.tar.gz.sha256
+incudal-v0.4.9-ota-manifest.json
 plugin-market-index.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 ```
 
+Published `v0.4.9` OTA manifest:
+
+```text
+version: v0.4.9
+gitCommit: 7ae4967315b9
+buildTime: 2026-06-24T23:55:17.892Z
+amd64 artifact: incudal-v0.4.9-linux-amd64.tar.gz
+amd64 size: 90274410
+amd64 sha256: 434a8b553aaddc5f983242b30536cdf6f38155c3de6092deec42b00231815875
+arm64 artifact: incudal-v0.4.9-linux-arm64.tar.gz
+arm64 size: 89384768
+arm64 sha256: 07a1b51bb55aca7690d50899b52204f34ab387cd50a5d01bd94f7c7b34ca8e60
+```
+
 Production OTA proof:
 
 ```text
-latest proven production version remains: v0.4.6 from task #55
-v0.4.7/v0.4.8 production apply status: not proven from this Codex environment
-reason: SSH to 147.125.252.103:22 was closed by the remote host before command execution, and the Chrome existing-session channel was unavailable because Codex Chrome Extension communication failed
-operator action needed: run the admin version update page to v0.4.8, or provide fresh redacted task/log proof after applying it
+latest proven production version: v0.4.8 from task #56
+task: #56
+target: v0.4.8
+started: 2026-06-24T23:27:07.761Z
+artifact: incudal-v0.4.8-linux-amd64.tar.gz
+artifact size: 90272197 bytes
+artifact sha256: ab02dcaa5c7aa72de1dd9a9bd1b0511aea8de036a7b6a1ce486b54ccd91884e3
+release dir: /opt/incudal/releases/v0.4.8-20260624232707
+current release: /opt/incudal/releases/v0.4.8-20260624232707
+prisma: 155 migrations found, no pending migrations
+post-restart health: passed on attempt 2
+verify-split-host: passed
+pnpm verify:production: passed
+verify-production-db: passed
+agent manifest check: passed
+pnpm verify:log-header: passed
+secret log/header scan: passed
+update result: System update completed successfully
+cleanup: OTA download cache cleaned; old release v0.3.4-20260624164225 removed
+v0.4.9 production apply status: not run/proven in this session
+reason: no safe non-recording production credential channel was available for running the OTA command; do not write the server password into commands or logs
 ```
 
 Post-update checks:
@@ -198,26 +229,25 @@ Post-update checks:
 ```text
 The admin console contains a read-only Production Proof workspace at /admin/production-proof.
 The user build output does not contain the production-proof route, nav key, or page content.
-The v0.4.8 release package is available for OTA, but production browser proof must be repeated after the server is updated.
+Public health checks returned HTTP 200 with TLS verify result 0 for https://pay.payincus.com/api/health and https://admin.payincus.com/api/health.
+The public admin route https://admin.payincus.com/admin/production-proof returned HTTP 200.
+Public admin asset scan found v0.4.8 production-proof markers in current hashed assets: /assets/28Cvyvon.js, /assets/OnPAze1M.js, and /assets/DbBP0PUF.js.
+Remaining production proof is still incomplete: Incus start/restart/recreate/delete/cleanup, SMTP delivery, Lsky upload, Telegram/in-app notification delivery, Turnstile/session browser smoke, and backup/restore drill.
+Current follow-up: a production Lsky 1x1 PNG upload succeeded, but cleanup failed because the v2 upload metadata did not persist a provider file ID. The fix is published as `v0.4.9`: `server/src/lib/lsky.ts` preserves `pathname/path` fallback IDs and `server/scripts/test-ticket-image-security.ts` guards this behavior. Production OTA for `v0.4.9` is not proven in this session; do not count Lsky proof complete until a post-OTA upload+delete proof confirms cleanup.
 ```
 
-Local gates run for `v0.4.8`:
+Local gates run for `v0.4.9`:
 
 ```text
-pnpm --filter server test:production-proof-center-guards
-pnpm --filter client type-check
-pnpm --filter client build
-pnpm --filter server test:frontend-route-guards
-pnpm --filter server test:frontend-dist-boundary-guards
-pnpm --filter server test:frontend-i18n-keys
+pnpm --filter server test:ticket-image-security
 pnpm --filter server type-check
-pnpm build
+pnpm --filter server build
 pnpm docs:changelog
 pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The release was verified locally by targeted production-proof guards, client type-check/build, frontend route and dist boundary guards, i18n key guards, server type-check, full build, docs version-log generation, docs build, diff hygiene, GitHub CI, GitHub Pages, and public release asset availability. Production OTA apply and live browser proof remain pending until the operator updates production to v0.4.8.
+The release was verified locally by the targeted ticket-image guard, server type-check/build, docs version-log generation, docs build, diff hygiene, GitHub CI, GitHub Pages, and public Release artifact availability. Final production acceptance still remains pending until `v0.4.9` is applied and the remaining real business proofs are captured.
 
 Current commercial operation progress:
 
@@ -714,21 +744,24 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.4.0 release, the product/docs baseline is `3dc1f66`.
-2. Continue the commercial operation target plan from `docs/commercial-operation-task-goals.md`; current progress is 9/12 categories complete, 75%, and the suggested next category is resource capacity and cost.
-3. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
-4. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof.
-5. Complete a logged-in browser smoke through Turnstile/session-gated UI, including `/admin/plugins` and user plugin rendering.
-6. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
-7. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
-8. Decide whether to continue improving docs:
+1. Keep local Git synced with remote `payincus/main`; after the v0.4.9 version-log refresh, the tracked baseline is `59152d3`.
+2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof remains 7/13 items, 54%.
+3. Treat `v0.4.8` production OTA as complete from task `#56`; do not spend the next session proving the server is still on `v0.4.6` unless new evidence contradicts task `#56`.
+4. Current published/latest-production boundary: the Lsky cleanup metadata fix is published as `v0.4.9`, but production is only proven through `v0.4.8` task `#56`. Apply `v0.4.9` by OTA before claiming the Lsky cleanup fix as live behavior.
+5. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
+6. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof only against explicit test recipients, test channels, or test tickets, then record redacted receipt/log references. For Lsky, first apply the `v0.4.9` provider-file-ID fallback fix by OTA and confirm the earlier test artifact is cleaned up or superseded by a successful upload+delete proof.
+7. Complete backup/restore drill proof in a temporary directory or temporary database only; do not overwrite production data.
+8. Complete a logged-in browser smoke through Turnstile/session-gated UI, including admin `/admin/production-proof` and representative user/admin pages.
+9. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
+10. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
+11. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
    - User workflow screenshots.
    - API request/response/error reference.
    - Payment provider setup guide.
    - Agent install guide with real host commands.
-9. Complete remaining real production proof items from `docs/production-audit.md`.
-10. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+12. Complete remaining real production proof items from `docs/production-audit.md`.
+13. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
 
 ## Release Documentation Rule
 
