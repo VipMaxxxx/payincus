@@ -15,6 +15,7 @@ const proofStartedAt = new Date()
 const proofId = `lsky-upload-delete-proof-${proofStartedAt.toISOString()}`
 const commit = process.env.LSKY_PROOF_COMMIT === '1'
 const cleanupDb = process.env.LSKY_PROOF_KEEP_DB !== '1'
+const LSKY_COMMIT_PROOF_ABILITIES = ['upload:write', 'user:photo:read', 'user:photo:write'] as const
 
 function sanitizePreview(value: unknown): string {
   return sanitizeTokensInString(String(value ?? ''))
@@ -43,11 +44,49 @@ function summarizeProviderFileId(value: string | null | undefined): {
   }
 }
 
+function parseJsonObject(value: string): any | null {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function summarizeTokenAbilities(payload: any): {
+  present: boolean
+  count: number
+  wildcard: boolean
+  hasUploadWrite: boolean
+  hasPhotoRead: boolean
+  hasPhotoWrite: boolean
+  missingForCommitProof: string[]
+} {
+  const abilities = Array.isArray(payload?.data?.abilities)
+    ? payload.data.abilities.filter((value: unknown): value is string => typeof value === 'string')
+    : []
+  const wildcard = abilities.includes('*')
+  const hasAbility = (ability: string) => wildcard || abilities.includes(ability)
+
+  return {
+    present: abilities.length > 0,
+    count: abilities.length,
+    wildcard,
+    hasUploadWrite: hasAbility('upload:write'),
+    hasPhotoRead: hasAbility('user:photo:read'),
+    hasPhotoWrite: hasAbility('user:photo:write'),
+    missingForCommitProof: wildcard
+      ? []
+      : LSKY_COMMIT_PROOF_ABILITIES.filter(ability => !abilities.includes(ability))
+  }
+}
+
 async function probeLskyEndpoint(pathname: string): Promise<{
   ok: boolean
   status?: number
   contentType?: string | null
   bodyPreview?: string
+  tokenAbilities?: ReturnType<typeof summarizeTokenAbilities>
   errorName?: string
   errorMessage?: string
 }> {
@@ -73,12 +112,16 @@ async function probeLskyEndpoint(pathname: string): Promise<{
       }
     })
     const responseText = await response.text()
+    const payload = parseJsonObject(responseText)
 
     return {
       ok: response.ok,
       status: response.status,
       contentType: response.headers.get('content-type'),
-      bodyPreview: sanitizePreview(responseText)
+      bodyPreview: sanitizePreview(responseText),
+      tokenAbilities: pathname === '/api/v2/user/tokens/permissions' && payload
+        ? summarizeTokenAbilities(payload)
+        : undefined
     }
   } catch (error) {
     return {
@@ -106,6 +149,7 @@ async function main(): Promise<void> {
     targetIdPresent: Boolean(config?.targetId),
     existingAttachmentCount,
     group: config?.apiVersion === 'v2' ? await probeLskyEndpoint('/api/v2/group') : null,
+    tokenPermissions: config?.apiVersion === 'v2' ? await probeLskyEndpoint('/api/v2/user/tokens/permissions') : null,
     userPhotos: config?.apiVersion === 'v2' ? await probeLskyEndpoint('/api/v2/user/photos?page=1&per_page=1') : null
   }
 
