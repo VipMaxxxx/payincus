@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-59152d3 Update version log for v0.4.9 / 更新 v0.4.9 版本日志
+3671deb Update version log for v0.5.0
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked product commit at the time of this refresh:
 
 ```text
-7ae4967 Fix Lsky upload cleanup identifier / 修复 Lsky 上传清理标识
+cd8797b Fix production proof workspace progress
 ```
 
 Recently updated/released files include:
@@ -233,7 +233,7 @@ Public health checks returned HTTP 200 with TLS verify result 0 for https://pay.
 The public admin route https://admin.payincus.com/admin/production-proof returned HTTP 200.
 Public admin asset scan found v0.4.8 production-proof markers in current hashed assets: /assets/28Cvyvon.js, /assets/OnPAze1M.js, and /assets/DbBP0PUF.js.
 Remaining production proof is still incomplete: Incus start/restart/recreate/delete/cleanup, SMTP delivery, Lsky upload, Telegram/in-app notification delivery, Turnstile/session browser smoke, and backup/restore drill.
-Current follow-up: a production Lsky 1x1 PNG upload succeeded, but cleanup failed because the v2 upload metadata did not persist a provider file ID. The fix is published as `v0.4.9`: `server/src/lib/lsky.ts` preserves `pathname/path` fallback IDs and `server/scripts/test-ticket-image-security.ts` guards this behavior. Production OTA for `v0.4.9` is not proven in this session; do not count Lsky proof complete until a post-OTA upload+delete proof confirms cleanup.
+Current follow-up: a production Lsky 1x1 PNG upload succeeded, but cleanup failed because the v2 upload metadata did not persist a provider file ID. The fix was first published as `v0.4.9` and is also included in latest release `v0.5.0`: `server/src/lib/lsky.ts` preserves `pathname/path` fallback IDs and `server/scripts/test-ticket-image-security.ts` guards this behavior. Production OTA for `v0.5.0` is not proven in this session; do not count Lsky proof complete until a post-OTA upload+delete proof confirms cleanup.
 ```
 
 Local gates run for `v0.4.9`:
@@ -247,7 +247,7 @@ pnpm --dir docs-site --ignore-workspace build
 git diff --check
 ```
 
-The release was verified locally by the targeted ticket-image guard, server type-check/build, docs version-log generation, docs build, diff hygiene, GitHub CI, GitHub Pages, and public Release artifact availability. Final production acceptance still remains pending until `v0.4.9` is applied and the remaining real business proofs are captured.
+The latest release chain was verified locally by the targeted guards, client build/type-check, docs version-log generation, docs build, diff hygiene, GitHub CI, GitHub Pages, and public Release artifact availability. Final production acceptance still remains pending until `v0.5.0` is applied and the remaining real business proofs are captured.
 
 Current commercial operation progress:
 
@@ -744,12 +744,12 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; after the v0.4.9 version-log refresh, the tracked baseline is `59152d3`.
+1. Keep local Git synced with remote `payincus/main`; after the v0.5.0 version-log refresh, the tracked baseline is `3671deb`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof remains 7/13 items, 54%.
 3. Treat `v0.4.8` production OTA as complete from task `#56`; do not spend the next session proving the server is still on `v0.4.6` unless new evidence contradicts task `#56`.
-4. Current published/latest-production boundary: the Lsky cleanup metadata fix is published as `v0.4.9`, but production is only proven through `v0.4.8` task `#56`. Apply `v0.4.9` by OTA before claiming the Lsky cleanup fix as live behavior.
+4. Current published/latest-production boundary: latest release `v0.5.0` includes the Lsky cleanup metadata fix and the production-proof workspace KPI correction, but production is only proven through `v0.4.8` task `#56`. Apply `v0.5.0` by OTA before claiming either as live behavior.
 5. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
-6. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof only against explicit test recipients, test channels, or test tickets, then record redacted receipt/log references. For Lsky, first apply the `v0.4.9` provider-file-ID fallback fix by OTA and confirm the earlier test artifact is cleaned up or superseded by a successful upload+delete proof.
+6. Complete real SMTP delivery, Lsky upload and Telegram / notification delivery proof only against explicit test recipients, test channels, or test tickets, then record redacted receipt/log references. For Lsky, first apply latest release `v0.5.0` by OTA and confirm the earlier test artifact is cleaned up or superseded by a successful upload+delete proof.
 7. Complete backup/restore drill proof in a temporary directory or temporary database only; do not overwrite production data.
 8. Complete a logged-in browser smoke through Turnstile/session-gated UI, including admin `/admin/production-proof` and representative user/admin pages.
 9. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
