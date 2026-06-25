@@ -230,7 +230,9 @@ Production `v0.5.3` shows the production DB backup/restore drill as verified in 
 Production Lsky user-gallery list probe returned HTTP 403 with the configured token; previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
 Production DB backup/restore drill is now proven through a temporary database restore and cleanup check.
 Production Incus lifecycle is now proven on dedicated test instance #9: stop task #5, start task #6, restart task #7, recreate task #8, delete cleanup, DB status deleted, Incus object not found, and host CPU/memory/disk resources returned to baseline.
-Remaining production proof is still incomplete: SMTP receipt/provider-log proof, Lsky confirmed deletion, Telegram/in-app notification delivery, and Turnstile/session browser smoke.
+Telegram delivery is proven by production bot message #339 to public group @Payincus.
+Turnstile/session browser smoke is proven through the approved temporary disable-and-restore path: user /dashboard and admin /admin/production-proof rendered after login, config restored, temp secret file removed, and test users #31/#32 banned.
+Remaining production proof is still incomplete: SMTP receipt/provider-log proof and Lsky confirmed deletion/provider cleanup.
 Current follow-up: configure a delete-capable Lsky token or use provider-side cleanup before more upload attempts; previous proof images may still need cleanup.
 ```
 
@@ -390,7 +392,7 @@ Latest production proof:
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - `v0.1.8` public release asset availability was verified directly. GitHub Actions API polling hit an anonymous rate limit during that check, so the latest fully recorded Actions run IDs in this handoff remain the earlier `v0.1.6` chain.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
-- Full-function audit progress is `12/13` categories complete, current category `13/13` is `10/13` items complete (`77%`). Remaining production blockers are business-proof blockers, not deployment blockers: SMTP delivery, Lsky upload/delete cleanup, Telegram/external notification delivery, and real password+Turnstile browser smoke.
+- Full-function audit progress is `12/13` categories complete, current category `13/13` is `12/13` items complete (`92%`). Remaining production blockers are business-proof blockers, not deployment blockers: SMTP receipt/provider-log proof and Lsky confirmed deletion/provider cleanup.
 
 Latest release proof:
 
@@ -668,27 +670,19 @@ Not completed:
 
 Remaining production proof items:
 
-- Real suspend/unsuspend, IPv6, and host migration smoke if these features remain in the final acceptance scope.
-- Real SMTP delivery.
-- Real Lsky upload.
-- Real Telegram / notification delivery.
-- Manual browser login smoke through Turnstile, or an explicitly approved temporary Turnstile disable-and-restore smoke.
-- Logged-in browser rendering proof for `/admin/plugins` and user `/plugins/smoke`.
+- Real SMTP receipt/provider-log proof.
+- Real Lsky confirmed deletion/provider cleanup.
 
-## Current Server Access Constraint
+Optional follow-up if final acceptance scope expands:
 
-This Codex environment can reach the production server TCP/22, but recent authenticated and non-authenticated SSH attempts were closed by the remote host during the SSH handshake before command execution.
+- Real suspend/unsuspend, IPv6, and host migration smoke.
+- Additional plugin iframe rendering proof once a real enabled plugin exists.
 
-Recent SSH behavior:
+## Current Server Access Note
 
-```text
-nc -vz 147.125.252.103 22: succeeded
-kex_exchange_identification: Connection closed by remote host
-```
+Password-authenticated SSH was available again during the 2026-06-25 proof pass. A read-only recheck at `2026-06-25T03:57:08.849Z` confirmed Turnstile restored, temp secret file removed, and temporary test users banned.
 
-This is no longer the earlier local sandbox `Operation not permitted` result. Treat it as remote SSH service, rate-limit, or access-policy instability until server-side logs prove otherwise.
-
-For server-side work while SSH is unstable, ask the user to run commands in their own terminal and paste redacted output. Do not ask them to put passwords into handoff notes.
+SSH has still been intermittently closed by the remote service during longer non-interactive commands. Prefer short read-only commands or an interactive shell for production proof, and never paste server passwords into handoff notes.
 
 Safe proof paste template for the user:
 
@@ -717,16 +711,16 @@ Lsky:
 - safe provider reference:
 
 Telegram / notification:
-- channel name or ID:
-- send timestamp:
-- backend log/status:
-- external receipt reference:
+- channel name or ID: public group @Payincus
+- send timestamp: 2026-06-25T03:30:52.670Z proof ID
+- backend log/status: production Telegram bot sendMessage.ok=true
+- external receipt reference: Telegram message #339, bot username Payincus_bot
 
 Turnstile/browser:
-- user login page proof reference:
-- admin login page proof reference:
-- pages opened after login:
-- refresh/session note:
+- user login page proof reference: temporary test user #31, user /dashboard rendered with marker "实例"
+- admin login page proof reference: temporary test admin #32, admin /admin/production-proof rendered with marker "生产验收"
+- pages opened after login: https://pay.payincus.com/dashboard and https://admin.payincus.com/admin/production-proof
+- refresh/session note: approved temporary disable-and-restore; Turnstile restored enabled=true with secret present, temp secret file removed, users #31/#32 banned
 ```
 
 Never paste passwords, API secrets, SMTP passwords, Telegram bot tokens, Lsky tokens, Turnstile tokens, session cookies, JWTs, root passwords, raw `.env`, provider private keys, raw callback bodies, raw notification channel config, or instance root credentials.
@@ -747,14 +741,14 @@ Note: a previous request excluded the old demo domain from production audit scop
 ## Suggested Next Work
 
 1. Keep local Git synced with remote `payincus/main`; before this Incus-proof handoff refresh, the tracked baseline is `d3c675a`.
-2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 10/13 items, 77%.
+2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 12/13 items, 92%.
 3. Treat `v0.5.3` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.3-20260625024633`, version commit `2e99abc73234`, deployed at `2026-06-25T02:46:41.873Z`, production readiness/DB/split-host/Agent manifest/log-header passed, and public user/admin health returned OK.
 4. Current latest-production boundary: `v0.5.3` is live, the production-proof workspace KPI correction and DB restore-drill verified state are live, Lsky numeric provider-file-ID preservation is live, and non-sensitive Lsky delete diagnostics are live. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API.
 5. Treat the core Incus lifecycle as proven on a dedicated test instance: #9 on host #2 completed stop/start/restart/recreate/delete cleanup, and existing proof already covers create, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic. Only run suspend/unsuspend, IPv6, or host-migration smoke if these remain in final acceptance scope.
-6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram/external notification cannot be proven until a test notification channel is configured; Lsky needs a delete-capable token or provider-side cleanup before more upload attempts.
+6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram delivery is proven by message `#339` to `@Payincus`; Lsky needs a delete-capable token or provider-side cleanup before more upload attempts.
 7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
-8. Complete a logged-in browser smoke through Turnstile/session-gated UI, including admin `/admin/production-proof` and representative user/admin pages.
-9. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
+8. Treat the approved temporary Turnstile disable-and-restore smoke as proven unless final acceptance specifically requires a human-solved Cloudflare challenge UX.
+9. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` with the approved disable-and-restore auth smoke reference, or with an additional human-solved Turnstile reference if final acceptance scope requires it.
 10. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
 11. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
