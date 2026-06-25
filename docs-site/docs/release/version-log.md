@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `cefd77a`
+- 当前 HEAD / Current HEAD: `9fcbe28`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Update final proof scope waiver / 更新最终验收豁免口径
-- 最新 tag / Latest tag: `v0.6.5`
+- 提交说明 / Commit subject: Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke
+- 最新 tag / Latest tag: `v0.6.6`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.6
+
+- 发布提交 / Release commit: `9fcbe28`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke
+
+### 其他变更 / Other Changes
+
+- Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke `9fcbe28`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.6.5 / 更新 v0.6.5 版本日志 `0e55c41`
 
 ## v0.6.5
 
