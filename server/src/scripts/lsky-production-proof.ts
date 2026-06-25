@@ -179,6 +179,11 @@ async function main(): Promise<void> {
     throw new Error('Configured Lsky token cannot access /api/v2/user/photos; refusing to create another proof upload')
   }
 
+  const tokenAbilities = preflight.tokenPermissions?.tokenAbilities
+  if (!tokenAbilities || tokenAbilities.missingForCommitProof.length > 0) {
+    throw new Error('Configured Lsky token is missing commit proof abilities; refusing to create another proof upload')
+  }
+
   const suffix = crypto.randomBytes(4).toString('hex')
   const username = `pproof-lsky-${suffix}`
   const createdIds: {
