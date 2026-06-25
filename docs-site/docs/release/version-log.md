@@ -6,16 +6,33 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `d470e7b`
+- 当前 HEAD / Current HEAD: `976a38a`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Harden online update runner environment
-- 最新 tag / Latest tag: `v0.5.7`
+- 提交说明 / Commit subject: Update production proof workspace status
+- 最新 tag / Latest tag: `v0.5.8`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.5.8
+
+- 发布提交 / Release commit: `976a38a`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Update production proof workspace status
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update production proof workspace status `976a38a`
+- Update handoff after v0.5.7 production OTA `2dc791c`
+- Update handoff for v0.5.7 release `8af7b58`
+- Update version log for v0.5.7 `233cfe6`
+
+### 其他变更 / Other Changes
+
+- Document safe Lsky cleanup proof boundary `813d8c0`
 
 ## v0.5.7
 

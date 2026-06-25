@@ -6,16 +6,33 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `d470e7b`
+- Current HEAD / 当前 HEAD: `976a38a`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Harden online update runner environment
-- Latest tag / 最新 tag: `v0.5.7`
+- Commit subject / 提交说明: Update production proof workspace status
+- Latest tag / 最新 tag: `v0.5.8`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.5.8
+
+- Release commit / 发布提交: `976a38a`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Update production proof workspace status
+
+### Improvements and Adjustments / 改进与调整
+
+- Update production proof workspace status `976a38a`
+- Update handoff after v0.5.7 production OTA `2dc791c`
+- Update handoff for v0.5.7 release `8af7b58`
+- Update version log for v0.5.7 `233cfe6`
+
+### Other Changes / 其他变更
+
+- Document safe Lsky cleanup proof boundary `813d8c0`
 
 ## v0.5.7
 
