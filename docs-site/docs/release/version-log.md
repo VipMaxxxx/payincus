@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `50f0f8b`
+- 当前 HEAD / Current HEAD: `0b408cc`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Summarize Lsky proof token abilities / 汇总 Lsky proof token 权限
-- 最新 tag / Latest tag: `v0.6.0`
+- 提交说明 / Commit subject: Harden Lsky proof and artifact install output / 加固 Lsky proof 与制品安装输出
+- 最新 tag / Latest tag: `v0.6.1`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.1
+
+- 发布提交 / Release commit: `0b408cc`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Harden Lsky proof and artifact install output / 加固 Lsky proof 与制品安装输出
+
+### 修复与稳定性 / Fixes and Stability
+
+- Harden Lsky proof and artifact install output / 加固 Lsky proof 与制品安装输出 `0b408cc`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.6.0 / 更新 v0.6.0 版本日志 `a5e877c`
 
 ## v0.6.0
 

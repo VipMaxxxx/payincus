@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `50f0f8b`
+- Current HEAD / 当前 HEAD: `0b408cc`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Summarize Lsky proof token abilities / 汇总 Lsky proof token 权限
-- Latest tag / 最新 tag: `v0.6.0`
+- Commit subject / 提交说明: Harden Lsky proof and artifact install output / 加固 Lsky proof 与制品安装输出
+- Latest tag / 最新 tag: `v0.6.1`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.1
+
+- Release commit / 发布提交: `0b408cc`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Harden Lsky proof and artifact install output / 加固 Lsky proof 与制品安装输出
+
+### Fixes and Stability / 修复与稳定性
+
+- Harden Lsky proof and artifact install output / 加固 Lsky proof 与制品安装输出 `0b408cc`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.6.0 / 更新 v0.6.0 版本日志 `a5e877c`
 
 ## v0.6.0
 
