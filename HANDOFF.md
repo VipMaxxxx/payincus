@@ -226,7 +226,8 @@ The admin console contains a read-only Production Proof workspace at /admin/prod
 The user build output does not contain the production-proof route, nav key, or page content.
 Production `v0.5.2` adds non-sensitive Lsky delete diagnostics and is live.
 Production Lsky user-gallery list probe returned HTTP 403 with the configured token; previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
-Remaining production proof is still incomplete: Incus start/restart/recreate/delete/cleanup, SMTP receipt/provider-log proof, Lsky confirmed deletion, Telegram/in-app notification delivery, Turnstile/session browser smoke, and backup/restore drill.
+Production DB backup/restore drill is now proven through a temporary database restore and cleanup check.
+Remaining production proof is still incomplete: Incus start/restart/recreate/delete/cleanup, SMTP receipt/provider-log proof, Lsky confirmed deletion, Telegram/in-app notification delivery, and Turnstile/session browser smoke.
 Current follow-up: configure a delete-capable Lsky token or use provider-side cleanup before more upload attempts; previous proof images may still need cleanup.
 ```
 
@@ -247,7 +248,7 @@ Current commercial operation progress:
 
 ```text
 12/12 categories have local feature coverage: commercial deployment/recovery, operations overview, order/payment operations, financial reconciliation, delivery assurance enhancement, SLA and alerting, customer success, user lifecycle, risk and audit, resource capacity and cost, plugin market governance, and production proof workspace.
-Important caveat: final production proof is not complete until real payment, Incus, terminal, Agent, delivery, notification, Turnstile, OTA rollback, and backup-restore evidence is collected and recorded.
+Important caveat: final production proof is not complete until the remaining Incus lifecycle, delivery, notification, Turnstile, and final accepted live references are collected and recorded.
 ```
 
 ## Product Split Status
@@ -381,7 +382,7 @@ Latest production proof:
 - Public header checks on `https://pay.payincus.com/`, `https://admin.payincus.com/`, `https://pay.payincus.com/api/health`, and `https://admin.payincus.com/api/health` returned HSTS, CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - `v0.1.8` public release asset availability was verified directly. GitHub Actions API polling hit an anonymous rate limit during that check, so the latest fully recorded Actions run IDs in this handoff remain the earlier `v0.1.6` chain.
 - Docs apex DNS is still incomplete for resilience: public resolvers currently return only A `185.199.108.153` and AAAA `2606:50c0:8000::153` for `payincus.com`, not the full recommended GitHub Pages record set.
-- Full-function audit progress is `12/13` categories complete, current category `13/13` is `7/13` items complete (`54%`). Remaining production blockers are business-proof blockers, not deployment blockers: Incus start/restart/recreate/delete/cleanup proof, SMTP delivery, Lsky upload, Telegram/external notification delivery, and real password+Turnstile browser smoke.
+- Full-function audit progress is `12/13` categories complete, current category `13/13` is `8/13` items complete (`62%`). Remaining production blockers are business-proof blockers, not deployment blockers: Incus start/restart/recreate/delete/cleanup proof, SMTP delivery, Lsky upload/delete cleanup, Telegram/external notification delivery, and real password+Turnstile browser smoke.
 
 Latest release proof:
 
@@ -660,7 +661,7 @@ Not completed:
 Remaining production proof items:
 
 - Real Incus start, restart, recreate, delete, cleanup and resource-release proof.
-- Real backup/restore, suspend/unsuspend, IPv6, and host migration smoke if these features remain in the final acceptance scope.
+- Real suspend/unsuspend, IPv6, and host migration smoke if these features remain in the final acceptance scope.
 - Real SMTP delivery.
 - Real Lsky upload.
 - Real Telegram / notification delivery.
@@ -739,12 +740,12 @@ Note: a previous request excluded the old demo domain from production audit scop
 ## Suggested Next Work
 
 1. Keep local Git synced with remote `payincus/main`; after the v0.5.2 version-log refresh, the tracked baseline is `9996b1c`.
-2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof remains 7/13 items, 54%.
+2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, while production proof is now 8/13 items, 62%.
 3. Treat `v0.5.2` production deployment/readiness as proven from the 2026-06-25 SSH/public proof: `/opt/incudal/current -> /opt/incudal/releases/v0.5.2-20260625020602`, version commit `4f5b3f076d4d`, deployed at `2026-06-25T02:06:11.632Z`, production readiness/DB/split-host/Agent manifest/log-header passed.
 4. Current latest-production boundary: `v0.5.2` is live, the production-proof workspace KPI correction is live, Lsky numeric provider-file-ID preservation is live, and non-sensitive Lsky delete diagnostics are live. Lsky cleanup is still not proven because the configured production Lsky token returned HTTP 403 for the documented user-gallery list API.
 5. Run the remaining real instance lifecycle proof on a dedicated test instance only: start, restart, recreate/delete, cleanup and resource-release verification. Existing proof already covers create, stop, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic.
 6. Complete delivery proof: SMTP send-test was accepted by the provider for recipient domain `qq.com`, but still needs inbox receipt or provider message/log reference; Telegram/external notification cannot be proven until a test notification channel is configured; Lsky needs a delete-capable token or provider-side cleanup before more upload attempts.
-7. Complete backup/restore drill proof in a temporary directory or temporary database only; do not overwrite production data.
+7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
 8. Complete a logged-in browser smoke through Turnstile/session-gated UI, including admin `/admin/production-proof` and representative user/admin pages.
 9. After the remaining proof is complete, run `pnpm verify:live-acceptance` with real live proof references. Only run `pnpm verify:final-acceptance` when real password+Turnstile or approved disable-and-restore auth smoke is available.
 10. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.

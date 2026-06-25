@@ -21,6 +21,7 @@ const en = read('client/src/locales/en.ts')
 const tw = read('client/src/locales/zh-TW.ts')
 const zhDocs = read('docs-site/docs/deployment/production-checklist.md')
 const enDocs = read('docs-site/docs/en/deployment/production-checklist.md')
+const restoreDrillScript = read('scripts/production-db-restore-drill.sh')
 
 assert.ok(
   adminRouter.includes("path: '/admin/production-proof'") &&
@@ -57,14 +58,14 @@ assert.ok(
     view.includes('不会执行支付、资源删除、Turnstile 变更或 OTA 回滚') &&
     view.includes('备份恢复演练') &&
     view.includes('不能覆盖生产数据') &&
-    view.includes('const completedProofItems = 7') &&
+    view.includes('const completedProofItems = 8') &&
     view.includes('const totalProofItems = 13') &&
     view.includes('completedProofItems / totalProofItems') &&
     view.includes('项真实 proof 已有证据') &&
     view.includes('ENV_FILE=/opt/incudal/.env PROOF_SINCE_HOURS=24 pnpm verify:production-proof-snapshot') &&
     view.includes('REQUIRE_LIVE_PROOF_REFS=1 pnpm verify:live-acceptance') &&
     view.includes('禁止写入审计记录的内容'),
-  'production proof workspace must explain read-only behavior, backup/restore boundaries, 7/13 proof progress, proof commands, final refs, and redaction rules'
+  'production proof workspace must explain read-only behavior, backup/restore boundaries, 8/13 proof progress, proof commands, final refs, and redaction rules'
 )
 
 const forbiddenExecutionMarkers = [
@@ -97,6 +98,20 @@ assert.ok(
     enDocs.includes('Turnstile login') &&
     enDocs.includes('Backup/restore drill'),
   'public docs must mention the admin production proof workspace and all remaining proof classes in both languages'
+)
+
+assert.ok(
+  restoreDrillScript.includes('DRILL_PREFIX="${DRILL_PREFIX:-incudal_restore_drill}"') &&
+    restoreDrillScript.includes('TEMP_DB_NAME="${DRILL_PREFIX}_${DRILL_ID//[^A-Za-z0-9_]/_}"') &&
+    restoreDrillScript.includes('PGDATABASE="$SOURCE_DB" pg_dump --format=custom --no-owner --no-privileges') &&
+    restoreDrillScript.includes('PGDATABASE="$TEMP_DB_NAME" pg_restore --dbname "$TEMP_DB_NAME" --no-owner --no-privileges --exit-on-error') &&
+    restoreDrillScript.includes('PGDATABASE="$RESTORE_DRILL_MAINTENANCE_DB" dropdb --if-exists "$TEMP_DB_NAME"') &&
+    restoreDrillScript.includes('runuser -u postgres -- createdb -O "$PGUSER" "$TEMP_DB_NAME"') &&
+    restoreDrillScript.includes('runuser -u postgres -- dropdb --if-exists "$TEMP_DB_NAME"') &&
+    restoreDrillScript.includes('rm -rf "$WORKDIR"') &&
+    !restoreDrillScript.includes('dropdb --if-exists "$SOURCE_DB"') &&
+    !restoreDrillScript.includes('PGDATABASE="$SOURCE_DB" pg_restore'),
+  'production database restore drill must dump production and restore only into a temporary database with cleanup'
 )
 
 console.log('production proof center guard tests passed')

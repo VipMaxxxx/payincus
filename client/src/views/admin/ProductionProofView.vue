@@ -99,14 +99,14 @@ const proofItems: ProofItem[] = [
   {
     key: 'backup',
     title: '备份恢复演练',
-    status: 'operator',
+    status: 'verified',
     risk: 'high',
-    evidence: '建议先恢复到临时目录或临时库，不能覆盖生产数据。',
-    safeNote: '记录备份时间、恢复目标、校验结果和清理结果。'
+    evidence: '已通过临时数据库完成生产 DB 备份恢复演练，恢复后校验表和关键记录计数，并清理临时库。',
+    safeNote: '后续只需在重大数据库结构变更后重新演练；不能覆盖生产数据。'
   }
 ]
 
-const completedProofItems = 7
+const completedProofItems = 8
 const totalProofItems = 13
 const remainingProofItems = totalProofItems - completedProofItems
 
@@ -240,7 +240,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
         <div class="text-sm text-themed-muted">高风险操作窗口</div>
         <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.operator }}</div>
-        <div class="mt-2 text-xs text-themed-muted">Turnstile、回滚和备份恢复需单独确认</div>
+        <div class="mt-2 text-xs text-themed-muted">Turnstile 和回滚需单独确认</div>
       </div>
     </section>
 
@@ -260,7 +260,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">3. 高风险业务 proof</div>
-          <p class="mt-2 text-sm text-themed-muted">使用测试订单和测试实例，完成支付、Incus 生命周期、终端、回滚和备份恢复演练。</p>
+          <p class="mt-2 text-sm text-themed-muted">使用测试订单和测试实例，完成支付、Incus 生命周期、终端和回滚复核。</p>
         </div>
       </div>
     </section>
