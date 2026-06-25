@@ -154,7 +154,7 @@ assert.ok(
 )
 
 assert.ok(
-  runTask.includes("pnpm', ['install', '--prod', '--frozen-lockfile']") &&
+  runTask.includes("pnpm', ['install', '--prod', '--frozen-lockfile', '--force']") &&
     runTask.includes("timeoutMs: 600000,") &&
     runTask.includes('cwd: releaseDir') &&
     (runTask.match(/env: \{ CI: '1' \}/g) ?? []).length >= 2,

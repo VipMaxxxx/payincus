@@ -572,7 +572,7 @@ async function applyArtifactAtomic(stagingDir: string, timestamp: string): Promi
   await restoreRuntimeAssets(currentTarget, releaseDir)
   await run('corepack', ['enable'], { timeoutMs: 120000, cwd: releaseDir })
   await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000, cwd: releaseDir })
-  await run('pnpm', ['install', '--prod', '--frozen-lockfile'], {
+  await run('pnpm', ['install', '--prod', '--frozen-lockfile', '--force'], {
     timeoutMs: 600000,
     cwd: releaseDir,
     env: { CI: '1' }
@@ -597,7 +597,7 @@ async function applyArtifactLegacy(stagingDir: string, backupDir: string): Promi
 
   await run('corepack', ['enable'], { timeoutMs: 120000 })
   await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000 })
-  await run('pnpm', ['install', '--prod', '--frozen-lockfile'], {
+  await run('pnpm', ['install', '--prod', '--frozen-lockfile', '--force'], {
     timeoutMs: 600000,
     env: { CI: '1' }
   })
