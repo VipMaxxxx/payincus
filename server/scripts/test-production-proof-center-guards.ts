@@ -64,7 +64,9 @@ assert.ok(
     view.includes('completedProofItems / totalProofItems') &&
     view.includes('项真实 proof 已有证据') &&
     view.includes('仅剩 Lsky 删除清理 proof') &&
-    view.includes('SMTP 投递证据已记录；具备删除权限后完成 Lsky 清理 proof。') &&
+    view.includes('SMTP 与 Telegram 已证明；具备删除权限后完成 Lsky 清理 proof。') &&
+    view.includes('ENV_FILE=/opt/incudal/.env NODE_ENV=production node server/dist/scripts/lsky-production-proof.js') &&
+    view.includes('BACKEND_URL=http://127.0.0.1:3001') &&
     view.includes('ENV_FILE=/opt/incudal/.env PROOF_SINCE_HOURS=24 pnpm verify:production-proof-snapshot') &&
     view.includes('REQUIRE_LIVE_PROOF_REFS=1 pnpm verify:live-acceptance') &&
     view.includes('禁止写入审计记录的内容'),
