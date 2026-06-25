@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `976a38a`
+- Current HEAD / 当前 HEAD: `800c509`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Update production proof workspace status
-- Latest tag / 最新 tag: `v0.5.8`
+- Commit subject / 提交说明: Harden artifact OTA install directory handling
+- Latest tag / 最新 tag: `v0.5.9`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.5.9
+
+- Release commit / 发布提交: `800c509`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Harden artifact OTA install directory handling
+
+### Fixes and Stability / 修复与稳定性
+
+- Harden artifact OTA install directory handling `800c509`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.5.8 `4fd4dda`
 
 ## v0.5.8
 
