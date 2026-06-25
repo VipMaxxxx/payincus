@@ -6,16 +6,24 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `cd8797b`
+- 当前 HEAD / Current HEAD: `b8eabc0`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Fix production proof workspace progress
-- 最新 tag / Latest tag: `v0.5.0`
+- 提交说明 / Commit subject: Fix Lsky v2 image deletion
+- 最新 tag / Latest tag: `v0.5.1`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.5.1
+
+- 发布提交 / Release commit: `b8eabc0`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Fix Lsky v2 image deletion
+
+Preserve numeric Lsky v2 photo IDs and delete images through the official batch /user/photos endpoint.
 
 ## v0.5.0
 
