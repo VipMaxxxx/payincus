@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `800c509`
+- Current HEAD / 当前 HEAD: `50f0f8b`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Harden artifact OTA install directory handling
-- Latest tag / 最新 tag: `v0.5.9`
+- Commit subject / 提交说明: Summarize Lsky proof token abilities / 汇总 Lsky proof token 权限
+- Latest tag / 最新 tag: `v0.6.0`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.0
+
+- Release commit / 发布提交: `50f0f8b`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Summarize Lsky proof token abilities / 汇总 Lsky proof token 权限
+
+### Other Changes / 其他变更
+
+- Summarize Lsky proof token abilities / 汇总 Lsky proof token 权限 `50f0f8b`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.5.9 production OTA `6f10519`
+- Update version log for v0.5.9 `2360bde`
 
 ## v0.5.9
 
