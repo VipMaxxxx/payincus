@@ -8,8 +8,17 @@ import { getCurrentVersionMetadata, isGitRepository, isValidReleaseTag } from '.
 
 const targetVersion = String(process.argv[2] || '').trim()
 const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())
-const installDir = resolve(process.env.INSTALL_DIR || (appDir.endsWith('/current') ? dirname(appDir) : appDir))
+const installDir = resolve(process.env.INSTALL_DIR || deriveInstallDir(appDir))
 const logDir = resolve(process.env.SYSTEM_UPDATE_LOG_DIR || join(installDir, 'update-logs'))
+
+function deriveInstallDir(resolvedAppDir: string): string {
+  if (resolvedAppDir.endsWith('/current')) return dirname(resolvedAppDir)
+
+  const releasesDir = dirname(resolvedAppDir)
+  if (releasesDir.endsWith('/releases')) return dirname(releasesDir)
+
+  return resolvedAppDir
+}
 
 async function findUpdaterUserId(): Promise<number> {
   const configured = Number(process.env.SYSTEM_UPDATE_STARTED_BY_USER_ID || '')

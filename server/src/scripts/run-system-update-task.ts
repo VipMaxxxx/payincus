@@ -18,7 +18,7 @@ import {
 const taskId = Number(process.argv[2])
 let targetVersion = String(process.argv[3] || '').trim()
 const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())
-const installDir = resolve(process.env.INSTALL_DIR || (appDir.endsWith('/current') ? dirname(appDir) : appDir))
+const installDir = resolve(process.env.INSTALL_DIR || deriveInstallDir(appDir))
 const serviceName = process.env.SERVICE_NAME || 'incudal-backend'
 const frontendUrl = process.env.FRONTEND_URL || 'https://pay.payincus.com'
 const adminFrontendUrl = process.env.ADMIN_FRONTEND_URL || 'https://admin.payincus.com'
@@ -32,6 +32,15 @@ const releaseRetentionCount = parseNonNegativeIntegerEnv(process.env.SYSTEM_UPDA
 const backupTaskRetentionCount = parseNonNegativeIntegerEnv(process.env.SYSTEM_UPDATE_BACKUP_TASKS_KEEP, 3)
 const defaultExecutionPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 const executionPath = process.env.PATH ? `${process.env.PATH}:${defaultExecutionPath}` : defaultExecutionPath
+
+function deriveInstallDir(resolvedAppDir: string): string {
+  if (resolvedAppDir.endsWith('/current')) return dirname(resolvedAppDir)
+
+  const releasesDir = dirname(resolvedAppDir)
+  if (releasesDir.endsWith('/releases')) return dirname(releasesDir)
+
+  return resolvedAppDir
+}
 
 function parseNonNegativeIntegerEnv(value: string | undefined, fallback: number): number {
   if (!value) return fallback
@@ -563,6 +572,7 @@ async function applyArtifactAtomic(stagingDir: string, timestamp: string): Promi
   await restoreRuntimeAssets(currentTarget, releaseDir)
   await run('corepack', ['enable'], { timeoutMs: 120000, cwd: releaseDir })
   await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000, cwd: releaseDir })
+  await run('pnpm', ['install', '--prod', '--frozen-lockfile'], { timeoutMs: 600000, cwd: releaseDir })
   await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], {
     timeoutMs: 300000,
     cwd: releaseDir
@@ -583,6 +593,7 @@ async function applyArtifactLegacy(stagingDir: string, backupDir: string): Promi
 
   await run('corepack', ['enable'], { timeoutMs: 120000 })
   await run('corepack', ['prepare', 'pnpm@9.14.2', '--activate'], { timeoutMs: 120000 })
+  await run('pnpm', ['install', '--prod', '--frozen-lockfile'], { timeoutMs: 600000 })
   await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
   await writeVersionFile()
   return backupDir

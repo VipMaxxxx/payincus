@@ -123,7 +123,9 @@ assert.ok(
     runTask.includes('autoRollbackFromBackup') &&
     runTask.includes('switchCurrentRelease') &&
     runTask.includes('applyArtifactAtomic') &&
-    runTask.includes("appDir.endsWith('/current') ? dirname(appDir) : appDir") &&
+    runTask.includes('function deriveInstallDir') &&
+    runTask.includes("resolvedAppDir.endsWith('/current')") &&
+    runTask.includes("releasesDir.endsWith('/releases')") &&
     runTask.includes("join(installDir, '.incudal-update-downloads')") &&
     runTask.includes("join(installDir, 'current')") &&
     runTask.includes("join(installDir, 'releases')") &&
@@ -149,6 +151,13 @@ assert.ok(
     runTask.includes("status: rolledBack ? 'rolled_back' : 'failed'") &&
     runTask.includes('failed-update'),
   'online updater must prefer checksum-verified OTA release artifacts, support atomic current/release switching, clean OTA caches, preflight disk space, prune old releases safely, and preserve Git fallback mode'
+)
+
+assert.ok(
+  runTask.includes("pnpm', ['install', '--prod', '--frozen-lockfile']") &&
+    runTask.includes("timeoutMs: 600000, cwd: releaseDir") &&
+    runTask.includes("timeoutMs: 600000 })"),
+  'artifact updates must recreate production dependency symlinks inside the applied release, not keep links into temporary staging'
 )
 
 assert.ok(
@@ -215,7 +224,8 @@ assert.ok(
     onlineScript.includes('APP_DIR="$INSTALL_DIR/current"') &&
     onlineScript.includes('INCUDAL_APP_DIR="$APP_DIR"') &&
     runTask.includes('const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())') &&
-    rollbackTask.includes("appDir.endsWith('/current') ? dirname(appDir) : appDir") &&
+    rollbackTask.includes('function deriveInstallDir') &&
+    read('server/src/scripts/start-system-update-task.ts').includes("releasesDir.endsWith('/releases')") &&
     serverPackage.includes('"update:online:start": "node dist/scripts/start-system-update-task.js"') &&
     releaseWorkflow.includes('fetch-depth: 0') &&
     releaseWorkflow.includes('cp -r deploy/* release/deploy/') &&

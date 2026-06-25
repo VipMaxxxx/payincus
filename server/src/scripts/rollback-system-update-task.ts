@@ -7,7 +7,7 @@ import { prisma, closePrismaDatabase } from '../db/prisma.js'
 
 const taskId = Number(process.argv[2])
 const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())
-const installDir = resolve(process.env.INSTALL_DIR || (appDir.endsWith('/current') ? dirname(appDir) : appDir))
+const installDir = resolve(process.env.INSTALL_DIR || deriveInstallDir(appDir))
 const serviceName = process.env.SERVICE_NAME || 'incudal-backend'
 const frontendUrl = process.env.FRONTEND_URL || 'https://pay.payincus.com'
 const adminFrontendUrl = process.env.ADMIN_FRONTEND_URL || 'https://admin.payincus.com'
@@ -16,6 +16,15 @@ const logDir = resolve(process.env.SYSTEM_UPDATE_LOG_DIR || join(installDir, 'up
 const logPath = resolve(process.env.SYSTEM_UPDATE_LOG_PATH || join(logDir, `system-update-${taskId}-rollback.log`))
 const defaultExecutionPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 const executionPath = process.env.PATH ? `${process.env.PATH}:${defaultExecutionPath}` : defaultExecutionPath
+
+function deriveInstallDir(resolvedAppDir: string): string {
+  if (resolvedAppDir.endsWith('/current')) return dirname(resolvedAppDir)
+
+  const releasesDir = dirname(resolvedAppDir)
+  if (releasesDir.endsWith('/releases')) return dirname(releasesDir)
+
+  return resolvedAppDir
+}
 
 function now(): string {
   return new Date().toISOString()
