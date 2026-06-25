@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-91d9c9d Update version log for v0.6.3 / 更新 v0.6.3 版本日志
+6b2e7d4 Update version log for v0.6.4 / 更新 v0.6.4 版本日志
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-91d9c9d Update version log for v0.6.3 / 更新 v0.6.3 版本日志
+6b2e7d4 Update version log for v0.6.4 / 更新 v0.6.4 版本日志
 ```
 
 Recently updated/released files include:
@@ -155,83 +155,69 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.6.3 Harden Lsky commit proof permissions
-feature commit: 54aa45a
-version-log commit: 91d9c9d
+v0.6.4 Update production proof workspace status
+feature commit/tag: 5eff38f
+version-log commit: 6b2e7d4
 docs/handoff commit: this handoff refresh commit
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.6.3: run 28174973047 completed successfully.
-CI for version-log commit 91d9c9d: run 28174969332 completed successfully.
-Docs Pages for version-log commit 91d9c9d: run 28174969346 completed successfully.
+Build & Release for tag v0.6.4: run 28176495161 completed successfully.
+CI for version-log commit 6b2e7d4: run 28176491244 completed successfully.
+Docs Pages for version-log commit 6b2e7d4: run 28176492013 completed successfully.
 ```
 
-Release assets confirmed publicly for `v0.6.3`:
+Release assets confirmed publicly for `v0.6.4`:
 
 ```text
 ota-manifest.json
-incudal-v0.6.3-linux-amd64.tar.gz
-incudal-v0.6.3-linux-amd64.tar.gz.sha256
-incudal-v0.6.3-linux-arm64.tar.gz
-incudal-v0.6.3-linux-arm64.tar.gz.sha256
-incudal-v0.6.3-ota-manifest.json
+incudal-v0.6.4-linux-amd64.tar.gz
+incudal-v0.6.4-linux-amd64.tar.gz.sha256
+incudal-v0.6.4-linux-arm64.tar.gz
+incudal-v0.6.4-linux-arm64.tar.gz.sha256
+incudal-v0.6.4-ota-manifest.json
 ```
 
-Published `v0.6.3` OTA manifest:
+Published `v0.6.4` OTA manifest:
 
 ```text
-version: v0.6.3
-gitCommit: 54aa45a2c35f
-buildTime: 2026-06-25T13:52:55.720Z
-amd64 artifact: incudal-v0.6.3-linux-amd64.tar.gz
-amd64 size: 90288530
-amd64 sha256: aac45441edb614586a3413e19582a4010aeed1e5e2876bcfdeacf585777261fd
-arm64 artifact: incudal-v0.6.3-linux-arm64.tar.gz
-arm64 size: 89402763
-arm64 sha256: c9e33b1634cb062ff22d071d83ced8dedb48f2530cb52b9c02027ac22879aacf
+version: v0.6.4
+gitCommit: 5eff38f1545d
+buildTime: 2026-06-25T14:16:40.111Z
+amd64 artifact: incudal-v0.6.4-linux-amd64.tar.gz
+amd64 size: 90284586
+amd64 sha256: 44ef7f673a66007fb7d83d829f348816c46c0e3c5163e872c74dcfb52c1181f6
+arm64 artifact: incudal-v0.6.4-linux-arm64.tar.gz
+arm64 size: 89396099
+arm64 sha256: 419882d8f089dda1f79bff4c8d890a727dcfb6868215b9ee3d25ab6925e1115a
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.6.3 from task #70
-task: #70
-target: v0.6.3
-fromVersion: v0.6.2
-started: 2026-06-25T13:55:26.619Z
-finished: 2026-06-25T13:56:39.375Z
-backup path: /opt/incudal/releases/v0.6.2-20260625133527
-release dir: /opt/incudal/releases/v0.6.3-20260625135526
-current release: /opt/incudal/releases/v0.6.3-20260625135526
-version.json: version/tag v0.6.3, commit 54aa45a2c35f, buildTime 2026-06-25T13:52:15.061Z, deployedAt 2026-06-25T13:55:45.475Z
-verify-split-host: passed
-pnpm verify:production: passed
-verify-production-db: passed
-agent manifest check: passed
-pnpm verify:log-header: passed
-secret log/header scan: passed
-update result: System update completed successfully
-cleanup: OTA download cache cleaned; old release pruning executed with protected-release retention
-post-OTA dependency check: SERVER_NODE_MODULES_OK passed from /opt/incudal/current/server
-deployed proof marker: /opt/incudal/current/server/dist/scripts/lsky-production-proof.js refuses commit proof when tokenAbilities.missingForCommitProof is non-empty
-```
-
-Production OTA follow-up for `v0.6.3`:
-
-```text
-task: #70
-target: v0.6.3
+latest proven production version: v0.6.4 from task #71
+task: #71
+target: v0.6.4
+fromVersion: v0.6.3
 status: success
-fromVersion: v0.6.2
-logPath: /opt/incudal/update-logs/system-update-70.log
+started: 2026-06-25 14:19:20.443 UTC
+finished: 2026-06-25 14:20:44.408 UTC
+backup path: /opt/incudal/releases/v0.6.3-20260625135526
+logPath: /opt/incudal/update-logs/system-update-71.log
+release dir: /opt/incudal/releases/v0.6.4-20260625141920
+current release: /opt/incudal/releases/v0.6.4-20260625141920
+version.json: version/tag v0.6.4, commit 5eff38f1545d, buildTime 2026-06-25T14:15:59.835Z, deployedAt 2026-06-25T14:19:39.415Z
+verify-split-host: passed
+current-release pnpm verify:production: passed
+verify-production-db: passed, with existing public-package capacity warnings for package #1 and #2
+agent manifest check: passed
+correct-loopback-backend pnpm verify:log-header: passed
+secret log/header scan: passed
 public health after update: user/admin /api/health returned HTTP 200
-production readiness: passed
-log/header exposure check: passed
-runner marker proof: task #70 ran pnpm install --prod --frozen-lockfile --force in the new release
-lsky marker proof: deployed script contains the missing commit proof abilities refusal
+post-OTA dependency check: SERVER_NODE_MODULES_OK passed from /opt/incudal/current/server
+deployed admin bundle markers: `Lsky 只读预检`, `SMTP 与 Telegram 已证明`, and `支付、Incus 生命周期和终端已有测试证据` present
 update result: System update completed successfully
 cleanup: OTA download cache cleaned; old release pruning executed with protected-release retention
 ```
@@ -241,13 +227,13 @@ Post-update checks:
 ```text
 The admin console contains a read-only Production Proof workspace at /admin/production-proof.
 The user build output does not contain the production-proof route, nav key, or page content.
-Production `v0.6.3` is live after the Lsky commit proof permission hardening release. Current proof progress is still `12/13`, but the remaining proof count is now `1`: Lsky confirmed deletion/provider cleanup.
-Production `v0.5.3` showed the production DB backup/restore drill as verified in the read-only proof workspace and is now task `#61` rollback backup.
-Production Lsky proof script is deployed at `server/dist/scripts/lsky-production-proof.js`. Latest read-only proof `lsky-upload-delete-proof-2026-06-25T14:00:06.848Z` confirmed config present, API v2 host `kkksr.com`, group endpoint HTTP 200, token permission endpoint HTTP 200 with redacted summary output, token abilities only include `upload:write`, missing `user:photo:read` and `user:photo:write`, and `/api/v2/user/photos?page=1&per_page=1` returned HTTP 403. The deployed `v0.6.3` proof script now refuses commit mode before upload when the token permission summary is missing any required commit-proof ability. Previous upload proof preserved a numeric providerFileId, but cleanup remains unproven.
+Production `v0.6.4` is live after the production-proof workspace status sync release. Current proof progress remains `12/13`, with the remaining proof count still `1`: Lsky confirmed deletion/provider cleanup.
+Production `v0.5.3` showed the production DB backup/restore drill as verified in the read-only proof workspace and is now an older rollback release.
+Production Lsky proof script is deployed at `server/dist/scripts/lsky-production-proof.js`. Latest read-only proof `lsky-upload-delete-proof-2026-06-25T14:22:40.974Z` confirmed config present, API v2 host `kkksr.com`, token permission endpoint HTTP 200 with redacted summary output, token abilities only include `upload:write`, missing `user:photo:read` and `user:photo:write`, and `/api/v2/user/photos?page=1&per_page=1` returned HTTP 403. The `/api/v2/group` check hit a transient AbortError in this latest run, but it does not change the commit blocker because user photo list/delete permissions are still missing. Commit mode was not run.
 Official Lsky Pro+ API docs confirm `DELETE /api/v2/user/photos` expects a JSON numeric ID array and returns HTTP 204 on successful deletion. The current production code matches this endpoint/body shape. A later production DB-only known-ID search `lsky-db-known-id-readonly-search-2026-06-25T04:54:26.080Z` found `attachmentCount=0` and no Lsky providerFileId in matched business log rows, so there is no safe persisted proof image ID to delete from the app side.
 Current code review confirms there is no safe no-upload/no-known-ID deletion proof path: `deleteTicketImageFromLsky()` requires a numeric Lsky v2 provider ID before it sends `DELETE /api/v2/user/photos`, and the proof script refuses commit mode while `/api/v2/user/photos` returns HTTP 403. Do not probe production with guessed IDs, empty delete arrays, or invalid-ID delete requests.
-Production DB backup/restore drill is now proven through a temporary database restore and cleanup check.
-Production Incus lifecycle is now proven on dedicated test instance #9: stop task #5, start task #6, restart task #7, recreate task #8, delete cleanup, DB status deleted, Incus object not found, and host CPU/memory/disk resources returned to baseline.
+Production DB backup/restore drill is proven through a temporary database restore and cleanup check.
+Production Incus lifecycle is proven on dedicated test instance #9: stop task #5, start task #6, restart task #7, recreate task #8, delete cleanup, DB status deleted, Incus object not found, and host CPU/memory/disk resources returned to baseline.
 Telegram delivery is proven by production bot message #339 to public group @Payincus.
 Turnstile/session browser smoke is proven through the approved temporary disable-and-restore path: user /dashboard and admin /admin/production-proof rendered after login, config restored, temp secret file removed, and test users #31/#32 banned.
 SMTP provider reference is proven by production send-test proof `smtp-provider-reference-2026-06-25T04:34:51.773Z`: recipient domain `qq.com`, provider reference `35bd2e0d-e817-1e31-ffde-de033e861c7e@qq.com`, accepted=1, rejected=0, pending=0, response `250 OK: queued as.`.
