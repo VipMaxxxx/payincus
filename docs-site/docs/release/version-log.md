@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `0f67f1d`
+- 当前 HEAD / Current HEAD: `54aa45a`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Force artifact OTA dependency install / 强制重建 OTA 制品依赖
-- 最新 tag / Latest tag: `v0.6.2`
+- 提交说明 / Commit subject: Harden Lsky commit proof permissions / 加固 Lsky 提交证明权限检查
+- 最新 tag / Latest tag: `v0.6.3`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.3
+
+- 发布提交 / Release commit: `54aa45a`
+- 提交日期 / Commit date: 2026-06-25
+- 提交说明 / Commit subject: Harden Lsky commit proof permissions / 加固 Lsky 提交证明权限检查
+
+### 修复与稳定性 / Fixes and Stability
+
+- Harden Lsky commit proof permissions / 加固 Lsky 提交证明权限检查 `54aa45a`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after v0.6.2 production OTA / 更新 v0.6.2 生产 OTA 交接 `2dc0858`
+- Update version log for v0.6.2 / 更新 v0.6.2 版本日志 `f6094bf`
 
 ## v0.6.2
 

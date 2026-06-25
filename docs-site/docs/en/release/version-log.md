@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `0f67f1d`
+- Current HEAD / 当前 HEAD: `54aa45a`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Force artifact OTA dependency install / 强制重建 OTA 制品依赖
-- Latest tag / 最新 tag: `v0.6.2`
+- Commit subject / 提交说明: Harden Lsky commit proof permissions / 加固 Lsky 提交证明权限检查
+- Latest tag / 最新 tag: `v0.6.3`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.3
+
+- Release commit / 发布提交: `54aa45a`
+- Commit date / 提交日期: 2026-06-25
+- Commit subject / 提交说明: Harden Lsky commit proof permissions / 加固 Lsky 提交证明权限检查
+
+### Fixes and Stability / 修复与稳定性
+
+- Harden Lsky commit proof permissions / 加固 Lsky 提交证明权限检查 `54aa45a`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.6.2 production OTA / 更新 v0.6.2 生产 OTA 交接 `2dc0858`
+- Update version log for v0.6.2 / 更新 v0.6.2 版本日志 `f6094bf`
 
 ## v0.6.2
 
