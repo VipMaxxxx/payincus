@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `f754493`
+- 当前 HEAD / Current HEAD: `f28e860`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Fix admin gift card generation Turnstile gate
-- 最新 tag / Latest tag: `v0.6.12`
+- 提交说明 / Commit subject: Fix user gift card Turnstile verification
+- 最新 tag / Latest tag: `v0.6.13`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.13
+
+- 发布提交 / Release commit: `f28e860`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Fix user gift card Turnstile verification
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix user gift card Turnstile verification `f28e860`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.6.12 `dbd249e`
 
 ## v0.6.12
 
