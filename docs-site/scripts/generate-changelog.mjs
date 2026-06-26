@@ -88,7 +88,7 @@ function listTags() {
 function commitMeta(ref) {
   const line = safeGit(['log', '-1', '--format=%h%x09%cs%x09%s', ref])
   const [shortHash = '-', date = '-', subject = '-'] = line.split('\t')
-  return { shortHash, date, subject }
+  return { shortHash, date, subject: normalizeProductWording(subject) }
 }
 
 function commitsBetween(fromRef, toRef) {
@@ -99,7 +99,7 @@ function commitsBetween(fromRef, toRef) {
     .split('\n')
     .map((line) => {
       const [hash, ...subjectParts] = line.split('\t')
-      return { hash, subject: subjectParts.join('\t') }
+      return { hash, subject: normalizeProductWording(subjectParts.join('\t')) }
     })
     .filter((item) => item.hash && item.subject)
 }
@@ -110,6 +110,14 @@ function tagContent(tag, format) {
 
 function normalizeTagNote(value) {
   return value.replace(/\\n/g, '\n')
+}
+
+function normalizeProductWording(value) {
+  return value
+    .replace(/插件中心/g, '扩展中心')
+    .replace(/\bPlugin Center\b/g, 'Extension Center')
+    .replace(/\bPlugin center\b/g, 'Extension center')
+    .replace(/\bplugin center\b/g, 'extension center')
 }
 
 function tagBodyLines(tag) {
@@ -123,7 +131,7 @@ function tagBodyLines(tag) {
 
   const lines = []
   for (const rawLine of note.split(/\r?\n/)) {
-    const line = rawLine.trim()
+    const line = normalizeProductWording(rawLine.trim())
     if (!line) {
       if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
       continue

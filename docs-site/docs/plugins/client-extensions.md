@@ -26,7 +26,7 @@ admin.billing.extra
 admin.ticket.extra
 ```
 
-`admin.plugins.settings` 用于扩展中心里的设置页。`admin.sidebar.extra` 会显示为后台侧边栏入口，并打开平台生成的 `/admin/plugins/:pluginId/pages/<entry>` 页面。后台扩展入口只通过 `/api/plugins/enabled-admin-client-extensions` 暴露给管理员。
+`admin.plugins.settings` 用于后台左侧菜单中的扩展设置入口，并打开独立的插件设置路由。`admin.sidebar.extra` 会显示为后台侧边栏入口，并打开平台生成的 `/admin/plugins/:pluginId/pages/<entry>` 页面。后台扩展入口只通过 `/api/plugins/enabled-admin-client-extensions` 暴露给管理员。
 
 `user.dashboard.cards` 会挂载到用户端仪表盘，`admin.dashboard.widgets` 会挂载到后台统计页。页面内扩展点会直接渲染 sandbox iframe，适合状态卡片、活动摘要、运营小组件和只读报表，不应用来绕过平台业务 API。
 

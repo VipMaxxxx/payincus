@@ -20,7 +20,7 @@ tar -czf my-plugin.tar.gz payincus.plugin.json README.md dist templates docs
 
 ## 后台页面
 
-后台页面通过 `adminPages` 声明，并在受保护的 sandbox iframe 中打开。`admin.plugins.settings` 会显示为扩展中心里的设置页；`admin.sidebar.extra` 会显示为后台侧边栏入口，平台会生成 `/admin/plugins/:pluginId/pages/<entry>` 路由并用后台权限加载对应页面。
+后台页面通过 `adminPages` 声明，并在受保护的 sandbox iframe 中打开。`admin.plugins.settings` 会显示为后台左侧菜单中的扩展设置入口，并打开独立的插件设置路由；`admin.sidebar.extra` 会显示为后台侧边栏入口，平台会生成 `/admin/plugins/:pluginId/pages/<entry>` 路由并用后台权限加载对应页面。
 
 ```json
 {
@@ -69,7 +69,7 @@ tar -czf my-plugin.tar.gz payincus.plugin.json README.md dist templates docs
 
 ## 配置
 
-后台扩展配置保存到扩展中心。扩展静态页可以读取非敏感公有配置：
+后台扩展配置通过独立的后台扩展设置页管理，配置数据仍由扩展配置接口保存。扩展静态页可以读取非敏感公有配置：
 
 ```text
 GET /api/plugins/:pluginId/config/public
