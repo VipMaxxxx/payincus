@@ -77,12 +77,45 @@ assert(
 assert(
   route.includes('function requireGiftCardManager') &&
     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
-    route.includes('requireGiftCardManager, turnstileRequired') &&
     route.includes('requireGiftCardManager]') &&
     route.includes('normalizeIdList') &&
     db.includes('maskGiftCardCode(code)') &&
     db.includes('revealCode: options.revealCode === true'),
   'admin gift card routes must require an explicit production allowlist, normalize batch IDs, and mask list codes by default'
+)
+
+const adminGenerateSection = route.slice(
+  route.indexOf("fastify.post('/admin/generate'"),
+  route.indexOf('// 批量生成兑换码')
+)
+const adminBatchSection = route.slice(
+  route.indexOf("fastify.post('/admin/batch'"),
+  route.indexOf('// 管理员列表')
+)
+const userRedeemSection = route.slice(
+  route.indexOf("fastify.post('/user/redeem'"),
+  route.indexOf('// 用户用余额生成兑换码')
+)
+const userGenerateRouteSection = route.slice(
+  route.indexOf("fastify.post('/user/generate'"),
+  route.indexOf('// 用户查看自己的兑换码')
+)
+
+assert(
+  adminGenerateSection.includes('requireGiftCardManager') &&
+    adminBatchSection.includes('requireGiftCardManager') &&
+    !adminGenerateSection.includes('turnstileRequired') &&
+    !adminBatchSection.includes('turnstileRequired') &&
+    !adminView.includes('useTurnstile') &&
+    !adminView.includes('turnstileToken'),
+  'admin gift card generation must rely on admin auth, explicit allowlist, and rate limits, not frontend Turnstile tokens'
+)
+
+assert(
+  userRedeemSection.includes('turnstileRequired') &&
+    userGenerateRouteSection.includes('turnstileRequired') &&
+    userView.includes('useTurnstile'),
+  'user gift card redemption and balance-funded generation must keep Turnstile protection'
 )
 
 assert(

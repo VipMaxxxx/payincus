@@ -2,11 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
-import { useTurnstile } from '@/composables/useTurnstile'
 import type { GiftCardRecord, GiftCardStats, GiftCardStatus } from '@/types/api'
 
 const toast = useToast()
-const turnstile = useTurnstile('admin_gift_card')
 
 const records = ref<GiftCardRecord[]>([])
 const stats = ref<GiftCardStats | null>(null)
@@ -54,11 +52,6 @@ function statusClass(status: GiftCardStatus): string {
   }[status]
 }
 
-async function getTurnstileToken(): Promise<string | undefined> {
-  const token = await turnstile.execute()
-  return token || undefined
-}
-
 async function loadData(): Promise<void> {
   loading.value = true
   try {
@@ -94,13 +87,11 @@ async function createCards(): Promise<void> {
 
   saving.value = true
   try {
-    const turnstileToken = await getTurnstileToken()
     const payload = {
       faceValue,
       balanceValue,
       expiresAt: form.value.expiresAt || null,
-      remark: form.value.remark.trim() || undefined,
-      turnstileToken
+      remark: form.value.remark.trim() || undefined
     }
     if (count === 1) {
       const response = await api.giftCards.generate(payload)

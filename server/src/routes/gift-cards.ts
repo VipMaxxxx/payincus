@@ -129,7 +129,7 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
 
   // 生成单个兑换码
   fastify.post('/admin/generate', {
-    onRequest: [fastify.authenticate, fastify.requireAdmin, requireGiftCardManager, turnstileRequired],
+    onRequest: [fastify.authenticate, fastify.requireAdmin, requireGiftCardManager],
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     schema: {
       body: {
@@ -139,8 +139,7 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
           faceValue: { type: 'number', minimum: 0.01, maximum: 10000 },
           balanceValue: { type: 'number', minimum: 0.01, maximum: 10000 },
           expiresAt: { type: ['string', 'null'] },
-          remark: { type: 'string', maxLength: 200 },
-          turnstileToken: { type: 'string' }
+          remark: { type: 'string', maxLength: 200 }
         }
       }
     }
@@ -194,7 +193,7 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
 
   // 批量生成兑换码
   fastify.post('/admin/batch', {
-    onRequest: [fastify.authenticate, fastify.requireAdmin, requireGiftCardManager, turnstileRequired],
+    onRequest: [fastify.authenticate, fastify.requireAdmin, requireGiftCardManager],
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     schema: {
       body: {
@@ -205,8 +204,7 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
           balanceValue: { type: 'number', minimum: 0.01, maximum: 10000 },
           count: { type: 'integer', minimum: 1, maximum: 500 },
           expiresAt: { type: ['string', 'null'] },
-          remark: { type: 'string', maxLength: 200 },
-          turnstileToken: { type: 'string' }
+          remark: { type: 'string', maxLength: 200 }
         }
       }
     }
