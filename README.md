@@ -1,6 +1,6 @@
 <h1 align="center"><img src="./client/public/incudal_logo.webp" width="96" align="absmiddle" alt="PayIncus logo"> PayIncus</h1>
 
-<p align="center">基于 Incus 的 LXC / KVM NAT VPS 销售、交付与管理面板。</p>
+<p align="center">面向 Incus 的 NAT VPS 销售、资源交付、支付账务、扩展市场、主题系统、Public API 和后台 OTA 平台。</p>
 
 <p align="center">
   <a href="https://payincus.com/demo">在线 Demo</a>
@@ -14,9 +14,9 @@
 
 ## 项目说明
 
-PayIncus 是基于开源项目 [VipMaxxxx/incudal](https://github.com/VipMaxxxx/payincus) 进行二次开发的 Incus 面板，面向 NAT VPS、LXC / KVM 实例、套餐销售、账务计费、用户后台、管理员后台和宿主机 Agent 管理场景。
+PayIncus 是基于开源项目 [VipMaxxxx/incudal](https://github.com/VipMaxxxx/payincus) 进行二次开发的 Incus 面板，面向 NAT VPS、LXC / KVM 实例、套餐销售、账务计费、用户后台、管理员后台、宿主机 Agent、第三方扩展和主题系统管理场景。
 
-当前维护重点是非 Docker 生产部署、前后端分离、安全审计、支付回调、资源交付和 Agent 上报链路。
+当前维护重点是非 Docker 生产部署、前后台双入口分离、安全审计、支付回调、资源交付、Agent 上报、后台 OTA、实时扩展市场、受控主题系统、OAuth Provider、Public API 和开发者 SDK。
 
 入口示例：
 
@@ -24,6 +24,8 @@ PayIncus 是基于开源项目 [VipMaxxxx/incudal](https://github.com/VipMaxxxx/
 - 管理后台：https://admin.example.com
 - 在线 Demo：https://payincus.com/demo
 - 文档站：https://payincus.com
+- API 参考：https://payincus.com/api/overview
+- 扩展市场：https://payincus.com/plugins/market
 - Telegram 交流群：https://t.me/Payincus
 - 当前仓库：https://github.com/VipMaxxxx/payincus
 - 原始项目：https://github.com/VipMaxxxx/payincus
@@ -31,10 +33,12 @@ PayIncus 是基于开源项目 [VipMaxxxx/incudal](https://github.com/VipMaxxxx/
 ## 核心能力
 
 - 实例交付：基于 Incus 创建和管理 LXC / KVM 实例，支持 NAT 网络、IPv6、系统镜像、套餐资源和节点绑定。
-- 用户后台：注册登录、控制台、实例详情、终端 WebSocket、工单、公告、通知、邀请、钱包、邮箱和托管节点。
-- 管理后台：用户、套餐、节点、镜像、订单、日志、OAuth、Telegram、邮件、系统配置、资源池和统计。
-- 扩展中心：后台上传安装、在线扩展市场安装、启用/停用/卸载、配置维护、任务日志、用户端扩展点和开发模板。
-- 计费账务：余额、充值、支付回调、消费记录、返利、积分、VIP 等级和会员福利。
+- 用户后台：注册登录、控制台、套餐市场、实例详情、终端 WebSocket、工单、公告、通知、邀请、钱包、邮箱和托管节点。
+- 管理后台：用户、套餐、节点、镜像、订单、日志、OAuth、Telegram、邮件、系统配置、资源池、SLA、告警、统计和版本更新。
+- 计费账务：余额、充值、支付回调、消费记录、对账、返利、积分、VIP 等级和会员福利。
+- 扩展中心：后台上传安装、实时在线扩展市场、投稿审核、扫描、发布、启用/停用/卸载、配置维护、任务日志、用户端扩展点和开发模板。
+- 主题系统：主题市场、主题上传、投稿审核/扫描/发布、预览、启用、回滚、配置表单、设计 token、受控模板槽和静态资产校验。
+- 开放接口：OAuth Provider、`pat_` API Token、`poa_` OAuth access token、OpenAPI 3.1、Public API SDK、分页/排序/scope 和统一错误模型。
 - 宿主机 Agent：安装脚本、心跳、资源上报、实例报告、流量统计和二进制下载代理。
 - 生产安全：JWT、Cookie、CORS、CSP、Helmet、SSRF 防护、文件上传校验、支付签名/IP 白名单和敏感日志脱敏。
 - 后台 OTA：管理后台查看当前版本、更新内容、Release OTA 包、SHA256、任务日志和回滚入口；生产支持 `current`/`releases` 原子切换、失败自动回滚和手动回滚。
@@ -310,6 +314,38 @@ THEME_MAX_PACKAGE_SIZE_MB=10
 
 第三方开发者应从 `docs-site/docs/plugins/overview.md` 和 `docs-site/docs/en/plugins/overview.md` 开始阅读。
 
+## Public API 与开发者能力
+
+PayIncus 已提供稳定的 `/api/v1` Public API，供第三方服务端、扩展后端和自动化系统接入。公开接口不依赖用户端或管理后台内部浏览器 API，统一使用 Bearer token、scope、分页、排序、白名单过滤和统一错误模型。
+
+当前公开能力：
+
+- 用户资料：`GET /api/v1/me`、`PATCH /api/v1/me`，写入只允许低风险展示字段。
+- 余额：读取余额和余额流水，提交待后台审批的余额调整申请，不直接改余额。
+- 产品：读取已启用套餐和计划。
+- 服务：读取当前用户服务，受控排队 `start`、`stop`、`restart` 任务，查询/取消公开任务，并通过内部账务状态机续费服务。
+- 订单与账单：读取当前用户充值订单、实例账务订单和服务账务记录。
+- 工单：创建自己的公开工单、追加公开回复、上传受控图片附件、关闭或重新打开自己的工单。
+- 通知：读取自己的通知，向当前 token 用户自己发送短通知或白名单模板通知。
+- 扩展 action：发现和触发已启用扩展声明过的公开 webhook action。
+- OAuth Provider：第三方应用通过 authorization code 流程获取 `poa_` access token，并按 scope 访问 Public API。
+
+OpenAPI 3.1 文档同时由后端 `/api/v1/openapi.json`、`/api/v1/openapi.yaml` 提供，并静态发布到文档站：
+
+```text
+https://payincus.com/api/v1/openapi.json
+https://payincus.com/api/v1/openapi.yaml
+```
+
+API 参考页已经按资源分组展示 endpoint、scope、参数、返回和安全边界：
+
+```text
+https://payincus.com/api/overview
+https://payincus.com/en/api/overview
+```
+
+Public API 不开放直接支付建单、支付回调、退款、直接余额写入、服务创建/删除/迁移、敏感资料修改、后台管理、扩展安装启停或主题启用。这些高风险能力必须通过 PayIncus 内部状态机、后台审核或受控扩展机制完成。
+
 后台页面路径：
 
 ```text
@@ -466,12 +502,20 @@ pnpm docs:build
 
 - 首页：`docs-site/docs/index.md`
 - 英文首页：`docs-site/docs/en/index.md`
+- 文档覆盖能力：`docs-site/docs/guide/documentation-coverage.md`、`docs-site/docs/en/guide/documentation-coverage.md`
 - 系统架构：`docs-site/docs/guide/architecture.md`
 - 前后台分离：`docs-site/docs/guide/split-deployment.md`
 - 后台 OTA：`docs-site/docs/guide/ota-update.md`
+- API 参考：`docs-site/docs/api/overview.md`、`docs-site/docs/en/api/overview.md`
+- OpenAPI 静态文件：`docs-site/docs/public/api/v1/openapi.json`、`docs-site/docs/public/api/v1/openapi.yaml`
 - 扩展开发：`docs-site/docs/plugins/overview.md`
+- 扩展中心方案：`docs-site/docs/plugins/platform-plan.md`、`docs-site/docs/en/plugins/platform-plan.md`
+- 扩展市场：`docs-site/docs/plugins/market.md`、`docs-site/docs/en/plugins/market.md`
+- Public API SDK：`docs-site/docs/plugins/sdk.md`、`docs-site/docs/en/plugins/sdk.md`
 - 生产验收：`docs-site/docs/deployment/production-checklist.md`
 - 系统版本更新日志：`docs-site/docs/release/version-log.md`、`docs-site/docs/en/release/version-log.md`
+
+当前文档站已经达到“开源可发布、可部署、可理解主要能力、可开始第三方扩展开发”的水平。它仍不是每个后台字段、每个按钮和每个 provider 异常都完整覆盖的全量运营手册；后台字段级说明、截图式用户流程、支付/SMTP/Telegram/Lsky/Incus/Agent 分场景排障、完整第三方扩展示例和真实主题包示例仍需持续补齐。
 
 ## 验证命令
 
