@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `370be98`
+- 当前 HEAD / Current HEAD: `e3963e0`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Fix gift card Turnstile token flow
-- 最新 tag / Latest tag: `v0.6.14`
+- 提交说明 / Commit subject: Persist expired gift card state
+- 最新 tag / Latest tag: `v0.6.15`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.15
+
+- 发布提交 / Release commit: `e3963e0`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Persist expired gift card state
+
+### 其他变更 / Other Changes
+
+- Persist expired gift card state `e3963e0`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.6.14 `33f37b9`
 
 ## v0.6.14
 
