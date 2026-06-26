@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-05b0517 Update version log for v0.6.9
+9297991 Update version log for v0.6.10
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,13 +29,19 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-05b0517 Update version log for v0.6.9
+9297991 Update version log for v0.6.10
 ```
 
 Recently updated/released files include:
 
 ```text
 client/src/views/TicketsView.vue
+client/src/views/GiftCardsView.vue
+client/src/views/admin/GiftCardsView.vue
+server/src/routes/gift-cards.ts
+server/src/db/gift-cards.ts
+server/prisma/migrations/20260625210000_add_gift_cards/migration.sql
+server/scripts/test-gift-card-guards.ts
 client/src/views/admin/ProductionProofView.vue
 server/scripts/test-production-proof-center-guards.ts
 docs-site/docs/deployment/production-checklist.md
@@ -155,61 +161,56 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.6.9 Fix extension market public domain
-feature commit/tag: 369212f
-version-log commit: 05b0517
+v0.6.10 Add gift card center
+feature commit/tag: 11ecc4b
+version-log commit: 9297991
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.6.9: run 28219307494 completed successfully.
-CI for version-log commit 05b0517: run 28219305445 completed successfully.
-Docs Pages for version-log commit 05b0517: run 28219305456 completed successfully.
+Build & Release for tag v0.6.10: run 28223353590 completed successfully.
+CI for version-log commit 9297991: branch badge reports passing.
+Docs Pages for version-log commit 9297991: run 28223597432 completed successfully.
 ```
 
-Release assets confirmed publicly for `v0.6.9`:
+Release assets confirmed publicly for `v0.6.10`:
 
 ```text
 ota-manifest.json
-incudal-v0.6.9-linux-amd64.tar.gz
-incudal-v0.6.9-linux-amd64.tar.gz.sha256
-incudal-v0.6.9-linux-arm64.tar.gz
-incudal-v0.6.9-linux-arm64.tar.gz.sha256
-incudal-v0.6.9-ota-manifest.json
+incudal-v0.6.10-linux-amd64.tar.gz
+incudal-v0.6.10-linux-amd64.tar.gz.sha256
+incudal-v0.6.10-linux-arm64.tar.gz
+incudal-v0.6.10-linux-arm64.tar.gz.sha256
+incudal-v0.6.10-ota-manifest.json
 ```
 
-Published `v0.6.9` OTA manifest:
+Published `v0.6.10` OTA manifest:
 
 ```text
-version: v0.6.9
-gitCommit: 369212f8e2a3
-buildTime: 2026-06-26T05:35:37.746Z
-amd64 artifact: incudal-v0.6.9-linux-amd64.tar.gz
-amd64 size: 92310059
-amd64 sha256: 5e5ef070ce97e465e9ea937646c856ae8d300bcb70a46d477be5dc1220d88f6f
-arm64 artifact: incudal-v0.6.9-linux-arm64.tar.gz
-arm64 size: 91410116
-arm64 sha256: 62a48201d14677b63699b014e53b947f52ebc33c2a976cc058b22a2b5952b43c
+version: v0.6.10
+gitCommit: 11ecc4b27fc3
+amd64 artifact: incudal-v0.6.10-linux-amd64.tar.gz
+amd64 size: 92359024
+amd64 sha256: 2bd6cd4f48b0e1b0259c15736b8f8ff764d9e3100e5fe4581e93b18a7724443d
+arm64 artifact: incudal-v0.6.10-linux-arm64.tar.gz
+arm64 size: 91451338
+arm64 sha256: 97133b0dad16dec83e535fd90abfc96f56ff22f36042dec8cd6e151ab6881fe8
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.6.9 from task #75
-task: #75
-target: v0.6.9
-fromVersion: v0.6.8
+latest proven production version: v0.6.10
+target: v0.6.10
 status: success
-started: 2026-06-26 05:36:55.443 UTC
-finished: 2026-06-26 05:38:23.829 UTC
-backup path: /opt/incudal/releases/v0.6.8-20260626052712
-release dir: /opt/incudal/releases/v0.6.9-20260626053655
-current release: /opt/incudal/releases/v0.6.9-20260626053655
-version.json: version/tag v0.6.9, commit 369212f8e2a3, buildTime 2026-06-26T05:34:45.534Z, deployedAt 2026-06-26T05:37:16.617Z
+release dir: /opt/incudal/releases/v0.6.10-20260626072242
+current release: /opt/incudal/releases/v0.6.10-20260626072242
+version.json: version/tag v0.6.10, commit 11ecc4b27fc3, buildTime 2026-06-26T07:19:25.704Z, deployedAt 2026-06-26T07:23:12.041Z
 public health after update: user/admin /api/health returned HTTP 200
-plugin market index: https://payincus.com/plugin-market/index.json returned HTTP 200 and uses payincus.com manifest/download URLs
-theme market index: https://payincus.com/theme-market/index.json returned HTTP 200 and uses payincus.com manifest/download URLs
+database proof: `gift_cards` table exists and migration `20260625210000_add_gift_cards` is applied
+production env: `PAYINCUS_GIFT_CARD_ADMIN_IDS=1` set in `/opt/incudal/.env` and `/opt/incudal/current/.env`; `incudal-backend` restarted and active
+production readiness: `pnpm verify:production` passed on `/opt/incudal/current`
 ```
 
 Important release-chain note:
@@ -217,7 +218,8 @@ Important release-chain note:
 ```text
 v0.6.7 contained the extension platform and theme system feature bundle, but its Release failed on the frontend route guard and must not be used for OTA.
 v0.6.8 fixed the extension platform release guards and deployed successfully through production task #74.
-v0.6.9 fixed the public extension/theme market domain to payincus.com and is the current production boundary.
+v0.6.9 fixed the public extension/theme market domain to payincus.com.
+v0.6.10 adds the guarded gift card center and is the current production boundary.
 ```
 
 Previous production-proof closure:
