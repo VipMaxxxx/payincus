@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-63879fc Update version log for v0.6.11
+ea25112 Update version log for v0.6.15
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,12 +29,26 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-63879fc Update version log for v0.6.11
+ea25112 Update version log for v0.6.15
 ```
 
 Recently updated/released files include:
 
 ```text
+client/src/components/TurnstileWidget.vue
+client/src/views/GiftCardsView.vue
+server/src/db/gift-cards.ts
+server/scripts/test-gift-card-flow.ts
+server/scripts/test-gift-card-guards.ts
+server/package.json
+docs-site/docs/release/version-log.md
+docs-site/docs/en/release/version-log.md
+client/src/composables/useTurnstile.ts
+client/src/views/admin/GiftCardsView.vue
+server/src/routes/gift-cards.ts
+server/scripts/test-gift-card-guards.ts
+docs-site/docs/release/version-log.md
+docs-site/docs/en/release/version-log.md
 client/src/views/admin/SystemConfigView.vue
 client/src/router/admin.ts
 client/src/locales/zh-CN.ts
@@ -187,60 +201,66 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.6.11 Add operations settings center
-feature commit/tag: 4db8d45
-version-log commit: 63879fc
+v0.6.15 Persist expired gift card state
+feature commit/tag: e3963e0
+version-log commit: ea25112
+previous gift-card Turnstile token flow commit/tag: 370be98 (v0.6.14)
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.6.11 completed successfully and produced OTA assets.
-CI/docs status was not rechecked with `gh` in this environment because the CLI is unavailable; use GitHub UI or a token-authenticated API call if a fresh status check is needed.
+Build & Release for tag v0.6.15: run 28228009917 completed successfully.
+CI for version-log commit ea25112: run 28228007358 completed successfully.
+Docs Pages for version-log commit ea25112: run 28228007369 completed successfully.
 ```
 
-Release assets confirmed for `v0.6.11` during OTA:
+Release assets confirmed for `v0.6.15`:
 
 ```text
 ota-manifest.json
-incudal-v0.6.11-linux-amd64.tar.gz
-incudal-v0.6.11-linux-amd64.tar.gz.sha256
-incudal-v0.6.11-linux-arm64.tar.gz
-incudal-v0.6.11-linux-arm64.tar.gz.sha256
-incudal-v0.6.11-ota-manifest.json
+incudal-v0.6.15-linux-amd64.tar.gz
+incudal-v0.6.15-linux-amd64.tar.gz.sha256
+incudal-v0.6.15-linux-arm64.tar.gz
+incudal-v0.6.15-linux-arm64.tar.gz.sha256
+incudal-v0.6.15-ota-manifest.json
 ```
 
-Published `v0.6.11` OTA artifact used by production:
+Published `v0.6.15` OTA manifest:
 
 ```text
-version: v0.6.11
-gitCommit: 4db8d4582071
-amd64 artifact: incudal-v0.6.11-linux-amd64.tar.gz
-amd64 size: 92368366
-amd64 sha256: ee941530efc4e5b706fcdc57e47f3ad398d86b88a6ce90bc3f46238793f810f9
+version: v0.6.15
+gitCommit: e3963e086979
+buildTime: 2026-06-26T08:59:58.170Z
+amd64 artifact: incudal-v0.6.15-linux-amd64.tar.gz
+amd64 size: 92363888
+amd64 sha256: 9df04967c8c2f150d0737f891669d59ca7eb506c4e144fff84004df05651c46c
+arm64 artifact: incudal-v0.6.15-linux-arm64.tar.gz
+arm64 size: 91446663
+arm64 sha256: 77078f70852a10e751b7539b2fa735c4f6eb3e9a44f8569ed6ce2dab431b037b
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.6.11
-task: #77
-target: v0.6.11
+latest proven production version: v0.6.15
+task: #81
+target: v0.6.15
 status: success
-started: 2026-06-26 08:06:58.823 UTC
-finished: 2026-06-26 08:08:10.228 UTC
-backup path: /opt/incudal/releases/v0.6.10-20260626072242
-logPath: /opt/incudal/update-logs/system-update-77.log
-release dir: /opt/incudal/releases/v0.6.11-20260626080658
-current release: /opt/incudal/releases/v0.6.11-20260626080658
-version.json: version/tag v0.6.11, commit 4db8d4582071, buildTime 2026-06-26T08:04:02.550Z, deployedAt 2026-06-26T08:07:08.189Z
+started: 2026-06-26 09:02:03 UTC
+finished: 2026-06-26 09:03:21 UTC
+backup path: /opt/incudal/releases/v0.6.14-20260626085253
+logPath: /opt/incudal/update-logs/system-update-81.log
+release dir: /opt/incudal/releases/v0.6.15-20260626090203
+current release: /opt/incudal/releases/v0.6.15-20260626090203
+version.json: version/tag v0.6.15, commit e3963e086979, buildTime 2026-06-26T08:59:58.170Z, deployedAt 2026-06-26T09:02:12.272Z
 backend service: `incudal-backend` active after restart
 backend health after update: `http://127.0.0.1:3001/api/health` returned `{"status":"ok"}`
 verify-split-host: passed for user/admin domains, proxied API, proxied WebSocket, and direct backend health
 production readiness: `pnpm verify:production` passed on `/opt/incudal/current`
 log/header exposure: `pnpm verify:log-header` passed; configured secret values were not found in logs or headers
-database proof: task #77 status is `success`; new `system_configs` rows exist for operations allowlists, online extension/theme market URLs, and plugin storage backup schedule/retention
-bundle proof: deployed client/server bundles contain `admin-settings-operations`, `plugin_market_index_url`, and `运营配置` markers
+gift card live flow proof: production DB live test passed for admin generate, disable, enable, redeem, duplicate redeem rejection, user balance-funded generation, self-redeem rejection, insufficient-balance rejection, batch generation/disable, expired-card status persistence, and final balances owner=80 / recipient=32.34
+route/UI proof: user gift card page now uses visible Turnstile widget token sync plus ref/DOM fallback before `/gift-cards/user/redeem` and `/gift-cards/user/generate`; user gift-card list includes `usedById` so redeemed admin-created cards appear in the user list
 ```
 
 Production warnings observed during `pnpm verify:production`:
@@ -250,7 +270,7 @@ PAYMENT_CALLBACK_IP_WHITELIST is empty; provider-specific defaults apply only wh
 Public package #1 (HKCMI) and #2 (JPIIJ) are active but online bound hosts cannot satisfy their minimum CPU/memory requirements.
 ```
 
-These are existing operational warnings and did not block the `v0.6.11` OTA.
+These are existing operational warnings and did not block the `v0.6.15` OTA.
 
 Important release-chain note:
 
@@ -259,7 +279,11 @@ v0.6.7 contained the extension platform and theme system feature bundle, but its
 v0.6.8 fixed the extension platform release guards and deployed successfully through production task #74.
 v0.6.9 fixed the public extension/theme market domain to payincus.com.
 v0.6.10 adds the guarded gift card center.
-v0.6.11 adds the guarded operations settings center and is the current production boundary.
+v0.6.11 adds the guarded operations settings center.
+v0.6.12 fixes admin gift card generation being blocked by the Turnstile gate.
+v0.6.13 adds the visible user gift-card Turnstile verification page.
+v0.6.14 fixes reliable user gift-card Turnstile token submission and redeemed-card list visibility.
+v0.6.15 persists expired gift-card status outside the rolled-back error path and is the current production boundary.
 ```
 
 Previous production-proof closure:
