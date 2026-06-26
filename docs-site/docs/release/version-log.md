@@ -6,18 +6,28 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `1737efe`
+- 当前 HEAD / Current HEAD: `369212f`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Update version log for v0.6.8
-- 最新 tag / Latest tag: `v0.6.8`
+- 提交说明 / Commit subject: Fix extension market public domain
+- 最新 tag / Latest tag: `v0.6.9`
 
 ## 未发布变更 / Unreleased Changes
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.6.8 `1737efe`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.9
+
+- 发布提交 / Release commit: `369212f`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Fix extension market public domain
+
+- Point extension, theme, and SDK public URLs to payincus.com
+
+- Trust the real docs-site host for market index and package downloads
+
+- Keep market guard coverage aligned with the live docs domain
 
 ## v0.6.8
 
