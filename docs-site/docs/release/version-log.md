@@ -6,14 +6,16 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `d173746`
+- 当前 HEAD / Current HEAD: `12420a5`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Build extension platform and theme system
+- 提交说明 / Commit subject: Update version log for v0.6.7
 - 最新 tag / Latest tag: `v0.6.7`
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.6.7 `12420a5`
 
 ## 历史版本 / Historical Versions
 

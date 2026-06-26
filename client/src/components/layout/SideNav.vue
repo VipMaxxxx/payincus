@@ -375,7 +375,7 @@ onUnmounted(() => {
         </RouterLink>
       </template>
       <PluginSlot v-if="isAdminEntry" slot-name="admin.sidebar.extra" surface="admin" :collapsed="collapsed && !mobileOpen" />
-      <PluginSlot v-else slot-name="user.sidebar.extra" surface="user" :collapsed="collapsed && !mobileOpen" />
+      <PluginSlot v-if="!isAdminEntry" slot-name="user.sidebar.extra" surface="user" :collapsed="collapsed && !mobileOpen" />
     </nav>
 
     <!-- 底部 -->

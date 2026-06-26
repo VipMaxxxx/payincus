@@ -14,6 +14,7 @@ const db = read('server/src/db/plugin-market-submissions.ts')
 const route = read('server/src/routes/plugin-market-submissions.ts')
 const app = read('server/src/app.ts')
 const clientApi = read('client/src/api/index.ts')
+const adminApi = read('client/src/api/admin.ts')
 const clientTypes = read('client/src/types/api.ts')
 const userExtensionsView = read('client/src/views/ExtensionsView.vue')
 const developmentDocs = read('docs-site/docs/plugins/development.md')
@@ -124,8 +125,13 @@ assert.ok(
     clientApi.includes("http.post('/plugin-market-submissions', data)") &&
     clientApi.includes("http.get('/plugin-market-submissions/mine')") &&
     clientApi.includes("http.get('/plugin-market-submissions/mine/event-health')") &&
-    clientApi.includes("http.get('/plugin-market-submissions/admin'") &&
-    clientApi.includes("http.patch(`/plugin-market-submissions/admin/${id}/review`, data)"),
+    !clientApi.includes("http.get('/plugin-market-submissions/admin'") &&
+    !clientApi.includes("http.patch(`/plugin-market-submissions/admin/${id}/review`, data)") &&
+    adminApi.includes('pluginMarketSubmissions:') &&
+    adminApi.includes("http.get('/plugin-market-submissions/admin'") &&
+    adminApi.includes("http.patch(`/plugin-market-submissions/admin/${id}/review`, data)") &&
+    adminApi.includes("http.post(`/plugin-market-submissions/admin/${id}/scan`") &&
+    adminApi.includes("http.post('/plugin-market-submissions/admin/publish-market-index'"),
   'client API types and wrappers must expose submission and review workflows'
 )
 
