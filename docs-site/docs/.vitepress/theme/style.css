@@ -221,6 +221,128 @@
   margin-bottom: 6px;
 }
 
+.api-reference-hero {
+  align-items: center;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  margin: 20px 0 24px;
+  padding: 16px;
+}
+
+.api-reference-hero strong {
+  color: var(--vp-c-text-1);
+  display: block;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.api-reference-hero span {
+  color: var(--vp-c-text-2);
+  display: block;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.api-reference-hero a {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  color: var(--vp-c-text-1);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.api-reference-hero a:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+}
+
+.api-endpoint {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
+  margin: 14px 0 24px;
+  overflow: hidden;
+}
+
+.api-endpoint-title {
+  align-items: center;
+  border-bottom: 1px solid var(--vp-c-divider);
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.api-endpoint-title code {
+  background: transparent;
+  color: var(--vp-c-text-1);
+  font-size: 14px;
+  padding: 0;
+}
+
+.api-endpoint p {
+  color: var(--vp-c-text-2);
+  margin: 0;
+  padding: 14px 14px 0;
+}
+
+.api-endpoint table {
+  border-collapse: collapse;
+  margin: 12px 0 0;
+}
+
+.api-endpoint th,
+.api-endpoint td {
+  border-color: var(--vp-c-divider);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 14px;
+  vertical-align: top;
+}
+
+.api-endpoint th {
+  color: var(--vp-c-text-1);
+  text-transform: none;
+  width: 120px;
+}
+
+.api-method {
+  border-radius: 6px;
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  font-weight: 800;
+  justify-content: center;
+  line-height: 1;
+  min-width: 58px;
+  padding: 6px 8px;
+}
+
+.api-method.get {
+  background: #0f766e;
+}
+
+.api-method.post {
+  background: #2563eb;
+}
+
+.api-method.patch,
+.api-method.put {
+  background: #b45309;
+}
+
+.api-method.delete {
+  background: #b91c1c;
+}
+
 @media (max-width: 900px) {
   .payincus-grid,
   .payincus-split {
@@ -229,5 +351,18 @@
 
   .payincus-section h2 {
     font-size: 24px;
+  }
+
+  .api-reference-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .api-reference-hero a {
+    text-align: center;
+  }
+
+  .api-endpoint-title {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
