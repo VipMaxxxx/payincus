@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-ea25112 Update version log for v0.6.15
+6464ff5 Update version log for v0.6.16
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-ea25112 Update version log for v0.6.15
+6464ff5 Update version log for v0.6.16
 ```
 
 Recently updated/released files include:
@@ -201,64 +201,69 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.6.15 Persist expired gift card state
-feature commit/tag: e3963e0
-version-log commit: ea25112
+v0.6.16 Fix gift card Turnstile body verification
+feature commit/tag: 69ac384
+version-log commit: 6464ff5
+previous production boundary: v0.6.15
 previous gift-card Turnstile token flow commit/tag: 370be98 (v0.6.14)
 ```
 
 GitHub Actions:
 
 ```text
+Build & Release for tag v0.6.16: run 28229134845 completed successfully.
+CI for version-log commit 6464ff5: run 28229131489 completed successfully.
+Docs Pages for version-log commit 6464ff5: run 28229131464 completed successfully.
 Build & Release for tag v0.6.15: run 28228009917 completed successfully.
 CI for version-log commit ea25112: run 28228007358 completed successfully.
 Docs Pages for version-log commit ea25112: run 28228007369 completed successfully.
 ```
 
-Release assets confirmed for `v0.6.15`:
+Release assets confirmed for `v0.6.16`:
 
 ```text
 ota-manifest.json
-incudal-v0.6.15-linux-amd64.tar.gz
-incudal-v0.6.15-linux-amd64.tar.gz.sha256
-incudal-v0.6.15-linux-arm64.tar.gz
-incudal-v0.6.15-linux-arm64.tar.gz.sha256
-incudal-v0.6.15-ota-manifest.json
+incudal-v0.6.16-linux-amd64.tar.gz
+incudal-v0.6.16-linux-amd64.tar.gz.sha256
+incudal-v0.6.16-linux-arm64.tar.gz
+incudal-v0.6.16-linux-arm64.tar.gz.sha256
+incudal-v0.6.16-ota-manifest.json
 ```
 
-Published `v0.6.15` OTA manifest:
+Published `v0.6.16` OTA manifest:
 
 ```text
-version: v0.6.15
-gitCommit: e3963e086979
-buildTime: 2026-06-26T08:59:58.170Z
-amd64 artifact: incudal-v0.6.15-linux-amd64.tar.gz
-amd64 size: 92363888
-amd64 sha256: 9df04967c8c2f150d0737f891669d59ca7eb506c4e144fff84004df05651c46c
-arm64 artifact: incudal-v0.6.15-linux-arm64.tar.gz
-arm64 size: 91446663
-arm64 sha256: 77078f70852a10e751b7539b2fa735c4f6eb3e9a44f8569ed6ce2dab431b037b
+version: v0.6.16
+gitCommit: 69ac3840a230
+buildTime: 2026-06-26T09:23:23.894Z
+amd64 artifact: incudal-v0.6.16-linux-amd64.tar.gz
+amd64 size: 92362387
+amd64 sha256: 0d9be4f4366ec55d1dcbb6be84582bcec24fad6ea14d0500171df672b7ddc7cd
+arm64 artifact: incudal-v0.6.16-linux-arm64.tar.gz
+arm64 size: 91450631
+arm64 sha256: dacc5149dc6c4a03417f333a13ee65334a50ed42f7797cb7691c26c49d390306
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.6.15
-task: #81
-target: v0.6.15
+latest proven production version: v0.6.16
+task: #82
+target: v0.6.16
 status: success
-started: 2026-06-26 09:02:03 UTC
-finished: 2026-06-26 09:03:21 UTC
-backup path: /opt/incudal/releases/v0.6.14-20260626085253
-logPath: /opt/incudal/update-logs/system-update-81.log
-release dir: /opt/incudal/releases/v0.6.15-20260626090203
-current release: /opt/incudal/releases/v0.6.15-20260626090203
-version.json: version/tag v0.6.15, commit e3963e086979, buildTime 2026-06-26T08:59:58.170Z, deployedAt 2026-06-26T09:02:12.272Z
+started: 2026-06-26 09:25:51 UTC
+finished: 2026-06-26 09:27:13 UTC
+backup path: /opt/incudal/releases/v0.6.15-20260626090203
+logPath: /opt/incudal/update-logs/system-update-82.log
+release dir: /opt/incudal/releases/v0.6.16-20260626092551
+current release: /opt/incudal/releases/v0.6.16-20260626092551
+version.json: version/tag v0.6.16, commit 69ac3840a230, buildTime 2026-06-26T09:22:50.887Z, deployedAt 2026-06-26T09:26:16.992Z
 backend service: `incudal-backend` active after restart
 backend health after update: `http://127.0.0.1:3001/api/health` returned `{"status":"ok"}`
 verify-split-host: passed for user/admin domains, proxied API, proxied WebSocket, and direct backend health
 production readiness: `pnpm verify:production` passed on `/opt/incudal/current`
 log/header exposure: `pnpm verify:log-header` passed; configured secret values were not found in logs or headers
+route proof: production dist now has `/gift-cards/user/redeem` and `/gift-cards/user/generate` with `onRequest: [fastify.authenticate]` and `preHandler: [turnstileRequired]`, so body `turnstileToken` is parsed before verification.
 gift card live flow proof: production DB live test passed for admin generate, disable, enable, redeem, duplicate redeem rejection, user balance-funded generation, self-redeem rejection, insufficient-balance rejection, batch generation/disable, expired-card status persistence, and final balances owner=80 / recipient=32.34
 route/UI proof: user gift card page now uses visible Turnstile widget token sync plus ref/DOM fallback before `/gift-cards/user/redeem` and `/gift-cards/user/generate`; user gift-card list includes `usedById` so redeemed admin-created cards appear in the user list
 ```
@@ -270,7 +275,7 @@ PAYMENT_CALLBACK_IP_WHITELIST is empty; provider-specific defaults apply only wh
 Public package #1 (HKCMI) and #2 (JPIIJ) are active but online bound hosts cannot satisfy their minimum CPU/memory requirements.
 ```
 
-These are existing operational warnings and did not block the `v0.6.15` OTA.
+These are existing operational warnings and did not block the `v0.6.16` OTA.
 
 Important release-chain note:
 
@@ -283,7 +288,8 @@ v0.6.11 adds the guarded operations settings center.
 v0.6.12 fixes admin gift card generation being blocked by the Turnstile gate.
 v0.6.13 adds the visible user gift-card Turnstile verification page.
 v0.6.14 fixes reliable user gift-card Turnstile token submission and redeemed-card list visibility.
-v0.6.15 persists expired gift-card status outside the rolled-back error path and is the current production boundary.
+v0.6.15 persists expired gift-card status outside the rolled-back error path.
+v0.6.16 fixes gift-card user Turnstile body-token verification by moving the check after body parsing and is the current production boundary.
 ```
 
 Previous production-proof closure:
