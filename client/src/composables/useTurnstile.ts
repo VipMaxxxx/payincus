@@ -188,10 +188,6 @@ export function useTurnstile(action?: string) {
 
     // 执行隐式验证
     async function execute(): Promise<string> {
-        if (!isEnabled.value || !siteKey.value) {
-            return ''
-        }
-
         if (!isReady.value) {
             await init()
         }
