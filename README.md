@@ -61,7 +61,7 @@ scripts/                安装、构建、预检和 smoke 脚本
 - Node.js 20+，生产推荐 Node.js 22
 - pnpm 9.14.2
 - PostgreSQL，生产推荐 PostgreSQL 16
-- Redis 7
+- Redis 7，由安装脚本和 systemd 模板保留，用于部署兼容和后续分布式状态扩展
 - Nginx + systemd
 - Go 1.22+，仅开发或构建 Agent 时需要
 
@@ -81,7 +81,8 @@ scripts/                安装、构建、预检和 smoke 脚本
   -> /api 和 /api/ws 反代到同一个后端 127.0.0.1:3001 或内网 IP:3001
 
 后端 Node API
-  -> PostgreSQL / Redis / Incus 节点 / Agent
+  -> PostgreSQL / Incus 节点 / Agent
+  -> Redis 服务由一键安装脚本保留，用于兼容部署和后续分布式状态扩展
 ```
 
 双机内网部署可以写成：
@@ -97,7 +98,8 @@ https://admin.example.com
 
 http://10.0.0.12:3001
   -> 后端 Node API
-  -> PostgreSQL / Redis / Incus 节点 / Agent
+  -> PostgreSQL / Incus 节点 / Agent
+  -> Redis 服务由一键安装脚本保留，用于兼容部署和后续分布式状态扩展
 ```
 
 约定：
@@ -108,6 +110,7 @@ http://10.0.0.12:3001
 - 管理端构建入口是 `VITE_APP_ENTRY=admin`，产物目录是 `client/dist/admin`。
 - 两个前端都使用 `VITE_API_BASE_URL=/api`，浏览器只访问同源 `/api` 和 `/api/ws`。
 - 后端监听 `127.0.0.1:3001` 或内网 IP，生产必须设置 `SERVE_STATIC_CLIENT=false`，不由后端直接托管前端静态文件。
+- PostgreSQL 是当前核心持久化来源；Redis 服务仍由一键安装脚本安装、`.env` 保留 `REDIS_URL`，但当前核心业务不依赖 Redis 客户端完成持久状态。
 - Nginx 生产环境应托管当前 release 下的 `/opt/incudal/current/client/dist/user` 和 `/opt/incudal/current/client/dist/admin`，并且只把两个站点的 `/api/` 和 `/api/ws/` 反代到后端。
 - 支付回调地址使用客户面板公网域名，不使用后端内网地址或管理后台域名。
 - 用户端不能暴露后台入口、后台 API 或后台跳转；管理端不能暴露用户端自助功能入口。
@@ -296,8 +299,9 @@ https://admin.example.com/admin/plugins
 - 从稳定在线扩展市场索引安装，默认读取文档站 `/plugin-market/index.json`，并限制下载源为受信域名。
 - 从稳定在线主题市场索引安装主题，默认读取文档站 `/theme-market/index.json`，安装前校验 listed 状态、SHA256 和主题包安全规则。
 - 扩展中心按“已安装 / 扩展市场 / 投稿审核 / 主题 / 安装任务”分为内页；后台启用、停用、卸载扩展，在独立扩展市场页安装已上架扩展，审核第三方投稿，并上传、预览、启用或回滚主题包。
-- 扩展可以声明后台配置页、用户端页面、用户侧边栏等白名单扩展点。
-- 主题包使用独立 `payincus.theme.json`，只允许 CSS、设计 token、本地静态资源和受控配置表单，不加载任意后端代码或远程脚本。
+- 扩展可以声明后台设置页、后台侧边栏入口、后台 dashboard widget、用户端页面、用户 dashboard card 等白名单扩展点。
+- 扩展 manifest 可以声明 webhook action、事件订阅、通知模板、服务扩展、支付网关扩展、scoped KV、私有表、配置 schema 和受控权限。
+- 主题包使用独立 `payincus.theme.json`，只允许 CSS、设计 token、本地静态资源、受控 HTML 模板片段和受控配置表单，不加载任意后端代码或远程脚本。
 - OTA 更新和回滚会保留扩展安装目录、扩展数据目录、扩展日志目录和主题安装目录。
 
 推荐生产环境变量：
@@ -327,11 +331,17 @@ THEME_MAX_PACKAGE_SIZE_MB=10
 
 扩展模板位于 `plugin-templates/`：
 
-- `basic-admin-plugin`：只有后台配置页。
+- `basic-admin-plugin`：后台设置页、后台侧边栏入口和后台 dashboard widget。
 - `user-sidebar-plugin`：用户端侧边栏入口和用户页面。
 - `admin-user-mixed-plugin`：后台配置页、用户页面和安装模板。
+- `ai-ticket-agent-plugin`：AI 工单草稿和受控接管回复扩展模板。
+- `flash-sale-plugin`：秒杀完整样板，覆盖前台活动页、后台设置、webhook action、事件订阅和 scoped KV 存储。
 
-第三方开发者应从 `docs-site/docs/plugins/overview.md` 和 `docs-site/docs/en/plugins/overview.md` 开始阅读。
+主题模板位于 `theme-templates/`：
+
+- `clean-theme`：官方主题样板，覆盖 CSS、tokens、configSchema、file 字段和公共/用户/后台/共享受控模板片段。
+
+第三方开发者应从 `docs-site/docs/plugins/overview.md`、`docs-site/docs/plugins/development.md`、`docs-site/docs/en/plugins/overview.md` 和 `docs-site/docs/en/plugins/development.md` 开始阅读。
 
 ## Public API 与开发者能力
 
@@ -527,14 +537,15 @@ pnpm docs:build
 - 后台 OTA：`docs-site/docs/guide/ota-update.md`
 - API 参考：`docs-site/docs/api/overview.md`、`docs-site/docs/en/api/overview.md`
 - OpenAPI 静态文件：`docs-site/docs/public/api/v1/openapi.json`、`docs-site/docs/public/api/v1/openapi.yaml`
-- 扩展开发：`docs-site/docs/plugins/overview.md`
+- 扩展开发：`docs-site/docs/plugins/overview.md`、`docs-site/docs/plugins/development.md`、`docs-site/docs/en/plugins/overview.md`、`docs-site/docs/en/plugins/development.md`
 - 扩展中心方案：`docs-site/docs/plugins/platform-plan.md`、`docs-site/docs/en/plugins/platform-plan.md`
 - 扩展市场：`docs-site/docs/plugins/market.md`、`docs-site/docs/en/plugins/market.md`
+- 扩展与主题模板：`docs-site/docs/plugins/templates.md`、`docs-site/docs/en/plugins/templates.md`
 - Public API SDK：`docs-site/docs/plugins/sdk.md`、`docs-site/docs/en/plugins/sdk.md`
 - 生产验收：`docs-site/docs/deployment/production-checklist.md`
 - 系统版本更新日志：`docs-site/docs/release/version-log.md`、`docs-site/docs/en/release/version-log.md`
 
-当前文档站已经达到“开源可发布、可部署、可理解主要能力、可开始第三方扩展开发”的水平。它仍不是每个后台字段、每个按钮和每个 provider 异常都完整覆盖的全量运营手册；后台字段级说明、截图式用户流程、支付/SMTP/Telegram/Lsky/Incus/Agent 分场景排障、完整第三方扩展示例和真实主题包示例仍需持续补齐。
+当前文档站已经达到“开源可发布、可部署、可理解主要能力、可开始第三方扩展和主题开发”的水平。它已经包含中英文扩展开发长文、Public API/OAuth/SDK、秒杀扩展样板和官方主题样板；但仍不是每个后台字段、每个按钮和每个 provider 异常都完整覆盖的全量运营手册，后台字段级说明、截图式用户流程、支付/SMTP/Telegram/Lsky/Incus/Agent 分场景排障仍需持续补齐。
 
 ## 验证命令
 
