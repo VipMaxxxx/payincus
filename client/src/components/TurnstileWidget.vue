@@ -20,6 +20,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
+  (e: 'update:modelValue', token: string): void
   (e: 'verify', token: string): void
   (e: 'expire'): void
   (e: 'error', error: string): void
@@ -33,8 +34,11 @@ const turnstileRef = ref<InstanceType<typeof Turnstile> | null>(null)
 
 // 监听内部 token 变化，同步到 modelValue
 watch(token, (newToken) => {
-  if (newToken && newToken !== modelValue.value) {
+  if (newToken !== modelValue.value) {
     modelValue.value = newToken
+    emit('update:modelValue', newToken)
+  }
+  if (newToken) {
     emit('verify', newToken)
   }
 })
@@ -42,18 +46,21 @@ watch(token, (newToken) => {
 function onVerify(response: string) {
   token.value = response
   modelValue.value = response
+  emit('update:modelValue', response)
   emit('verify', response)
 }
 
 function onExpire() {
   token.value = ''
   modelValue.value = ''
+  emit('update:modelValue', '')
   emit('expire')
 }
 
 function onError(error: string) {
   token.value = ''
   modelValue.value = ''
+  emit('update:modelValue', '')
   emit('error', error)
 }
 
@@ -61,6 +68,7 @@ function onError(error: string) {
 function reset() {
   token.value = ''
   modelValue.value = ''
+  emit('update:modelValue', '')
   turnstileRef.value?.reset?.()
 }
 
@@ -90,9 +98,10 @@ void props.language
       :language="language"
       :action="action"
       :appearance="appearance"
-      @verify="onVerify"
-      @expire="onExpire"
+      @update:model-value="onVerify"
+      @expired="onExpire"
       @error="onError"
+      @unsupported="onError('unsupported')"
     />
   </div>
 </template>

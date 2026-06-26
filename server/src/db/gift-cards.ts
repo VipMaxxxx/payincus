@@ -454,7 +454,7 @@ export async function listGiftCardsByUser(userId: number, options: GiftCardUserL
   const page = clampPage(options.page)
   const pageSize = clampPageSize(options.pageSize)
   const where: Prisma.GiftCardWhereInput = {
-    OR: [{ ownerId: userId }, { createdById: userId }],
+    OR: [{ ownerId: userId }, { createdById: userId }, { usedById: userId }],
     ...(options.status ? { status: options.status } : {})
   }
 
