@@ -44,153 +44,153 @@ export interface PublicApiScopeMetadata {
 export const PUBLIC_API_SCOPE_METADATA: Record<PublicApiScope, PublicApiScopeMetadata> = {
   'profile:read': {
     scope: 'profile:read',
-    title: 'Profile read',
-    description: 'Read the authenticated user profile summary.',
+    title: '读取个人资料',
+    description: '读取当前授权用户的基础资料摘要。',
     risk: 'low',
     access: 'read',
     resources: ['/api/v1/me'],
     implemented: true,
-    notes: ['Returns only the token owner profile fields.']
+    notes: ['只返回 token 所属用户自己的资料字段。']
   },
   'profile:write': {
     scope: 'profile:write',
-    title: 'Profile write',
-    description: 'Update low-risk profile presentation fields for the authenticated user.',
+    title: '更新个人资料',
+    description: '更新当前授权用户的低风险展示资料字段。',
     risk: 'medium',
     access: 'write',
     resources: ['/api/v1/me'],
     implemented: true,
-    notes: ['Only avatarStyle is accepted; email, password, role, status, balance, and 2FA settings are not writable.']
+    notes: ['仅允许更新 avatarStyle；邮箱、密码、角色、状态、余额和 2FA 设置不可写。']
   },
   'balance:read': {
     scope: 'balance:read',
-    title: 'Balance read',
-    description: 'Read the authenticated user balance and safe balance ledger.',
+    title: '读取余额',
+    description: '读取当前授权用户的账户余额和安全余额流水。',
     risk: 'medium',
     access: 'read',
     resources: ['/api/v1/balance', '/api/v1/balance/logs'],
     implemented: true,
-    notes: ['Does not expose payment provider payloads, adjustment objects, hosting balance, AFF balance, or other users.']
+    notes: ['不暴露支付 provider payload、调账对象、托管余额、AFF 余额或其他用户数据。']
   },
   'balance:write': {
     scope: 'balance:write',
-    title: 'Balance adjustment request',
-    description: 'Submit and list pending balance adjustment requests for the authenticated user.',
+    title: '提交余额调整申请',
+    description: '提交并读取当前授权用户自己的待审批余额调整申请。',
     risk: 'high',
     access: 'write',
     resources: ['/api/v1/balance/adjustment-requests'],
     implemented: true,
-    notes: ['Does not directly mutate balance, balance logs, payment records, or recharge orders.']
+    notes: ['不会直接修改余额、余额流水、支付记录或充值订单。']
   },
   'billing:read': {
     scope: 'billing:read',
-    title: 'Billing read',
-    description: 'Read the authenticated user service billing records.',
+    title: '读取账单',
+    description: '读取当前授权用户的服务账单记录。',
     risk: 'medium',
     access: 'read',
     resources: ['/api/v1/billing-records', '/api/v1/billing-records/:id'],
     implemented: true,
-    notes: ['Returns billing summaries only; provider payloads and internal reconciliation data are omitted.']
+    notes: ['仅返回账单摘要；不返回 provider payload 和内部对账数据。']
   },
   'products:read': {
     scope: 'products:read',
-    title: 'Products read',
-    description: 'Read enabled public product and plan catalog entries.',
+    title: '读取产品目录',
+    description: '读取已启用的公开产品和套餐目录。',
     risk: 'low',
     access: 'read',
     resources: ['/api/v1/products'],
     implemented: true,
-    notes: ['Returns only enabled packages and enabled plans.']
+    notes: ['仅返回已启用的套餐和方案。']
   },
   'services:read': {
     scope: 'services:read',
-    title: 'Services read',
-    description: 'Read the authenticated user service summaries and safe includes.',
+    title: '读取服务',
+    description: '读取当前授权用户的服务摘要和安全关联信息。',
     risk: 'medium',
     access: 'read',
     resources: ['/api/v1/services', '/api/v1/services/:id'],
     implemented: true,
-    notes: ['Does not expose root passwords, Incus IDs, host internal configuration, or privileged connection material.']
+    notes: ['不暴露 root 密码、Incus ID、节点内部配置或高权限连接材料。']
   },
   'services:operate': {
     scope: 'services:operate',
-    title: 'Service power tasks',
-    description: 'Queue, poll, and cancel controlled service power tasks for the authenticated user.',
+    title: '服务电源操作',
+    description: '为当前授权用户的服务排队、查询和取消受控电源任务。',
     risk: 'high',
     access: 'operate',
     resources: ['/api/v1/services/:id/actions', '/api/v1/services/:id/tasks/:taskId'],
     implemented: true,
-    notes: ['Only start, stop, and restart are accepted; create, suspend, renew, reinstall, delete, migrate, and provisioning operations are not exposed.']
+    notes: ['仅允许 start、stop、restart；不开放创建、暂停、续费、重装、删除、迁移和交付操作。']
   },
   'services:billing': {
     scope: 'services:billing',
-    title: 'Service billing operations',
-    description: 'Renew authenticated user services through the internal billing state machine.',
+    title: '服务计费操作',
+    description: '通过内部计费状态机为当前授权用户的服务续费。',
     risk: 'high',
     access: 'write',
     resources: ['/api/v1/services/:id/renew'],
     implemented: true,
-    notes: ['Only renewal is accepted; balance deduction, billing records, hosting income, and expired-service unsuspension are handled by the internal renewal transaction.']
+    notes: ['仅允许续费；余额扣减、账单记录、托管收益和过期服务解封由内部续费事务处理。']
   },
   'orders:read': {
     scope: 'orders:read',
-    title: 'Orders read',
-    description: 'Read the authenticated user recharge and instance billing orders.',
+    title: '读取订单',
+    description: '读取当前授权用户的充值和实例账单订单。',
     risk: 'medium',
     access: 'read',
     resources: ['/api/v1/orders', '/api/v1/orders/:id'],
     implemented: true,
-    notes: ['Does not expose payment callbacks, provider config snapshots, raw query results, or complete trade numbers.']
+    notes: ['不暴露支付回调、provider 配置快照、原始查询结果或完整交易号。']
   },
   'tickets:read': {
     scope: 'tickets:read',
-    title: 'Tickets read',
-    description: 'Read the authenticated user tickets, messages, and safe attachment metadata.',
+    title: '读取工单',
+    description: '读取当前授权用户的工单、消息和安全附件元数据。',
     risk: 'medium',
     access: 'read',
     resources: ['/api/v1/tickets', '/api/v1/tickets/:id'],
     implemented: true,
-    notes: ['Internal notes, storage provider IDs, and other users tickets are not exposed.']
+    notes: ['不暴露内部备注、存储 provider ID 和其他用户工单。']
   },
   'tickets:write': {
     scope: 'tickets:write',
-    title: 'Tickets write',
-    description: 'Create tickets, add public replies, upload controlled image attachments, and close or reopen own tickets.',
+    title: '写入工单',
+    description: '创建工单、添加公开回复、上传受控图片附件，并关闭或重新打开自己的工单。',
     risk: 'high',
     access: 'write',
     resources: ['/api/v1/tickets', '/api/v1/tickets/:id/replies', '/api/v1/tickets/:id/status'],
     implemented: true,
-    notes: ['Does not allow internal notes, arbitrary status, priority/category override, assignee changes, or cross-user ticket writes.']
+    notes: ['不允许内部备注、任意状态、优先级/分类覆盖、处理人变更或跨用户写入。']
   },
   'notifications:read': {
     scope: 'notifications:read',
-    title: 'Notifications read',
-    description: 'Read the authenticated user inbox notifications and unread count.',
+    title: '读取通知',
+    description: '读取当前授权用户的站内通知和未读数量。',
     risk: 'low',
     access: 'read',
     resources: ['/api/v1/notifications', '/api/v1/notifications/unread-count'],
     implemented: true,
-    notes: ['Does not expose channel configuration, external delivery logs, raw event payloads, broadcast targets, or other users messages.']
+    notes: ['不暴露渠道配置、外部投递日志、原始事件 payload、广播目标或其他用户消息。']
   },
   'notifications:send': {
     scope: 'notifications:send',
-    title: 'Self notification send',
-    description: 'Send short controlled notifications to the authenticated user.',
+    title: '发送自有通知',
+    description: '向当前授权用户自己发送短内容、受控模板通知。',
     risk: 'medium',
     access: 'write',
     resources: ['/api/v1/notifications'],
     implemented: true,
-    notes: ['Only self notifications, platform templates, and enabled plugin-declared templates are accepted; broadcast, HTML, arbitrary channels, and internal event type override are not accepted.']
+    notes: ['仅允许自有通知、平台模板和已启用扩展声明的模板；不允许广播、HTML、任意渠道或覆盖内部事件类型。']
   },
   'plugins:action': {
     scope: 'plugins:action',
-    title: 'Plugin actions',
-    description: 'Discover and invoke enabled plugin-declared public webhook actions.',
+    title: '扩展动作调用',
+    description: '发现并调用已启用扩展声明的公开 webhook action。',
     risk: 'high',
     access: 'operate',
     resources: ['/api/v1/plugins', '/api/v1/plugins/:pluginId/actions', '/api/v1/plugins/:pluginId/actions/:action'],
     implemented: true,
-    notes: ['Does not expose webhook URLs, secrets, config values, service extension hooks, or gateway extension hooks.']
+    notes: ['不暴露 webhook URL、密钥、配置值、服务扩展 hook 或网关扩展 hook。']
   }
 }
 

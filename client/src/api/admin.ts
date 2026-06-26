@@ -130,6 +130,11 @@ import type {
   SlaAlertRule,
   SlaAlertScanResponse,
   SlaAlertSeverity,
+  CreateGiftCardBatchRequest,
+  CreateGiftCardRequest,
+  GiftCardListResponse,
+  GiftCardRecord,
+  GiftCardStats,
   UserLifecycleOffer,
   UserLifecycleOverview,
   UserLifecycleUserSummary,
@@ -3929,6 +3934,34 @@ const api = {
     // 管理员：审核拒绝
     adminReject: (withdrawalId: number, reason: string): Promise<{ message: string }> =>
       http.post(`/aff/admin/withdrawals/${withdrawalId}/reject`, { reason })
+  },
+
+  giftCards: {
+    stats: (): Promise<GiftCardStats> => http.get('/gift-cards/admin/stats'),
+    list: (params?: {
+      page?: number
+      pageSize?: number
+      status?: string
+      batchId?: string
+      revealCode?: boolean
+    }): Promise<GiftCardListResponse> => http.get('/gift-cards/admin/list', { params }),
+    generate: (data: CreateGiftCardRequest): Promise<{ giftCard: GiftCardRecord }> =>
+      http.post('/gift-cards/admin/generate', data),
+    batch: (data: CreateGiftCardBatchRequest): Promise<{
+      batchId: string
+      count: number
+      codes: GiftCardRecord[]
+    }> => http.post('/gift-cards/admin/batch', data),
+    enable: (id: number): Promise<{ success: boolean }> =>
+      http.patch(`/gift-cards/admin/${id}/enable`, {}),
+    disable: (id: number): Promise<{ success: boolean }> =>
+      http.patch(`/gift-cards/admin/${id}/disable`, {}),
+    delete: (id: number): Promise<{ success: boolean }> =>
+      http.delete(`/gift-cards/admin/${id}`),
+    batchDisable: (ids: number[]): Promise<{ success: boolean; count: number }> =>
+      http.post('/gift-cards/admin/batch-disable', { ids }),
+    batchDelete: (ids: number[]): Promise<{ success: boolean; count: number }> =>
+      http.post('/gift-cards/admin/batch-delete', { ids })
   },
 
   // ==================== 娱乐系统 ====================

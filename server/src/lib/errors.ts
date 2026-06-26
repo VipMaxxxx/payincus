@@ -330,6 +330,19 @@ export const ErrorCode = {
     RESOURCE_EXISTS: 'RESOURCE_EXISTS',
     UPSTREAM_ERROR: 'UPSTREAM_ERROR',
     INSUFFICIENT_BALANCE: 'INSUFFICIENT_BALANCE',
+
+    // Gift card errors
+    GIFT_CARD_NOT_FOUND: 'GIFT_CARD_NOT_FOUND',
+    GIFT_CARD_USED: 'GIFT_CARD_USED',
+    GIFT_CARD_EXPIRED: 'GIFT_CARD_EXPIRED',
+    GIFT_CARD_DISABLED: 'GIFT_CARD_DISABLED',
+    GIFT_CARD_SELF_REDEEM: 'GIFT_CARD_SELF_REDEEM',
+    GIFT_CARD_ALREADY_USED_BY_USER: 'GIFT_CARD_ALREADY_USED_BY_USER',
+    GIFT_CARD_RATE_LIMITED: 'GIFT_CARD_RATE_LIMITED',
+    GIFT_CARD_INSUFFICIENT_BALANCE: 'GIFT_CARD_INSUFFICIENT_BALANCE',
+    GIFT_CARD_BATCH_TOO_LARGE: 'GIFT_CARD_BATCH_TOO_LARGE',
+    GIFT_CARD_INVALID_CODE: 'GIFT_CARD_INVALID_CODE',
+    GIFT_CARD_TURNSTILE_REQUIRED: 'GIFT_CARD_TURNSTILE_REQUIRED',
 } as const
 
 export type ErrorCodeType = typeof ErrorCode[keyof typeof ErrorCode]
@@ -662,6 +675,19 @@ export const ErrorMessages: Record<ErrorCodeType, string> = {
     [ErrorCode.RESOURCE_EXISTS]: 'Resource already exists',
     [ErrorCode.UPSTREAM_ERROR]: 'Upstream service error',
     [ErrorCode.INSUFFICIENT_BALANCE]: 'Insufficient balance',
+
+    // Gift card errors
+    [ErrorCode.GIFT_CARD_NOT_FOUND]: 'Gift card not found',
+    [ErrorCode.GIFT_CARD_USED]: 'Gift card has already been used',
+    [ErrorCode.GIFT_CARD_EXPIRED]: 'Gift card has expired',
+    [ErrorCode.GIFT_CARD_DISABLED]: 'Gift card has been disabled',
+    [ErrorCode.GIFT_CARD_SELF_REDEEM]: 'Cannot redeem your own gift card',
+    [ErrorCode.GIFT_CARD_ALREADY_USED_BY_USER]: 'You have already used this gift card',
+    [ErrorCode.GIFT_CARD_RATE_LIMITED]: 'Too many attempts, please try again later',
+    [ErrorCode.GIFT_CARD_INSUFFICIENT_BALANCE]: 'Insufficient balance to generate gift card',
+    [ErrorCode.GIFT_CARD_BATCH_TOO_LARGE]: 'Batch count exceeds maximum allowed',
+    [ErrorCode.GIFT_CARD_INVALID_CODE]: 'Invalid gift card code format',
+    [ErrorCode.GIFT_CARD_TURNSTILE_REQUIRED]: 'Turnstile verification required',
 }
 
 /**

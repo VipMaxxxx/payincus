@@ -352,6 +352,22 @@ const providerInfo = computed<Record<ProviderType, ProviderInfo>>(() => {
 function getCallbackUrl(path?: string): string {
   return path ? buildPublicApiUrl(path) : ''
 }
+
+function formatScopeRisk(risk: PublicApiScopeMetadata['risk']): string {
+  return {
+    low: '低风险',
+    medium: '中风险',
+    high: '高风险'
+  }[risk]
+}
+
+function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
+  return {
+    read: '读取',
+    write: '写入',
+    operate: '操作'
+  }[access]
+}
 </script>
 
 <template>
@@ -471,8 +487,8 @@ function getCallbackUrl(path?: string): string {
     <div class="card p-6">
       <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 class="text-themed font-medium">PayIncus OAuth Provider</h3>
-          <p class="mt-1 text-sm text-themed-muted">为第三方应用创建 OAuth App，通过授权码换取 Bearer token 后访问 /api/v1。</p>
+          <h3 class="text-themed font-medium">PayIncus OAuth 服务端</h3>
+          <p class="mt-1 text-sm text-themed-muted">为第三方应用创建 OAuth 应用，通过授权码换取 Bearer token 后访问 /api/v1。</p>
         </div>
         <button class="btn-secondary" :disabled="oauthAppsLoading" @click="loadOAuthApps">
           {{ oauthAppsLoading ? '加载中...' : '刷新应用' }}
@@ -484,8 +500,8 @@ function getCallbackUrl(path?: string): string {
         <code class="mt-2 block break-all rounded bg-white/70 p-2 font-mono text-xs">{{ oauthAppSecret }}</code>
       </div>
 
-      <form class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]" @submit.prevent="saveOAuthApp">
-        <div class="grid gap-4 md:grid-cols-2">
+      <form class="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(360px,1fr)_minmax(360px,480px)]" @submit.prevent="saveOAuthApp">
+        <div class="grid min-w-0 gap-4 md:grid-cols-2">
           <div>
             <label class="mb-1 block text-sm text-themed-secondary">应用名称</label>
             <input v-model="oauthAppForm.name" class="input" type="text" placeholder="Flash Sale App" />
@@ -503,19 +519,20 @@ function getCallbackUrl(path?: string): string {
           </div>
         </div>
 
-        <div class="rounded-lg border border-themed p-4">
+        <div class="min-w-0 rounded-lg border border-themed p-4">
           <div class="text-sm font-medium text-themed">授权 Scope</div>
           <div class="mt-3 grid gap-2 text-sm text-themed">
-            <label v-for="scope in availableOAuthScopes" :key="scope.scope" class="flex items-start gap-2 rounded border border-themed px-3 py-2">
+            <label v-for="scope in availableOAuthScopes" :key="scope.scope" class="flex min-w-0 items-start gap-2 rounded border border-themed px-3 py-2">
               <input v-model="oauthAppForm.scopes" type="checkbox" :value="scope.scope" class="mt-1 h-4 w-4 rounded text-accent" />
-              <span class="min-w-0">
+              <span class="min-w-0 flex-1">
                 <span class="flex flex-wrap items-center gap-2">
                   <span class="font-mono text-xs">{{ scope.scope }}</span>
-                  <span class="rounded bg-themed-secondary px-1.5 py-0.5 text-[10px] uppercase text-themed-muted">{{ scope.risk }}</span>
-                  <span class="rounded bg-themed-secondary px-1.5 py-0.5 text-[10px] uppercase text-themed-muted">{{ scope.access }}</span>
+                  <span class="rounded bg-themed-secondary px-1.5 py-0.5 text-[10px] text-themed-muted">{{ formatScopeRisk(scope.risk) }}</span>
+                  <span class="rounded bg-themed-secondary px-1.5 py-0.5 text-[10px] text-themed-muted">{{ formatScopeAccess(scope.access) }}</span>
                 </span>
-                <span class="mt-1 block text-xs text-themed-muted">{{ scope.description }}</span>
-                <span class="mt-1 block truncate text-[11px] text-themed-muted">{{ scope.resources.join(', ') }}</span>
+                <span class="mt-1 block text-xs font-medium text-themed">{{ scope.title }}</span>
+                <span class="mt-1 block break-words text-xs text-themed-muted">{{ scope.description }}</span>
+                <span class="mt-1 block break-all text-[11px] text-themed-muted">{{ scope.resources.join(', ') }}</span>
               </span>
             </label>
           </div>

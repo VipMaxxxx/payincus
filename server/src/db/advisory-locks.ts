@@ -20,6 +20,7 @@ export const MAIL_DOMAIN_LOCK_NAMESPACE = 4116
 export const USER_EMAIL_REGISTRATION_LOCK_NAMESPACE = 4117
 export const OPERATION_VERIFICATION_REQUEST_LOCK_NAMESPACE = 4118
 export const IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE = 4119
+export const GIFT_CARD_LOCK_NAMESPACE = 4120
 
 export async function tryAdvisoryTransactionLock(
   tx: Prisma.TransactionClient,

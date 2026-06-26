@@ -162,6 +162,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.invites', title: '邀请码' }
   },
   {
+    path: '/gift-cards',
+    name: 'gift-cards',
+    component: () => import('@/views/GiftCardsView.vue'),
+    meta: { requiresAuth: true, requiresUser: true, title: '礼品卡' }
+  },
+  {
     path: '/extensions',
     name: 'extensions',
     component: () => import('@/views/ExtensionsView.vue'),

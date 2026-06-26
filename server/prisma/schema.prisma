@@ -670,6 +670,11 @@ model User {
   redeemCodesCreated RedeemCode[]      @relation("RedeemCodesCreated")
   redeemCodeUsages   RedeemCodeUsage[] @relation("RedeemCodeUsages")
 
+  // 礼品卡兑换码
+  giftCardsCreated   GiftCard[]        @relation("GiftCardsCreated")
+  giftCardsOwned     GiftCard[]        @relation("GiftCardsOwner")
+  giftCardsUsed      GiftCard[]        @relation("GiftCardsUsedBy")
+
   // 用户自定义初始化命令
   customInitCommands CustomInitCommand[]
 
@@ -4286,4 +4291,39 @@ model HostingZone {
 
   @@index([active, sortOrder])
   @@map("hosting_zones")
+}
+// ==================== 礼品卡兑换码系统 ====================
+
+enum GiftCardStatus {
+  active
+  used
+  disabled
+  expired
+}
+
+model GiftCard {
+  id           Int            @id @default(autoincrement())
+  code         String         @unique                        // gc- 前缀 + 24 位 base64url 随机字符
+  faceValue    Decimal        @map("face_value") @db.Decimal(10, 2)  // 面值（CNY）
+  balanceValue Decimal        @map("balance_value") @db.Decimal(10, 2) // 充值到账金额
+  status       GiftCardStatus @default(active)
+  createdById  Int?           @map("created_by_id")    // 创建者（null=管理员控制台生成）
+  ownerId      Int?           @map("owner_id")         // 持有者（用户用余额生成时有值）
+  usedById     Int?           @map("used_by_id")       // 兑换使用者
+  usedAt       DateTime?      @map("used_at")
+  expiresAt    DateTime?      @map("expires_at")       // 过期时间，null=永不过期
+  remark       String?
+  batchId      String?        @map("batch_id")         // 批量生成批次
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  createdBy User?  @relation("GiftCardsCreated", fields: [createdById], references: [id])
+  owner     User?  @relation("GiftCardsOwner", fields: [ownerId], references: [id])
+  usedBy    User?  @relation("GiftCardsUsedBy", fields: [usedById], references: [id])
+
+  @@index([status])
+  @@index([batchId])
+  @@index([createdById])
+  @@index([ownerId])
+  @@index([usedById])
+  @@map("gift_cards")
 }

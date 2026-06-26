@@ -19,6 +19,7 @@ export const navMenuItems: MenuItem[] = [
   { name: 'transfers', path: '/transfers', icon: 'transfer', label: 'nav.transfers' },
   { name: 'tickets', path: '/tickets', icon: 'ticket', label: 'nav.tickets' },
   { name: 'entertainment', path: '/entertainment', icon: 'gift', label: 'nav.entertainment' },
+  { name: 'gift-cards', path: '/gift-cards', icon: 'gift', labelText: '礼品卡' },
   { name: 'wallet', path: '/wallet', icon: 'wallet', label: 'nav.wallet' },
   { name: 'orders', path: '/orders', icon: 'card', label: 'nav.orders' },
   { name: 'invites', path: '/invites', icon: 'key', label: 'nav.invites' },

@@ -26,6 +26,7 @@ https://panel.example.com
 | 实例详情 | `/instances/:id` | 启动、停止、重启、删除、查看网络、终端和运行状态。 |
 | 集中终端 | `/terminal` | 统一进入 WebSocket 终端，依赖 `/api/ws` 升级。 |
 | 钱包 | `/wallet` | 充值、余额、消费记录、订单状态和支付回调结果。 |
+| 礼品卡 | `/gift-cards` | 用余额生成礼品卡、兑换他人或后台发放的礼品卡，并查看自己的礼品卡记录。 |
 | 订单中心 | `/orders` | 聚合查看充值订单、实例新购、续费、升级、退款和转移手续费账单，支持筛选和详情查看。 |
 | 邀请码 | `/invites` | 邀请关系、返利、邀请记录。 |
 | 转移 | `/transfers` | 实例或资源转移相关自助入口。 |
@@ -48,7 +49,7 @@ https://panel.example.com
 ## 关联后端能力
 
 - 实例交付：`instances`、`instance-billing`、`terminal`、`traffic`、`snapshots`。
-- 账务支付：`orders`、`balance`、`recharge`、`redeem-codes`、`aff`、`vip-levels`、`user-lifecycle`。
+- 账务支付：`orders`、`balance`、`recharge`、`gift-cards`、`redeem-codes`、`aff`、`vip-levels`、`user-lifecycle`。
 - 工单通知：`tickets`、`inbox`、`notifications`、`help`。
 - 邮箱服务：`mail`。
 - 托管资源：`hosting`、`resource-pool`、`packages`。

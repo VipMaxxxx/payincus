@@ -23,6 +23,7 @@ export const navMenuItems: MenuItem[] = [
   { name: 'admin-user-lifecycle', path: '/admin/user-lifecycle', icon: 'users', label: 'nav.userLifecycle' },
   { name: 'admin-tickets', path: '/admin/tickets', icon: 'ticket', label: 'nav.tickets' },
   { name: 'admin-billing', path: '/admin/billing', icon: 'wallet', label: 'nav.billing' },
+  { name: 'admin-gift-cards', path: '/admin/gift-cards', icon: 'gift', labelText: '礼品卡' },
   { name: 'admin-orders', path: '/admin/orders', icon: 'card', label: 'nav.orders' },
   { name: 'admin-broadcast', path: '/admin/broadcast', icon: 'bell', label: 'nav.broadcast' },
   { name: 'admin-logs', path: '/admin/logs', icon: 'logs', label: 'nav.logs' },

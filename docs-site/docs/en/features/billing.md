@@ -11,6 +11,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 | Recharge history | View amount, channel, order ID, status and completion time. |
 | Spending records | View instance creation, renewal and resource consumption. |
 | Order center | Use `/orders` to view unified recharge and instance billing order details. |
+| Gift cards | Use `/gift-cards` to generate cards from the user's own balance, redeem cards issued by others or admins, and view owned cards. |
 | Redeem codes | Use admin-issued codes for balance or benefits. |
 | Affiliate rewards | View invites, conversions and rewards. |
 
@@ -23,6 +24,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Payment provider configuration, keys, callbacks and enablement.
 - Affiliate conversion review.
 - VIP level, points and benefits management.
+- Gift card management at `/admin/gift-cards`, including single or batch generation, stats, redacted lists, and enable/disable/delete for unused cards.
 - Redeem code creation, disabling and usage records.
 
 ## Callback Boundary
@@ -31,6 +33,7 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Do not use the admin domain or internal backend URL for callbacks.
 - Verify signature, order ID, amount, status and idempotency.
 - Payment secrets must never enter frontend bundles or logs.
+- Gift cards are a high-risk balance feature. Production deployments must configure `PAYINCUS_GIFT_CARD_ADMIN_IDS`; user generation and redemption must stay transactional, and admin lists are redacted by default.
 - Manual completion and failure marking in the order center keep using the existing audited recharge flows. Refunds, compensation credits and deductions create balance-adjustment approval tasks, and approved tasks execute the existing balance-ledger flow.
 - Refund registration only creates an approval request. It does not call payment-provider refund APIs and does not directly modify the user balance.
 - Order details may show only redacted provider summaries. Raw callback payloads, provider configuration snapshots and secrets must not be returned.
@@ -43,6 +46,8 @@ Billing covers recharges, balance changes, orders, plan consumption, affiliate r
 - Duplicate callbacks do not credit twice.
 - Invalid signature, amount or order ID is rejected.
 - Admin can audit orders, callbacks and balance records.
+- Gift-card generation from user balance deducts balance and writes a ledger entry; self-redemption is blocked, and concurrent redemption can succeed only once.
+- Gift-card admin management rejects production access without `PAYINCUS_GIFT_CARD_ADMIN_IDS`, and admin lists are redacted by default.
 - User and admin order centers must only return authorized order data and must not expose raw payment callback payloads or provider config snapshots.
 - Admin order detail can manually complete or fail pending/paid recharge orders and submit reasoned balance-adjustment approval requests for the related user.
 - Admin order detail can set dispute status to pending review, confirmed, compensated or closed.

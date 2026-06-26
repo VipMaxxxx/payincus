@@ -100,6 +100,7 @@ import adminOAuthAppRoutes from './routes/admin-oauth-apps.js'
 import oauthProviderRoutes from './routes/oauth-provider.js'
 import orderRoutes from './routes/orders.js'
 import userLifecycleRoutes from './routes/user-lifecycle.js'
+import giftCardsRoutes from './routes/gift-cards.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -523,6 +524,7 @@ await fastify.register(adminOAuthAppRoutes, { prefix: '/api/admin/oauth-apps' })
 await fastify.register(oauthProviderRoutes, { prefix: '/api/oauth-provider' })
 await fastify.register(orderRoutes)
 await fastify.register(userLifecycleRoutes)
+await fastify.register(giftCardsRoutes, { prefix: '/api/gift-cards' })
 
 const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
 

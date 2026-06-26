@@ -31,6 +31,7 @@ https://admin.example.com
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Capacity & Cost | `/admin/capacity-cost` | Host sellable inventory, cost profiles, plan margin estimates, capacity alerts and 7/30-day trends. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
+| Gift Cards | `/admin/gift-cards` | Create single or batch balance gift cards, review stats and redacted lists, and enable, disable or delete unused cards. |
 | Logs and Audit | `/admin/logs` | Audit logs and system operation records with risk levels, approval or verification hints, and redacted CSV export. |
 
 ## Billing and Commercial Features
@@ -41,6 +42,7 @@ https://admin.example.com
 - Payment providers: `/admin/billing?tab=paymentProviders`.
 - Affiliate review: `/admin/billing?tab=affConversions`.
 - Entertainment management: `/admin/entertainment`.
+- Gift cards: `/admin/gift-cards`. Production deployments must configure the `PAYINCUS_GIFT_CARD_ADMIN_IDS` administrator allowlist.
 
 ## Operations Overview
 

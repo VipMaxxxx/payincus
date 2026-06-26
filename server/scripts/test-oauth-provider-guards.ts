@@ -163,7 +163,7 @@ assert(
     adminApi.includes('revokeAuthorization') &&
     adminApi.includes("http.delete(`/admin/oauth-apps/authorizations/${id}`)") &&
     adminApi.includes("http.post('/admin/oauth-apps'") &&
-    oauthView.includes('PayIncus OAuth Provider') &&
+    oauthView.includes('PayIncus OAuth 服务端') &&
     oauthView.includes('loadOAuthScopes') &&
     oauthView.includes('availableOAuthScopes') &&
     oauthView.includes('scope.resources.join') &&

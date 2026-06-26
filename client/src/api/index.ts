@@ -94,6 +94,8 @@ import type {
   OAuthProviderAuthorizeRequest,
   OAuthProviderAuthorizeResponse,
   OAuthProviderAuthorization,
+  GiftCardListResponse,
+  GiftCardRecord,
   PluginMarketSubmission,
   DeveloperPluginEventHealth,
   PluginEventAlertPreference,
@@ -3244,6 +3246,21 @@ const api = {
         slaGuarantee: number | null
       }>
     }> => http.get(`/packages/${packageId}/plans`)
+  },
+
+  giftCards: {
+    redeem: (code: string, turnstileToken?: string): Promise<{
+      success: boolean
+      amount: number
+      balanceBefore: number
+      balanceAfter: number
+    }> => http.post('/gift-cards/user/redeem', { code, turnstileToken }),
+    generate: (faceValue: number, remark?: string, turnstileToken?: string): Promise<{
+      giftCard: GiftCardRecord
+      newBalance: number
+    }> => http.post('/gift-cards/user/generate', { faceValue, remark, turnstileToken }),
+    mine: (params?: { page?: number; pageSize?: number; status?: string }): Promise<GiftCardListResponse> =>
+      http.get('/gift-cards/user/mine', { params })
   },
 
   // ==================== AFF 推荐计划 ====================

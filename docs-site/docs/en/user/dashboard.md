@@ -25,6 +25,7 @@ https://panel.example.com
 | Instance detail | `/instances/:id` | Start, stop, reboot, delete, network and terminal. |
 | Terminal | `/terminal` | WebSocket terminal through `/api/ws`. |
 | Wallet | `/wallet` | Recharge, balance, orders and callback results. |
+| Gift Cards | `/gift-cards` | Generate gift cards from the user's own balance, redeem cards issued by others or admins, and view owned cards. |
 | Orders | `/orders` | Unified read-only order center for recharge orders and instance billing records, including purchases, renewals, upgrades, refunds and transfer fees. |
 | Invites | `/invites` | Referral relationships and rewards. |
 | Tickets | `/tickets` | Create tickets, read replies and upload attachments. |
@@ -40,6 +41,10 @@ https://panel.example.com
 - Hosted plans: `/resources/packages`.
 - Hosting wallet: `/hosting-wallet`.
 - Entertainment: `/entertainment`.
+
+## Gift Cards
+
+Users can generate gift cards from their own balance and redeem cards issued by other users or administrators. Self-redemption is blocked, and balance deduction, card creation, redemption and ledger writes are handled transactionally by the backend.
 
 ## Lifecycle Offers
 

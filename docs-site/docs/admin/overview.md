@@ -31,6 +31,7 @@ https://admin.example.com
 | 托管管理 | `/admin/hosting` | 查看托管节点、资源提供方、收益与审核。 |
 | 容量与成本 | `/admin/capacity-cost` | 查看 Host 可售库存、成本配置、套餐毛利估算、容量预警和 7/30 天趋势。 |
 | 统计面板 | `/admin/statistics` | 查看运营总览、收入、订单、资源、交付、风险提醒和账务统计。 |
+| 礼品卡 | `/admin/gift-cards` | 单张或批量生成余额礼品卡，查看统计、脱敏列表，并启用、禁用或删除未使用礼品卡。 |
 | 日志与审计 | `/admin/logs` | 查看操作日志、系统日志和关键链路记录；展示风险等级、审批/验证码提示，并支持脱敏审计 CSV 导出。 |
 
 ## 账务与商业化
@@ -43,6 +44,7 @@ https://admin.example.com
 | 支付渠道 | `/admin/billing?tab=paymentProviders` | 管理支付提供商、密钥、回调和启用状态。 |
 | 推荐返利 | `/admin/billing?tab=affConversions` | 审核推荐转化、返利和推广记录。 |
 | 娱乐管理 | `/admin/entertainment` | 管理积分、会员或娱乐模块配置。 |
+| 礼品卡 | `/admin/gift-cards` | 管理余额礼品卡，生产环境必须配置 `PAYINCUS_GIFT_CARD_ADMIN_IDS` 管理员白名单。 |
 
 ## 运营总览
 

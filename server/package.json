@@ -62,6 +62,7 @@
     "test:entertainment-route-guards": "node --import tsx scripts/test-entertainment-route-guards.ts",
     "test:vip-benefit-route-guards": "node --import tsx scripts/test-vip-benefit-route-guards.ts",
     "test:geoip-guard": "node --import tsx scripts/test-geoip-guard.ts",
+    "test:gift-card-guards": "node --import tsx scripts/test-gift-card-guards.ts",
     "test:hosting-balance-guards": "node --import tsx scripts/test-hosting-balance-guards.ts",
     "test:host-notification-email-task-guards": "node --import tsx scripts/test-host-notification-email-task-guards.ts",
     "test:image-route-guards": "node --import tsx scripts/test-image-route-guards.ts",

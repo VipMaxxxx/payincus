@@ -2890,6 +2890,54 @@ export interface OAuthProviderAuthorizeResponse {
   expiresIn?: number
 }
 
+export type GiftCardStatus = 'active' | 'used' | 'disabled' | 'expired'
+
+export interface GiftCardRecord {
+  id: number
+  code: string
+  codeMasked?: string
+  faceValue: number
+  balanceValue: number
+  status: GiftCardStatus
+  expiresAt?: string | null
+  usedAt?: string | null
+  createdAt: string
+  remark?: string | null
+  batchId?: string | null
+  createdBy?: { id: number; username: string } | null
+  owner?: { id: number; username: string } | null
+  usedBy?: { id: number; username: string } | null
+}
+
+export interface GiftCardListResponse {
+  records: GiftCardRecord[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface GiftCardStats {
+  total: number
+  active: number
+  used: number
+  disabled: number
+  expired: number
+  outstandingValue: number
+  totalRedeemedValue: number
+}
+
+export interface CreateGiftCardRequest {
+  faceValue: number
+  balanceValue?: number
+  expiresAt?: string | null
+  remark?: string
+  turnstileToken?: string
+}
+
+export interface CreateGiftCardBatchRequest extends CreateGiftCardRequest {
+  count: number
+}
+
 export interface OAuthProviderAuthorization {
   id: number
   app: {
