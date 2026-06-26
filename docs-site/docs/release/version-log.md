@@ -6,18 +6,32 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `eca75d9`
+- 当前 HEAD / Current HEAD: `4db8d45`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Update version log for gift card center
-- 最新 tag / Latest tag: `v0.6.10`
+- 提交说明 / Commit subject: Add operations settings center
+- 最新 tag / Latest tag: `v0.6.11`
 
 ## 未发布变更 / Unreleased Changes
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for gift card center `eca75d9`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.11
+
+- 发布提交 / Release commit: `4db8d45`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Add operations settings center
+
+### 新增能力 / New Capabilities
+
+- Add operations settings center `4db8d45`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after v0.6.10 production OTA `3ad9e41`
+- Update version log for v0.6.10 `9297991`
+- Update version log for gift card center `eca75d9`
 
 ## v0.6.10
 
