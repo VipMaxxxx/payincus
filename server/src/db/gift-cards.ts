@@ -56,6 +56,8 @@ export interface GiftCardBalanceResult {
   balanceAfter: number
 }
 
+type GiftCardRedeemTransactionResult = GiftCardBalanceResult | { error: 'GIFT_CARD_EXPIRED' }
+
 function generateGiftCardCode(): string {
   const encoded = crypto.randomBytes(18).toString('base64url')
   return GIFT_CARD_CODE_PREFIX + encoded.substring(0, GIFT_CARD_RANDOM_LENGTH)
@@ -290,7 +292,7 @@ export async function findGiftCardById(id: number, options: { revealCode?: boole
 }
 
 export async function redeemGiftCard(code: string, userId: number): Promise<GiftCardBalanceResult> {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx): Promise<GiftCardRedeemTransactionResult> => {
     const initialGiftCard = await tx.giftCard.findUnique({
       where: { code },
       select: { id: true }
@@ -331,7 +333,7 @@ export async function redeemGiftCard(code: string, userId: number): Promise<Gift
       if (expired.count === 0) {
         throw new Error('GIFT_CARD_USED')
       }
-      throw new Error('GIFT_CARD_EXPIRED')
+      return { error: 'GIFT_CARD_EXPIRED' }
     }
 
     const user = await tx.user.findUnique({
@@ -370,6 +372,12 @@ export async function redeemGiftCard(code: string, userId: number): Promise<Gift
 
     return { balanceValue: amount, balanceBefore, balanceAfter }
   })
+
+  if ('error' in result) {
+    throw new Error(result.error)
+  }
+
+  return result
 }
 
 export async function disableGiftCard(id: number) {

@@ -70,9 +70,11 @@ assert(
   redeemSection.includes("if (giftCard.ownerId === userId)") &&
     redeemSection.includes("throw new Error('GIFT_CARD_SELF_REDEEM')") &&
     redeemSection.includes("where: { id: giftCard.id, status: 'active' }") &&
+    redeemSection.includes("return { error: 'GIFT_CARD_EXPIRED' }") &&
+    db.includes("if ('error' in result)") &&
     redeemSection.includes("type: 'gift'") &&
     redeemSection.includes('maskGiftCardCode(giftCard.code)'),
-  'gift card redemption must reject self redemption, claim active codes atomically, credit balance, and avoid logging full codes'
+  'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
 )
 
 assert(
