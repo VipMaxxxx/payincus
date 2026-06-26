@@ -114,8 +114,11 @@ assert(
 assert(
   userRedeemSection.includes('turnstileRequired') &&
     userGenerateRouteSection.includes('turnstileRequired') &&
-    userView.includes('useTurnstile'),
-  'user gift card redemption and balance-funded generation must keep Turnstile protection'
+    userView.includes("import TurnstileWidget from '@/components/TurnstileWidget.vue'") &&
+    userView.includes('api.systemConfig.getPublic()') &&
+    userView.includes('v-model="turnstileToken"') &&
+    userView.includes('请先完成人机验证'),
+  'user gift card redemption and balance-funded generation must keep visible Turnstile protection'
 )
 
 assert(
@@ -132,7 +135,7 @@ assert(
     adminRouter.includes("path: '/admin/gift-cards'") &&
     userNav.includes("path: '/gift-cards'") &&
     adminNav.includes("path: '/admin/gift-cards'") &&
-    userView.includes('useTurnstile') &&
+    userView.includes('TurnstileWidget') &&
     userView.includes('兑换礼品卡') &&
     adminView.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
     adminView.includes('显示完整兑换码') &&
