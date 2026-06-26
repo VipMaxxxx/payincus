@@ -1,6 +1,6 @@
 # PayIncus / Incudal Handoff
 
-Last updated: 2026-06-25 CST
+Last updated: 2026-06-26 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-6b2e7d4 Update version log for v0.6.4 / 更新 v0.6.4 版本日志
+05b0517 Update version log for v0.6.9
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-6b2e7d4 Update version log for v0.6.4 / 更新 v0.6.4 版本日志
+05b0517 Update version log for v0.6.9
 ```
 
 Recently updated/released files include:
@@ -155,6 +155,80 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
+v0.6.9 Fix extension market public domain
+feature commit/tag: 369212f
+version-log commit: 05b0517
+```
+
+GitHub Actions:
+
+```text
+Build & Release for tag v0.6.9: run 28219307494 completed successfully.
+CI for version-log commit 05b0517: run 28219305445 completed successfully.
+Docs Pages for version-log commit 05b0517: run 28219305456 completed successfully.
+```
+
+Release assets confirmed publicly for `v0.6.9`:
+
+```text
+ota-manifest.json
+incudal-v0.6.9-linux-amd64.tar.gz
+incudal-v0.6.9-linux-amd64.tar.gz.sha256
+incudal-v0.6.9-linux-arm64.tar.gz
+incudal-v0.6.9-linux-arm64.tar.gz.sha256
+incudal-v0.6.9-ota-manifest.json
+```
+
+Published `v0.6.9` OTA manifest:
+
+```text
+version: v0.6.9
+gitCommit: 369212f8e2a3
+buildTime: 2026-06-26T05:35:37.746Z
+amd64 artifact: incudal-v0.6.9-linux-amd64.tar.gz
+amd64 size: 92310059
+amd64 sha256: 5e5ef070ce97e465e9ea937646c856ae8d300bcb70a46d477be5dc1220d88f6f
+arm64 artifact: incudal-v0.6.9-linux-arm64.tar.gz
+arm64 size: 91410116
+arm64 sha256: 62a48201d14677b63699b014e53b947f52ebc33c2a976cc058b22a2b5952b43c
+```
+
+Production OTA proof:
+
+```text
+latest proven production version: v0.6.9 from task #75
+task: #75
+target: v0.6.9
+fromVersion: v0.6.8
+status: success
+started: 2026-06-26 05:36:55.443 UTC
+finished: 2026-06-26 05:38:23.829 UTC
+backup path: /opt/incudal/releases/v0.6.8-20260626052712
+release dir: /opt/incudal/releases/v0.6.9-20260626053655
+current release: /opt/incudal/releases/v0.6.9-20260626053655
+version.json: version/tag v0.6.9, commit 369212f8e2a3, buildTime 2026-06-26T05:34:45.534Z, deployedAt 2026-06-26T05:37:16.617Z
+public health after update: user/admin /api/health returned HTTP 200
+plugin market index: https://payincus.com/plugin-market/index.json returned HTTP 200 and uses payincus.com manifest/download URLs
+theme market index: https://payincus.com/theme-market/index.json returned HTTP 200 and uses payincus.com manifest/download URLs
+```
+
+Important release-chain note:
+
+```text
+v0.6.7 contained the extension platform and theme system feature bundle, but its Release failed on the frontend route guard and must not be used for OTA.
+v0.6.8 fixed the extension platform release guards and deployed successfully through production task #74.
+v0.6.9 fixed the public extension/theme market domain to payincus.com and is the current production boundary.
+```
+
+Previous production-proof closure:
+
+```text
+v0.6.6 remains the production-proof scope closure release. It completed the operator-approved final proof scope with Lsky cleanup explicitly waived, not tested.
+```
+
+Previous completed feature bundle:
+
+```text
 v0.6.4 Update production proof workspace status
 feature commit/tag: 5eff38f
 version-log commit: 6b2e7d4
@@ -197,7 +271,7 @@ arm64 sha256: 419882d8f089dda1f79bff4c8d890a727dcfb6868215b9ee3d25ab6925e1115a
 Production OTA proof:
 
 ```text
-latest proven production version: v0.6.4 from task #71
+historical proven production version for this release block: v0.6.4 from task #71
 task: #71
 target: v0.6.4
 fromVersion: v0.6.3
@@ -849,15 +923,15 @@ Note: a previous request excluded the old demo domain from production audit scop
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `9590201`.
+1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `05b0517`.
 2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, and production proof is complete for the current operator-approved scope.
-3. Treat `v0.6.6` production deployment/readiness as the latest proven production deployment from the 2026-06-25 SSH proof: `/opt/incudal/current -> /opt/incudal/releases/v0.6.6-20260625151558`, version commit `9fcbe2867efa`, deployed at `2026-06-25T15:16:16.522Z`, production readiness/DB/split-host/Agent manifest/log-header passed, `SERVER_NODE_MODULES_OK` passed, production admin bundle marker grep passed, live acceptance report passed with proof refs, and OTA task `#73` completed successfully.
-4. Current latest-production boundary: `v0.6.6` is live and proven via task `#73`. Lsky cleanup is not proven because the configured production Lsky token only has `upload:write`, is missing `user:photo:read` and `user:photo:write`, returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete. The operator explicitly waived this cleanup test from final scope, so do not claim confirmed deletion unless a future delete-capable proof is collected.
+3. Treat `v0.6.9` production deployment/readiness as the latest proven production deployment from the 2026-06-26 SSH and public HTTP proof: `/opt/incudal/current -> /opt/incudal/releases/v0.6.9-20260626053655`, version commit `369212f8e2a3`, deployed at `2026-06-26T05:37:16.617Z`, user/admin health passed, online plugin/theme market indexes returned HTTP 200, and OTA task `#75` completed successfully.
+4. Current latest-production boundary: `v0.6.9` is live and proven via task `#75`. Current proof-scope boundary remains `v0.6.6` task `#73`: Lsky cleanup is not proven because the configured production Lsky token only has `upload:write`, is missing `user:photo:read` and `user:photo:write`, returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete. The operator explicitly waived this cleanup test from final scope, so do not claim confirmed deletion unless a future delete-capable proof is collected.
 5. Treat the core Incus lifecycle as proven on a dedicated test instance: #9 on host #2 completed stop/start/restart/recreate/delete cleanup, and existing proof already covers create, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic. Only run suspend/unsuspend, IPv6, or host-migration smoke if these remain in final acceptance scope.
 6. Delivery proof: SMTP provider reference is proven by `smtp-provider-reference-2026-06-25T04:34:51.773Z`; Telegram delivery is proven by message `#339` to `@Payincus`; Lsky cleanup is waived for current final scope. If it is later required, it still needs a delete-capable token or provider-side cleanup before commit-mode proof. The target endpoint is `DELETE /api/v2/user/photos` with a JSON numeric ID array; do not use guessed IDs or invalid/empty delete probes as proof.
 7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
 8. Treat the approved temporary Turnstile disable-and-restore smoke as proven unless final acceptance specifically requires a human-solved Cloudflare challenge UX.
-9. Latest live acceptance is already recorded at `/tmp/incudal-proof/final-acceptance-v0.6.6.md` with real proof references and `LIVE_LSKY_CLEANUP_WAIVER_REF`. Only rerun `pnpm verify:final-acceptance` if final scope explicitly requires a fresh auth smoke or human-solved Turnstile challenge.
+9. Latest proof-scope live acceptance is already recorded at `/tmp/incudal-proof/final-acceptance-v0.6.6.md` with real proof references and `LIVE_LSKY_CLEANUP_WAIVER_REF`. The later extension platform work is deployed in `v0.6.9` with online market proof. Only rerun `pnpm verify:final-acceptance` if final scope explicitly requires a fresh auth smoke or human-solved Turnstile challenge.
 10. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
 11. Decide whether to continue improving docs:
    - Page-by-page admin field explanations.
