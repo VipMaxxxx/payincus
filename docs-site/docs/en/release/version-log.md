@@ -6,30 +6,40 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `11ecc4b`
+- Current HEAD / 当前 HEAD: `eca75d9`
 - Commit date / 提交日期: 2026-06-26
-- Commit subject / 提交说明: Add gift card center
-- Latest tag / 最新 tag: `v0.6.9`
+- Commit subject / 提交说明: Update version log for gift card center
+- Latest tag / 最新 tag: `v0.6.10`
 
 ## Unreleased Changes / 未发布变更
 
-### New Capabilities / 新增能力
-
-- Add gift card center `11ecc4b`
-
 ### Improvements and Adjustments / 改进与调整
 
-- Update README for current docs platform `d2f9b33`
-- Improve API reference docs `823eeb3`
-- Update handoff after v0.6.9 production OTA `179c6b6`
-- Update version log for v0.6.9 `05b0517`
-
-### Other Changes / 其他变更
-
-- Publish static OpenAPI docs artifacts `61318e6`
-- Restyle docs site navigation and landing pages `ecf0d7b`
+- Update version log for gift card center `eca75d9`
 
 ## Historical Versions / 历史版本
+
+## v0.6.10
+
+- Release commit / 发布提交: `11ecc4b`
+- Commit date / 提交日期: 2026-06-26
+- Commit subject / 提交说明: Add gift card center
+
+### New capabilities / 新增能力
+
+- Add user gift card page for balance-funded gift card generation, redemption, and owned-card history.
+
+- Add admin gift card center for single and batch generation, stats, redacted lists, enable, disable, and delete actions.
+
+- Add GiftCard Prisma model and migration; OTA applies it through prisma migrate deploy.
+
+### Fixes and stability / 修复与稳定性
+
+- Protect gift card balance flows with advisory locks, transaction-scoped balance deduction, self-redeem blocking, and one-time redeem claims.
+
+- Restrict production gift card management with PAYINCUS_GIFT_CARD_ADMIN_IDS and mask codes by default.
+
+- Localize and fix the OAuth Provider admin UI template.
 
 ## v0.6.9
 
