@@ -790,19 +790,19 @@ GET /api/v1/openapi.yaml
 Public API TypeScript SDK 首版：
 
 ```text
-GET https://docs.payincus.com/sdk/payincus-public-api.ts
-GET https://docs.payincus.com/sdk/examples/service-power-task.ts
-GET https://docs.payincus.com/sdk/examples/service-renew.ts
-GET https://docs.payincus.com/sdk/examples/flash-sale-action.ts
-GET https://docs.payincus.com/sdk/examples/balance-adjustment-request.ts
-GET https://docs.payincus.com/sdk/examples/billing-records.ts
-GET https://docs.payincus.com/sdk/examples/oauth-authorization-code.ts
+GET https://payincus.com/sdk/payincus-public-api.ts
+GET https://payincus.com/sdk/examples/service-power-task.ts
+GET https://payincus.com/sdk/examples/service-renew.ts
+GET https://payincus.com/sdk/examples/flash-sale-action.ts
+GET https://payincus.com/sdk/examples/balance-adjustment-request.ts
+GET https://payincus.com/sdk/examples/billing-records.ts
+GET https://payincus.com/sdk/examples/oauth-authorization-code.ts
 ```
 
 SDK 文档页：
 
 ```text
-https://docs.payincus.com/plugins/sdk
+https://payincus.com/plugins/sdk
 ```
 
 当前 scope 白名单：
@@ -1306,8 +1306,8 @@ GET /api/themes/preview/:themeId
 生产环境可以配置稳定在线主题市场：
 
 ```env
-THEME_MARKET_INDEX_URL=https://docs.payincus.com/theme-market/index.json
-THEME_MARKET_TRUSTED_HOSTS=docs.payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
+THEME_MARKET_INDEX_URL=https://payincus.com/theme-market/index.json
+THEME_MARKET_TRUSTED_HOSTS=payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
 ```
 
 后台扩展中心的“主题”页会读取 `theme-market/index.json`，默认只展示 `reviewStatus = listed` 的主题。安装市场主题时，服务端会重新下载 `.tar.gz` artifact，校验 SHA256、PayIncus 兼容范围和主题包安全规则；未上架或 SHA256 不匹配的主题不能安装。

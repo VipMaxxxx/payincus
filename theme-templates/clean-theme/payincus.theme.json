@@ -5,7 +5,7 @@
   "payincus": ">=0.6.0",
   "description": "Official clean theme sample with design tokens, controlled config fields, CSS assets, and safe template fragments.",
   "author": "PayIncus",
-  "homepage": "https://docs.payincus.com/plugins/templates",
+  "homepage": "https://payincus.com/plugins/templates",
   "css": "dist/theme.css",
   "tokens": {
     "colorPrimary": "#0f766e",

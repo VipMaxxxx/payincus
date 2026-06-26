@@ -6,14 +6,16 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `809db50`
+- Current HEAD / 当前 HEAD: `1737efe`
 - Commit date / 提交日期: 2026-06-26
-- Commit subject / 提交说明: Fix extension platform release guards
+- Commit subject / 提交说明: Update version log for v0.6.8
 - Latest tag / 最新 tag: `v0.6.8`
 
 ## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.6.8 `1737efe`
 
 ## Historical Versions / 历史版本
 

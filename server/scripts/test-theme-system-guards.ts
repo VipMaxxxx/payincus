@@ -470,10 +470,10 @@ assert(
 assert(
   envExample.includes('THEME_INSTALL_DIR=/opt/incudal/themes') &&
     envExample.includes('THEME_DATA_DIR=/opt/incudal/theme-data') &&
-    envExample.includes('THEME_MARKET_INDEX_URL=https://docs.payincus.com/theme-market/index.json') &&
+    envExample.includes('THEME_MARKET_INDEX_URL=https://payincus.com/theme-market/index.json') &&
     envExample.includes('THEME_MARKET_TRUSTED_HOSTS=') &&
     envExample.includes('THEME_MARKET_PUBLISH_DIR=/opt/incudal/theme-market') &&
-    envExample.includes('THEME_MARKET_PUBLIC_BASE_URL=https://docs.payincus.com/theme-market') &&
+    envExample.includes('THEME_MARKET_PUBLIC_BASE_URL=https://payincus.com/theme-market') &&
     envExample.includes('THEME_STAGING_DIR=/opt/incudal/theme-staging') &&
     installPanel.includes('THEME_INSTALL_DIR') &&
     installPanel.includes('THEME_DATA_DIR') &&
@@ -490,7 +490,7 @@ assert(
     developmentDocs.includes('字段可以声明 `group` 和 `order`') &&
     developmentDocs.includes('THEME_DATA_DIR/config-files') &&
     developmentDocs.includes('/api/themes/:themeId/config-files/:key/:filename') &&
-    developmentDocs.includes('THEME_MARKET_INDEX_URL=https://docs.payincus.com/theme-market/index.json') &&
+    developmentDocs.includes('THEME_MARKET_INDEX_URL=https://payincus.com/theme-market/index.json') &&
     developmentDocs.includes('theme-market/index.json') &&
     developmentDocs.includes('POST /api/theme-market-submissions/admin/publish-market-index') &&
     developmentDocs.includes('只会发布 `reviewStatus = listed` 且 `scanStatus = passed` 或 `warning` 的投稿') &&
@@ -534,7 +534,7 @@ assert(
     rootPackage.includes('"publish:theme-market-index"') &&
     themeMarketIndex.includes('"id": "com.payincus.theme.clean"') &&
     themeMarketIndex.includes('"reviewStatus": "listed"') &&
-    themeMarketIndex.includes('https://docs.payincus.com/theme-market/packages/com.payincus.theme.clean/1.0.0/theme.tar.gz') &&
+    themeMarketIndex.includes('https://payincus.com/theme-market/packages/com.payincus.theme.clean/1.0.0/theme.tar.gz') &&
     themeMarketIndex.includes('"checksumPinned": true'),
   'deployment and docs must describe theme runtime directories, config forms, and implemented theme package lifecycle'
 )

@@ -123,7 +123,7 @@ function getTrustedMarketHosts(): Set<string> {
       'github.com',
       'objects.githubusercontent.com',
       'raw.githubusercontent.com',
-      'docs.payincus.com',
+      'payincus.com',
       'payincus.github.io'
     ].concat(
       (process.env.PLUGIN_MARKET_TRUSTED_HOSTS || '')
@@ -152,13 +152,13 @@ function assertTrustedMarketUrl(input: string, purpose: 'index' | 'download'): U
 
   if (host === 'objects.githubusercontent.com') return url
 
-  if ((host === 'docs.payincus.com' || host === 'payincus.github.io') && purpose === 'index') {
+  if ((host === 'payincus.com' || host === 'payincus.github.io') && purpose === 'index') {
     if (!url.pathname.endsWith('/plugin-market/index.json')) {
       throw new Error('Stable plugin market index must use /plugin-market/index.json')
     }
   }
 
-  if ((host === 'docs.payincus.com' || host === 'payincus.github.io') && purpose === 'download') {
+  if ((host === 'payincus.com' || host === 'payincus.github.io') && purpose === 'download') {
     if (!url.pathname.startsWith('/plugin-market/packages/') && !url.pathname.startsWith('/plugin-market/manifests/')) {
       throw new Error('Stable plugin market assets must be under /plugin-market/packages or /plugin-market/manifests')
     }
