@@ -1,16 +1,16 @@
 import { defineConfig } from 'vitepress'
 
 const zhNav = [
-  { text: '开始', link: '/guide/introduction' },
-  { text: '在线 Demo', link: '/demo' },
-  { text: '部署', link: '/deployment/one-click-install' },
-  { text: '后台 OTA', link: '/guide/ota-update' },
-  { text: '扩展', link: '/plugins/overview' },
-  { text: '版本日志', link: '/release/version-log' },
+  { text: '首页', link: '/' },
+  { text: '文档', link: '/guide/introduction' },
+  { text: '开发', link: '/plugins/overview' },
+  { text: '市场', link: '/plugins/market' },
   { text: 'API', link: '/api/overview' },
   {
-    text: '社区',
+    text: '关于',
     items: [
+      { text: '在线 Demo', link: '/demo' },
+      { text: '版本日志', link: '/release/version-log' },
       { text: 'Telegram 交流群', link: 'https://t.me/Payincus' },
       { text: 'GitHub', link: 'https://github.com/VipMaxxxx/payincus' }
     ]
@@ -18,16 +18,16 @@ const zhNav = [
 ]
 
 const enNav = [
-  { text: 'Start', link: '/en/guide/introduction' },
-  { text: 'Demo', link: '/en/demo' },
-  { text: 'Deploy', link: '/en/deployment/one-click-install' },
-  { text: 'Admin OTA', link: '/en/guide/ota-update' },
-  { text: 'Extensions', link: '/en/plugins/overview' },
-  { text: 'Version Log', link: '/en/release/version-log' },
+  { text: 'Home', link: '/en/' },
+  { text: 'Docs', link: '/en/guide/introduction' },
+  { text: 'Development', link: '/en/plugins/overview' },
+  { text: 'Marketplace', link: '/en/plugins/market' },
   { text: 'API', link: '/en/api/overview' },
   {
-    text: 'Community',
+    text: 'About',
     items: [
+      { text: 'Demo', link: '/en/demo' },
+      { text: 'Version Log', link: '/en/release/version-log' },
       { text: 'Telegram Group', link: 'https://t.me/Payincus' },
       { text: 'GitHub', link: 'https://github.com/VipMaxxxx/payincus' }
     ]
@@ -93,6 +93,57 @@ const zhSidebar = [
   }
 ]
 
+const zhDevelopmentSidebar = [
+  {
+    text: 'Extensions',
+    items: [
+      { text: 'Extensions', link: '/plugins/overview' },
+      { text: 'Configuration', link: '/plugins/development#配置' },
+      { text: 'Event list', link: '/plugins/development#业务事件' },
+      { text: 'Manifest', link: '/plugins/manifest' },
+      { text: 'Marketplace', link: '/plugins/market' },
+      { text: 'SDK', link: '/plugins/sdk' }
+    ]
+  },
+  {
+    text: 'Types of Extensions',
+    items: [
+      { text: 'Server Extension', link: '/plugins/development#服务扩展类型' },
+      { text: 'Gateway Extension', link: '/plugins/development#支付网关扩展类型' },
+      { text: 'Webhook Action', link: '/plugins/development#webhook-action-runtime' },
+      { text: 'Storage', link: '/plugins/development#扩展-kv-存储' }
+    ]
+  },
+  {
+    text: 'Themes',
+    items: [
+      { text: 'Create a Theme', link: '/plugins/development#主题开发标准' },
+      { text: 'Theme Manifest', link: '/plugins/manifest#主题-manifest' },
+      { text: 'Theme Templates', link: '/plugins/templates#主题模板' }
+    ]
+  },
+  {
+    text: 'OAuth',
+    items: [
+      { text: 'OAuth Provider', link: '/plugins/development#oauth-provider' },
+      { text: 'API Reference', link: '/api/overview' },
+      { text: 'Public API SDK', link: '/plugins/sdk' }
+    ]
+  }
+]
+
+const zhApiSidebar = [
+  {
+    text: 'API Reference',
+    items: [
+      { text: 'Introduction', link: '/api/overview' },
+      { text: 'OAuth Provider', link: '/plugins/development#oauth-provider' },
+      { text: 'Public API SDK', link: '/plugins/sdk' },
+      { text: 'Extension Actions', link: '/plugins/development#webhook-action-runtime' }
+    ]
+  }
+]
+
 const enSidebar = [
   {
     text: 'Guide',
@@ -149,6 +200,57 @@ const enSidebar = [
   }
 ]
 
+const enDevelopmentSidebar = [
+  {
+    text: 'Extensions',
+    items: [
+      { text: 'Extensions', link: '/en/plugins/overview' },
+      { text: 'Configuration', link: '/en/plugins/development#configuration' },
+      { text: 'Event list', link: '/en/plugins/manifest#current-capability-manifest' },
+      { text: 'Manifest', link: '/en/plugins/manifest' },
+      { text: 'Marketplace', link: '/en/plugins/market' },
+      { text: 'SDK', link: '/en/plugins/sdk' }
+    ]
+  },
+  {
+    text: 'Types of Extensions',
+    items: [
+      { text: 'Server Extension', link: '/en/plugins/manifest#current-capability-manifest' },
+      { text: 'Gateway Extension', link: '/en/plugins/manifest#current-capability-manifest' },
+      { text: 'Webhook Action', link: '/en/plugins/manifest#current-capability-manifest' },
+      { text: 'Storage', link: '/en/plugins/manifest#current-capability-manifest' }
+    ]
+  },
+  {
+    text: 'Themes',
+    items: [
+      { text: 'Create a Theme', link: '/en/plugins/templates' },
+      { text: 'Theme Manifest', link: '/en/plugins/manifest#theme-manifest' },
+      { text: 'Theme Templates', link: '/en/plugins/templates' }
+    ]
+  },
+  {
+    text: 'OAuth',
+    items: [
+      { text: 'OAuth Provider', link: '/en/plugins/overview#oauth-provider' },
+      { text: 'API Reference', link: '/en/api/overview' },
+      { text: 'Public API SDK', link: '/en/plugins/sdk' }
+    ]
+  }
+]
+
+const enApiSidebar = [
+  {
+    text: 'API Reference',
+    items: [
+      { text: 'Introduction', link: '/en/api/overview' },
+      { text: 'OAuth Provider', link: '/en/plugins/overview#oauth-provider' },
+      { text: 'Public API SDK', link: '/en/plugins/sdk' },
+      { text: 'Extension Actions', link: '/en/plugins/manifest#current-capability-manifest' }
+    ]
+  }
+]
+
 export default defineConfig({
   title: 'PayIncus',
   description: 'PayIncus 用户端、管理后台、Incus 交付、Agent 和 OTA 文档',
@@ -168,7 +270,6 @@ export default defineConfig({
       description: 'PayIncus 用户端、管理后台、Incus 交付、Agent 和 OTA 文档',
       themeConfig: {
         nav: zhNav,
-        sidebar: zhSidebar,
         editLink: {
           pattern: 'https://github.com/VipMaxxxx/payincus/edit/main/docs-site/docs/:path',
           text: '在 GitHub 上编辑此页'
@@ -183,6 +284,11 @@ export default defineConfig({
         outline: {
           label: '本页目录',
           level: [2, 3]
+        },
+        sidebar: {
+          '/plugins/': zhDevelopmentSidebar,
+          '/api/': zhApiSidebar,
+          '/': zhSidebar
         }
       }
     },
@@ -193,7 +299,6 @@ export default defineConfig({
       description: 'PayIncus documentation for user portal, admin console, Incus delivery, Agent reporting, payments and OTA updates',
       themeConfig: {
         nav: enNav,
-        sidebar: enSidebar,
         editLink: {
           pattern: 'https://github.com/VipMaxxxx/payincus/edit/main/docs-site/docs/:path',
           text: 'Edit this page on GitHub'
@@ -208,6 +313,11 @@ export default defineConfig({
         outline: {
           label: 'On this page',
           level: [2, 3]
+        },
+        sidebar: {
+          '/en/plugins/': enDevelopmentSidebar,
+          '/en/api/': enApiSidebar,
+          '/en/': enSidebar
         }
       }
     }

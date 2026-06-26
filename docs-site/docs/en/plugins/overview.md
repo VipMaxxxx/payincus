@@ -2,7 +2,7 @@
 
 The PayIncus Extension Center installs and manages third-party extensions. An extension can provide admin settings pages and user-facing pages through controlled extension slots.
 
-Full platform plan: [Extension Center Plan](/plugins/platform-plan). Live online directory: [Extension Market](/plugins/market).
+Full platform plan: [Extension Center Plan](/en/plugins/platform-plan). Live online directory: [Extension Market](/en/plugins/market).
 
 Extensions do not modify PayIncus source code directly. Installed runtime files are stored under:
 
