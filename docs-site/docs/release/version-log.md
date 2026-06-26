@@ -6,14 +6,28 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `369212f`
+- 当前 HEAD / Current HEAD: `11ecc4b`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Fix extension market public domain
+- 提交说明 / Commit subject: Add gift card center
 - 最新 tag / Latest tag: `v0.6.9`
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 新增能力 / New Capabilities
+
+- Add gift card center `11ecc4b`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update README for current docs platform `d2f9b33`
+- Improve API reference docs `823eeb3`
+- Update handoff after v0.6.9 production OTA `179c6b6`
+- Update version log for v0.6.9 `05b0517`
+
+### 其他变更 / Other Changes
+
+- Publish static OpenAPI docs artifacts `61318e6`
+- Restyle docs site navigation and landing pages `ecf0d7b`
 
 ## 历史版本 / Historical Versions
 

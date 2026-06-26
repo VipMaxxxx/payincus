@@ -6,14 +6,28 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `369212f`
+- Current HEAD / 当前 HEAD: `11ecc4b`
 - Commit date / 提交日期: 2026-06-26
-- Commit subject / 提交说明: Fix extension market public domain
+- Commit subject / 提交说明: Add gift card center
 - Latest tag / 最新 tag: `v0.6.9`
 
 ## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### New Capabilities / 新增能力
+
+- Add gift card center `11ecc4b`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update README for current docs platform `d2f9b33`
+- Improve API reference docs `823eeb3`
+- Update handoff after v0.6.9 production OTA `179c6b6`
+- Update version log for v0.6.9 `05b0517`
+
+### Other Changes / 其他变更
+
+- Publish static OpenAPI docs artifacts `61318e6`
+- Restyle docs site navigation and landing pages `ecf0d7b`
 
 ## Historical Versions / 历史版本
 
