@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-9297991 Update version log for v0.6.10
+63879fc Update version log for v0.6.11
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,12 +29,38 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-9297991 Update version log for v0.6.10
+63879fc Update version log for v0.6.11
 ```
 
 Recently updated/released files include:
 
 ```text
+client/src/views/admin/SystemConfigView.vue
+client/src/router/admin.ts
+client/src/locales/zh-CN.ts
+client/src/locales/zh-TW.ts
+client/src/locales/en.ts
+server/src/lib/runtime-settings.ts
+server/src/db/system-config.ts
+server/src/routes/system-config.ts
+server/src/routes/system-update.ts
+server/src/routes/gift-cards.ts
+server/src/routes/admin-plugins.ts
+server/src/routes/admin-themes.ts
+server/src/routes/plugin-market-submissions.ts
+server/src/routes/theme-market-submissions.ts
+server/src/lib/plugin-market.ts
+server/src/lib/theme-market.ts
+server/src/lib/plugin-market-publisher.ts
+server/src/lib/theme-market-publisher.ts
+server/src/services/plugin-storage-backup-scheduler.ts
+server/scripts/test-system-update-guards.ts
+server/scripts/test-plugin-market-guards.ts
+server/scripts/test-plugin-market-publish-guards.ts
+server/scripts/test-plugin-market-submission-guards.ts
+server/scripts/test-theme-system-guards.ts
+docs-site/docs/release/version-log.md
+docs-site/docs/en/release/version-log.md
 client/src/views/TicketsView.vue
 client/src/views/GiftCardsView.vue
 client/src/views/admin/GiftCardsView.vue
@@ -161,57 +187,70 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.6.10 Add gift card center
-feature commit/tag: 11ecc4b
-version-log commit: 9297991
+v0.6.11 Add operations settings center
+feature commit/tag: 4db8d45
+version-log commit: 63879fc
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.6.10: run 28223353590 completed successfully.
-CI for version-log commit 9297991: branch badge reports passing.
-Docs Pages for version-log commit 9297991: run 28223597432 completed successfully.
+Build & Release for tag v0.6.11 completed successfully and produced OTA assets.
+CI/docs status was not rechecked with `gh` in this environment because the CLI is unavailable; use GitHub UI or a token-authenticated API call if a fresh status check is needed.
 ```
 
-Release assets confirmed publicly for `v0.6.10`:
+Release assets confirmed for `v0.6.11` during OTA:
 
 ```text
 ota-manifest.json
-incudal-v0.6.10-linux-amd64.tar.gz
-incudal-v0.6.10-linux-amd64.tar.gz.sha256
-incudal-v0.6.10-linux-arm64.tar.gz
-incudal-v0.6.10-linux-arm64.tar.gz.sha256
-incudal-v0.6.10-ota-manifest.json
+incudal-v0.6.11-linux-amd64.tar.gz
+incudal-v0.6.11-linux-amd64.tar.gz.sha256
+incudal-v0.6.11-linux-arm64.tar.gz
+incudal-v0.6.11-linux-arm64.tar.gz.sha256
+incudal-v0.6.11-ota-manifest.json
 ```
 
-Published `v0.6.10` OTA manifest:
+Published `v0.6.11` OTA artifact used by production:
 
 ```text
-version: v0.6.10
-gitCommit: 11ecc4b27fc3
-amd64 artifact: incudal-v0.6.10-linux-amd64.tar.gz
-amd64 size: 92359024
-amd64 sha256: 2bd6cd4f48b0e1b0259c15736b8f8ff764d9e3100e5fe4581e93b18a7724443d
-arm64 artifact: incudal-v0.6.10-linux-arm64.tar.gz
-arm64 size: 91451338
-arm64 sha256: 97133b0dad16dec83e535fd90abfc96f56ff22f36042dec8cd6e151ab6881fe8
+version: v0.6.11
+gitCommit: 4db8d4582071
+amd64 artifact: incudal-v0.6.11-linux-amd64.tar.gz
+amd64 size: 92368366
+amd64 sha256: ee941530efc4e5b706fcdc57e47f3ad398d86b88a6ce90bc3f46238793f810f9
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.6.10
-target: v0.6.10
+latest proven production version: v0.6.11
+task: #77
+target: v0.6.11
 status: success
-release dir: /opt/incudal/releases/v0.6.10-20260626072242
-current release: /opt/incudal/releases/v0.6.10-20260626072242
-version.json: version/tag v0.6.10, commit 11ecc4b27fc3, buildTime 2026-06-26T07:19:25.704Z, deployedAt 2026-06-26T07:23:12.041Z
-public health after update: user/admin /api/health returned HTTP 200
-database proof: `gift_cards` table exists and migration `20260625210000_add_gift_cards` is applied
-production env: `PAYINCUS_GIFT_CARD_ADMIN_IDS=1` set in `/opt/incudal/.env` and `/opt/incudal/current/.env`; `incudal-backend` restarted and active
+started: 2026-06-26 08:06:58.823 UTC
+finished: 2026-06-26 08:08:10.228 UTC
+backup path: /opt/incudal/releases/v0.6.10-20260626072242
+logPath: /opt/incudal/update-logs/system-update-77.log
+release dir: /opt/incudal/releases/v0.6.11-20260626080658
+current release: /opt/incudal/releases/v0.6.11-20260626080658
+version.json: version/tag v0.6.11, commit 4db8d4582071, buildTime 2026-06-26T08:04:02.550Z, deployedAt 2026-06-26T08:07:08.189Z
+backend service: `incudal-backend` active after restart
+backend health after update: `http://127.0.0.1:3001/api/health` returned `{"status":"ok"}`
+verify-split-host: passed for user/admin domains, proxied API, proxied WebSocket, and direct backend health
 production readiness: `pnpm verify:production` passed on `/opt/incudal/current`
+log/header exposure: `pnpm verify:log-header` passed; configured secret values were not found in logs or headers
+database proof: task #77 status is `success`; new `system_configs` rows exist for operations allowlists, online extension/theme market URLs, and plugin storage backup schedule/retention
+bundle proof: deployed client/server bundles contain `admin-settings-operations`, `plugin_market_index_url`, and `运营配置` markers
 ```
+
+Production warnings observed during `pnpm verify:production`:
+
+```text
+PAYMENT_CALLBACK_IP_WHITELIST is empty; provider-specific defaults apply only where the backend implements them.
+Public package #1 (HKCMI) and #2 (JPIIJ) are active but online bound hosts cannot satisfy their minimum CPU/memory requirements.
+```
+
+These are existing operational warnings and did not block the `v0.6.11` OTA.
 
 Important release-chain note:
 
@@ -219,7 +258,8 @@ Important release-chain note:
 v0.6.7 contained the extension platform and theme system feature bundle, but its Release failed on the frontend route guard and must not be used for OTA.
 v0.6.8 fixed the extension platform release guards and deployed successfully through production task #74.
 v0.6.9 fixed the public extension/theme market domain to payincus.com.
-v0.6.10 adds the guarded gift card center and is the current production boundary.
+v0.6.10 adds the guarded gift card center.
+v0.6.11 adds the guarded operations settings center and is the current production boundary.
 ```
 
 Previous production-proof closure:
