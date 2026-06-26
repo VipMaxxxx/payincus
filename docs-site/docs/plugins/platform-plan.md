@@ -111,14 +111,14 @@ Paymenter 的开发文档把能力拆成 Extensions、Configuration、Event list
 当前稳定地址：
 
 ```text
-https://docs.payincus.com/plugins/market
-https://docs.payincus.com/plugin-market/index.json
+https://payincus.com/plugins/market
+https://payincus.com/plugin-market/index.json
 ```
 
 生产环境固定配置：
 
 ```text
-PLUGIN_MARKET_INDEX_URL=https://docs.payincus.com/plugin-market/index.json
+PLUGIN_MARKET_INDEX_URL=https://payincus.com/plugin-market/index.json
 ```
 
 文档站负责：
@@ -147,8 +147,8 @@ PLUGIN_MARKET_INDEX_URL=https://docs.payincus.com/plugin-market/index.json
       "name": "AI 工单助手",
       "latest": "1.0.0",
       "repo": "payincus/plugins",
-      "manifestUrl": "https://docs.payincus.com/plugin-market/manifests/com.payincus.ai-ticket-agent/1.0.0.json",
-      "downloadUrl": "https://docs.payincus.com/plugin-market/packages/com.payincus.ai-ticket-agent/1.0.0/plugin.tar.gz",
+      "manifestUrl": "https://payincus.com/plugin-market/manifests/com.payincus.ai-ticket-agent/1.0.0.json",
+      "downloadUrl": "https://payincus.com/plugin-market/packages/com.payincus.ai-ticket-agent/1.0.0/plugin.tar.gz",
       "sha256": "64-character-sha256",
       "reviewStatus": "listed",
       "trustLevel": "official",

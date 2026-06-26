@@ -107,7 +107,7 @@ function getTrustedThemeMarketHosts(): Set<string> {
       'github.com',
       'objects.githubusercontent.com',
       'raw.githubusercontent.com',
-      'docs.payincus.com',
+      'payincus.com',
       'payincus.github.io'
     ].concat(
       (process.env.THEME_MARKET_TRUSTED_HOSTS || process.env.PLUGIN_MARKET_TRUSTED_HOSTS || '')
@@ -136,13 +136,13 @@ function assertTrustedThemeMarketUrl(input: string, purpose: 'index' | 'download
 
   if (host === 'objects.githubusercontent.com') return url
 
-  if ((host === 'docs.payincus.com' || host === 'payincus.github.io') && purpose === 'index') {
+  if ((host === 'payincus.com' || host === 'payincus.github.io') && purpose === 'index') {
     if (!url.pathname.endsWith('/theme-market/index.json')) {
       throw new Error('Stable theme market index must use /theme-market/index.json')
     }
   }
 
-  if ((host === 'docs.payincus.com' || host === 'payincus.github.io') && purpose === 'download') {
+  if ((host === 'payincus.com' || host === 'payincus.github.io') && purpose === 'download') {
     if (!url.pathname.startsWith('/theme-market/packages/') && !url.pathname.startsWith('/theme-market/manifests/')) {
       throw new Error('Stable theme market assets must be under /theme-market/packages or /theme-market/manifests')
     }

@@ -281,10 +281,10 @@ https://admin.example.com/admin/plugins
 
 ```env
 PLUGIN_MANAGER_ALLOWED_ADMIN_IDS=1
-PLUGIN_MARKET_INDEX_URL=https://docs.payincus.com/plugin-market/index.json
-PLUGIN_MARKET_TRUSTED_HOSTS=docs.payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
+PLUGIN_MARKET_INDEX_URL=https://payincus.com/plugin-market/index.json
+PLUGIN_MARKET_TRUSTED_HOSTS=payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
 PLUGIN_MARKET_PUBLISH_DIR=/opt/incudal/plugin-market
-PLUGIN_MARKET_PUBLIC_BASE_URL=https://docs.payincus.com/plugin-market
+PLUGIN_MARKET_PUBLIC_BASE_URL=https://payincus.com/plugin-market
 PLUGIN_WEBHOOK_SIGNING_SECRET=change_me_generate_with_openssl_rand_base64_48
 PLUGIN_WEBHOOK_TIMEOUT_MS=10000
 PLUGIN_INSTALL_DIR=/opt/incudal/plugins
@@ -293,10 +293,10 @@ PLUGIN_LOG_DIR=/opt/incudal/plugin-logs
 PLUGIN_STAGING_DIR=/opt/incudal/plugin-staging
 PLUGIN_MAX_PACKAGE_SIZE_MB=20
 THEME_MANAGER_ALLOWED_ADMIN_IDS=1
-THEME_MARKET_INDEX_URL=https://docs.payincus.com/theme-market/index.json
-THEME_MARKET_TRUSTED_HOSTS=docs.payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
+THEME_MARKET_INDEX_URL=https://payincus.com/theme-market/index.json
+THEME_MARKET_TRUSTED_HOSTS=payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
 THEME_MARKET_PUBLISH_DIR=/opt/incudal/theme-market
-THEME_MARKET_PUBLIC_BASE_URL=https://docs.payincus.com/theme-market
+THEME_MARKET_PUBLIC_BASE_URL=https://payincus.com/theme-market
 THEME_INSTALL_DIR=/opt/incudal/themes
 THEME_STAGING_DIR=/opt/incudal/theme-staging
 THEME_MAX_PACKAGE_SIZE_MB=10

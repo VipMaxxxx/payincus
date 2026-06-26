@@ -53,7 +53,7 @@ function getThemeMarketPublishDir(): string {
 }
 
 function getThemeMarketPublicBaseUrl(): string {
-  return (process.env.THEME_MARKET_PUBLIC_BASE_URL || 'https://docs.payincus.com/theme-market').replace(/\/+$/, '')
+  return (process.env.THEME_MARKET_PUBLIC_BASE_URL || 'https://payincus.com/theme-market').replace(/\/+$/, '')
 }
 
 function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.themeMarketSubmission.findMany>>[number]): ThemeMarketEntry {

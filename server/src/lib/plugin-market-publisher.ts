@@ -78,7 +78,7 @@ function getPluginMarketPublishDir(): string {
 }
 
 function getPluginMarketPublicBaseUrl(): string {
-  return (process.env.PLUGIN_MARKET_PUBLIC_BASE_URL || 'https://docs.payincus.com/plugin-market').replace(/\/+$/, '')
+  return (process.env.PLUGIN_MARKET_PUBLIC_BASE_URL || 'https://payincus.com/plugin-market').replace(/\/+$/, '')
 }
 
 function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.pluginMarketSubmission.findMany>>[number]): PluginMarketEntry {

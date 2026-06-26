@@ -21,7 +21,7 @@ assert.ok(
   market.includes('PLUGIN_MARKET_INDEX_URL') &&
     market.includes('PLUGIN_MARKET_TRUSTED_HOSTS') &&
     market.includes('getTrustedMarketHosts') &&
-    market.includes('docs.payincus.com') &&
+    market.includes('payincus.com') &&
     market.includes('/plugin-market/index.json') &&
     market.includes('assertGitHubIndexUrl') &&
     market.includes('raw.githubusercontent.com') &&
@@ -43,8 +43,8 @@ assert.ok(
 )
 
 assert.ok(
-  envExample.includes('PLUGIN_MARKET_INDEX_URL=https://docs.payincus.com/plugin-market/index.json') &&
-    envExample.includes('PLUGIN_MARKET_TRUSTED_HOSTS=docs.payincus.com') &&
+  envExample.includes('PLUGIN_MARKET_INDEX_URL=https://payincus.com/plugin-market/index.json') &&
+    envExample.includes('PLUGIN_MARKET_TRUSTED_HOSTS=payincus.com') &&
     envExample.includes('PLUGIN_INSTALL_DIR=/opt/incudal/plugins') &&
     envExample.includes('PLUGIN_MAX_PACKAGE_SIZE_MB=20'),
   'stable extension market and install settings must be documented in env example'

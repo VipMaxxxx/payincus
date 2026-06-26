@@ -3,7 +3,7 @@
 PayIncus 扩展市场是扩展中心的稳定在线目录。后台扩展中心应固定读取机器可读索引：
 
 ```text
-https://docs.payincus.com/plugin-market/index.json
+https://payincus.com/plugin-market/index.json
 ```
 
 这个地址不跟随 PayIncus Release 版本变化。PayIncus 升级、回滚或 OTA 后，后台仍读取同一个在线目录。

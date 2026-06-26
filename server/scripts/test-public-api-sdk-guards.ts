@@ -275,13 +275,13 @@ assert.ok(
 
 assert.ok(
     sdkDocs.includes('# Public API SDK') &&
-    sdkDocs.includes('https://docs.payincus.com/sdk/payincus-public-api.ts') &&
-    sdkDocs.includes('https://docs.payincus.com/sdk/examples/service-power-task.ts') &&
-    sdkDocs.includes('https://docs.payincus.com/sdk/examples/service-renew.ts') &&
-    sdkDocs.includes('https://docs.payincus.com/sdk/examples/flash-sale-action.ts') &&
-    sdkDocs.includes('https://docs.payincus.com/sdk/examples/balance-adjustment-request.ts') &&
-    sdkDocs.includes('https://docs.payincus.com/sdk/examples/billing-records.ts') &&
-    sdkDocs.includes('https://docs.payincus.com/sdk/examples/oauth-authorization-code.ts') &&
+    sdkDocs.includes('https://payincus.com/sdk/payincus-public-api.ts') &&
+    sdkDocs.includes('https://payincus.com/sdk/examples/service-power-task.ts') &&
+    sdkDocs.includes('https://payincus.com/sdk/examples/service-renew.ts') &&
+    sdkDocs.includes('https://payincus.com/sdk/examples/flash-sale-action.ts') &&
+    sdkDocs.includes('https://payincus.com/sdk/examples/balance-adjustment-request.ts') &&
+    sdkDocs.includes('https://payincus.com/sdk/examples/billing-records.ts') &&
+    sdkDocs.includes('https://payincus.com/sdk/examples/oauth-authorization-code.ts') &&
     sdkDocs.includes('PayIncusPublicApiClient') &&
     sdkDocs.includes('listOAuthScopes()') &&
     sdkDocs.includes('GET /api/oauth-provider/scopes') &&
@@ -361,16 +361,16 @@ assert.ok(
 )
 
 assert.ok(
-  developmentDocs.includes('GET https://docs.payincus.com/sdk/payincus-public-api.ts') &&
+  developmentDocs.includes('GET https://payincus.com/sdk/payincus-public-api.ts') &&
     developmentDocs.includes('GET /api/oauth-provider/scopes') &&
     developmentDocs.includes('scopeMetadata') &&
-    developmentDocs.includes('GET https://docs.payincus.com/sdk/examples/service-power-task.ts') &&
-    developmentDocs.includes('GET https://docs.payincus.com/sdk/examples/service-renew.ts') &&
-    developmentDocs.includes('GET https://docs.payincus.com/sdk/examples/flash-sale-action.ts') &&
-    developmentDocs.includes('GET https://docs.payincus.com/sdk/examples/balance-adjustment-request.ts') &&
-    developmentDocs.includes('GET https://docs.payincus.com/sdk/examples/billing-records.ts') &&
-    developmentDocs.includes('GET https://docs.payincus.com/sdk/examples/oauth-authorization-code.ts') &&
-    developmentDocs.includes('https://docs.payincus.com/plugins/sdk') &&
+    developmentDocs.includes('GET https://payincus.com/sdk/examples/service-power-task.ts') &&
+    developmentDocs.includes('GET https://payincus.com/sdk/examples/service-renew.ts') &&
+    developmentDocs.includes('GET https://payincus.com/sdk/examples/flash-sale-action.ts') &&
+    developmentDocs.includes('GET https://payincus.com/sdk/examples/balance-adjustment-request.ts') &&
+    developmentDocs.includes('GET https://payincus.com/sdk/examples/billing-records.ts') &&
+    developmentDocs.includes('GET https://payincus.com/sdk/examples/oauth-authorization-code.ts') &&
+    developmentDocs.includes('https://payincus.com/plugins/sdk') &&
     platformPlan.includes('Public API TypeScript SDK 和示例首版') &&
     platformPlan.includes('scope 元数据目录') &&
     platformPlan.includes('sdk/payincus-public-api.ts') &&
