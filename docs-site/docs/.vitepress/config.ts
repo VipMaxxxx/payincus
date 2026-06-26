@@ -288,7 +288,7 @@ const enDevelopmentSidebar = [
     items: [
       { text: 'Extensions', link: '/en/plugins/overview' },
       { text: 'Configuration', link: '/en/plugins/development#configuration' },
-      { text: 'Event list', link: '/en/plugins/manifest#current-capability-manifest' },
+      { text: 'Event list', link: '/en/plugins/development#business-events' },
       { text: 'Manifest', link: '/en/plugins/manifest' },
       { text: 'Marketplace', link: '/en/plugins/market' },
       { text: 'SDK', link: '/en/plugins/sdk' }
@@ -297,16 +297,16 @@ const enDevelopmentSidebar = [
   {
     text: 'Types of Extensions',
     items: [
-      { text: 'Server Extension', link: '/en/plugins/manifest#current-capability-manifest' },
-      { text: 'Gateway Extension', link: '/en/plugins/manifest#current-capability-manifest' },
-      { text: 'Webhook Action', link: '/en/plugins/manifest#current-capability-manifest' },
-      { text: 'Storage', link: '/en/plugins/manifest#current-capability-manifest' }
+      { text: 'Server Extension', link: '/en/plugins/development#service-extension-types' },
+      { text: 'Gateway Extension', link: '/en/plugins/development#gateway-extension-types' },
+      { text: 'Webhook Action', link: '/en/plugins/development#webhook-action-runtime' },
+      { text: 'Storage', link: '/en/plugins/development#extension-kv-storage' }
     ]
   },
   {
     text: 'Themes',
     items: [
-      { text: 'Create a Theme', link: '/en/plugins/templates' },
+      { text: 'Create a Theme', link: '/en/plugins/development#theme-development-standard' },
       { text: 'Theme Manifest', link: '/en/plugins/manifest#theme-manifest' },
       { text: 'Theme Templates', link: '/en/plugins/templates' }
     ]
@@ -314,7 +314,7 @@ const enDevelopmentSidebar = [
   {
     text: 'OAuth',
     items: [
-      { text: 'OAuth Provider', link: '/en/plugins/overview#oauth-provider' },
+      { text: 'OAuth Provider', link: '/en/plugins/development#oauth-provider' },
       { text: 'API Reference', link: '/en/api/overview' },
       { text: 'Public API SDK', link: '/en/plugins/sdk' }
     ]

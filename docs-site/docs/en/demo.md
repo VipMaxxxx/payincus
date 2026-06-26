@@ -20,4 +20,4 @@ The demo environment is for quickly trying the PayIncus user portal and admin co
 
 - Demo domains are public trial entrypoints.
 - `panel.example.com` and `admin.example.com` are placeholder domains in the docs and must be replaced with your own domains.
-- Production requires your own database, Redis, Incus hosts, Agent, payment providers, SMTP, object storage and notification channels.
+- Production requires your own PostgreSQL database, the Redis service kept by the installer, Incus hosts, Agent, payment providers, SMTP, object storage and notification channels.

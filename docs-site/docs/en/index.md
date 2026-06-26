@@ -1,6 +1,6 @@
 ---
 layout: home
-title: Extension Center
+title: PayIncus
 
 hero:
   name: PayIncus
@@ -63,7 +63,7 @@ features:
     <div class="payincus-links">
       <a class="payincus-link" href="/en/plugins/overview"><strong>Extensions</strong> Capabilities and security boundaries</a>
       <a class="payincus-link" href="/en/plugins/market"><strong>Marketplace</strong> Stable online market directory</a>
-      <a class="payincus-link" href="/en/plugins/overview"><strong>Extension Development</strong> [Extension Development](/en/plugins/overview): Extension Center</a>
+      <a class="payincus-link" href="/en/plugins/development"><strong>Extension Development</strong> Development guide, manifest, events, actions, storage, and themes</a>
     </div>
   </div>
   <div class="payincus-code-panel">

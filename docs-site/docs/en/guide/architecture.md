@@ -14,7 +14,8 @@ Admin browser
   -> /api and /api/ws proxy to backend
 
 Backend API
-  -> PostgreSQL / Redis / Incus hosts / Agent
+  -> PostgreSQL / Incus hosts / Agent
+  -> Redis service is kept by the installer for deployment compatibility and future distributed state
 ```
 
 ## Frontend Entries
@@ -44,7 +45,8 @@ VITE_API_BASE_URL=/api
 ## Data and Integration
 
 - PostgreSQL stores accounts, instances, billing, configuration and audit data.
-- Redis is used for runtime state where configured.
+- Backend workers process instance tasks, restore tasks, backup uploads, notification email tasks and extension events. Recoverable queue state is stored in PostgreSQL.
+- The one-click installer still installs and protects `redis-server`, writes `REDIS_URL`, and the systemd templates wait for the Redis service. The current core business state does not depend on a Redis client for persistence; Redis is reserved for deployment compatibility and future distributed cache, session or short-lived token expansion.
 - Incus hosts provide LXC / KVM resources.
 - Agent reports host resource usage and instance state.
 - SMTP, Telegram and Lsky handle delivery and communication workflows.

@@ -14,7 +14,7 @@ Developers can understand the architecture, deployment model, core features, Ext
 | --- | --- |
 | Product scope | Incus NAT VPS sales, delivery, billing, admin operations, Agent reporting and OTA |
 | Deployment | One-click install, manual install, Nginx split deployment, systemd, environment variables and production checklist |
-| Architecture | User frontend, admin frontend, backend, database, Redis, Incus, Agent and static asset boundaries |
+| Architecture | User frontend, admin frontend, backend, PostgreSQL, reserved Redis service, Incus, Agent and static asset boundaries |
 | Access boundaries | User/admin split, backend authorization, build artifact checks and production proof rules |
 | User portal | Dashboard, services, orders, wallet, tickets, notifications and self-service overview |
 | Admin console | Users, products, hosts, images, billing, payments, notifications, logs, OTA and operations overview |

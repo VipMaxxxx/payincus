@@ -1,6 +1,6 @@
 ---
 layout: home
-title: 扩展中心
+title: PayIncus
 
 hero:
   name: PayIncus
@@ -63,7 +63,7 @@ features:
     <div class="payincus-links">
       <a class="payincus-link" href="/plugins/overview"><strong>扩展总览</strong> 扩展中心能力和安全边界</a>
       <a class="payincus-link" href="/plugins/market"><strong>扩展市场</strong> 稳定在线市场目录</a>
-      <a class="payincus-link" href="/plugins/overview"><strong>扩展开发</strong> [扩展开发](/plugins/overview)：扩展中心</a>
+      <a class="payincus-link" href="/plugins/development"><strong>扩展开发</strong> 开发指南、Manifest、事件、Action、存储和主题系统</a>
     </div>
   </div>
   <div class="payincus-code-panel">

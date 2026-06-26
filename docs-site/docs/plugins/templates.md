@@ -19,7 +19,7 @@ tar -czf coupon-plugin.tar.gz payincus.plugin.json README.md dist templates docs
 
 然后在后台「扩展中心」上传 `.tar.gz` 安装并启用。
 
-`plugin-templates/basic-admin-plugin` 同时演示 `admin.plugins.settings`、`admin.sidebar.extra` 和 `admin.dashboard.widgets`：设置页出现在扩展中心，侧边栏入口会打开受保护的后台扩展页面，dashboard widget 会嵌入后台统计页。
+`plugin-templates/basic-admin-plugin` 同时演示 `admin.plugins.settings`、`admin.sidebar.extra` 和 `admin.dashboard.widgets`：设置页会出现在后台左侧菜单的扩展设置入口，侧边栏入口会打开受保护的后台扩展页面，dashboard widget 会嵌入后台统计页。
 
 `plugin-templates/admin-user-mixed-plugin` 同时演示 `user.sidebar.extra` 和 `user.dashboard.cards`：前者出现在用户端侧边栏，后者嵌入用户端仪表盘。
 
