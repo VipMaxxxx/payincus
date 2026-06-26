@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `4db8d45`
+- Current HEAD / 当前 HEAD: `f754493`
 - Commit date / 提交日期: 2026-06-26
-- Commit subject / 提交说明: Add operations settings center
-- Latest tag / 最新 tag: `v0.6.11`
+- Commit subject / 提交说明: Fix admin gift card generation Turnstile gate
+- Latest tag / 最新 tag: `v0.6.12`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.12
+
+- Release commit / 发布提交: `f754493`
+- Commit date / 提交日期: 2026-06-26
+- Commit subject / 提交说明: Fix admin gift card generation Turnstile gate
+
+### Fixes and Stability / 修复与稳定性
+
+- Fix admin gift card generation Turnstile gate `f754493`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.6.11 production OTA `fb9dc40`
+- Update version log for v0.6.11 `63879fc`
 
 ## v0.6.11
 

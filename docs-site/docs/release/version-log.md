@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `4db8d45`
+- 当前 HEAD / Current HEAD: `f754493`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Add operations settings center
-- 最新 tag / Latest tag: `v0.6.11`
+- 提交说明 / Commit subject: Fix admin gift card generation Turnstile gate
+- 最新 tag / Latest tag: `v0.6.12`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.12
+
+- 发布提交 / Release commit: `f754493`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Fix admin gift card generation Turnstile gate
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix admin gift card generation Turnstile gate `f754493`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after v0.6.11 production OTA `fb9dc40`
+- Update version log for v0.6.11 `63879fc`
 
 ## v0.6.11
 
