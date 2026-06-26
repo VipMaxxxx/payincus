@@ -6,18 +6,28 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `12420a5`
+- 当前 HEAD / Current HEAD: `809db50`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Update version log for v0.6.7
-- 最新 tag / Latest tag: `v0.6.7`
+- 提交说明 / Commit subject: Fix extension platform release guards
+- 最新 tag / Latest tag: `v0.6.8`
 
 ## 未发布变更 / Unreleased Changes
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.6.7 `12420a5`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.8
+
+- 发布提交 / Release commit: `809db50`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Fix extension platform release guards
+
+- Keep plugin market review APIs in the admin API client
+
+- Preserve user/admin SideNav build-time route separation
+
+- Add frontend route guard to extension platform verification
 
 ## v0.6.7
 

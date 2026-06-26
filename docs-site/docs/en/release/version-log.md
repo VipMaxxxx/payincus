@@ -6,18 +6,28 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `12420a5`
+- Current HEAD / 当前 HEAD: `809db50`
 - Commit date / 提交日期: 2026-06-26
-- Commit subject / 提交说明: Update version log for v0.6.7
-- Latest tag / 最新 tag: `v0.6.7`
+- Commit subject / 提交说明: Fix extension platform release guards
+- Latest tag / 最新 tag: `v0.6.8`
 
 ## Unreleased Changes / 未发布变更
 
-### Improvements and Adjustments / 改进与调整
-
-- Update version log for v0.6.7 `12420a5`
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.8
+
+- Release commit / 发布提交: `809db50`
+- Commit date / 提交日期: 2026-06-26
+- Commit subject / 提交说明: Fix extension platform release guards
+
+- Keep plugin market review APIs in the admin API client
+
+- Preserve user/admin SideNav build-time route separation
+
+- Add frontend route guard to extension platform verification
 
 ## v0.6.7
 
