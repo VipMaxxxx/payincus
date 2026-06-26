@@ -33,8 +33,8 @@ features:
     details: The host Agent reports heartbeat, resources, instance status, traffic and binary release metadata.
   - title: Production checks
     details: Includes split host verification, production preflight, security header checks and live acceptance gates.
-  - title: Plugin Center
-    details: Supports upload installs, GitHub market installs, enablement, user extension slots and templates.
+  - title: Extension Center
+    details: Supports upload installs, online extension market installs, enablement, user extension slots and templates.
 ---
 
 ## Quick Links
@@ -69,7 +69,7 @@ features:
 
 - [User Portal](/en/user/dashboard): dashboard, instances, terminal, wallet, invites, tickets, notifications and self-service modules.
 - [Admin Console](/en/admin/overview): users, instances, billing, payments, notifications, system settings and OTA.
-- [Plugin Development](/en/plugins/overview): plugin center, manifest, admin and user slots, templates and third-party workflow.
+- [Extension Development](/en/plugins/overview): Extension Center, manifest, admin and user slots, templates and third-party workflow.
 - [Instances and Delivery](/en/features/instances): the full path from order, billing and Incus creation to Agent reporting.
 - [Billing and Payments](/en/features/billing): recharge, callbacks, balance, affiliate rewards, redeem codes and audit.
 - [Communication](/en/features/communication): inbox, SMTP, Telegram, Lsky, tickets and help center.

@@ -177,13 +177,19 @@ const routes: RouteRecordRaw[] = [
     path: '/admin/plugins',
     name: 'admin-plugins',
     component: () => import('@/views/admin/PluginCenterView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.plugins', title: '插件中心' }
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.plugins', title: '扩展中心' }
   },
   {
     path: '/admin/plugins/:pluginId/settings',
     name: 'admin-plugin-settings',
     component: () => import('@/views/admin/PluginSettingsView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '插件设置' }
+    meta: { requiresAuth: true, requiresAdmin: true, title: '扩展设置' }
+  },
+  {
+    path: '/admin/plugins/:pluginId/pages/:pathMatch(.*)*',
+    name: 'admin-plugin-page',
+    component: () => import('@/views/admin/AdminPluginPageView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '扩展页面' }
   },
   {
     path: '/admin/delivery',

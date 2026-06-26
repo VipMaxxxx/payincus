@@ -13,6 +13,10 @@ import { getIncusClient, patchInstanceResources } from '../lib/incus/index.js'
 import { sendRenewSuccessEmail } from '../lib/mailer.js'
 import { calculateDailyPrice } from '../lib/billing-calc.js'
 import type { BillingRecordType } from '@prisma/client'
+import {
+  dispatchPluginServiceExtension,
+  listEnabledServiceExtensionTargets
+} from '../lib/plugin-extension-dispatch.js'
 
 interface BatchRenewPreviewItem {
   id: number
@@ -76,6 +80,58 @@ function normalizeBillingRecordType(value: string | undefined): BillingRecordTyp
 function parsePositiveIntegerInput(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) return null
   return value
+}
+
+async function dispatchInstanceUpgradeServiceExtensions(input: {
+  instanceId: number
+  userId: number
+  username: string
+  instanceName: string
+  hostId: number
+  incusId: string
+  productId: string | null
+  oldPlan: { id: number; name: string; price?: unknown; billingCycle?: number | null } | null
+  newPlan: { id: number; name: string; price?: unknown; billingCycle?: number | null; cpu?: number; memory?: number; disk?: number }
+  priceDiff: number
+  refundAmount: number
+  incusSyncSuccess: boolean
+  incusSyncError: string | null
+}): Promise<void> {
+  const targets = await listEnabledServiceExtensionTargets('upgrade', input.productId)
+  if (targets.length === 0) return
+
+  const payload = {
+    lifecycleEvent: 'service.upgraded',
+    instanceId: input.instanceId,
+    userId: input.userId,
+    hostId: input.hostId,
+    instanceName: input.instanceName,
+    incusId: input.incusId,
+    productId: input.productId,
+    source: 'instance.change_plan',
+    oldPlan: input.oldPlan,
+    newPlan: input.newPlan,
+    priceDiff: input.priceDiff,
+    refundAmount: input.refundAmount,
+    incusSyncSuccess: input.incusSyncSuccess,
+    incusSyncError: input.incusSyncError,
+    occurredAt: new Date().toISOString()
+  }
+
+  for (const target of targets) {
+    try {
+      await dispatchPluginServiceExtension({
+        pluginId: target.pluginId,
+        hook: 'upgrade',
+        serviceExtensionKey: target.serviceExtensionKey,
+        payload,
+        idempotencyKey: `service-lifecycle:service.upgraded:${input.instanceId}:instance.change_plan:${target.pluginId}:${target.serviceExtensionKey}`,
+        actor: { id: input.userId, role: 'user', username: input.username }
+      })
+    } catch {
+      // dispatchPluginServiceExtension records the failed plugin event; billing and resource changes are not rolled back here.
+    }
+  }
 }
 
 async function buildBatchRenewPreviewItem(userId: number, instanceId: number): Promise<BatchRenewPreviewItem> {
@@ -952,6 +1008,38 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
         'success',
         { instanceId }
       )
+
+      void dispatchInstanceUpgradeServiceExtensions({
+        instanceId,
+        userId: user.id,
+        username: user.username,
+        instanceName: instance.name,
+        hostId: instance.hostId,
+        incusId: instance.incusId,
+        productId: instance.packageId ? String(instance.packageId) : null,
+        oldPlan: oldPlan ? {
+          id: oldPlan.id,
+          name: oldPlan.name,
+          price: oldPlan.price,
+          billingCycle: oldPlan.billingCycle
+        } : null,
+        newPlan: {
+          id: newPlan.id,
+          name: newPlan.name,
+          price: newPlan.price,
+          billingCycle: newPlan.billingCycle,
+          cpu: newPlan.cpu,
+          memory: newPlan.memory,
+          disk: newPlan.disk
+        },
+        priceDiff: result.priceDiff,
+        refundAmount: result.refundAmount ?? 0,
+        incusSyncSuccess,
+        incusSyncError
+      }).catch(error => {
+        const message = error instanceof Error ? error.message : String(error)
+        request.log.warn({ err: message, instanceId }, '实例升级服务扩展 lifecycle 派发失败')
+      })
 
       // 判断实例类型：KVM 需要重启，LXC 即时生效
       const instanceType = (instance.package as { instanceType?: string } | null)?.instanceType || 'container'

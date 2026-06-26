@@ -9,6 +9,7 @@ import { createInboxMessage } from '../db/inbox.js'
 import { prisma } from '../db/prisma.js'
 import { assertSafeWebhookUrl } from './outbound-security.js'
 import { sanitizeTokensInString } from './log-sanitizer.js'
+import { emitNotificationSentPluginEvent } from './plugin-business-events.js'
 
 // 重试配置
 const MAX_RETRIES = 3
@@ -88,6 +89,10 @@ type EventType =
   | 'aff_applied'
   // 托管节点价格调整
   | 'instance_renewal_price_updated'
+  // 公共 API 受控通知
+  | 'public_api_notification'
+  // 扩展开发者告警
+  | 'plugin_event_delivery_alert'
 
 interface EventData {
   instanceName?: string
@@ -123,6 +128,17 @@ interface EventData {
   quotaLimit?: number         // 配额上限
   // 时间相关
   createdAt?: string          // 创建时间
+  // 公共 API 受控通知
+  publicApiTitle?: string
+  publicApiMessage?: string
+  publicApiSource?: string
+  // 扩展事件投递告警
+  pluginEventPluginId?: string
+  pluginEventDeadLetterCount?: number
+  pluginEventDueRetryCount?: number
+  pluginEventRecentFailedCount?: number
+  pluginEventLatestEventName?: string
+  pluginEventLatestHandler?: string
   // 社交互动相关
   fromUsername?: string       // 来源用户名
   toUsername?: string         // 目标用户名
@@ -798,6 +814,29 @@ const EVENT_TEMPLATES: Record<EventType, EventTemplate> = {
       if (data.hostName) msg += `\n节点: ${data.hostName}`
       return msg
     }
+  },
+  public_api_notification: {
+    title: '📣 扩展通知',
+    message: (data) => {
+      const source = data.publicApiSource ? `\n来源: ${data.publicApiSource}` : ''
+      return `${data.publicApiTitle || '来自扩展的通知'}\n\n${data.publicApiMessage || ''}${source}`
+    }
+  },
+  plugin_event_delivery_alert: {
+    title: '⚠️ 扩展事件投递告警',
+    message: (data) => {
+      const lines = [
+        `扩展「${data.pluginEventPluginId || '-'}」存在事件投递异常。`,
+        `死信事件: ${data.pluginEventDeadLetterCount || 0}`,
+        `到期重试: ${data.pluginEventDueRetryCount || 0}`,
+        `近期待处理失败: ${data.pluginEventRecentFailedCount || 0}`
+      ]
+      if (data.pluginEventLatestEventName || data.pluginEventLatestHandler) {
+        lines.push(`最近事件: ${data.pluginEventLatestEventName || '-'} -> ${data.pluginEventLatestHandler || '-'}`)
+      }
+      lines.push('请在扩展中心查看事件健康、修复 webhook 后手动重放或等待自动重试。')
+      return lines.join('\n')
+    }
   }
 }
 
@@ -921,6 +960,7 @@ export async function sendNotification(
     const channels = await db.getEnabledChannelsByUserId(userId)
 
     if (channels.length === 0) {
+      emitNotificationSentPluginEvent({ userId, eventType, sent: 0, failed: 0, channelCount: 0 })
       return { sent: 0, failed: 0 }
     }
 
@@ -985,6 +1025,7 @@ export async function sendNotification(
       }
     }
 
+    emitNotificationSentPluginEvent({ userId, eventType, sent, failed, channelCount: channels.length })
     return { sent, failed }
   } catch (err) {
     console.error('[Notifier] sendNotification error:', err)

@@ -90,6 +90,14 @@ import vipBenefitRoutes from './routes/vip-benefits.js'
 import systemUpdateRoutes from './routes/system-update.js'
 import adminPluginRoutes from './routes/admin-plugins.js'
 import pluginRoutes from './routes/plugins.js'
+import adminThemeRoutes from './routes/admin-themes.js'
+import themeRoutes from './routes/themes.js'
+import pluginMarketSubmissionRoutes from './routes/plugin-market-submissions.js'
+import themeMarketSubmissionRoutes from './routes/theme-market-submissions.js'
+import apiTokenRoutes from './routes/api-tokens.js'
+import publicApiRoutes from './routes/public-api.js'
+import adminOAuthAppRoutes from './routes/admin-oauth-apps.js'
+import oauthProviderRoutes from './routes/oauth-provider.js'
 import orderRoutes from './routes/orders.js'
 import userLifecycleRoutes from './routes/user-lifecycle.js'
 
@@ -505,6 +513,14 @@ await fastify.register(vipBenefitRoutes)
 await fastify.register(systemUpdateRoutes, { prefix: '/api/admin/system-update' })
 await fastify.register(adminPluginRoutes, { prefix: '/api/admin/plugins' })
 await fastify.register(pluginRoutes, { prefix: '/api/plugins' })
+await fastify.register(adminThemeRoutes, { prefix: '/api/admin/themes' })
+await fastify.register(themeRoutes, { prefix: '/api/themes' })
+await fastify.register(pluginMarketSubmissionRoutes, { prefix: '/api/plugin-market-submissions' })
+await fastify.register(themeMarketSubmissionRoutes, { prefix: '/api/theme-market-submissions' })
+await fastify.register(apiTokenRoutes, { prefix: '/api/api-tokens' })
+await fastify.register(publicApiRoutes, { prefix: '/api/v1' })
+await fastify.register(adminOAuthAppRoutes, { prefix: '/api/admin/oauth-apps' })
+await fastify.register(oauthProviderRoutes, { prefix: '/api/oauth-provider' })
 await fastify.register(orderRoutes)
 await fastify.register(userLifecycleRoutes)
 
@@ -711,6 +727,14 @@ const start = async (): Promise<void> => {
     // 启动实例状态同步调度器
     const { startStatusScheduler } = await import('./services/status-scheduler.js')
     startStatusScheduler()
+
+    // 启动扩展事件重试调度器
+    const { startPluginEventRetryScheduler } = await import('./services/plugin-event-retry-scheduler.js')
+    startPluginEventRetryScheduler()
+
+    // 启动扩展存储定时归档调度器（默认关闭）
+    const { startPluginStorageBackupScheduler } = await import('./services/plugin-storage-backup-scheduler.js')
+    startPluginStorageBackupScheduler()
 
     // 启动实例操作任务调度器
     const { cleanupStaleTasks: cleanupStaleInstanceTasks, startInstanceTaskWorker } = await import('./workers/instanceTaskWorker.js')

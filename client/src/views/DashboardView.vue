@@ -12,6 +12,8 @@ import type { Instance, UserBalance, UserLifecycleOffer } from '@/types/api'
 import DistroIcon from '@/components/icons/DistroIcon.vue'
 import FlagIcon from '@/components/FlagIcon.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
+import PluginFrameSlot from '@/components/plugins/PluginFrameSlot.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { getRandomFunnyQuote } from '@/data/funnyQuotes'
 import { freeSiteCopy } from '@/utils/freeSiteFun'
 import { getVipBadgeInlineStyle, normalizeVipBadgeStyle, type VipBadgeStyle } from '@/utils/vipBadge'
@@ -461,6 +463,9 @@ function getInstanceRowClass(): string {
       </div>
     </div>
 
+    <ThemeTemplateSlot slot-name="user.dashboard.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+    <ThemeTemplateSlot slot-name="user.dashboard.cards" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+
     <!-- 总览面板 -->
     <div class="grid gap-4">
       <section class="dashboard-overview-card relative overflow-hidden rounded-lg border p-5 shadow-sm sm:p-6" :class="overviewShellClass">
@@ -646,6 +651,9 @@ function getInstanceRowClass(): string {
         </div>
       </section>
     </div>
+
+    <PluginFrameSlot slot-name="user.dashboard.cards" surface="user" frame-class="min-h-[220px]" />
+
     <!-- 实例列表 -->
     <div class="card overflow-hidden">
       <div 

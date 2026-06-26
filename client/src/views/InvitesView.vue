@@ -6,6 +6,7 @@ import type { InviteCostOption, UserInvite, UserInviteSummary } from '@/types/ap
 import { useToast } from '@/stores/toast'
 import { useThemeStore } from '@/stores/theme'
 import UserAvatar from '@/components/UserAvatar.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 
 defineOptions({ name: 'InvitesView' })
 
@@ -160,6 +161,8 @@ function nextPage(): void {
         返回概览
       </RouterLink>
     </div>
+
+    <ThemeTemplateSlot slot-name="user.invites.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
     <div v-if="loading" class="card p-6 animate-pulse">
       <div class="h-6 w-1/4 rounded bg-themed-secondary mb-5"></div>

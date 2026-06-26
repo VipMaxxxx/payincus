@@ -5,7 +5,7 @@ const zhNav = [
   { text: '在线 Demo', link: '/demo' },
   { text: '部署', link: '/deployment/one-click-install' },
   { text: '后台 OTA', link: '/guide/ota-update' },
-  { text: '插件', link: '/plugins/overview' },
+  { text: '扩展', link: '/plugins/overview' },
   { text: '版本日志', link: '/release/version-log' },
   { text: 'API', link: '/api/overview' },
   {
@@ -22,7 +22,7 @@ const enNav = [
   { text: 'Demo', link: '/en/demo' },
   { text: 'Deploy', link: '/en/deployment/one-click-install' },
   { text: 'Admin OTA', link: '/en/guide/ota-update' },
-  { text: 'Plugins', link: '/en/plugins/overview' },
+  { text: 'Extensions', link: '/en/plugins/overview' },
   { text: 'Version Log', link: '/en/release/version-log' },
   { text: 'API', link: '/en/api/overview' },
   {
@@ -71,13 +71,16 @@ const zhSidebar = [
     ]
   },
   {
-    text: '插件开发',
+    text: '扩展开发',
     items: [
-      { text: '插件中心', link: '/plugins/overview' },
+      { text: '扩展中心', link: '/plugins/overview' },
+      { text: '扩展中心方案', link: '/plugins/platform-plan' },
+      { text: '扩展市场', link: '/plugins/market' },
       { text: '开发指南', link: '/plugins/development' },
+      { text: 'Public API SDK', link: '/plugins/sdk' },
       { text: 'Manifest', link: '/plugins/manifest' },
       { text: '客户端扩展点', link: '/plugins/client-extensions' },
-      { text: '插件模板', link: '/plugins/templates' }
+      { text: '扩展模板', link: '/plugins/templates' }
     ]
   },
   {
@@ -127,13 +130,13 @@ const enSidebar = [
     ]
   },
   {
-    text: 'Plugin Development',
+    text: 'Extension Development',
     items: [
-      { text: 'Plugin Center', link: '/en/plugins/overview' },
+      { text: 'Extension Center', link: '/en/plugins/overview' },
       { text: 'Development Guide', link: '/en/plugins/development' },
       { text: 'Manifest', link: '/en/plugins/manifest' },
       { text: 'Client Extensions', link: '/en/plugins/client-extensions' },
-      { text: 'Plugin Templates', link: '/en/plugins/templates' }
+      { text: 'Extension Templates', link: '/en/plugins/templates' }
     ]
   },
   {

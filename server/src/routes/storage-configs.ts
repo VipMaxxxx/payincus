@@ -37,6 +37,7 @@ interface UpdateStorageConfigBody {
 }
 
 const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+type RemoteStorageType = 'WEBDAV' | 'FTP' | 'SFTP' | 'S3'
 
 function parsePositiveRouteId(value: string): number | null {
     if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
@@ -48,11 +49,7 @@ function parsePositiveRouteId(value: string): number | null {
 }
 
 export default async function storageConfigRoutes(fastify: FastifyInstance) {
-    async function validateStorageTarget(type: 'WEBDAV' | 'FTP' | 'SFTP' | 'S3', host: string): Promise<void> {
-        if (type === 'S3') {
-            return
-        }
-
+    async function validateStorageTarget(type: RemoteStorageType, host: string): Promise<void> {
         try {
             await assertSafeStorageTarget(type, host)
         } catch (error) {
@@ -61,6 +58,40 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
             }
             throw error
         }
+    }
+
+    function normalizeS3Extra(extra: Record<string, unknown> | null | undefined): Record<string, unknown> {
+        const bucket = typeof extra?.bucket === 'string' ? extra.bucket.trim() : ''
+        if (!bucket || bucket.length > 128 || !/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/i.test(bucket)) {
+            throw new Error('S3 bucket 配置无效')
+        }
+
+        const region = typeof extra?.region === 'string' && extra.region.trim() ? extra.region.trim() : 'auto'
+        if (region.length > 64) {
+            throw new Error('S3 region 配置过长')
+        }
+
+        return {
+            bucket,
+            region,
+            forcePathStyle: extra?.forcePathStyle === true
+        }
+    }
+
+    function normalizeStorageExtra(
+        type: RemoteStorageType,
+        extra: Record<string, unknown> | null | undefined,
+        username: string | null | undefined,
+        hasSecret: boolean
+    ): Record<string, unknown> | null | undefined {
+        if (type !== 'S3') return extra
+        if (!username?.trim()) {
+            throw new Error('S3 access key 不能为空')
+        }
+        if (!hasSecret) {
+            throw new Error('S3 secret key 不能为空')
+        }
+        return normalizeS3Extra(extra)
     }
 
     // 获取用户的存储配置列表
@@ -108,14 +139,11 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
     }, async (request: FastifyRequest<{ Body: CreateStorageConfigBody }>, reply: FastifyReply) => {
         const { name, type, host, port, username, password, basePath, extra, isDefault } = request.body
 
-        // S3 暂不支持
-        if (type === 'S3') {
-            return reply.code(400).send(apiError(ErrorCode.STORAGE_TYPE_NOT_SUPPORTED, 'S3 存储暂未实现'))
-        }
-
+        let normalizedExtra: Record<string, unknown> | null | undefined
         try {
             await validateStorageTarget(type, host)
             normalizeStorageBasePath(basePath)
+            normalizedExtra = normalizeStorageExtra(type, extra, username, Boolean(password))
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(err)
             return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, errorMessage))
@@ -135,7 +163,7 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
                 username,
                 password: encryptedPassword,
                 basePath: normalizedBasePath || null,
-                extra,
+                extra: normalizedExtra,
                 isDefault
             })
 
@@ -209,16 +237,18 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
 
         const { password, type, ...rest } = request.body
 
-        // S3 暂不支持
-        if (type === 'S3') {
-            return reply.code(400).send(apiError(ErrorCode.STORAGE_TYPE_NOT_SUPPORTED, 'S3 存储暂未实现'))
-        }
-
         let normalizedBasePathPatch: string | null | undefined
+        let normalizedExtraPatch: Record<string, unknown> | null | undefined
         try {
-            const nextType = (type || existing.type) as 'WEBDAV' | 'FTP' | 'SFTP' | 'S3'
+            const nextType = (type || existing.type) as RemoteStorageType
             const nextHost = request.body.host || existing.host
+            const nextExtra = request.body.extra !== undefined
+                ? request.body.extra
+                : existing.extra as Record<string, unknown> | null
+            const nextUsername = request.body.username !== undefined ? request.body.username : existing.username
+            const hasSecret = password !== undefined ? Boolean(password) : Boolean(existing.password)
             await validateStorageTarget(nextType, nextHost)
+            normalizedExtraPatch = normalizeStorageExtra(nextType, nextExtra, nextUsername, hasSecret) ?? null
             if (request.body.basePath !== undefined) {
                 normalizedBasePathPatch = request.body.basePath === null
                     ? null
@@ -239,6 +269,9 @@ export default async function storageConfigRoutes(fastify: FastifyInstance) {
             }
             if (normalizedBasePathPatch !== undefined) {
                 updateData.basePath = normalizedBasePathPatch
+            }
+            if (type === 'S3' || request.body.extra !== undefined || existing.type === 'S3') {
+                updateData.extra = normalizedExtraPatch
             }
 
             const config = await db.updateStorageConfig(id, updateData as Parameters<typeof db.updateStorageConfig>[1])

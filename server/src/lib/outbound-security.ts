@@ -155,13 +155,14 @@ export async function assertSafeHttpUrl(url: string, label = 'URL'): Promise<URL
 }
 
 export async function assertSafeStorageTarget(
-  type: 'WEBDAV' | 'FTP' | 'SFTP',
+  type: 'WEBDAV' | 'FTP' | 'SFTP' | 'S3',
   host: string
 ): Promise<void> {
-  const defaultProtocol: Record<'WEBDAV' | 'FTP' | 'SFTP', SupportedProtocol> = {
+  const defaultProtocol: Record<'WEBDAV' | 'FTP' | 'SFTP' | 'S3', SupportedProtocol> = {
     WEBDAV: 'https',
     FTP: 'ftp',
-    SFTP: 'sftp'
+    SFTP: 'sftp',
+    S3: 'https'
   }
 
   const parsed = buildUrl(host, defaultProtocol[type])

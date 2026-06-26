@@ -36,6 +36,7 @@ import TerminalModal from '@/components/instance/TerminalModal.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
 import InstanceBadgeModal from '@/components/instance/InstanceBadgeModal.vue'
 import AnnouncementIcon from '@/components/icons/AnnouncementIcon.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { getStatusInfo } from '@/utils/formatters'
 import { translateError } from '@/utils/errorHandler'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel, getFreeSiteBillingCycleShort } from '@/utils/freeSiteFun'
@@ -2824,6 +2825,43 @@ function formatShortDate(dateStr: string | null | undefined): string {
                 </p>
               </div>
             </div>
+
+            <div
+              v-if="instance.servicePanelExtensions?.length"
+              class="card p-4 sm:p-5"
+            >
+              <div class="flex flex-col gap-3">
+                <div>
+                  <h3
+                    class="text-sm font-semibold"
+                    :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
+                  >
+                    {{ $t('instance.servicePanelExtensionTitle') }}
+                  </h3>
+                  <p
+                    class="mt-1 text-sm leading-6"
+                    :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+                  >
+                    {{ $t('instance.servicePanelExtensionDescription') }}
+                  </p>
+                </div>
+                <div class="flex flex-wrap gap-1.5 text-[11px]">
+                  <span
+                    v-for="extension in instance.servicePanelExtensions"
+                    :key="`${extension.pluginId}:${extension.serviceExtensionKey}`"
+                    class="rounded-lg border px-2 py-0.5 font-medium"
+                    :class="themeStore.isDark ? 'border-gray-800 bg-gray-900 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'"
+                  >
+                    {{ extension.name }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <ThemeTemplateSlot
+              slot-name="user.instance.detail.extra"
+              container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface"
+            />
 
             <!-- Paid Subscription Card (only for paid instances) -->
             <div 

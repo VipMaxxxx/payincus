@@ -69,20 +69,29 @@ await assertThrowsOutbound(() => assertSafeHttpUrl('file:///etc/passwd'))
 await assertThrowsOutbound(() => assertSafeStorageTarget('FTP', '10.0.0.2'))
 await assertThrowsOutbound(() => assertSafeStorageTarget('SFTP', 'localhost'))
 await assertThrowsOutbound(() => assertSafeStorageTarget('WEBDAV', 'http://169.254.169.254'))
+await assertThrowsOutbound(() => assertSafeStorageTarget('S3', 'http://169.254.169.254'))
 
 const ftpSource = readFileSync(resolve(__dirname, '../src/storage/providers/FtpProvider.ts'), 'utf8')
 const sftpSource = readFileSync(resolve(__dirname, '../src/storage/providers/SftpProvider.ts'), 'utf8')
 const webdavSource = readFileSync(resolve(__dirname, '../src/storage/providers/WebDavProvider.ts'), 'utf8')
+const s3Source = readFileSync(resolve(__dirname, '../src/storage/providers/S3Provider.ts'), 'utf8')
+const factorySource = readFileSync(resolve(__dirname, '../src/storage/factory.ts'), 'utf8')
+const storageConfigRoutes = readFileSync(resolve(__dirname, '../src/routes/storage-configs.ts'), 'utf8')
 
 for (const [label, source] of [
   ['FTP', ftpSource],
   ['SFTP', sftpSource],
-  ['WebDAV', webdavSource]
+  ['WebDAV', webdavSource],
+  ['S3', s3Source]
 ] as const) {
   assert.ok(source.includes('assertSafeStorageTarget'), `${label} provider must validate outbound storage host`)
   assert.ok(source.includes('joinStorageRemotePath(this.basePath, filename)'), `${label} provider must validate remote filenames`)
   assert.ok(source.includes('joinStorageRemoteDirectory(this.basePath, path)'), `${label} provider must scope directory listing to configured base path`)
   assert.ok(source.includes('normalizeStorageBasePath(config.basePath)'), `${label} provider must normalize configured base path`)
 }
+
+assert.ok(factorySource.includes('new S3Provider'), 'storage factory must create S3 providers')
+assert.ok(storageConfigRoutes.includes('normalizeS3Extra'), 'storage routes must validate S3 bucket metadata')
+assert.ok(!storageConfigRoutes.includes('S3 存储暂未实现'), 'storage routes must not reject S3 configs as unimplemented')
 
 console.log('storage outbound guard tests passed')

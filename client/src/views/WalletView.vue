@@ -6,6 +6,7 @@ import api from '@/api'
 import { useToast } from '@/stores/toast'
 import { useThemeStore } from '@/stores/theme'
 import { useConfigStore } from '@/stores/config'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import TermsOfServiceModal from '@/components/TermsOfServiceModal.vue'
 import { freeSiteCopy } from '@/utils/freeSiteFun'
 
@@ -910,6 +911,8 @@ function formatAmount() {
 
 <template>
   <div class="animate-fade-in">
+    <ThemeTemplateSlot slot-name="user.wallet.banner" container-class="mb-5 overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+
     <!-- 顶部胶囊 Tabs -->
     <div class="mb-4 flex justify-center overflow-x-auto pb-1 sm:mb-5">
       <div

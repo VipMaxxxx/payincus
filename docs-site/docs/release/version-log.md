@@ -6,14 +6,17 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `9fcbe28`
+- 当前 HEAD / Current HEAD: `592f2be`
 - 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke
+- 提交说明 / Commit subject: Update handoff after v0.6.6 production OTA / 更新 v0.6.6 生产 OTA 交接
 - 最新 tag / Latest tag: `v0.6.6`
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after v0.6.6 production OTA / 更新 v0.6.6 生产 OTA 交接 `592f2be`
+- Update version log for v0.6.6 / 更新 v0.6.6 版本日志 `9590201`
 
 ## 历史版本 / Historical Versions
 

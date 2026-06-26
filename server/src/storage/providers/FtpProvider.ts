@@ -3,7 +3,7 @@
  */
 
 import * as ftp from 'basic-ftp'
-import { Readable } from 'stream'
+import { PassThrough, Readable } from 'stream'
 import type { IStorageProvider, StorageConfigData } from '../types.js'
 import { assertSafeStorageTarget } from '../../lib/outbound-security.js'
 import { joinStorageRemoteDirectory, joinStorageRemotePath, normalizeStorageBasePath } from '../path.js'
@@ -51,6 +51,17 @@ export class FtpProvider implements IStorageProvider {
         } finally {
             client.close()
         }
+    }
+
+    async downloadStream(filename: string): Promise<Readable> {
+        const client = await this.getClient()
+        const stream = new PassThrough()
+
+        void client.downloadTo(stream, joinStorageRemotePath(this.basePath, filename))
+            .catch(error => stream.destroy(error))
+            .finally(() => client.close())
+
+        return stream
     }
 
     async testConnection(): Promise<void> {

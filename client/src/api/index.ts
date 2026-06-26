@@ -76,7 +76,33 @@ import type {
   UserInvite,
   UserInviteSummary,
   UserLifecycleOffer,
-  PluginClientExtension
+  PluginClientExtension,
+  PluginUserData,
+  PluginStorageItem,
+  PluginStorageScope,
+  PluginStorageBackup,
+  PluginStorageRestoreResult,
+  PluginStorageRestoreDryRunResult,
+  PluginTableMigration,
+  PluginTableRow,
+  PublicApiScope,
+  PublicApiScopeMetadata,
+  PublicApiToken,
+  CreatePublicApiTokenRequest,
+  CreatePublicApiTokenResponse,
+  OAuthProviderConsentResponse,
+  OAuthProviderAuthorizeRequest,
+  OAuthProviderAuthorizeResponse,
+  OAuthProviderAuthorization,
+  PluginMarketSubmission,
+  DeveloperPluginEventHealth,
+  PluginEventAlertPreference,
+  PluginMarketSubmissionReviewStatus,
+  PluginMarketSubmissionUploadResult,
+  CreatePluginMarketSubmissionRequest,
+  UpdatePluginEventAlertPreferenceRequest,
+  ReviewPluginMarketSubmissionRequest,
+  ThemePackageRecord
 } from '@/types/api.js'
 
 export type VipRuleType = 'user' | 'hosting'
@@ -3725,10 +3751,98 @@ const api = {
   plugins: {
     getEnabledClientExtensions: (): Promise<{ extensions: PluginClientExtension[] }> =>
       http.get('/plugins/enabled-client-extensions'),
+    getEnabledAdminClientExtensions: (): Promise<{ extensions: PluginClientExtension[] }> =>
+      http.get('/plugins/enabled-admin-client-extensions'),
     getPublicConfig: (pluginId: string): Promise<{ config: Record<string, unknown> }> =>
       http.get(`/plugins/${pluginId}/config/public`),
+    getStorage: (pluginId: string, key: string): Promise<{ data: PluginUserData | null }> =>
+      http.get(`/plugins/${pluginId}/storage/${encodeURIComponent(key)}`),
+    setStorage: (pluginId: string, key: string, value: unknown): Promise<{ data: PluginUserData }> =>
+      http.put(`/plugins/${pluginId}/storage/${encodeURIComponent(key)}`, { value }),
+    deleteStorage: (pluginId: string, key: string): Promise<{ message: string }> =>
+      http.delete(`/plugins/${pluginId}/storage/${encodeURIComponent(key)}`),
+    getScopedStorage: (pluginId: string, scope: PluginStorageScope, key: string, scopeId?: string | number): Promise<{ data: PluginStorageItem | null }> =>
+      http.get(`/plugins/${pluginId}/scoped-storage/${scope}/${encodeURIComponent(key)}`, { params: scopeId ? { scopeId } : undefined }),
+    setScopedStorage: (pluginId: string, scope: PluginStorageScope, key: string, value: unknown, scopeId?: string | number): Promise<{ data: PluginStorageItem }> =>
+      http.put(`/plugins/${pluginId}/scoped-storage/${scope}/${encodeURIComponent(key)}`, { value }, { params: scopeId ? { scopeId } : undefined }),
+    deleteScopedStorage: (pluginId: string, scope: PluginStorageScope, key: string, scopeId?: string | number): Promise<{ message: string }> =>
+      http.delete(`/plugins/${pluginId}/scoped-storage/${scope}/${encodeURIComponent(key)}`, { params: scopeId ? { scopeId } : undefined }),
+    getTableRow: (pluginId: string, scope: PluginStorageScope, table: string, rowKey: string, scopeId?: string | number): Promise<{ data: PluginTableRow | null }> =>
+      http.get(`/plugins/${pluginId}/table-storage/${scope}/${encodeURIComponent(table)}/${encodeURIComponent(rowKey)}`, { params: scopeId ? { scopeId } : undefined }),
+    setTableRow: (pluginId: string, scope: PluginStorageScope, table: string, rowKey: string, value: unknown, scopeId?: string | number): Promise<{ data: PluginTableRow }> =>
+      http.put(`/plugins/${pluginId}/table-storage/${scope}/${encodeURIComponent(table)}/${encodeURIComponent(rowKey)}`, { value }, { params: scopeId ? { scopeId } : undefined }),
+    deleteTableRow: (pluginId: string, scope: PluginStorageScope, table: string, rowKey: string, scopeId?: string | number): Promise<{ message: string }> =>
+      http.delete(`/plugins/${pluginId}/table-storage/${scope}/${encodeURIComponent(table)}/${encodeURIComponent(rowKey)}`, { params: scopeId ? { scopeId } : undefined }),
+    listTableMigrations: (pluginId: string, table: string): Promise<{ data: PluginTableMigration[] }> =>
+      http.get(`/plugins/${pluginId}/table-storage/${encodeURIComponent(table)}/migrations`),
+    applyTableMigration: (pluginId: string, table: string, version: string): Promise<{ data: PluginTableMigration }> =>
+      http.post(`/plugins/${pluginId}/table-storage/${encodeURIComponent(table)}/migrations`, { version }),
+    exportStorageBackup: (pluginId: string): Promise<{ backup: PluginStorageBackup }> =>
+      http.get(`/plugins/${pluginId}/storage-backup`),
+    restoreStorageBackup: (pluginId: string, backup: PluginStorageBackup): Promise<{ restored: PluginStorageRestoreResult }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/restore`, { backup }),
+    validateStorageBackupRestore: (pluginId: string, backup: PluginStorageBackup): Promise<{ dryRun: PluginStorageRestoreDryRunResult }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/restore`, { backup }, { params: { dryRun: 'true' } }),
     runAction: (pluginId: string, action: string, payload?: Record<string, unknown>): Promise<unknown> =>
       http.post(`/plugins/${pluginId}/actions/${action}`, payload || {})
+  },
+
+  themes: {
+    getActive: (): Promise<{ theme: ThemePackageRecord | null }> =>
+      http.get('/themes/active')
+  },
+
+  apiTokens: {
+    list: (): Promise<{ scopes: readonly PublicApiScope[]; tokens: PublicApiToken[] }> =>
+      http.get('/api-tokens'),
+    create: (data: CreatePublicApiTokenRequest): Promise<CreatePublicApiTokenResponse> =>
+      http.post('/api-tokens', data),
+    revoke: (id: number): Promise<{ message: string }> =>
+      http.delete(`/api-tokens/${id}`)
+  },
+
+  oauthProvider: {
+    listScopes: (): Promise<{ scopes: PublicApiScopeMetadata[]; updatedAt: string }> =>
+      http.get('/oauth-provider/scopes'),
+    getConsent: (params: {
+      response_type?: string
+      client_id: string
+      redirect_uri: string
+      scope?: string
+      state?: string | null
+    }): Promise<OAuthProviderConsentResponse> =>
+      http.get('/oauth-provider/authorize/consent', { params }),
+    confirm: (data: OAuthProviderAuthorizeRequest): Promise<OAuthProviderAuthorizeResponse> =>
+      http.post('/oauth-provider/authorize/confirm', data),
+    listAuthorizations: (): Promise<{ authorizations: OAuthProviderAuthorization[] }> =>
+      http.get('/oauth-provider/authorizations'),
+    revokeAuthorization: (id: number): Promise<{ authorization: OAuthProviderAuthorization }> =>
+      http.delete(`/oauth-provider/authorizations/${id}`)
+  },
+
+  pluginMarketSubmissions: {
+    uploadPackage: (file: File): Promise<{ upload: PluginMarketSubmissionUploadResult }> => {
+      const form = new FormData()
+      form.append('package', file)
+      return http.post('/plugin-market-submissions/upload-package', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: TIMEOUT.LONG
+      })
+    },
+    create: (data: CreatePluginMarketSubmissionRequest): Promise<{ submission: PluginMarketSubmission }> =>
+      http.post('/plugin-market-submissions', data),
+    mine: (): Promise<{ submissions: PluginMarketSubmission[] }> =>
+      http.get('/plugin-market-submissions/mine'),
+    eventHealth: (): Promise<{ plugins: DeveloperPluginEventHealth[]; updatedAt: string }> =>
+      http.get('/plugin-market-submissions/mine/event-health'),
+    eventAlertPreferences: (): Promise<{ preferences: PluginEventAlertPreference[]; updatedAt: string }> =>
+      http.get('/plugin-market-submissions/mine/event-alert-preferences'),
+    updateEventAlertPreference: (pluginId: string, data: UpdatePluginEventAlertPreferenceRequest): Promise<{ preference: PluginEventAlertPreference }> =>
+      http.patch(`/plugin-market-submissions/mine/event-alert-preferences/${encodeURIComponent(pluginId)}`, data),
+    listForReview: (params?: { reviewStatus?: PluginMarketSubmissionReviewStatus; limit?: number }): Promise<{ submissions: PluginMarketSubmission[] }> =>
+      http.get('/plugin-market-submissions/admin', { params }),
+    review: (id: number, data: ReviewPluginMarketSubmissionRequest): Promise<{ submission: PluginMarketSubmission }> =>
+      http.patch(`/plugin-market-submissions/admin/${id}/review`, data)
   },
 
   orders: {

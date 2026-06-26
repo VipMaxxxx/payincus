@@ -3,10 +3,11 @@
  */
 
 import { prisma } from './prisma.js'
-import type { RechargeRecord, RechargeStatus } from '@prisma/client'
+import { Prisma, type BalanceLog, type PaymentProvider, type RechargeRecord, type RechargeRefundRequest, type RechargeStatus, type User } from '@prisma/client'
 import { nanoid } from 'nanoid'
 import { getTodayRange } from '../lib/timezone.js'
 import { USER_BALANCE_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
+import { emitPluginEvent } from '../lib/plugin-event-emitter.js'
 
 // ==================== 类型定义 ====================
 
@@ -44,9 +45,32 @@ export type CompleteRechargeResult = RechargeRecord & {
   completedNow: boolean
 }
 
+export type RechargeRefundRequestWithRelations = RechargeRefundRequest & {
+  rechargeRecord: RechargeRecord
+  provider: Pick<PaymentProvider, 'id' | 'name' | 'type'>
+  user: Pick<User, 'id' | 'username'>
+  requestedBy: Pick<User, 'id' | 'username'>
+  processedBy?: Pick<User, 'id' | 'username'> | null
+}
+
+export interface CreateRechargeRefundRequestInput {
+  rechargeRecordId: number
+  requestedByUserId: number
+  amount: number
+  reason: string
+}
+
+export interface ClaimRechargeRefundResult {
+  request: RechargeRefundRequestWithRelations
+  balanceLog?: BalanceLog
+  claimedNow: boolean
+}
+
 interface MoneySumRow {
   value: unknown
 }
+
+type RechargeDbClient = typeof prisma | Prisma.TransactionClient
 
 const RECHARGE_STATUSES = new Set<RechargeStatus>([
   'pending',
@@ -78,6 +102,49 @@ function clampPagination(
 
 function normalizeRechargeStatus(status: RechargeStatus | undefined): RechargeStatus | undefined {
   return status && RECHARGE_STATUSES.has(status) ? status : undefined
+}
+
+function normalizeRefundAmount(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error('退款金额无效')
+  }
+
+  const normalized = Number(value.toFixed(2))
+  if (normalized <= 0 || !/^\d+(\.\d{1,2})?$/.test(String(normalized))) {
+    throw new Error('退款金额无效')
+  }
+  return normalized
+}
+
+function getRechargeCreditAmount(record: Pick<RechargeRecord, 'amount' | 'actualAmount'>): number {
+  return Number(record.actualAmount ?? record.amount)
+}
+
+function includeRechargeRefundRelations() {
+  return {
+    rechargeRecord: true,
+    provider: { select: { id: true, name: true, type: true } },
+    user: { select: { id: true, username: true } },
+    requestedBy: { select: { id: true, username: true } },
+    processedBy: { select: { id: true, username: true } }
+  }
+}
+
+async function getRechargeRefundCommittedAmount(
+  tx: RechargeDbClient,
+  rechargeRecordId: number,
+  excludeRefundRequestId?: number,
+  statuses: Array<'pending' | 'processing' | 'completed'> = ['pending', 'processing', 'completed']
+): Promise<number> {
+  const aggregate = await tx.rechargeRefundRequest.aggregate({
+    where: {
+      rechargeRecordId,
+      status: { in: statuses },
+      ...(excludeRefundRequestId ? { id: { not: excludeRefundRequestId } } : {})
+    },
+    _sum: { amount: true }
+  })
+  return toMoney(aggregate._sum.amount)
 }
 
 // ==================== 订单号生成 ====================
@@ -220,7 +287,7 @@ export async function createRechargeOrder(input: CreateRechargeOrderInput): Prom
   const orderNo = input.orderNo || generateOrderNo()
   const expiredAt = input.expiredAt ?? new Date(Date.now() + 30 * 60 * 1000)
 
-  return prisma.rechargeRecord.create({
+  const record = await prisma.rechargeRecord.create({
     data: {
       userId: input.userId,
       providerId: input.providerId,
@@ -237,6 +304,24 @@ export async function createRechargeOrder(input: CreateRechargeOrderInput): Prom
       paymentDetails: input.paymentDetails as any
     }
   })
+
+  emitPluginEvent('order.created', {
+    dedupeKey: `order.created:recharge:${record.orderNo}`,
+    resource: 'recharge',
+    orderNo: record.orderNo,
+    rechargeId: record.id,
+    userId: record.userId,
+    providerId: record.providerId,
+    amount: Number(record.amount),
+    actualAmount: Number(record.actualAmount),
+    fee: Number(record.fee),
+    paymentMethod: record.paymentMethod,
+    status: record.status,
+    createdAt: record.createdAt.toISOString(),
+    expiredAt: record.expiredAt?.toISOString() ?? null
+  }, { id: record.userId, role: 'user' }, { dedupeKey: `order.created:recharge:${record.orderNo}` })
+
+  return record
 }
 
 // ==================== 更新操作 ====================
@@ -402,6 +487,24 @@ export async function completeRecharge(
     return { ...updatedRecord, completedNow: true }
   })
 
+  if (result.completedNow) {
+    emitPluginEvent('order.paid', {
+      dedupeKey: `order.paid:recharge:${result.orderNo}`,
+      resource: 'recharge',
+      orderNo: result.orderNo,
+      rechargeId: result.id,
+      userId: result.userId,
+      providerId: result.providerId,
+      amount: Number(result.amount),
+      actualAmount: Number(result.actualAmount),
+      fee: Number(result.fee),
+      tradeNo: result.tradeNo,
+      paymentMethod: result.paymentMethod,
+      status: result.status,
+      completedAt: result.completedAt?.toISOString() ?? null
+    }, { id: result.userId, role: 'user' }, { dedupeKey: `order.paid:recharge:${result.orderNo}` })
+  }
+
   return result
 }
 
@@ -414,7 +517,7 @@ export async function failRecharge(
   callbackData?: Record<string, unknown>,
   paymentDetails?: Record<string, unknown>
 ): Promise<RechargeRecord> {
-  await prisma.rechargeRecord.updateMany({
+  const updateResult = await prisma.rechargeRecord.updateMany({
     where: {
       orderNo,
       status: { in: ['pending', 'paid'] }
@@ -434,6 +537,23 @@ export async function failRecharge(
 
   if (!record) {
     throw new Error('订单不存在')
+  }
+
+  if (updateResult.count > 0) {
+    emitPluginEvent('payment.failed', {
+      dedupeKey: `payment.failed:recharge:${record.orderNo}`,
+      resource: 'recharge',
+      orderNo: record.orderNo,
+      rechargeId: record.id,
+      userId: record.userId,
+      providerId: record.providerId,
+      amount: Number(record.amount),
+      actualAmount: Number(record.actualAmount),
+      paymentMethod: record.paymentMethod,
+      status: record.status,
+      failReason: record.failReason,
+      callbackAt: record.callbackAt?.toISOString() ?? null
+    }, { id: record.userId, role: 'user' }, { dedupeKey: `payment.failed:recharge:${record.orderNo}` })
   }
 
   return record
@@ -473,6 +593,305 @@ export async function cancelRecharge(
   }
 
   return record
+}
+
+export async function getRechargeRefundRequestById(id: number): Promise<RechargeRefundRequestWithRelations | null> {
+  return prisma.rechargeRefundRequest.findUnique({
+    where: { id },
+    include: includeRechargeRefundRelations()
+  }) as Promise<RechargeRefundRequestWithRelations | null>
+}
+
+export async function createRechargeRefundRequest(
+  input: CreateRechargeRefundRequestInput
+): Promise<RechargeRefundRequestWithRelations> {
+  const amount = normalizeRefundAmount(input.amount)
+  const reason = input.reason.trim()
+  if (!reason) {
+    throw new Error('必须填写退款原因')
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const record = await tx.rechargeRecord.findUnique({
+      where: { id: input.rechargeRecordId }
+    })
+
+    if (!record) {
+      throw new Error('充值记录不存在')
+    }
+    if (record.status !== 'completed') {
+      throw new Error('仅已完成充值支持原路退款')
+    }
+
+    const creditAmount = getRechargeCreditAmount(record)
+    if (!Number.isFinite(creditAmount) || creditAmount <= 0) {
+      throw new Error('充值入账金额无效')
+    }
+
+    const committedAmount = await getRechargeRefundCommittedAmount(tx, record.id)
+    if (Number((committedAmount + amount).toFixed(2)) > Number(creditAmount.toFixed(2))) {
+      throw new Error('退款金额超过可退款余额')
+    }
+
+    return tx.rechargeRefundRequest.create({
+      data: {
+        rechargeRecordId: record.id,
+        userId: record.userId,
+        providerId: record.providerId,
+        requestedByUserId: input.requestedByUserId,
+        amount,
+        reason,
+        idempotencyKey: `recharge-refund:${record.orderNo}:${Date.now()}:${nanoid(8)}`
+      },
+      include: includeRechargeRefundRelations()
+    }) as Promise<RechargeRefundRequestWithRelations>
+  })
+}
+
+export async function claimRechargeRefundForProcessing(
+  refundRequestId: number,
+  processedByUserId: number
+): Promise<ClaimRechargeRefundResult> {
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.rechargeRefundRequest.findUnique({
+      where: { id: refundRequestId },
+      include: includeRechargeRefundRelations()
+    }) as RechargeRefundRequestWithRelations | null
+
+    if (!request) {
+      throw new Error('退款申请不存在')
+    }
+    if (request.status === 'completed') {
+      return { request, claimedNow: false }
+    }
+    if (request.status === 'processing') {
+      return { request, claimedNow: false }
+    }
+    if (request.status === 'cancelled') {
+      throw new Error('退款申请已取消')
+    }
+
+    const record = request.rechargeRecord
+    if (record.status !== 'completed') {
+      throw new Error('仅已完成充值支持原路退款')
+    }
+
+    const refundAmount = Number(request.amount)
+    const creditAmount = getRechargeCreditAmount(record)
+    const committedAmount = await getRechargeRefundCommittedAmount(tx, record.id, request.id)
+    if (Number((committedAmount + refundAmount).toFixed(2)) > Number(creditAmount.toFixed(2))) {
+      throw new Error('退款金额超过可退款余额')
+    }
+
+    await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, request.userId)
+    const user = await tx.user.findUnique({
+      where: { id: request.userId },
+      select: { balance: true }
+    })
+    if (!user) {
+      throw new Error('用户不存在')
+    }
+
+    const balanceBefore = Number(user.balance)
+    const balanceAfter = Number((balanceBefore - refundAmount).toFixed(2))
+    if (balanceAfter < 0) {
+      throw new Error('用户余额不足，无法执行原路退款预扣')
+    }
+
+    const updated = await tx.user.updateMany({
+      where: { id: request.userId, balance: { gte: refundAmount } },
+      data: { balance: { decrement: refundAmount } }
+    })
+    if (updated.count !== 1) {
+      throw new Error('用户余额不足或并发冲突，无法执行原路退款预扣')
+    }
+
+    const balanceLog = await tx.balanceLog.create({
+      data: {
+        userId: request.userId,
+        type: 'admin_adjust',
+        amount: -refundAmount,
+        balanceBefore,
+        balanceAfter,
+        orderId: record.orderNo,
+        remark: `[原路退款预扣] ${request.reason}`
+      }
+    })
+
+    const claimed = await tx.rechargeRefundRequest.updateMany({
+      where: { id: refundRequestId, status: request.status },
+      data: {
+        status: 'processing',
+        processedByUserId,
+        processedAt: new Date(),
+        failureReason: null
+      }
+    })
+    if (claimed.count !== 1) {
+      throw new Error('退款申请状态已变更')
+    }
+
+    const updatedRequest = await tx.rechargeRefundRequest.findUnique({
+      where: { id: refundRequestId },
+      include: includeRechargeRefundRelations()
+    })
+    if (!updatedRequest) {
+      throw new Error('退款申请不存在')
+    }
+
+    return {
+      request: updatedRequest as RechargeRefundRequestWithRelations,
+      balanceLog,
+      claimedNow: true
+    }
+  })
+}
+
+export async function markRechargeRefundProcessing(
+  refundRequestId: number,
+  data: {
+    providerRequestId?: string | null
+    providerRefundId?: string | null
+    providerStatus?: string | null
+    providerMessage?: string | null
+    providerMetadata?: Record<string, unknown> | null
+  }
+): Promise<RechargeRefundRequestWithRelations> {
+  const request = await prisma.rechargeRefundRequest.update({
+    where: { id: refundRequestId },
+    data: {
+      status: 'processing',
+      providerRequestId: data.providerRequestId,
+      providerRefundId: data.providerRefundId,
+      providerStatus: data.providerStatus,
+      providerMessage: data.providerMessage,
+      providerMetadata: data.providerMetadata as any
+    },
+    include: includeRechargeRefundRelations()
+  })
+
+  return request as RechargeRefundRequestWithRelations
+}
+
+export async function completeRechargeRefundRequest(
+  refundRequestId: number,
+  data: {
+    providerRequestId?: string | null
+    providerRefundId?: string | null
+    providerStatus?: string | null
+    providerMessage?: string | null
+    providerMetadata?: Record<string, unknown> | null
+  }
+): Promise<RechargeRefundRequestWithRelations> {
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.rechargeRefundRequest.findUnique({
+      where: { id: refundRequestId },
+      include: includeRechargeRefundRelations()
+    }) as RechargeRefundRequestWithRelations | null
+
+    if (!request) {
+      throw new Error('退款申请不存在')
+    }
+    if (request.status === 'completed') {
+      return request
+    }
+    if (request.status !== 'processing') {
+      throw new Error('退款申请未进入处理状态')
+    }
+
+    const updatedRequest = await tx.rechargeRefundRequest.update({
+      where: { id: refundRequestId },
+      data: {
+        status: 'completed',
+        providerRequestId: data.providerRequestId,
+        providerRefundId: data.providerRefundId,
+        providerStatus: data.providerStatus,
+        providerMessage: data.providerMessage,
+        providerMetadata: data.providerMetadata as any,
+        completedAt: new Date(),
+        failureReason: null
+      },
+      include: includeRechargeRefundRelations()
+    })
+
+    const completedAmount = await getRechargeRefundCommittedAmount(tx, request.rechargeRecordId, undefined, ['completed'])
+    const creditAmount = getRechargeCreditAmount(request.rechargeRecord)
+    if (completedAmount + 0.01 >= creditAmount) {
+      await tx.rechargeRecord.updateMany({
+        where: { id: request.rechargeRecordId, status: 'completed' },
+        data: { status: 'refunded' }
+      })
+    }
+
+    return updatedRequest as RechargeRefundRequestWithRelations
+  })
+}
+
+export async function failRechargeRefundRequest(
+  refundRequestId: number,
+  failureReason: string,
+  data: {
+    providerRequestId?: string | null
+    providerRefundId?: string | null
+    providerStatus?: string | null
+    providerMessage?: string | null
+    providerMetadata?: Record<string, unknown> | null
+  } = {}
+): Promise<RechargeRefundRequestWithRelations> {
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.rechargeRefundRequest.findUnique({
+      where: { id: refundRequestId },
+      include: includeRechargeRefundRelations()
+    }) as RechargeRefundRequestWithRelations | null
+
+    if (!request) {
+      throw new Error('退款申请不存在')
+    }
+    if (request.status === 'completed') {
+      throw new Error('退款申请已完成')
+    }
+    if (request.status === 'failed') {
+      return request
+    }
+
+    const refundAmount = Number(request.amount)
+    if (request.status === 'processing') {
+      await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, request.userId)
+      const user = await tx.user.update({
+        where: { id: request.userId },
+        data: { balance: { increment: refundAmount } },
+        select: { balance: true }
+      })
+      const balanceAfter = Number(user.balance)
+      await tx.balanceLog.create({
+        data: {
+          userId: request.userId,
+          type: 'admin_adjust',
+          amount: refundAmount,
+          balanceBefore: Number((balanceAfter - refundAmount).toFixed(2)),
+          balanceAfter,
+          orderId: request.rechargeRecord.orderNo,
+          remark: `[原路退款失败返还预扣] ${failureReason}`
+        }
+      })
+    }
+
+    const updatedRequest = await tx.rechargeRefundRequest.update({
+      where: { id: refundRequestId },
+      data: {
+        status: 'failed',
+        providerRequestId: data.providerRequestId,
+        providerRefundId: data.providerRefundId,
+        providerStatus: data.providerStatus,
+        providerMessage: data.providerMessage,
+        providerMetadata: data.providerMetadata as any,
+        failureReason
+      },
+      include: includeRechargeRefundRelations()
+    })
+
+    return updatedRequest as RechargeRefundRequestWithRelations
+  })
 }
 
 /**

@@ -1,6 +1,6 @@
-# Plugin Development
+# Extension Development
 
-A plugin package must be a `.tar.gz` archive with this root structure:
+An extension package must be a `.tar.gz` archive with this root structure:
 
 ```text
 payincus.plugin.json
@@ -20,7 +20,7 @@ tar -czf my-plugin.tar.gz payincus.plugin.json README.md dist templates docs
 
 ## Admin Pages
 
-Declare admin pages with `adminPages`. PayIncus renders them in the plugin center with a sandboxed iframe.
+Declare admin pages with `adminPages`. PayIncus renders them in the Extension Center with a sandboxed iframe.
 
 ```json
 {
@@ -32,12 +32,12 @@ Declare admin pages with `adminPages`. PayIncus renders them in the plugin cente
 
 ## User Pages
 
-Declare user pages with `userPages`. After the plugin is enabled, the user portal reads visible entries from `/api/plugins/enabled-client-extensions`.
+Declare user pages with `userPages`. After the extension is enabled, the user portal reads visible entries from `/api/plugins/enabled-client-extensions`.
 
 ```json
 {
   "slot": "user.sidebar.extra",
-  "title": "My Plugin",
+  "title": "My Extension",
   "path": "/plugins/my-plugin",
   "entry": "dist/user/index.html",
   "requiresAuth": true
@@ -46,7 +46,7 @@ Declare user pages with `userPages`. After the plugin is enabled, the user porta
 
 ## Configuration
 
-Plugin config is managed from the admin plugin center. Static plugin pages can read non-secret public config:
+Extension config is managed from the admin Extension Center. Static extension pages can read non-secret public config:
 
 ```text
 GET /api/plugins/:pluginId/config/public

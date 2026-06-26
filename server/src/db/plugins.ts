@@ -10,6 +10,10 @@ import type {
   PluginInstallTaskStatus,
   PluginSourceType,
   PluginStatus,
+  PluginStorageItem,
+  PluginTableMigration,
+  PluginTableRow,
+  PluginUserData,
   PluginVersion
 } from '@prisma/client'
 import { prisma } from './prisma.js'
@@ -70,6 +74,80 @@ export interface SerializedPluginTask {
   updatedAt: string
 }
 
+export interface SerializedPluginEventLog {
+  id: number
+  pluginId: string
+  userId: number | null
+  action: string
+  result: string
+  message: string | null
+  eventName: string | null
+  handler: string | null
+  payload: unknown
+  actor: unknown
+  retryCount: number
+  maxRetries: number
+  nextRetryAt: string | null
+  deadLetterAt: string | null
+  dedupeKey: string | null
+  lastAttemptAt: string | null
+  lastError: string | null
+  createdAt: string
+}
+
+export interface SerializedPluginStorageItem {
+  id: number
+  pluginId: string
+  scopeType: string
+  scopeId: string
+  key: string
+  value: unknown
+  createdByUserId: number | null
+  updatedByUserId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SerializedPluginTableRow {
+  id: number
+  pluginId: string
+  tableName: string
+  scopeType: string
+  scopeId: string
+  rowKey: string
+  value: unknown
+  createdByUserId: number | null
+  updatedByUserId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SerializedPluginTableMigration {
+  id: number
+  pluginId: string
+  tableName: string
+  version: string
+  name: string
+  appliedByUserId: number
+  appliedAt: string
+}
+
+export interface PluginStorageScopeCount {
+  scopeType: string
+  count: number
+}
+
+export interface PluginTableScopeCount {
+  tableName: string
+  scopeType: string
+  count: number
+}
+
+export interface PluginTableMigrationCount {
+  tableName: string
+  count: number
+}
+
 export function serializePluginVersion(version: PluginVersion): SerializedPluginVersion {
   return {
     id: version.id,
@@ -118,6 +196,29 @@ export function serializePluginTask(task: PluginInstallTask & { startedBy?: { us
     finishedAt: task.finishedAt?.toISOString() || null,
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString()
+  }
+}
+
+export function serializePluginEventLog(log: PluginEventLog): SerializedPluginEventLog {
+  return {
+    id: log.id,
+    pluginId: log.pluginId,
+    userId: log.userId,
+    action: log.action,
+    result: log.result,
+    message: log.message,
+    eventName: log.eventName,
+    handler: log.handler,
+    payload: log.payload,
+    actor: log.actor,
+    retryCount: log.retryCount,
+    maxRetries: log.maxRetries,
+    nextRetryAt: log.nextRetryAt?.toISOString() || null,
+    deadLetterAt: log.deadLetterAt?.toISOString() || null,
+    dedupeKey: log.dedupeKey,
+    lastAttemptAt: log.lastAttemptAt?.toISOString() || null,
+    lastError: log.lastError,
+    createdAt: log.createdAt.toISOString()
   }
 }
 
@@ -297,19 +398,55 @@ export async function disablePlugin(pluginId: string, userId: number) {
 
 export async function uninstallPlugin(pluginId: string, userId: number) {
   const installRoot = getPluginInstallDir()
+  const plugin = await getPlugin(pluginId)
+  const manifest = plugin?.versions?.[0]?.manifest as unknown as PayIncusPluginManifest | undefined
+  if (manifest?.capabilities?.storage?.retention === 'delete_on_uninstall') {
+    await deletePluginStorageItems(pluginId)
+    await deletePluginTableRows(pluginId)
+  }
   await prisma.plugin.delete({ where: { pluginId } })
   await rm(resolveInside(installRoot, pluginId), { recursive: true, force: true })
   await createPluginEvent(pluginId, userId, 'plugin.uninstall', 'success', 'Uninstalled plugin').catch(() => undefined)
 }
 
-export async function createPluginEvent(pluginId: string, userId: number | null, action: string, result: string, message?: string | null) {
+export async function createPluginEvent(
+  pluginId: string,
+  userId: number | null,
+  action: string,
+  result: string,
+  message?: string | null,
+  delivery?: {
+    eventName?: string | null
+    handler?: string | null
+    payload?: unknown
+    actor?: unknown
+    retryCount?: number
+    maxRetries?: number
+    nextRetryAt?: Date | null
+    deadLetterAt?: Date | null
+    dedupeKey?: string | null
+    lastAttemptAt?: Date | null
+    lastError?: string | null
+  }
+) {
   return await prisma.pluginEventLog.create({
     data: {
       pluginId,
       userId,
       action,
       result,
-      message: message || null
+      message: message || null,
+      eventName: delivery?.eventName || null,
+      handler: delivery?.handler || null,
+      payload: delivery?.payload === undefined ? undefined : delivery.payload as Prisma.InputJsonValue,
+      actor: delivery?.actor === undefined ? undefined : delivery.actor as Prisma.InputJsonValue,
+      retryCount: delivery?.retryCount ?? 0,
+      maxRetries: delivery?.maxRetries ?? 3,
+      nextRetryAt: delivery?.nextRetryAt || null,
+      deadLetterAt: delivery?.deadLetterAt || null,
+      dedupeKey: delivery?.dedupeKey || null,
+      lastAttemptAt: delivery?.lastAttemptAt || null,
+      lastError: delivery?.lastError || null
     }
   })
 }
@@ -356,4 +493,287 @@ export async function updatePluginConfigs(pluginId: string, configs: Array<{ key
     }))
   }
   return updated
+}
+
+export function serializePluginUserData(data: PluginUserData) {
+  return {
+    id: data.id,
+    pluginId: data.pluginId,
+    userId: data.userId,
+    key: data.key,
+    value: data.valueJson,
+    createdAt: data.createdAt.toISOString(),
+    updatedAt: data.updatedAt.toISOString()
+  }
+}
+
+export function serializePluginStorageItem(data: PluginStorageItem): SerializedPluginStorageItem {
+  return {
+    id: data.id,
+    pluginId: data.pluginId,
+    scopeType: data.scopeType,
+    scopeId: data.scopeId,
+    key: data.key,
+    value: data.valueJson,
+    createdByUserId: data.createdByUserId,
+    updatedByUserId: data.updatedByUserId,
+    createdAt: data.createdAt.toISOString(),
+    updatedAt: data.updatedAt.toISOString()
+  }
+}
+
+export function serializePluginTableRow(data: PluginTableRow): SerializedPluginTableRow {
+  return {
+    id: data.id,
+    pluginId: data.pluginId,
+    tableName: data.tableName,
+    scopeType: data.scopeType,
+    scopeId: data.scopeId,
+    rowKey: data.rowKey,
+    value: data.valueJson,
+    createdByUserId: data.createdByUserId,
+    updatedByUserId: data.updatedByUserId,
+    createdAt: data.createdAt.toISOString(),
+    updatedAt: data.updatedAt.toISOString()
+  }
+}
+
+export function serializePluginTableMigration(data: PluginTableMigration): SerializedPluginTableMigration {
+  return {
+    id: data.id,
+    pluginId: data.pluginId,
+    tableName: data.tableName,
+    version: data.version,
+    name: data.name,
+    appliedByUserId: data.appliedByUserId,
+    appliedAt: data.appliedAt.toISOString()
+  }
+}
+
+export async function getPluginUserData(pluginId: string, userId: number, key: string) {
+  return await prisma.pluginUserData.findUnique({
+    where: { pluginId_userId_key: { pluginId, userId, key } }
+  })
+}
+
+export async function upsertPluginUserData(pluginId: string, userId: number, key: string, value: unknown) {
+  const valueJson = value === null ? Prisma.JsonNull : value as Prisma.InputJsonValue
+  return await prisma.pluginUserData.upsert({
+    where: { pluginId_userId_key: { pluginId, userId, key } },
+    create: {
+      pluginId,
+      userId,
+      key,
+      valueJson
+    },
+    update: {
+      valueJson
+    }
+  })
+}
+
+export async function deletePluginUserData(pluginId: string, userId: number, key: string) {
+  await prisma.pluginUserData.deleteMany({
+    where: { pluginId, userId, key }
+  })
+}
+
+export async function countPluginUserDataItems(pluginId: string) {
+  return await prisma.pluginUserData.count({ where: { pluginId } })
+}
+
+export async function getPluginStorageItem(pluginId: string, scopeType: string, scopeId: string, key: string) {
+  return await prisma.pluginStorageItem.findUnique({
+    where: {
+      pluginId_scopeType_scopeId_key: { pluginId, scopeType, scopeId, key }
+    }
+  })
+}
+
+export async function countPluginStorageItems(pluginId: string, scopeType: string, scopeId: string) {
+  return await prisma.pluginStorageItem.count({
+    where: { pluginId, scopeType, scopeId }
+  })
+}
+
+export async function listPluginStorageScopeCounts(pluginId: string): Promise<PluginStorageScopeCount[]> {
+  const rows = await prisma.pluginStorageItem.groupBy({
+    by: ['scopeType'],
+    where: { pluginId },
+    _count: { id: true }
+  })
+  return rows.map(row => ({
+    scopeType: row.scopeType,
+    count: row._count.id
+  }))
+}
+
+export async function upsertPluginStorageItem(input: {
+  pluginId: string
+  scopeType: string
+  scopeId: string
+  key: string
+  value: unknown
+  actorUserId: number
+}) {
+  const valueJson = input.value === null ? Prisma.JsonNull : input.value as Prisma.InputJsonValue
+  return await prisma.pluginStorageItem.upsert({
+    where: {
+      pluginId_scopeType_scopeId_key: {
+        pluginId: input.pluginId,
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+        key: input.key
+      }
+    },
+    create: {
+      pluginId: input.pluginId,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      key: input.key,
+      valueJson,
+      createdByUserId: input.actorUserId,
+      updatedByUserId: input.actorUserId
+    },
+    update: {
+      valueJson,
+      updatedByUserId: input.actorUserId
+    }
+  })
+}
+
+export async function deletePluginStorageItem(pluginId: string, scopeType: string, scopeId: string, key: string) {
+  await prisma.pluginStorageItem.deleteMany({
+    where: { pluginId, scopeType, scopeId, key }
+  })
+}
+
+export async function deletePluginStorageItems(pluginId: string) {
+  await prisma.pluginStorageItem.deleteMany({ where: { pluginId } })
+}
+
+export async function getPluginTableRow(pluginId: string, tableName: string, scopeType: string, scopeId: string, rowKey: string) {
+  return await prisma.pluginTableRow.findUnique({
+    where: {
+      pluginId_tableName_scopeType_scopeId_rowKey: {
+        pluginId,
+        tableName,
+        scopeType,
+        scopeId,
+        rowKey
+      }
+    }
+  })
+}
+
+export async function countPluginTableRows(pluginId: string, tableName: string, scopeType: string, scopeId: string) {
+  return await prisma.pluginTableRow.count({
+    where: { pluginId, tableName, scopeType, scopeId }
+  })
+}
+
+export async function listPluginTableScopeCounts(pluginId: string): Promise<PluginTableScopeCount[]> {
+  const rows = await prisma.pluginTableRow.groupBy({
+    by: ['tableName', 'scopeType'],
+    where: { pluginId },
+    _count: { id: true }
+  })
+  return rows.map(row => ({
+    tableName: row.tableName,
+    scopeType: row.scopeType,
+    count: row._count.id
+  }))
+}
+
+export async function upsertPluginTableRow(input: {
+  pluginId: string
+  tableName: string
+  scopeType: string
+  scopeId: string
+  rowKey: string
+  value: unknown
+  actorUserId: number
+}) {
+  const valueJson = input.value === null ? Prisma.JsonNull : input.value as Prisma.InputJsonValue
+  return await prisma.pluginTableRow.upsert({
+    where: {
+      pluginId_tableName_scopeType_scopeId_rowKey: {
+        pluginId: input.pluginId,
+        tableName: input.tableName,
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+        rowKey: input.rowKey
+      }
+    },
+    create: {
+      pluginId: input.pluginId,
+      tableName: input.tableName,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      rowKey: input.rowKey,
+      valueJson,
+      createdByUserId: input.actorUserId,
+      updatedByUserId: input.actorUserId
+    },
+    update: {
+      valueJson,
+      updatedByUserId: input.actorUserId
+    }
+  })
+}
+
+export async function deletePluginTableRow(pluginId: string, tableName: string, scopeType: string, scopeId: string, rowKey: string) {
+  await prisma.pluginTableRow.deleteMany({
+    where: { pluginId, tableName, scopeType, scopeId, rowKey }
+  })
+}
+
+export async function deletePluginTableRows(pluginId: string) {
+  await prisma.pluginTableRow.deleteMany({ where: { pluginId } })
+  await prisma.pluginTableMigration.deleteMany({ where: { pluginId } })
+}
+
+export async function listPluginTableMigrations(pluginId: string, tableName: string) {
+  return await prisma.pluginTableMigration.findMany({
+    where: { pluginId, tableName },
+    orderBy: { appliedAt: 'asc' }
+  })
+}
+
+export async function listPluginTableMigrationCounts(pluginId: string): Promise<PluginTableMigrationCount[]> {
+  const rows = await prisma.pluginTableMigration.groupBy({
+    by: ['tableName'],
+    where: { pluginId },
+    _count: { id: true }
+  })
+  return rows.map(row => ({
+    tableName: row.tableName,
+    count: row._count.id
+  }))
+}
+
+export async function applyPluginTableMigration(input: {
+  pluginId: string
+  tableName: string
+  version: string
+  name: string
+  actorUserId: number
+}) {
+  return await prisma.pluginTableMigration.upsert({
+    where: {
+      pluginId_tableName_version: {
+        pluginId: input.pluginId,
+        tableName: input.tableName,
+        version: input.version
+      }
+    },
+    create: {
+      pluginId: input.pluginId,
+      tableName: input.tableName,
+      version: input.version,
+      name: input.name,
+      appliedByUserId: input.actorUserId
+    },
+    update: {}
+  })
 }

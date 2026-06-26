@@ -478,6 +478,9 @@ async function clearInstallDirForArtifact(): Promise<void> {
     'plugin-data',
     'plugin-logs',
     'plugin-staging',
+    'themes',
+    'theme-data',
+    'theme-staging',
     '.incudal-update-downloads',
     'update-logs'
   ])
@@ -499,6 +502,9 @@ async function restoreRuntimeAssets(backupDir: string, targetDir = installDir): 
   await copyIfExists(join(backupDir, 'plugin-data'), join(installDir, 'plugin-data'))
   await copyIfExists(join(backupDir, 'plugin-logs'), join(installDir, 'plugin-logs'))
   await copyIfExists(join(backupDir, 'plugin-staging'), join(installDir, 'plugin-staging'))
+  await copyIfExists(join(backupDir, 'themes'), join(installDir, 'themes'))
+  await copyIfExists(join(backupDir, 'theme-data'), join(installDir, 'theme-data'))
+  await copyIfExists(join(backupDir, 'theme-staging'), join(installDir, 'theme-staging'))
   await mkdir(join(installDir, '.npm'), { recursive: true })
   await mkdir(join(installDir, '.cache'), { recursive: true })
   await mkdir(join(targetDir, 'server/certs'), { recursive: true })
@@ -630,7 +636,7 @@ async function applyGitUpdate(backupDir: string): Promise<string> {
   await cp(installDir, backupDir, { recursive: true, preserveTimestamps: true })
 
   await run('git', ['checkout', '--force', targetVersion], { timeoutMs: 120000 })
-  await run('git', ['clean', '-fdx', '-e', '.env', '-e', '.gitconfig', '-e', 'server/certs', '-e', 'agent-release', '-e', 'plugins', '-e', 'plugin-data', '-e', 'plugin-logs', '-e', 'plugin-staging', '-e', '.npm', '-e', '.cache', '-e', 'update-logs'], { timeoutMs: 120000 })
+  await run('git', ['clean', '-fdx', '-e', '.env', '-e', '.gitconfig', '-e', 'server/certs', '-e', 'agent-release', '-e', 'plugins', '-e', 'plugin-data', '-e', 'plugin-logs', '-e', 'plugin-staging', '-e', 'themes', '-e', 'theme-data', '-e', 'theme-staging', '-e', '.npm', '-e', '.cache', '-e', 'update-logs'], { timeoutMs: 120000 })
   await restoreRuntimeAssets(backupDir)
 
   await run('corepack', ['enable'], { timeoutMs: 120000 })
@@ -731,7 +737,7 @@ async function autoRollbackFromBackup(backupDir: string, timestamp: string): Pro
     await cp(installDir, failedInstallBackup, { recursive: true, preserveTimestamps: true })
   }
 
-  await clearInstallDirPreserving(['update-logs', 'plugins', 'plugin-data', 'plugin-logs', 'plugin-staging'])
+  await clearInstallDirPreserving(['update-logs', 'plugins', 'plugin-data', 'plugin-logs', 'plugin-staging', 'themes', 'theme-data', 'theme-staging'])
   await cp(backupDir, installDir, { recursive: true, preserveTimestamps: true })
   await mkdir(join(installDir, '.npm'), { recursive: true })
   await mkdir(join(installDir, '.cache'), { recursive: true })
@@ -739,6 +745,9 @@ async function autoRollbackFromBackup(backupDir: string, timestamp: string): Pro
   await mkdir(join(installDir, 'plugin-data'), { recursive: true })
   await mkdir(join(installDir, 'plugin-logs'), { recursive: true })
   await mkdir(join(installDir, 'plugin-staging'), { recursive: true })
+  await mkdir(join(installDir, 'themes'), { recursive: true })
+  await mkdir(join(installDir, 'theme-data'), { recursive: true })
+  await mkdir(join(installDir, 'theme-staging'), { recursive: true })
   await mkdir(join(installDir, 'server/certs'), { recursive: true })
   await chownInstallDir()
   await run('systemctl', ['restart', serviceName], { timeoutMs: 120000 })

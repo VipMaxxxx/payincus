@@ -10,6 +10,7 @@ import { isAdminEntry, navMenuItems, type MenuItem } from '@/config/side-nav-ite
 import { dashboardPath } from '@/utils/app-paths'
 import { buildApiUrl } from '@/utils/api-url'
 import PluginSlot from '@/components/plugins/PluginSlot.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import type { PluginRecord } from '@/types/api'
 
 const { t } = useI18n()
@@ -31,6 +32,8 @@ const configStore = useConfigStore()
 const themeStore = useThemeStore()
 const brand = useBrand()
 void configStore.loadPublicConfig()
+
+const shellBrandSlot = computed(() => isAdminEntry ? 'admin.shell.brand' : 'user.shell.brand')
 
 const footerEmailHref = computed(() => {
   const email = configStore.footerContactEmail?.trim()
@@ -214,6 +217,13 @@ onUnmounted(() => {
       </RouterLink>
     </div>
 
+    <ThemeTemplateSlot
+      v-if="!collapsed || mobileOpen"
+      :slot-name="shellBrandSlot"
+      container-class="border-b px-4 py-3"
+      :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
+    />
+
     <!-- 导航菜单 -->
     <nav class="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
       <template v-for="item in menuItems" :key="item.name || item.label">
@@ -364,7 +374,8 @@ onUnmounted(() => {
           <span v-if="!collapsed || mobileOpen" class="truncate">{{ item.labelText || t(item.label || '') }}</span>
         </RouterLink>
       </template>
-      <PluginSlot v-if="!isAdminEntry" slot-name="user.sidebar.extra" :collapsed="collapsed && !mobileOpen" />
+      <PluginSlot v-if="isAdminEntry" slot-name="admin.sidebar.extra" surface="admin" :collapsed="collapsed && !mobileOpen" />
+      <PluginSlot v-else slot-name="user.sidebar.extra" surface="user" :collapsed="collapsed && !mobileOpen" />
     </nav>
 
     <!-- 底部 -->

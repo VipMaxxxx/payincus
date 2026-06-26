@@ -168,6 +168,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.extensions', title: '扩展' }
   },
   {
+    path: '/oauth/authorize',
+    name: 'oauth-authorize',
+    component: () => import('@/views/OAuthAuthorizeView.vue'),
+    meta: { requiresAuth: true, requiresUser: true, title: 'OAuth 授权' }
+  },
+  {
     path: '/plugins/:pathMatch(.*)*',
     name: 'plugin-page',
     component: () => import('@/views/PluginPageView.vue'),

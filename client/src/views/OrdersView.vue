@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import api from '@/api'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 
 type OrderSourceType = 'recharge' | 'instance_billing'
 
@@ -173,6 +174,8 @@ onMounted(loadOrders)
       </div>
       <button class="btn btn-outline" :disabled="loading" @click="loadOrders">刷新</button>
     </header>
+
+    <ThemeTemplateSlot slot-name="user.orders.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
     <section class="rounded-lg border border-themed bg-themed-secondary p-4">
       <div class="grid gap-3 md:grid-cols-[180px_180px_auto]">

@@ -23,6 +23,7 @@ import TelegramBindingSection from '@/components/profile/TelegramBindingSection.
 import SSHKeysSection from '@/components/profile/SSHKeysSection.vue'
 import NotificationSection from '@/components/profile/NotificationSection.vue'
 import LoginHistorySection from '@/components/profile/LoginHistorySection.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'ProfileView' })
@@ -35,6 +36,8 @@ const authStore = useAuthStore()
     <div class="page-header">
       <h1 class="page-title">{{ $t('nav.settings') }}</h1>
     </div>
+
+    <ThemeTemplateSlot slot-name="user.profile.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
     <!-- 账户信息和配额 -->
     <AccountSection />

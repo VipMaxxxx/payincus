@@ -117,25 +117,62 @@ export function getPluginMarketIndexUrl(): string | null {
   return pickString(process.env.PLUGIN_MARKET_INDEX_URL, 500)
 }
 
-export function assertGitHubReleaseUrl(input: string): URL {
+function getTrustedMarketHosts(): Set<string> {
+  return new Set(
+    [
+      'github.com',
+      'objects.githubusercontent.com',
+      'raw.githubusercontent.com',
+      'docs.payincus.com',
+      'payincus.github.io'
+    ].concat(
+      (process.env.PLUGIN_MARKET_TRUSTED_HOSTS || '')
+        .split(',')
+        .map(host => host.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  )
+}
+
+function assertTrustedMarketUrl(input: string, purpose: 'index' | 'download'): URL {
   const url = new URL(input)
   if (url.protocol !== 'https:') throw new Error('Plugin market URL must use HTTPS')
-  if (!['github.com', 'objects.githubusercontent.com'].includes(url.hostname)) {
-    throw new Error('Plugin market downloads must come from GitHub release assets')
+  const host = url.hostname.toLowerCase()
+  if (!getTrustedMarketHosts().has(host)) {
+    throw new Error('Plugin market URL host is not trusted')
   }
-  if (url.hostname === 'github.com' && !url.pathname.includes('/releases/download/')) {
+
+  if (host === 'github.com' && !url.pathname.includes('/releases/download/')) {
     throw new Error('GitHub plugin URL must point to a release asset')
   }
+
+  if (host === 'raw.githubusercontent.com' && purpose === 'download') {
+    throw new Error('Raw GitHub URLs may only be used for plugin market indexes')
+  }
+
+  if (host === 'objects.githubusercontent.com') return url
+
+  if ((host === 'docs.payincus.com' || host === 'payincus.github.io') && purpose === 'index') {
+    if (!url.pathname.endsWith('/plugin-market/index.json')) {
+      throw new Error('Stable plugin market index must use /plugin-market/index.json')
+    }
+  }
+
+  if ((host === 'docs.payincus.com' || host === 'payincus.github.io') && purpose === 'download') {
+    if (!url.pathname.startsWith('/plugin-market/packages/') && !url.pathname.startsWith('/plugin-market/manifests/')) {
+      throw new Error('Stable plugin market assets must be under /plugin-market/packages or /plugin-market/manifests')
+    }
+  }
+
   return url
 }
 
+export function assertGitHubReleaseUrl(input: string): URL {
+  return assertTrustedMarketUrl(input, 'download')
+}
+
 function assertGitHubIndexUrl(input: string): URL {
-  const url = new URL(input)
-  if (url.protocol !== 'https:') throw new Error('Plugin market index must use HTTPS')
-  if (!['github.com', 'raw.githubusercontent.com'].includes(url.hostname)) {
-    throw new Error('Plugin market index must be hosted on GitHub')
-  }
-  return url
+  return assertTrustedMarketUrl(input, 'index')
 }
 
 function normalizeDeveloper(input: unknown, fallbackName: string): PluginMarketDeveloper {

@@ -7,6 +7,7 @@ import type { PluginClientExtension } from '@/types/api'
 const props = defineProps<{
   slotName: string
   collapsed?: boolean
+  surface?: 'user' | 'admin'
 }>()
 
 const loading = ref(false)
@@ -19,7 +20,9 @@ const visibleExtensions = computed(() =>
 onMounted(async () => {
   loading.value = true
   try {
-    const response = await api.plugins.getEnabledClientExtensions()
+    const response = props.surface === 'admin'
+      ? await api.plugins.getEnabledAdminClientExtensions()
+      : await api.plugins.getEnabledClientExtensions()
     extensions.value = response.extensions
   } catch {
     extensions.value = []

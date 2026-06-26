@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
 import { useToast } from '@/stores/toast'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import api from '@/api'
 import { useBrand } from '@/composables/useBrand'
@@ -171,6 +172,11 @@ function backToEmail() {
     :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'"
   >
     <div class="w-full max-w-sm">
+      <ThemeTemplateSlot
+        slot-name="public.auth.aside"
+        container-class="mb-6"
+      />
+
       <!-- Logo -->
       <div class="text-center mb-8">
         <img

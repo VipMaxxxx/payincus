@@ -10,6 +10,7 @@ import { onClickOutside } from '@vueuse/core'
 import { availableFlagCountryCodes, getLocalizedCountryName } from '@/utils/countryDisplay'
 import { buildHostApiUrl, validateIdentifier, validateName, validateHostAddress, validateIpAddress } from '@/utils/validation'
 import FlagIcon from '@/components/FlagIcon.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { hostsPath } from '@/utils/app-paths'
 
 const { t, locale } = useI18n()
@@ -280,6 +281,8 @@ function closeAndGoBack() {
 
 <template>
   <div class="space-y-6 animate-fade-in">
+    <ThemeTemplateSlot slot-name="user.host.create.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+
     <!-- 居中容器 -->
     <div class="flex justify-center">
       <div class="w-full max-w-3xl space-y-6">

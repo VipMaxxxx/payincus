@@ -164,7 +164,7 @@ https://admin.example.com
 | 工单 | `/admin/tickets` | 查看用户工单、回复、关闭、处理附件、查看客服上下文和记录内部备注。 |
 | 通知 | `/admin/inbox` | 查看管理员通知和系统消息。 |
 | 帮助中心 | `/admin/help` | 维护用户端帮助文章。 |
-| 插件中心 | `/admin/plugins` | 已安装插件、插件市场和安装任务分内页管理；支持上传安装、GitHub 市场安装、启用停用、打开独立插件设置页和查看任务日志。 |
+| 扩展中心 | `/admin/plugins` | 已安装扩展、扩展市场和安装任务分内页管理；支持上传安装、在线市场安装、启用停用、打开独立扩展设置页和查看任务日志。 |
 | OAuth | `/admin/oauth` | 配置第三方登录、绑定和回调。 |
 | Telegram | `/admin/settings/telegram` | 配置 Telegram bot、通知和 webhook。 |
 | 邮箱 | `/admin/mail` | 管理邮箱套餐、域名、账号和订阅生命周期。 |

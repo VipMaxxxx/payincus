@@ -1,4 +1,4 @@
-# Plugin Templates
+# Extension Templates
 
 The repository includes three templates:
 
@@ -15,4 +15,4 @@ cd plugin-templates/admin-user-mixed-plugin
 tar -czf coupon-plugin.tar.gz payincus.plugin.json README.md dist templates docs
 ```
 
-Upload the `.tar.gz` package from the admin plugin center, then enable it.
+Upload the `.tar.gz` package from the admin Extension Center, then enable it.

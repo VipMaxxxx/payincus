@@ -15,6 +15,11 @@ interface StorageConfig {
   port: number | null
   username: string | null
   basePath: string | null
+  extra?: {
+    bucket?: string
+    region?: string
+    forcePathStyle?: boolean
+  } | null
   isDefault: boolean
   createdAt: string
 }
@@ -33,25 +38,31 @@ const form = ref({
   username: '',
   password: '',
   basePath: '/backups/',
+  s3Bucket: '',
+  s3Region: 'auto',
+  s3ForcePathStyle: false,
   isDefault: false
 })
 
 const defaultPorts: Record<string, number> = {
   WEBDAV: 443,
   FTP: 21,
-  SFTP: 22
+  SFTP: 22,
+  S3: 443
 }
 
 const typeLabels: Record<string, string> = {
   WEBDAV: 'WebDAV',
   FTP: 'FTP',
-  SFTP: 'SFTP'
+  SFTP: 'SFTP',
+  S3: 'S3 / R2'
 }
 
 const typeIcons: Record<string, string> = {
   WEBDAV: '🌐',
   FTP: '📁',
-  SFTP: '🔐'
+  SFTP: '🔐',
+  S3: '☁️'
 }
 
 const portPlaceholder = computed(() => {
@@ -66,6 +77,8 @@ const hostPlaceholder = computed(() => {
       return 'ftp.example.com'
     case 'SFTP':
       return 'ssh.example.com'
+    case 'S3':
+      return 'https://account.r2.cloudflarestorage.com'
     default:
       return 'example.com'
   }
@@ -89,6 +102,9 @@ function resetForm() {
     username: '',
     password: '',
     basePath: '/backups/',
+    s3Bucket: '',
+    s3Region: 'auto',
+    s3ForcePathStyle: false,
     isDefault: false
   }
   editingId.value = null
@@ -108,6 +124,9 @@ function openEditForm(config: StorageConfig) {
     username: config.username || '',
     password: '', // 不回显密码
     basePath: config.basePath || '/backups/',
+    s3Bucket: config.extra?.bucket || '',
+    s3Region: config.extra?.region || 'auto',
+    s3ForcePathStyle: config.extra?.forcePathStyle === true,
     isDefault: config.isDefault
   }
   editingId.value = config.id
@@ -130,6 +149,13 @@ async function saveConfig() {
       username: form.value.username || undefined,
       password: form.value.password || undefined,
       basePath: form.value.basePath || undefined,
+      extra: form.value.type === 'S3'
+        ? {
+            bucket: form.value.s3Bucket,
+            region: form.value.s3Region || 'auto',
+            forcePathStyle: form.value.s3ForcePathStyle
+          }
+        : undefined,
       isDefault: form.value.isDefault
     }
 
@@ -226,6 +252,7 @@ loadStorageConfigs()
             <option value="WEBDAV">WebDAV</option>
             <option value="FTP">FTP</option>
             <option value="SFTP">SFTP</option>
+            <option value="S3">S3 / Cloudflare R2</option>
           </select>
         </div>
       </div>
@@ -244,12 +271,27 @@ loadStorageConfigs()
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs text-themed-muted mb-1.5">{{ $t('profile.storage.username') }}</label>
-          <input v-model="form.username" type="text" class="input" />
+          <input v-model="form.username" type="text" class="input" :placeholder="form.type === 'S3' ? 'Access Key ID' : ''" />
         </div>
         <div>
           <label class="block text-xs text-themed-muted mb-1.5">{{ $t('profile.storage.password') }}</label>
-          <input v-model="form.password" type="password" class="input" :placeholder="editingId ? $t('profile.storage.passwordUnchanged') : ''" />
+          <input v-model="form.password" type="password" class="input" :placeholder="editingId ? $t('profile.storage.passwordUnchanged') : (form.type === 'S3' ? 'Secret Access Key' : '')" />
         </div>
+      </div>
+
+      <div v-if="form.type === 'S3'" class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-themed-muted mb-1.5">Bucket</label>
+          <input v-model="form.s3Bucket" type="text" class="input" placeholder="payincus-backups" />
+        </div>
+        <div>
+          <label class="block text-xs text-themed-muted mb-1.5">Region</label>
+          <input v-model="form.s3Region" type="text" class="input" placeholder="auto" />
+        </div>
+        <label class="col-span-2 flex items-center gap-2 text-xs text-themed-muted">
+          <input v-model="form.s3ForcePathStyle" type="checkbox" class="rounded" />
+          启用 path-style endpoint（MinIO 或部分兼容存储需要）
+        </label>
       </div>
 
       <div>

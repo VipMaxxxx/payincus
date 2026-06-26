@@ -7,6 +7,7 @@ import { useToast } from '@/stores/toast'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
 import InstanceSelector from '@/components/InstanceSelector.vue'
@@ -931,6 +932,8 @@ function formatDateShort(dateString: string) {
           {{ t('tickets.createTicket') }}
         </button>
       </div>
+
+      <ThemeTemplateSlot slot-name="user.tickets.banner" container-class="mb-6 overflow-hidden rounded-lg border border-themed bg-themed-surface" />
       
       <!-- List View -->
       <template v-if="viewMode === 'list'">

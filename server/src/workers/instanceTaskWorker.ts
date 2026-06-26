@@ -50,6 +50,7 @@ import { getSystemImageAvailabilityForHost } from '../db/images.js'
 import { createCaddyClient } from '../lib/caddy-client.js'
 import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
 import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
+import { emitServiceTaskPluginEvent } from '../lib/plugin-business-events.js'
 
 // 任务超时时间：轻量任务保持短超时，重建/克隆/改节点等重任务允许更长执行窗口
 const LIGHT_TASK_TIMEOUT = 5 * 60 * 1000
@@ -66,6 +67,7 @@ const LIGHT_TASK_CONCURRENCY = 5
 
 // 轻量任务类型（可并行执行）
 const LIGHT_TASK_NAMES = new Set(['start', 'stop', 'restart'])
+const PUBLIC_SERVICE_TASK_NAMES = new Set(['start', 'stop', 'restart'])
 
 // 重量任务类型（需串行执行）
 const HEAVY_TASK_NAMES = new Set(['rebuild', 'clone', 'recreate', 'change_host'])
@@ -78,6 +80,36 @@ let workerInterval: ReturnType<typeof setInterval> | null = null
 let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null
 const runningTaskIds = new Set<number>()
 const dbBackoff = createWorkerDbBackoff('InstanceTaskWorker')
+
+function emitInstanceTaskResultEvent(input: {
+  event: 'service.task.completed' | 'service.task.failed'
+  task: NonNullable<Awaited<ReturnType<typeof prisma.instanceTask.findUnique>>>
+  instanceName: string
+  durationMs: number
+}): void {
+  emitServiceTaskPluginEvent({
+    event: input.event,
+    instanceId: input.task.instanceId,
+    userId: input.task.userId,
+    hostId: input.task.hostId,
+    instanceName: input.instanceName,
+    taskId: input.task.id,
+    taskType: input.task.taskType,
+    taskStatus: input.event === 'service.task.completed' ? 'COMPLETED' : 'FAILED',
+    source: 'instance_task_worker',
+    dedupeKey: `${input.event}:${input.task.id}`,
+    metadata: {
+      durationMs: input.durationMs,
+      publicServiceTask: PUBLIC_SERVICE_TASK_NAMES.has(input.task.taskType),
+      imageAlias: input.task.imageAlias,
+      targetName: input.task.targetName,
+      targetHostId: input.task.targetHostId,
+      snapshotName: input.task.snapshotName,
+      newInstanceId: input.task.newInstanceId,
+      failureType: input.event === 'service.task.failed' ? 'task_failed' : null
+    }
+  })
+}
 
 type InstanceTaskFailureNotice = {
   id: number
@@ -190,6 +222,26 @@ async function notifyInstanceTaskFailure(task: InstanceTaskFailureNotice, errorM
   }
 }
 
+async function emitTimedOutServiceTaskFailureEvent(task: InstanceTaskFailureNotice, source: string): Promise<void> {
+  const instance = await db.getInstanceById(task.instanceId).catch(() => null)
+  emitServiceTaskPluginEvent({
+    event: 'service.task.failed',
+    instanceId: task.instanceId,
+    userId: task.userId,
+    hostId: task.hostId,
+    instanceName: instance?.name || `instance-${task.instanceId}`,
+    taskId: task.id,
+    taskType: task.taskType,
+    taskStatus: 'FAILED',
+    source,
+    dedupeKey: `service.task.failed:${source}:${task.id}`,
+    metadata: {
+      failureType: 'timeout',
+      publicServiceTask: PUBLIC_SERVICE_TASK_NAMES.has(task.taskType)
+    }
+  })
+}
+
 /**
  * 服务启动时清理僵尸任务
  */
@@ -232,6 +284,9 @@ export async function cleanupStaleTasks(): Promise<void> {
     console.log(`[InstanceTaskWorker] 清理了 ${result.count} 个僵尸任务`)
     await Promise.allSettled(
       staleTasks.map(task => notifyInstanceTaskFailure(task, '系统启动清理超时任务'))
+    )
+    await Promise.allSettled(
+      staleTasks.map(task => emitTimedOutServiceTaskFailureEvent(task, 'instance_task_worker.startup_cleanup'))
     )
   }
 }
@@ -286,6 +341,11 @@ async function cleanupTimeoutTasks(): Promise<void> {
       timedOutTasks
         .filter(task => timedOutTaskIds.includes(task.id))
         .map(task => notifyInstanceTaskFailure(task, '任务执行超时'))
+    )
+    await Promise.allSettled(
+      timedOutTasks
+        .filter(task => timedOutTaskIds.includes(task.id))
+        .map(task => emitTimedOutServiceTaskFailureEvent(task, 'instance_task_worker.timeout_cleanup'))
     )
   }
 }
@@ -596,6 +656,13 @@ async function executeTask(taskId: number): Promise<void> {
     })
     if (completeResult.count === 0) {
       console.warn(`[InstanceTaskWorker] 任务 ${taskId} 已不处于 PROCESSING，跳过完成状态覆盖`)
+    } else {
+      emitInstanceTaskResultEvent({
+        event: 'service.task.completed',
+        task,
+        instanceName: instance.name,
+        durationMs: Date.now() - taskStartTime
+      })
     }
 
     const taskDuration = Date.now() - taskStartTime
@@ -615,6 +682,14 @@ async function executeTask(taskId: number): Promise<void> {
     })
     if (failResult.count === 0) {
       console.warn(`[InstanceTaskWorker] 任务 ${taskId} 已不处于 PROCESSING，跳过失败状态覆盖`)
+    } else if (task) {
+      const failedInstance = await db.getInstanceById(task.instanceId).catch(() => null)
+      emitInstanceTaskResultEvent({
+        event: 'service.task.failed',
+        task,
+        instanceName: failedInstance?.name || `instance-${task.instanceId}`,
+        durationMs: Date.now() - taskStartTime
+      })
     }
 
     if (!task) {

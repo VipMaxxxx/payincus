@@ -49,6 +49,9 @@ import type {
   OAuthConfig,
   UserOAuthBinding,
   UpdateOAuthConfigRequest,
+  OAuthClientApp,
+  AdminOAuthAuthorization,
+  UpsertOAuthClientAppRequest,
   HelpArticle,
   CreateHelpArticleRequest,
   UpdateHelpArticleRequest,
@@ -85,9 +88,39 @@ import type {
   SystemUpdateTask,
   PluginRecord,
   PluginTask,
+  PluginEventLog,
+  PluginEventSummary,
+  PluginEventReplayResult,
   PluginMarketEntry,
   PluginMarketGovernance,
   PluginConfigValue,
+  PluginMarketSubmission,
+  PluginMarketSubmissionReviewStatus,
+  PluginMarketPublishResult,
+  PluginMarketSubmissionScanResult,
+  PluginGatewayExtensionDispatchResult,
+  PluginGatewayExtensionTarget,
+  PluginServiceExtensionDispatchResult,
+  PluginServiceExtensionTarget,
+  PluginStorageBackup,
+  PluginStorageBackupArchive,
+  PluginStorageBackupRemoteArchive,
+  PluginStorageRestoreResult,
+  PluginStorageRestoreDryRunResult,
+  PluginStorageUsage,
+  PublicPluginActionRateLimitDefault,
+  PublicPluginActionRateLimitPolicy,
+  PublicPluginActionRateLimitPolicyInput,
+  PublicApiScopeMetadata,
+  ThemeMarketEntry,
+  ThemeMarketGovernance,
+  ThemeMarketPublishResult,
+  ThemeMarketSubmission,
+  ThemeMarketSubmissionReviewStatus,
+  ThemeMarketSubmissionScanResult,
+  ThemePackageRecord,
+  ReviewPluginMarketSubmissionRequest,
+  ReviewThemeMarketSubmissionRequest,
   DeliveryAssuranceCase,
   DeliveryOverview,
   DeliveryTasksResponse,
@@ -2046,6 +2079,36 @@ const api = {
       http.post('/oauth/exchange-code', { code })
   },
 
+  oauthApps: {
+    listScopes: (): Promise<{ scopes: PublicApiScopeMetadata[]; updatedAt: string }> =>
+      http.get('/oauth-provider/scopes'),
+    list: (): Promise<{ apps: OAuthClientApp[] }> =>
+      http.get('/admin/oauth-apps'),
+    listAuthorizations: (params?: {
+      appId?: number | null
+      user?: string
+      status?: 'all' | 'active' | 'revoked' | 'disabled'
+      page?: number
+      pageSize?: number
+    }): Promise<{
+      authorizations: AdminOAuthAuthorization[]
+      total: number
+      page: number
+      pageSize: number
+      totalPages: number
+    }> => http.get('/admin/oauth-apps/authorizations', { params }),
+    revokeAuthorization: (id: number): Promise<{ authorization: AdminOAuthAuthorization }> =>
+      http.delete(`/admin/oauth-apps/authorizations/${id}`),
+    create: (data: UpsertOAuthClientAppRequest): Promise<{ app: OAuthClientApp; clientSecret: string }> =>
+      http.post('/admin/oauth-apps', data),
+    update: (id: number, data: UpsertOAuthClientAppRequest): Promise<{ app: OAuthClientApp }> =>
+      http.put(`/admin/oauth-apps/${id}`, data),
+    rotateSecret: (id: number): Promise<{ app: OAuthClientApp; clientSecret: string }> =>
+      http.post(`/admin/oauth-apps/${id}/rotate-secret`, {}),
+    delete: (id: number): Promise<{ message: string }> =>
+      http.delete(`/admin/oauth-apps/${id}`)
+  },
+
   // 帮助文章（公开）
   help: {
     list: (params: Record<string, unknown> = {}): Promise<PaginatedResponse<HelpArticle>> =>
@@ -2222,12 +2285,119 @@ const api = {
       http.delete(`/admin/plugins/${pluginId}`, { timeout: TIMEOUT.LONG }),
     getConfig: (pluginId: string): Promise<{ configs: PluginConfigValue[] }> =>
       http.get(`/admin/plugins/${pluginId}/config`),
+    uploadConfigFile: (pluginId: string, key: string, file: File): Promise<{ filename: string; mimeType: string; sizeBytes: number; value: string }> => {
+      const form = new FormData()
+      form.append('file', file)
+      return http.post(`/admin/plugins/${pluginId}/config-files/${encodeURIComponent(key)}`, form, {
+        timeout: TIMEOUT.MEDIUM,
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    },
     updateConfig: (pluginId: string, configs: Array<{ key: string; value: unknown; isSecret?: boolean }>): Promise<{ configs: PluginConfigValue[] }> =>
       http.put(`/admin/plugins/${pluginId}/config`, { configs }),
+    listActionRateLimits: (): Promise<{ defaults: PublicPluginActionRateLimitDefault[]; policies: PublicPluginActionRateLimitPolicy[] }> =>
+      http.get('/admin/plugins/action-rate-limits'),
+    updateActionRateLimits: (policies: PublicPluginActionRateLimitPolicyInput[]): Promise<{ defaults: PublicPluginActionRateLimitDefault[]; policies: PublicPluginActionRateLimitPolicy[] }> =>
+      http.put('/admin/plugins/action-rate-limits', { policies }),
     listTasks: (): Promise<{ tasks: PluginTask[] }> =>
       http.get('/admin/plugins/tasks'),
     getTaskLogs: (id: number): Promise<{ logs: string }> =>
-      http.get(`/admin/plugins/tasks/${id}/logs`)
+      http.get(`/admin/plugins/tasks/${id}/logs`),
+    listEvents: (params?: { result?: string; pluginId?: string; eventName?: string; handler?: string; limit?: number }): Promise<{ events: PluginEventLog[]; summary: PluginEventSummary }> =>
+      http.get('/admin/plugins/events', { params }),
+    retryDueEvents: (): Promise<{ processed: number; succeeded: number; failed: number; deadLettered: number }> =>
+      http.post('/admin/plugins/events/retry-due', {}),
+    replayEvent: (id: number): Promise<{ result: PluginEventReplayResult; event: PluginEventLog | null }> =>
+      http.post(`/admin/plugins/events/${id}/replay`, {}),
+    listServiceExtensionTargets: (hook: string, productId?: string): Promise<{ targets: PluginServiceExtensionTarget[] }> =>
+      http.get(`/plugins/service-actions/${encodeURIComponent(hook)}/targets`, { params: productId ? { productId } : undefined }),
+    dispatchServiceExtension: (pluginId: string, hook: string, data: { serviceExtensionKey?: string; idempotencyKey?: string | null; payload?: unknown }): Promise<{ serviceAction: PluginServiceExtensionDispatchResult }> =>
+      http.post(`/plugins/${encodeURIComponent(pluginId)}/service-actions/${encodeURIComponent(hook)}`, data),
+    listGatewayExtensionTargets: (hook: string, providerCode?: string): Promise<{ targets: PluginGatewayExtensionTarget[] }> =>
+      http.get(`/plugins/gateway-actions/${encodeURIComponent(hook)}/targets`, { params: providerCode ? { providerCode } : undefined }),
+    dispatchGatewayExtension: (pluginId: string, hook: string, data: { gatewayExtensionKey?: string; idempotencyKey?: string | null; payload?: unknown }): Promise<{ gatewayAction: PluginGatewayExtensionDispatchResult }> =>
+      http.post(`/plugins/${encodeURIComponent(pluginId)}/gateway-actions/${encodeURIComponent(hook)}`, data),
+    getStorageUsage: (pluginId: string): Promise<{ usage: PluginStorageUsage }> =>
+      http.get(`/plugins/${pluginId}/storage-usage`),
+    exportStorageBackup: (pluginId: string): Promise<{ backup: PluginStorageBackup }> =>
+      http.get(`/plugins/${pluginId}/storage-backup`),
+    restoreStorageBackup: (pluginId: string, backup: unknown): Promise<{ restored: PluginStorageRestoreResult }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/restore`, { backup }),
+    validateStorageBackupRestore: (pluginId: string, backup: unknown): Promise<{ dryRun: PluginStorageRestoreDryRunResult }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/restore`, { backup }, { params: { dryRun: 'true' } }),
+    listStorageBackupArchives: (pluginId: string): Promise<{ archives: PluginStorageBackupArchive[] }> =>
+      http.get(`/plugins/${pluginId}/storage-backup/archives`),
+    createStorageBackupArchive: (pluginId: string): Promise<{ archive: PluginStorageBackupArchive }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/archives`, {}),
+    downloadStorageBackupArchive: (pluginId: string, backupId: string): Promise<{ backup: PluginStorageBackup }> =>
+      http.get(`/plugins/${pluginId}/storage-backup/archives/${backupId}`),
+    validateStorageBackupArchiveRestore: (pluginId: string, backupId: string): Promise<{ dryRun: PluginStorageRestoreDryRunResult }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/archives/${backupId}/restore`, {}, { params: { dryRun: 'true' } }),
+    restoreStorageBackupArchive: (pluginId: string, backupId: string): Promise<{ restored: PluginStorageRestoreResult }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/archives/${backupId}/restore`, {}),
+    uploadStorageBackupArchiveRemote: (pluginId: string, backupId: string, storageConfigId?: number): Promise<{ remoteArchive: PluginStorageBackupRemoteArchive }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/archives/${backupId}/upload-remote`, { storageConfigId }),
+    validateRemoteStorageBackupArchiveRestore: (pluginId: string, backupId: string, remoteArchiveId: number): Promise<{ dryRun: PluginStorageRestoreDryRunResult }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/archives/${backupId}/remote/${remoteArchiveId}/restore`, {}, { params: { dryRun: 'true' } }),
+    restoreRemoteStorageBackupArchive: (pluginId: string, backupId: string, remoteArchiveId: number): Promise<{ restored: PluginStorageRestoreResult }> =>
+      http.post(`/plugins/${pluginId}/storage-backup/archives/${backupId}/remote/${remoteArchiveId}/restore`, {}),
+    deleteStorageBackupArchive: (pluginId: string, backupId: string): Promise<{ message: string }> =>
+      http.delete(`/plugins/${pluginId}/storage-backup/archives/${backupId}`)
+  },
+
+  themes: {
+    list: (): Promise<{ themes: ThemePackageRecord[] }> =>
+      http.get('/admin/themes'),
+    market: (): Promise<{ themes: ThemeMarketEntry[]; governance: ThemeMarketGovernance }> =>
+      http.get('/admin/themes/market'),
+    installMarket: (themeId: string): Promise<{ theme: ThemePackageRecord }> =>
+      http.post('/admin/themes/market/install', { themeId }, { timeout: TIMEOUT.LONG }),
+    upload: (file: File): Promise<{ theme: ThemePackageRecord }> => {
+      const form = new FormData()
+      form.append('package', file)
+      return http.post('/admin/themes/upload', form, {
+        timeout: TIMEOUT.LONG,
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    },
+    enable: (themeId: string): Promise<{ theme: ThemePackageRecord }> =>
+      http.post(`/admin/themes/${themeId}/enable`, {}, { timeout: TIMEOUT.LONG }),
+    uploadConfigFile: (themeId: string, key: string, file: File): Promise<{ filename: string; mimeType: string; sizeBytes: number; value: string }> => {
+      const form = new FormData()
+      form.append('file', file)
+      return http.post(`/admin/themes/${themeId}/config-files/${encodeURIComponent(key)}`, form, {
+        timeout: TIMEOUT.MEDIUM,
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    },
+    updateConfig: (themeId: string, configValues: Record<string, unknown>): Promise<{ theme: ThemePackageRecord }> =>
+      http.put(`/admin/themes/${themeId}/config`, { configValues }),
+    rollbackDefault: (): Promise<{ message: string }> =>
+      http.post('/admin/themes/default', {}, { timeout: TIMEOUT.LONG }),
+    uninstall: (themeId: string): Promise<{ message: string }> =>
+      http.delete(`/admin/themes/${themeId}`, { timeout: TIMEOUT.LONG })
+  },
+
+  pluginMarketSubmissions: {
+    listForReview: (params?: { reviewStatus?: PluginMarketSubmissionReviewStatus; limit?: number }): Promise<{ submissions: PluginMarketSubmission[] }> =>
+      http.get('/plugin-market-submissions/admin', { params }),
+    review: (id: number, data: ReviewPluginMarketSubmissionRequest): Promise<{ submission: PluginMarketSubmission }> =>
+      http.patch(`/plugin-market-submissions/admin/${id}/review`, data),
+    scan: (id: number): Promise<{ submission: PluginMarketSubmission; scan: PluginMarketSubmissionScanResult }> =>
+      http.post(`/plugin-market-submissions/admin/${id}/scan`, {}, { timeout: TIMEOUT.LONG }),
+    publishMarketIndex: (): Promise<{ result: PluginMarketPublishResult }> =>
+      http.post('/plugin-market-submissions/admin/publish-market-index', {}, { timeout: TIMEOUT.LONG })
+  },
+
+  themeMarketSubmissions: {
+    listForReview: (params?: { reviewStatus?: ThemeMarketSubmissionReviewStatus; limit?: number }): Promise<{ submissions: ThemeMarketSubmission[] }> =>
+      http.get('/theme-market-submissions/admin', { params }),
+    review: (id: number, data: ReviewThemeMarketSubmissionRequest): Promise<{ submission: ThemeMarketSubmission }> =>
+      http.patch(`/theme-market-submissions/admin/${id}/review`, data),
+    scan: (id: number): Promise<{ submission: ThemeMarketSubmission; scan: ThemeMarketSubmissionScanResult }> =>
+      http.post(`/theme-market-submissions/admin/${id}/scan`, {}, { timeout: TIMEOUT.LONG }),
+    publishMarketIndex: (): Promise<{ result: ThemeMarketPublishResult }> =>
+      http.post('/theme-market-submissions/admin/publish-market-index', {}, { timeout: TIMEOUT.LONG })
   },
 
   delivery: {

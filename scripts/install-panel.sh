@@ -200,13 +200,28 @@ ensure_env_keys() {
     set_env_if_missing "SYSTEM_UPDATE_RELEASE_REPOSITORY" "${GITHUB_REPO}" "在线更新 GitHub Release 仓库"
     set_env_if_missing "SYSTEM_UPDATE_RELEASE_TOKEN" "" "在线更新私有 Release Token"
     set_env_if_missing "SYSTEM_UPDATE_APPLY_MODE" "auto" "在线更新应用模式"
-    set_env_if_missing "PLUGIN_MANAGER_ALLOWED_ADMIN_IDS" "" "允许管理插件的管理员 ID"
-    set_env_if_missing "PLUGIN_MARKET_INDEX_URL" "" "插件市场索引地址"
-    set_env_if_missing "PLUGIN_INSTALL_DIR" "${INSTALL_DIR}/plugins" "插件安装目录"
-    set_env_if_missing "PLUGIN_DATA_DIR" "${INSTALL_DIR}/plugin-data" "插件数据目录"
-    set_env_if_missing "PLUGIN_LOG_DIR" "${INSTALL_DIR}/plugin-logs" "插件日志目录"
-    set_env_if_missing "PLUGIN_STAGING_DIR" "${INSTALL_DIR}/plugin-staging" "插件临时目录"
-    set_env_if_missing "PLUGIN_MAX_PACKAGE_SIZE_MB" "20" "插件包大小限制"
+    set_env_if_missing "PLUGIN_MANAGER_ALLOWED_ADMIN_IDS" "" "允许管理扩展的管理员 ID"
+    set_env_if_missing "PLUGIN_MARKET_INDEX_URL" "https://docs.payincus.com/plugin-market/index.json" "扩展市场索引地址"
+    set_env_if_missing "PLUGIN_MARKET_TRUSTED_HOSTS" "docs.payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com" "扩展市场受信域名"
+    set_env_if_missing "PLUGIN_MARKET_PUBLISH_DIR" "${INSTALL_DIR}/plugin-market" "扩展市场发布目录"
+    set_env_if_missing "PLUGIN_MARKET_PUBLIC_BASE_URL" "https://docs.payincus.com/plugin-market" "扩展市场公开基础地址"
+    set_env_if_missing "PLUGIN_SUBMISSION_PUBLIC_BASE_URL" "" "扩展投稿上传公开基础地址"
+    set_env_if_missing "PLUGIN_WEBHOOK_SIGNING_SECRET" "$(gen_secret 48)" "扩展 Webhook 签名密钥"
+    set_env_if_missing "PLUGIN_WEBHOOK_TIMEOUT_MS" "10000" "扩展 Webhook 超时时间"
+    set_env_if_missing "PLUGIN_INSTALL_DIR" "${INSTALL_DIR}/plugins" "扩展安装目录"
+    set_env_if_missing "PLUGIN_DATA_DIR" "${INSTALL_DIR}/plugin-data" "扩展数据目录"
+    set_env_if_missing "PLUGIN_LOG_DIR" "${INSTALL_DIR}/plugin-logs" "扩展日志目录"
+    set_env_if_missing "PLUGIN_STAGING_DIR" "${INSTALL_DIR}/plugin-staging" "扩展临时目录"
+    set_env_if_missing "PLUGIN_MAX_PACKAGE_SIZE_MB" "20" "扩展包大小限制"
+    set_env_if_missing "THEME_MANAGER_ALLOWED_ADMIN_IDS" "" "允许管理主题的管理员 ID"
+    set_env_if_missing "THEME_MARKET_INDEX_URL" "https://docs.payincus.com/theme-market/index.json" "主题市场索引地址"
+    set_env_if_missing "THEME_MARKET_TRUSTED_HOSTS" "docs.payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com" "主题市场受信域名"
+    set_env_if_missing "THEME_MARKET_PUBLISH_DIR" "${INSTALL_DIR}/theme-market" "主题市场发布目录"
+    set_env_if_missing "THEME_MARKET_PUBLIC_BASE_URL" "https://docs.payincus.com/theme-market" "主题市场公开基础地址"
+    set_env_if_missing "THEME_INSTALL_DIR" "${INSTALL_DIR}/themes" "主题安装目录"
+    set_env_if_missing "THEME_DATA_DIR" "${INSTALL_DIR}/theme-data" "主题数据目录"
+    set_env_if_missing "THEME_STAGING_DIR" "${INSTALL_DIR}/theme-staging" "主题临时目录"
+    set_env_if_missing "THEME_MAX_PACKAGE_SIZE_MB" "10" "主题包大小限制"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_REPOSITORY" "" "Agent GitHub Release 仓库"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_TOKEN" "" "Agent GitHub Release Token"
     set_env_if_missing "INCUDAL_AGENT_RELEASE_DIR" "" "Agent 本地 Release 目录"
@@ -736,6 +751,7 @@ create_user() {
     mkdir -p "${INSTALL_DIR}/plugin-data"
     mkdir -p "${INSTALL_DIR}/plugin-logs"
     mkdir -p "${INSTALL_DIR}/plugin-staging"
+    mkdir -p "${INSTALL_DIR}/theme-data"
 
     # Nginx runs as www-data and must be able to traverse the install root
     # to serve client/dist while .env stays owner-only below.
@@ -995,7 +1011,7 @@ StartLimitIntervalSec=300
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/plugins ${INSTALL_DIR}/plugin-data ${INSTALL_DIR}/plugin-logs ${INSTALL_DIR}/plugin-staging ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
+ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/plugins ${INSTALL_DIR}/plugin-data ${INSTALL_DIR}/plugin-logs ${INSTALL_DIR}/plugin-staging ${INSTALL_DIR}/themes ${INSTALL_DIR}/theme-data ${INSTALL_DIR}/theme-staging ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
 PrivateTmp=true
 
 # 资源限制
@@ -1021,7 +1037,7 @@ create_online_update_service() {
     step "创建在线更新 systemd 单元..."
 
     mkdir -p "${INSTALL_DIR}/update-logs"
-    mkdir -p "${INSTALL_DIR}/plugins" "${INSTALL_DIR}/plugin-data" "${INSTALL_DIR}/plugin-logs" "${INSTALL_DIR}/plugin-staging"
+    mkdir -p "${INSTALL_DIR}/plugins" "${INSTALL_DIR}/plugin-data" "${INSTALL_DIR}/plugin-logs" "${INSTALL_DIR}/plugin-staging" "${INSTALL_DIR}/themes" "${INSTALL_DIR}/theme-data" "${INSTALL_DIR}/theme-staging"
     local app_dir="${INSTALL_DIR}"
     if [[ -L "${INSTALL_DIR}/current" ]]; then
         app_dir="${INSTALL_DIR}/current"
@@ -1091,7 +1107,7 @@ EOF
     visudo -cf /etc/sudoers.d/incudal-online-update >/dev/null
 
     systemctl daemon-reload
-    chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/update-logs" "${INSTALL_DIR}/plugins" "${INSTALL_DIR}/plugin-data" "${INSTALL_DIR}/plugin-logs" "${INSTALL_DIR}/plugin-staging" "${INSTALL_DIR}/.git" 2>/dev/null || true
+    chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/update-logs" "${INSTALL_DIR}/plugins" "${INSTALL_DIR}/plugin-data" "${INSTALL_DIR}/plugin-logs" "${INSTALL_DIR}/plugin-staging" "${INSTALL_DIR}/themes" "${INSTALL_DIR}/theme-data" "${INSTALL_DIR}/theme-staging" "${INSTALL_DIR}/.git" 2>/dev/null || true
 
     log "在线更新 systemd 单元和 sudoers 创建完成"
 }

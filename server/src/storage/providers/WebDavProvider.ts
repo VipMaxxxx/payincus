@@ -58,6 +58,12 @@ export class WebDavProvider implements IStorageProvider {
         })
     }
 
+    async downloadStream(filename: string): Promise<Readable> {
+        await assertSafeStorageTarget('WEBDAV', this.rawHost)
+        const remotePath = joinStorageRemotePath(this.basePath, filename)
+        return this.client.createReadStream(remotePath)
+    }
+
     async testConnection(): Promise<void> {
         try {
             await assertSafeStorageTarget('WEBDAV', this.rawHost)

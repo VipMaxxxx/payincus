@@ -13,6 +13,7 @@ const adminRoute = read('server/src/routes/admin-plugins.ts')
 const clientTypes = read('client/src/types/api.ts')
 const pluginCenter = read('client/src/views/admin/PluginCenterView.vue')
 const releaseWorkflow = read('.github/workflows/release.yml')
+const docsMarketIndex = read('docs-site/docs/public/plugin-market/index.json')
 
 assert.ok(
   market.includes("PluginMarketReviewStatus = 'pending' | 'listed' | 'delisted' | 'rejected'") &&
@@ -25,7 +26,9 @@ assert.ok(
     market.includes("reviewStatus === 'listed'") &&
     market.includes('defaultReviewStatus') &&
     market.includes('fingerprint: getMarketFingerprint') &&
-    market.includes('assertMarketEntryInstallable'),
+    market.includes('assertMarketEntryInstallable') &&
+    market.includes('docs.payincus.com') &&
+    market.includes('PLUGIN_MARKET_TRUSTED_HOSTS'),
   'plugin market must model review, trust, developer, permissions, compatibility, security, pricing and listed-only governance'
 )
 
@@ -79,6 +82,16 @@ assert.ok(
     releaseWorkflow.includes("type: 'free'") &&
     releaseWorkflow.includes('revenueSharePercent'),
   'official plugin market index must publish governance metadata'
+)
+
+assert.ok(
+  docsMarketIndex.includes('"reviewStatus": "listed"') &&
+    docsMarketIndex.includes('"trustLevel": "official"') &&
+    docsMarketIndex.includes('https://docs.payincus.com/plugin-market/packages/') &&
+    docsMarketIndex.includes('"sha256": "') &&
+    docsMarketIndex.includes('"checksumPinned": true') &&
+    docsMarketIndex.includes('"minPayincus": "v0.4.0"'),
+  'docs-site stable extension market index must publish installable governed entries'
 )
 
 console.log('plugin market governance guard tests passed')

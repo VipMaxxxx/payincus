@@ -1,0 +1,9 @@
+{
+  "campaignEnabled": false,
+  "campaignId": "summer-2026",
+  "productSku": "vps-basic",
+  "startsAt": "2026-07-01T12:00:00+08:00",
+  "endsAt": "2026-07-01T12:10:00+08:00",
+  "stockLimit": 100,
+  "perUserLimit": 1
+}

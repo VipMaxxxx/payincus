@@ -333,6 +333,112 @@ export interface PluginTemplateManifest {
   path: string
 }
 
+export interface PluginConfigOptionManifest {
+  label: string
+  value: string
+}
+
+export interface PluginConfigFieldManifest {
+  type: 'text' | 'textarea' | 'markdown' | 'password' | 'email' | 'number' | 'select' | 'tags' | 'checkbox' | 'color' | 'file' | 'placeholder'
+  label: string
+  description?: string
+  placeholder?: string
+  group?: string
+  order?: number
+  required: boolean
+  default?: unknown
+  options?: PluginConfigOptionManifest[]
+  min?: number
+  max?: number
+  step?: number
+  secret?: boolean
+}
+
+export interface PluginActionManifest {
+  name: string
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  path: string
+  runtime?: 'webhook'
+  url?: string
+  scopes: string[]
+  requestSchema?: Record<string, unknown>
+  responseSchema?: Record<string, unknown>
+  idempotency?: 'none' | 'optional' | 'required'
+  rateLimit?: 'normal' | 'strict'
+}
+
+export interface PluginEventSubscriptionManifest {
+  event: string
+  handler: string
+}
+
+export interface PluginNotificationTemplateManifest {
+  id: string
+  title: string
+  message: string
+  variables?: string[]
+}
+
+export type PluginServiceExtensionHook =
+  | 'checkoutConfig'
+  | 'provision'
+  | 'suspend'
+  | 'unsuspend'
+  | 'terminate'
+  | 'upgrade'
+  | 'servicePanel'
+
+export interface PluginServiceExtensionManifest {
+  key: string
+  name: string
+  productId?: string
+  hooks: Partial<Record<PluginServiceExtensionHook, string>>
+}
+
+export type PluginGatewayExtensionHook =
+  | 'availability'
+  | 'createPayment'
+  | 'verifyPayment'
+  | 'refund'
+  | 'webhook'
+
+export interface PluginGatewayExtensionManifest {
+  key: string
+  name: string
+  providerCode?: string
+  hooks: Partial<Record<PluginGatewayExtensionHook, string>>
+}
+
+export interface PluginTableMigrationManifest {
+  version: string
+  name: string
+}
+
+export interface PluginTableManifest {
+  name: string
+  description?: string
+  scopes?: Array<'user' | 'global' | 'service'>
+  maxRows?: number
+  migrations?: PluginTableMigrationManifest[]
+}
+
+export interface PluginStorageManifest {
+  kind: 'kv'
+  maxKeys?: number
+  scopes?: Array<'user' | 'global' | 'service'>
+  retention?: 'keep' | 'delete_on_uninstall'
+  tables?: PluginTableManifest[]
+}
+
+export interface PluginCapabilitiesManifest {
+  actions?: PluginActionManifest[]
+  events?: PluginEventSubscriptionManifest[]
+  notificationTemplates?: PluginNotificationTemplateManifest[]
+  serviceExtensions?: PluginServiceExtensionManifest[]
+  gatewayExtensions?: PluginGatewayExtensionManifest[]
+  storage?: PluginStorageManifest
+}
+
 export interface PayIncusPluginManifest {
   id: string
   name: string
@@ -346,8 +452,9 @@ export interface PayIncusPluginManifest {
     userPages?: PluginPageManifest[]
   }
   permissions?: string[]
-  configSchema?: Record<string, unknown>
+  configSchema?: Record<string, PluginConfigFieldManifest>
   templates?: PluginTemplateManifest[]
+  capabilities?: PluginCapabilitiesManifest
 }
 
 export interface PluginVersion {
@@ -377,6 +484,830 @@ export interface PluginRecord {
   latestVersion: PluginVersion | null
 }
 
+export interface PublicPluginActionRateLimitDefault {
+  rateLimit: 'normal' | 'strict'
+  maxRequests: number
+  windowSeconds: number
+}
+
+export interface PublicPluginActionRateLimitPolicy {
+  id: number
+  pluginId: string
+  actionName: string
+  rateLimit: 'normal' | 'strict'
+  maxRequests: number
+  windowSeconds: number
+  enabled: boolean
+  updatedByUserId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PublicPluginActionRateLimitPolicyInput {
+  pluginId?: string
+  actionName?: string
+  rateLimit: 'normal' | 'strict'
+  maxRequests: number
+  windowSeconds?: number
+  enabled?: boolean
+}
+
+export interface PayIncusThemeManifest {
+  id: string
+  name: string
+  version: string
+  payincus: string
+  description?: string
+  author?: string
+  homepage?: string
+  css: string
+  previewImage?: string
+  tokens: Record<string, unknown>
+  layoutSlots: string[]
+  templates: PayIncusThemeTemplate[]
+  configSchema: Record<string, PayIncusThemeConfigField>
+}
+
+export interface PayIncusThemeTemplate {
+  slot: string
+  title: string
+  entry: string
+}
+
+export interface PayIncusThemeConfigOption {
+  label: string
+  value: string
+}
+
+export interface PayIncusThemeConfigField {
+  type: string
+  label: string
+  description?: string
+  placeholder?: string
+  group?: string
+  order?: number
+  required: boolean
+  default?: unknown
+  options?: PayIncusThemeConfigOption[]
+  min?: number
+  max?: number
+  step?: number
+}
+
+export interface ThemePackageRecord {
+  id: number
+  themeId: string
+  name: string
+  version: string
+  description: string | null
+  author: string | null
+  status: string
+  enabled: boolean
+  manifest: PayIncusThemeManifest
+  tokens: Record<string, unknown>
+  configValues: Record<string, unknown>
+  cssPath: string
+  cssUrl: string
+  templateUrls: Record<string, { title: string; url: string }>
+  previewImageUrl: string | null
+  previewUrl: string
+  packageSha256: string
+  installedByUsername: string | null
+  enabledByUsername: string | null
+  enabledAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ThemeMarketEntry {
+  id: string
+  name: string
+  latest: string
+  manifestUrl: string
+  downloadUrl: string
+  sha256: string
+  description?: string
+  author?: string
+  previewImageUrl?: string
+  reviewStatus: 'pending' | 'listed' | 'delisted' | 'rejected'
+  trustLevel: 'official' | 'verified' | 'third_party'
+  developer: {
+    name: string
+    homepage?: string
+    github?: string
+    verified: boolean
+    contact?: string
+  }
+  compatibility: {
+    minPayincus?: string
+    maxPayincus?: string
+  }
+  security: {
+    checksumPinned: boolean
+    signature?: {
+      status: 'unsigned' | 'valid' | 'missing' | 'invalid'
+      algorithm?: string
+      keyId?: string
+    }
+    notes: string[]
+  }
+  tokens: string[]
+  layoutSlots: string[]
+  rating: { average: number; count: number }
+  installCount: number
+  releaseNotes?: string
+  rollbackNotes?: string
+}
+
+export interface ThemeMarketGovernance {
+  totalEntries: number
+  visibleEntries: number
+  hiddenEntries: number
+  indexHost: string | null
+  fingerprint: string
+  defaultReviewStatus: 'pending' | 'listed' | 'delisted' | 'rejected'
+  installPolicy: string[]
+}
+
+export type ThemeMarketSubmissionReviewStatus = 'pending' | 'listed' | 'rejected' | 'delisted'
+export type ThemeMarketSubmissionRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+export interface ThemeMarketSubmission {
+  id: number
+  themeId: string
+  version: string
+  name: string
+  repoUrl: string
+  releaseUrl: string
+  manifestUrl: string
+  packageUrl: string
+  sha256: string
+  developerName: string
+  developerHomepage?: string | null
+  developerGithub?: string | null
+  contactEmail: string
+  compatibility?: Record<string, unknown>
+  tokens?: unknown
+  layoutSlots?: unknown
+  notes?: string | null
+  reviewStatus: ThemeMarketSubmissionReviewStatus
+  riskLevel: ThemeMarketSubmissionRiskLevel
+  reviewNotes?: string | null
+  scanStatus: 'pending' | 'passed' | 'warning' | 'failed'
+  scanResult?: unknown
+  scannedAt?: string | null
+  submittedByUserId: number
+  submittedByUsername?: string | null
+  reviewedByUserId?: number | null
+  reviewedByUsername?: string | null
+  reviewedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ThemeMarketSubmissionScanResult {
+  status: 'passed' | 'warning' | 'failed'
+  riskLevel: ThemeMarketSubmissionRiskLevel
+  manifest: {
+    id: string
+    name: string
+    version: string
+    payincus: string
+    tokenCount: number
+    layoutSlotCount: number
+  } | null
+  packageSha256: string | null
+  findings: PluginMarketSubmissionScanFinding[]
+  scannedAt: string
+}
+
+export interface ReviewThemeMarketSubmissionRequest {
+  reviewStatus: ThemeMarketSubmissionReviewStatus
+  riskLevel?: ThemeMarketSubmissionRiskLevel
+  reviewNotes?: string | null
+}
+
+export interface ThemeMarketPublishResult {
+  indexPath: string
+  publishedEntries: number
+  totalEntries: number
+  updatedAt: string
+}
+
+export interface PluginUserData {
+  id: number
+  pluginId: string
+  userId: number
+  key: string
+  value: unknown
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PluginStorageItem {
+  id: number
+  pluginId: string
+  scopeType: string
+  scopeId: string
+  key: string
+  value: unknown
+  createdByUserId: number | null
+  updatedByUserId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type PluginStorageScope = 'user' | 'global' | 'service'
+
+export interface PluginTableRow {
+  id: number
+  pluginId: string
+  tableName: string
+  scopeType: string
+  scopeId: string
+  rowKey: string
+  value: unknown
+  createdByUserId: number | null
+  updatedByUserId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PluginTableMigration {
+  id: number
+  pluginId: string
+  tableName: string
+  version: string
+  name: string
+  appliedByUserId: number
+  appliedAt: string
+}
+
+export interface PluginStorageUsage {
+  pluginId: string
+  storageDeclared: boolean
+  retention: 'keep' | 'delete_on_uninstall'
+  legacyUserKeyCount: number
+  kv: Array<{
+    scopeType: string
+    keyCount: number
+    maxKeys: number | null
+    declared: boolean
+  }>
+  tables: Array<{
+    tableName: string
+    scopeType: string
+    rowCount: number
+    maxRows: number | null
+    migrationCount: number
+    declared: boolean
+  }>
+  warnings: Array<{
+    level: 'warning' | 'critical'
+    kind: 'kv' | 'table'
+    label: string
+    count: number
+    limit: number
+    usageRatio: number
+    message: string
+  }>
+  totals: {
+    kvKeys: number
+    tableRows: number
+    tableMigrations: number
+  }
+}
+
+export interface PluginStorageBackup {
+  schemaVersion: 1
+  pluginId: string
+  pluginVersion: string
+  exportedAt: string
+  backupId?: string
+  mode?: 'full'
+  contentSha256?: string
+  legacyUserData: Array<{ userId: number; key: string; value: unknown; createdAt?: string; updatedAt?: string }>
+  scopedStorage: Array<{ scopeType: string; scopeId: string; key: string; value: unknown; createdByUserId: number | null; updatedByUserId: number | null; createdAt?: string; updatedAt?: string }>
+  tableRows: Array<{ tableName: string; scopeType: string; scopeId: string; rowKey: string; value: unknown; createdByUserId: number | null; updatedByUserId: number | null; createdAt?: string; updatedAt?: string }>
+  tableMigrations: Array<{ tableName: string; version: string; name: string; appliedByUserId: number; appliedAt?: string }>
+  counts: {
+    legacyUserData: number
+    scopedStorage: number
+    tableRows: number
+    tableMigrations: number
+    totalItems?: number
+  }
+  restorePolicy?: {
+    dryRunSupported: boolean
+    restoreMode: 'replace_all_plugin_storage'
+    modifiesBusinessData: boolean
+    modifiesPluginPackage: boolean
+  }
+}
+
+export interface PluginStorageRestoreResult {
+  pluginId: string
+  legacyUserData: number
+  scopedStorage: number
+  tableRows: number
+  tableMigrations: number
+  totalItems?: number
+  contentSha256?: string
+  archiveId?: string | null
+}
+
+export interface PluginStorageRestoreDryRunResult {
+  pluginId: string
+  valid: boolean
+  contentSha256: string
+  counts: {
+    legacyUserData: number
+    scopedStorage: number
+    tableRows: number
+    tableMigrations: number
+    totalItems: number
+  }
+  restoreMode: 'replace_all_plugin_storage'
+  modified: false
+  archiveId?: string | null
+}
+
+export interface PluginStorageBackupArchive {
+  backupId: string
+  pluginId: string
+  pluginVersion: string
+  exportedAt: string
+  mode: 'full'
+  contentSha256: string
+  counts: {
+    legacyUserData: number
+    scopedStorage: number
+    tableRows: number
+    tableMigrations: number
+    totalItems: number
+  }
+  restorePolicy: {
+    dryRunSupported: boolean
+    restoreMode: 'replace_all_plugin_storage'
+    modifiesBusinessData: boolean
+    modifiesPluginPackage: boolean
+  }
+  remoteArchives?: PluginStorageBackupRemoteArchive[]
+}
+
+export interface PluginStorageBackupRemoteArchive {
+  id: number
+  pluginId: string
+  backupId: string
+  storageConfigId: number
+  remoteFileName: string
+  remotePath: string | null
+  storageName: string
+  storageType: string
+  contentSha256: string
+  fileSize: string
+  status: string
+  lastRestoredAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PluginServiceExtensionTarget {
+  pluginId: string
+  serviceExtensionKey: string
+  name: string
+  productId: string | null
+  hook: PluginServiceExtensionHook
+}
+
+export interface PluginGatewayExtensionTarget {
+  pluginId: string
+  gatewayExtensionKey: string
+  name: string
+  providerCode: string | null
+  hook: PluginGatewayExtensionHook
+}
+
+export interface PluginExtensionContractResult {
+  accepted: boolean
+  status: 'accepted' | 'pending' | 'completed' | 'failed' | 'unsupported'
+  message: string | null
+  externalReference: string | null
+  metadata: Record<string, unknown>
+}
+
+export interface PluginActionExecutionResult {
+  pluginId: string
+  action: string
+  runtime: 'webhook'
+  status: 'success'
+  statusCode: number
+  requestId: string
+  result: unknown
+}
+
+export interface PluginServiceExtensionDispatchResult {
+  pluginId: string
+  serviceExtensionKey: string
+  hook: PluginServiceExtensionHook
+  action: PluginActionExecutionResult
+  contract: PluginExtensionContractResult
+}
+
+export interface PluginGatewayExtensionDispatchResult {
+  pluginId: string
+  gatewayExtensionKey: string
+  hook: PluginGatewayExtensionHook
+  action: PluginActionExecutionResult
+  contract: PluginExtensionContractResult
+}
+
+export type PublicApiScope =
+  | 'profile:read'
+  | 'profile:write'
+  | 'balance:read'
+  | 'balance:write'
+  | 'billing:read'
+  | 'products:read'
+  | 'services:read'
+  | 'services:operate'
+  | 'services:billing'
+  | 'orders:read'
+  | 'tickets:read'
+  | 'tickets:write'
+  | 'notifications:read'
+  | 'notifications:send'
+  | 'plugins:action'
+
+export interface PublicApiScopeMetadata {
+  scope: PublicApiScope
+  title: string
+  description: string
+  risk: 'low' | 'medium' | 'high'
+  access: 'read' | 'write' | 'operate'
+  resources: string[]
+  implemented: boolean
+  notes: string[]
+}
+
+export interface PublicApiProfile {
+  id: number
+  username: string
+  email: string | null
+  role: 'admin' | 'user'
+  avatarStyle: string
+  avatarBadgeId: string | null
+}
+
+export interface UpdatePublicApiProfileRequest {
+  avatarStyle: string
+}
+
+export interface PublicApiBalance {
+  userId: number
+  balance: number
+  currency: 'CNY'
+  updatedAt: string
+}
+
+export type PublicApiBalanceLogType =
+  | 'recharge'
+  | 'consume'
+  | 'refund'
+  | 'admin_adjust'
+  | 'gift'
+  | 'transfer_fee'
+  | 'transfer_refund'
+  | 'hosting_withdraw'
+  | 'hosting_deduction'
+  | 'invite_generate'
+
+export interface PublicApiBalanceLog {
+  id: number
+  type: PublicApiBalanceLogType
+  amount: number
+  balanceBefore: number
+  balanceAfter: number
+  orderId: string | null
+  instance: { id: number; name: string } | null
+  remark: string | null
+  createdAt: string
+}
+
+export interface PublicApiOrder {
+  id: string
+  sourceType: 'recharge' | 'instance_billing'
+  sourceId: number
+  orderNo: string
+  title: string
+  status: string
+  rawStatus: string
+  amount: number
+  actualAmount: number | null
+  fee: number
+  paymentMethod: string
+  tradeNo: string | null
+  failReason: string | null
+  instance?: {
+    id: number
+    name: string
+    status: string
+    plan: {
+      id: number
+      name: string
+      package: { id: number; name: string } | null
+    } | null
+  } | null
+  months?: number | null
+  periodStart?: string
+  periodEnd?: string
+  createdAt: string
+  completedAt: string | null
+  expiredAt: string | null
+}
+
+export interface PublicApiNotification {
+  id: number
+  eventType: string
+  title: string
+  content: string
+  isRead: boolean
+  createdAt: string
+}
+
+export interface PublicApiUnreadNotificationCount {
+  count: number
+}
+
+export interface PublicApiPluginActionDescriptor {
+  name: string
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  path: string
+  runtime: 'webhook'
+  scopes: string[]
+  idempotency: 'none' | 'optional' | 'required'
+  rateLimit: 'normal' | 'strict'
+  requestSchema: Record<string, unknown> | null
+  responseSchema: Record<string, unknown> | null
+}
+
+export interface PublicApiPluginActionCatalogItem {
+  pluginId: string
+  name: string
+  version: string
+  description: string | null
+  author: string | null
+  homepage: string | null
+  actionCount: number
+  actions: PublicApiPluginActionDescriptor[]
+}
+
+export interface PublicApiPluginActionCatalog {
+  pluginId: string
+  name: string
+  version: string
+  description: string | null
+  actions: PublicApiPluginActionDescriptor[]
+}
+
+export interface CreatePublicApiTicketRequest {
+  subject: string
+  content: string
+  category?: 'general' | 'billing' | 'technical' | 'abuse'
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  instanceId?: number
+}
+
+export interface PublicApiTicketCreateResult {
+  id: number
+  messageId: number
+  subject: string
+  category: string
+  priority: string
+  status: 'open'
+  hostId: number | null
+  instanceId: number | null
+  attachments: []
+}
+
+export interface PublicApiToken {
+  id: number
+  name: string
+  tokenPrefix: string
+  scopes: PublicApiScope[]
+  lastUsedAt: string | null
+  revokedAt: string | null
+  expiresAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreatePublicApiTokenRequest {
+  name: string
+  scopes: PublicApiScope[]
+  expiresAt?: string | null
+}
+
+export interface CreatePublicApiTokenResponse {
+  token: string
+  apiToken: PublicApiToken
+}
+
+export type PluginMarketSubmissionReviewStatus = 'pending' | 'listed' | 'rejected' | 'delisted'
+export type PluginMarketSubmissionRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+export interface PluginMarketSubmission {
+  id: number
+  pluginId: string
+  version: string
+  name: string
+  repoUrl: string
+  releaseUrl: string
+  manifestUrl: string
+  packageUrl: string
+  sha256: string
+  developerName: string
+  developerHomepage: string | null
+  developerGithub: string | null
+  contactEmail: string
+  permissions: unknown
+  compatibility: unknown
+  pricing: unknown
+  notes: string | null
+  reviewStatus: PluginMarketSubmissionReviewStatus
+  riskLevel: PluginMarketSubmissionRiskLevel
+  reviewNotes: string | null
+  scanStatus: 'pending' | 'passed' | 'warning' | 'failed'
+  scanResult: unknown
+  scannedAt: string | null
+  submittedByUserId: number
+  submittedByUsername: string | null
+  reviewedByUserId: number | null
+  reviewedByUsername: string | null
+  reviewedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DeveloperPluginEventHealth {
+  pluginId: string
+  total: number
+  success: number
+  failed: number
+  retryPending: number
+  deadLetter: number
+  deduped: number
+  dueRetry: number
+  lastEventAt: string | null
+  lastSuccessAt: string | null
+  lastFailureAt: string | null
+  lastError: string | null
+  recentWindowHours: number
+  recentTotal: number
+  recentSuccess: number
+  recentFailed: number
+  recentRetryPending: number
+  recentDeadLetter: number
+  recentDeduped: number
+  recentDueRetry: number
+  recentSuccessRate: number | null
+  trendWindowDays: number
+  trend: DeveloperPluginEventHealthTrendPoint[]
+  alerts: DeveloperPluginEventHealthAlert[]
+  breakdown: DeveloperPluginEventHealthBreakdown[]
+}
+
+export interface DeveloperPluginEventHealthAlert {
+  level: 'warning' | 'critical'
+  code: string
+  message: string
+  count: number
+}
+
+export interface DeveloperPluginEventHealthTrendPoint {
+  date: string
+  total: number
+  success: number
+  failed: number
+  retryPending: number
+  deadLetter: number
+  deduped: number
+}
+
+export interface DeveloperPluginEventHealthBreakdown {
+  eventName: string
+  handler: string
+  total: number
+  success: number
+  failed: number
+  retryPending: number
+  deadLetter: number
+  deduped: number
+  dueRetry: number
+  lastEventAt: string | null
+  lastSuccessAt: string | null
+  lastFailureAt: string | null
+  lastError: string | null
+  recentWindowHours: number
+  recentTotal: number
+  recentSuccess: number
+  recentFailed: number
+  recentRetryPending: number
+  recentDeadLetter: number
+  recentDeduped: number
+  recentDueRetry: number
+  recentSuccessRate: number | null
+  alerts: DeveloperPluginEventHealthAlert[]
+}
+
+export interface PluginEventAlertPreference {
+  pluginId: string
+  enabled: boolean
+  minimumLevel: 'warning' | 'critical'
+  cooldownMinutes: number
+  notifyOnDeadLetter: boolean
+  notifyOnDueRetry: boolean
+  notifyOnSuccessRateBelow: boolean
+  successRateThreshold: number
+  recentWindowHours: number
+  updatedAt: string | null
+}
+
+export interface UpdatePluginEventAlertPreferenceRequest {
+  enabled?: boolean
+  minimumLevel?: 'warning' | 'critical'
+  cooldownMinutes?: number
+  notifyOnDeadLetter?: boolean
+  notifyOnDueRetry?: boolean
+  notifyOnSuccessRateBelow?: boolean
+  successRateThreshold?: number
+  recentWindowHours?: number
+}
+
+export interface CreatePluginMarketSubmissionRequest {
+  pluginId: string
+  version: string
+  name: string
+  repoUrl: string
+  releaseUrl: string
+  manifestUrl: string
+  packageUrl: string
+  sha256: string
+  developerName: string
+  developerHomepage?: string | null
+  developerGithub?: string | null
+  contactEmail: string
+  permissions?: Record<string, unknown>
+  compatibility?: Record<string, unknown>
+  pricing?: Record<string, unknown>
+  notes?: string | null
+}
+
+export interface PluginMarketSubmissionUploadResult {
+  pluginId: string
+  version: string
+  name: string
+  packageUrl: string
+  manifestUrl: string
+  sha256: string
+  permissions: Record<string, unknown>
+  compatibility: Record<string, unknown>
+  sourceName: string
+}
+
+export interface ReviewPluginMarketSubmissionRequest {
+  reviewStatus: PluginMarketSubmissionReviewStatus
+  riskLevel?: PluginMarketSubmissionRiskLevel
+  reviewNotes?: string | null
+}
+
+export interface PluginMarketSubmissionScanFinding {
+  severity: 'info' | 'warning' | 'error'
+  code: string
+  message: string
+}
+
+export interface PluginMarketSubmissionScanResult {
+  status: 'passed' | 'warning' | 'failed'
+  riskLevel: PluginMarketSubmissionRiskLevel
+  manifest: {
+    id: string
+    name: string
+    version: string
+    permissions: string[]
+  } | null
+  packageSha256: string | null
+  findings: PluginMarketSubmissionScanFinding[]
+  scannedAt: string
+}
+
+export interface PluginMarketPublishResult {
+  indexPath: string
+  publishedEntries: number
+  totalEntries: number
+  updatedAt: string
+}
+
 export interface PluginTask {
   id: number
   pluginId: string | null
@@ -392,6 +1323,47 @@ export interface PluginTask {
   finishedAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface PluginEventLog {
+  id: number
+  pluginId: string
+  userId: number | null
+  action: string
+  result: string
+  message: string | null
+  eventName: string | null
+  handler: string | null
+  payload: unknown
+  actor: unknown
+  retryCount: number
+  maxRetries: number
+  nextRetryAt: string | null
+  deadLetterAt: string | null
+  dedupeKey: string | null
+  lastAttemptAt: string | null
+  lastError: string | null
+  createdAt: string
+}
+
+export interface PluginEventSummary {
+  total: number
+  success: number
+  failed: number
+  retryPending: number
+  deadLetter: number
+  deduped: number
+  dueRetry: number
+  updatedAt: string
+}
+
+export interface PluginEventReplayResult {
+  id: number
+  pluginId: string
+  eventName: string
+  handler: string
+  result: 'success' | 'retry_pending' | 'dead_letter'
+  retryCount: number
 }
 
 export interface PluginConfigValue {
@@ -811,6 +1783,7 @@ export interface Instance {
     vipLevel: number
     vipBadgeStyle?: VipBadgeStyle | null
   } | null
+  servicePanelExtensions?: Array<PluginServiceExtensionTarget & { hook: 'servicePanel' }>
   created_at: string
   createdAt?: string  // camelCase 别名
   updated_at: string
@@ -1862,6 +2835,89 @@ export interface UpdateOAuthConfigRequest {
   clientId?: string
   clientSecret?: string
   enabled?: boolean
+}
+
+export interface OAuthClientApp {
+  id: number
+  name: string
+  clientId: string
+  redirectUris: string[]
+  scopes: PublicApiScope[]
+  enabled: boolean
+  createdByUserId: number
+  createdByUsername: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UpsertOAuthClientAppRequest {
+  name: string
+  redirectUris: string[]
+  scopes: PublicApiScope[]
+  enabled: boolean
+}
+
+export interface OAuthProviderConsentResponse {
+  app: {
+    id: number
+    name: string
+    clientId: string
+  }
+  requestedScopes: PublicApiScope[]
+  scopeMetadata: PublicApiScopeMetadata[]
+  existingScopes: PublicApiScope[]
+  consentRequired: boolean
+  request: {
+    responseType: string
+    clientId: string
+    redirectUri: string
+    scope: string
+    state: string | null
+  }
+}
+
+export interface OAuthProviderAuthorizeRequest {
+  responseType: 'code'
+  clientId: string
+  redirectUri: string
+  scope: string
+  state?: string | null
+  confirmed?: boolean
+}
+
+export interface OAuthProviderAuthorizeResponse {
+  redirectTo: string
+  expiresIn?: number
+}
+
+export interface OAuthProviderAuthorization {
+  id: number
+  app: {
+    id: number
+    name: string
+    clientId: string
+    enabled: boolean
+  }
+  scopes: PublicApiScope[]
+  active: boolean
+  lastAuthorizedAt: string
+  revokedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminOAuthAuthorization extends OAuthProviderAuthorization {
+  user: {
+    id: number
+    username: string
+    email: string | null
+    role: string
+    status: string
+  }
+  tokenStats: {
+    activeAccessTokens: number
+    activeRefreshTokens: number
+  }
 }
 
 // ==================== 帮助文档 ====================

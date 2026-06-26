@@ -1,0 +1,236 @@
+{
+  "id": "com.payincus.theme.clean",
+  "name": "PayIncus Clean Theme",
+  "version": "1.0.0",
+  "payincus": ">=0.6.0",
+  "description": "Official clean theme sample with design tokens, controlled config fields, CSS assets, and safe template fragments.",
+  "author": "PayIncus",
+  "homepage": "https://docs.payincus.com/plugins/templates",
+  "css": "dist/theme.css",
+  "tokens": {
+    "colorPrimary": "#0f766e",
+    "colorAccent": "#2563eb",
+    "colorSurface": "#ffffff",
+    "colorMuted": "#64748b",
+    "radius": "8px",
+    "shadow": "0 10px 30px rgba(15, 23, 42, 0.08)"
+  },
+  "layoutSlots": [
+    "public.home.hero",
+    "public.home.sections",
+    "public.market.banner",
+    "public.auth.aside",
+    "user.shell.brand",
+    "user.dashboard.banner",
+    "user.dashboard.cards",
+    "user.instance.detail.extra",
+    "user.wallet.banner",
+    "user.tickets.banner",
+    "user.extensions.banner",
+    "user.orders.banner",
+    "user.profile.banner",
+    "user.invites.banner",
+    "user.hosts.banner",
+    "user.host.create.banner",
+    "admin.shell.brand",
+    "admin.extensions.header",
+    "admin.extensions.market.banner",
+    "admin.extensions.theme.banner",
+    "admin.dashboard.banner",
+    "admin.dashboard.widgets",
+    "admin.billing.banner",
+    "admin.payment.providers.banner",
+    "admin.oauth.banner",
+    "shared.footer"
+  ],
+  "templates": [
+    {
+      "slot": "public.home.hero",
+      "title": "Clean homepage hero",
+      "entry": "templates/public/home-hero.html"
+    },
+    {
+      "slot": "public.home.sections",
+      "title": "Clean homepage sections",
+      "entry": "templates/public/home-sections.html"
+    },
+    {
+      "slot": "public.market.banner",
+      "title": "Clean market banner",
+      "entry": "templates/public/market-banner.html"
+    },
+    {
+      "slot": "public.auth.aside",
+      "title": "Clean authentication aside",
+      "entry": "templates/public/auth-aside.html"
+    },
+    {
+      "slot": "user.shell.brand",
+      "title": "Clean user shell brand",
+      "entry": "templates/user/shell-brand.html"
+    },
+    {
+      "slot": "user.dashboard.banner",
+      "title": "Clean user dashboard banner",
+      "entry": "templates/user/dashboard-banner.html"
+    },
+    {
+      "slot": "user.dashboard.cards",
+      "title": "Clean user dashboard cards",
+      "entry": "templates/user/dashboard-cards.html"
+    },
+    {
+      "slot": "user.instance.detail.extra",
+      "title": "Clean instance detail extra",
+      "entry": "templates/user/instance-detail-extra.html"
+    },
+    {
+      "slot": "user.wallet.banner",
+      "title": "Clean wallet banner",
+      "entry": "templates/user/wallet-banner.html"
+    },
+    {
+      "slot": "user.tickets.banner",
+      "title": "Clean tickets banner",
+      "entry": "templates/user/tickets-banner.html"
+    },
+    {
+      "slot": "user.extensions.banner",
+      "title": "Clean extensions banner",
+      "entry": "templates/user/extensions-banner.html"
+    },
+    {
+      "slot": "user.orders.banner",
+      "title": "Clean orders banner",
+      "entry": "templates/user/orders-banner.html"
+    },
+    {
+      "slot": "user.profile.banner",
+      "title": "Clean profile banner",
+      "entry": "templates/user/profile-banner.html"
+    },
+    {
+      "slot": "user.invites.banner",
+      "title": "Clean invites banner",
+      "entry": "templates/user/invites-banner.html"
+    },
+    {
+      "slot": "user.hosts.banner",
+      "title": "Clean hosts banner",
+      "entry": "templates/user/hosts-banner.html"
+    },
+    {
+      "slot": "user.host.create.banner",
+      "title": "Clean host create banner",
+      "entry": "templates/user/host-create-banner.html"
+    },
+    {
+      "slot": "admin.shell.brand",
+      "title": "Clean admin shell brand",
+      "entry": "templates/admin/shell-brand.html"
+    },
+    {
+      "slot": "admin.extensions.header",
+      "title": "Clean extension center header",
+      "entry": "templates/admin/extensions-header.html"
+    },
+    {
+      "slot": "admin.extensions.market.banner",
+      "title": "Clean extension market banner",
+      "entry": "templates/admin/extensions-market-banner.html"
+    },
+    {
+      "slot": "admin.extensions.theme.banner",
+      "title": "Clean extension theme banner",
+      "entry": "templates/admin/extensions-theme-banner.html"
+    },
+    {
+      "slot": "admin.dashboard.banner",
+      "title": "Clean admin dashboard banner",
+      "entry": "templates/admin/dashboard-banner.html"
+    },
+    {
+      "slot": "admin.dashboard.widgets",
+      "title": "Clean admin dashboard widgets",
+      "entry": "templates/admin/dashboard-widgets.html"
+    },
+    {
+      "slot": "admin.billing.banner",
+      "title": "Clean billing banner",
+      "entry": "templates/admin/billing-banner.html"
+    },
+    {
+      "slot": "admin.payment.providers.banner",
+      "title": "Clean payment providers banner",
+      "entry": "templates/admin/payment-providers-banner.html"
+    },
+    {
+      "slot": "admin.oauth.banner",
+      "title": "Clean OAuth banner",
+      "entry": "templates/admin/oauth-banner.html"
+    },
+    {
+      "slot": "shared.footer",
+      "title": "Clean shared footer",
+      "entry": "templates/public/footer.html"
+    }
+  ],
+  "configSchema": {
+    "brandColor": {
+      "type": "color",
+      "label": "Brand color",
+      "description": "Primary color used by theme accents.",
+      "group": "Brand",
+      "order": 10,
+      "required": true,
+      "default": "#0f766e"
+    },
+    "accentColor": {
+      "type": "color",
+      "label": "Accent color",
+      "description": "Secondary action color.",
+      "group": "Brand",
+      "order": 20,
+      "required": true,
+      "default": "#2563eb"
+    },
+    "layoutDensity": {
+      "type": "select",
+      "label": "Layout density",
+      "description": "Controls spacing assumptions used by the sample theme.",
+      "group": "Layout",
+      "order": 30,
+      "required": true,
+      "default": "comfortable",
+      "options": [
+        { "label": "Comfortable", "value": "comfortable" },
+        { "label": "Compact", "value": "compact" }
+      ]
+    },
+    "announcementText": {
+      "type": "text",
+      "label": "Announcement text",
+      "description": "Short text shown by safe template fragments.",
+      "group": "Content",
+      "order": 40,
+      "required": false,
+      "default": "Clean operations for every service."
+    },
+    "brandMark": {
+      "type": "file",
+      "label": "Brand mark",
+      "description": "Optional PNG, JPEG, or WebP image uploaded through the admin theme config form.",
+      "group": "Brand",
+      "order": 50,
+      "required": false
+    },
+    "notes": {
+      "type": "placeholder",
+      "label": "Safety note",
+      "description": "Theme packages may only change visual surfaces through CSS, tokens, config values, and safe template fragments.",
+      "group": "Review",
+      "order": 60,
+      "required": false
+    }
+  }
+}

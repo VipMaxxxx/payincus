@@ -31,20 +31,141 @@
     "plugin:config:write"
   ],
   "configSchema": {
-    "enabled": { "type": "boolean", "title": "启用 AI 工单助手" },
-    "mode": { "type": "string", "title": "接管模式", "enum": ["draft", "semi_auto", "auto"] },
-    "model": { "type": "string", "title": "模型名称" },
-    "apiBaseUrl": { "type": "string", "title": "OpenAI 兼容接口地址" },
-    "apiKey": { "type": "string", "title": "模型 API Key" },
-    "temperature": { "type": "number", "title": "模型温度" },
-    "timeoutMs": { "type": "number", "title": "模型请求超时时间（毫秒）" },
-    "autoReplyCategories": { "type": "array", "title": "允许自动回复的工单分类" },
-    "confidenceThreshold": { "type": "number", "title": "自动回复置信度阈值" },
-    "dailyAutoReplyLimit": { "type": "number", "title": "每日自动回复上限" },
-    "ticketAutoReplyLimit": { "type": "number", "title": "单工单自动回复上限" },
-    "cooldownSeconds": { "type": "number", "title": "自动回复冷却时间（秒）" },
-    "showAiIdentity": { "type": "boolean", "title": "回复中展示 AI 身份" },
-    "systemPrompt": { "type": "string", "title": "自定义系统提示词" }
+    "enabled": {
+      "type": "checkbox",
+      "label": "启用 AI 工单助手",
+      "group": "基础设置",
+      "order": 10,
+      "required": false,
+      "default": false
+    },
+    "mode": {
+      "type": "select",
+      "label": "接管模式",
+      "group": "基础设置",
+      "order": 20,
+      "required": true,
+      "default": "draft",
+      "options": [
+        { "label": "只生成草稿", "value": "draft" },
+        { "label": "人工审核后接管", "value": "semi_auto" },
+        { "label": "自动接管低风险工单", "value": "auto" }
+      ]
+    },
+    "model": {
+      "type": "text",
+      "label": "模型名称",
+      "group": "模型",
+      "order": 30,
+      "required": true,
+      "default": "gpt-4o-mini"
+    },
+    "apiBaseUrl": {
+      "type": "text",
+      "label": "OpenAI 兼容接口地址",
+      "group": "模型",
+      "order": 40,
+      "required": false,
+      "placeholder": "https://api.openai.com/v1"
+    },
+    "apiKey": {
+      "type": "password",
+      "label": "模型 API Key",
+      "group": "模型",
+      "order": 50,
+      "required": false,
+      "secret": true
+    },
+    "temperature": {
+      "type": "number",
+      "label": "模型温度",
+      "group": "模型",
+      "order": 60,
+      "required": true,
+      "default": 0.2,
+      "min": 0,
+      "max": 1,
+      "step": 0.1
+    },
+    "timeoutMs": {
+      "type": "number",
+      "label": "模型请求超时时间（毫秒）",
+      "group": "模型",
+      "order": 70,
+      "required": true,
+      "default": 20000,
+      "min": 3000,
+      "max": 60000,
+      "step": 1000
+    },
+    "autoReplyCategories": {
+      "type": "tags",
+      "label": "允许自动回复的工单分类",
+      "group": "安全策略",
+      "order": 80,
+      "required": false,
+      "default": ["general", "billing"],
+      "placeholder": "general,billing"
+    },
+    "confidenceThreshold": {
+      "type": "number",
+      "label": "自动回复置信度阈值",
+      "group": "安全策略",
+      "order": 90,
+      "required": true,
+      "default": 0.82,
+      "min": 0,
+      "max": 1,
+      "step": 0.01
+    },
+    "dailyAutoReplyLimit": {
+      "type": "number",
+      "label": "每日自动回复上限",
+      "group": "安全策略",
+      "order": 100,
+      "required": true,
+      "default": 100,
+      "min": 1,
+      "max": 1000,
+      "step": 1
+    },
+    "ticketAutoReplyLimit": {
+      "type": "number",
+      "label": "单工单自动回复上限",
+      "group": "安全策略",
+      "order": 110,
+      "required": true,
+      "default": 3,
+      "min": 1,
+      "max": 20,
+      "step": 1
+    },
+    "cooldownSeconds": {
+      "type": "number",
+      "label": "自动回复冷却时间（秒）",
+      "group": "安全策略",
+      "order": 120,
+      "required": true,
+      "default": 120,
+      "min": 0,
+      "max": 3600,
+      "step": 10
+    },
+    "showAiIdentity": {
+      "type": "checkbox",
+      "label": "回复中展示 AI 身份",
+      "group": "安全策略",
+      "order": 130,
+      "required": false,
+      "default": true
+    },
+    "systemPrompt": {
+      "type": "textarea",
+      "label": "自定义系统提示词",
+      "group": "提示词",
+      "order": 140,
+      "required": false
+    }
   },
   "templates": [
     {

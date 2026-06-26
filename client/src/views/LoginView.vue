@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { getSafeRedirectUrl } from '@/utils/validation'
 import api from '@/api'
@@ -182,6 +183,11 @@ function getProviderInfo(provider: string): ProviderInfo {
     :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'"
   >
     <div class="w-full max-w-sm">
+      <ThemeTemplateSlot
+        slot-name="public.auth.aside"
+        container-class="mb-6"
+      />
+
       <!-- Logo -->
       <div class="text-center mb-8">
         <img

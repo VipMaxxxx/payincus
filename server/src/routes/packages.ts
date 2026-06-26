@@ -15,6 +15,7 @@ import { normalizeTrafficMultiplier } from '../lib/traffic-multiplier.js'
 import { parseNullablePostgresBigIntInput, parseRequiredPostgresBigIntInput } from '../lib/bigint-input.js'
 import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
 import { calculateVipLevel, getVipBadgeStyleForLevel, getVipRules } from '../services/vip-levels.js'
+import { listEnabledServiceExtensionTargets } from '../lib/plugin-extension-dispatch.js'
 
 const KVM_UNSUPPORTED_NETWORK_MODES = new Set(['nat_ipv6_nat', 'ipv6_nat'])
 const MAX_PACKAGE_PLAN_NAME_LENGTH = 50
@@ -757,6 +758,8 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       orderBy: { name: 'asc' }
     })
     
+    const checkoutExtensionTargets = await listEnabledServiceExtensionTargets('checkoutConfig')
+
     // 查询每个套餐是否有定价方案，并计算售罄状态
     const packagesWithDetails = await Promise.all(packages.map(async (pkg) => {
       // 获取套餐的定价方案
@@ -821,6 +824,9 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       
       // 判断是否为托管市场套餐
       const sourceType = pkg.user.role === 'admin' ? 'official' : 'market'
+      const checkoutExtensions = checkoutExtensionTargets.filter(target =>
+        target.productId === null || target.productId === String(pkg.id)
+      )
       
       return {
         id: pkg.id,
@@ -840,6 +846,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         required_package_id: null,
         required_package_name: null,
         sourceType,
+        checkoutExtensions,
         soldOut,
         isPaid,
         plans: plans.map(p => ({

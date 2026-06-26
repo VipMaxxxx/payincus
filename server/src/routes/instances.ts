@@ -34,6 +34,11 @@ import {
   getCachedCloudInitStatus,
   persistCloudInitStatus
 } from '../lib/cloud-init-status.js'
+import {
+  emitServicePluginEvent,
+  emitServiceResourceRollbackPluginEvent,
+  emitServiceTaskPluginEvent
+} from '../lib/plugin-business-events.js'
 import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'
 import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
 import { customAlphabet } from 'nanoid'
@@ -71,6 +76,7 @@ import { calculateCreateBilling } from '../db/billing-operations.js'
 import { getUserBalance } from '../db/balance.js'
 import { selectBindableIpv4ListenAddress } from '../lib/network-address.js'
 import { applyTrafficMultiplier, normalizeTrafficMultiplier, resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
+import { listEnabledServiceExtensionTargets } from '../lib/plugin-extension-dispatch.js'
 import {
   persistResolvedInstanceNetworkAddresses,
   resolveInstanceNetworkAddresses
@@ -245,7 +251,30 @@ async function createInstanceTaskOrConflict(
   data: CreateInstanceTaskData
 ): Promise<InstanceTaskWithDetails | null> {
   try {
-    return await createInstanceTask(data)
+    const task = await createInstanceTask(data)
+    const instance = await prisma.instance.findUnique({
+      where: { id: data.instanceId },
+      select: { name: true }
+    })
+    emitServiceTaskPluginEvent({
+      event: 'service.task.queued',
+      instanceId: task.instanceId,
+      userId: task.userId,
+      hostId: task.hostId,
+      instanceName: instance?.name || `instance-${task.instanceId}`,
+      taskId: task.id,
+      taskType: task.taskType,
+      taskStatus: task.status,
+      source: 'instances.route',
+      dedupeKey: `service.task.queued:instances:${task.id}`,
+      metadata: {
+        imageAlias: task.imageAlias,
+        targetName: task.targetName,
+        targetHostId: task.targetHostId,
+        snapshotName: task.snapshotName
+      }
+    })
+    return task
   } catch (error) {
     if (error instanceof InstanceTaskConflictError) {
       sendActiveTaskConflict(reply, error.activeTask)
@@ -2297,6 +2326,13 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           textColor: string
         } | null
       } | null
+      servicePanelExtensions?: Array<{
+        pluginId: string
+        serviceExtensionKey: string
+        name: string
+        productId: string | null
+        hook: 'servicePanel'
+      }>
     } = {
       id: instance.id,
       incusId: instance.incus_id,
@@ -2359,6 +2395,15 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       suspend_reason: instance.suspend_reason,
       // 自动续费（仅付费实例有意义）
       autoRenew: (instance as any).auto_renew ?? false
+    }
+
+    if (instance.package_id) {
+      const servicePanelTargets = await listEnabledServiceExtensionTargets('servicePanel')
+      response.servicePanelExtensions = servicePanelTargets.filter(target =>
+        target.productId === null || target.productId === String(instance.package_id)
+      ).map(target => ({ ...target, hook: 'servicePanel' as const }))
+    } else {
+      response.servicePanelExtensions = []
     }
 
     // 用户托管节点：获取节点所有者详细信息
@@ -2895,6 +2940,18 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         suspendReason: reason || ''
       })
     }
+    emitServicePluginEvent({
+      event: 'service.suspended',
+      instanceId,
+      userId: instance.user_id,
+      hostId: instance.host_id,
+      instanceName: instance.name,
+      status: 'suspended',
+      incusId: instance.incus_id,
+      reason: reason || '',
+      source: 'instance.manual_suspend',
+      actor: { id: user.id, role: user.role, username: user.username }
+    })
 
     reply.code(200).send({
       message: 'Instance suspended successfully'
@@ -2953,6 +3010,18 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         hostName: host?.name || ''
       })
     }
+    emitServicePluginEvent({
+      event: 'service.unsuspended',
+      instanceId,
+      userId: instance.user_id,
+      hostId: instance.host_id,
+      instanceName: instance.name,
+      status: 'stopped',
+      incusId: instance.incus_id,
+      reason: null,
+      source: 'instance.manual_unsuspend',
+      actor: { id: user.id, role: user.role, username: user.username }
+    })
 
     reply.code(200).send({
       message: 'Instance unsuspended successfully'
@@ -4022,6 +4091,26 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
             : '用户删除实例'
         }).catch(() => { })
       }
+      emitServicePluginEvent({
+        event: 'service.deleted',
+        instanceId,
+        userId: instance.user_id,
+        hostId: instance.host_id,
+        instanceName: instance.name,
+        status: 'deleted',
+        incusId: instance.incus_id,
+        reason: reason || null,
+        source: isPrivilegedDeleter && instance.user_id !== user.id
+          ? (isAdmin ? 'instance.admin_delete' : 'instance.host_owner_delete')
+          : 'instance.user_delete',
+        actor: { id: user.id, role: user.role, username: user.username },
+        metadata: {
+          cpu: instance.cpu,
+          memory: instance.memory,
+          disk: instance.disk,
+          releasedPorts: portMappingsCount
+        }
+      })
 
       await createLog(
         user.id,
@@ -5847,6 +5936,22 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       { instanceId: task.instanceId }
     )
 
+    const cancelledInstance = await db.getInstanceById(cancelledTask.instanceId).catch(() => null)
+    emitServiceTaskPluginEvent({
+      event: 'service.task.cancelled',
+      instanceId: cancelledTask.instanceId,
+      userId: cancelledTask.userId,
+      hostId: cancelledTask.hostId,
+      instanceName: cancelledInstance?.name || `instance-${cancelledTask.instanceId}`,
+      taskId: cancelledTask.id,
+      taskType: cancelledTask.taskType,
+      taskStatus: cancelledTask.status,
+      source: 'instances.route',
+      actor: { id: user.id, role: user.role },
+      dedupeKey: `service.task.cancelled:instances:${cancelledTask.id}`,
+      metadata: { failureType: 'user_cancelled' }
+    })
+
     return {
       message: 'Task cancelled',
       task: {
@@ -6463,6 +6568,25 @@ async function createInstanceAsync(
         ipv4: ipv4 || undefined,
         ipv6: ipv6 || undefined
       })
+      emitServicePluginEvent({
+        event: 'service.provisioned',
+        instanceId,
+        userId,
+        hostId: host.id,
+        instanceName: instance.name,
+        status: 'running',
+        incusId: config.name,
+        source: 'instance.provisioning',
+        metadata: {
+          image: config.image,
+          cpu: config.cpu,
+          memory: config.memory,
+          disk: config.disk,
+          networkMode: config.networkMode,
+          ipv4: ipv4 || null,
+          ipv6: ipv6 || null
+        }
+      })
 
       // 发送实例创建成功邮件通知
       try {
@@ -6531,16 +6655,46 @@ async function createInstanceAsync(
 
     // 只有成功更新状态时才回滚资源（避免与超时清理任务双重回滚）
     if (updateResult.count > 0 && userId && resources) {
+      const rollbackPortCount = ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(config.networkMode) ? (config.portLimit || 0) : 0
       try {
         await db.rollbackResources({
           hostId: host.id,
           cpu: resources.cpu,
           memory: resources.memory,
           disk: resources.disk,
-          portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(config.networkMode) ? (config.portLimit || 0) : 0
+          portCount: rollbackPortCount
+        })
+        emitServiceResourceRollbackPluginEvent({
+          event: 'service.resource.rollback.completed',
+          instanceId,
+          userId,
+          hostId: host.id,
+          instanceName: config.name,
+          source: 'instance.provisioning.failure',
+          reason: 'provisioning_failed',
+          cpu: resources.cpu,
+          memory: resources.memory,
+          disk: resources.disk,
+          portCount: rollbackPortCount,
+          dedupeKey: `service.resource.rollback.completed:provisioning:${instanceId}`
         })
         console.log(`[Provisioning] 用户 ${userId} 资源已回滚 (CPU=${resources.cpu}, Mem=${resources.memory}MB, Disk=${resources.disk}MB)`)
       } catch (rollbackErr) {
+        emitServiceResourceRollbackPluginEvent({
+          event: 'service.resource.rollback.failed',
+          instanceId,
+          userId,
+          hostId: host.id,
+          instanceName: config.name,
+          source: 'instance.provisioning.failure',
+          reason: 'rollback_failed',
+          cpu: resources.cpu,
+          memory: resources.memory,
+          disk: resources.disk,
+          portCount: rollbackPortCount,
+          dedupeKey: `service.resource.rollback.failed:provisioning:${instanceId}`,
+          metadata: { failureType: 'resource_rollback_failed' }
+        })
         console.error(`[Provisioning] 资源回滚失败:`, rollbackErr)
       }
 

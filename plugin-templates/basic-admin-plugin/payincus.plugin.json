@@ -11,6 +11,16 @@
         "slot": "admin.plugins.settings",
         "title": "Admin Tool",
         "entry": "dist/admin/index.html"
+      },
+      {
+        "slot": "admin.sidebar.extra",
+        "title": "Admin Tool Console",
+        "entry": "dist/admin/index.html"
+      },
+      {
+        "slot": "admin.dashboard.widgets",
+        "title": "Admin Tool Widget",
+        "entry": "dist/admin/index.html"
       }
     ],
     "userPages": []

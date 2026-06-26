@@ -13,6 +13,7 @@ import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import BillingOverviewIcon from '@/components/admin/BillingOverviewIcon.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { calculateDiscountedPrice } from '@/utils/billing'
 import { instanceDetailPath } from '@/utils/app-paths'
 
@@ -1267,6 +1268,7 @@ function copyToClipboard(text: string) {
       <h1 class="page-title">{{ $t('admin.billing.title') }}</h1>
       <p class="text-sm text-themed-muted mt-1">{{ $t('admin.billing.description') }}</p>
     </div>
+    <ThemeTemplateSlot slot-name="admin.billing.banner" container-class="mb-6 overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
     <!-- Tab 切换 -->
     <div class="mb-6 overflow-x-auto border-b border-themed">

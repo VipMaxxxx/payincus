@@ -59,6 +59,29 @@ export class SftpProvider implements IStorageProvider {
         }
     }
 
+    async downloadStream(filename: string): Promise<Readable> {
+        const client = await this.getClient()
+        const remotePath = joinStorageRemotePath(this.basePath, filename)
+        try {
+            const stream = await client.get(remotePath)
+            if (Buffer.isBuffer(stream) || typeof stream === 'string') {
+                await client.end()
+                return Readable.from(stream)
+            }
+            const nodeStream = stream as unknown as Readable
+            nodeStream.on('close', () => {
+                void client.end()
+            })
+            nodeStream.on('error', () => {
+                void client.end()
+            })
+            return nodeStream
+        } catch (error) {
+            await client.end()
+            throw error
+        }
+    }
+
     async testConnection(): Promise<void> {
         const client = await this.getClient()
 

@@ -490,6 +490,7 @@ enum PaymentProviderType {
   alipay_direct // 支付宝直连（预留）
   wechat_direct // 微信直连（预留）
   manual        // 人工充值
+  plugin_gateway // 插件支付网关
 }
 
 // 支付渠道状态
@@ -507,6 +508,14 @@ enum RechargeStatus {
   failed        // 失败
   cancelled     // 已取消
   refunded      // 已退款
+}
+
+enum RechargeRefundStatus {
+  pending    // 待处理
+  processing // 支付渠道退款处理中
+  completed  // 已完成
+  failed     // 失败
+  cancelled  // 已取消
 }
 
 enum VipLevelRuleType {
@@ -613,6 +622,8 @@ model User {
   oauthBindings        UserOAuthBinding[]
   telegramBinding      UserTelegramBinding?
   telegramBindTokens   TelegramBindToken[]
+  publicApiTokens      PublicApiToken[]
+  publicPluginActionRateLimitPolicies PublicPluginActionRateLimitPolicy[] @relation("PublicPluginActionRateLimitPolicyUpdater")
   helpArticles         HelpArticle[]         @relation("CreatedArticles")
   logs                 Log[]
   transfersSent        InstanceTransfer[]    @relation("TransferFrom")
@@ -668,6 +679,9 @@ model User {
   // 计费相关
   balanceLogs     BalanceLog[]
   rechargeRecords RechargeRecord[]
+  rechargeRefundTargets RechargeRefundRequest[] @relation("RechargeRefundTarget")
+  rechargeRefundRequests RechargeRefundRequest[] @relation("RechargeRefundRequester")
+  rechargeRefundProcessors RechargeRefundRequest[] @relation("RechargeRefundProcessor")
   balanceAdjustmentTargets BalanceAdjustmentRequest[] @relation("BalanceAdjustmentTarget")
   balanceAdjustmentRequests BalanceAdjustmentRequest[] @relation("BalanceAdjustmentRequester")
   balanceAdjustmentReviews BalanceAdjustmentRequest[] @relation("BalanceAdjustmentReviewer")
@@ -721,6 +735,21 @@ model User {
   pluginInstallTasks PluginInstallTask[] @relation("PluginInstallTaskStarter")
   pluginEventLogs PluginEventLog[] @relation("PluginEventLogUser")
   pluginUserData PluginUserData[] @relation("PluginUserDataUser")
+  pluginStorageItemsCreated PluginStorageItem[] @relation("PluginStorageItemCreator")
+  pluginStorageItemsUpdated PluginStorageItem[] @relation("PluginStorageItemUpdater")
+  pluginStorageBackupRemoteArchives PluginStorageBackupRemoteArchive[] @relation("PluginStorageBackupRemoteArchiveUploader")
+  pluginMarketSubmissions PluginMarketSubmission[] @relation("PluginMarketSubmissionSubmitter")
+  pluginMarketReviews PluginMarketSubmission[] @relation("PluginMarketSubmissionReviewer")
+  pluginEventAlertPreferences PluginEventAlertPreference[] @relation("PluginEventAlertPreferenceUser")
+  themeMarketSubmissions ThemeMarketSubmission[] @relation("ThemeMarketSubmissionSubmitter")
+  themeMarketReviews ThemeMarketSubmission[] @relation("ThemeMarketSubmissionReviewer")
+  themesInstalled ThemePackage[] @relation("ThemeInstaller")
+  themesEnabled ThemePackage[] @relation("ThemeEnabler")
+  oauthAppsCreated OAuthClientApp[] @relation("OAuthClientAppCreator")
+  oauthAuthorizationCodes OAuthAuthorizationCode[] @relation("OAuthAuthorizationCodeUser")
+  oauthAccessTokens OAuthAccessToken[] @relation("OAuthAccessTokenUser")
+  oauthRefreshTokens OAuthRefreshToken[] @relation("OAuthRefreshTokenUser")
+  oauthGrants OAuthGrant[] @relation("OAuthGrantUser")
   lifecycleTags UserLifecycleTag[]
   lifecycleSegmentMembers UserLifecycleSegmentMember[]
   lifecycleEvents UserLifecycleEvent[]
@@ -1581,6 +1610,191 @@ model TelegramBindToken {
   @@map("telegram_bind_tokens")
 }
 
+model PublicApiToken {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  name        String
+  tokenPrefix String    @map("token_prefix")
+  tokenHash   String    @unique @map("token_hash")
+  scopes      Json      @default("[]")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenPrefix])
+  @@index([revokedAt])
+  @@index([expiresAt])
+  @@map("public_api_tokens")
+}
+
+model PublicPluginActionRateLimitBucket {
+  id           Int      @id @default(autoincrement())
+  tokenSource  String   @map("token_source")
+  tokenId      Int      @map("token_id")
+  pluginId     String   @map("plugin_id")
+  actionName   String   @map("action_name")
+  policy       String   @default("normal")
+  requestCount Int      @default(0) @map("request_count")
+  resetAt      DateTime @map("reset_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+
+  @@unique([tokenSource, tokenId, pluginId, actionName])
+  @@index([pluginId])
+  @@index([resetAt])
+  @@map("public_plugin_action_rate_limit_buckets")
+}
+
+model PublicPluginActionRateLimitPolicy {
+  id              Int      @id @default(autoincrement())
+  pluginId        String   @default("*") @map("plugin_id")
+  actionName      String   @default("*") @map("action_name")
+  rateLimit       String   @map("rate_limit")
+  maxRequests     Int      @map("max_requests")
+  windowSeconds   Int      @default(60) @map("window_seconds")
+  enabled         Boolean  @default(true)
+  updatedByUserId Int?     @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  updatedBy User? @relation("PublicPluginActionRateLimitPolicyUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([pluginId, actionName, rateLimit])
+  @@index([pluginId])
+  @@index([rateLimit])
+  @@index([enabled])
+  @@index([updatedByUserId])
+  @@map("public_plugin_action_rate_limit_policies")
+}
+
+model OAuthClientApp {
+  id              Int      @id @default(autoincrement())
+  name            String
+  clientId        String   @unique @map("client_id")
+  clientSecretHash String  @map("client_secret_hash")
+  redirectUris    Json     @default("[]") @map("redirect_uris")
+  scopes          Json     @default("[]")
+  enabled         Boolean  @default(true)
+  createdByUserId Int      @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation("OAuthClientAppCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  authorizationCodes OAuthAuthorizationCode[]
+  accessTokens OAuthAccessToken[]
+  refreshTokens OAuthRefreshToken[]
+  grants OAuthGrant[]
+
+  @@index([clientId])
+  @@index([enabled])
+  @@index([createdByUserId])
+  @@map("oauth_client_apps")
+}
+
+model OAuthGrant {
+  id               Int       @id @default(autoincrement())
+  appId            Int       @map("app_id")
+  userId           Int       @map("user_id")
+  scopes           Json      @default("[]")
+  lastAuthorizedAt DateTime  @default(now()) @map("last_authorized_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  app OAuthClientApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  user User          @relation("OAuthGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  accessTokens OAuthAccessToken[]
+  refreshTokens OAuthRefreshToken[]
+
+  @@unique([appId, userId])
+  @@index([userId])
+  @@index([appId])
+  @@index([revokedAt])
+  @@map("oauth_grants")
+}
+
+model OAuthAuthorizationCode {
+  id          Int       @id @default(autoincrement())
+  appId       Int       @map("app_id")
+  userId      Int       @map("user_id")
+  codeHash    String    @unique @map("code_hash")
+  redirectUri String    @map("redirect_uri")
+  scopes      Json      @default("[]")
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  app  OAuthClientApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  user User           @relation("OAuthAuthorizationCodeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+  @@map("oauth_authorization_codes")
+}
+
+model OAuthAccessToken {
+  id          Int       @id @default(autoincrement())
+  appId       Int       @map("app_id")
+  userId      Int       @map("user_id")
+  grantId     Int?      @map("grant_id")
+  tokenPrefix String    @map("token_prefix")
+  tokenHash   String    @unique @map("token_hash")
+  scopes      Json      @default("[]")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+  expiresAt   DateTime  @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  app  OAuthClientApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  user User           @relation("OAuthAccessTokenUser", fields: [userId], references: [id], onDelete: Cascade)
+  grant OAuthGrant?   @relation(fields: [grantId], references: [id], onDelete: SetNull)
+
+  @@index([appId])
+  @@index([userId])
+  @@index([grantId])
+  @@index([tokenPrefix])
+  @@index([revokedAt])
+  @@index([expiresAt])
+  @@map("oauth_access_tokens")
+}
+
+model OAuthRefreshToken {
+  id          Int       @id @default(autoincrement())
+  appId       Int       @map("app_id")
+  userId      Int       @map("user_id")
+  grantId     Int?      @map("grant_id")
+  tokenPrefix String    @map("token_prefix")
+  tokenHash   String    @unique @map("token_hash")
+  scopes      Json      @default("[]")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+  expiresAt   DateTime  @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  app OAuthClientApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  user User          @relation("OAuthRefreshTokenUser", fields: [userId], references: [id], onDelete: Cascade)
+  grant OAuthGrant?  @relation(fields: [grantId], references: [id], onDelete: SetNull)
+
+  @@index([appId])
+  @@index([userId])
+  @@index([grantId])
+  @@index([tokenPrefix])
+  @@index([revokedAt])
+  @@index([expiresAt])
+  @@map("oauth_refresh_tokens")
+}
+
 // ==================== 帮助文档模型 ====================
 
 model HelpArticle {
@@ -1670,9 +1884,42 @@ model StorageConfig {
 
   user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   uploadTasks BackupUploadTask[]
+  pluginStorageBackupRemoteArchives PluginStorageBackupRemoteArchive[]
 
   @@index([userId])
   @@map("storage_configs")
+}
+
+model PluginStorageBackupRemoteArchive {
+  id               Int         @id @default(autoincrement())
+  pluginId         String      @map("plugin_id")
+  backupId         String      @map("backup_id")
+  storageConfigId  Int         @map("storage_config_id")
+  uploadedByUserId Int         @map("uploaded_by_user_id")
+  remoteFileName   String      @map("remote_file_name")
+  remotePath       String?     @map("remote_path")
+  storageName      String      @map("storage_name")
+  storageType      StorageType @map("storage_type")
+  contentSha256    String      @map("content_sha256")
+  fileSize         BigInt      @map("file_size")
+  status           String      @default("available")
+  lastRestoredAt   DateTime?   @map("last_restored_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+  storageConfig StorageConfig @relation(fields: [storageConfigId], references: [id], onDelete: Restrict)
+  uploadedBy User @relation("PluginStorageBackupRemoteArchiveUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([pluginId, backupId, storageConfigId, remoteFileName])
+  @@index([pluginId])
+  @@index([backupId])
+  @@index([storageConfigId])
+  @@index([uploadedByUserId])
+  @@index([contentSha256])
+  @@index([status])
+  @@index([createdAt])
+  @@map("plugin_storage_backup_remote_archives")
 }
 
 // ==================== 备份上传任务模型 ====================
@@ -1773,6 +2020,11 @@ model Plugin {
   tasks PluginInstallTask[]
   eventLogs PluginEventLog[]
   userData PluginUserData[]
+  tableRows PluginTableRow[]
+  tableMigrations PluginTableMigration[]
+  publicActionRateLimitBuckets PublicPluginActionRateLimitBucket[]
+  eventDedupeLocks PluginEventDedupeLock[]
+  storageBackupRemoteArchives PluginStorageBackupRemoteArchive[]
 
   @@index([status])
   @@index([enabled])
@@ -1852,6 +2104,123 @@ model PluginMarketSource {
   @@map("plugin_market_sources")
 }
 
+model PluginMarketSubmission {
+  id                Int       @id @default(autoincrement())
+  pluginId          String    @map("plugin_id")
+  version           String
+  name              String
+  repoUrl           String    @map("repo_url")
+  releaseUrl        String    @map("release_url")
+  manifestUrl       String    @map("manifest_url")
+  packageUrl        String    @map("package_url")
+  sha256            String
+  developerName     String    @map("developer_name")
+  developerHomepage String?   @map("developer_homepage")
+  developerGithub   String?   @map("developer_github")
+  contactEmail      String    @map("contact_email")
+  permissions       Json      @default("{}")
+  compatibility     Json      @default("{}")
+  pricing           Json      @default("{}")
+  notes             String?
+  reviewStatus      String    @default("pending") @map("review_status")
+  riskLevel         String    @default("medium") @map("risk_level")
+  reviewNotes       String?   @map("review_notes")
+  scanStatus        String    @default("pending") @map("scan_status")
+  scanResult        Json      @default("{}") @map("scan_result")
+  scannedAt         DateTime? @map("scanned_at")
+  submittedByUserId Int       @map("submitted_by_user_id")
+  reviewedByUserId  Int?      @map("reviewed_by_user_id")
+  reviewedAt        DateTime? @map("reviewed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  submittedBy User  @relation("PluginMarketSubmissionSubmitter", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+  reviewedBy  User? @relation("PluginMarketSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([pluginId, version])
+  @@index([reviewStatus])
+  @@index([riskLevel])
+  @@index([scanStatus])
+  @@index([submittedByUserId])
+  @@index([reviewedByUserId])
+  @@index([createdAt])
+  @@map("plugin_market_submissions")
+}
+
+model ThemeMarketSubmission {
+  id                Int       @id @default(autoincrement())
+  themeId           String    @map("theme_id")
+  version           String
+  name              String
+  repoUrl           String    @map("repo_url")
+  releaseUrl        String    @map("release_url")
+  manifestUrl       String    @map("manifest_url")
+  packageUrl        String    @map("package_url")
+  sha256            String
+  developerName     String    @map("developer_name")
+  developerHomepage String?   @map("developer_homepage")
+  developerGithub   String?   @map("developer_github")
+  contactEmail      String    @map("contact_email")
+  compatibility     Json      @default("{}")
+  tokens            Json      @default("[]")
+  layoutSlots       Json      @default("[]") @map("layout_slots")
+  notes             String?
+  reviewStatus      String    @default("pending") @map("review_status")
+  riskLevel         String    @default("medium") @map("risk_level")
+  reviewNotes       String?   @map("review_notes")
+  scanStatus        String    @default("pending") @map("scan_status")
+  scanResult        Json      @default("{}") @map("scan_result")
+  scannedAt         DateTime? @map("scanned_at")
+  submittedByUserId Int       @map("submitted_by_user_id")
+  reviewedByUserId  Int?      @map("reviewed_by_user_id")
+  reviewedAt        DateTime? @map("reviewed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  submittedBy User  @relation("ThemeMarketSubmissionSubmitter", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+  reviewedBy  User? @relation("ThemeMarketSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([themeId, version])
+  @@index([reviewStatus])
+  @@index([riskLevel])
+  @@index([scanStatus])
+  @@index([submittedByUserId])
+  @@index([reviewedByUserId])
+  @@index([createdAt])
+  @@map("theme_market_submissions")
+}
+
+model ThemePackage {
+  id                Int       @id @default(autoincrement())
+  themeId           String    @unique @map("theme_id")
+  name              String
+  version           String
+  description       String?
+  author            String?
+  status            String    @default("installed")
+  enabled           Boolean   @default(false)
+  manifest          Json
+  tokens            Json      @default("{}")
+  configValues      Json      @default("{}") @map("config_values")
+  cssPath           String    @map("css_path")
+  installPath       String    @map("install_path")
+  packageSha256     String    @map("package_sha256")
+  installedByUserId Int       @map("installed_by_user_id")
+  enabledByUserId   Int?      @map("enabled_by_user_id")
+  enabledAt         DateTime? @map("enabled_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  installedBy User  @relation("ThemeInstaller", fields: [installedByUserId], references: [id], onDelete: Restrict)
+  enabledBy   User? @relation("ThemeEnabler", fields: [enabledByUserId], references: [id], onDelete: SetNull)
+
+  @@index([enabled])
+  @@index([status])
+  @@index([installedByUserId])
+  @@index([enabledByUserId])
+  @@map("theme_packages")
+}
+
 model PluginEventLog {
   id        Int      @id @default(autoincrement())
   pluginId  String   @map("plugin_id")
@@ -1859,6 +2228,17 @@ model PluginEventLog {
   action    String
   result    String
   message   String?
+  eventName String?  @map("event_name")
+  handler   String?
+  payload   Json?    @default("{}")
+  actor     Json?    @default("{}")
+  retryCount Int     @default(0) @map("retry_count")
+  maxRetries Int     @default(3) @map("max_retries")
+  nextRetryAt DateTime? @map("next_retry_at")
+  deadLetterAt DateTime? @map("dead_letter_at")
+  dedupeKey String? @map("dedupe_key")
+  lastAttemptAt DateTime? @map("last_attempt_at")
+  lastError String?  @map("last_error")
   createdAt DateTime @default(now()) @map("created_at")
 
   plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
@@ -1867,8 +2247,64 @@ model PluginEventLog {
   @@index([pluginId])
   @@index([userId])
   @@index([action])
+  @@index([result])
+  @@index([eventName])
+  @@index([handler])
+  @@index([dedupeKey])
+  @@index([pluginId, eventName, handler, dedupeKey])
+  @@index([nextRetryAt])
+  @@index([deadLetterAt])
+  @@index([lastAttemptAt])
   @@index([createdAt])
   @@map("plugin_event_logs")
+}
+
+model PluginEventDedupeLock {
+  id        Int      @id @default(autoincrement())
+  pluginId  String   @map("plugin_id")
+  eventName String   @map("event_name")
+  handler   String
+  dedupeKey String   @map("dedupe_key")
+  status    String   @default("in_flight")
+  eventLogId Int?    @map("event_log_id")
+  expiresAt DateTime? @map("expires_at")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+
+  @@unique([pluginId, eventName, handler, dedupeKey])
+  @@index([pluginId])
+  @@index([eventName])
+  @@index([handler])
+  @@index([dedupeKey])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([eventLogId])
+  @@map("plugin_event_dedupe_locks")
+}
+
+model PluginEventAlertPreference {
+  id                       Int      @id @default(autoincrement())
+  userId                   Int      @map("user_id")
+  pluginId                 String   @map("plugin_id")
+  enabled                  Boolean  @default(true)
+  minimumLevel             String   @default("warning") @map("minimum_level")
+  cooldownMinutes          Int      @default(360) @map("cooldown_minutes")
+  notifyOnDeadLetter       Boolean  @default(true) @map("notify_on_dead_letter")
+  notifyOnDueRetry         Boolean  @default(true) @map("notify_on_due_retry")
+  notifyOnSuccessRateBelow Boolean  @default(true) @map("notify_on_success_rate_below")
+  successRateThreshold     Int      @default(95) @map("success_rate_threshold")
+  recentWindowHours        Int      @default(24) @map("recent_window_hours")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  user User @relation("PluginEventAlertPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pluginId])
+  @@index([pluginId])
+  @@index([userId])
+  @@map("plugin_event_alert_preferences")
 }
 
 model PluginUserData {
@@ -1887,6 +2323,72 @@ model PluginUserData {
   @@index([pluginId])
   @@index([userId])
   @@map("plugin_user_data")
+}
+
+model PluginStorageItem {
+  id              Int      @id @default(autoincrement())
+  pluginId        String   @map("plugin_id")
+  scopeType       String   @map("scope_type")
+  scopeId         String   @default("_") @map("scope_id")
+  key             String
+  valueJson       Json     @default("{}") @map("value_json")
+  createdByUserId Int?     @map("created_by_user_id")
+  updatedByUserId Int?     @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  createdBy User? @relation("PluginStorageItemCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("PluginStorageItemUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([pluginId, scopeType, scopeId, key])
+  @@index([pluginId])
+  @@index([scopeType, scopeId])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("plugin_storage_items")
+}
+
+model PluginTableRow {
+  id              Int      @id @default(autoincrement())
+  pluginId        String   @map("plugin_id")
+  tableName       String   @map("table_name")
+  scopeType       String   @map("scope_type")
+  scopeId         String   @default("_") @map("scope_id")
+  rowKey          String   @map("row_key")
+  valueJson       Json     @default("{}") @map("value_json")
+  createdByUserId Int?     @map("created_by_user_id")
+  updatedByUserId Int?     @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+
+  @@unique([pluginId, tableName, scopeType, scopeId, rowKey])
+  @@index([pluginId])
+  @@index([pluginId, tableName])
+  @@index([scopeType, scopeId])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
+  @@map("plugin_table_rows")
+}
+
+model PluginTableMigration {
+  id              Int      @id @default(autoincrement())
+  pluginId        String   @map("plugin_id")
+  tableName       String   @map("table_name")
+  version         String
+  name            String
+  appliedByUserId Int      @map("applied_by_user_id")
+  appliedAt       DateTime @default(now()) @map("applied_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+
+  @@unique([pluginId, tableName, version])
+  @@index([pluginId])
+  @@index([pluginId, tableName])
+  @@index([appliedByUserId])
+  @@index([appliedAt])
+  @@map("plugin_table_migrations")
 }
 
 model InstanceAuditRule {
@@ -2886,6 +3388,7 @@ model PaymentProvider {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   rechargeRecords RechargeRecord[]
+  rechargeRefundRequests RechargeRefundRequest[]
 
   @@map("payment_providers")
 }
@@ -2930,12 +3433,48 @@ model RechargeRecord {
 
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider PaymentProvider @relation(fields: [providerId], references: [id])
+  refundRequests RechargeRefundRequest[]
 
   @@index([userId, status])
   @@index([status, createdAt])
   @@index([orderNo])
   @@index([tradeNo])
   @@map("recharge_records")
+}
+
+model RechargeRefundRequest {
+  id                Int                  @id @default(autoincrement())
+  rechargeRecordId  Int                  @map("recharge_record_id")
+  userId            Int                  @map("user_id")
+  providerId        Int                  @map("provider_id")
+  requestedByUserId Int                  @map("requested_by_user_id")
+  processedByUserId Int?                 @map("processed_by_user_id")
+  amount            Decimal              @db.Decimal(10, 2)
+  status            RechargeRefundStatus @default(pending)
+  reason            String               @db.Text
+  idempotencyKey    String               @unique @map("idempotency_key")
+  providerRequestId String?              @map("provider_request_id")
+  providerRefundId  String?              @map("provider_refund_id")
+  providerStatus    String?              @map("provider_status")
+  providerMessage   String?              @map("provider_message") @db.Text
+  providerMetadata  Json?                @map("provider_metadata")
+  failureReason     String?              @map("failure_reason") @db.Text
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  processedAt       DateTime?            @map("processed_at")
+  completedAt       DateTime?            @map("completed_at")
+
+  rechargeRecord RechargeRecord  @relation(fields: [rechargeRecordId], references: [id], onDelete: Cascade)
+  user           User            @relation("RechargeRefundTarget", fields: [userId], references: [id], onDelete: Cascade)
+  provider       PaymentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  requestedBy    User            @relation("RechargeRefundRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  processedBy    User?           @relation("RechargeRefundProcessor", fields: [processedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([rechargeRecordId, status])
+  @@index([userId, createdAt])
+  @@index([providerId, status])
+  @@index([status, createdAt])
+  @@map("recharge_refund_requests")
 }
 
 // VIP 等级规则配置

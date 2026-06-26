@@ -13,6 +13,12 @@ export interface IStorageProvider {
     uploadStream(fileStream: Readable, filename: string): Promise<void>
 
     /**
+     * 从远程存储读取文件流
+     * @param filename 远程文件名
+     */
+    downloadStream(filename: string): Promise<Readable>
+
+    /**
      * 测试连接
      */
     testConnection(): Promise<void>
@@ -40,12 +46,10 @@ export interface StorageConfigData {
     extra?: Record<string, unknown> | null
 }
 
-// S3 扩展配置（预留）
+// S3-compatible 扩展配置。密钥不放 extra；access key 使用 username，secret 使用加密 password。
 export interface S3ExtraConfig {
     bucket: string
     region: string
-    accessKeyId: string
-    secretAccessKey: string  // 已解密
     endpoint?: string  // 自定义端点（如 MinIO）
     forcePathStyle?: boolean
 }

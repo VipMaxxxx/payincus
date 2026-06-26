@@ -33,7 +33,7 @@ PayIncus 是基于开源项目 [qwer-xyz/incudal](https://github.com/qwer-xyz/in
 - 实例交付：基于 Incus 创建和管理 LXC / KVM 实例，支持 NAT 网络、IPv6、系统镜像、套餐资源和节点绑定。
 - 用户后台：注册登录、控制台、实例详情、终端 WebSocket、工单、公告、通知、邀请、钱包、邮箱和托管节点。
 - 管理后台：用户、套餐、节点、镜像、订单、日志、OAuth、Telegram、邮件、系统配置、资源池和统计。
-- 插件中心：后台上传安装、GitHub 插件市场安装、启用/停用/卸载、配置维护、任务日志、用户端扩展点和开发模板。
+- 扩展中心：后台上传安装、在线扩展市场安装、启用/停用/卸载、配置维护、任务日志、用户端扩展点和开发模板。
 - 计费账务：余额、充值、支付回调、消费记录、返利、积分、VIP 等级和会员福利。
 - 宿主机 Agent：安装脚本、心跳、资源上报、实例报告、流量统计和二进制下载代理。
 - 生产安全：JWT、Cookie、CORS、CSP、Helmet、SSRF 防护、文件上传校验、支付签名/IP 白名单和敏感日志脱敏。
@@ -47,7 +47,7 @@ server/                 Fastify + Prisma 后端
 agent/                  Go 宿主机 Agent
 server/prisma/          Prisma schema 与 migrations
 server/templates/       Agent / 节点安装模板
-plugin-templates/       插件开发模板
+plugin-templates/       扩展开发模板
 deploy/                 systemd 与 Nginx 分离部署模板
 scripts/                安装、构建、预检和 smoke 脚本
 ```
@@ -259,9 +259,9 @@ SYSTEM_UPDATE_BACKUP_TASKS_KEEP=3
 SYSTEM_UPDATE_RELEASE_TOKEN=
 ```
 
-## 插件中心
+## 扩展中心
 
-插件中心位于管理后台：
+扩展中心位于管理后台：
 
 ```text
 https://admin.example.com/admin/plugins
@@ -269,25 +269,40 @@ https://admin.example.com/admin/plugins
 
 核心能力：
 
-- 上传 `.tar.gz` 插件包安装，安装前校验 `payincus.plugin.json`、路径安全、入口文件和 SHA256。
-- 从 GitHub 托管的插件市场索引安装，只允许 GitHub Release artifact 下载地址。
-- 插件中心按“已安装 / 插件市场 / 安装任务”分为内页；后台启用、停用、卸载插件，在独立插件市场页安装 GitHub 市场插件，并在安装任务页查看最多 7 条一页的任务和日志。
-- 插件可以声明后台配置页、用户端页面、用户侧边栏等白名单扩展点。
-- OTA 更新和回滚会保留插件安装目录、插件数据目录和插件日志目录。
+- 上传 `.tar.gz` 扩展包安装，安装前校验 `payincus.plugin.json`、路径安全、入口文件和 SHA256。
+- 从稳定在线扩展市场索引安装，默认读取文档站 `/plugin-market/index.json`，并限制下载源为受信域名。
+- 从稳定在线主题市场索引安装主题，默认读取文档站 `/theme-market/index.json`，安装前校验 listed 状态、SHA256 和主题包安全规则。
+- 扩展中心按“已安装 / 扩展市场 / 投稿审核 / 主题 / 安装任务”分为内页；后台启用、停用、卸载扩展，在独立扩展市场页安装已上架扩展，审核第三方投稿，并上传、预览、启用或回滚主题包。
+- 扩展可以声明后台配置页、用户端页面、用户侧边栏等白名单扩展点。
+- 主题包使用独立 `payincus.theme.json`，只允许 CSS、设计 token、本地静态资源和受控配置表单，不加载任意后端代码或远程脚本。
+- OTA 更新和回滚会保留扩展安装目录、扩展数据目录、扩展日志目录和主题安装目录。
 
 推荐生产环境变量：
 
 ```env
 PLUGIN_MANAGER_ALLOWED_ADMIN_IDS=1
-PLUGIN_MARKET_INDEX_URL=
+PLUGIN_MARKET_INDEX_URL=https://docs.payincus.com/plugin-market/index.json
+PLUGIN_MARKET_TRUSTED_HOSTS=docs.payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
+PLUGIN_MARKET_PUBLISH_DIR=/opt/incudal/plugin-market
+PLUGIN_MARKET_PUBLIC_BASE_URL=https://docs.payincus.com/plugin-market
+PLUGIN_WEBHOOK_SIGNING_SECRET=change_me_generate_with_openssl_rand_base64_48
+PLUGIN_WEBHOOK_TIMEOUT_MS=10000
 PLUGIN_INSTALL_DIR=/opt/incudal/plugins
 PLUGIN_DATA_DIR=/opt/incudal/plugin-data
 PLUGIN_LOG_DIR=/opt/incudal/plugin-logs
 PLUGIN_STAGING_DIR=/opt/incudal/plugin-staging
 PLUGIN_MAX_PACKAGE_SIZE_MB=20
+THEME_MANAGER_ALLOWED_ADMIN_IDS=1
+THEME_MARKET_INDEX_URL=https://docs.payincus.com/theme-market/index.json
+THEME_MARKET_TRUSTED_HOSTS=docs.payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
+THEME_MARKET_PUBLISH_DIR=/opt/incudal/theme-market
+THEME_MARKET_PUBLIC_BASE_URL=https://docs.payincus.com/theme-market
+THEME_INSTALL_DIR=/opt/incudal/themes
+THEME_STAGING_DIR=/opt/incudal/theme-staging
+THEME_MAX_PACKAGE_SIZE_MB=10
 ```
 
-插件模板位于 `plugin-templates/`：
+扩展模板位于 `plugin-templates/`：
 
 - `basic-admin-plugin`：只有后台配置页。
 - `user-sidebar-plugin`：用户端侧边栏入口和用户页面。
@@ -454,7 +469,7 @@ pnpm docs:build
 - 系统架构：`docs-site/docs/guide/architecture.md`
 - 前后台分离：`docs-site/docs/guide/split-deployment.md`
 - 后台 OTA：`docs-site/docs/guide/ota-update.md`
-- 插件开发：`docs-site/docs/plugins/overview.md`
+- 扩展开发：`docs-site/docs/plugins/overview.md`
 - 生产验收：`docs-site/docs/deployment/production-checklist.md`
 - 系统版本更新日志：`docs-site/docs/release/version-log.md`、`docs-site/docs/en/release/version-log.md`
 

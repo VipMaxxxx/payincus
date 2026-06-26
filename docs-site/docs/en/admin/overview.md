@@ -165,9 +165,9 @@ The operations overview is returned only by the admin statistics API and is not 
 - Popup announcements.
 - Telegram integration.
 
-## Plugin Center
+## Extension Center
 
-`/admin/plugins` splits plugin management into Installed, Plugin Market and Install Tasks pages. Administrators can upload plugin packages, install from a GitHub-hosted market index, enable or disable plugins, open standalone plugin settings pages from the left sidebar and inspect paginated install task logs.
+`/admin/plugins` splits extension management into Installed, Extension Market and Install Tasks pages. Administrators can upload extension packages, install from the online governed market index, enable or disable extensions, open standalone extension settings pages from the left sidebar and inspect paginated install task logs.
 
 ## OTA
 

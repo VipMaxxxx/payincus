@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "updatedAt": "2026-06-25T00:00:00.000Z",
+  "plugins": [
+    {
+      "id": "com.payincus.ai-ticket-agent",
+      "name": "AI 工单助手",
+      "latest": "0.1.1",
+      "repo": "https://docs.payincus.com/plugins/market",
+      "manifestUrl": "https://docs.payincus.com/plugin-market/manifests/com.payincus.ai-ticket-agent/0.1.1.json",
+      "downloadUrl": "https://docs.payincus.com/plugin-market/packages/com.payincus.ai-ticket-agent/0.1.1/plugin.tar.gz",
+      "sha256": "39a47adc016d5a153194fc01b3611af61e0b80779ea7dbf214f453bfdf7d046b",
+      "description": "官方 AI 工单助手扩展，支持工单草稿生成和受控接管回复。",
+      "author": "PayIncus",
+      "reviewStatus": "listed",
+      "trustLevel": "official",
+      "developer": {
+        "name": "PayIncus",
+        "homepage": "https://payincus.com",
+        "github": "https://github.com/payincus",
+        "verified": true,
+        "contact": "plugins@payincus.com"
+      },
+      "permissions": {
+        "adminPages": [
+          "admin.plugins.settings"
+        ],
+        "userPages": [],
+        "api": [
+          "ticket:ai:read-context",
+          "ticket:ai:generate-draft",
+          "ticket:ai:reply",
+          "ticket:ai:handoff",
+          "plugin:config:read",
+          "plugin:config:write"
+        ],
+        "storage": [
+          "plugin:config"
+        ]
+      },
+      "compatibility": {
+        "minPayincus": "v0.4.0"
+      },
+      "security": {
+        "checksumPinned": true,
+        "signature": {
+          "status": "unsigned"
+        },
+        "notes": [
+          "Hosted in the stable PayIncus extension market directory",
+          "Package installation requires SHA256 verification",
+          "No arbitrary backend code execution"
+        ]
+      },
+      "pricing": {
+        "type": "free",
+        "price": null,
+        "currency": null,
+        "revenueSharePercent": null
+      },
+      "rating": {
+        "average": 5,
+        "count": 1
+      },
+      "installCount": 0,
+      "releaseNotes": "官方 AI 工单助手扩展，支持工单草稿生成和受控接管回复。",
+      "upgradeNotes": "从扩展中心市场页安装新版本，安装前会校验稳定扩展市场包和 SHA256。",
+      "rollbackNotes": "如需回退，请在扩展中心卸载后安装上一版扩展包。"
+    }
+  ]
+}

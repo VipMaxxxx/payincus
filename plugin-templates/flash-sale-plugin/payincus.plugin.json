@@ -1,0 +1,219 @@
+{
+  "id": "com.example.flash-sale",
+  "name": "Flash Sale Example",
+  "version": "1.0.0",
+  "payincus": ">=0.6.0",
+  "description": "A complete extension example with an admin settings page, user campaign page, webhook actions, event subscriptions, and scoped storage.",
+  "author": "Example",
+  "homepage": "https://example.com/payincus-flash-sale",
+  "entrypoints": {
+    "adminPages": [
+      {
+        "slot": "admin.plugins.settings",
+        "title": "Flash Sale Settings",
+        "entry": "dist/admin/settings.html"
+      }
+    ],
+    "userPages": [
+      {
+        "slot": "user.sidebar.extra",
+        "title": "Flash Sale",
+        "path": "/plugins/flash-sale",
+        "entry": "dist/user/index.html",
+        "requiresAuth": true
+      }
+    ]
+  },
+  "permissions": [
+    "plugin-action:run",
+    "plugin-storage:read",
+    "plugin-storage:write",
+    "orders:create",
+    "products:read",
+    "services:read",
+    "notifications:send"
+  ],
+  "configSchema": {
+    "campaignEnabled": {
+      "type": "checkbox",
+      "label": "Enable campaign",
+      "description": "Controls whether the flash sale page should show the active campaign.",
+      "group": "Campaign",
+      "order": 10,
+      "required": false,
+      "default": false
+    },
+    "campaignId": {
+      "type": "text",
+      "label": "Campaign ID",
+      "description": "Stable ID used in webhook idempotency and extension storage keys.",
+      "placeholder": "summer-2026",
+      "group": "Campaign",
+      "order": 20,
+      "required": true
+    },
+    "productSku": {
+      "type": "text",
+      "label": "Product SKU",
+      "description": "Product or package identifier shown on the user page.",
+      "placeholder": "vps-basic",
+      "group": "Campaign",
+      "order": 30,
+      "required": true
+    },
+    "startsAt": {
+      "type": "text",
+      "label": "Start time",
+      "description": "ISO 8601 campaign start time.",
+      "placeholder": "2026-07-01T12:00:00+08:00",
+      "group": "Campaign",
+      "order": 40,
+      "required": true
+    },
+    "endsAt": {
+      "type": "text",
+      "label": "End time",
+      "description": "ISO 8601 campaign end time.",
+      "placeholder": "2026-07-01T12:10:00+08:00",
+      "group": "Campaign",
+      "order": 50,
+      "required": true
+    },
+    "stockLimit": {
+      "type": "number",
+      "label": "Stock limit",
+      "description": "Maximum number of reservations the extension service may accept.",
+      "group": "Inventory",
+      "order": 60,
+      "required": true,
+      "default": 100,
+      "min": 1,
+      "max": 100000,
+      "step": 1
+    },
+    "perUserLimit": {
+      "type": "number",
+      "label": "Per-user limit",
+      "description": "Maximum reservations per user in this campaign.",
+      "group": "Inventory",
+      "order": 70,
+      "required": true,
+      "default": 1,
+      "min": 1,
+      "max": 20,
+      "step": 1
+    },
+    "reserveWebhookSecret": {
+      "type": "password",
+      "label": "Reserve webhook secret",
+      "description": "Secret used by the external extension service. PayIncus stores it encrypted.",
+      "group": "Security",
+      "order": 80,
+      "required": false,
+      "secret": true
+    }
+  },
+  "capabilities": {
+    "actions": [
+      {
+        "name": "reserveStock",
+        "method": "POST",
+        "path": "/reserve-stock",
+        "runtime": "webhook",
+        "url": "https://extension.example.com/payincus/flash-sale/reserve-stock",
+        "scopes": ["orders:create", "plugin-storage:write", "notifications:send"],
+        "requestSchema": {
+          "type": "object",
+          "required": ["campaignId", "sku", "userId", "idempotencyKey"],
+          "properties": {
+            "campaignId": { "type": "string" },
+            "sku": { "type": "string" },
+            "userId": { "type": "number" },
+            "idempotencyKey": { "type": "string" }
+          }
+        },
+        "responseSchema": {
+          "type": "object",
+          "required": ["reserved", "reservationId"],
+          "properties": {
+            "reserved": { "type": "boolean" },
+            "reservationId": { "type": "string" },
+            "expiresAt": { "type": "string" }
+          }
+        },
+        "idempotency": "required",
+        "rateLimit": "strict"
+      },
+      {
+        "name": "confirmPaidReservation",
+        "method": "POST",
+        "path": "/confirm-paid-reservation",
+        "runtime": "webhook",
+        "url": "https://extension.example.com/payincus/flash-sale/confirm-paid-reservation",
+        "scopes": ["plugin-storage:write", "notifications:send"],
+        "idempotency": "required",
+        "rateLimit": "normal"
+      },
+      {
+        "name": "releaseReservation",
+        "method": "POST",
+        "path": "/release-reservation",
+        "runtime": "webhook",
+        "url": "https://extension.example.com/payincus/flash-sale/release-reservation",
+        "scopes": ["plugin-storage:write", "notifications:send"],
+        "idempotency": "required",
+        "rateLimit": "normal"
+      }
+    ],
+    "events": [
+      {
+        "event": "order.paid",
+        "handler": "confirmPaidReservation"
+      },
+      {
+        "event": "payment.failed",
+        "handler": "releaseReservation"
+      }
+    ],
+    "notificationTemplates": [
+      {
+        "id": "reservation_reminder",
+        "title": "秒杀预约提醒",
+        "message": "活动「{{campaignName}}」将在 {{startsAt}} 开始，商品：{{productName}}。",
+        "variables": ["campaignName", "startsAt", "productName"]
+      },
+      {
+        "id": "reservation_result",
+        "title": "秒杀预约结果",
+        "message": "活动「{{campaignName}}」预约结果：{{statusText}}。",
+        "variables": ["campaignName", "statusText"]
+      }
+    ],
+    "storage": {
+      "kind": "kv",
+      "maxKeys": 5000,
+      "scopes": ["global", "user", "service"],
+      "retention": "keep",
+      "tables": [
+        {
+          "name": "campaign_reservations",
+          "description": "Scoped reservation rows keyed by campaign and user id.",
+          "scopes": ["global", "user"],
+          "maxRows": 100000,
+          "migrations": [
+            {
+              "version": "1.0.0",
+              "name": "Create reservation row shape"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "templates": [
+    {
+      "name": "Default campaign config",
+      "path": "templates/default-config.json"
+    }
+  ]
+}

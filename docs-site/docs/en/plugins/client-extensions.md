@@ -27,3 +27,7 @@ admin.ticket.extra
 ```
 
 Plugin pages are loaded in sandboxed iframes. A plugin can read its own public config, but it cannot bypass permissions or call admin APIs from the user portal.
+
+`admin.plugins.settings` is used for settings pages inside the extension center. `admin.sidebar.extra` appears in the admin sidebar and opens a platform-generated `/admin/plugins/:pluginId/pages/<entry>` page. Admin extension entries are only exposed through `/api/plugins/enabled-admin-client-extensions` for authenticated administrators.
+
+`user.dashboard.cards` mounts into the user dashboard. `admin.dashboard.widgets` mounts into the admin statistics dashboard. Page-level slots render sandboxed iframes directly in the host page and are intended for status cards, campaign summaries, operational widgets, and read-only reports.

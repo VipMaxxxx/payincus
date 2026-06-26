@@ -8,6 +8,7 @@ import type { IStorageProvider, StorageConfigData } from './types.js'
 import { WebDavProvider } from './providers/WebDavProvider.js'
 import { FtpProvider } from './providers/FtpProvider.js'
 import { SftpProvider } from './providers/SftpProvider.js'
+import { S3Provider } from './providers/S3Provider.js'
 
 export class StorageFactory {
     /**
@@ -37,7 +38,7 @@ export class StorageFactory {
             case 'SFTP':
                 return new SftpProvider(secureConfig)
             case 'S3':
-                throw new Error('S3 存储暂未实现，敬请期待')
+                return new S3Provider(secureConfig)
             default:
                 throw new Error(`未知的存储类型: ${config.type}`)
         }
@@ -60,7 +61,8 @@ export class StorageFactory {
                 provider = new SftpProvider(config)
                 break
             case 'S3':
-                throw new Error('S3 存储暂未实现，敬请期待')
+                provider = new S3Provider(config)
+                break
             default:
                 throw new Error(`未知的存储类型: ${config.type}`)
         }

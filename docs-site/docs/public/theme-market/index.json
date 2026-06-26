@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "updatedAt": "2026-06-26T00:00:00.000Z",
+  "themes": [
+    {
+      "id": "com.payincus.theme.clean",
+      "name": "PayIncus Clean Theme",
+      "latest": "1.0.0",
+      "manifestUrl": "https://docs.payincus.com/theme-market/manifests/com.payincus.theme.clean/1.0.0.json",
+      "downloadUrl": "https://docs.payincus.com/theme-market/packages/com.payincus.theme.clean/1.0.0/theme.tar.gz",
+      "sha256": "25a34aee4c5def9db5b25e50c377a6e5fcc55e992ed6d5fe7084b1338f57ef71",
+      "description": "Official clean theme sample with design tokens, controlled config fields, CSS assets, and safe template fragments.",
+      "author": "PayIncus",
+      "reviewStatus": "listed",
+      "trustLevel": "official",
+      "developer": {
+        "name": "PayIncus",
+        "homepage": "https://payincus.com",
+        "github": "https://github.com/payincus",
+        "verified": true,
+        "contact": "themes@payincus.com"
+      },
+      "compatibility": {
+        "minPayincus": "v0.6.0"
+      },
+      "security": {
+        "checksumPinned": true,
+        "signature": {
+          "status": "unsigned"
+        },
+        "notes": [
+          "Hosted in the stable PayIncus theme market directory",
+          "Package installation requires SHA256 verification",
+          "No scripts, iframes, forms, or backend actions"
+        ]
+      },
+      "tokens": [
+        "colorPrimary",
+        "colorAccent",
+        "colorSurface",
+        "colorMuted",
+        "radius",
+        "shadow"
+      ],
+      "layoutSlots": [
+        "public.home.hero",
+        "public.home.sections",
+        "public.market.banner",
+        "public.auth.aside",
+        "user.shell.brand",
+        "user.dashboard.banner",
+        "user.dashboard.cards",
+        "user.instance.detail.extra",
+        "user.wallet.banner",
+        "user.tickets.banner",
+        "user.extensions.banner",
+        "user.orders.banner",
+        "user.profile.banner",
+        "user.invites.banner",
+        "user.hosts.banner",
+        "user.host.create.banner",
+        "admin.shell.brand",
+        "admin.extensions.header",
+        "admin.extensions.market.banner",
+        "admin.extensions.theme.banner",
+        "admin.dashboard.banner",
+        "admin.dashboard.widgets",
+        "admin.billing.banner",
+        "admin.payment.providers.banner",
+        "admin.oauth.banner",
+        "shared.footer"
+      ],
+      "rating": {
+        "average": 5,
+        "count": 1
+      },
+      "installCount": 0,
+      "releaseNotes": "Official clean theme sample for validating theme preview, enable, config form, safe template fragments, and rollback.",
+      "rollbackNotes": "Use the Extension Center theme tab to roll back to the default theme."
+    }
+  ]
+}

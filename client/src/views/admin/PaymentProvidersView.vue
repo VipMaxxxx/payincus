@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 
 const props = withDefaults(defineProps<{
   embedded?: boolean
@@ -42,7 +43,7 @@ const formData = ref({
 
 const DEFAULT_YIPAY_METHODS = ['alipay', 'wxpay']
 const YIPAY_METHODS = ['alipay', 'wxpay', 'qqpay']
-const IMPLEMENTED_PROVIDER_TYPES = new Set(['yipay', 'heleket'])
+const IMPLEMENTED_PROVIDER_TYPES = new Set(['yipay', 'heleket', 'plugin_gateway'])
 
 function getConfigMethodFees(config: Record<string, unknown>): Record<string, { feeRate?: number; feeFixed?: number }> {
   const raw = (config as any).methodFees
@@ -118,6 +119,7 @@ const providerTypes = computed(() => [
   { value: 'stripe', label: t('admin.paymentProviders.providerTypes.stripe') },
   { value: 'alipay_direct', label: t('admin.paymentProviders.providerTypes.alipayDirect') },
   { value: 'wechat_direct', label: t('admin.paymentProviders.providerTypes.wechatDirect') },
+  { value: 'plugin_gateway', label: t('admin.paymentProviders.providerTypes.pluginGateway') },
   { value: 'manual', label: t('admin.paymentProviders.providerTypes.manual') }
 ].map(option => {
   const implemented = IMPLEMENTED_PROVIDER_TYPES.has(option.value)
@@ -208,6 +210,12 @@ function getDefaultConfig(type: string, version?: string): Record<string, unknow
     case 'manual':
       return {
         instructions: ''
+      }
+    case 'plugin_gateway':
+      return {
+        pluginId: '',
+        gatewayExtensionKey: '',
+        providerCode: ''
       }
     default:
       return {}
@@ -397,6 +405,11 @@ function togglePaymentMethod(method: string) {
         {{ $t('admin.paymentProviders.add') }}
       </button>
     </div>
+    <ThemeTemplateSlot
+      v-if="!props.embedded"
+      slot-name="admin.payment.providers.banner"
+      container-class="mb-6 overflow-hidden rounded-lg border border-themed bg-themed-surface"
+    />
 
     <!-- 加载中 -->
     <SkeletonLoader v-if="loading" :count="3" />
@@ -689,6 +702,28 @@ function togglePaymentMethod(method: string) {
               <div>
                 <label class="label">{{ $t('admin.paymentProviders.config.instructions') }}</label>
                 <textarea v-model="(formData.config as any).instructions" class="input w-full h-24 resize-none" :placeholder="$t('admin.paymentProviders.config.instructionsPlaceholder')"></textarea>
+              </div>
+            </template>
+
+            <!-- 插件支付网关配置 -->
+            <template v-else-if="formData.type === 'plugin_gateway'">
+              <div>
+                <label class="label">{{ $t('admin.paymentProviders.config.pluginId') }} *</label>
+                <input v-model="(formData.config as any).pluginId" type="text" class="input w-full font-mono" placeholder="com.example.gateway" />
+                <p class="text-xs text-themed-muted mt-1">{{ $t('admin.paymentProviders.config.pluginGatewayPluginIdHint') }}</p>
+              </div>
+              <div>
+                <label class="label">{{ $t('admin.paymentProviders.config.gatewayExtensionKey') }} *</label>
+                <input v-model="(formData.config as any).gatewayExtensionKey" type="text" class="input w-full font-mono" placeholder="custom-gateway" />
+                <p class="text-xs text-themed-muted mt-1">{{ $t('admin.paymentProviders.config.pluginGatewayExtensionKeyHint') }}</p>
+              </div>
+              <div>
+                <label class="label">{{ $t('admin.paymentProviders.config.providerCode') }} *</label>
+                <input v-model="(formData.config as any).providerCode" type="text" class="input w-full font-mono" placeholder="custompay" />
+                <p class="text-xs text-themed-muted mt-1">{{ $t('admin.paymentProviders.config.pluginGatewayProviderCodeHint') }}</p>
+              </div>
+              <div class="rounded-lg bg-themed-secondary px-3 py-2 text-xs text-themed-muted">
+                {{ $t('admin.paymentProviders.config.pluginGatewaySafetyHint') }}
               </div>
             </template>
             

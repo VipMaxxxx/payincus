@@ -37,6 +37,10 @@ yarn-error.log*
 version.json
 release-packages/
 
+# ==================== 扩展/主题运行态临时目录 ====================
+server/plugin-staging/
+server/theme-staging/
+
 # ==================== IDE/编辑器 ====================
 .vscode/
 .idea/

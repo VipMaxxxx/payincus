@@ -35,15 +35,53 @@ import { sendRechargeSuccessEmail } from '../lib/mailer.js'
 import { sanitizeObject } from '../lib/log-sanitizer.js'
 import { isRechargeGatewayOrderNoMatch } from '../lib/recharge-order-guard.js'
 import { assertSafeHttpUrl, isIpPrivateOrReserved } from '../lib/outbound-security.js'
+import { dispatchGatewayPaymentLifecycle } from '../lib/plugin-payment-lifecycle.js'
+import {
+  dispatchPluginGatewayExtension,
+  listEnabledGatewayExtensionTargets
+} from '../lib/plugin-extension-dispatch.js'
+import type { PluginRuntimeActor } from '../lib/plugin-runtime.js'
+import type { PluginGatewayExtensionHook } from '../lib/plugin-manifest.js'
 
 // 金额一致性检查容差（分）
 const AMOUNT_TOLERANCE_CENTS = 1
-const SUPPORTED_RECHARGE_PROVIDER_TYPES = new Set(['yipay', 'heleket'])
+const PLUGIN_GATEWAY_PROVIDER_TYPE = 'plugin_gateway'
+const SUPPORTED_RECHARGE_PROVIDER_TYPES = new Set(['yipay', 'heleket', PLUGIN_GATEWAY_PROVIDER_TYPE])
 const HELEKET_CALLBACK_IPS = ['31.133.220.8']
 const POSITIVE_ID_PATTERN = /^[1-9]\d*$/
 const RECHARGE_STATUSES = new Set(['pending', 'paid', 'completed', 'failed', 'cancelled', 'refunded'])
 const MAX_RECHARGE_TRADE_NO_LENGTH = 128
 const MAX_RECHARGE_ADMIN_REASON_LENGTH = 500
+const PLUGIN_GATEWAY_PROVIDER_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,120}$/
+const PLUGIN_GATEWAY_EXTENSION_KEY_PATTERN = /^[a-z][a-z0-9_-]{1,79}$/
+const PLUGIN_GATEWAY_PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9-]*){2,}$/
+const PLUGIN_GATEWAY_CALLBACK_HEADER_BLOCKLIST = new Set(['cookie', 'authorization', 'proxy-authorization'])
+
+interface PluginGatewayProviderConfig {
+  pluginId: string
+  gatewayExtensionKey: string
+  providerCode: string
+}
+
+interface PluginGatewayPaymentContext {
+  rechargeId?: number | null
+  userId: number
+  username?: string | null
+  source: string
+  actor: PluginRuntimeActor
+}
+
+type PluginGatewayPaymentState = 'pending' | 'completed' | 'failed' | 'cancelled'
+
+interface PluginGatewayPaymentResult {
+  state: PluginGatewayPaymentState
+  orderNo: string
+  tradeNo: string | null
+  actualAmount: number | null
+  message: string | null
+  metadata: Record<string, unknown>
+  requestId: string
+}
 
 function parsePositiveId(value: unknown): number | null {
   if (typeof value === 'number') {
@@ -114,6 +152,70 @@ function isRechargeProviderTypeSupported(type: string): boolean {
 
 function getUnsupportedProviderError(type: string): string {
   return `支付渠道类型 ${type} 当前未实现安全的充值流程，暂不支持启用`
+}
+
+function buildPluginGatewayProviderConfig(config: Record<string, unknown>): {
+  valid: boolean
+  error?: string
+  pluginConfig?: PluginGatewayProviderConfig
+} {
+  const pluginId = typeof config.pluginId === 'string' ? config.pluginId.trim() : ''
+  const gatewayExtensionKey = typeof config.gatewayExtensionKey === 'string' ? config.gatewayExtensionKey.trim() : ''
+  const providerCode = typeof config.providerCode === 'string' ? config.providerCode.trim() : ''
+
+  if (!pluginId || !PLUGIN_GATEWAY_PLUGIN_ID_PATTERN.test(pluginId)) {
+    return { valid: false, error: '插件支付渠道 pluginId 不合法' }
+  }
+  if (!gatewayExtensionKey || !PLUGIN_GATEWAY_EXTENSION_KEY_PATTERN.test(gatewayExtensionKey)) {
+    return { valid: false, error: '插件支付渠道 gatewayExtensionKey 不合法' }
+  }
+  if (!providerCode || !PLUGIN_GATEWAY_PROVIDER_CODE_PATTERN.test(providerCode)) {
+    return { valid: false, error: '插件支付渠道 providerCode 不合法' }
+  }
+
+  return {
+    valid: true,
+    pluginConfig: { pluginId, gatewayExtensionKey, providerCode }
+  }
+}
+
+async function validatePluginGatewayProviderTarget(
+  config: Record<string, unknown>,
+  hook: PluginGatewayExtensionHook = 'createPayment'
+): Promise<{ valid: boolean; error?: string }> {
+  const parsed = buildPluginGatewayProviderConfig(config)
+  if (!parsed.valid || !parsed.pluginConfig) {
+    return { valid: false, error: parsed.error }
+  }
+
+  const targets = await listEnabledGatewayExtensionTargets(hook, parsed.pluginConfig.providerCode)
+  const matched = targets.find(target =>
+    target.pluginId === parsed.pluginConfig!.pluginId &&
+    target.gatewayExtensionKey === parsed.pluginConfig!.gatewayExtensionKey &&
+    target.providerCode === parsed.pluginConfig!.providerCode
+  )
+
+  if (!matched) {
+    return {
+      valid: false,
+      error: `插件支付渠道未找到已启用且 providerCode 匹配的 ${hook} 网关扩展`
+    }
+  }
+
+  return { valid: true }
+}
+
+async function validateActiveRechargeProviderRuntime(
+  provider: { type: string; config: Record<string, unknown> }
+): Promise<{ valid: boolean; error?: string }> {
+  const validation = validateActiveRechargeProvider(provider)
+  if (!validation.valid) return validation
+
+  if (provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE) {
+    return validatePluginGatewayProviderTarget(provider.config)
+  }
+
+  return validation
 }
 
 /**
@@ -473,13 +575,293 @@ function buildRechargeUrls(providerId: number, orderNo: string): {
   }
 }
 
+function getStringMetadata(metadata: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = metadata[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return null
+}
+
+function getNumberMetadata(metadata: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = metadata[key]
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return Number(value.toFixed(2))
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value.trim())
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return Number(parsed.toFixed(2))
+      }
+    }
+  }
+  return null
+}
+
+function normalizePluginGatewayPaymentState(status: string, metadata: Record<string, unknown>): PluginGatewayPaymentState {
+  const rawState = getStringMetadata(metadata, ['paymentState', 'gatewayState', 'state', 'status'])
+  const state = (rawState || status || 'pending').trim().toLowerCase()
+  if (state === 'completed' || state === 'complete' || state === 'paid' || state === 'success' || state === 'succeeded') {
+    return 'completed'
+  }
+  if (state === 'failed' || state === 'failure' || state === 'error' || state === 'declined') {
+    return 'failed'
+  }
+  if (state === 'cancelled' || state === 'canceled' || state === 'cancel' || state === 'expired' || state === 'closed') {
+    return 'cancelled'
+  }
+  return 'pending'
+}
+
+function buildPluginGatewayCallbackHeaders(headers: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    const normalizedKey = key.trim().toLowerCase()
+    if (!normalizedKey || PLUGIN_GATEWAY_CALLBACK_HEADER_BLOCKLIST.has(normalizedKey)) continue
+    if (typeof value === 'string') {
+      result[normalizedKey] = value.slice(0, 1024)
+    } else if (Array.isArray(value)) {
+      result[normalizedKey] = value.map(item => String(item)).join(', ').slice(0, 1024)
+    }
+  }
+  return result
+}
+
+function buildPluginGatewayCallbackPaymentDetails(
+  current: Record<string, unknown> | null | undefined,
+  input: {
+    providerCode: string
+    pluginId: string
+    gatewayExtensionKey: string
+    state: PluginGatewayPaymentState
+    requestId: string
+    tradeNo: string | null
+    message: string | null
+    metadata: Record<string, unknown>
+  }
+): Record<string, unknown> {
+  return {
+    ...(current && typeof current === 'object' && !Array.isArray(current) ? current : {}),
+    kind: PLUGIN_GATEWAY_PROVIDER_TYPE,
+    providerCode: input.providerCode,
+    pluginId: input.pluginId,
+    gatewayExtensionKey: input.gatewayExtensionKey,
+    pluginGateway: {
+      state: input.state,
+      requestId: input.requestId,
+      tradeNo: input.tradeNo,
+      message: input.message,
+      metadata: sanitizeObject(input.metadata)
+    }
+  }
+}
+
+function normalizePluginGatewayDispatchResult(input: {
+  actionRequestId: string
+  contract: {
+    accepted: boolean
+    status: string
+    message: string | null
+    externalReference: string | null
+    metadata: Record<string, unknown>
+  }
+  fallbackOrderNo?: string | null
+}): { valid: true; result: PluginGatewayPaymentResult } | { valid: false; error: string } {
+  const contract = input.contract
+  if (!contract.accepted || contract.status === 'unsupported') {
+    return { valid: false, error: contract.message || '插件支付网关拒绝处理该回调' }
+  }
+
+  const orderNo = getStringMetadata(contract.metadata, ['orderNo', 'order_no', 'outTradeNo', 'out_trade_no']) || input.fallbackOrderNo || ''
+  if (!orderNo) {
+    return { valid: false, error: '插件支付网关未返回订单号' }
+  }
+
+  const state = normalizePluginGatewayPaymentState(contract.status, contract.metadata)
+  const tradeNo = contract.externalReference || getStringMetadata(contract.metadata, ['tradeNo', 'trade_no', 'transactionId', 'transaction_id', 'paymentId', 'payment_id'])
+  const actualAmount = getNumberMetadata(contract.metadata, ['actualAmount', 'paidAmount', 'amount', 'money', 'totalAmount'])
+
+  return {
+    valid: true,
+    result: {
+      state,
+      orderNo,
+      tradeNo,
+      actualAmount,
+      message: contract.message,
+      metadata: contract.metadata,
+      requestId: input.actionRequestId
+    }
+  }
+}
+
+function buildPluginGatewayPaymentDetails(config: Record<string, unknown>): Record<string, unknown> {
+  const parsed = buildPluginGatewayProviderConfig(config)
+  if (!parsed.pluginConfig) {
+    return { kind: PLUGIN_GATEWAY_PROVIDER_TYPE }
+  }
+
+  return {
+    kind: PLUGIN_GATEWAY_PROVIDER_TYPE,
+    providerCode: parsed.pluginConfig.providerCode,
+    pluginId: parsed.pluginConfig.pluginId,
+    gatewayExtensionKey: parsed.pluginConfig.gatewayExtensionKey
+  }
+}
+
+async function createPluginGatewayRechargePayUrl(input: {
+  provider: { id: number; type: string }
+  config: Record<string, unknown>
+  orderNo: string
+  amount: number
+  paymentMethod: string | undefined
+  urls: { notifyUrl: string; returnUrl: string; successUrl: string }
+  context?: PluginGatewayPaymentContext
+}): Promise<string | null> {
+  const parsed = buildPluginGatewayProviderConfig(input.config)
+  if (!parsed.valid || !parsed.pluginConfig) {
+    throw new Error(parsed.error || '插件支付渠道配置不完整')
+  }
+
+  const targetValidation = await validatePluginGatewayProviderTarget(input.config)
+  if (!targetValidation.valid) {
+    throw new Error(targetValidation.error || '插件支付渠道不可用')
+  }
+
+  const result = await dispatchPluginGatewayExtension({
+    pluginId: parsed.pluginConfig.pluginId,
+    hook: 'createPayment',
+    gatewayExtensionKey: parsed.pluginConfig.gatewayExtensionKey,
+    payload: {
+      provider: {
+        id: input.provider.id,
+        type: input.provider.type,
+        providerCode: parsed.pluginConfig.providerCode,
+        pluginId: parsed.pluginConfig.pluginId,
+        gatewayExtensionKey: parsed.pluginConfig.gatewayExtensionKey
+      },
+      order: {
+        orderNo: input.orderNo,
+        rechargeId: input.context?.rechargeId ?? null,
+        userId: input.context?.userId ?? null,
+        amount: input.amount,
+        currency: 'CNY',
+        paymentMethod: input.paymentMethod ?? null
+      },
+      urls: input.urls,
+      source: input.context?.source ?? 'recharge.create',
+      occurredAt: new Date().toISOString()
+    },
+    idempotencyKey: `plugin-gateway-payment:create:${input.orderNo}:${parsed.pluginConfig.pluginId}:${parsed.pluginConfig.gatewayExtensionKey}`,
+    actor: input.context?.actor || { id: null, role: 'system' }
+  })
+
+  const contract = result.contract
+  if (!contract.accepted || contract.status === 'failed' || contract.status === 'unsupported') {
+    throw new Error(contract.message || '插件支付渠道拒绝创建支付订单')
+  }
+
+  const payUrl = getStringMetadata(contract.metadata, ['payUrl', 'paymentUrl', 'redirectUrl', 'checkoutUrl'])
+  if (!payUrl) {
+    throw new Error('插件支付渠道未返回支付跳转地址')
+  }
+
+  const safePayUrl = await assertSafeHttpUrl(payUrl, 'Plugin gateway pay URL')
+  if (safePayUrl.protocol !== 'https:') {
+    throw new Error('插件支付跳转地址必须使用 HTTPS')
+  }
+
+  return safePayUrl.toString()
+}
+
+async function dispatchPluginGatewayPaymentHook(input: {
+  hook: Extract<PluginGatewayExtensionHook, 'webhook' | 'verifyPayment'>
+  provider: { id: number; type: string }
+  config: Record<string, unknown>
+  orderNo: string
+  rechargeId: number
+  userId: number
+  amount: number
+  payableAmount: number
+  paymentMethod?: string | null
+  paymentDetails?: Record<string, unknown> | null
+  source: string
+  callbackData?: Record<string, unknown>
+  callbackHeaders?: Record<string, string>
+  callbackIp?: string | null
+  actor: PluginRuntimeActor
+}): Promise<{ valid: true; pluginConfig: PluginGatewayProviderConfig; result: PluginGatewayPaymentResult } | { valid: false; error: string }> {
+  const parsed = buildPluginGatewayProviderConfig(input.config)
+  if (!parsed.valid || !parsed.pluginConfig) {
+    return { valid: false, error: parsed.error || '插件支付渠道配置不完整' }
+  }
+
+  const targetValidation = await validatePluginGatewayProviderTarget(input.config, input.hook)
+  if (!targetValidation.valid) {
+    return { valid: false, error: targetValidation.error || '插件支付渠道不可用' }
+  }
+
+  const action = await dispatchPluginGatewayExtension({
+    pluginId: parsed.pluginConfig.pluginId,
+    hook: input.hook,
+    gatewayExtensionKey: parsed.pluginConfig.gatewayExtensionKey,
+    payload: {
+      provider: {
+        id: input.provider.id,
+        type: input.provider.type,
+        providerCode: parsed.pluginConfig.providerCode,
+        pluginId: parsed.pluginConfig.pluginId,
+        gatewayExtensionKey: parsed.pluginConfig.gatewayExtensionKey
+      },
+      order: {
+        orderNo: input.orderNo,
+        rechargeId: input.rechargeId,
+        userId: input.userId,
+        amount: input.amount,
+        payableAmount: input.payableAmount,
+        currency: 'CNY',
+        paymentMethod: input.paymentMethod ?? null,
+        paymentDetails: input.paymentDetails ?? null
+      },
+      callback: input.callbackData
+        ? {
+            data: input.callbackData,
+            headers: input.callbackHeaders ?? {},
+            ip: input.callbackIp ?? null
+          }
+        : null,
+      source: input.source,
+      occurredAt: new Date().toISOString()
+    },
+    idempotencyKey: `plugin-gateway-payment:${input.hook}:${input.orderNo}:${parsed.pluginConfig.pluginId}:${parsed.pluginConfig.gatewayExtensionKey}`,
+    actor: input.actor
+  })
+
+  const normalized = normalizePluginGatewayDispatchResult({
+    actionRequestId: action.action.requestId,
+    contract: action.contract,
+    fallbackOrderNo: input.orderNo
+  })
+  if (!normalized.valid) return normalized
+
+  return {
+    valid: true,
+    pluginConfig: parsed.pluginConfig,
+    result: normalized.result
+  }
+}
+
 async function createRechargePayUrl(
   provider: { id: number; type: string; methods: unknown },
   config: Record<string, unknown>,
   orderNo: string,
   amount: number,
   paymentMethod: string | undefined,
-  urls: { notifyUrl: string; returnUrl: string; successUrl: string }
+  urls: { notifyUrl: string; returnUrl: string; successUrl: string },
+  context?: PluginGatewayPaymentContext
 ): Promise<string | null> {
   if (provider.type === 'yipay') {
     const { epayConfig, valid, error } = buildEpayConfig(config)
@@ -523,6 +905,18 @@ async function createRechargePayUrl(
     return typeof invoice.url === 'string' && invoice.url.trim() ? invoice.url : null
   }
 
+  if (provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE) {
+    return createPluginGatewayRechargePayUrl({
+      provider,
+      config,
+      orderNo,
+      amount,
+      paymentMethod,
+      urls,
+      context
+    })
+  }
+
   return null
 }
 
@@ -540,6 +934,11 @@ function validateActiveRechargeProvider(
 
   if (provider.type === 'heleket') {
     const { valid, error } = buildHeleketConfig(provider.config)
+    return { valid, error }
+  }
+
+  if (provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE) {
+    const { valid, error } = buildPluginGatewayProviderConfig(provider.config)
     return { valid, error }
   }
 
@@ -611,8 +1010,25 @@ async function validatePaymentProviderAdminInput(
     }
   }
 
+  if (providerType === PLUGIN_GATEWAY_PROVIDER_TYPE) {
+    const { valid, error, pluginConfig } = buildPluginGatewayProviderConfig(normalizedConfig)
+    if (!valid || !pluginConfig) {
+      return { valid: false, error, config: normalizedConfig }
+    }
+    normalizedConfig.pluginId = pluginConfig.pluginId
+    normalizedConfig.gatewayExtensionKey = pluginConfig.gatewayExtensionKey
+    normalizedConfig.providerCode = pluginConfig.providerCode
+  }
+
   if (status === 'active') {
     const activeValidation = validateActiveRechargeProvider({ type: providerType, config: normalizedConfig })
+    if (!activeValidation.valid) {
+      return { ...activeValidation, config: normalizedConfig }
+    }
+    if (providerType === PLUGIN_GATEWAY_PROVIDER_TYPE) {
+      const targetValidation = await validatePluginGatewayProviderTarget(normalizedConfig)
+      return { ...targetValidation, config: normalizedConfig }
+    }
     return { ...activeValidation, config: normalizedConfig }
   }
 
@@ -726,16 +1142,19 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         return { providers: [] }
       }
 
-      const providers = (await db.getActivePaymentProviders()).filter(provider => {
+      const activeProviders = await db.getActivePaymentProviders()
+      const providers = []
+      for (const provider of activeProviders) {
         const config = typeof provider.config === 'string'
           ? JSON.parse(provider.config)
           : (provider.config || {}) as Record<string, unknown>
-        const validation = validateActiveRechargeProvider({ type: provider.type, config })
+        const validation = await validateActiveRechargeProviderRuntime({ type: provider.type, config })
         if (!validation.valid) {
           request.log.warn({ providerId: provider.id, type: provider.type, error: validation.error }, '忽略未安全启用的支付渠道')
+          continue
         }
-        return validation.valid
-      })
+        providers.push(provider)
+      }
       
       // 只返回用户需要的信息，隐藏敏感配置
       const safeProviders = providers.map(p => ({
@@ -801,7 +1220,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       const providerConfig = typeof provider.config === 'string'
         ? JSON.parse(provider.config)
         : (provider.config || {}) as Record<string, unknown>
-      const providerValidation = validateActiveRechargeProvider({ type: provider.type, config: providerConfig })
+      const providerValidation = await validateActiveRechargeProviderRuntime({ type: provider.type, config: providerConfig })
       if (!providerValidation.valid) {
         request.log.warn({ providerId: providerIdNum, type: provider.type, error: providerValidation.error }, '拒绝使用未安全实现的支付渠道创建订单')
         return reply.status(400).send({ error: providerValidation.error || '支付渠道不可用' })
@@ -834,7 +1253,9 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       const providerConfigSnapshot = buildRechargeProviderConfigSnapshot(provider.type, providerConfig)
       const providerPaymentDetails = provider.type === 'heleket'
         ? buildHeleketInvoicePaymentDetails(orderNo, payableAmount, buildHeleketConfig(providerConfig).heleketConfig)
-        : { kind: provider.type }
+        : provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE
+          ? buildPluginGatewayPaymentDetails(providerConfig)
+          : { kind: provider.type }
       const paymentDetails = mergeRechargeAmountDetails(providerPaymentDetails, {
         amount: normalizedAmount,
         payableAmount,
@@ -872,11 +1293,39 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           order.orderNo,
           payableAmount,
           selectedPaymentMethod,
-          urls
+          urls,
+          {
+            rechargeId: order.id,
+            userId: user.id,
+            username: user.username,
+            source: 'recharge.create',
+            actor: { id: user.id, role: 'user', username: user.username }
+          }
         )
       } catch (payError) {
         request.log.warn({ providerId: providerIdNum, orderNo: order.orderNo, error: payError }, '生成支付链接失败')
         throw payError
+      }
+
+      if (provider.type !== PLUGIN_GATEWAY_PROVIDER_TYPE) {
+        dispatchGatewayPaymentLifecycle({
+          hook: 'createPayment',
+          providerCode: provider.type,
+          providerId: provider.id,
+          orderNo: order.orderNo,
+          rechargeId: order.id,
+          userId: user.id,
+          amount: normalizedAmount,
+          payableAmount,
+          actualAmount: Number(order.actualAmount),
+          fee,
+          status: order.status,
+          paymentMethod: selectedPaymentMethod,
+          source: 'recharge.create',
+          payUrl,
+          paymentDetails: paymentDetails as Record<string, unknown>,
+          actor: { id: user.id, role: 'user', username: user.username }
+        })
       }
 
       return {
@@ -1081,7 +1530,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         providerConfig,
         (record as any).providerConfigSnapshot
       )
-      const providerValidation = validateActiveRechargeProvider({ type: provider.type, config: effectiveProviderConfig })
+      const providerValidation = await validateActiveRechargeProviderRuntime({ type: provider.type, config: effectiveProviderConfig })
       if (!providerValidation.valid) {
         request.log.warn({ orderNo, type: provider.type, error: providerValidation.error }, '拒绝使用未安全实现的支付渠道重新支付')
         return reply.status(400).send({ error: providerValidation.error || '支付渠道不可用' })
@@ -1131,6 +1580,8 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
               payableAmount,
               buildHeleketConfig(effectiveProviderConfig).heleketConfig
             )
+          : provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE
+            ? buildPluginGatewayPaymentDetails(effectiveProviderConfig)
           : ((record as any).paymentDetails || { kind: provider.type })
         paymentDetails = mergeRechargeAmountDetails(providerPaymentDetails, {
           amount: rechargeAmount,
@@ -1153,7 +1604,13 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           record.orderNo,
           payableAmount,
           selectedPaymentMethod,
-          urls
+          urls,
+          {
+            rechargeId: record.id,
+            userId: record.userId,
+            source: 'recharge.repay',
+            actor: { id: record.userId, role: 'user' }
+          }
         )
       } catch (payError) {
         request.log.warn({ orderNo, providerId: provider.id, error: payError }, '重新生成支付链接失败')
@@ -1288,20 +1745,6 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         return reply.status(400).send({ error: '支付渠道不存在' })
       }
 
-      if (provider.type !== 'yipay' && provider.type !== 'heleket') {
-        return {
-          success: true,
-          verified: false,
-          status: record.status,
-          message: '订单待支付，请稍后重试',
-          order: {
-            orderNo: record.orderNo,
-            amount: Number(record.amount),
-            status: record.status
-          }
-        }
-      }
-
       const config = typeof provider.config === 'string'
         ? JSON.parse(provider.config)
         : (provider.config || {}) as Record<string, unknown>
@@ -1323,6 +1766,229 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       let actualAmount = creditedAmount
       let callbackPayload: Record<string, unknown> = { source: 'verify_api' }
       let paymentDetails = (record as any).paymentDetails as Record<string, unknown> | undefined
+
+      if (provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE) {
+        const pluginPayment = await dispatchPluginGatewayPaymentHook({
+          hook: 'verifyPayment',
+          provider,
+          config: effectiveConfig,
+          orderNo: record.orderNo,
+          rechargeId: record.id,
+          userId: record.userId,
+          amount: rechargeAmount,
+          payableAmount: orderAmount,
+          paymentMethod: (record as any).paymentMethod || null,
+          paymentDetails: (record as any).paymentDetails,
+          source: 'recharge.verify',
+          actor: { id: record.userId, role: 'user' }
+        })
+
+        if (!pluginPayment.valid) {
+          request.log.warn({ orderNo, providerId: provider.id, error: pluginPayment.error }, '插件支付主动验单失败')
+          return {
+            success: true,
+            verified: false,
+            status: record.status,
+            message: '订单待支付，请稍后重试',
+            order: {
+              orderNo: record.orderNo,
+              amount: rechargeAmount,
+              status: record.status
+            }
+          }
+        }
+
+        const pluginResult = pluginPayment.result
+        if (!isRechargeGatewayOrderNoMatch(record.orderNo, pluginResult.orderNo)) {
+          request.log.warn(
+            { orderNo: record.orderNo, pluginOrderNo: pluginResult.orderNo },
+            '插件支付主动验单返回订单号不匹配，拒绝处理'
+          )
+          return {
+            success: false,
+            verified: false,
+            status: record.status,
+            message: '支付订单号校验失败，请等待异步回调或联系客服',
+            order: {
+              orderNo: record.orderNo,
+              amount: rechargeAmount,
+              status: record.status
+            }
+          }
+        }
+
+        tradeNo = pluginResult.tradeNo || ''
+        tradeNoForIndex = getTradeNoForIndex(record.orderNo, tradeNo)
+        paymentDetails = buildPluginGatewayCallbackPaymentDetails((record as any).paymentDetails, {
+          providerCode: pluginPayment.pluginConfig.providerCode,
+          pluginId: pluginPayment.pluginConfig.pluginId,
+          gatewayExtensionKey: pluginPayment.pluginConfig.gatewayExtensionKey,
+          state: pluginResult.state,
+          requestId: pluginResult.requestId,
+          tradeNo: pluginResult.tradeNo,
+          message: pluginResult.message,
+          metadata: pluginResult.metadata
+        })
+        callbackPayload = {
+          source: 'plugin_gateway_verify',
+          pluginRequestId: pluginResult.requestId,
+          pluginState: pluginResult.state,
+          pluginMessage: pluginResult.message,
+          pluginMetadata: sanitizeObject(pluginResult.metadata)
+        }
+
+        if (pluginResult.state === 'pending') {
+          await db.updateRechargeOrderMetadata(record.orderNo, {
+            tradeNo: pluginResult.tradeNo,
+            paymentDetails
+          })
+          return {
+            success: true,
+            verified: false,
+            status: 'pending',
+            message: pluginResult.message || '订单待支付',
+            order: buildRechargeRecordView({
+              id: record.id,
+              orderNo: record.orderNo,
+              amount: record.amount,
+              actualAmount: record.actualAmount,
+              fee: record.fee,
+              status: record.status,
+              provider: record.provider,
+              paymentMethod: (record as any).paymentMethod || null,
+              paymentDetails,
+              tradeNo: pluginResult.tradeNo,
+              failReason: record.failReason,
+              createdAt: record.createdAt,
+              expiredAt: record.expiredAt,
+              completedAt: record.completedAt
+            })
+          }
+        }
+
+        if (record.status !== 'pending' && record.status !== 'paid') {
+          return reply.status(400).send({ error: '订单状态异常' })
+        }
+
+        if (pluginResult.state === 'cancelled') {
+          const cancelledRecord = await db.cancelRecharge(record.orderNo, callbackPayload, paymentDetails)
+          await markCallbackProcessed(provider.id, record.orderNo, tradeNoForIndex, request.ip)
+          return {
+            success: true,
+            verified: true,
+            status: 'cancelled',
+            message: pluginResult.message || '订单已取消',
+            order: buildRechargeRecordView({
+              id: cancelledRecord.id,
+              orderNo: record.orderNo,
+              amount: record.amount,
+              actualAmount: cancelledRecord.actualAmount ?? record.actualAmount,
+              fee: cancelledRecord.fee ?? record.fee,
+              status: 'cancelled',
+              provider: record.provider,
+              paymentMethod: (record as any).paymentMethod || null,
+              paymentDetails,
+              tradeNo,
+              failReason: pluginResult.message,
+              createdAt: record.createdAt,
+              expiredAt: record.expiredAt,
+              completedAt: cancelledRecord.completedAt
+            })
+          }
+        }
+
+        if (pluginResult.state === 'failed') {
+          const failReason = pluginResult.message || '插件支付网关返回支付失败'
+          const failedRecord = await db.failRecharge(record.orderNo, failReason, callbackPayload, paymentDetails)
+          await markCallbackProcessed(provider.id, record.orderNo, tradeNoForIndex, request.ip)
+          return {
+            success: true,
+            verified: true,
+            status: 'failed',
+            message: failReason,
+            order: buildRechargeRecordView({
+              id: failedRecord.id,
+              orderNo: record.orderNo,
+              amount: record.amount,
+              actualAmount: failedRecord.actualAmount ?? record.actualAmount,
+              fee: failedRecord.fee ?? record.fee,
+              status: 'failed',
+              provider: record.provider,
+              paymentMethod: (record as any).paymentMethod || null,
+              paymentDetails,
+              tradeNo,
+              failReason,
+              createdAt: record.createdAt,
+              expiredAt: record.expiredAt,
+              completedAt: failedRecord.completedAt
+            })
+          }
+        }
+
+        if (pluginResult.actualAmount === null || !Number.isFinite(pluginResult.actualAmount) || pluginResult.actualAmount <= 0) {
+          request.log.warn({ orderNo, actualAmount: pluginResult.actualAmount }, '插件支付主动验单缺少有效支付金额')
+          return {
+            success: true,
+            verified: false,
+            status: 'pending',
+            message: '支付处理中，请稍后重试',
+            order: {
+              orderNo: record.orderNo,
+              amount: rechargeAmount,
+              status: record.status
+            }
+          }
+        }
+
+        const diff = Math.abs(pluginResult.actualAmount - orderAmount)
+        if (diff > AMOUNT_TOLERANCE_CENTS / 100) {
+          request.log.warn(
+            { orderNo, orderAmount, actualAmount: pluginResult.actualAmount, diff },
+            '插件支付主动验单金额与订单金额不匹配，拒绝处理'
+          )
+          return {
+            success: false,
+            verified: false,
+            status: 'pending',
+            message: '支付金额与订单金额不匹配，请联系客服',
+            order: {
+              orderNo: record.orderNo,
+              amount: rechargeAmount,
+              status: record.status
+            }
+          }
+        }
+
+        if (record.expiredAt && new Date(record.expiredAt) < new Date()) {
+          request.log.warn({ orderNo, expiredAt: record.expiredAt }, '插件支付主动验单订单已过期，拒绝处理')
+          await markCallbackProcessed(provider.id, record.orderNo, tradeNoForIndex, request.ip)
+          return {
+            success: true,
+            verified: false,
+            status: 'pending',
+            message: '订单已过期，请联系客服',
+            order: {
+              orderNo: record.orderNo,
+              amount: rechargeAmount,
+              status: record.status
+            }
+          }
+        }
+
+        actualAmount = creditedAmount
+      } else if (provider.type !== 'yipay' && provider.type !== 'heleket') {
+        return {
+          success: true,
+          verified: false,
+          status: record.status,
+          message: '订单待支付，请稍后重试',
+          order: {
+            orderNo: record.orderNo,
+            amount: Number(record.amount),
+            status: record.status
+          }
+        }
+      }
 
       if (provider.type === 'yipay') {
         const { epayConfig, valid, error: configError } = buildEpayConfig(effectiveConfig)
@@ -1416,7 +2082,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
 
         actualAmount = creditedAmount
         callbackPayload = { source: 'verify_api', queryResult: sanitizeObject(queryResult.rawData) as Record<string, unknown> }
-      } else {
+      } else if (provider.type === 'heleket') {
         const { heleketConfig, valid, error: configError } = buildHeleketConfig(effectiveConfig)
         if (!valid) {
           request.log.warn({ orderNo, error: configError }, 'Heleket 支付渠道配置不完整')
@@ -1513,7 +2179,26 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         }
 
         if (paymentState === 'cancelled') {
-          await db.cancelRecharge(orderNo, callbackPayload, paymentDetails)
+          const cancelledRecord = await db.cancelRecharge(orderNo, callbackPayload, paymentDetails)
+          dispatchGatewayPaymentLifecycle({
+            hook: 'verifyPayment',
+            providerCode: provider.type,
+            providerId: provider.id,
+            orderNo,
+            rechargeId: cancelledRecord.id,
+            userId: record.userId,
+            amount: rechargeAmount,
+            payableAmount: orderAmount,
+            actualAmount: Number(cancelledRecord.actualAmount ?? record.actualAmount ?? record.amount),
+            fee: Number(cancelledRecord.fee ?? record.fee),
+            status: 'cancelled',
+            paymentMethod: (record as any).paymentMethod || null,
+            source: 'recharge.verify',
+            tradeNo,
+            failureReason: statusMessage,
+            paymentDetails,
+            actor: { id: record.userId, role: 'user' }
+          })
 
           return {
             success: true,
@@ -1540,7 +2225,26 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         }
 
         if (paymentState === 'failed') {
-          await db.failRecharge(orderNo, statusMessage, callbackPayload, paymentDetails)
+          const failedRecord = await db.failRecharge(orderNo, statusMessage, callbackPayload, paymentDetails)
+          dispatchGatewayPaymentLifecycle({
+            hook: 'verifyPayment',
+            providerCode: provider.type,
+            providerId: provider.id,
+            orderNo,
+            rechargeId: failedRecord.id,
+            userId: record.userId,
+            amount: rechargeAmount,
+            payableAmount: orderAmount,
+            actualAmount: Number(failedRecord.actualAmount ?? record.actualAmount ?? record.amount),
+            fee: Number(failedRecord.fee ?? record.fee),
+            status: 'failed',
+            paymentMethod: (record as any).paymentMethod || null,
+            source: 'recharge.verify',
+            tradeNo,
+            failureReason: statusMessage,
+            paymentDetails,
+            actor: { id: record.userId, role: 'user' }
+          })
 
           return {
             success: true,
@@ -1653,6 +2357,25 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         await markCallbackProcessed(provider.id, orderNo, tradeNoForIndex, request.ip)
 
         if (completion.completedNow) {
+          dispatchGatewayPaymentLifecycle({
+            hook: 'verifyPayment',
+            providerCode: provider.type,
+            providerId: provider.id,
+            orderNo,
+            rechargeId: completion.id,
+            userId: record.userId,
+            amount: rechargeAmount,
+            payableAmount: orderAmount,
+            actualAmount,
+            fee: Number(completion.fee ?? record.fee),
+            status: 'completed',
+            paymentMethod: (record as any).paymentMethod || null,
+            source: 'recharge.verify',
+            tradeNo,
+            paymentDetails,
+            actor: { id: record.userId, role: 'user' }
+          })
+
           // 记录充值成功日志
           await createLog(
             record.userId,
@@ -2048,6 +2771,24 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         return { success: true, message: '订单已完成，无需重复处理' }
       }
 
+      dispatchGatewayPaymentLifecycle({
+        hook: 'verifyPayment',
+        providerCode: record.provider?.type ?? null,
+        providerId: record.providerId,
+        orderNo,
+        rechargeId: completion.id,
+        userId: record.userId,
+        amount: Number(record.amount),
+        actualAmount: Number(completion.actualAmount ?? record.actualAmount ?? record.amount),
+        fee: Number(completion.fee ?? record.fee),
+        status: 'completed',
+        paymentMethod: (record as any).paymentMethod || null,
+        source: 'admin.recharge.manual_complete',
+        tradeNo,
+        paymentDetails: (record as any).paymentDetails,
+        actor: { id: request.user!.id, role: 'admin', username: request.user!.username }
+      })
+
       // 记录管理员操作日志
       await createLog(
         request.user!.id,
@@ -2087,9 +2828,27 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         return reply.status(400).send({ error: '当前订单状态不允许标记失败' })
       }
 
-      await db.failRecharge(orderNo, failReason, {
+      const failedRecord = await db.failRecharge(orderNo, failReason, {
         manual: true,
         operator: request.user!.username
+      })
+
+      dispatchGatewayPaymentLifecycle({
+        hook: 'verifyPayment',
+        providerCode: record.provider?.type ?? null,
+        providerId: record.providerId,
+        orderNo,
+        rechargeId: failedRecord.id,
+        userId: record.userId,
+        amount: Number(record.amount),
+        actualAmount: Number(failedRecord.actualAmount ?? record.actualAmount ?? record.amount),
+        fee: Number(failedRecord.fee ?? record.fee),
+        status: 'failed',
+        paymentMethod: (record as any).paymentMethod || null,
+        source: 'admin.recharge.manual_fail',
+        failureReason: failReason,
+        paymentDetails: (record as any).paymentDetails,
+        actor: { id: request.user!.id, role: 'admin', username: request.user!.username }
       })
 
       // 记录管理员操作日志
@@ -2115,6 +2874,230 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
    * 通用支付回调处理函数
    * 支持 POST 和 GET 请求（V1版本使用GET）
    */
+  async function handlePluginGatewayPaymentCallback(
+    request: any,
+    reply: any,
+    provider: { id: number; type: string; config: unknown },
+    providerIdNum: number,
+    callbackData: Record<string, unknown>,
+    clientIp: string
+  ) {
+    const preliminaryOrderNo = extractRechargeOrderNoFromCallback(PLUGIN_GATEWAY_PROVIDER_TYPE, callbackData)
+    if (!preliminaryOrderNo) {
+      request.log.warn({ providerId: providerIdNum, data: sanitizeObject(callbackData) }, '插件支付回调缺少订单号')
+      return reply.status(400).send({ error: '缺少订单号' })
+    }
+
+    const record = await db.getRechargeRecordByOrderNo(preliminaryOrderNo)
+    if (!record) {
+      request.log.warn({ providerId: providerIdNum, orderNo: preliminaryOrderNo }, '插件支付回调订单不存在')
+      return reply.status(404).send({ error: '订单不存在' })
+    }
+
+    if (record.providerId !== providerIdNum) {
+      request.log.warn({ orderNo: preliminaryOrderNo, expected: record.providerId, actual: providerIdNum }, '插件支付回调支付渠道不匹配')
+      return reply.status(400).send({ error: '支付渠道不匹配' })
+    }
+
+    const currentConfig = typeof provider.config === 'string'
+      ? JSON.parse(provider.config)
+      : (provider.config || {}) as Record<string, unknown>
+    const { config, source: configSource } = resolveRechargeProviderConfig(
+      provider.type,
+      currentConfig,
+      (record as any).providerConfigSnapshot
+    )
+    const providerValidation = validateActiveRechargeProvider({ type: provider.type, config })
+    if (!providerValidation.valid) {
+      request.log.error({ providerId: providerIdNum, type: provider.type, error: providerValidation.error, configSource }, '插件支付回调拒绝未安全实现的支付渠道')
+      return reply.status(400).send({ error: providerValidation.error || '支付渠道未安全启用' })
+    }
+
+    const rechargeAmount = Number(record.amount)
+    const expectedAmount = getRechargePayableAmount({
+      amount: record.amount,
+      fee: record.fee,
+      paymentDetails: (record as any).paymentDetails
+    })
+    const creditedAmount = record.actualAmount !== null && record.actualAmount !== undefined ? Number(record.actualAmount) : rechargeAmount
+    const pluginPayment = await dispatchPluginGatewayPaymentHook({
+      hook: 'webhook',
+      provider,
+      config,
+      orderNo: record.orderNo,
+      rechargeId: record.id,
+      userId: record.userId,
+      amount: rechargeAmount,
+      payableAmount: expectedAmount,
+      paymentMethod: (record as any).paymentMethod || null,
+      paymentDetails: (record as any).paymentDetails,
+      source: 'recharge.callback',
+      callbackData,
+      callbackHeaders: buildPluginGatewayCallbackHeaders(request.headers || {}),
+      callbackIp: clientIp,
+      actor: { id: null, role: 'system' }
+    })
+
+    if (!pluginPayment.valid) {
+      request.log.warn({ providerId: providerIdNum, orderNo: record.orderNo, error: pluginPayment.error }, '插件支付回调归一化失败')
+      return reply.status(400).send({ error: pluginPayment.error })
+    }
+
+    const pluginResult = pluginPayment.result
+    if (!isRechargeGatewayOrderNoMatch(record.orderNo, pluginResult.orderNo)) {
+      request.log.warn(
+        { orderNo: record.orderNo, pluginOrderNo: pluginResult.orderNo },
+        '插件支付回调返回订单号不匹配，拒绝处理'
+      )
+      return reply.status(400).send({ error: '支付订单号校验失败' })
+    }
+
+    const tradeNoForIndex = getTradeNoForIndex(record.orderNo, pluginResult.tradeNo)
+    if (await isCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex)) {
+      request.log.info({ orderNo: record.orderNo }, '插件支付重复回调，忽略')
+      return { code: 'SUCCESS', message: 'OK' }
+    }
+
+    const paymentDetails = buildPluginGatewayCallbackPaymentDetails((record as any).paymentDetails, {
+      providerCode: pluginPayment.pluginConfig.providerCode,
+      pluginId: pluginPayment.pluginConfig.pluginId,
+      gatewayExtensionKey: pluginPayment.pluginConfig.gatewayExtensionKey,
+      state: pluginResult.state,
+      requestId: pluginResult.requestId,
+      tradeNo: pluginResult.tradeNo,
+      message: pluginResult.message,
+      metadata: pluginResult.metadata
+    })
+    const callbackPayload = {
+      source: 'plugin_gateway_callback',
+      pluginRequestId: pluginResult.requestId,
+      pluginState: pluginResult.state,
+      pluginMessage: pluginResult.message,
+      pluginMetadata: sanitizeObject(pluginResult.metadata),
+      callbackData: sanitizeObject(callbackData)
+    }
+
+    if (pluginResult.state === 'pending') {
+      await db.updateRechargeOrderMetadata(record.orderNo, {
+        tradeNo: pluginResult.tradeNo,
+        callbackData: callbackPayload,
+        paymentDetails
+      })
+      request.log.info({ orderNo: record.orderNo, pluginRequestId: pluginResult.requestId }, '插件支付回调仍为待处理状态')
+      return { code: 'SUCCESS', message: 'OK' }
+    }
+
+    if (record.status === 'completed') {
+      await markCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex, clientIp)
+      request.log.info({ orderNo: record.orderNo }, '插件支付回调订单已完成，幂等返回')
+      return { code: 'SUCCESS', message: 'OK' }
+    }
+
+    if (record.status !== 'pending' && record.status !== 'paid') {
+      request.log.warn({ orderNo: record.orderNo, status: record.status }, '插件支付回调订单状态不允许处理')
+      return reply.status(400).send({ error: '订单状态异常' })
+    }
+
+    if (pluginResult.state === 'cancelled') {
+      const cancelledRecord = await db.cancelRecharge(record.orderNo, callbackPayload, paymentDetails)
+      await markCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex, clientIp)
+      request.log.info({ orderNo: record.orderNo, id: cancelledRecord.id }, '插件支付回调已取消订单')
+      return { code: 'SUCCESS', message: 'OK' }
+    }
+
+    if (pluginResult.state === 'failed') {
+      const failReason = pluginResult.message || '插件支付网关返回支付失败'
+      const failedRecord = await db.failRecharge(record.orderNo, failReason, callbackPayload, paymentDetails)
+      await markCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex, clientIp)
+      request.log.info({ orderNo: record.orderNo, id: failedRecord.id }, '插件支付回调已标记失败')
+      return { code: 'SUCCESS', message: 'OK' }
+    }
+
+    if (pluginResult.actualAmount === null || !Number.isFinite(pluginResult.actualAmount) || pluginResult.actualAmount <= 0) {
+      request.log.warn({ providerId: providerIdNum, orderNo: record.orderNo, actualAmount: pluginResult.actualAmount }, '插件支付回调缺少有效支付金额')
+      return reply.status(400).send({ error: '缺少有效支付金额' })
+    }
+
+    const diff = Math.abs(pluginResult.actualAmount - expectedAmount)
+    if (diff > AMOUNT_TOLERANCE_CENTS / 100) {
+      request.log.warn({
+        orderNo: record.orderNo,
+        expected: expectedAmount,
+        actual: pluginResult.actualAmount,
+        diff
+      }, '插件支付回调金额与订单金额不匹配，拒绝处理')
+      await createLog(
+        record.userId,
+        'system',
+        'recharge.amount_mismatch',
+        `Plugin gateway amount mismatch rejected: order ${record.orderNo}, expected ${expectedAmount}, actual ${pluginResult.actualAmount}`,
+        'warning'
+      )
+      return reply.status(400).send({ error: '支付金额与订单金额不匹配' })
+    }
+
+    if (record.expiredAt && new Date(record.expiredAt) < new Date()) {
+      request.log.warn({ orderNo: record.orderNo, expiredAt: record.expiredAt }, '插件支付回调订单已过期，拒绝处理')
+      await markCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex, clientIp)
+      return { code: 'SUCCESS', message: 'OK' }
+    }
+
+    const completion = await db.completeRecharge(record.orderNo, {
+      tradeNo: pluginResult.tradeNo || undefined,
+      actualAmount: creditedAmount,
+      callbackData: callbackPayload,
+      paymentDetails
+    })
+
+    await markCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex, clientIp)
+
+    if (completion.completedNow) {
+      await createLog(
+        record.userId,
+        'user',
+        'recharge.completed',
+        `Recharge completed via plugin gateway callback: order ${record.orderNo}, amount ${creditedAmount}, tradeNo: ${pluginResult.tradeNo || 'N/A'}`,
+        'success'
+      )
+
+      try {
+        await createInboxMessage({
+          userId: record.userId,
+          eventType: 'recharge_success',
+          title: '充值到账通知',
+          content: `您的充值已到账！\n充值金额：￥${creditedAmount.toFixed(2)}\n订单号：${record.orderNo}\n交易号：${pluginResult.tradeNo || 'N/A'}`,
+          data: {
+            orderNo: record.orderNo,
+            amount: creditedAmount,
+            tradeNo: pluginResult.tradeNo
+          }
+        })
+
+        try {
+          const user = await db.findUserById(record.userId)
+          if (user && user.email) {
+            const balance = await db.getUserBalance(record.userId)
+            await sendRechargeSuccessEmail(user.email, {
+              username: user.username,
+              amount: creditedAmount,
+              orderNo: record.orderNo,
+              tradeNo: pluginResult.tradeNo,
+              newBalance: balance,
+              time: new Date()
+            })
+          }
+        } catch (emailErr) {
+          request.log.warn({ orderNo: record.orderNo, error: emailErr }, '发送插件支付充值成功邮件失败')
+        }
+      } catch (notifyError) {
+        request.log.warn({ orderNo: record.orderNo, error: notifyError }, '发送插件支付充值成功通知失败')
+      }
+    }
+
+    request.log.info({ orderNo: record.orderNo, tradeNo: pluginResult.tradeNo, completedNow: completion.completedNow }, '插件支付回调处理成功')
+    return { code: 'SUCCESS', message: 'OK' }
+  }
+
   async function handlePaymentCallback(
     request: any,
     reply: any,
@@ -2139,6 +3122,10 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     if (!provider) {
       request.log.warn({ providerId }, '支付渠道不存在')
       return reply.status(404).send({ error: '支付渠道不存在' })
+    }
+
+    if (provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE) {
+      return handlePluginGatewayPaymentCallback(request, reply, provider, providerIdNum, callbackData, clientIp)
     }
 
     // 2. IP 白名单验证
@@ -2325,9 +3312,56 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
 
       if (record.status === 'pending' || record.status === 'paid') {
         if (heleketPaymentState === 'cancelled') {
-          await db.cancelRecharge(orderNo, heleketCallbackPayload, paymentDetails)
+          const cancelledRecord = await db.cancelRecharge(orderNo, heleketCallbackPayload, paymentDetails)
+          dispatchGatewayPaymentLifecycle({
+            hook: 'webhook',
+            providerCode: provider.type,
+            providerId: provider.id,
+            orderNo,
+            rechargeId: cancelledRecord.id,
+            userId: record.userId,
+            amount: Number(record.amount),
+            payableAmount: getRechargePayableAmount({
+              amount: record.amount,
+              fee: record.fee,
+              paymentDetails: (record as any).paymentDetails
+            }),
+            actualAmount: Number(cancelledRecord.actualAmount ?? record.actualAmount ?? record.amount),
+            fee: Number(cancelledRecord.fee ?? record.fee),
+            status: 'cancelled',
+            paymentMethod: (record as any).paymentMethod || null,
+            source: 'recharge.callback',
+            tradeNo,
+            failureReason: getHeleketStatusMessage(heleketPaymentStatus),
+            paymentDetails,
+            actor: { id: null, role: 'system' }
+          })
         } else {
-          await db.failRecharge(orderNo, getHeleketStatusMessage(heleketPaymentStatus), heleketCallbackPayload, paymentDetails)
+          const failReason = getHeleketStatusMessage(heleketPaymentStatus)
+          const failedRecord = await db.failRecharge(orderNo, failReason, heleketCallbackPayload, paymentDetails)
+          dispatchGatewayPaymentLifecycle({
+            hook: 'webhook',
+            providerCode: provider.type,
+            providerId: provider.id,
+            orderNo,
+            rechargeId: failedRecord.id,
+            userId: record.userId,
+            amount: Number(record.amount),
+            payableAmount: getRechargePayableAmount({
+              amount: record.amount,
+              fee: record.fee,
+              paymentDetails: (record as any).paymentDetails
+            }),
+            actualAmount: Number(failedRecord.actualAmount ?? record.actualAmount ?? record.amount),
+            fee: Number(failedRecord.fee ?? record.fee),
+            status: 'failed',
+            paymentMethod: (record as any).paymentMethod || null,
+            source: 'recharge.callback',
+            tradeNo,
+            failureReason: failReason,
+            paymentDetails,
+            actor: { id: null, role: 'system' }
+          })
         }
       }
 
@@ -2416,6 +3450,25 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)
 
       if (completion.completedNow) {
+        dispatchGatewayPaymentLifecycle({
+          hook: 'webhook',
+          providerCode: provider.type,
+          providerId: provider.id,
+          orderNo,
+          rechargeId: completion.id,
+          userId: record.userId,
+          amount: rechargeAmount,
+          payableAmount: expectedAmount,
+          actualAmount: creditedAmount,
+          fee: Number(completion.fee ?? record.fee),
+          status: 'completed',
+          paymentMethod: (record as any).paymentMethod || null,
+          source: 'recharge.callback',
+          tradeNo,
+          paymentDetails,
+          actor: { id: null, role: 'system' }
+        })
+
         // 记录充值成功日志
         await createLog(
           record.userId,

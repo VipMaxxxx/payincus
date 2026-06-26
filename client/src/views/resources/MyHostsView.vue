@@ -9,6 +9,7 @@ import { useToast } from '@/stores/toast'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import FlagIcon from '@/components/FlagIcon.vue'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { translateError } from '@/utils/errorHandler'
 import { hostCreatePath, hostDetailPath, isAdminEntry } from '@/utils/app-paths'
 
@@ -371,6 +372,8 @@ onActivated(() => {
 
 <template>
   <div class="space-y-6 animate-fade-in">
+    <ThemeTemplateSlot slot-name="user.hosts.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+
     <div class="page-header">
       <div>
         <h1 class="page-title">{{ t('resources.hosts.title') }}</h1>

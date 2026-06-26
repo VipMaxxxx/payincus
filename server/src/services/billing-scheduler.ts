@@ -8,6 +8,7 @@ import pLimit from 'p-limit'
 import { prisma } from '../db/prisma.js'
 import * as db from '../db/index.js'
 import { sendHostManagedInstanceNotification, sendNotification } from '../lib/notifier.js'
+import { emitServicePluginEvent } from '../lib/plugin-business-events.js'
 import { 
   sendExpiryReminderEmail, 
   sendAutoRenewSuccessEmail, 
@@ -377,6 +378,17 @@ async function processExpirySuspend(instance: any): Promise<void> {
       instanceName: suspendedInstance.name,
       suspendReason: '实例已到期'
     })
+    emitServicePluginEvent({
+      event: 'service.suspended',
+      instanceId: suspendedInstance.id,
+      userId: suspendedInstance.userId,
+      hostId: suspendedInstance.hostId,
+      instanceName: suspendedInstance.name,
+      status: 'suspended',
+      incusId: suspendedInstance.incusId,
+      reason: 'expired',
+      source: 'billing.expiry_suspend'
+    })
 
     await createLog(
       suspendedInstance.userId,
@@ -525,6 +537,17 @@ async function processExpiryDelete(instance: any): Promise<void> {
     // 发送删除通知
     await sendNotification(instance.userId, 'instance_deleted', {
       instanceName: instance.name
+    })
+    emitServicePluginEvent({
+      event: 'service.deleted',
+      instanceId: instance.id,
+      userId: instance.userId,
+      hostId: instance.hostId,
+      instanceName: instance.name,
+      status: 'deleted',
+      incusId: instance.incusId,
+      reason: 'expired',
+      source: 'billing.expiry_delete'
     })
 
     await createLog(

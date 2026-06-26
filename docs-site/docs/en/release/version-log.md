@@ -6,14 +6,17 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `9fcbe28`
+- Current HEAD / 当前 HEAD: `592f2be`
 - Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke
+- Commit subject / 提交说明: Update handoff after v0.6.6 production OTA / 更新 v0.6.6 生产 OTA 交接
 - Latest tag / 最新 tag: `v0.6.6`
 
 ## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.6.6 production OTA / 更新 v0.6.6 生产 OTA 交接 `592f2be`
+- Update version log for v0.6.6 / 更新 v0.6.6 版本日志 `9590201`
 
 ## Historical Versions / 历史版本
 

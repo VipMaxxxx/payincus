@@ -13,9 +13,18 @@ import * as db from '../db/index.js'
 import { prisma } from '../db/prisma.js'
 import { getAllAdminUserIds } from '../db/users.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
-import { deleteTicketImageFromLsky, uploadTicketImageToLsky } from '../lib/lsky.js'
 import { sendNotification } from '../lib/notifier.js'
 import { assertSafeHttpUrl } from '../lib/outbound-security.js'
+import { emitPluginEvent } from '../lib/plugin-event-emitter.js'
+import {
+  cleanupUploadedTicketImages,
+  isHandledTicketPayloadError,
+  normalizeAllowedImageMimeType,
+  readTicketPayload,
+  TICKET_UPLOAD_BODY_LIMIT,
+  uploadTicketImages,
+  MAX_TICKET_IMAGE_SIZE
+} from '../lib/ticket-attachments.js'
 import {
   AI_TICKET_CONTEXT_PERMISSION,
   AI_TICKET_DRAFT_PERMISSION,
@@ -67,33 +76,8 @@ const VALID_STATUSES: TicketStatus[] = ['open', 'in_progress', 'resolved', 'clos
 // 扩展的状态类型（包含 active）
 type ExtendedTicketStatus = TicketStatus | 'active'
 
-const MAX_TICKET_IMAGES = 6
-const MAX_TICKET_IMAGE_SIZE = 50 * 1024 * 1024
-const TICKET_UPLOAD_BODY_LIMIT = (MAX_TICKET_IMAGES * MAX_TICKET_IMAGE_SIZE) + (4 * 1024 * 1024)
 const TICKET_PROXY_FETCH_TIMEOUT_MS = 15_000
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/avif'
-])
 const POSITIVE_INTEGER_ID_RE = /^[1-9]\d*$/
-
-interface ParsedTicketPayload {
-  fields: Record<string, string>
-  images: Array<{
-    buffer: Buffer
-    filename: string
-    contentType: string
-    sizeBytes: number
-  }>
-}
-
-function isMultipartRequest(request: FastifyRequest): boolean {
-  return typeof (request as FastifyRequest & { isMultipart?: () => boolean }).isMultipart === 'function'
-    && (request as FastifyRequest & { isMultipart: () => boolean }).isMultipart()
-}
 
 function parsePositiveId(value: unknown): number | null {
   if (typeof value === 'number') {
@@ -140,11 +124,6 @@ function normalizeTicketStatusBody(body: unknown): TicketStatus | null {
     : null
 }
 
-function normalizeAllowedImageMimeType(value: string | null | undefined): string | null {
-  const normalized = value?.split(';')[0]?.trim().toLowerCase()
-  return normalized && ALLOWED_IMAGE_MIME_TYPES.has(normalized) ? normalized : null
-}
-
 async function readRemoteImageBody(response: Response): Promise<Buffer> {
   const contentLength = Number(response.headers.get('content-length') || '0')
   if (Number.isFinite(contentLength) && contentLength > MAX_TICKET_IMAGE_SIZE) {
@@ -180,124 +159,6 @@ async function readRemoteImageBody(response: Response): Promise<Buffer> {
   }
 
   return Buffer.concat(chunks, totalBytes)
-}
-
-async function readTicketPayload(request: FastifyRequest): Promise<ParsedTicketPayload> {
-  if (!isMultipartRequest(request)) {
-    const body = (request.body ?? {}) as Record<string, unknown>
-    const fields: Record<string, string> = {}
-
-    for (const [key, value] of Object.entries(body)) {
-      if (value !== null && value !== undefined) {
-        fields[key] = String(value)
-      }
-    }
-
-    return { fields, images: [] }
-  }
-
-  const multipartRequest = request as FastifyRequest & {
-    parts: () => AsyncIterable<any>
-  }
-  const fields: Record<string, string> = {}
-  const images: ParsedTicketPayload['images'] = []
-
-  for await (const part of multipartRequest.parts()) {
-    if (part.type === 'file') {
-      if (part.fieldname !== 'images') {
-        await part.toBuffer()
-        continue
-      }
-
-      if (!part.mimetype || !ALLOWED_IMAGE_MIME_TYPES.has(part.mimetype)) {
-        throw new Error('Only JPG, PNG, WebP, GIF and AVIF images are supported')
-      }
-
-      if (images.length >= MAX_TICKET_IMAGES) {
-        throw new Error(`A ticket message can contain at most ${MAX_TICKET_IMAGES} images`)
-      }
-
-      const buffer = await part.toBuffer()
-      if (buffer.length === 0) {
-        continue
-      }
-
-      if (buffer.length > MAX_TICKET_IMAGE_SIZE) {
-        throw new Error(`Each image must be no larger than ${MAX_TICKET_IMAGE_SIZE / (1024 * 1024)}MB`)
-      }
-
-      images.push({
-        buffer,
-        filename: part.filename || `ticket-image-${Date.now()}`,
-        contentType: part.mimetype,
-        sizeBytes: buffer.length
-      })
-      continue
-    }
-
-    fields[part.fieldname] = typeof part.value === 'string' ? part.value : String(part.value ?? '')
-  }
-
-  return { fields, images }
-}
-
-async function uploadTicketImages(
-  images: ParsedTicketPayload['images']
-): Promise<ticketDb.CreateTicketMessageAttachmentData[]> {
-  const uploaded: ticketDb.CreateTicketMessageAttachmentData[] = []
-
-  try {
-    for (const image of images) {
-      const result = await uploadTicketImageToLsky(image)
-      uploaded.push({
-        provider: result.provider,
-        providerVersion: result.providerVersion,
-        providerFileId: result.providerFileId,
-        filename: result.filename,
-        originalName: result.originalName,
-        mimeType: result.mimeType,
-        sizeBytes: result.sizeBytes,
-        width: result.width,
-        height: result.height,
-        url: result.url,
-        thumbnailUrl: result.thumbnailUrl
-      })
-    }
-  } catch (error) {
-    if (uploaded.length > 0) {
-      await cleanupUploadedTicketImages(uploaded)
-    }
-    throw error
-  }
-
-  return uploaded
-}
-
-async function cleanupUploadedTicketImages(
-  attachments: Array<{ providerVersion: string; providerFileId?: string | null }>
-): Promise<void> {
-  await Promise.allSettled(
-    attachments.map(attachment => deleteTicketImageFromLsky(attachment.providerVersion, attachment.providerFileId ?? null))
-  )
-}
-
-function isHandledTicketPayloadError(error: unknown): error is Error {
-  if (!(error instanceof Error)) {
-    return false
-  }
-
-  return [
-    'Only JPG',
-    'A ticket message can contain at most',
-    'Each image must be no larger than',
-    'Lsky',
-    'image bed',
-    'Cannot reply to a closed ticket',
-    'must use http or https',
-    'Private or',
-    'Unable to resolve hostname',
-    'Targets resolving'
-  ].some(fragment => error.message.includes(fragment))
 }
 
 export default async function ticketsRoutes(fastify: FastifyInstance) {
@@ -409,6 +270,20 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       } catch (err) {
         console.error('[Tickets] Failed to send notification:', err)
       }
+
+      emitPluginEvent('ticket.created', {
+        dedupeKey: `ticket.created:${result.ticketId}:${result.messageId}`,
+        ticketId: result.ticketId,
+        messageId: result.messageId,
+        userId: user.id,
+        username: user.username,
+        subject,
+        category: category || 'general',
+        priority: priority || 'normal',
+        instanceId: instanceId ?? null,
+        hostId,
+        attachmentCount: uploadedAttachments.length
+      }, { id: user.id, role: user.role, username: user.username }, { dedupeKey: `ticket.created:${result.ticketId}:${result.messageId}` })
 
       return reply.code(201).send({
         message: 'Ticket created successfully',
@@ -1197,6 +1072,19 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       } catch (err) {
         console.error('[Tickets] Failed to send notification:', err)
       }
+
+      emitPluginEvent('ticket.replied', {
+        dedupeKey: `ticket.replied:${ticketId}:${message.id}`,
+        ticketId,
+        messageId: message.id,
+        userId: user.id,
+        username: user.username,
+        subject: ticket.subject,
+        isFromOwner: access.isOwner,
+        status: ticket.status,
+        attachmentCount: uploadedAttachments.length,
+        createdAt: message.createdAt
+      }, { id: user.id, role: user.role, username: user.username }, { dedupeKey: `ticket.replied:${ticketId}:${message.id}` })
 
       return reply.code(201).send({
         message: 'Message added successfully',

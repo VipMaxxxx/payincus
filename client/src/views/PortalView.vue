@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
+import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { usePageSeo } from '@/composables/usePageSeo'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -305,6 +306,11 @@ onMounted(() => {
 
 <template>
   <div class="relative">
+    <ThemeTemplateSlot
+      slot-name="public.home.hero"
+      container-class="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8"
+    />
+
     <section class="relative px-4 pb-20 pt-14 sm:px-6 lg:px-8">
       <div class="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <div class="max-w-3xl">
@@ -421,6 +427,11 @@ onMounted(() => {
         </div>
       </div>
     </section>
+
+    <ThemeTemplateSlot
+      slot-name="public.home.sections"
+      container-class="mx-auto max-w-7xl px-4 pb-6 sm:px-6 lg:px-8"
+    />
 
     <section class="px-4 py-20 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-7xl">
