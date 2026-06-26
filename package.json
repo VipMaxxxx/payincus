@@ -24,7 +24,7 @@
     "verify:log-header": "bash scripts/verify-log-header-exposure.sh",
     "verify:live-acceptance": "bash scripts/verify-live-acceptance.sh",
     "verify:final-acceptance": "FINAL_ACCEPTANCE_MODE=1 RUN_PRODUCTION_PREFLIGHT=1 RUN_SPLIT_AUTH_SMOKE=1 RUN_AGENT_RELEASE_SMOKE=1 RUN_LOG_HEADER_CHECK=1 REQUIRE_LIVE_PROOF_REFS=1 bash scripts/verify-live-acceptance.sh",
-    "verify:extension-platform": "pnpm test:extension-platform && pnpm --filter server type-check && pnpm --filter client build && pnpm --filter server test:frontend-dist-boundary-guards && pnpm --filter server build && pnpm --dir docs-site --ignore-workspace build",
+    "verify:extension-platform": "pnpm test:extension-platform && pnpm --filter server type-check && pnpm --filter client build && pnpm --filter server test:frontend-dist-boundary-guards && pnpm --filter server test:frontend-route-guards && pnpm --filter server build && pnpm --dir docs-site --ignore-workspace build",
     "update:online": "bash scripts/apply-online-update.sh",
     "smoke:split:nginx": "bash scripts/smoke-local-nginx-split.sh",
     "lint": "pnpm --filter client lint:check",

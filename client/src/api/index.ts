@@ -97,11 +97,9 @@ import type {
   PluginMarketSubmission,
   DeveloperPluginEventHealth,
   PluginEventAlertPreference,
-  PluginMarketSubmissionReviewStatus,
   PluginMarketSubmissionUploadResult,
   CreatePluginMarketSubmissionRequest,
   UpdatePluginEventAlertPreferenceRequest,
-  ReviewPluginMarketSubmissionRequest,
   ThemePackageRecord
 } from '@/types/api.js'
 
@@ -3838,11 +3836,7 @@ const api = {
     eventAlertPreferences: (): Promise<{ preferences: PluginEventAlertPreference[]; updatedAt: string }> =>
       http.get('/plugin-market-submissions/mine/event-alert-preferences'),
     updateEventAlertPreference: (pluginId: string, data: UpdatePluginEventAlertPreferenceRequest): Promise<{ preference: PluginEventAlertPreference }> =>
-      http.patch(`/plugin-market-submissions/mine/event-alert-preferences/${encodeURIComponent(pluginId)}`, data),
-    listForReview: (params?: { reviewStatus?: PluginMarketSubmissionReviewStatus; limit?: number }): Promise<{ submissions: PluginMarketSubmission[] }> =>
-      http.get('/plugin-market-submissions/admin', { params }),
-    review: (id: number, data: ReviewPluginMarketSubmissionRequest): Promise<{ submission: PluginMarketSubmission }> =>
-      http.patch(`/plugin-market-submissions/admin/${id}/review`, data)
+      http.patch(`/plugin-market-submissions/mine/event-alert-preferences/${encodeURIComponent(pluginId)}`, data)
   },
 
   orders: {
