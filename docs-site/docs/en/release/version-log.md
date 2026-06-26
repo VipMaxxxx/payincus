@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `f28e860`
+- Current HEAD / 当前 HEAD: `370be98`
 - Commit date / 提交日期: 2026-06-26
-- Commit subject / 提交说明: Fix user gift card Turnstile verification
-- Latest tag / 最新 tag: `v0.6.13`
+- Commit subject / 提交说明: Fix gift card Turnstile token flow
+- Latest tag / 最新 tag: `v0.6.14`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.14
+
+- Release commit / 发布提交: `370be98`
+- Commit date / 提交日期: 2026-06-26
+- Commit subject / 提交说明: Fix gift card Turnstile token flow
+
+### Fixes and Stability / 修复与稳定性
+
+- Fix gift card Turnstile token flow `370be98`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update version log for v0.6.13 `d0f193c`
 
 ## v0.6.13
 
