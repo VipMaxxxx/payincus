@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `e3963e0`
+- 当前 HEAD / Current HEAD: `69ac384`
 - 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Persist expired gift card state
-- 最新 tag / Latest tag: `v0.6.15`
+- 提交说明 / Commit subject: Fix gift card Turnstile body verification
+- 最新 tag / Latest tag: `v0.6.16`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.16
+
+- 发布提交 / Release commit: `69ac384`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Fix gift card Turnstile body verification
+
+### Fixes and Stability / 修复与稳定性
+
+- Move user gift card Turnstile verification from onRequest to preHandler so body turnstileToken is available.
+
+- Keep authentication in onRequest and add guard coverage to prevent body-token verification regressions.
+
+- Let the gift-card flow test check the active database schema for isolated test runs.
 
 ## v0.6.15
 
