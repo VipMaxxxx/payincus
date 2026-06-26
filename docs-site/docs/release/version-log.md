@@ -6,19 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `592f2be`
-- 提交日期 / Commit date: 2026-06-25
-- 提交说明 / Commit subject: Update handoff after v0.6.6 production OTA / 更新 v0.6.6 生产 OTA 交接
-- 最新 tag / Latest tag: `v0.6.6`
+- 当前 HEAD / Current HEAD: `d173746`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Build extension platform and theme system
+- 最新 tag / Latest tag: `v0.6.7`
 
 ## 未发布变更 / Unreleased Changes
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.6.6 production OTA / 更新 v0.6.6 生产 OTA 交接 `592f2be`
-- Update version log for v0.6.6 / 更新 v0.6.6 版本日志 `9590201`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.7
+
+- 发布提交 / Release commit: `d173746`
+- 提交日期 / Commit date: 2026-06-26
+- 提交说明 / Commit subject: Build extension platform and theme system
+
+- Upgrade Plugin Center product wording to Extension Center
+
+- Add OAuth Provider, Public API, SDK, action runtime, events, scoped plugin storage, market review, and theme package system
+
+- Add governed live extension/theme market assets and development documentation
+
+- Add extension platform guard coverage and verification scripts
 
 ## v0.6.6
 

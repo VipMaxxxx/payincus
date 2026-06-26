@@ -6,19 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `592f2be`
-- Commit date / 提交日期: 2026-06-25
-- Commit subject / 提交说明: Update handoff after v0.6.6 production OTA / 更新 v0.6.6 生产 OTA 交接
-- Latest tag / 最新 tag: `v0.6.6`
+- Current HEAD / 当前 HEAD: `d173746`
+- Commit date / 提交日期: 2026-06-26
+- Commit subject / 提交说明: Build extension platform and theme system
+- Latest tag / 最新 tag: `v0.6.7`
 
 ## Unreleased Changes / 未发布变更
 
-### Improvements and Adjustments / 改进与调整
-
-- Update handoff after v0.6.6 production OTA / 更新 v0.6.6 生产 OTA 交接 `592f2be`
-- Update version log for v0.6.6 / 更新 v0.6.6 版本日志 `9590201`
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.7
+
+- Release commit / 发布提交: `d173746`
+- Commit date / 提交日期: 2026-06-26
+- Commit subject / 提交说明: Build extension platform and theme system
+
+- Upgrade Plugin Center product wording to Extension Center
+
+- Add OAuth Provider, Public API, SDK, action runtime, events, scoped plugin storage, market review, and theme package system
+
+- Add governed live extension/theme market assets and development documentation
+
+- Add extension platform guard coverage and verification scripts
 
 ## v0.6.6
 
