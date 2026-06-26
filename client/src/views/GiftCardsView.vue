@@ -94,7 +94,24 @@ async function loadCards(): Promise<void> {
 
 function getTurnstileToken(): string | undefined {
   if (!turnstileEnabled.value) return undefined
-  return turnstileToken.value || undefined
+  const widgetToken = turnstileRef.value?.getToken?.()
+  if (widgetToken) {
+    turnstileToken.value = widgetToken
+    return widgetToken
+  }
+
+  if (turnstileToken.value) return turnstileToken.value
+
+  const domToken = document
+    .querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')
+    ?.value
+    ?.trim()
+  if (domToken) {
+    turnstileToken.value = domToken
+    return domToken
+  }
+
+  return undefined
 }
 
 function resetTurnstile(): void {
@@ -118,6 +135,10 @@ function onTurnstileExpire(): void {
 function onTurnstileError(): void {
   turnstileToken.value = ''
   toast.error('人机验证失败，请重试')
+}
+
+function onTurnstileVerify(token: string): void {
+  turnstileToken.value = token
 }
 
 async function redeemGiftCard(): Promise<void> {
@@ -207,6 +228,7 @@ onMounted(async () => {
             :site-key="turnstileSiteKey"
             :theme="themeStore.isDark ? 'dark' : 'light'"
             action="gift_card"
+            @verify="onTurnstileVerify"
             @expire="onTurnstileExpire"
             @error="onTurnstileError"
           />

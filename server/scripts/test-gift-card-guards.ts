@@ -20,6 +20,7 @@ const userRouter = read('client/src/router/user.ts')
 const adminRouter = read('client/src/router/admin.ts')
 const userView = read('client/src/views/GiftCardsView.vue')
 const adminView = read('client/src/views/admin/GiftCardsView.vue')
+const turnstileWidget = read('client/src/components/TurnstileWidget.vue')
 const userNav = read('client/src/config/side-nav-items-user.ts')
 const adminNav = read('client/src/config/side-nav-items-admin.ts')
 const serverPackage = read('server/package.json')
@@ -117,8 +118,13 @@ assert(
     userView.includes("import TurnstileWidget from '@/components/TurnstileWidget.vue'") &&
     userView.includes('api.systemConfig.getPublic()') &&
     userView.includes('v-model="turnstileToken"') &&
+    userView.includes('turnstileRef.value?.getToken?.()') &&
+    userView.includes('input[name="cf-turnstile-response"]') &&
+    userView.includes('@verify="onTurnstileVerify"') &&
+    turnstileWidget.includes("@update:model-value=\"onVerify\"") &&
+    turnstileWidget.includes('@expired="onExpire"') &&
     userView.includes('请先完成人机验证'),
-  'user gift card redemption and balance-funded generation must keep visible Turnstile protection'
+  'user gift card redemption and balance-funded generation must keep visible Turnstile protection and reliably submit the widget token'
 )
 
 assert(
