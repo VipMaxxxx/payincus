@@ -31,6 +31,7 @@ import {
   upsertPluginEventAlertPreference,
   type PluginEventAlertPreferenceInput
 } from '../lib/plugin-event-alert-preferences.js'
+import { getCombinedAdminIdAllowlist, getPluginSubmissionPublicBaseUrl } from '../lib/runtime-settings.js'
 
 const REVIEW_STATUSES: PluginMarketSubmissionReviewStatus[] = ['pending', 'listed', 'rejected', 'delisted']
 const RISK_LEVELS: PluginMarketSubmissionRiskLevel[] = ['low', 'medium', 'high', 'critical']
@@ -155,25 +156,19 @@ function getRequestUser(request: FastifyRequest): { id: number; username: string
   return request.user as { id: number; username: string; role: 'admin' | 'user' }
 }
 
-function getAllowedPluginManagerAdminIds(): Set<number> {
-  return new Set(
-    (process.env.PLUGIN_MANAGER_ALLOWED_ADMIN_IDS || process.env.SYSTEM_UPDATE_ALLOWED_ADMIN_IDS || '')
-      .split(',')
-      .map(item => Number(item.trim()))
-      .filter(id => Number.isSafeInteger(id) && id > 0)
-  )
-}
-
-function canManagePluginMarketSubmissions(user: { id: number; username: string; role: 'admin' | 'user' }): boolean {
+async function canManagePluginMarketSubmissions(user: { id: number; username: string; role: 'admin' | 'user' }): Promise<boolean> {
   if (user.role !== 'admin') return false
-  const allowedIds = getAllowedPluginManagerAdminIds()
+  const { ids: allowedIds } = await getCombinedAdminIdAllowlist(
+    'plugin_manager_allowed_admin_ids',
+    ['PLUGIN_MANAGER_ALLOWED_ADMIN_IDS', 'SYSTEM_UPDATE_ALLOWED_ADMIN_IDS']
+  )
   if (allowedIds.size > 0) return allowedIds.has(user.id)
   return user.username === 'admin'
 }
 
 async function requirePluginMarketReviewer(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const user = getRequestUser(request)
-  if (!canManagePluginMarketSubmissions(user)) {
+  if (!(await canManagePluginMarketSubmissions(user))) {
     await createLog(
       user.id,
       LogModule.PLUGIN,
@@ -296,17 +291,13 @@ function normalizeUploadFilename(value: string): string | null {
   return /^[a-z][a-z0-9.-]{2,180}\.(?:tar\.gz|plugin\.json)$/.test(trimmed) ? trimmed : null
 }
 
-function publicBaseUrlFromRequest(request: FastifyRequest): string {
-  const configured = process.env.PLUGIN_SUBMISSION_PUBLIC_BASE_URL ||
-    process.env.SITE_URL ||
-    process.env.FRONTEND_URL ||
-    ''
-  if (configured.trim()) return configured.trim().replace(/\/+$/, '')
-  return `${request.protocol}://${request.hostname}`.replace(/\/+$/, '')
+async function publicBaseUrlFromRequest(request: FastifyRequest): Promise<string> {
+  return getPluginSubmissionPublicBaseUrl(`${request.protocol}://${request.hostname}`)
 }
 
-function buildPublicUploadUrl(request: FastifyRequest, filename: string): string {
-  return `${publicBaseUrlFromRequest(request)}/api/plugin-market-submissions/uploads/plugins/${encodeURIComponent(filename)}`
+async function buildPublicUploadUrl(request: FastifyRequest, filename: string): Promise<string> {
+  const publicBaseUrl = await publicBaseUrlFromRequest(request)
+  return `${publicBaseUrl}/api/plugin-market-submissions/uploads/plugins/${encodeURIComponent(filename)}`
 }
 
 function submissionUploadTaskId(): number {
@@ -705,8 +696,8 @@ export default async function pluginMarketSubmissionRoutes(fastify: FastifyInsta
           pluginId: validated.manifest.id,
           version: validated.manifest.version,
           name: validated.manifest.name,
-          packageUrl: buildPublicUploadUrl(request, packageFilename),
-          manifestUrl: buildPublicUploadUrl(request, manifestFilename),
+          packageUrl: await buildPublicUploadUrl(request, packageFilename),
+          manifestUrl: await buildPublicUploadUrl(request, manifestFilename),
           sha256: validated.sha256,
           permissions: {
             manifest: validated.manifest.permissions || [],

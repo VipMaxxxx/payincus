@@ -3958,6 +3958,10 @@ export default {
                     title: '工單與附件',
                     description: '管理工單入口和工單圖片儲存配置',
                 },
+                operations: {
+                    title: '營運配置',
+                    description: '管理 OTA、禮品卡、擴展/主題市場和擴展備份等平台營運參數',
+                },
             },
             popupAnnouncement: {
                 title: '彈窗公告',

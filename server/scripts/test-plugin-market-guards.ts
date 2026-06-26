@@ -10,6 +10,7 @@ function read(path: string): string {
 }
 
 const market = read('server/src/lib/plugin-market.ts')
+const runtimeSettings = read('server/src/lib/runtime-settings.ts')
 const adminRoute = read('server/src/routes/admin-plugins.ts')
 const envExample = read('.env.example')
 const releaseWorkflow = read('.github/workflows/release.yml')
@@ -18,9 +19,12 @@ const docsMarketIndex = JSON.parse(read('docs-site/docs/public/plugin-market/ind
 }
 
 assert.ok(
-  market.includes('PLUGIN_MARKET_INDEX_URL') &&
-    market.includes('PLUGIN_MARKET_TRUSTED_HOSTS') &&
-    market.includes('getTrustedMarketHosts') &&
+  market.includes('getPluginMarketIndexUrl as getConfiguredPluginMarketIndexUrl') &&
+    market.includes('getPluginMarketTrustedHosts') &&
+    runtimeSettings.includes("'plugin_market_index_url'") &&
+    runtimeSettings.includes('PLUGIN_MARKET_INDEX_URL') &&
+    runtimeSettings.includes("'plugin_market_trusted_hosts'") &&
+    runtimeSettings.includes('PLUGIN_MARKET_TRUSTED_HOSTS') &&
     market.includes('payincus.com') &&
     market.includes('/plugin-market/index.json') &&
     market.includes('assertGitHubIndexUrl') &&

@@ -36,6 +36,9 @@ const savingBrand = ref(false)
 const savingTicket = ref(false)
 const savingFreeSite = ref(false)
 const savingTicketImages = ref(false)
+const savingPlatformPermissions = ref(false)
+const savingMarketConfig = ref(false)
+const savingPluginBackup = ref(false)
 const testingSmtp = ref(false)
 const sendingTestEmail = ref(false)
 const testEmailTo = ref('')
@@ -107,7 +110,22 @@ const form = ref({
   ticket_image_lsky_base_url: '',
   ticket_image_lsky_token: '',
   ticket_image_lsky_api_version: 'v1',
-  ticket_image_lsky_target_id: ''
+  ticket_image_lsky_target_id: '',
+  // 平台运营配置
+  system_update_allowed_admin_ids: '',
+  payincus_gift_card_admin_ids: '',
+  plugin_manager_allowed_admin_ids: '',
+  theme_manager_allowed_admin_ids: '',
+  plugin_market_index_url: 'https://payincus.com/plugin-market/index.json',
+  plugin_market_trusted_hosts: 'payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com',
+  plugin_market_public_base_url: 'https://payincus.com/plugin-market',
+  theme_market_index_url: 'https://payincus.com/theme-market/index.json',
+  theme_market_trusted_hosts: 'payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com',
+  theme_market_public_base_url: 'https://payincus.com/theme-market',
+  plugin_submission_public_base_url: '',
+  plugin_storage_backup_schedule_enabled: false,
+  plugin_storage_backup_interval_hours: 24,
+  plugin_storage_backup_retention_count: 7
 })
 
 // Config metadata - computed to support i18n
@@ -138,17 +156,19 @@ const configMeta = computed(() => {
 
 // 数字类型的配置键
 // 注意：不再限制实例配额，已删除 default_quota_instance
-const numericConfigKeys = ['default_quota_host', 'default_quota_friend', 'default_quota_package', 'smtp_port', 'free_site_register_gift_points', 'invite_default_expire_days']
+const numericConfigKeys = ['default_quota_host', 'default_quota_friend', 'default_quota_package', 'smtp_port', 'free_site_register_gift_points', 'invite_default_expire_days', 'plugin_storage_backup_interval_hours', 'plugin_storage_backup_retention_count']
 
 // 浮点数类型的配置键
 const floatConfigKeys = ['transfer_fee', 'free_site_register_gift_balance']
 
 // 布尔类型的配置键
-const booleanConfigKeys = ['registration_enabled', 'require_invite_code', 'hosting_feature_enabled', 'hosting_market_entry_enabled', 'ticket_enabled', 'free_site_mode', 'free_site_register_gift_enabled', 'turnstile_enabled', 'smtp_enabled', 'smtp_secure', 'email_domain_whitelist_enabled']
+const booleanConfigKeys = ['registration_enabled', 'require_invite_code', 'hosting_feature_enabled', 'hosting_market_entry_enabled', 'ticket_enabled', 'free_site_mode', 'free_site_register_gift_enabled', 'turnstile_enabled', 'smtp_enabled', 'smtp_secure', 'email_domain_whitelist_enabled', 'plugin_storage_backup_schedule_enabled']
 
 // 字符串类型的配置键
 const stringConfigKeys = ['turnstile_site_key', 'turnstile_secret_key', 'avatar_api_base', 'smtp_host', 'smtp_username', 'smtp_password', 'smtp_from_email', 'smtp_from_name', 'email_allowed_domains', 'footer_contact_email', 'brand_name', 'brand_subtitle', 'brand_logo_url', 'hosting_notice']
 stringConfigKeys.push('popup_announcement', 'popup_promo_image_url', 'popup_promo_package_id', 'ticket_image_lsky_base_url', 'ticket_image_lsky_token', 'ticket_image_lsky_api_version', 'ticket_image_lsky_target_id')
+stringConfigKeys.push('system_update_allowed_admin_ids', 'payincus_gift_card_admin_ids', 'plugin_manager_allowed_admin_ids', 'theme_manager_allowed_admin_ids')
+stringConfigKeys.push('plugin_market_index_url', 'plugin_market_trusted_hosts', 'plugin_market_public_base_url', 'theme_market_index_url', 'theme_market_trusted_hosts', 'theme_market_public_base_url', 'plugin_submission_public_base_url')
 
 const jsonConfigKeys = ['invite_generation_costs']
 
@@ -167,6 +187,7 @@ const isSecuritySection = computed(() => currentSectionKey.value === 'security')
 const isMailSection = computed(() => currentSectionKey.value === 'mail')
 const isTicketSection = computed(() => currentSectionKey.value === 'tickets')
 const isPopupAnnouncementTab = computed(() => currentSectionKey.value === 'popup')
+const isOperationsSection = computed(() => currentSectionKey.value === 'operations')
 
 function hasAtMostTwoDecimalPlaces(value: number): boolean {
   const cents = value * 100
@@ -499,6 +520,59 @@ const hasTicketImageChanges = computed(() => {
   })
 })
 
+const platformPermissionKeys = [
+  'system_update_allowed_admin_ids',
+  'payincus_gift_card_admin_ids',
+  'plugin_manager_allowed_admin_ids',
+  'theme_manager_allowed_admin_ids'
+]
+async function savePlatformPermissions() {
+  await saveConfigGroup(platformPermissionKeys, savingPlatformPermissions)
+}
+const hasPlatformPermissionChanges = computed(() => {
+  return platformPermissionKeys.some(key => {
+    const config = configs.value.find(c => c.key === key)
+    if (!config) return false
+    return String((form.value as any)[key]) !== config.value
+  })
+})
+
+const marketConfigKeys = [
+  'plugin_market_index_url',
+  'plugin_market_trusted_hosts',
+  'plugin_market_public_base_url',
+  'theme_market_index_url',
+  'theme_market_trusted_hosts',
+  'theme_market_public_base_url',
+  'plugin_submission_public_base_url'
+]
+async function saveMarketConfig() {
+  await saveConfigGroup(marketConfigKeys, savingMarketConfig)
+}
+const hasMarketConfigChanges = computed(() => {
+  return marketConfigKeys.some(key => {
+    const config = configs.value.find(c => c.key === key)
+    if (!config) return false
+    return String((form.value as any)[key]) !== config.value
+  })
+})
+
+const pluginBackupKeys = [
+  'plugin_storage_backup_schedule_enabled',
+  'plugin_storage_backup_interval_hours',
+  'plugin_storage_backup_retention_count'
+]
+async function savePluginBackup() {
+  await saveConfigGroup(pluginBackupKeys, savingPluginBackup)
+}
+const hasPluginBackupChanges = computed(() => {
+  return pluginBackupKeys.some(key => {
+    const config = configs.value.find(c => c.key === key)
+    if (!config) return false
+    return String((form.value as any)[key]) !== config.value
+  })
+})
+
 // 用户默认配额保存
 // 注意：不再限制实例配额，已删除 default_quota_instance
 // 注意：好友配额已禁用，保留 default_quota_friend 以确保旧数据兼容
@@ -760,6 +834,159 @@ async function sendTestEmail() {
       </div>
 
       <template v-else>
+        <div v-if="isOperationsSection" class="card p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+            <div>
+              <h3 class="text-themed font-medium">平台权限白名单</h3>
+              <p class="text-sm text-themed-muted mt-1">配置高风险后台能力允许操作的管理员 UID。多个 UID 用英文逗号分隔，环境变量会作为兜底白名单合并生效。</p>
+            </div>
+            <button
+              type="button"
+              class="btn-primary text-sm px-4 py-1.5"
+              :disabled="!hasPlatformPermissionChanges || savingPlatformPermissions"
+              @click="savePlatformPermissions"
+            >
+              {{ savingPlatformPermissions ? t('admin.system.saving') : t('admin.system.save') }}
+            </button>
+          </div>
+
+          <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">OTA 更新管理员 UID</label>
+              <input v-model="form.system_update_allowed_admin_ids" type="text" class="input" placeholder="1,2,3" />
+              <p class="text-xs text-themed-muted">控制版本检查后的在线更新、回滚等高风险操作。留空时仅 admin 用户名可操作。</p>
+            </div>
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">礼品卡管理员 UID</label>
+              <input v-model="form.payincus_gift_card_admin_ids" type="text" class="input" placeholder="1,2,3" />
+              <p class="text-xs text-themed-muted">生产环境建议必须配置；未在白名单内的管理员不能生成、禁用或删除礼品卡。</p>
+            </div>
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">扩展中心管理员 UID</label>
+              <input v-model="form.plugin_manager_allowed_admin_ids" type="text" class="input" placeholder="1,2,3" />
+              <p class="text-xs text-themed-muted">控制扩展上传、安装、启停、卸载、事件重放和扩展市场审核。</p>
+            </div>
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">主题系统管理员 UID</label>
+              <input v-model="form.theme_manager_allowed_admin_ids" type="text" class="input" placeholder="1,2,3" />
+              <p class="text-xs text-themed-muted">控制主题上传、安装、启停、卸载和主题市场审核；留空时继承扩展/OTA 白名单。</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="isOperationsSection" class="card p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+            <div>
+              <h3 class="text-themed font-medium">在线扩展与主题市场</h3>
+              <p class="text-sm text-themed-muted mt-1">配置扩展中心和主题系统实时读取的市场目录、可信下载域名，以及审核发布后生成的公开地址。</p>
+            </div>
+            <button
+              type="button"
+              class="btn-primary text-sm px-4 py-1.5"
+              :disabled="!hasMarketConfigChanges || savingMarketConfig"
+              @click="saveMarketConfig"
+            >
+              {{ savingMarketConfig ? t('admin.system.saving') : t('admin.system.save') }}
+            </button>
+          </div>
+
+          <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">扩展市场索引 URL</label>
+              <input v-model="form.plugin_market_index_url" type="url" class="input" placeholder="https://payincus.com/plugin-market/index.json" />
+              <p class="text-xs text-themed-muted">扩展中心市场页会实时读取这个 index.json。</p>
+            </div>
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">扩展市场公开地址</label>
+              <input v-model="form.plugin_market_public_base_url" type="url" class="input" placeholder="https://payincus.com/plugin-market" />
+              <p class="text-xs text-themed-muted">审核发布扩展市场 index.json 时生成 manifest URL 使用。</p>
+            </div>
+            <div class="space-y-2 lg:col-span-2">
+              <label class="block text-sm text-themed-secondary">扩展市场可信域名</label>
+              <input v-model="form.plugin_market_trusted_hosts" type="text" class="input" placeholder="payincus.com,github.com,objects.githubusercontent.com" />
+              <p class="text-xs text-themed-muted">只有这些 HTTPS 域名下的索引和包允许被读取或安装。</p>
+            </div>
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">主题市场索引 URL</label>
+              <input v-model="form.theme_market_index_url" type="url" class="input" placeholder="https://payincus.com/theme-market/index.json" />
+              <p class="text-xs text-themed-muted">主题市场页会实时读取这个 index.json。</p>
+            </div>
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">主题市场公开地址</label>
+              <input v-model="form.theme_market_public_base_url" type="url" class="input" placeholder="https://payincus.com/theme-market" />
+              <p class="text-xs text-themed-muted">审核发布主题市场 index.json 时生成 manifest URL 使用。</p>
+            </div>
+            <div class="space-y-2 lg:col-span-2">
+              <label class="block text-sm text-themed-secondary">主题市场可信域名</label>
+              <input v-model="form.theme_market_trusted_hosts" type="text" class="input" placeholder="payincus.com,github.com,objects.githubusercontent.com" />
+              <p class="text-xs text-themed-muted">主题包、manifest 和预览资源必须来自可信 HTTPS 域名。</p>
+            </div>
+            <div class="space-y-2 lg:col-span-2">
+              <label class="block text-sm text-themed-secondary">第三方扩展提交公开基础地址</label>
+              <input v-model="form.plugin_submission_public_base_url" type="url" class="input" placeholder="https://pay.payincus.com" />
+              <p class="text-xs text-themed-muted">第三方上传扩展包后，返回给开发者的 packageUrl/manifestUrl 会使用这个基础地址；留空时使用站点地址。</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="isOperationsSection" class="card p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+            <div>
+              <h3 class="text-themed font-medium">扩展数据备份</h3>
+              <p class="text-sm text-themed-muted mt-1">控制扩展 storage 的定时归档策略。修改开关或周期后，后端进程需要重启才会重新安排定时器；保留数量下一轮备份会读取最新值。</p>
+            </div>
+            <button
+              type="button"
+              class="btn-primary text-sm px-4 py-1.5"
+              :disabled="!hasPluginBackupChanges || savingPluginBackup"
+              @click="savePluginBackup"
+            >
+              {{ savingPluginBackup ? t('admin.system.saving') : t('admin.system.save') }}
+            </button>
+          </div>
+
+          <div class="mt-6 space-y-5">
+            <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50">
+              <div class="flex-1">
+                <label class="text-sm font-medium text-themed">启用扩展数据定时备份</label>
+                <p class="text-xs text-themed-muted mt-1">为已安装扩展的 storage、scoped storage 和 table storage 定时创建归档。</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="form.plugin_storage_backup_schedule_enabled"
+                class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2"
+                :class="form.plugin_storage_backup_schedule_enabled ? 'bg-green-500 focus:ring-green-500' : 'bg-gray-400 dark:bg-gray-500 focus:ring-gray-400'"
+                @click="form.plugin_storage_backup_schedule_enabled = !form.plugin_storage_backup_schedule_enabled"
+              >
+                <span
+                  class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out"
+                  :class="form.plugin_storage_backup_schedule_enabled ? 'translate-x-5' : 'translate-x-0'"
+                />
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div class="space-y-2">
+                <label class="block text-sm text-themed-secondary">备份周期</label>
+                <div class="relative max-w-xs">
+                  <input v-model.number="form.plugin_storage_backup_interval_hours" type="number" min="1" max="720" step="1" class="input pr-14" />
+                  <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">小时</span>
+                </div>
+                <p class="text-xs text-themed-muted">范围 1-720 小时。</p>
+              </div>
+              <div class="space-y-2">
+                <label class="block text-sm text-themed-secondary">每个扩展保留归档数</label>
+                <div class="relative max-w-xs">
+                  <input v-model.number="form.plugin_storage_backup_retention_count" type="number" min="1" max="365" step="1" class="input pr-12" />
+                  <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">份</span>
+                </div>
+                <p class="text-xs text-themed-muted">范围 1-365 份，超出后自动清理旧归档。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Registration settings -->
         <div v-if="isAccessSection" class="card p-6">
           <div class="flex items-center justify-between mb-2">

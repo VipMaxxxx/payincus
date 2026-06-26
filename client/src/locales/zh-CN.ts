@@ -2963,6 +2963,10 @@ export default {
                     title: '工单与附件',
                     description: '管理工单入口和工单图片存储配置',
                 },
+                operations: {
+                    title: '运营配置',
+                    description: '管理 OTA、礼品卡、扩展/主题市场和扩展备份等平台运营参数',
+                },
             },
             popupAnnouncement: {
                 title: '弹窗公告',

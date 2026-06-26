@@ -3,6 +3,10 @@ import { join } from 'path'
 import { createHash, randomUUID } from 'crypto'
 import { getPluginStagingDir } from './plugin-package.js'
 import { getCurrentVersionMetadata } from './system-version.js'
+import {
+  getPluginMarketIndexUrl as getConfiguredPluginMarketIndexUrl,
+  getPluginMarketTrustedHosts
+} from './runtime-settings.js'
 
 export type PluginMarketReviewStatus = 'pending' | 'listed' | 'delisted' | 'rejected'
 export type PluginMarketTrustLevel = 'official' | 'verified' | 'third_party'
@@ -113,32 +117,15 @@ function pickEnum<T extends string>(value: unknown, allowed: readonly T[], fallb
   return typeof value === 'string' && allowed.includes(value as T) ? value as T : fallback
 }
 
-export function getPluginMarketIndexUrl(): string | null {
-  return pickString(process.env.PLUGIN_MARKET_INDEX_URL, 500)
+export async function getPluginMarketIndexUrl(): Promise<string | null> {
+  return pickString(await getConfiguredPluginMarketIndexUrl(), 500)
 }
 
-function getTrustedMarketHosts(): Set<string> {
-  return new Set(
-    [
-      'github.com',
-      'objects.githubusercontent.com',
-      'raw.githubusercontent.com',
-      'payincus.com',
-      'payincus.github.io'
-    ].concat(
-      (process.env.PLUGIN_MARKET_TRUSTED_HOSTS || '')
-        .split(',')
-        .map(host => host.trim().toLowerCase())
-        .filter(Boolean)
-    )
-  )
-}
-
-function assertTrustedMarketUrl(input: string, purpose: 'index' | 'download'): URL {
+function assertTrustedMarketUrl(input: string, purpose: 'index' | 'download', trustedHosts: Set<string>): URL {
   const url = new URL(input)
   if (url.protocol !== 'https:') throw new Error('Plugin market URL must use HTTPS')
   const host = url.hostname.toLowerCase()
-  if (!getTrustedMarketHosts().has(host)) {
+  if (!trustedHosts.has(host)) {
     throw new Error('Plugin market URL host is not trusted')
   }
 
@@ -167,12 +154,12 @@ function assertTrustedMarketUrl(input: string, purpose: 'index' | 'download'): U
   return url
 }
 
-export function assertGitHubReleaseUrl(input: string): URL {
-  return assertTrustedMarketUrl(input, 'download')
+export async function assertGitHubReleaseUrl(input: string): Promise<URL> {
+  return assertTrustedMarketUrl(input, 'download', await getPluginMarketTrustedHosts())
 }
 
-function assertGitHubIndexUrl(input: string): URL {
-  return assertTrustedMarketUrl(input, 'index')
+function assertGitHubIndexUrl(input: string, trustedHosts: Set<string>): URL {
+  return assertTrustedMarketUrl(input, 'index', trustedHosts)
 }
 
 function normalizeDeveloper(input: unknown, fallbackName: string): PluginMarketDeveloper {
@@ -233,7 +220,7 @@ function normalizePricing(input: unknown): PluginMarketPricing {
   }
 }
 
-function normalizeEntry(input: unknown): PluginMarketEntry | null {
+function normalizeEntry(input: unknown, trustedHosts: Set<string>): PluginMarketEntry | null {
   if (!isRecord(input)) return null
   const id = pickString(input.id, 120)
   const name = pickString(input.name, 120)
@@ -243,8 +230,8 @@ function normalizeEntry(input: unknown): PluginMarketEntry | null {
   const downloadUrl = pickString(input.downloadUrl, 500)
   const sha256 = pickString(input.sha256, 64)
   if (!id || !name || !latest || !repo || !manifestUrl || !downloadUrl || !sha256) return null
-  assertGitHubReleaseUrl(manifestUrl)
-  assertGitHubReleaseUrl(downloadUrl)
+  assertTrustedMarketUrl(manifestUrl, 'download', trustedHosts)
+  assertTrustedMarketUrl(downloadUrl, 'download', trustedHosts)
   if (!/^[a-f0-9]{64}$/i.test(sha256)) return null
   const reviewStatus = pickEnum(input.reviewStatus, ['pending', 'listed', 'delisted', 'rejected'] as const, 'pending')
   const trustLevel = pickEnum(input.trustLevel, ['official', 'verified', 'third_party'] as const, 'third_party')
@@ -310,8 +297,9 @@ function getMarketFingerprint(entries: PluginMarketEntry[]): string {
   return createHash('sha256').update(JSON.stringify(stablePayload)).digest('hex')
 }
 
-export async function fetchPluginMarketIndex(url = getPluginMarketIndexUrl()): Promise<PluginMarketIndex> {
-  if (!url) {
+export async function fetchPluginMarketIndex(url?: string | null): Promise<PluginMarketIndex> {
+  const effectiveUrl = url ?? await getPluginMarketIndexUrl()
+  if (!effectiveUrl) {
     return {
       plugins: [],
       governance: {
@@ -325,7 +313,8 @@ export async function fetchPluginMarketIndex(url = getPluginMarketIndexUrl()): P
       }
     }
   }
-  const parsed = assertGitHubIndexUrl(url)
+  const trustedHosts = await getPluginMarketTrustedHosts()
+  const parsed = assertGitHubIndexUrl(effectiveUrl, trustedHosts)
   const response = await fetch(parsed, {
     headers: { 'user-agent': 'payincus-plugin-center' }
   })
@@ -334,7 +323,7 @@ export async function fetchPluginMarketIndex(url = getPluginMarketIndexUrl()): P
   }
   const payload: unknown = await response.json()
   const normalized = isRecord(payload) && Array.isArray(payload.plugins)
-    ? payload.plugins.map(normalizeEntry).filter((entry): entry is PluginMarketEntry => !!entry)
+    ? payload.plugins.map(entry => normalizeEntry(entry, trustedHosts)).filter((entry): entry is PluginMarketEntry => !!entry)
     : []
   const plugins = normalized.filter(entry => entry.reviewStatus === 'listed')
   return {
@@ -373,7 +362,7 @@ export async function assertMarketEntryInstallable(entry: PluginMarketEntry): Pr
 
 export async function downloadMarketPlugin(entry: PluginMarketEntry): Promise<string> {
   await assertMarketEntryInstallable(entry)
-  assertGitHubReleaseUrl(entry.downloadUrl)
+  await assertGitHubReleaseUrl(entry.downloadUrl)
   const response = await fetch(entry.downloadUrl, {
     headers: { 'user-agent': 'payincus-plugin-center' }
   })

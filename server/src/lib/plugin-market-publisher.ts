@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import { prisma } from '../db/prisma.js'
 import type { PluginMarketEntry, PluginMarketIndex } from './plugin-market.js'
+import { getRuntimeConfigString } from './runtime-settings.js'
 
 export interface PluginMarketPublishResult {
   indexPath: string
@@ -77,12 +78,15 @@ function getPluginMarketPublishDir(): string {
   return resolve(process.env.PLUGIN_MARKET_PUBLISH_DIR || join(process.cwd(), 'docs-site/docs/public/plugin-market'))
 }
 
-function getPluginMarketPublicBaseUrl(): string {
-  return (process.env.PLUGIN_MARKET_PUBLIC_BASE_URL || 'https://payincus.com/plugin-market').replace(/\/+$/, '')
+async function getPluginMarketPublicBaseUrl(): Promise<string> {
+  return (await getRuntimeConfigString(
+    'plugin_market_public_base_url',
+    'PLUGIN_MARKET_PUBLIC_BASE_URL',
+    'https://payincus.com/plugin-market'
+  )).replace(/\/+$/, '')
 }
 
-function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.pluginMarketSubmission.findMany>>[number]): PluginMarketEntry {
-  const publicBaseUrl = getPluginMarketPublicBaseUrl()
+function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.pluginMarketSubmission.findMany>>[number], publicBaseUrl: string): PluginMarketEntry {
   const manifestUrl = submission.manifestUrl || `${publicBaseUrl}/manifests/${submission.pluginId}/${submission.version}.json`
   return {
     id: submission.pluginId,
@@ -132,7 +136,7 @@ async function readExistingMarketEntries(indexPath: string): Promise<PluginMarke
 export async function publishPluginMarketIndex(): Promise<PluginMarketPublishResult> {
   const publishDir = getPluginMarketPublishDir()
   const indexPath = join(publishDir, 'index.json')
-  const [existingEntries, listedSubmissions] = await Promise.all([
+  const [existingEntries, listedSubmissions, publicBaseUrl] = await Promise.all([
     readExistingMarketEntries(indexPath),
     prisma.pluginMarketSubmission.findMany({
       where: {
@@ -140,7 +144,8 @@ export async function publishPluginMarketIndex(): Promise<PluginMarketPublishRes
         scanStatus: { in: ['passed', 'warning'] }
       },
       orderBy: [{ pluginId: 'asc' }, { version: 'desc' }]
-    })
+    }),
+    getPluginMarketPublicBaseUrl()
   ])
 
   const entriesById = new Map<string, PluginMarketEntry>()
@@ -148,7 +153,7 @@ export async function publishPluginMarketIndex(): Promise<PluginMarketPublishRes
     entriesById.set(entry.id, entry)
   }
   for (const submission of listedSubmissions) {
-    entriesById.set(submission.pluginId, submissionToMarketEntry(submission))
+    entriesById.set(submission.pluginId, submissionToMarketEntry(submission, publicBaseUrl))
   }
 
   const updatedAt = new Date().toISOString()

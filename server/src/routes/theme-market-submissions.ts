@@ -14,6 +14,7 @@ import {
 import { createLog, LogModule, LogResult } from '../db/logs.js'
 import { scanThemeMarketSubmission } from '../lib/theme-market-submission-scan.js'
 import { publishThemeMarketIndex } from '../lib/theme-market-publisher.js'
+import { getCombinedAdminIdAllowlist } from '../lib/runtime-settings.js'
 
 const REVIEW_STATUSES: ThemeMarketSubmissionReviewStatus[] = ['pending', 'listed', 'rejected', 'delisted']
 const RISK_LEVELS: ThemeMarketSubmissionRiskLevel[] = ['low', 'medium', 'high', 'critical']
@@ -59,25 +60,24 @@ function getRequestUser(request: FastifyRequest): { id: number; username: string
   return request.user as { id: number; username: string; role: 'admin' | 'user' }
 }
 
-function getAllowedThemeManagerAdminIds(): Set<number> {
-  return new Set(
-    (process.env.THEME_MANAGER_ALLOWED_ADMIN_IDS || process.env.PLUGIN_MANAGER_ALLOWED_ADMIN_IDS || process.env.SYSTEM_UPDATE_ALLOWED_ADMIN_IDS || '')
-      .split(',')
-      .map(item => Number(item.trim()))
-      .filter(id => Number.isSafeInteger(id) && id > 0)
-  )
-}
-
-function canManageThemeMarketSubmissions(user: { id: number; username: string; role: 'admin' | 'user' }): boolean {
+async function canManageThemeMarketSubmissions(user: { id: number; username: string; role: 'admin' | 'user' }): Promise<boolean> {
   if (user.role !== 'admin') return false
-  const allowedIds = getAllowedThemeManagerAdminIds()
+  const themeAllowlist = await getCombinedAdminIdAllowlist(
+    'theme_manager_allowed_admin_ids',
+    'THEME_MANAGER_ALLOWED_ADMIN_IDS'
+  )
+  const pluginAllowlist = await getCombinedAdminIdAllowlist(
+    'plugin_manager_allowed_admin_ids',
+    ['PLUGIN_MANAGER_ALLOWED_ADMIN_IDS', 'SYSTEM_UPDATE_ALLOWED_ADMIN_IDS']
+  )
+  const allowedIds = new Set([...themeAllowlist.ids, ...pluginAllowlist.ids])
   if (allowedIds.size > 0) return allowedIds.has(user.id)
   return user.username === 'admin'
 }
 
 async function requireThemeMarketReviewer(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const user = getRequestUser(request)
-  if (!canManageThemeMarketSubmissions(user)) {
+  if (!(await canManageThemeMarketSubmissions(user))) {
     await createLog(
       user.id,
       LogModule.PLUGIN,

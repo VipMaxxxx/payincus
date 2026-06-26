@@ -2959,6 +2959,10 @@ export default {
                     title: 'Tickets & Attachments',
                     description: 'Manage ticket access and ticket image storage settings',
                 },
+                operations: {
+                    title: 'Operations',
+                    description: 'Manage platform operation settings for OTA, gift cards, extension/theme markets, and extension backups',
+                },
             },
             popupAnnouncement: {
                 title: 'Popup Notice',

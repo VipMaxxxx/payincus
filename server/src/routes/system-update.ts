@@ -19,6 +19,7 @@ import {
   isGitRepository,
   isValidReleaseTag
 } from '../lib/system-version.js'
+import { getCombinedAdminIdAllowlist } from '../lib/runtime-settings.js'
 
 interface StartUpdateBody {
   targetVersion: string
@@ -39,18 +40,12 @@ function parsePositiveId(value: string): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null
 }
 
-function getAllowedUpdaterAdminIds(): Set<number> {
-  return new Set(
-    (process.env.SYSTEM_UPDATE_ALLOWED_ADMIN_IDS || '')
-      .split(',')
-      .map(item => Number(item.trim()))
-      .filter(id => Number.isSafeInteger(id) && id > 0)
-  )
-}
-
-function canManageSystemUpdates(user: { id: number; username: string; role: 'admin' | 'user' }): boolean {
+async function canManageSystemUpdates(user: { id: number; username: string; role: 'admin' | 'user' }): Promise<boolean> {
   if (user.role !== 'admin') return false
-  const allowedIds = getAllowedUpdaterAdminIds()
+  const { ids: allowedIds } = await getCombinedAdminIdAllowlist(
+    'system_update_allowed_admin_ids',
+    'SYSTEM_UPDATE_ALLOWED_ADMIN_IDS'
+  )
   if (allowedIds.size > 0) {
     return allowedIds.has(user.id)
   }
@@ -100,7 +95,7 @@ async function startSystemUpdateWorker(mode: 'update' | 'rollback', taskId: numb
 
 async function requireUpdateManager(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const user = getRequestUser(request)
-  if (!canManageSystemUpdates(user)) {
+  if (!(await canManageSystemUpdates(user))) {
     await createLog(
       user.id,
       LogModule.SYSTEM,
@@ -127,7 +122,7 @@ export default async function systemUpdateRoutes(fastify: FastifyInstance) {
     const result = await checkForUpdates()
     return {
       ...result,
-      canManageUpdates: canManageSystemUpdates(getRequestUser(request))
+      canManageUpdates: await canManageSystemUpdates(getRequestUser(request))
     }
   })
 

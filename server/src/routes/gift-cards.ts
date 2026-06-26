@@ -23,6 +23,7 @@ import * as giftCardDb from '../db/gift-cards.js'
 import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { createTurnstileVerifier } from '../lib/turnstile.js'
+import { getCombinedAdminIdAllowlist } from '../lib/runtime-settings.js'
 
 const turnstileRequired = createTurnstileVerifier(true)
 
@@ -80,29 +81,18 @@ function normalizeIdList(value: unknown): number[] | null {
   return Array.from(ids)
 }
 
-function getConfiguredGiftCardAdminIds(): Set<number> | null {
-  const raw = process.env.PAYINCUS_GIFT_CARD_ADMIN_IDS?.trim()
-  if (!raw) {
-    return process.env.NODE_ENV === 'production' ? new Set<number>() : null
-  }
-  const ids = new Set<number>()
-  for (const part of raw.split(',')) {
-    const trimmed = part.trim()
-    if (!trimmed) continue
-    const id = Number(trimmed)
-    if (Number.isSafeInteger(id) && id > 0) ids.add(id)
-  }
-  return ids
-}
-
 async function requireGiftCardManager(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const user = request.user
   if (!user || user.role !== 'admin') {
     return reply.code(403).send(apiError(ErrorCode.ADMIN_REQUIRED))
   }
-  const allowedIds = getConfiguredGiftCardAdminIds()
-  if (allowedIds && !allowedIds.has(user.id)) {
-    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'Gift card management requires PAYINCUS_GIFT_CARD_ADMIN_IDS allowlist'))
+  const { ids: allowedIds, configured } = await getCombinedAdminIdAllowlist(
+    'payincus_gift_card_admin_ids',
+    'PAYINCUS_GIFT_CARD_ADMIN_IDS'
+  )
+  const requiresAllowlist = configured || process.env.NODE_ENV === 'production'
+  if (requiresAllowlist && !allowedIds.has(user.id)) {
+    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'Gift card management requires gift card admin allowlist'))
   }
 }
 

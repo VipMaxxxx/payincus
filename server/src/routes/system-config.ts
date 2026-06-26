@@ -46,6 +46,8 @@ const maxTransferFee = 100
 const decimalMoneyPattern = /^\d+(?:\.\d{1,2})?$/
 const positiveIntegerConfigPattern = /^[1-9]\d*$/
 const nonNegativeIntegerConfigPattern = /^(?:0|[1-9]\d*)$/
+const adminIdCsvPattern = /^(?:\s*[1-9]\d*\s*)(?:,\s*[1-9]\d*\s*)*$/
+const trustedHostPattern = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i
 
 function getEmailDomainForAudit(email: string): string {
     const domain = email.split('@').pop()?.trim().toLowerCase() || 'unknown'
@@ -80,6 +82,42 @@ function parseDecimalMoneyConfig(value: string, max: number): number | null {
     if (!decimalMoneyPattern.test(trimmed)) return null
     const parsed = Number(trimmed)
     return Number.isFinite(parsed) && parsed >= 0 && parsed <= max ? parsed : null
+}
+
+function normalizeAdminIdCsv(value: string): string | null {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    if (!adminIdCsvPattern.test(trimmed)) return null
+    const ids = Array.from(new Set(trimmed.split(',').map(item => Number(item.trim()))))
+    if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) return null
+    return ids.join(',')
+}
+
+function normalizeTrustedHostsCsv(value: string): string | null {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    const hosts = Array.from(new Set(
+        trimmed
+            .split(',')
+            .map(item => item.trim().toLowerCase())
+            .filter(Boolean)
+    ))
+    if (hosts.length > 50) return null
+    if (hosts.some(host => host.length > 253 || !trustedHostPattern.test(host))) return null
+    return hosts.join(',')
+}
+
+async function normalizeOptionalSafeHttpsUrl(value: string, label: string, maxLength = 1000): Promise<string | null> {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    if (trimmed.length > maxLength) return null
+    try {
+        const url = await assertSafeHttpUrl(trimmed, label)
+        if (url.protocol !== 'https:') return null
+        return url.toString().replace(/\/+$/, '')
+    } catch {
+        return null
+    }
 }
 
 export default async function systemConfigRoutes(fastify: FastifyInstance) {
@@ -339,11 +377,26 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
             'ticket_image_lsky_base_url',
             'ticket_image_lsky_token',
             'ticket_image_lsky_api_version',
-            'ticket_image_lsky_target_id'
+            'ticket_image_lsky_target_id',
+            // Platform operation config
+            'system_update_allowed_admin_ids',
+            'payincus_gift_card_admin_ids',
+            'plugin_manager_allowed_admin_ids',
+            'theme_manager_allowed_admin_ids',
+            'plugin_market_index_url',
+            'plugin_market_trusted_hosts',
+            'plugin_market_public_base_url',
+            'theme_market_index_url',
+            'theme_market_trusted_hosts',
+            'theme_market_public_base_url',
+            'plugin_submission_public_base_url',
+            'plugin_storage_backup_schedule_enabled',
+            'plugin_storage_backup_interval_hours',
+            'plugin_storage_backup_retention_count'
         ]
 
         // 布尔类型配置键
-        const booleanKeys = ['registration_enabled', 'require_invite_code', 'hosting_feature_enabled', 'hosting_market_entry_enabled', 'ticket_enabled', 'free_site_mode', 'free_site_register_gift_enabled', 'turnstile_enabled', 'telegram_bot_enabled', 'telegram_group_join_enabled', 'telegram_vip_group_join_enabled', 'smtp_enabled', 'smtp_secure', 'email_domain_whitelist_enabled']
+        const booleanKeys = ['registration_enabled', 'require_invite_code', 'hosting_feature_enabled', 'hosting_market_entry_enabled', 'ticket_enabled', 'free_site_mode', 'free_site_register_gift_enabled', 'turnstile_enabled', 'telegram_bot_enabled', 'telegram_group_join_enabled', 'telegram_vip_group_join_enabled', 'smtp_enabled', 'smtp_secure', 'email_domain_whitelist_enabled', 'plugin_storage_backup_schedule_enabled']
         // 字符串类型配置键
         const stringKeys = [
             'turnstile_site_key',
@@ -374,11 +427,22 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
             'ticket_image_lsky_base_url',
             'ticket_image_lsky_token',
             'ticket_image_lsky_api_version',
-            'ticket_image_lsky_target_id'
+            'ticket_image_lsky_target_id',
+            'system_update_allowed_admin_ids',
+            'payincus_gift_card_admin_ids',
+            'plugin_manager_allowed_admin_ids',
+            'theme_manager_allowed_admin_ids',
+            'plugin_market_index_url',
+            'plugin_market_trusted_hosts',
+            'plugin_market_public_base_url',
+            'theme_market_index_url',
+            'theme_market_trusted_hosts',
+            'theme_market_public_base_url',
+            'plugin_submission_public_base_url'
         ]
         const jsonKeys = ['invite_generation_costs']
         // 数字类型配置键（包括配额配置）
-        const numberKeys = ['smtp_port', 'default_quota_host', 'default_quota_friend', 'default_quota_package', 'free_site_register_gift_points', 'invite_default_expire_days', 'telegram_group_invite_expire_minutes', 'telegram_vip_group_invite_expire_minutes']
+        const numberKeys = ['smtp_port', 'default_quota_host', 'default_quota_friend', 'default_quota_package', 'free_site_register_gift_points', 'invite_default_expire_days', 'telegram_group_invite_expire_minutes', 'telegram_vip_group_invite_expire_minutes', 'plugin_storage_backup_interval_hours', 'plugin_storage_backup_retention_count']
         const decimalKeys = ['free_site_register_gift_balance', 'telegram_group_min_recharge', 'telegram_group_min_consume', 'telegram_vip_group_min_recharge', 'telegram_vip_group_min_consume']
 
         for (const config of configs) {
@@ -459,6 +523,32 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                             return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                         }
                     }
+                }
+                if ([
+                    'system_update_allowed_admin_ids',
+                    'payincus_gift_card_admin_ids',
+                    'plugin_manager_allowed_admin_ids',
+                    'theme_manager_allowed_admin_ids'
+                ].includes(config.key)) {
+                    const normalized = normalizeAdminIdCsv(config.value)
+                    if (normalized === null) {
+                        return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
+                    }
+                    config.value = normalized
+                }
+                if (config.key === 'plugin_market_trusted_hosts' || config.key === 'theme_market_trusted_hosts') {
+                    const normalized = normalizeTrustedHostsCsv(config.value)
+                    if (normalized === null) {
+                        return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
+                    }
+                    config.value = normalized
+                }
+                if (config.key === 'plugin_market_index_url' || config.key === 'theme_market_index_url' || config.key === 'plugin_market_public_base_url' || config.key === 'theme_market_public_base_url' || config.key === 'plugin_submission_public_base_url') {
+                    const normalized = await normalizeOptionalSafeHttpsUrl(config.value, config.key)
+                    if (normalized === null) {
+                        return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
+                    }
+                    config.value = normalized
                 }
                 if ((config.key === 'telegram_group_join_mode' || config.key === 'telegram_vip_group_join_mode') && !telegramGroupJoinModes.has(config.value)) {
                     return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
@@ -546,9 +636,19 @@ export default async function systemConfigRoutes(fastify: FastifyInstance) {
                     ? maxRegisterGiftPoints
                     : config.key === 'smtp_port'
                         ? 65535
-                        : Number.MAX_SAFE_INTEGER
+                        : config.key === 'plugin_storage_backup_interval_hours'
+                            ? 24 * 30
+                            : config.key === 'plugin_storage_backup_retention_count'
+                                ? 365
+                                : Number.MAX_SAFE_INTEGER
                 const num = parseNonNegativeConfigInteger(config.value, max)
                 if (num === null) {
+                    return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
+                }
+                if (config.key === 'plugin_storage_backup_interval_hours' && num < 1) {
+                    return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
+                }
+                if (config.key === 'plugin_storage_backup_retention_count' && num < 1) {
                     return reply.code(400).send(apiError(ErrorCode.CONFIG_INVALID_VALUE, config.key))
                 }
                 if ((config.key === 'telegram_group_invite_expire_minutes' || config.key === 'telegram_vip_group_invite_expire_minutes') && (num < 1 || num > 10080)) {

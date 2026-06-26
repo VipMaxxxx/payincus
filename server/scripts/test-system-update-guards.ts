@@ -62,7 +62,7 @@ assert.ok(
     versionLib.includes('updates.push(latest?.version === tag ? latest : await buildAvailableUpdate(tag))') &&
     versionLib.includes('latest,') &&
     versionLib.includes('updateAvailable: updates.length > 0') &&
-    route.includes('canManageUpdates: canManageSystemUpdates(getRequestUser(request))') &&
+    route.includes('canManageUpdates: await canManageSystemUpdates(getRequestUser(request))') &&
     route.includes("fastify.post<{ Body: StartUpdateBody }>('/start'") &&
     route.includes('if (!(await requireUpdateManager(request, reply))) return'),
   'system update checks must always expose the newest release tag while keeping updateAvailable and mutation permissions separate'

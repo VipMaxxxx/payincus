@@ -29,6 +29,7 @@ import { getPluginDataDir, getPluginLogDir, getPluginPackageMaxBytes, getPluginS
 import { processDuePluginEventRetries, replayPluginEventLog } from '../lib/plugin-runtime.js'
 import type { PayIncusPluginManifest, PluginConfigFieldManifest } from '../lib/plugin-manifest.js'
 import { dispatchPluginLifecycleEvent } from '../lib/plugin-business-events.js'
+import { getCombinedAdminIdAllowlist } from '../lib/runtime-settings.js'
 
 interface PluginParams {
   pluginId: string
@@ -211,25 +212,19 @@ async function listPublicPluginActionRateLimitPolicies(): Promise<PublicPluginAc
   `
 }
 
-function getAllowedPluginManagerAdminIds(): Set<number> {
-  return new Set(
-    (process.env.PLUGIN_MANAGER_ALLOWED_ADMIN_IDS || process.env.SYSTEM_UPDATE_ALLOWED_ADMIN_IDS || '')
-      .split(',')
-      .map(item => Number(item.trim()))
-      .filter(id => Number.isSafeInteger(id) && id > 0)
-  )
-}
-
-function canManagePlugins(user: { id: number; username: string; role: 'admin' | 'user' }): boolean {
+async function canManagePlugins(user: { id: number; username: string; role: 'admin' | 'user' }): Promise<boolean> {
   if (user.role !== 'admin') return false
-  const allowedIds = getAllowedPluginManagerAdminIds()
+  const { ids: allowedIds } = await getCombinedAdminIdAllowlist(
+    'plugin_manager_allowed_admin_ids',
+    ['PLUGIN_MANAGER_ALLOWED_ADMIN_IDS', 'SYSTEM_UPDATE_ALLOWED_ADMIN_IDS']
+  )
   if (allowedIds.size > 0) return allowedIds.has(user.id)
   return user.username === 'admin'
 }
 
 async function requirePluginManager(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const user = getRequestUser(request)
-  if (!canManagePlugins(user)) {
+  if (!(await canManagePlugins(user))) {
     await createLog(
       user.id,
       LogModule.PLUGIN,

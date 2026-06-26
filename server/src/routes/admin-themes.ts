@@ -15,6 +15,7 @@ import {
 import { createLog, LogModule, LogResult } from '../db/logs.js'
 import { getThemeDataDir, getThemePackageMaxBytes, getThemeStagingDir, resolveThemeAsset, validateAndExtractThemePackage, type PayIncusThemeManifest } from '../lib/theme-package.js'
 import { downloadMarketTheme, fetchThemeMarketIndex } from '../lib/theme-market.js'
+import { getCombinedAdminIdAllowlist } from '../lib/runtime-settings.js'
 
 interface ThemeParams {
   themeId: string
@@ -103,25 +104,24 @@ function themeConfigAuditSummary(input: {
   ].join('; ')
 }
 
-function getAllowedThemeManagerAdminIds(): Set<number> {
-  return new Set(
-    (process.env.THEME_MANAGER_ALLOWED_ADMIN_IDS || process.env.PLUGIN_MANAGER_ALLOWED_ADMIN_IDS || process.env.SYSTEM_UPDATE_ALLOWED_ADMIN_IDS || '')
-      .split(',')
-      .map(item => Number(item.trim()))
-      .filter(id => Number.isSafeInteger(id) && id > 0)
-  )
-}
-
-function canManageThemes(user: { id: number; username: string; role: 'admin' | 'user' }): boolean {
+async function canManageThemes(user: { id: number; username: string; role: 'admin' | 'user' }): Promise<boolean> {
   if (user.role !== 'admin') return false
-  const allowedIds = getAllowedThemeManagerAdminIds()
+  const themeAllowlist = await getCombinedAdminIdAllowlist(
+    'theme_manager_allowed_admin_ids',
+    'THEME_MANAGER_ALLOWED_ADMIN_IDS'
+  )
+  const pluginAllowlist = await getCombinedAdminIdAllowlist(
+    'plugin_manager_allowed_admin_ids',
+    ['PLUGIN_MANAGER_ALLOWED_ADMIN_IDS', 'SYSTEM_UPDATE_ALLOWED_ADMIN_IDS']
+  )
+  const allowedIds = new Set([...themeAllowlist.ids, ...pluginAllowlist.ids])
   if (allowedIds.size > 0) return allowedIds.has(user.id)
   return user.username === 'admin'
 }
 
 async function requireThemeManager(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const user = getRequestUser(request)
-  if (!canManageThemes(user)) {
+  if (!(await canManageThemes(user))) {
     await createLog(
       user.id,
       LogModule.PLUGIN,

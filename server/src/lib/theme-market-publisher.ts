@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import { prisma } from '../db/prisma.js'
 import type { ThemeMarketEntry, ThemeMarketIndex } from './theme-market.js'
+import { getRuntimeConfigString } from './runtime-settings.js'
 
 export interface ThemeMarketPublishResult {
   indexPath: string
@@ -52,12 +53,15 @@ function getThemeMarketPublishDir(): string {
   return resolve(process.env.THEME_MARKET_PUBLISH_DIR || join(process.cwd(), 'docs-site/docs/public/theme-market'))
 }
 
-function getThemeMarketPublicBaseUrl(): string {
-  return (process.env.THEME_MARKET_PUBLIC_BASE_URL || 'https://payincus.com/theme-market').replace(/\/+$/, '')
+async function getThemeMarketPublicBaseUrl(): Promise<string> {
+  return (await getRuntimeConfigString(
+    'theme_market_public_base_url',
+    'THEME_MARKET_PUBLIC_BASE_URL',
+    'https://payincus.com/theme-market'
+  )).replace(/\/+$/, '')
 }
 
-function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.themeMarketSubmission.findMany>>[number]): ThemeMarketEntry {
-  const publicBaseUrl = getThemeMarketPublicBaseUrl()
+function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.themeMarketSubmission.findMany>>[number], publicBaseUrl: string): ThemeMarketEntry {
   const manifestUrl = submission.manifestUrl || `${publicBaseUrl}/manifests/${submission.themeId}/${submission.version}.json`
   return {
     id: submission.themeId,
@@ -105,7 +109,7 @@ async function readExistingMarketEntries(indexPath: string): Promise<ThemeMarket
 export async function publishThemeMarketIndex(): Promise<ThemeMarketPublishResult> {
   const publishDir = getThemeMarketPublishDir()
   const indexPath = join(publishDir, 'index.json')
-  const [existingEntries, listedSubmissions] = await Promise.all([
+  const [existingEntries, listedSubmissions, publicBaseUrl] = await Promise.all([
     readExistingMarketEntries(indexPath),
     prisma.themeMarketSubmission.findMany({
       where: {
@@ -113,7 +117,8 @@ export async function publishThemeMarketIndex(): Promise<ThemeMarketPublishResul
         scanStatus: { in: ['passed', 'warning'] }
       },
       orderBy: [{ themeId: 'asc' }, { version: 'desc' }]
-    })
+    }),
+    getThemeMarketPublicBaseUrl()
   ])
 
   const entriesById = new Map<string, ThemeMarketEntry>()
@@ -121,7 +126,7 @@ export async function publishThemeMarketIndex(): Promise<ThemeMarketPublishResul
     entriesById.set(entry.id, entry)
   }
   for (const submission of listedSubmissions) {
-    entriesById.set(submission.themeId, submissionToMarketEntry(submission))
+    entriesById.set(submission.themeId, submissionToMarketEntry(submission, publicBaseUrl))
   }
 
   const updatedAt = new Date().toISOString()

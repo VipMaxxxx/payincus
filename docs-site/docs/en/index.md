@@ -1,5 +1,6 @@
 ---
 layout: home
+title: Extension Center
 
 hero:
   name: PayIncus
@@ -31,7 +32,7 @@ features:
   - title: Open Operation
     details: Key production paths are backed by version logs, OTA tasks, production proof, and redacted audit records.
   - title: Extensible
-    details: Public API, OAuth Provider, SDK, events, action runtime, and plugin storage form the developer platform.
+    details: Public API, OAuth Provider, SDK, events, action runtime, and extension storage form the developer platform.
 ---
 
 <section class="payincus-section">
@@ -58,10 +59,11 @@ features:
   <div>
     <p class="payincus-kicker">Extensions</p>
     <h2>Live marketplace and third-party developer platform</h2>
-    <p>The Extension Center supports upload installs, online marketplace installs, submission review, scanning, publishing, enable/disable/uninstall, configuration forms, event delivery, webhook actions, plugin storage, Gateway Extensions, Server Extensions, and SDK examples.</p>
+    <p>The Extension Center supports upload installs, online marketplace installs, submission review, scanning, publishing, enable/disable/uninstall, configuration forms, event delivery, webhook actions, extension storage, Gateway Extensions, Server Extensions, and SDK examples.</p>
     <div class="payincus-links">
       <a class="payincus-link" href="/en/plugins/overview"><strong>Extensions</strong> Capabilities and security boundaries</a>
       <a class="payincus-link" href="/en/plugins/market"><strong>Marketplace</strong> Stable online market directory</a>
+      <a class="payincus-link" href="/en/plugins/overview"><strong>Extension Development</strong> [Extension Development](/en/plugins/overview): Extension Center</a>
     </div>
   </div>
   <div class="payincus-code-panel">

@@ -120,7 +120,22 @@ export async function initSystemConfig(): Promise<void> {
         { key: 'ticket_image_lsky_base_url', value: '', type: 'string', label: 'Lsky 地址', description: '兰空图床站点地址，例如 https://img.example.com' },
         { key: 'ticket_image_lsky_token', value: '', type: 'secret', label: 'Lsky Token', description: '兰空图床 API Token（仅后端使用）' },
         { key: 'ticket_image_lsky_api_version', value: 'v1', type: 'string', label: 'Lsky API 版本', description: '上传时使用的 API 版本：v1 或 v2' },
-        { key: 'ticket_image_lsky_target_id', value: '', type: 'string', label: '策略/存储 ID', description: 'v1 填 strategy_id，v2 填 storage_id，可留空使用默认策略' }
+        { key: 'ticket_image_lsky_target_id', value: '', type: 'string', label: '策略/存储 ID', description: 'v1 填 strategy_id，v2 填 storage_id，可留空使用默认策略' },
+        // 平台运营配置
+        { key: 'system_update_allowed_admin_ids', value: '', type: 'string', label: 'OTA 管理员白名单', description: '允许执行系统 OTA 更新的管理员 UID，多个用英文逗号分隔；留空时仅 admin 用户名可操作' },
+        { key: 'payincus_gift_card_admin_ids', value: '', type: 'string', label: '礼品卡管理员白名单', description: '允许管理礼品卡的管理员 UID，多个用英文逗号分隔；生产环境建议必须配置' },
+        { key: 'plugin_manager_allowed_admin_ids', value: '', type: 'string', label: '扩展管理员白名单', description: '允许安装、上传、启停扩展并审核扩展市场提交的管理员 UID' },
+        { key: 'theme_manager_allowed_admin_ids', value: '', type: 'string', label: '主题管理员白名单', description: '允许安装、上传、启停主题并审核主题市场提交的管理员 UID；留空时继承扩展或 OTA 白名单' },
+        { key: 'plugin_market_index_url', value: 'https://payincus.com/plugin-market/index.json', type: 'string', label: '扩展市场索引 URL', description: '扩展中心实时读取的在线市场 index.json 地址' },
+        { key: 'plugin_market_trusted_hosts', value: 'payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com', type: 'string', label: '扩展市场可信域名', description: '扩展市场索引和下载允许访问的 HTTPS 域名，多个用英文逗号分隔' },
+        { key: 'plugin_market_public_base_url', value: 'https://payincus.com/plugin-market', type: 'string', label: '扩展市场公开地址', description: '发布扩展市场 index.json 时生成 manifest URL 使用的公开基础地址' },
+        { key: 'theme_market_index_url', value: 'https://payincus.com/theme-market/index.json', type: 'string', label: '主题市场索引 URL', description: '主题市场实时读取的在线市场 index.json 地址' },
+        { key: 'theme_market_trusted_hosts', value: 'payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com', type: 'string', label: '主题市场可信域名', description: '主题市场索引和下载允许访问的 HTTPS 域名，多个用英文逗号分隔' },
+        { key: 'theme_market_public_base_url', value: 'https://payincus.com/theme-market', type: 'string', label: '主题市场公开地址', description: '发布主题市场 index.json 时生成 manifest URL 使用的公开基础地址' },
+        { key: 'plugin_submission_public_base_url', value: '', type: 'string', label: '扩展提交公开地址', description: '第三方扩展上传后生成公开包地址使用的站点基础 URL，留空时使用站点地址' },
+        { key: 'plugin_storage_backup_schedule_enabled', value: 'false', type: 'boolean', label: '插件数据定时备份', description: '是否定时为已启用扩展创建 storage 备份归档' },
+        { key: 'plugin_storage_backup_interval_hours', value: '24', type: 'number', label: '插件备份周期', description: '插件数据定时备份周期，单位小时' },
+        { key: 'plugin_storage_backup_retention_count', value: '7', type: 'number', label: '插件备份保留数', description: '每个扩展保留的定时备份归档数量' }
     ]
 
     for (const config of configs) {

@@ -1,5 +1,6 @@
 ---
 layout: home
+title: 扩展中心
 
 hero:
   name: PayIncus
@@ -31,7 +32,7 @@ features:
   - title: 开放运营
     details: 关键链路有版本日志、生产 proof、后台 OTA 任务和脱敏审计记录。
   - title: 可扩展
-    details: Public API、OAuth Provider、SDK、事件、action runtime 和插件存储组成开发平台。
+    details: Public API、OAuth Provider、SDK、事件、action runtime 和扩展存储组成开发平台。
 ---
 
 <section class="payincus-section">
@@ -58,10 +59,11 @@ features:
   <div>
     <p class="payincus-kicker">扩展中心</p>
     <h2>实时扩展市场与第三方开发平台</h2>
-    <p>扩展中心支持上传安装、在线市场安装、投稿审核、扫描、发布、启用、停用、卸载、配置表单、事件投递、webhook action、插件存储、Gateway Extension、Server Extension 和开发者 SDK。</p>
+    <p>扩展中心支持上传安装、在线扩展市场安装、投稿审核、扫描、发布、启用、停用、卸载、配置表单、事件投递、webhook action、扩展存储、Gateway Extension、Server Extension 和开发者 SDK。</p>
     <div class="payincus-links">
       <a class="payincus-link" href="/plugins/overview"><strong>扩展总览</strong> 扩展中心能力和安全边界</a>
       <a class="payincus-link" href="/plugins/market"><strong>扩展市场</strong> 稳定在线市场目录</a>
+      <a class="payincus-link" href="/plugins/overview"><strong>扩展开发</strong> [扩展开发](/plugins/overview)：扩展中心</a>
     </div>
   </div>
   <div class="payincus-code-panel">

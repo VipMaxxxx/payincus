@@ -162,6 +162,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'admin.system.sections.tickets.title', title: '工单与附件' }
   },
   {
+    path: '/admin/settings/operations',
+    name: 'admin-settings-operations',
+    component: () => import('@/views/admin/SystemConfigView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'admin.system.sections.operations.title', title: '运营配置' }
+  },
+  {
     path: '/admin/settings/popup-announcement',
     name: 'admin-settings-popup-announcement',
     component: () => import('@/views/admin/SystemConfigView.vue'),

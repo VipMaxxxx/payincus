@@ -3,6 +3,10 @@ import { join } from 'path'
 import { createHash, randomUUID } from 'crypto'
 import { getThemeStagingDir } from './theme-package.js'
 import { getCurrentVersionMetadata } from './system-version.js'
+import {
+  getThemeMarketIndexUrl as getConfiguredThemeMarketIndexUrl,
+  getThemeMarketTrustedHosts
+} from './runtime-settings.js'
 
 export type ThemeMarketReviewStatus = 'pending' | 'listed' | 'delisted' | 'rejected'
 export type ThemeMarketTrustLevel = 'official' | 'verified' | 'third_party'
@@ -97,32 +101,15 @@ function pickStringArray(value: unknown, maxItems: number, maxLength: number): s
     .filter((item): item is string => !!item)
 }
 
-export function getThemeMarketIndexUrl(): string | null {
-  return pickString(process.env.THEME_MARKET_INDEX_URL, 500)
+export async function getThemeMarketIndexUrl(): Promise<string | null> {
+  return pickString(await getConfiguredThemeMarketIndexUrl(), 500)
 }
 
-function getTrustedThemeMarketHosts(): Set<string> {
-  return new Set(
-    [
-      'github.com',
-      'objects.githubusercontent.com',
-      'raw.githubusercontent.com',
-      'payincus.com',
-      'payincus.github.io'
-    ].concat(
-      (process.env.THEME_MARKET_TRUSTED_HOSTS || process.env.PLUGIN_MARKET_TRUSTED_HOSTS || '')
-        .split(',')
-        .map(host => host.trim().toLowerCase())
-        .filter(Boolean)
-    )
-  )
-}
-
-function assertTrustedThemeMarketUrl(input: string, purpose: 'index' | 'download'): URL {
+function assertTrustedThemeMarketUrl(input: string, purpose: 'index' | 'download', trustedHosts: Set<string>): URL {
   const url = new URL(input)
   if (url.protocol !== 'https:') throw new Error('Theme market URL must use HTTPS')
   const host = url.hostname.toLowerCase()
-  if (!getTrustedThemeMarketHosts().has(host)) {
+  if (!trustedHosts.has(host)) {
     throw new Error('Theme market URL host is not trusted')
   }
 
@@ -186,7 +173,7 @@ function normalizeSecurity(input: unknown): ThemeMarketSecurity {
   }
 }
 
-function normalizeEntry(input: unknown): ThemeMarketEntry | null {
+function normalizeEntry(input: unknown, trustedHosts: Set<string>): ThemeMarketEntry | null {
   if (!isRecord(input)) return null
   const id = pickString(input.id, 120)
   const name = pickString(input.name, 120)
@@ -195,8 +182,8 @@ function normalizeEntry(input: unknown): ThemeMarketEntry | null {
   const downloadUrl = pickString(input.downloadUrl, 500)
   const sha256 = pickString(input.sha256, 64)
   if (!id || !name || !latest || !manifestUrl || !downloadUrl || !sha256) return null
-  assertTrustedThemeMarketUrl(manifestUrl, 'download')
-  assertTrustedThemeMarketUrl(downloadUrl, 'download')
+  assertTrustedThemeMarketUrl(manifestUrl, 'download', trustedHosts)
+  assertTrustedThemeMarketUrl(downloadUrl, 'download', trustedHosts)
   if (!/^[a-f0-9]{64}$/i.test(sha256)) return null
   const reviewStatus = pickEnum(input.reviewStatus, ['pending', 'listed', 'delisted', 'rejected'] as const, 'pending')
   const trustLevel = pickEnum(input.trustLevel, ['official', 'verified', 'third_party'] as const, 'third_party')
@@ -260,8 +247,9 @@ function getThemeMarketFingerprint(entries: ThemeMarketEntry[]): string {
   return createHash('sha256').update(JSON.stringify(stablePayload)).digest('hex')
 }
 
-export async function fetchThemeMarketIndex(url = getThemeMarketIndexUrl()): Promise<ThemeMarketIndex> {
-  if (!url) {
+export async function fetchThemeMarketIndex(url?: string | null): Promise<ThemeMarketIndex> {
+  const effectiveUrl = url ?? await getThemeMarketIndexUrl()
+  if (!effectiveUrl) {
     return {
       themes: [],
       governance: {
@@ -276,7 +264,8 @@ export async function fetchThemeMarketIndex(url = getThemeMarketIndexUrl()): Pro
     }
   }
 
-  const parsed = assertTrustedThemeMarketUrl(url, 'index')
+  const trustedHosts = await getThemeMarketTrustedHosts()
+  const parsed = assertTrustedThemeMarketUrl(effectiveUrl, 'index', trustedHosts)
   const response = await fetch(parsed, {
     headers: { 'user-agent': 'payincus-theme-center' }
   })
@@ -285,7 +274,7 @@ export async function fetchThemeMarketIndex(url = getThemeMarketIndexUrl()): Pro
   }
   const payload: unknown = await response.json()
   const normalized = isRecord(payload) && Array.isArray(payload.themes)
-    ? payload.themes.map(normalizeEntry).filter((entry): entry is ThemeMarketEntry => !!entry)
+    ? payload.themes.map(entry => normalizeEntry(entry, trustedHosts)).filter((entry): entry is ThemeMarketEntry => !!entry)
     : []
   const themes = normalized.filter(entry => entry.reviewStatus === 'listed')
   return {
@@ -324,7 +313,7 @@ export async function assertThemeMarketEntryInstallable(entry: ThemeMarketEntry)
 
 export async function downloadMarketTheme(entry: ThemeMarketEntry): Promise<string> {
   await assertThemeMarketEntryInstallable(entry)
-  assertTrustedThemeMarketUrl(entry.downloadUrl, 'download')
+  assertTrustedThemeMarketUrl(entry.downloadUrl, 'download', await getThemeMarketTrustedHosts())
   const response = await fetch(entry.downloadUrl, {
     headers: { 'user-agent': 'payincus-theme-center' }
   })

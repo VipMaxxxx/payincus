@@ -29,7 +29,7 @@ assert.ok(
     publisher.includes("scanStatus: { in: ['passed', 'warning'] }") &&
     publisher.includes('readExistingMarketEntries') &&
     publisher.includes('entriesById.set(entry.id, entry)') &&
-    publisher.includes('entriesById.set(submission.pluginId, submissionToMarketEntry(submission))') &&
+    publisher.includes('entriesById.set(submission.pluginId, submissionToMarketEntry(submission, publicBaseUrl))') &&
     publisher.includes("writeFile(indexPath, `${JSON.stringify(index, null, 2)}\\n`, 'utf8')") &&
     publisher.includes('fingerprint'),
   'plugin market publisher must generate index.json from listed scanned submissions while preserving existing market entries'

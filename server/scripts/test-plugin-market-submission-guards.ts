@@ -12,6 +12,7 @@ const schema = read('server/prisma/schema.prisma')
 const migration = read('server/prisma/migrations/20260626103000_add_plugin_market_submissions/migration.sql')
 const db = read('server/src/db/plugin-market-submissions.ts')
 const route = read('server/src/routes/plugin-market-submissions.ts')
+const runtimeSettings = read('server/src/lib/runtime-settings.ts')
 const app = read('server/src/app.ts')
 const clientApi = read('client/src/api/index.ts')
 const adminApi = read('client/src/api/admin.ts')
@@ -79,7 +80,8 @@ assert.ok(
     route.includes('receiveUploadedPluginPackage') &&
     route.includes('validateAndExtractPluginPackage') &&
     route.includes('getPluginSubmissionUploadDir') &&
-    route.includes('PLUGIN_SUBMISSION_PUBLIC_BASE_URL') &&
+    route.includes('getPluginSubmissionPublicBaseUrl') &&
+    runtimeSettings.includes('PLUGIN_SUBMISSION_PUBLIC_BASE_URL') &&
     route.includes('plugin.market_submission.upload_package') &&
     route.includes("fastify.get<{") &&
     route.includes("fastify.patch<{") &&
@@ -88,6 +90,7 @@ assert.ok(
     route.includes('SHA256_PATTERN') &&
     route.includes('PLUGIN_SUBMISSION_EXISTS') &&
     route.includes('requirePluginMarketReviewer') &&
+    route.includes('getCombinedAdminIdAllowlist') &&
     route.includes('PLUGIN_MANAGER_ALLOWED_ADMIN_IDS') &&
     route.includes('plugin.market_submission.create') &&
     route.includes('plugin.market_submission.review'),

@@ -3,21 +3,12 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { prisma } from '../db/prisma.js'
 import { createPluginEvent } from '../db/plugins.js'
 import { getPluginDataDir, resolveInside } from '../lib/plugin-package.js'
+import { getRuntimeConfigBoolean, getRuntimeConfigNumber } from '../lib/runtime-settings.js'
 
 let schedulerStarted = false
 
 const DEFAULT_INTERVAL_HOURS = 24
 const DEFAULT_RETENTION_COUNT = 7
-
-function parseBooleanEnv(value: string | undefined): boolean {
-  return value === 'true' || value === '1' || value === 'yes'
-}
-
-function parsePositiveInteger(value: string | undefined, fallback: number, min: number, max: number): number {
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed < min || parsed > max) return fallback
-  return parsed
-}
 
 function formatPluginStorageBackupTimestamp(date: Date): string {
   return date.toISOString().replace(/\D/g, '').slice(0, 17)
@@ -206,7 +197,13 @@ async function createScheduledPluginStorageArchive(input: {
 }
 
 export async function runScheduledPluginStorageBackups(now = new Date()): Promise<{ scanned: number; archived: number; skipped: number; failed: number; pruned: number }> {
-  const retentionCount = parsePositiveInteger(process.env.PLUGIN_STORAGE_BACKUP_RETENTION_COUNT, DEFAULT_RETENTION_COUNT, 1, 365)
+  const retentionCount = await getRuntimeConfigNumber(
+    'plugin_storage_backup_retention_count',
+    'PLUGIN_STORAGE_BACKUP_RETENTION_COUNT',
+    DEFAULT_RETENTION_COUNT,
+    1,
+    365
+  )
   const plugins = await prisma.plugin.findMany({
     where: { status: { not: 'failed' } },
     select: {
@@ -256,22 +253,38 @@ export function startPluginStorageBackupScheduler(): void {
   if (schedulerStarted) return
   schedulerStarted = true
 
-  if (!parseBooleanEnv(process.env.PLUGIN_STORAGE_BACKUP_SCHEDULE_ENABLED)) {
-    console.log('[PluginStorageBackup] Scheduled plugin storage backups disabled')
-    return
-  }
+  void (async () => {
+    const enabled = await getRuntimeConfigBoolean(
+      'plugin_storage_backup_schedule_enabled',
+      'PLUGIN_STORAGE_BACKUP_SCHEDULE_ENABLED',
+      false
+    )
+    if (!enabled) {
+      console.log('[PluginStorageBackup] Scheduled plugin storage backups disabled')
+      return
+    }
 
-  const intervalHours = parsePositiveInteger(process.env.PLUGIN_STORAGE_BACKUP_INTERVAL_HOURS, DEFAULT_INTERVAL_HOURS, 1, 24 * 30)
-  const intervalMs = intervalHours * 60 * 60 * 1000
-  console.log(`[PluginStorageBackup] Starting scheduled plugin storage backups every ${intervalHours}h`)
-  void runScheduledPluginStorageBackups().catch(error => {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(`[PluginStorageBackup] Initial scheduled backup failed: ${message}`)
-  })
-  setInterval(() => {
+    const intervalHours = await getRuntimeConfigNumber(
+      'plugin_storage_backup_interval_hours',
+      'PLUGIN_STORAGE_BACKUP_INTERVAL_HOURS',
+      DEFAULT_INTERVAL_HOURS,
+      1,
+      24 * 30
+    )
+    const intervalMs = intervalHours * 60 * 60 * 1000
+    console.log(`[PluginStorageBackup] Starting scheduled plugin storage backups every ${intervalHours}h`)
     void runScheduledPluginStorageBackups().catch(error => {
       const message = error instanceof Error ? error.message : String(error)
-      console.error(`[PluginStorageBackup] Scheduled backup failed: ${message}`)
+      console.error(`[PluginStorageBackup] Initial scheduled backup failed: ${message}`)
     })
-  }, intervalMs)
+    setInterval(() => {
+      void runScheduledPluginStorageBackups().catch(error => {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error(`[PluginStorageBackup] Scheduled backup failed: ${message}`)
+      })
+    }, intervalMs)
+  })().catch(error => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[PluginStorageBackup] Failed to start scheduler: ${message}`)
+  })
 }

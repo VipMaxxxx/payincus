@@ -15,6 +15,7 @@ const configMigration = read('server/prisma/migrations/20260626143000_add_theme_
 const themeSubmissionMigration = read('server/prisma/migrations/20260626162000_add_theme_market_submissions/migration.sql')
 const themePackage = read('server/src/lib/theme-package.ts')
 const themeMarket = read('server/src/lib/theme-market.ts')
+const runtimeSettings = read('server/src/lib/runtime-settings.ts')
 const themeMarketSubmissionsDb = read('server/src/db/theme-market-submissions.ts')
 const themeMarketSubmissionScanner = read('server/src/lib/theme-market-submission-scan.ts')
 const themeMarketPublisher = read('server/src/lib/theme-market-publisher.ts')
@@ -149,8 +150,12 @@ assert(
 
 assert(
   themeMarket.includes('export async function fetchThemeMarketIndex') &&
-    themeMarket.includes('THEME_MARKET_INDEX_URL') &&
-    themeMarket.includes('THEME_MARKET_TRUSTED_HOSTS') &&
+    themeMarket.includes('getThemeMarketIndexUrl as getConfiguredThemeMarketIndexUrl') &&
+    themeMarket.includes('getThemeMarketTrustedHosts') &&
+    runtimeSettings.includes("'theme_market_index_url'") &&
+    runtimeSettings.includes('THEME_MARKET_INDEX_URL') &&
+    runtimeSettings.includes("'theme_market_trusted_hosts'") &&
+    runtimeSettings.includes('THEME_MARKET_TRUSTED_HOSTS') &&
     themeMarket.includes('/theme-market/index.json') &&
     themeMarket.includes('/theme-market/packages/') &&
     themeMarket.includes("entry.reviewStatus !== 'listed'") &&
@@ -173,7 +178,7 @@ assert(
     themeMarketPublisher.includes('THEME_MARKET_PUBLISH_DIR') &&
     themeMarketPublisher.includes('THEME_MARKET_PUBLIC_BASE_URL') &&
     themeMarketPublisher.includes("scanStatus: { in: ['passed', 'warning'] }") &&
-    themeMarketPublisher.includes('entriesById.set(submission.themeId, submissionToMarketEntry(submission))'),
+    themeMarketPublisher.includes('entriesById.set(submission.themeId, submissionToMarketEntry(submission, publicBaseUrl))'),
   'theme submissions must persist review state, scan theme packages safely, and publish listed scanned themes into the theme market index'
 )
 
