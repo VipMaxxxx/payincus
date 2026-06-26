@@ -115,8 +115,12 @@ assert(
 )
 
 assert(
-  userRedeemSection.includes('turnstileRequired') &&
-    userGenerateRouteSection.includes('turnstileRequired') &&
+  userRedeemSection.includes('onRequest: [fastify.authenticate]') &&
+    userRedeemSection.includes('preHandler: [turnstileRequired]') &&
+    userGenerateRouteSection.includes('onRequest: [fastify.authenticate]') &&
+    userGenerateRouteSection.includes('preHandler: [turnstileRequired]') &&
+    !userRedeemSection.includes('onRequest: [fastify.authenticate, turnstileRequired]') &&
+    !userGenerateRouteSection.includes('onRequest: [fastify.authenticate, turnstileRequired]') &&
     userView.includes("import TurnstileWidget from '@/components/TurnstileWidget.vue'") &&
     userView.includes('api.systemConfig.getPublic()') &&
     userView.includes('v-model="turnstileToken"') &&
@@ -126,7 +130,7 @@ assert(
     turnstileWidget.includes("@update:model-value=\"onVerify\"") &&
     turnstileWidget.includes('@expired="onExpire"') &&
     userView.includes('请先完成人机验证'),
-  'user gift card redemption and balance-funded generation must keep visible Turnstile protection and reliably submit the widget token'
+  'user gift card redemption and balance-funded generation must keep visible Turnstile protection after body parsing and reliably submit the widget token'
 )
 
 assert(
