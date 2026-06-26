@@ -16,7 +16,7 @@ async function giftCardTableExists(): Promise<boolean> {
     SELECT EXISTS (
       SELECT 1
       FROM information_schema.tables
-      WHERE table_schema = 'public'
+      WHERE table_schema = current_schema()
         AND table_name = 'gift_cards'
     ) AS "exists"
   `

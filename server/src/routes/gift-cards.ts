@@ -390,7 +390,8 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
 
   // 兑换码充值
   fastify.post('/user/redeem', {
-    onRequest: [fastify.authenticate, turnstileRequired],
+    onRequest: [fastify.authenticate],
+    preHandler: [turnstileRequired],
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     schema: {
       body: {
@@ -437,7 +438,8 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
 
   // 用户用余额生成兑换码
   fastify.post('/user/generate', {
-    onRequest: [fastify.authenticate, turnstileRequired],
+    onRequest: [fastify.authenticate],
+    preHandler: [turnstileRequired],
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     schema: {
       body: {
