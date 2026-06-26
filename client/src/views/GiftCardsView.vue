@@ -2,11 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import api from '@/api'
 import { useToast } from '@/stores/toast'
-import { useTurnstile } from '@/composables/useTurnstile'
+import { useThemeStore } from '@/stores/theme'
+import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import type { GiftCardRecord, GiftCardStatus } from '@/types/api'
 
 const toast = useToast()
-const turnstile = useTurnstile('gift_card')
+const themeStore = useThemeStore()
 
 const redeemCode = ref('')
 const generateAmount = ref<number | null>(null)
@@ -17,6 +18,10 @@ const redeeming = ref(false)
 const generating = ref(false)
 const statusFilter = ref<GiftCardStatus | ''>('')
 const lastGeneratedCode = ref('')
+const turnstileEnabled = ref(false)
+const turnstileSiteKey = ref('')
+const turnstileToken = ref('')
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 
 const statusOptions: Array<{ value: GiftCardStatus | ''; label: string }> = [
   { value: '', label: '全部状态' },
@@ -59,6 +64,18 @@ function statusClass(status: GiftCardStatus): string {
   }[status]
 }
 
+async function loadTurnstileConfig(): Promise<void> {
+  try {
+    const config = await api.systemConfig.getPublic()
+    turnstileEnabled.value = config.turnstileEnabled || false
+    turnstileSiteKey.value = config.turnstileSiteKey || ''
+  } catch (err) {
+    console.error('[GiftCardsView] Failed to load Turnstile config:', err)
+    turnstileEnabled.value = false
+    turnstileSiteKey.value = ''
+  }
+}
+
 async function loadCards(): Promise<void> {
   loading.value = true
   try {
@@ -75,9 +92,32 @@ async function loadCards(): Promise<void> {
   }
 }
 
-async function getTurnstileToken(): Promise<string | undefined> {
-  const token = await turnstile.execute()
-  return token || undefined
+function getTurnstileToken(): string | undefined {
+  if (!turnstileEnabled.value) return undefined
+  return turnstileToken.value || undefined
+}
+
+function resetTurnstile(): void {
+  turnstileToken.value = ''
+  turnstileRef.value?.reset?.()
+}
+
+function requireTurnstileToken(): string | undefined | null {
+  const token = getTurnstileToken()
+  if (turnstileEnabled.value && !token) {
+    toast.warning('请先完成人机验证')
+    return null
+  }
+  return token
+}
+
+function onTurnstileExpire(): void {
+  turnstileToken.value = ''
+}
+
+function onTurnstileError(): void {
+  turnstileToken.value = ''
+  toast.error('人机验证失败，请重试')
 }
 
 async function redeemGiftCard(): Promise<void> {
@@ -88,7 +128,8 @@ async function redeemGiftCard(): Promise<void> {
   }
   redeeming.value = true
   try {
-    const token = await getTurnstileToken()
+    const token = requireTurnstileToken()
+    if (token === null) return
     const response = await api.giftCards.redeem(code, token)
     toast.success(`兑换成功，余额增加 ${formatMoney(response.amount)}`)
     redeemCode.value = ''
@@ -96,6 +137,7 @@ async function redeemGiftCard(): Promise<void> {
   } catch (err: any) {
     toast.error('兑换失败：' + (err?.message || String(err)))
   } finally {
+    resetTurnstile()
     redeeming.value = false
   }
 }
@@ -108,7 +150,8 @@ async function generateGiftCard(): Promise<void> {
   }
   generating.value = true
   try {
-    const token = await getTurnstileToken()
+    const token = requireTurnstileToken()
+    if (token === null) return
     const response = await api.giftCards.generate(amount, generateRemark.value.trim() || undefined, token)
     lastGeneratedCode.value = response.giftCard.code
     toast.success(`礼品卡已生成，当前余额 ${formatMoney(response.newBalance)}`)
@@ -118,6 +161,7 @@ async function generateGiftCard(): Promise<void> {
   } catch (err: any) {
     toast.error('生成礼品卡失败：' + (err?.message || String(err)))
   } finally {
+    resetTurnstile()
     generating.value = false
   }
 }
@@ -127,7 +171,9 @@ async function copyCode(code: string): Promise<void> {
   toast.success('兑换码已复制')
 }
 
-onMounted(loadCards)
+onMounted(async () => {
+  await Promise.all([loadTurnstileConfig(), loadCards()])
+})
 </script>
 
 <template>
@@ -151,6 +197,22 @@ onMounted(loadCards)
     </div>
 
     <div class="grid gap-6 lg:grid-cols-2">
+      <section v-if="turnstileEnabled && turnstileSiteKey" class="card p-6 lg:col-span-2">
+        <h2 class="text-base font-semibold text-themed">人机验证</h2>
+        <p class="mt-1 text-sm text-themed-muted">兑换或生成礼品卡前需要完成验证。</p>
+        <div class="mt-4">
+          <TurnstileWidget
+            ref="turnstileRef"
+            v-model="turnstileToken"
+            :site-key="turnstileSiteKey"
+            :theme="themeStore.isDark ? 'dark' : 'light'"
+            action="gift_card"
+            @expire="onTurnstileExpire"
+            @error="onTurnstileError"
+          />
+        </div>
+      </section>
+
       <section class="card p-6">
         <h2 class="text-base font-semibold text-themed">兑换礼品卡</h2>
         <div class="mt-4 flex flex-col gap-3 sm:flex-row">
