@@ -6,16 +6,26 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `5c8668a`
+- Current HEAD / 当前 HEAD: `d60bf6d`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Polish instance cards and creation naming
-- Latest tag / 最新 tag: `v0.6.18`
+- Commit subject / 提交说明: Fix instance transfer path release guard
+- Latest tag / 最新 tag: `v0.6.19`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.19
+
+- Release commit / 发布提交: `d60bf6d`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Fix instance transfer path release guard
+
+- 继续发布用户端实例产品卡片和创建实例自动命名能力。
+- 修复实例卡片 PUSH 跳转的前后台构建边界，避免后台包包含用户端固定转让路径。
+- 更新 route guard 以覆盖新的 transfersPath helper 形态。
 
 ## v0.6.18
 
