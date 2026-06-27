@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-4a131d7 Harden storage readiness and traffic reset
+1a82f05 Fix instance bandwidth and billing nav display
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,12 +29,21 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-4a131d7 Harden storage readiness and traffic reset
+78640e4 Update version log for v0.8.3
 ```
 
 Recently updated/released files include:
 
 ```text
+client/src/views/InstancesView.vue
+client/src/components/layout/SideNav.vue
+server/src/db/pagination.ts
+server/src/routes/instances.ts
+package.json
+client/package.json
+server/package.json
+docs-site/docs/release/version-log.md
+docs-site/docs/en/release/version-log.md
 client/src/components/TurnstileWidget.vue
 client/src/views/GiftCardsView.vue
 server/src/db/gift-cards.ts
@@ -201,16 +210,18 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.8.2 Package/plan traffic reset pricing OTA
-release commit/tag: 4f5bb5e (v0.8.2)
-version-log commit: ef43193
-previous production release: 4a131d7 (v0.8.1)
+v0.8.3 Instance bandwidth and billing nav display OTA
+release commit/tag: 1a82f05 (v0.8.3)
+version-log commit: 78640e4
+previous production release: 4f5bb5e (v0.8.2)
 versioning note: OTA tags now continue with carry at 10, e.g. 0.8.9 -> 0.9.0.
 ```
 
 GitHub Actions:
 
 ```text
+Build & Release for tag v0.8.3: public OTA manifest and amd64/arm64 artifacts are available.
+CI for main commit 78640e4: pushed after version-log generation; local type-check/build gates passed.
 Build & Release for tag v0.8.2: run 28276692386 completed successfully; public OTA manifest and amd64/arm64 artifacts are available.
 CI for main commit ef43193: run 28276690725 was started by the version-log push; GitHub API later rate-limited unauthenticated status polling, but local type-check/build gates passed and Docs Pages run 28276690722 completed successfully.
 Build & Release for tag v0.8.1: run 28275824753 completed successfully.
@@ -218,7 +229,18 @@ CI for main commit 4a131d7: run 28275823541 completed successfully.
 Build & Release for previous tag v0.6.19: run 28274947080 completed successfully.
 ```
 
-Release assets confirmed for `v0.8.2`:
+Release assets confirmed for `v0.8.3`:
+
+```text
+ota-manifest.json
+incudal-v0.8.3-linux-amd64.tar.gz
+incudal-v0.8.3-linux-amd64.tar.gz.sha256
+incudal-v0.8.3-linux-arm64.tar.gz
+incudal-v0.8.3-linux-arm64.tar.gz.sha256
+incudal-v0.8.3-ota-manifest.json
+```
+
+Previous release assets confirmed for `v0.8.2`:
 
 ```text
 ota-manifest.json
@@ -233,33 +255,34 @@ payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 plugin-market-index.json
 ```
 
-Published `v0.8.2` OTA manifest:
+Published `v0.8.3` OTA manifest:
 
 ```text
-version: v0.8.2
-gitCommit: 4f5bb5ec153b
-buildTime: 2026-06-27T03:06:04.471Z
-amd64 artifact: incudal-v0.8.2-linux-amd64.tar.gz
-amd64 size: 92387398
-amd64 sha256: 5cbe8e11b50c8d8fc00e932c2ac2762eb39a2fed54c4c0d011d7697e0375bd7a
-arm64 artifact: incudal-v0.8.2-linux-arm64.tar.gz
-arm64 size: 91471983
-arm64 sha256: c6084b8e711e3cdd2d4d9c57c60eb71501e8e292a8fdd2a5ec7c5e601e47fdcd
+version: v0.8.3
+gitCommit: 1a82f05eca51
+buildTime: 2026-06-27T03:24:06.930Z
+amd64 artifact: incudal-v0.8.3-linux-amd64.tar.gz
+amd64 size: 92391355
+amd64 sha256: 4c5f3a3104e1a32cdef0276dd8fd2dca73b9387cb328cbdbf2c8fa576c22a910
+arm64 artifact: incudal-v0.8.3-linux-arm64.tar.gz
+arm64 size: 91478978
+arm64 sha256: 2fb68a224d5f9e23fb172d5d39b747c0214cc0c61ac17bd2859aa107735fb1be
 ```
 
 Production OTA proof:
 
 ```text
-task: #86
-fromVersion: v0.8.1
-targetVersion: v0.8.2
-release dir: /opt/incudal/releases/v0.8.2-20260627030924
-log: /opt/incudal/update-logs/system-update-86.log
-status: success at 2026-06-27T03:10:57.158Z
-public health: https://pay.payincus.com/api/health -> ok
-admin health: https://admin.payincus.com/api/health -> ok
-current version.json: v0.8.2 / 4f5bb5ec153b
-checks: migration 20260627024500_add_package_traffic_reset_price applied; backend health passed; verify-split-host, verify:production, verify:log-header passed; OTA cache cleanup and release pruning completed.
+task: #87
+fromVersion: v0.8.2
+targetVersion: v0.8.3
+release dir: /opt/incudal/releases/v0.8.3-20260627032627
+log: /opt/incudal/update-logs/system-update-87.log
+status: success at 2026-06-27T03:27:43.625Z
+public health: https://pay.payincus.com/api/health -> HTTP 200
+admin health: https://admin.payincus.com/api/health -> HTTP 200
+current version.json: v0.8.3 / 1a82f05eca51
+checks: backend health passed after retry 2; verify-split-host, verify:production, verify:log-header passed; OTA cache cleanup and release pruning completed.
+notes: production DB readiness kept the existing warning that public package #1 (HKCMI) is active but online bound hosts cannot satisfy its minimum CPU/memory requirement.
 ```
 
 Production OTA proof:
