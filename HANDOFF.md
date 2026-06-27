@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-1a82f05 Fix instance bandwidth and billing nav display
+51e2df0 Harden OTA Prisma client generation
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,8 +29,41 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-78640e4 Update version log for v0.8.3
+55a1280 Update version log for v0.8.5
 ```
+
+## Latest Production OTA Proof
+
+- Production version: `v0.8.5`
+- Release tag commit: `51e2df00fb0e`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.8.5-20260627043444`
+- OTA task: `89`, status `success`, backup path `/opt/incudal/releases/v0.8.4-20260627042200`
+- GitHub Actions: `Build & Release` for `v0.8.5` succeeded, `CI` on `main` succeeded, docs Pages deployment succeeded.
+- Release assets verified: linux amd64/arm64 tarballs, sha256 files, OTA manifest, and marketplace assets.
+- Production checks passed during OTA: split host verification, `pnpm verify:production`, `pnpm verify:log-header`.
+- Independent checks after OTA:
+  - `https://pay.payincus.com/api/health` returned HTTP 200.
+  - `https://admin.payincus.com/api/health` returned HTTP 200.
+  - `https://admin.payincus.com/admin/resource-risk` returned HTTP 200.
+  - `https://admin.payincus.com/api/admin/resource-risk/overview` returned HTTP 401 without auth.
+  - Resource risk policy fields are readable through production Prisma Client: `orderRestrictScore=70`, `autoSuspendScore=90`, `autoSuspendEnabled=false`, `accountOrderRestrictEnabled=true`.
+  - Resource risk collector is writing production samples; sample count reached 100 during verification.
+
+## Latest Resource Risk Work
+
+`v0.8.4` added the instance-scoped resource risk center:
+
+- Collects bandwidth Mbps, PPS, packet deltas, and CPU usage samples from Incus traffic polling.
+- Scores instances only; accounts are linked through the source instance and can be restricted from new orders/requires manual ticket review.
+- Supports QoS tiers from the admin policy page, defaulting to 50 Mbps, 30 Mbps, and 10 Mbps thresholds.
+- Supports CPU sustained usage, sustained bandwidth, packet anomaly, and small-packet scan suspicion signals.
+- Supports automatic instance suspension when `autoSuspendEnabled` is enabled and score reaches `autoSuspendScore`; default is currently disabled to avoid first-rollout false positives.
+- Adds user review ticket flow when `ORDER_RESTRICTED_BY_RISK` blocks instance creation.
+
+`v0.8.5` hardened OTA:
+
+- The OTA runner now explicitly runs `pnpm --filter server exec prisma generate` after `prisma migrate deploy` in artifact atomic, artifact legacy, and git fallback update paths.
+- `server/scripts/test-resource-risk-guards.ts` now checks the key risk policy fields and auto-suspend/order-restrict service wiring.
 
 Recently updated/released files include:
 
