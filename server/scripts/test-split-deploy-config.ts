@@ -442,8 +442,13 @@ assert.ok(
 assert.ok(
   verifyProductionReadiness.includes('validate_ip_whitelist "$PAYMENT_CALLBACK_IP_WHITELIST_VALUE"') &&
     verifyProductionReadiness.includes('PAYMENT_CALLBACK_IP_WHITELIST contains an invalid IP') &&
-    verifyProductionReadiness.includes('PAYMENT_CALLBACK_IP_WHITELIST is empty; provider-specific defaults apply only where the backend implements them'),
+    verifyProductionReadiness.includes('PAYMENT_CALLBACK_IP_WHITELIST is empty; callbacks still require signature/status/amount/idempotency checks, but provider source IPs should be configured when available'),
   'production readiness verifier must reject malformed payment callback IP whitelist config and warn when it is empty'
+)
+assert.ok(
+  verifyProductionDbReadiness.includes('PAYMENT_CALLBACK_IP_WHITELIST is empty while active payment providers without built-in callback IP defaults exist') &&
+    verifyProductionDbReadiness.includes('signature, status, amount and idempotency checks still run before crediting balance'),
+  'production DB readiness verifier must make empty callback IP whitelist warnings provider-specific'
 )
 assert.ok(
   verifyProductionReadiness.includes('validate_https_public_url FRONTEND_URL "$FRONTEND_URL_VALUE"') &&

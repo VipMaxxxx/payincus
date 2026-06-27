@@ -216,7 +216,7 @@ require_equals PAYMENT_CALLBACK_SKIP_IP_WHITELIST "$PAYMENT_CALLBACK_SKIP_IP_WHI
 if [[ -n "$PAYMENT_CALLBACK_IP_WHITELIST_VALUE" ]]; then
   validate_ip_whitelist "$PAYMENT_CALLBACK_IP_WHITELIST_VALUE"
 else
-  warn "PAYMENT_CALLBACK_IP_WHITELIST is empty; provider-specific defaults apply only where the backend implements them"
+  warn "PAYMENT_CALLBACK_IP_WHITELIST is empty; callbacks still require signature/status/amount/idempotency checks, but provider source IPs should be configured when available"
 fi
 
 if [[ -n "$AGENT_BINARY_URL_VALUE" || -n "$AGENT_BINARY_SHA256_VALUE" ]]; then

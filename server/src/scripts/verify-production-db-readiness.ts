@@ -64,10 +64,21 @@ async function checkDatabaseConnectivity(): Promise<void> {
 async function checkPaymentProviders(): Promise<void> {
   const providers = await getAllPaymentProviders()
   const activeProviders = providers.filter(provider => provider.status === 'active')
+  const hasGlobalCallbackIpWhitelist = !isBlank(process.env.PAYMENT_CALLBACK_IP_WHITELIST)
 
   if (activeProviders.length === 0) {
     warn('No active payment providers are configured; recharge will be unavailable until one is enabled')
     return
+  }
+
+  if (!hasGlobalCallbackIpWhitelist) {
+    const providersWithoutBuiltInCallbackIps = activeProviders
+      .filter(provider => provider.type !== 'heleket')
+      .map(provider => `#${provider.id} (${provider.name}, ${provider.type})`)
+
+    if (providersWithoutBuiltInCallbackIps.length > 0) {
+      warn(`PAYMENT_CALLBACK_IP_WHITELIST is empty while active payment providers without built-in callback IP defaults exist: ${providersWithoutBuiltInCallbackIps.join(', ')}. Configure provider callback source IPs when available; signature, status, amount and idempotency checks still run before crediting balance.`)
+    }
   }
 
   for (const provider of activeProviders) {

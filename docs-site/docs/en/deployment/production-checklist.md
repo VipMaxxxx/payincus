@@ -31,7 +31,7 @@ pnpm verify:production-proof-snapshot
 
 A `WARN` line from `verify:production` does not always mean the application is down, but the acceptance record must explain the decision.
 
-- `PAYMENT_CALLBACK_IP_WHITELIST is empty`: no global payment callback IP allowlist is configured. If the payment provider publishes fixed callback source IPs, configure `PAYMENT_CALLBACK_IP_WHITELIST` in `.env`. If the provider does not provide stable source IPs, rely on signature verification, order idempotency and amount checks, then record that operator decision in the acceptance report.
+- `PAYMENT_CALLBACK_IP_WHITELIST is empty`: no global payment callback IP allowlist is configured. If the payment provider publishes fixed callback source IPs, configure `PAYMENT_CALLBACK_IP_WHITELIST` in `.env`. If the provider does not provide stable source IPs, confirm that the callback still passes signature verification, trade-status validation, amount matching and `payment_callbacks` idempotency before balance credit, then record that operator decision in the acceptance report. DB readiness also identifies active payment providers without built-in default callback IPs.
 - `Public package ... cannot satisfy its minimum CPU/memory/disk requirement`: a public package is still enabled/public in configuration, but its online bound Hosts cannot create the smallest available plan after subtracting non-deleted instance usage. The current user package API marks this package as `soldOut=true` and blocks new orders; close the warning by increasing host CPU, memory or disk capacity, migrating or cleaning instances, binding the package to a Host with spare capacity, or pausing the package from public sale. Do not treat this as a display-only frontend issue.
 
 ## Must-pass Items

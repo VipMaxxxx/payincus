@@ -153,6 +153,10 @@ assert(
     adminView.includes('releaseOrderRestrictionFromState(item)') &&
     adminView.includes('openEvidence(item)') &&
     adminView.includes('风险证据详情') &&
+    adminView.includes('resource-risk-evidence-panel') &&
+    adminView.includes('resource-risk-evidence-surface') &&
+    adminView.includes('resource-risk-evidence-code') &&
+    adminView.includes('background-color: #ffffff') &&
     adminView.includes('当前证据快照') &&
     adminView.includes('最近资源样本') &&
     adminView.includes('24 小时趋势') &&
