@@ -4,19 +4,16 @@
 
 该页面从仓库 Git tag 和 commit 自动生成，用于展示系统版本演进。后台 OTA 的“可更新版本”和生产部署仍以 GitHub Release tag 为准。
 
-## 当前源码状态 / Current Source State
+## 最新发布状态 / Latest Release State
 
-- 当前 HEAD / Current HEAD: `a465155`
+- 最新发布提交 / Latest Release Commit: `15e6c63`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Update handoff after v0.9.4 OTA
+- 提交说明 / Commit subject: Close OTA worker database on skipped duplicate
 - 最新 tag / Latest tag: `v0.9.4`
 
 ## 未发布变更 / Unreleased Changes
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.9.4 OTA `a465155`
-- Update version log for v0.9.4 `5c4bb3b`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
 
