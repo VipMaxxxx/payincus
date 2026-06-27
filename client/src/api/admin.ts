@@ -216,6 +216,75 @@ export interface FinancialReconciliationRun {
   items: FinancialReconciliationItem[]
 }
 
+export interface ResourceRiskPolicy {
+  id: number
+  name: string
+  enabled: boolean
+  bandwidthWindowMinutes: number
+  bandwidthActiveMinutes: number
+  bandwidthThresholdMbps: number
+  cpuWindowMinutes: number
+  cpuActiveMinutes: number
+  cpuThresholdPercent: number
+  ppsThreshold: number
+  qosTiers: Array<{ level: number; bandwidthMbps: number; score: number }>
+  orderRestrictScore: number
+  autoSuspendScore: number
+  autoSuspendEnabled: boolean
+  accountOrderRestrictEnabled: boolean
+}
+
+export interface ResourceRiskState {
+  id: number
+  instanceId: number
+  userId: number
+  hostId: number
+  score: number
+  level: string
+  status: string
+  qosLevel: number
+  currentBandwidthLimit: string | null
+  reason: string | null
+  evidence: Record<string, unknown>
+  updatedAt: string
+  instance?: { id: number; name: string; status: string; incusId?: string | null }
+  user?: { id: number; username: string }
+  host?: { id: number; name: string }
+}
+
+export interface ResourceRiskEvent {
+  id: number
+  instanceId: number
+  userId: number
+  hostId: number
+  type: string
+  severity: string
+  scoreDelta: number
+  scoreAfter: number
+  actionTaken: string | null
+  message: string
+  evidence: Record<string, unknown>
+  createdAt: string
+  instance?: { id: number; name: string }
+  user?: { id: number; username: string }
+  host?: { id: number; name: string }
+}
+
+export interface UserOrderRestrictionRecord {
+  id: number
+  userId: number
+  status: string
+  reason: string
+  sourceInstanceId: number | null
+  sourceRiskEventId: number | null
+  ticketId: number | null
+  createdAt: string
+  releasedAt: string | null
+  releaseReason: string | null
+  user?: { id: number; username: string }
+  sourceInstance?: { id: number; name: string; status: string } | null
+}
+
 export interface VipLevelRule {
   id?: number
   type: VipRuleType
@@ -2261,6 +2330,42 @@ const api = {
       http.post('/admin/system-update/start', { targetVersion }, { timeout: TIMEOUT.LONG }),
     rollback: (id: number): Promise<{ taskId: number; logPath: string }> =>
       http.post(`/admin/system-update/tasks/${id}/rollback`, {}, { timeout: TIMEOUT.LONG })
+  },
+
+  resourceRisk: {
+    overview: (): Promise<{
+      policy: ResourceRiskPolicy | null
+      counters: { totalStates: number; highRisk: number; activeRestrictions: number }
+      recentEvents: ResourceRiskEvent[]
+    }> => http.get('/admin/resource-risk/overview'),
+    getPolicy: (): Promise<{ policy: ResourceRiskPolicy }> =>
+      http.get('/admin/resource-risk/policy'),
+    updatePolicy: (data: Partial<ResourceRiskPolicy>): Promise<{ policy: ResourceRiskPolicy }> =>
+      http.put('/admin/resource-risk/policy', data),
+    listInstances: (params?: { page?: number; pageSize?: number; level?: string }): Promise<{
+      items: ResourceRiskState[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/resource-risk/instances', { params }),
+    listEvents: (params?: { page?: number; pageSize?: number; instanceId?: number }): Promise<{
+      items: ResourceRiskEvent[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/resource-risk/events', { params }),
+    listRestrictions: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
+      items: UserOrderRestrictionRecord[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/resource-risk/order-restrictions', { params }),
+    evaluateInstance: (id: number): Promise<{ state: ResourceRiskState | null }> =>
+      http.post(`/admin/resource-risk/instances/${id}/evaluate`),
+    releaseInstance: (id: number, reason: string): Promise<{ state: ResourceRiskState }> =>
+      http.post(`/admin/resource-risk/instances/${id}/release`, { reason }),
+    releaseRestriction: (id: number, data: { reason: string; ticketId?: number | null }): Promise<{ restriction: UserOrderRestrictionRecord }> =>
+      http.post(`/admin/resource-risk/order-restrictions/${id}/release`, data)
   },
 
   plugins: {

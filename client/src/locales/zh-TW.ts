@@ -219,6 +219,7 @@ export default {
         plugins: '擴展中心',
         delivery: '交付保障',
         slaAlerts: 'SLA 與告警',
+        resourceRisk: '資源風控',
         productionProof: '生產驗收',
         userLifecycle: '使用者生命週期',
         users: '使用者',
@@ -5655,6 +5656,7 @@ export default {
         INSTANCE_NOT_SUSPENDED: '實例未處於封停狀態',
         INSTANCE_SUSPENDED_EXPIRED: '實例因到期被封停，請續費後解封',
         INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED: '當前月流量週期無法銷毀，已用流量達到或超過 5G',
+        ORDER_RESTRICTED_BY_RISK: '目前帳號因實例資源風控進入人工審核狀態，請提交工單審核後恢復下單',
         // 主機錯誤
         HOST_NOT_FOUND: '主機不存在',
         HOST_OFFLINE: '主機離線',

@@ -216,6 +216,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.slaAlerts', title: 'SLA 与告警' }
   },
   {
+    path: '/admin/resource-risk',
+    name: 'admin-resource-risk',
+    component: () => import('@/views/admin/ResourceRiskView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.resourceRisk', title: '资源风控' }
+  },
+  {
     path: '/admin/production-proof',
     name: 'admin-production-proof',
     component: () => import('@/views/admin/ProductionProofView.vue'),

@@ -1,0 +1,112 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const repoRoot = resolve(import.meta.dirname, '../..')
+const read = (path: string) => readFileSync(resolve(repoRoot, path), 'utf8')
+
+const schema = read('server/prisma/schema.prisma')
+const migration = read('server/prisma/migrations/20260627043000_add_instance_resource_risk_center/migration.sql')
+const incusTraffic = read('server/src/lib/incus/incus-traffic.ts')
+const trafficCollector = read('server/src/services/instance-traffic-collector.ts')
+const riskService = read('server/src/services/resource-risk.ts')
+const restrictionService = read('server/src/services/user-order-restrictions.ts')
+const riskRoute = read('server/src/routes/resource-risk.ts')
+const instanceRoute = read('server/src/routes/instances.ts')
+const app = read('server/src/app.ts')
+const clientApi = read('client/src/api/index.ts')
+const adminApi = read('client/src/api/admin.ts')
+const adminRouter = read('client/src/router/admin.ts')
+const adminNav = read('client/src/config/side-nav-items-admin.ts')
+const adminView = read('client/src/views/admin/ResourceRiskView.vue')
+const createView = read('client/src/views/InstanceCreateView.vue')
+const zhLocale = read('client/src/locales/zh-CN.ts')
+const enLocale = read('client/src/locales/en.ts')
+
+assert(
+  schema.includes('model ResourceRiskPolicy') &&
+    schema.includes('model InstanceRiskState') &&
+    schema.includes('model InstanceResourceSample') &&
+    schema.includes('model InstanceRiskEvent') &&
+    schema.includes('model UserOrderRestriction') &&
+    schema.includes('rxPacketsRaw') &&
+    schema.includes('cpuUsageRaw') &&
+    migration.includes('CREATE TABLE IF NOT EXISTS "instance_risk_states"') &&
+    migration.includes('CREATE TABLE IF NOT EXISTS "instance_resource_samples"') &&
+    migration.includes('CREATE TABLE IF NOT EXISTS "user_order_restrictions"'),
+  'resource risk schema and migration must persist policy, instance scores, samples, events, order restrictions, packets, and CPU snapshots'
+)
+
+assert(
+  incusTraffic.includes('rxPackets: bigint') &&
+    incusTraffic.includes('txPackets: bigint') &&
+    incusTraffic.includes('cpuUsageRaw: bigint | null') &&
+    incusTraffic.includes('state.cpu?.usage') &&
+    trafficCollector.includes('instanceResourceSample.create') &&
+    trafficCollector.includes('rxPacketsDelta') &&
+    trafficCollector.includes('cpuPercent') &&
+    trafficCollector.includes('totalMbps'),
+  'traffic collector must record resource-risk samples without replacing monthly traffic accounting'
+)
+
+assert(
+  riskService.includes('export async function evaluateInstanceRisk') &&
+    riskService.includes('bandwidth_sustained') &&
+    riskService.includes('cpu_sustained') &&
+    riskService.includes('packet_anomaly') &&
+    riskService.includes('scan_suspected') &&
+    riskService.includes('restoreBandwidth(client, input.instance.incusId, limit, limit)') &&
+    riskService.includes('accountOrderRestrictEnabled') &&
+    riskService.includes('autoSuspendEnabled') &&
+    riskService.includes('restrictUserOrdersForRisk') &&
+    riskService.includes('startResourceRiskScheduler'),
+  'resource risk service must evaluate bandwidth, CPU, packet anomaly, scan signals, apply QoS, restrict orders, and run on a scheduler'
+)
+
+assert(
+  restrictionService.includes('assertUserCanCreateInstance') &&
+    restrictionService.includes('OrderRestrictedError') &&
+    restrictionService.includes('ORDER_RESTRICTED_BY_RISK') &&
+    instanceRoute.includes('await assertUserCanCreateInstance(user.id)') &&
+    instanceRoute.includes('orderRestrictionApiError(error)'),
+  'user instance creation must be blocked when the account has an active instance-risk order restriction'
+)
+
+assert(
+  riskRoute.includes("'/resource-risk/my-status'") &&
+    riskRoute.includes("'/resource-risk/review-ticket'") &&
+    riskRoute.includes("'/admin/resource-risk/policy'") &&
+    riskRoute.includes("'/admin/resource-risk/instances'") &&
+    riskRoute.includes("'/admin/resource-risk/order-restrictions/:id/release'") &&
+    app.includes("await fastify.register(resourceRiskRoutes, { prefix: '/api' })") &&
+    app.includes('startResourceRiskScheduler()'),
+  'resource risk user and admin APIs must be registered and scheduler must start with the app'
+)
+
+assert(
+  adminApi.includes('resourceRisk:') &&
+    adminApi.includes("http.get('/admin/resource-risk/overview')") &&
+    adminApi.includes("http.put('/admin/resource-risk/policy'") &&
+    clientApi.includes('createReviewTicket') &&
+    adminRouter.includes("path: '/admin/resource-risk'") &&
+    adminNav.includes("path: '/admin/resource-risk'") &&
+    adminView.includes('实例风险') &&
+    adminView.includes('事件流水') &&
+    adminView.includes('下单限制') &&
+    adminView.includes('QoS 档位') &&
+    createView.includes('orderRiskReviewAvailable') &&
+    createView.includes('api.resourceRisk.createReviewTicket') &&
+    zhLocale.includes('ORDER_RESTRICTED_BY_RISK') &&
+    enLocale.includes('ORDER_RESTRICTED_BY_RISK'),
+  'admin UI and user create-page review flow must expose the resource risk center'
+)
+
+assert(
+  !schema.includes('userRiskScore') &&
+    !schema.includes('accountRiskScore') &&
+    riskService.includes('instanceRiskState') &&
+    riskService.includes('sourceInstanceId'),
+  'risk scores must stay instance-scoped; accounts are restricted only through source instance linkage'
+)
+
+console.log('resource risk guards passed')

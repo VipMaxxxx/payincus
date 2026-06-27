@@ -41,6 +41,11 @@ import {
 } from '../lib/plugin-business-events.js'
 import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'
 import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
+import {
+  assertUserCanCreateInstance,
+  OrderRestrictedError,
+  orderRestrictionApiError
+} from '../services/user-order-restrictions.js'
 import { customAlphabet } from 'nanoid'
 
 // 自定义 nanoid，只使用小写字母和数字（Incus 不允许下划线）
@@ -1202,6 +1207,15 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
     // ==================== 阶段一: 验证与校验 ====================
     name = typeof name === 'string' ? name.trim() : ''
+
+    try {
+      await assertUserCanCreateInstance(user.id)
+    } catch (error) {
+      if (error instanceof OrderRestrictedError) {
+        return reply.code(403).send(orderRestrictionApiError(error))
+      }
+      throw error
+    }
 
     // 0. 处理 SSH 密钥：支持 sshKeyId 或直接传 sshKey
     if (sshKeyId && !sshKey) {

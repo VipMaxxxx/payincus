@@ -211,6 +211,7 @@ export default {
         plugins: 'Extension Center',
         delivery: 'Delivery Assurance',
         slaAlerts: 'SLA & Alerts',
+        resourceRisk: 'Resource Risk',
         productionProof: 'Production Proof',
         userLifecycle: 'User Lifecycle',
         users: 'Users',
@@ -5074,6 +5075,7 @@ export default {
         INSTANCE_NOT_SUSPENDED: 'Instance is not in suspended status',
         INSTANCE_SUSPENDED_EXPIRED: 'Instance is suspended due to expiration, please renew to unsuspend',
         INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED: 'Destroy is unavailable in the current monthly traffic cycle because usage has reached 5G',
+        ORDER_RESTRICTED_BY_RISK: 'This account is under instance resource risk review. Please submit a ticket before placing new orders.',
         // Host errors
         HOST_NOT_FOUND: 'Host not found',
         HOST_OFFLINE: 'Host is offline',

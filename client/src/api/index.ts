@@ -2610,6 +2610,13 @@ const api = {
       http.get('/tickets/pending-count')
   },
 
+  resourceRisk: {
+    createReviewTicket: (content?: string): Promise<{ message: string; ticket: { id: number; messageId: number } }> =>
+      http.post('/resource-risk/review-ticket', { content }),
+    getMyStatus: (): Promise<{ restricted: boolean; restriction: unknown; riskStates: unknown[] }> =>
+      http.get('/resource-risk/my-status')
+  },
+
   // 签到系统
   checkin: {
     // 获取签到状态
