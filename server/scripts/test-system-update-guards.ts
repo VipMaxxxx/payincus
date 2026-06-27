@@ -107,7 +107,8 @@ assert.ok(
     runTask.includes("verify:log-header") &&
     runTask.includes("smoke:agent-release") &&
     runTask.includes("tryMarkSystemUpdateTaskRunning(taskId, ['pending'], logPath)") &&
-    runTask.includes('already claimed or finished; skipping duplicate worker'),
+    runTask.includes('already claimed or finished; skipping duplicate worker') &&
+    runTask.includes('await closePrismaDatabase()'),
   'online updater must build, migrate, guard, restart, and verify before marking success'
 )
 
@@ -117,7 +118,8 @@ assert.ok(
     systemUpdateTasksDb.includes('status: { in: allowedStatuses }') &&
     systemUpdateTasksDb.includes('return result.count === 1') &&
     rollbackTask.includes("tryMarkSystemUpdateTaskRunning(taskId, ['success', 'failed'], logPath)") &&
-    rollbackTask.includes('already claimed or not rollbackable; skipping duplicate worker'),
+    rollbackTask.includes('already claimed or not rollbackable; skipping duplicate worker') &&
+    rollbackTask.includes('await closePrismaDatabase()'),
   'online update and rollback workers must atomically claim tasks before touching staging, downloads, releases, or rollback paths'
 )
 

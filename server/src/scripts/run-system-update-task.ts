@@ -790,6 +790,7 @@ async function main(): Promise<void> {
   const claimed = await tryMarkSystemUpdateTaskRunning(taskId, ['pending'], logPath)
   if (!claimed) {
     await log(`System update task ${taskId} is already claimed or finished; skipping duplicate worker`)
+    await closePrismaDatabase()
     return
   }
   await log(`Starting system update task ${taskId} -> ${targetVersion}`)

@@ -153,6 +153,7 @@ async function main(): Promise<void> {
   const claimed = await tryMarkSystemUpdateTaskRunning(taskId, ['success', 'failed'], logPath)
   if (!claimed) {
     await log(`System rollback task ${taskId} is already claimed or not rollbackable; skipping duplicate worker`)
+    await closePrismaDatabase()
     return
   }
 
