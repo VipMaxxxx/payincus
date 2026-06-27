@@ -211,6 +211,7 @@ export default {
         plugins: '扩展中心',
         delivery: '交付保障',
         slaAlerts: 'SLA 与告警',
+        resourceRisk: '资源风控',
         productionProof: '生产验收',
         userLifecycle: '用户生命周期',
         users: '用户',
@@ -5084,6 +5085,7 @@ export default {
         INSTANCE_NOT_SUSPENDED: '实例未处于封停状态',
         INSTANCE_SUSPENDED_EXPIRED: '实例因到期被封停，请续费后解封',
         INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED: '当前月流量周期无法销毁，已用流量达到或超过 5G',
+        ORDER_RESTRICTED_BY_RISK: '当前账号因实例资源风控进入人工审核状态，请提交工单审核后恢复下单',
         // 节点错误
         HOST_NOT_FOUND: '宿主机不存在',
         HOST_OFFLINE: '宿主机离线',

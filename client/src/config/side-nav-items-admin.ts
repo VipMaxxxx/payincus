@@ -12,6 +12,7 @@ export const navMenuItems: MenuItem[] = [
   { name: 'admin-system-update', path: '/admin/system-update', icon: 'sparkles', label: 'nav.systemUpdate' },
   { name: 'admin-delivery', path: '/admin/delivery', icon: 'pulse', label: 'nav.delivery' },
   { name: 'admin-sla-alerts', path: '/admin/sla-alerts', icon: 'bell', label: 'nav.slaAlerts' },
+  { name: 'admin-resource-risk', path: '/admin/resource-risk', icon: 'pulse', label: 'nav.resourceRisk' },
   { name: 'admin-production-proof', path: '/admin/production-proof', icon: 'logs', label: 'nav.productionProof' },
   { name: 'admin-user-lifecycle', path: '/admin/user-lifecycle', icon: 'users', label: 'nav.userLifecycle' },
   { name: 'admin-tickets', path: '/admin/tickets', icon: 'ticket', label: 'nav.tickets' },

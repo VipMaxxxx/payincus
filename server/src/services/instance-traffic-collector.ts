@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma.js'
-import { getTrafficCounters } from '../lib/incus/incus-traffic.js'
+import { getTrafficCounters, type NetworkCounters } from '../lib/incus/incus-traffic.js'
 import { getIncusClientFromPool } from '../lib/incus/incus-pool.js'
 import type { IncusClient } from '../lib/incus/incus-client.js'
 import { acquireLock, extendLock, releaseLock, withLock } from '../lib/distributed-lock.js'
@@ -39,7 +39,7 @@ function getUserTrafficLockKey(userId: number): string {
 async function applyTrafficCounters(
   instanceId: number,
   userId: number,
-  counters: { rxBytes: bigint; txBytes: bigint }
+  counters: NetworkCounters
 ): Promise<{ totalDelta: bigint; currentUsage: bigint; skipped: boolean }> {
   const now = new Date()
   const normalizedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -49,7 +49,8 @@ async function applyTrafficCounters(
       where: { id: instanceId },
       select: {
         monthlyTrafficUsed: true,
-        status: true
+        status: true,
+        hostId: true
       }
     })
 
@@ -75,20 +76,69 @@ async function applyTrafficCounters(
     const txIncrement = latestSnapshot
       ? calculateIncrement(counters.txBytes, latestSnapshot.txRaw)
       : 0n
+    const rxPacketIncrement = latestSnapshot
+      ? calculateIncrement(counters.rxPackets, latestSnapshot.rxPacketsRaw)
+      : 0n
+    const txPacketIncrement = latestSnapshot
+      ? calculateIncrement(counters.txPackets, latestSnapshot.txPacketsRaw)
+      : 0n
     const totalDelta = rxIncrement + txIncrement
+    const totalPacketDelta = rxPacketIncrement + txPacketIncrement
+
+    const elapsedSeconds = latestSnapshot
+      ? Math.max(1, (counters.sampledAt.getTime() - latestSnapshot.updatedAt.getTime()) / 1000)
+      : 0
+    const cpuUsageDelta = latestSnapshot?.cpuUsageRaw !== null && latestSnapshot?.cpuUsageRaw !== undefined && counters.cpuUsageRaw !== null
+      ? calculateIncrement(counters.cpuUsageRaw, latestSnapshot.cpuUsageRaw)
+      : 0n
+    const cpuPercent = elapsedSeconds > 0 && cpuUsageDelta > 0n
+      ? Math.min(1000, Number(cpuUsageDelta) / (elapsedSeconds * 1_000_000_000) * 100)
+      : null
 
     await tx.trafficSnapshot.upsert({
       where: { instanceId },
       update: {
         rxRaw: counters.rxBytes,
-        txRaw: counters.txBytes
+        txRaw: counters.txBytes,
+        rxPacketsRaw: counters.rxPackets,
+        txPacketsRaw: counters.txPackets,
+        cpuUsageRaw: counters.cpuUsageRaw
       },
       create: {
         instanceId,
         rxRaw: counters.rxBytes,
-        txRaw: counters.txBytes
+        txRaw: counters.txBytes,
+        rxPacketsRaw: counters.rxPackets,
+        txPacketsRaw: counters.txPackets,
+        cpuUsageRaw: counters.cpuUsageRaw
       }
     })
+
+    if (latestSnapshot && elapsedSeconds > 0) {
+      const rxMbps = Number(rxIncrement) * 8 / elapsedSeconds / 1_000_000
+      const txMbps = Number(txIncrement) * 8 / elapsedSeconds / 1_000_000
+      const pps = Number(totalPacketDelta) / elapsedSeconds
+
+      await tx.instanceResourceSample.create({
+        data: {
+          instanceId,
+          userId,
+          hostId: instance.hostId,
+          sampledAt: counters.sampledAt,
+          rxBytesDelta: rxIncrement,
+          txBytesDelta: txIncrement,
+          totalBytesDelta: totalDelta,
+          rxPacketsDelta: rxPacketIncrement,
+          txPacketsDelta: txPacketIncrement,
+          totalPacketsDelta: totalPacketDelta,
+          rxMbps,
+          txMbps,
+          totalMbps: rxMbps + txMbps,
+          pps,
+          cpuPercent
+        }
+      })
+    }
 
     let currentUsage = instance.monthlyTrafficUsed
 

@@ -55,6 +55,7 @@ export const ErrorCode = {
     INSTANCE_NOT_SUSPENDED: 'INSTANCE_NOT_SUSPENDED',
     INSTANCE_SUSPENDED_EXPIRED: 'INSTANCE_SUSPENDED_EXPIRED',
     INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED: 'INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED',
+    ORDER_RESTRICTED_BY_RISK: 'ORDER_RESTRICTED_BY_RISK',
 
     // Host errors
     HOST_NOT_FOUND: 'HOST_NOT_FOUND',
@@ -400,6 +401,7 @@ export const ErrorMessages: Record<ErrorCodeType, string> = {
     [ErrorCode.INSTANCE_NOT_SUSPENDED]: 'Instance is not in suspended status',
     [ErrorCode.INSTANCE_SUSPENDED_EXPIRED]: 'Instance is suspended due to expiration, please renew to unsuspend',
     [ErrorCode.INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED]: 'Current monthly traffic cycle usage has reached the destroy limit',
+    [ErrorCode.ORDER_RESTRICTED_BY_RISK]: 'Account ordering is restricted by instance risk review',
 
     // Host errors
     [ErrorCode.HOST_NOT_FOUND]: 'Host not found',

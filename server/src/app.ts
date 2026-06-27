@@ -101,6 +101,7 @@ import oauthProviderRoutes from './routes/oauth-provider.js'
 import orderRoutes from './routes/orders.js'
 import userLifecycleRoutes from './routes/user-lifecycle.js'
 import giftCardsRoutes from './routes/gift-cards.js'
+import resourceRiskRoutes from './routes/resource-risk.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -525,6 +526,7 @@ await fastify.register(oauthProviderRoutes, { prefix: '/api/oauth-provider' })
 await fastify.register(orderRoutes)
 await fastify.register(userLifecycleRoutes)
 await fastify.register(giftCardsRoutes, { prefix: '/api/gift-cards' })
+await fastify.register(resourceRiskRoutes, { prefix: '/api' })
 
 const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
 
@@ -709,6 +711,10 @@ const start = async (): Promise<void> => {
     // 启动流量调度器
     const { startTrafficScheduler } = await import('./services/traffic-scheduler.js')
     startTrafficScheduler()
+
+    // 启动实例级资源风控调度器
+    const { startResourceRiskScheduler } = await import('./services/resource-risk.js')
+    startResourceRiskScheduler()
 
     // 启动自动快照/备份调度器
     const { startAutoPolicyScheduler } = await import('./services/auto-policy-scheduler.js')

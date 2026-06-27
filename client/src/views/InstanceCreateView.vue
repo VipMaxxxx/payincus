@@ -113,6 +113,8 @@ const plansLoading = ref<boolean>(false)
 const loading = ref<boolean>(true)
 const submitting = ref<boolean>(false)
 const error = ref<string>('')
+const orderRiskReviewAvailable = ref(false)
+const creatingRiskReviewTicket = ref(false)
 const instanceNameEditedByUser = ref<boolean>(false)
 
 // 表单数据
@@ -978,6 +980,7 @@ async function handleSubmit(): Promise<void> {
   if (!canSubmit.value) return
   
   error.value = ''
+  orderRiskReviewAvailable.value = false
   submitting.value = true
   
   try {
@@ -1013,8 +1016,23 @@ async function handleSubmit(): Promise<void> {
     router.push('/instances')
   } catch (err: any) {
     error.value = translateError(err)
+    orderRiskReviewAvailable.value = err?.code === 'ORDER_RESTRICTED_BY_RISK'
   } finally {
     submitting.value = false
+  }
+}
+
+async function createRiskReviewTicket(): Promise<void> {
+  if (creatingRiskReviewTicket.value) return
+  creatingRiskReviewTicket.value = true
+  try {
+    const response = await api.resourceRisk.createReviewTicket('实例创建被资源风控限制，申请人工审核解除下单限制。')
+    toast.success(`审核工单已创建：#${response.ticket.id}`)
+    router.push('/tickets')
+  } catch (err: any) {
+    toast.error(err?.message || '创建审核工单失败')
+  } finally {
+    creatingRiskReviewTicket.value = false
   }
 }
 </script>
@@ -1325,7 +1343,18 @@ async function handleSubmit(): Promise<void> {
             <div v-if="prerequisiteMissing" class="p-3 rounded-lg border" :class="themeStore.isDark ? 'bg-amber-900/20 border-amber-500/30' : 'bg-amber-50 border-amber-200'">
               <p class="text-sm font-medium" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-700'">{{ prerequisiteMessage }}</p>
             </div>
-            <div v-if="error" class="p-3 rounded-lg border text-sm" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30 text-red-400' : 'bg-red-50 border-red-200 text-red-700'">{{ error }}</div>
+            <div v-if="error" class="space-y-3 rounded-lg border p-3 text-sm" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30 text-red-400' : 'bg-red-50 border-red-200 text-red-700'">
+              <div>{{ error }}</div>
+              <button
+                v-if="orderRiskReviewAvailable"
+                type="button"
+                class="btn-primary"
+                :disabled="creatingRiskReviewTicket"
+                @click="createRiskReviewTicket"
+              >
+                {{ creatingRiskReviewTicket ? '创建审核工单中...' : '提交人工审核工单' }}
+              </button>
+            </div>
             <button type="submit" :disabled="!canSubmit" class="btn-primary w-full">{{ submitting ? $t('instance.createPage.creating') : $t('instance.create') }}</button>
           </div>
         </div><!-- end right col -->

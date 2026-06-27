@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Incudal 后端服务",
   "type": "module",
   "main": "dist/app.js",
@@ -64,6 +64,7 @@
     "test:geoip-guard": "node --import tsx scripts/test-geoip-guard.ts",
     "test:gift-card-guards": "node --import tsx scripts/test-gift-card-guards.ts",
     "test:gift-card-flow": "node --import tsx scripts/test-gift-card-flow.ts",
+    "test:resource-risk-guards": "node --import tsx scripts/test-resource-risk-guards.ts",
     "test:hosting-balance-guards": "node --import tsx scripts/test-hosting-balance-guards.ts",
     "test:host-notification-email-task-guards": "node --import tsx scripts/test-host-notification-email-task-guards.ts",
     "test:image-route-guards": "node --import tsx scripts/test-image-route-guards.ts",

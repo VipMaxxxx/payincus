@@ -13,6 +13,10 @@ import { generateVmNicMacs } from '../vm-network-identifiers.js'
 export interface NetworkCounters {
     rxBytes: bigint
     txBytes: bigint
+    rxPackets: bigint
+    txPackets: bigint
+    cpuUsageRaw: bigint | null
+    sampledAt: Date
 }
 
 /**
@@ -36,6 +40,9 @@ export interface InstanceStateNetwork {
 export interface InstanceTrafficState {
     status?: string
     network?: Record<string, InstanceStateNetwork>
+    cpu?: {
+        usage?: number | string
+    }
 }
 
 function normalizeMac(value: unknown): string | null {
@@ -92,6 +99,8 @@ function addCounters(
     if (!counters) return
     totals.rxBytes += counterToBigInt(counters.bytes_received)
     totals.txBytes += counterToBigInt(counters.bytes_sent)
+    totals.rxPackets += counterToBigInt(counters.packets_received)
+    totals.txPackets += counterToBigInt(counters.packets_sent)
 }
 
 /**
@@ -112,7 +121,14 @@ export function getTrafficCountersFromState(
 ): NetworkCounters {
     const billableVmMacs = getBillableVmMacs(instanceName)
 
-    const totals: NetworkCounters = { rxBytes: 0n, txBytes: 0n }
+    const totals: NetworkCounters = {
+        rxBytes: 0n,
+        txBytes: 0n,
+        rxPackets: 0n,
+        txPackets: 0n,
+        cpuUsageRaw: counterToBigInt(state.cpu?.usage) || null,
+        sampledAt: new Date()
+    }
     const fallbackInterfaces: Array<[string, InstanceStateNetwork]> = []
     let hasStrictBillableInterface = false
 

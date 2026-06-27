@@ -617,6 +617,10 @@ model User {
   usedInviteCodes      InviteCode[]          @relation("UsedInviteCodes")
   sshKeys              SshKey[]
   instances            Instance[]
+  resourceRiskStates   InstanceRiskState[] @relation("InstanceRiskStateUser")
+  resourceRiskEvents   InstanceRiskEvent[] @relation("InstanceRiskEventUser")
+  resourceRiskSamples  InstanceResourceSample[] @relation("InstanceResourceSampleUser")
+  orderRestrictions    UserOrderRestriction[] @relation("UserOrderRestrictionUser")
   notificationChannels NotificationChannel[]
   storageConfigs       StorageConfig[]
   oauthBindings        UserOAuthBinding[]
@@ -965,6 +969,9 @@ model Host {
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   instances    Instance[]
+  resourceRiskStates  InstanceRiskState[]
+  resourceRiskEvents  InstanceRiskEvent[]
+  resourceRiskSamples InstanceResourceSample[]
   ipAddresses  IpAddress[]
   allowedImages HostAllowedImage[]
   portMappings PortMapping[]
@@ -1358,6 +1365,10 @@ model Instance {
   snapshotPolicy  SnapshotPolicy?
   trafficSnapshot TrafficSnapshot?
   dailyTraffic    DailyTraffic[]
+  resourceRiskState InstanceRiskState?
+  resourceRiskEvents InstanceRiskEvent[]
+  resourceRiskSamples InstanceResourceSample[]
+  orderRestrictions UserOrderRestriction[] @relation("UserOrderRestrictionSourceInstance")
   transfers       InstanceTransfer[]
   ipAddresses     IpAddress[]
   ipv6Subnets     Ipv6Subnet[]
@@ -1844,6 +1855,9 @@ model TrafficSnapshot {
   instanceId Int      @unique @map("instance_id")
   rxRaw      BigInt   @map("rx_raw") // 上次采集的原始值
   txRaw      BigInt   @map("tx_raw")
+  rxPacketsRaw BigInt @default(0) @map("rx_packets_raw")
+  txPacketsRaw BigInt @default(0) @map("tx_packets_raw")
+  cpuUsageRaw  BigInt? @map("cpu_usage_raw")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
@@ -1864,6 +1878,145 @@ model DailyTraffic {
   @@unique([instanceId, date])
   @@index([instanceId, date])
   @@map("daily_traffic")
+}
+
+model ResourceRiskPolicy {
+  id                         Int      @id @default(autoincrement())
+  name                       String   @default("默认策略")
+  enabled                    Boolean  @default(true)
+  bandwidthWindowMinutes     Int      @default(60) @map("bandwidth_window_minutes")
+  bandwidthActiveMinutes     Int      @default(45) @map("bandwidth_active_minutes")
+  bandwidthThresholdMbps     Int      @default(100) @map("bandwidth_threshold_mbps")
+  cpuWindowMinutes           Int      @default(60) @map("cpu_window_minutes")
+  cpuActiveMinutes           Int      @default(45) @map("cpu_active_minutes")
+  cpuThresholdPercent        Int      @default(90) @map("cpu_threshold_percent")
+  ppsThreshold               Int      @default(20000) @map("pps_threshold")
+  packetSmallRatioThreshold  Int      @default(85) @map("packet_small_ratio_threshold")
+  qosTiers                   Json     @default("[{\"level\":1,\"bandwidthMbps\":50,\"score\":50},{\"level\":2,\"bandwidthMbps\":30,\"score\":65},{\"level\":3,\"bandwidthMbps\":10,\"score\":80}]") @map("qos_tiers")
+  scoreDecayPerHour          Int      @default(3) @map("score_decay_per_hour")
+  orderRestrictScore         Int      @default(70) @map("order_restrict_score")
+  autoSuspendScore           Int      @default(90) @map("auto_suspend_score")
+  autoSuspendEnabled         Boolean  @default(false) @map("auto_suspend_enabled")
+  accountOrderRestrictEnabled Boolean @default(true) @map("account_order_restrict_enabled")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled])
+  @@map("resource_risk_policies")
+}
+
+model InstanceRiskState {
+  id                    Int      @id @default(autoincrement())
+  instanceId            Int      @unique @map("instance_id")
+  userId                Int      @map("user_id")
+  hostId                Int      @map("host_id")
+  score                 Int      @default(0)
+  level                 String   @default("normal")
+  status                String   @default("normal")
+  qosLevel              Int      @default(0) @map("qos_level")
+  currentBandwidthLimit String?  @map("current_bandwidth_limit")
+  originalIngress       String?  @map("original_ingress")
+  originalEgress        String?  @map("original_egress")
+  cpuLimited            Boolean  @default(false) @map("cpu_limited")
+  lastEvaluatedAt       DateTime? @map("last_evaluated_at")
+  lastTriggeredAt       DateTime? @map("last_triggered_at")
+  lastRecoveredAt       DateTime? @map("last_recovered_at")
+  reason                String?
+  evidence              Json     @default("{}")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user     User     @relation("InstanceRiskStateUser", fields: [userId], references: [id], onDelete: Cascade)
+  host     Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([hostId, status])
+  @@index([score])
+  @@index([level])
+  @@map("instance_risk_states")
+}
+
+model InstanceResourceSample {
+  id              Int      @id @default(autoincrement())
+  instanceId      Int      @map("instance_id")
+  userId          Int      @map("user_id")
+  hostId          Int      @map("host_id")
+  sampledAt       DateTime @default(now()) @map("sampled_at")
+  rxBytesDelta    BigInt   @default(0) @map("rx_bytes_delta")
+  txBytesDelta    BigInt   @default(0) @map("tx_bytes_delta")
+  totalBytesDelta BigInt   @default(0) @map("total_bytes_delta")
+  rxPacketsDelta  BigInt   @default(0) @map("rx_packets_delta")
+  txPacketsDelta  BigInt   @default(0) @map("tx_packets_delta")
+  totalPacketsDelta BigInt @default(0) @map("total_packets_delta")
+  rxMbps          Decimal  @default(0) @map("rx_mbps") @db.Decimal(12, 2)
+  txMbps          Decimal  @default(0) @map("tx_mbps") @db.Decimal(12, 2)
+  totalMbps       Decimal  @default(0) @map("total_mbps") @db.Decimal(12, 2)
+  pps             Decimal  @default(0) @db.Decimal(12, 2)
+  cpuPercent      Decimal? @map("cpu_percent") @db.Decimal(8, 2)
+  source          String   @default("traffic_scheduler")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user     User     @relation("InstanceResourceSampleUser", fields: [userId], references: [id], onDelete: Cascade)
+  host     Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, sampledAt(sort: Desc)])
+  @@index([userId, sampledAt(sort: Desc)])
+  @@index([hostId, sampledAt(sort: Desc)])
+  @@map("instance_resource_samples")
+}
+
+model InstanceRiskEvent {
+  id             Int      @id @default(autoincrement())
+  instanceId     Int      @map("instance_id")
+  userId         Int      @map("user_id")
+  hostId         Int      @map("host_id")
+  type           String
+  severity       String
+  scoreDelta     Int      @default(0) @map("score_delta")
+  scoreAfter     Int      @default(0) @map("score_after")
+  actionTaken    String?  @map("action_taken")
+  message        String
+  evidence       Json     @default("{}")
+  ticketId       Int?     @map("ticket_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user     User     @relation("InstanceRiskEventUser", fields: [userId], references: [id], onDelete: Cascade)
+  host     Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([severity, createdAt(sort: Desc)])
+  @@map("instance_risk_events")
+}
+
+model UserOrderRestriction {
+  id                 Int      @id @default(autoincrement())
+  userId             Int      @map("user_id")
+  status             String   @default("active")
+  reason             String
+  sourceInstanceId   Int?     @map("source_instance_id")
+  sourceRiskEventId  Int?     @map("source_risk_event_id")
+  ticketId           Int?     @map("ticket_id")
+  restrictedCreate   Boolean  @default(true) @map("restricted_create")
+  restrictedPurchase Boolean  @default(true) @map("restricted_purchase")
+  restrictedRenew    Boolean  @default(false) @map("restricted_renew")
+  reviewRequired     Boolean  @default(true) @map("review_required")
+  releasedByUserId   Int?     @map("released_by_user_id")
+  releasedAt         DateTime? @map("released_at")
+  releaseReason      String?  @map("release_reason")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user           User      @relation("UserOrderRestrictionUser", fields: [userId], references: [id], onDelete: Cascade)
+  sourceInstance Instance? @relation("UserOrderRestrictionSourceInstance", fields: [sourceInstanceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([sourceInstanceId])
+  @@index([sourceRiskEventId])
+  @@map("user_order_restrictions")
 }
 
 // ==================== 远程存储配置模型 ====================
