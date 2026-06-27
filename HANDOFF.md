@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-8df3634 Fix instance plan upgrade capacity checks
+359501c Update version log for v0.8.8
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,26 +29,40 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-1ab2452 Update version log for v0.8.7
+359501c Update version log for v0.8.8
 ```
 
 ## Latest Production OTA Proof
 
-- Production version: `v0.8.7`
-- Release tag commit: `8df36349327b`
-- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.8.7-20260627054123`
-- OTA task: `91`, status `success`, completed at `2026-06-27T05:42:54Z`.
-- GitHub Actions: `Build & Release` for `v0.8.7` succeeded, `CI` on `main` succeeded, docs Pages deployment succeeded.
+- Production version: `v0.8.8`
+- Release tag commit: `359501c1294d`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.8.8-20260627070501`
+- OTA task: `92`, status `success`, completed at `2026-06-27T07:06:32Z`; backup path `/opt/incudal/releases/v0.8.7-20260627054123`.
+- GitHub Actions: `Build & Release` for `v0.8.8` succeeded, `CI` on `main` succeeded, docs Pages deployment succeeded.
 - Release assets verified: linux amd64/arm64 tarballs, sha256 files, OTA manifest, and marketplace assets.
 - Production checks passed during OTA: split host verification, `pnpm verify:production`, `pnpm verify:log-header`.
 - Independent checks after OTA:
   - `https://pay.payincus.com/api/health` returned HTTP 200.
-  - `https://admin.payincus.com/api/health` returned HTTP 200.
-  - `https://admin.payincus.com/api/admin/instances/1/available-plans` returned HTTP 401 without auth.
-  - `https://pay.payincus.com/api/instances/1/change-plan/preview?newPlanId=1` returned HTTP 401 without auth.
-  - Production server dist contains `reservePlanUpgradeCapacityWithLock`, `HOST_RESOURCES_INSUFFICIENT`, and the instance upgrade bandwidth restore call.
-  - Production user/admin assets contain the capacity warning text `实例所在节点资源不足`.
+  - Local backend health `http://127.0.0.1:3001/api/health` returned HTTP 200.
   - `systemctl is-active incudal-backend` returned `active`.
+  - `package.json` under `/opt/incudal/current` reports `0.8.8`.
+  - OTA log shows `System update completed successfully`.
+
+## Latest Independence / Docs Release Work
+
+`v0.8.8` rebuilt the public project identity and developer-facing release artifacts:
+
+- Default branch history was rebuilt as an independent PayIncus baseline and force-pushed to `payincus/main`; local mirror backup: `/Users/max/Documents/payincus-history-backup-20260627143322.git`.
+- Public README, docs site, deployment docs, extension center docs, theme docs, OAuth/Public API docs and release notes no longer reference the retired upstream project.
+- `LICENSE` and package metadata now use PayIncus/VipMaxxxx ownership language.
+- Public API TypeScript SDK and examples are tracked under `docs-site/docs/public/sdk`.
+- Official extension templates and the clean theme template now track their `dist` and `docs` artifacts explicitly despite global `dist/` and `docs/` ignore rules.
+- Release workflow wording is PayIncus-branded while keeping existing artifact names and `/opt/incudal` runtime paths for OTA compatibility.
+- Local validation before release: server type-check, docs-site build, old-reference scan, system update guard, Public API OpenAPI/resource/SDK guards, OAuth Provider guard, extension runtime/package/template/market guards, theme guard, frontend i18n guard, agent install command guard.
+
+Known follow-up:
+
+- `pnpm verify:production` still warns that public package `HKCMI` is active but online bound hosts cannot satisfy its minimum CPU/memory requirement. This is an existing capacity/business configuration warning, not a v0.8.8 deployment failure.
 
 ## Latest Instance Upgrade Work
 
