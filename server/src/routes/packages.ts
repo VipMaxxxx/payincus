@@ -22,6 +22,7 @@ const MAX_PACKAGE_PLAN_NAME_LENGTH = 50
 const PUBLIC_PACKAGE_MAX_INSTANCES_MIN = 1
 const PUBLIC_PACKAGE_MAX_INSTANCES_MAX = 5
 const MAX_PACKAGE_PLAN_PRICE_CENTS = 99999999
+const MAX_TRAFFIC_RESET_PRICE_CENTS = MAX_PACKAGE_PLAN_PRICE_CENTS
 const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
 const POSTGRES_INT_MAX = 2147483647
 const MAX_PACKAGE_PLAN_BILLING_CYCLE_MONTHS = 120
@@ -44,6 +45,7 @@ type NormalizedPackagePlanInput = {
   trafficLimit?: unknown
   trafficLimitSpeed?: unknown
   price?: number
+  trafficResetPrice?: number | null
   billingCycle?: number
   isActive?: boolean
   isSoldOut?: boolean
@@ -67,6 +69,7 @@ type NormalizedPackageInput = {
   nested?: boolean
   active?: boolean
   monthlyTrafficLimit?: string | null
+  trafficResetPrice?: number
   portLimit?: number
   snapshotLimit?: number
   backupLimit?: number
@@ -274,6 +277,25 @@ function optionalPlanBoolean(input: Record<string, unknown>, key: string, field:
   return value
 }
 
+function optionalMoneyCents(
+  input: Record<string, unknown>,
+  key: string,
+  field: string,
+  max: number,
+  options: { nullable?: boolean } = {}
+): number | null | undefined {
+  const value = input[key]
+  if (value === undefined) return undefined
+  if (value === null && options.nullable) return null
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须为整数分`)
+  }
+  if (value < 0 || value > max) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须在 0-${max} 分之间`)
+  }
+  return value
+}
+
 function normalizePackagePlanDescription(value: unknown): string | undefined {
   if (value === undefined) return undefined
   if (typeof value !== 'string') {
@@ -343,6 +365,7 @@ function normalizePackagePlanInput(input: unknown, options: {
     ? 0
     : optionalPlanInteger(input, 'swapSize', 'SWAP', 0, 1048576)
   normalized.price = optionalPlanInteger(input, 'price', '价格', 0, MAX_PACKAGE_PLAN_PRICE_CENTS)
+  normalized.trafficResetPrice = optionalMoneyCents(input, 'trafficResetPrice', '流量重置价格', MAX_TRAFFIC_RESET_PRICE_CENTS, { nullable: true })
   normalized.billingCycle = optionalPlanInteger(input, 'billingCycle', '计费周期', 1, MAX_PACKAGE_PLAN_BILLING_CYCLE_MONTHS)
   normalized.sortOrder = optionalPlanInteger(input, 'sortOrder', '排序值', -MAX_PACKAGE_PLAN_SORT_ORDER, MAX_PACKAGE_PLAN_SORT_ORDER)
   normalized.isActive = optionalPlanBoolean(input, 'isActive', 'isActive')
@@ -576,6 +599,7 @@ function normalizePackageInput(input: unknown, options: { requireAll: boolean })
   normalized.nested = optionalPackageBoolean(input, 'nested', 'nested')
   normalized.active = optionalPackageBoolean(input, 'active', 'active')
   normalized.monthlyTrafficLimit = optionalPackageNullableString(input, 'monthlyTrafficLimit', '月流量限制', 64)
+  normalized.trafficResetPrice = optionalMoneyCents(input, 'trafficResetPrice', '流量重置价格', MAX_TRAFFIC_RESET_PRICE_CENTS) as number | undefined
   normalized.portLimit = optionalPackageInteger(input, 'portLimit', '端口映射数', 1, POSTGRES_INT_MAX)
   normalized.snapshotLimit = optionalPackageInteger(input, 'snapshotLimit', '快照数', 0, POSTGRES_INT_MAX)
   normalized.backupLimit = optionalPackageInteger(input, 'backupLimit', '备份数', 0, POSTGRES_INT_MAX)
@@ -793,6 +817,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         memoryMax: true,
         diskMax: true,
         monthlyTrafficLimit: true,
+        trafficResetPrice: true,
         networkMode: true,
         instanceType: true,
         privileged: true,
@@ -893,6 +918,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         memory_max: pkg.memoryMax,
         disk_max: pkg.diskMax,
         monthly_traffic_limit: pkg.monthlyTrafficLimit?.toString() || null,
+        traffic_reset_price: Number(pkg.trafficResetPrice),
         network_mode: pkg.networkMode,
         instance_type: pkg.instanceType,
         host_ids: hostIds,
@@ -1577,6 +1603,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         nested: isOwn ? pkg.nested : 0,
         active: pkg.active,
         monthly_traffic_limit: pkg.monthly_traffic_limit,
+        traffic_reset_price: (pkg as any).traffic_reset_price ?? 0,
         port_limit: pkg.port_limit,
         snapshot_limit: pkg.snapshot_limit,
         backup_limit: pkg.backup_limit,
@@ -1647,6 +1674,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
           nested: { type: 'boolean' },
           active: { type: 'boolean' },
           monthlyTrafficLimit: { type: 'string' },
+          trafficResetPrice: { type: 'integer', minimum: 0, maximum: MAX_TRAFFIC_RESET_PRICE_CENTS },
           portLimit: { type: 'integer', minimum: 1 },
           snapshotLimit: { type: 'integer', minimum: 0 },
           backupLimit: { type: 'integer', minimum: 0 },
@@ -1688,6 +1716,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     const {
       name, description, cpuMax, memoryMax, diskMax, bandwidthMax, networkMode, instanceType, hostIds, privileged, nested, active,
       monthlyTrafficLimit, portLimit, snapshotLimit, backupLimit, siteLimit,
+      trafficResetPrice,
       ioLimitMode, limitsRead, limitsWrite, limitsReadIops, limitsWriteIops,
       limitsIngress, limitsEgress, limitsProcesses, limitsCpuPriority,
       bootAutostart, bootAutostartPriority, bootHostShutdownTimeout,
@@ -1760,6 +1789,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         backupLimit,
         siteLimit,
         monthlyTrafficLimit: trafficLimit,
+        trafficResetPrice,
         // 存储 I/O 限制
         ioLimitMode,
         limitsRead,
@@ -1836,6 +1866,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
           nested: { type: 'boolean' },
           active: { type: 'boolean' },
           monthlyTrafficLimit: { type: ['string', 'null'] },
+          trafficResetPrice: { type: 'integer', minimum: 0, maximum: MAX_TRAFFIC_RESET_PRICE_CENTS },
           portLimit: { type: 'integer', minimum: 1 },
           snapshotLimit: { type: 'integer', minimum: 0 },
           backupLimit: { type: 'integer', minimum: 0 },
@@ -1905,7 +1936,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
 
     // 处理流量限额和套餐资源限制
     const {
-      monthlyTrafficLimit, portLimit, snapshotLimit, backupLimit, siteLimit, hostIds, hostStoragePools, hostTrafficMultipliers,
+      monthlyTrafficLimit, trafficResetPrice, portLimit, snapshotLimit, backupLimit, siteLimit, hostIds, hostStoragePools, hostTrafficMultipliers,
       ioLimitMode, limitsRead, limitsWrite, limitsReadIops, limitsWriteIops,
       limitsIngress, limitsEgress, limitsProcesses, limitsCpuPriority,
       bootAutostart, bootAutostartPriority, bootAutostartDelay, bootHostShutdownTimeout,
@@ -1966,6 +1997,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       }
       updateData.monthlyTrafficLimit = parsedMonthlyTrafficLimit
     }
+    if (trafficResetPrice !== undefined) updateData.trafficResetPrice = trafficResetPrice
     if (portLimit !== undefined) updateData.portLimit = portLimit
     if (snapshotLimit !== undefined) updateData.snapshotLimit = snapshotLimit
     if (backupLimit !== undefined) updateData.backupLimit = backupLimit
@@ -2590,6 +2622,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         trafficLimit: plan.trafficLimit.toString(),
         trafficLimitSpeed: plan.trafficLimitSpeed,
         price: Number(plan.price),
+        trafficResetPrice: plan.trafficResetPrice === null ? null : Number(plan.trafficResetPrice),
         billingCycle: plan.billingCycle,
         setupFee: Number(plan.setupFee),
         monthlyPrice: db.calculateMonthlyPrice(plan),
@@ -2618,6 +2651,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       trafficLimit: string // BigInt 作为字符串传输
       trafficLimitSpeed?: string
       price: number
+      trafficResetPrice?: number | null
       billingCycle?: number
       setupFee?: number
       isActive?: boolean
@@ -2703,6 +2737,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         trafficLimit: parsedTrafficLimit,
         trafficLimitSpeed: normalizedTrafficLimitSpeed,
         price: planInput.price!,
+        trafficResetPrice: planInput.trafficResetPrice ?? null,
         billingCycle: planInput.billingCycle,
         setupFee: 0,  // 开通费固定为0
         isActive: planInput.isActive,
@@ -2746,6 +2781,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       trafficLimit?: string
       trafficLimitSpeed?: string
       price?: number
+      trafficResetPrice?: number | null
       billingCycle?: number
       setupFee?: number
       isActive?: boolean
@@ -2839,6 +2875,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
         updateData.trafficLimitSpeed = parsedTrafficLimitSpeed ?? '0'
       }
       if (planInput.price !== undefined) updateData.price = planInput.price
+      if (planInput.trafficResetPrice !== undefined) updateData.trafficResetPrice = planInput.trafficResetPrice
       if (planInput.billingCycle !== undefined) updateData.billingCycle = planInput.billingCycle
       // setupFee 已废弃，不再接受更新
       if (planInput.isActive !== undefined) updateData.isActive = planInput.isActive

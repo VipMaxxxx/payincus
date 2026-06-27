@@ -143,6 +143,7 @@ export interface Package {
   backup_limit: number      // 备份数上限
   site_limit: number        // 反代站点数上限
   monthly_traffic_limit: string | null  // BigInt as string
+  traffic_reset_price?: number // 用户自助重置月流量价格（分）
   // 存储 I/O 限制
   io_limit_mode: string     // "throughput" | "iops" - IO限制模式
   limits_read: string       // 磁盘读取吞吐限制

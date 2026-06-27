@@ -232,6 +232,7 @@ export async function getAllPackages(
     backup_limit: pkg.backupLimit,
     site_limit: pkg.siteLimit,
     monthly_traffic_limit: pkg.monthlyTrafficLimit?.toString() ?? null,
+    traffic_reset_price: Number(pkg.trafficResetPrice),
     // 存储 I/O 限制
     io_limit_mode: pkg.ioLimitMode,
     limits_read: pkg.limitsRead,
@@ -312,6 +313,7 @@ export async function getPackageById(id: number): Promise<(Package & { host_ids?
     backup_limit: pkg.backupLimit,
     site_limit: pkg.siteLimit,
     monthly_traffic_limit: pkg.monthlyTrafficLimit?.toString() ?? null,
+    traffic_reset_price: Number(pkg.trafficResetPrice),
     // 存储 I/O 限制
     io_limit_mode: pkg.ioLimitMode,
     limits_read: pkg.limitsRead,
@@ -473,6 +475,7 @@ export async function createPackage(data: {
   backupLimit?: number
   siteLimit?: number
   monthlyTrafficLimit?: bigint | null
+  trafficResetPrice?: number
   // 存储 I/O 限制
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string
@@ -542,6 +545,7 @@ async function createPackageUnchecked(data: {
   backupLimit?: number
   siteLimit?: number
   monthlyTrafficLimit?: bigint | null
+  trafficResetPrice?: number
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string
   limitsWrite?: string
@@ -603,6 +607,7 @@ async function createPackageUnchecked(data: {
       backupLimit: data.backupLimit ?? 3,
       siteLimit: data.siteLimit ?? 10,
       monthlyTrafficLimit: data.monthlyTrafficLimit ?? null,
+      trafficResetPrice: data.trafficResetPrice ?? 0,
       // 存储 I/O 限制 (使用默认值如果未提供)
       ioLimitMode: data.ioLimitMode ?? 'throughput',
       limitsRead: data.limitsRead ?? '100MB',
@@ -666,6 +671,7 @@ export async function updatePackage(id: number, data: {
   backupLimit?: number
   siteLimit?: number
   monthlyTrafficLimit?: bigint | null
+  trafficResetPrice?: number
   // 存储 I/O 限制
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string
@@ -743,6 +749,7 @@ async function updatePackageUnchecked(id: number, data: {
   backupLimit?: number
   siteLimit?: number
   monthlyTrafficLimit?: bigint | null
+  trafficResetPrice?: number
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string
   limitsWrite?: string
@@ -779,6 +786,7 @@ async function updatePackageUnchecked(id: number, data: {
     backupLimit?: number
     siteLimit?: number
     monthlyTrafficLimit?: bigint | null
+    trafficResetPrice?: number
     // 存储 I/O 限制
     ioLimitMode?: 'throughput' | 'iops'
     limitsRead?: string
@@ -822,6 +830,7 @@ async function updatePackageUnchecked(id: number, data: {
   if (data.backupLimit !== undefined) updateData.backupLimit = data.backupLimit
   if (data.siteLimit !== undefined) updateData.siteLimit = data.siteLimit
   if (data.monthlyTrafficLimit !== undefined) updateData.monthlyTrafficLimit = data.monthlyTrafficLimit
+  if (data.trafficResetPrice !== undefined) updateData.trafficResetPrice = data.trafficResetPrice
   // 存储 I/O 限制
   if (data.ioLimitMode !== undefined) updateData.ioLimitMode = data.ioLimitMode
   if (data.limitsRead !== undefined) updateData.limitsRead = data.limitsRead

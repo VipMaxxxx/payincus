@@ -94,6 +94,7 @@ export interface CreatePlanInput {
   trafficLimit: bigint
   trafficLimitSpeed?: string
   price: number
+  trafficResetPrice?: number | null
   billingCycle?: number
   setupFee?: number
   isActive?: boolean
@@ -121,6 +122,7 @@ export async function createPlan(input: CreatePlanInput): Promise<PackagePlan> {
     trafficLimit,
     trafficLimitSpeed = '1Mbit',
     price,
+    trafficResetPrice = null,
     billingCycle = 1,
     setupFee = 0,
     isActive = true,
@@ -145,6 +147,7 @@ export async function createPlan(input: CreatePlanInput): Promise<PackagePlan> {
       trafficLimit,
       trafficLimitSpeed,
       price,
+      trafficResetPrice,
       billingCycle,
       setupFee,
       isActive,
@@ -171,6 +174,7 @@ export interface UpdatePlanInput {
   trafficLimit?: bigint
   trafficLimitSpeed?: string
   price?: number
+  trafficResetPrice?: number | null
   billingCycle?: number
   setupFee?: number
   isActive?: boolean
@@ -381,6 +385,7 @@ export function getPlanResources(plan: PackagePlan) {
 export function getPlanBilling(plan: PackagePlan) {
   return {
     price: Number(plan.price),
+    trafficResetPrice: plan.trafficResetPrice === null ? null : Number(plan.trafficResetPrice),
     billingCycle: plan.billingCycle,
     setupFee: Number(plan.setupFee),
     monthlyPrice: calculateMonthlyPrice(plan)

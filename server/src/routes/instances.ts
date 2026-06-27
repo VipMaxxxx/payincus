@@ -809,6 +809,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           packageName?: string | null
           packagePlanId?: number | null
           billingPrice?: number | null
+          trafficResetPrice?: number
           monthlyTrafficLimit?: string | null
           monthlyTrafficUsed?: string
           allow_instance_deletion?: boolean
@@ -853,6 +854,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           packageName: instance.package_name || null,
           packagePlanId: instance.package_plan_id || null,
           billingPrice: instance.billing_price || null,
+          trafficResetPrice: Number((instance as any).traffic_reset_price || 0),
           monthlyTrafficLimit: instance.monthly_traffic_limit || null,
           monthlyTrafficUsed: instance.monthly_traffic_used || '0',
           allow_instance_deletion: instance.allow_instance_deletion,
@@ -2238,15 +2240,19 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     let planName: string | null = null
     let planPrice: number | null = null  // 方案原价（续费价格，元）
     let billingCycle: number | null = null
+    let trafficResetPrice: number = Number((pkg as any)?.traffic_reset_price ?? 0) / 100
     let affDiscountRate: number | null = null  // AFF优惠码折扣率
     let hasAffBinding = false
     let isHostedInstance = false
     if ((instance as any).package_plan_id) {
       const plan = await prisma.packagePlan.findUnique({
         where: { id: (instance as any).package_plan_id },
-        select: { name: true, price: true, billingCycle: true }
+        select: { name: true, price: true, billingCycle: true, trafficResetPrice: true }
       })
       planName = plan?.name ?? null
+      if (plan?.trafficResetPrice !== null && plan?.trafficResetPrice !== undefined) {
+        trafficResetPrice = Number(plan.trafficResetPrice) / 100
+      }
       if (plan?.price && plan?.billingCycle) {
         // 返回方案原价（分转元）
         planPrice = Number(plan.price) / 100
@@ -2329,6 +2335,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       planName?: string | null
       planPrice?: number | null  // 方案月价格
       billingPrice?: number | null  // 实例专属价格（管理员设置的价格，优先于方案价格）
+      trafficResetPrice?: number
       billingCycle?: number | null  // 计费周期（月）
       affDiscountRate?: number | null  // AFF优惠码折扣率
       hasAffBinding?: boolean  // 是否已绑定 AFF 优惠码
@@ -2416,6 +2423,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       planName: planName,
       planPrice: planPrice,
       billingPrice: (instance as any).billing_price ?? null,  // 实例专属价格
+      trafficResetPrice,
       billingCycle: billingCycle,
       affDiscountRate: affDiscountRate,
       hasAffBinding,

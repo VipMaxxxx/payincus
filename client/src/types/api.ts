@@ -1736,6 +1736,7 @@ export interface Instance {
   swapEnabled?: boolean
   swapSize?: number | null
   monthlyTrafficLimit?: string | null  // BigInt as string (Bytes)
+  trafficResetPrice?: number  // 元，实例实际自助重置价格
   limitsIngress?: string | null  // 入栈带宽限制
   limitsEgress?: string | null  // 出栈带宽限制
   planId?: number | null  // 方案ID（用于变更方案）
@@ -2266,6 +2267,7 @@ export interface Package {
   site_limit?: number | null
   node_selectors?: string | null
   monthly_traffic_limit?: string | null  // BigInt as string (Bytes)
+  traffic_reset_price?: number | null  // 分
   // 存储 I/O 限制
   io_limit_mode?: 'throughput' | 'iops'
   limits_read?: string
@@ -2346,6 +2348,7 @@ export interface CreatePackageRequest {
   siteLimit?: number
   nodeSelectors?: string[]
   monthlyTrafficLimit?: string  // BigInt as string (Bytes)
+  trafficResetPrice?: number    // 分
   // 存储 I/O 限制
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string
@@ -2393,6 +2396,7 @@ export interface UpdatePackageRequest {
   siteLimit?: number
   nodeSelectors?: string[]
   monthlyTrafficLimit?: string | null  // BigInt as string (Bytes), null to clear
+  trafficResetPrice?: number    // 分
   // 存储 I/O 限制
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string
@@ -3319,6 +3323,7 @@ export interface PackagePlan {
   name: string
   description: string | null
   price: number
+  trafficResetPrice?: number | null
   billingCycle: number // 账期（月）
   setupFee?: number    // 开通费（分）
   cpu: number

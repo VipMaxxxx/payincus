@@ -1996,6 +1996,7 @@ const api = {
         trafficLimit: string
         trafficLimitSpeed: string
         price: number
+        trafficResetPrice: number | null
         billingCycle: number
         setupFee: number
         monthlyPrice: number
@@ -2020,6 +2021,7 @@ const api = {
       trafficLimit: string
       trafficLimitSpeed?: string
       price: number
+      trafficResetPrice?: number | null
       billingCycle?: number
       setupFee?: number
       isActive?: boolean
@@ -2043,6 +2045,7 @@ const api = {
       trafficLimit?: string
       trafficLimitSpeed?: string
       price?: number
+      trafficResetPrice?: number | null
       billingCycle?: number
       setupFee?: number
       isActive?: boolean

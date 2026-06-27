@@ -21,6 +21,7 @@ function section(source: string, startPattern: string, endPattern: string): stri
 
 const repoRoot = resolve(new URL('../..', import.meta.url).pathname)
 const trafficDbSource = readFileSync(resolve(repoRoot, 'server/src/db/traffic.ts'), 'utf8')
+const trafficRoutesSource = readFileSync(resolve(repoRoot, 'server/src/routes/traffic.ts'), 'utf8')
 const collectorSource = readFileSync(resolve(repoRoot, 'server/src/services/instance-traffic-collector.ts'), 'utf8')
 const agentReportSource = readFileSync(resolve(repoRoot, 'server/src/services/agent-instance-report.ts'), 'utf8')
 
@@ -69,6 +70,28 @@ const resetOneInstance = section(
 assert(
   resetOneInstance.includes('await withLock(getTrafficInstanceLockKey(instanceId)'),
   'single-instance traffic reset must acquire the instance traffic lock'
+)
+
+const userResetRoute = section(
+  trafficRoutesSource,
+  "fastify.post<{\n        Params: { instanceId: string }\n    }>('/instances/:instanceId/traffic/reset'",
+  '    // ==================== 管理员操作'
+)
+assert(
+  userResetRoute.includes('resolveTrafficResetPriceCents(currentInstance)'),
+  'user self-service traffic reset must resolve package/plan traffic reset price'
+)
+assert(
+  userResetRoute.includes('USER_BALANCE_LOCK_NAMESPACE'),
+  'paid user self-service traffic reset must acquire the user balance lock'
+)
+assert(
+  userResetRoute.includes("type: 'consume'"),
+  'paid user self-service traffic reset must write a consume balance log'
+)
+assert(
+  userResetRoute.includes('monthlyTrafficUsed: 0n'),
+  'user self-service traffic reset must clear instance monthly traffic'
 )
 
 const resetHostInstances = section(

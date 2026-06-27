@@ -5,6 +5,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import * as trafficDb from '../db/traffic.js'
 import * as db from '../db/index.js'
+import { prisma } from '../db/prisma.js'
+import {
+    INSTANCE_TRAFFIC_RESET_LOCK_NAMESPACE,
+    USER_BALANCE_LOCK_NAMESPACE,
+    tryAdvisoryTransactionLock
+} from '../db/advisory-locks.js'
 import { formatBytes } from '../services/traffic-notifier.js'
 import {
     calculateInstanceTrafficStatus,
@@ -29,6 +35,21 @@ function parsePositiveId(value: string): number | null {
 
     const parsed = Number(value)
     return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function normalizeMoney(value: number): number {
+    return Number(value.toFixed(2))
+}
+
+function resolveTrafficResetPriceCents(instance: {
+    package?: { trafficResetPrice: unknown } | null
+    packagePlan?: { trafficResetPrice: unknown } | null
+}): number {
+    const planPrice = instance.packagePlan?.trafficResetPrice
+    if (planPrice !== null && planPrice !== undefined) {
+        return Math.max(0, Math.round(Number(planPrice) || 0))
+    }
+    return Math.max(0, Math.round(Number(instance.package?.trafficResetPrice) || 0))
 }
 
 /**
@@ -338,11 +359,110 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
             }
         }
 
-        await trafficDb.resetInstanceMonthlyTraffic(instanceId)
+        let price = 0
+        const shouldChargeOwner = isInstanceOwner && !isAdmin
+
+        if (shouldChargeOwner) {
+            try {
+                const result = await prisma.$transaction(async tx => {
+                    const resetLocked = await tryAdvisoryTransactionLock(tx, INSTANCE_TRAFFIC_RESET_LOCK_NAMESPACE, instanceId)
+                    if (!resetLocked) {
+                        throw new Error('流量重置正在处理，请稍后重试')
+                    }
+
+                    const currentInstance = await tx.instance.findUnique({
+                        where: { id: instanceId },
+                        select: {
+                            id: true,
+                            name: true,
+                            userId: true,
+                            status: true,
+                            package: { select: { trafficResetPrice: true } },
+                            packagePlan: { select: { trafficResetPrice: true } },
+                            user: { select: { balance: true } }
+                        }
+                    })
+
+                    if (!currentInstance || currentInstance.status === 'deleted') {
+                        throw new Error('Instance not found')
+                    }
+                    if (currentInstance.userId !== request.user.id) {
+                        throw new Error('Access denied')
+                    }
+
+                    const priceCents = resolveTrafficResetPriceCents(currentInstance)
+                    const priceYuan = normalizeMoney(priceCents / 100)
+
+                    if (priceYuan > 0) {
+                        const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, currentInstance.userId)
+                        if (!balanceLocked) {
+                            throw new Error('余额正在处理，请稍后重试')
+                        }
+
+                        const balanceBefore = Number(currentInstance.user.balance)
+                        const balanceAfter = normalizeMoney(balanceBefore - priceYuan)
+                        if (balanceAfter < 0) {
+                            throw new Error('余额不足')
+                        }
+
+                        const balanceUpdate = await tx.user.updateMany({
+                            where: {
+                                id: currentInstance.userId,
+                                balance: { gte: priceYuan }
+                            },
+                            data: { balance: { decrement: priceYuan } }
+                        })
+                        if (balanceUpdate.count === 0) {
+                            throw new Error('余额不足或并发冲突')
+                        }
+
+                        const updatedUser = await tx.user.findUnique({
+                            where: { id: currentInstance.userId },
+                            select: { balance: true }
+                        })
+                        if (!updatedUser) {
+                            throw new Error('用户不存在')
+                        }
+
+                        await tx.balanceLog.create({
+                            data: {
+                                userId: currentInstance.userId,
+                                type: 'consume',
+                                amount: -priceYuan,
+                                balanceBefore,
+                                balanceAfter: Number(updatedUser.balance),
+                                instanceId,
+                                remark: `重置实例 ${currentInstance.name} 月流量`
+                            }
+                        })
+                    }
+
+                    await tx.instance.updateMany({
+                        where: {
+                            id: instanceId,
+                            status: { not: 'deleted' }
+                        },
+                        data: {
+                            monthlyTrafficUsed: 0n,
+                            trafficStatus: 'NORMAL'
+                        }
+                    })
+
+                    return { price: priceYuan }
+                })
+                price = result.price
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                const statusCode = message.includes('余额不足') ? 400 : message.includes('正在处理') ? 409 : 400
+                return reply.code(statusCode).send({ error: message })
+            }
+        } else {
+            await trafficDb.resetInstanceMonthlyTraffic(instanceId)
+        }
         const { reconcileTrafficStateForInstanceIds } = await import('../services/traffic-scheduler.js')
         await reconcileTrafficStateForInstanceIds([instanceId])
 
-        return { success: true, message: 'Instance traffic reset completed', price: 0 }
+        return { success: true, message: 'Instance traffic reset completed', price }
     })
 
     // ==================== 管理员操作 ======================================

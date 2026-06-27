@@ -1197,6 +1197,7 @@ model Package {
   backupLimit         Int          @default(3) @map("backup_limit") // 备份数上限
   siteLimit           Int          @default(10) @map("site_limit") // 反代站点数上限
   monthlyTrafficLimit BigInt?      @map("monthly_traffic_limit") // 月流量限额 (Bytes)，null = 无限制
+  trafficResetPrice   Decimal      @default(0) @map("traffic_reset_price") @db.Decimal(10, 2) // 用户自助重置月流量价格（分）
 
   // 存储 I/O 限制
   ioLimitMode     String @default("throughput") @map("io_limit_mode") // "throughput" | "iops" - IO限制模式
@@ -3585,6 +3586,7 @@ model PackagePlan {
   price        Decimal @db.Decimal(10, 2)                             // 价格
   billingCycle Int     @default(1) @map("billing_cycle")              // 计费周期（月）
   setupFee     Decimal @default(0) @map("setup_fee") @db.Decimal(10, 2) // 开通费
+  trafficResetPrice Decimal? @map("traffic_reset_price") @db.Decimal(10, 2) // 用户自助重置月流量价格覆盖（分），null=继承套餐
 
   // ========== 状态与排序 ==========
   isActive  Boolean @default(true) @map("is_active") // 是否启用
