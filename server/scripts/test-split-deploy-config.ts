@@ -69,7 +69,8 @@ const originConfig = readRepoFile('server/src/lib/origin-config.ts')
 const prismaConfig = readRepoFile('server/prisma.config.ts')
 const verifyProductionDbReadiness = readRepoFile('server/src/scripts/verify-production-db-readiness.ts')
 const releaseWorkflow = readRepoFile('.github/workflows/release.yml')
-const splitAuthSmoke = readRepoFile('server/scripts/smoke-split-auth.ts')
+const splitAuthSmokeWrapper = readRepoFile('server/scripts/smoke-split-auth.ts')
+const splitAuthSmoke = readRepoFile('server/src/scripts/smoke-split-auth.ts')
 const agentReleaseSmoke = readRepoFile('server/scripts/smoke-agent-release.ts')
 const localNginxSplitSmoke = readRepoFile('scripts/smoke-local-nginx-split.sh')
 const serverApp = readRepoFile('server/src/app.ts')
@@ -214,7 +215,15 @@ assert.ok(
   rootPackage.includes('VITE_APP_ENTRY=admin VITE_CUSTOMER_BASE_URL=http://127.0.0.1:3000 VITE_DEV_PORT=3002'),
   'root dev scripts must point admin-generated customer links at the local user frontend'
 )
-assert.ok(serverPackage.includes('"smoke:split:auth": "node --import tsx scripts/smoke-split-auth.ts"'), 'server package must expose split auth smoke script')
+assert.ok(serverPackage.includes('"smoke:split:auth": "node dist/scripts/smoke-split-auth.js"'), 'server package must expose production-artifact split auth smoke script')
+assert.ok(splitAuthSmokeWrapper.trim() === "import '../src/scripts/smoke-split-auth.js'", 'legacy split auth smoke entrypoint must delegate to the compiled source smoke')
+assert.ok(
+  splitAuthSmoke.includes("import '../config/env.js'") &&
+    splitAuthSmoke.includes("from '../db/users.js'") &&
+    splitAuthSmoke.includes("from '../db/prisma.js'") &&
+    splitAuthSmoke.includes("from '../lib/security.js'"),
+  'split auth smoke must live under server/src/scripts so production artifacts compile it into dist/scripts without tsx'
+)
 assert.ok(splitAuthSmoke.includes('frontend proxied /api/health'), 'split auth smoke must verify frontend /api proxy')
 assert.ok(splitAuthSmoke.includes('/api/auth/refresh'), 'split auth smoke must verify refresh token cookie flow')
 assert.ok(splitAuthSmoke.includes('anonymous admin boundary'), 'split auth smoke must verify anonymous admin boundary')

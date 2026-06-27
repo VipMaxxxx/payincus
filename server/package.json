@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "PayIncus backend service",
   "type": "module",
   "main": "dist/app.js",
@@ -22,7 +22,7 @@
     "update:online:start": "node dist/scripts/start-system-update-task.js",
     "publish:plugin-market-index": "node --import tsx scripts/publish-plugin-market-index.ts",
     "publish:theme-market-index": "node --import tsx scripts/publish-theme-market-index.ts",
-    "smoke:split:auth": "node --import tsx scripts/smoke-split-auth.ts",
+    "smoke:split:auth": "node dist/scripts/smoke-split-auth.js",
     "smoke:recharge-callback": "node --import tsx scripts/smoke-recharge-callback.ts",
     "smoke:agent-heartbeat": "node --import tsx scripts/smoke-agent-heartbeat.ts",
     "smoke:agent-release": "node --import tsx scripts/smoke-agent-release.ts",
