@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `4a131d7`
+- 当前 HEAD / Current HEAD: `4f5bb5e`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Harden storage readiness and traffic reset
-- 最新 tag / Latest tag: `v0.8.1`
+- 提交说明 / Commit subject: Add package traffic reset pricing
+- 最新 tag / Latest tag: `v0.8.2`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.8.2
+
+- 发布提交 / Release commit: `4f5bb5e`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Add package traffic reset pricing
+
+### 新增能力 / New Capabilities
+
+- Add package traffic reset pricing `4f5bb5e`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.8.1 `4454778`
 
 ## v0.8.1
 
@@ -25,14 +39,11 @@
 
 ### 修复与稳定性 / Fixes and Stability
 
-- 宿主机没有 `instance_data` 系统盘存储池时，不再允许套餐上架、前台可购或实例创建继续通过，避免下单后异步创建失败。
-- 新实例、后台代开、宿主管理创建和迁移/重建路径不再隐式回退到未登记的 `default` 存储池。
-- 创建 ZFS/LVM/Btrfs 存储池时，Loop 文件模式会清理旧 `source` 路径；后端拒绝 `source` 与 `size` 同时提交，避免误读旧路径。
+- Harden storage readiness and traffic reset `4a131d7`
 
 ### 改进与调整 / Improvements and Adjustments
 
-- 用户实例列表新增自助重置流量入口，实例所有者可对自己的实例执行重置；管理员和宿主机所有者保留原管理重置能力。
-- OTA 版本提升到 `v0.8.1`，并按 10 进位规则继续维护版本号。
+- Update handoff after v0.6.19 OTA `89c4cad`
 
 ## v0.6.19
 
