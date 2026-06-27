@@ -6,16 +6,27 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `e9c266e`
+- Current HEAD / 当前 HEAD: `5c8668a`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Polish UI structure and docs for v0.6.17
-- Latest tag / 最新 tag: `v0.6.17`
+- Commit subject / 提交说明: Polish instance cards and creation naming
+- Latest tag / 最新 tag: `v0.6.18`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.6.18
+
+- Release commit / 发布提交: `5c8668a`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Polish instance cards and creation naming
+
+- 用户端实例卡片改为产品信息卡样式，集中展示地区、节点、套餐、配置、网络、流量、价格、到期时间和自动续费。
+- 实例卡片新增管理、PUSH、续费入口，并复用现有单实例续费/自动续费能力。
+- 创建实例时自动生成安全实例名称，支持手动覆盖和重新生成；后端 API 在 name 缺省时也会兜底生成。
+- 侧边栏分组标题增加翻译兜底，避免显示裸 key。
 
 ## v0.6.17
 

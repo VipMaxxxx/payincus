@@ -6,16 +6,27 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `e9c266e`
+- 当前 HEAD / Current HEAD: `5c8668a`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Polish UI structure and docs for v0.6.17
-- 最新 tag / Latest tag: `v0.6.17`
+- 提交说明 / Commit subject: Polish instance cards and creation naming
+- 最新 tag / Latest tag: `v0.6.18`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.18
+
+- 发布提交 / Release commit: `5c8668a`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Polish instance cards and creation naming
+
+- 用户端实例卡片改为产品信息卡样式，集中展示地区、节点、套餐、配置、网络、流量、价格、到期时间和自动续费。
+- 实例卡片新增管理、PUSH、续费入口，并复用现有单实例续费/自动续费能力。
+- 创建实例时自动生成安全实例名称，支持手动覆盖和重新生成；后端 API 在 name 缺省时也会兜底生成。
+- 侧边栏分组标题增加翻译兜底，避免显示裸 key。
 
 ## v0.6.17
 
