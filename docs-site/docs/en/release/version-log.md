@@ -6,19 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `1482aa9`
+- Current HEAD / 当前 HEAD: `3aad553`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Release v0.8.8
-- Latest tag / 最新 tag: `v0.8.7`
+- Commit subject / 提交说明: Release v0.8.9
+- Latest tag / 最新 tag: `v0.8.8`
 
 ## Unreleased Changes / 未发布变更
 
 ### Other Changes / 其他变更
 
-- Release v0.8.8 `1482aa9`
-- Establish PayIncus project baseline `66d286a`
+- Release v0.8.9 `3aad553`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.8.8 OTA `78dfa5e`
 
 ## Historical Versions / 历史版本
+
+## v0.8.8
+
+- Release commit / 发布提交: `359501c`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Update version log for v0.8.8
+
+PayIncus independent baseline release with rebuilt public docs, SDK examples, extension/theme templates, and clean public attribution.
 
 ## v0.8.7
 
