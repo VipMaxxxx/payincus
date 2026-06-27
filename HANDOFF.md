@@ -153,31 +153,32 @@ v0.9.9:
 
 Remaining before calling the whole commercial-operation objective complete:
 
-- Current `v0.9.9` production OTA is complete and verified. `v0.9.4` final-acceptance proof remains the latest full live proof report; `v0.9.9` was a public branding/guard patch and passed OTA production checks.
+- Current `v1.0.0` production OTA is complete and verified. `v0.9.4` final-acceptance proof remains the latest full live proof report; `v1.0.0` passed OTA production checks.
 - `DEBGP` production capacity warning was closed operationally on 2026-06-27 by setting package `#3` (`DEBGP`) `active=false`; package data and host binding were preserved for later re-enable after capacity is added.
-- `PAYMENT_CALLBACK_IP_WHITELIST` remains empty by operator decision. The local `1.0.0` candidate adds `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false` so production readiness records this as an explicit no-fixed-source-IP policy while keeping `PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false` and preserving signature/status/amount/idempotency requirements. This candidate is not tagged or OTA-applied yet.
-- The local `1.0.0` candidate hardens the host Agent against CPU/log pressure: default heartbeat 60s, minimum 30s, Incus state concurrency 3, 500-instance report cap, non-running instances skip `/state`, heartbeat log throttling, and generated `incudal-agent.service` CPU/memory/task/journal rate limits. Existing hosts must rerun the Agent installer after release to refresh old service templates.
+- `PAYMENT_CALLBACK_IP_WHITELIST` remains empty by operator decision. Production `.env` now sets `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false`, so production readiness records this as an explicit no-fixed-source-IP policy while keeping `PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false` and preserving signature/status/amount/idempotency requirements.
+- `v1.0.0` hardens the host Agent against CPU/log pressure: default heartbeat 60s, minimum 30s, Incus state concurrency 3, 500-instance report cap, non-running instances skip `/state`, heartbeat log throttling, and generated `incudal-agent.service` CPU/memory/task/journal rate limits. Existing hosts must rerun the Agent installer after release to refresh old service templates. Production `/opt/incudal/agent-release` now serves Agent manifest `v1.0.0`; already-installed Agents can self-upgrade their binary, but systemd CPU/memory/journal limits still require rerunning the installer because the binary upgrade does not rewrite the unit file.
 - With Turnstile enabled and no `SMOKE_TURNSTILE_TOKEN`, split auth smoke verifies Turnstile enforcement and skips the full login-chain smoke. Provide a valid Turnstile token if a full automated login-chain proof is required.
 - Keep watching the high-risk surfaces touched by `v0.9.0`: Integration Center health checks, manual recharge, refund/reconciliation workbench, extension capability review blocking, delivery/plan-upgrade sync repair, and split user/admin login boundaries.
 
 ## Latest Production OTA Proof
 
-- Production version: `v0.9.9`
-- Release tag commit: `e64ad2c`
-- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.9.9-20260627150556`
-- OTA task: `103`, status `success`; backup path `/opt/incudal/releases/v0.9.8-20260627143752`; log path `/opt/incudal/update-logs/system-update-103.log`.
-- GitHub Actions: `Build & Release` for `v0.9.9` succeeded, `CI` on `main` succeeded, and docs Pages deployment succeeded.
-- Production checks passed during OTA: split host verification, `pnpm verify:production`, `pnpm verify:log-header`.
+- Production version: `v1.0.0`
+- Release tag commit: `8d722fe`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.0.0-20260627155441`
+- OTA task: `104`, status `success`; backup path `/opt/incudal/releases/v0.9.9-20260627150556`; log path `/opt/incudal/update-logs/system-update-104.log`.
+- GitHub Release assets for `v1.0.0` are available, including linux amd64/arm64 tarballs, sha256 files, and `ota-manifest.json`.
+- Production checks passed during and after OTA: split host verification, `pnpm verify:production`, health checks for user/admin/backend APIs, Agent manifest check, and Agent binary sha256 download check.
 - Independent checks after OTA:
   - `https://pay.payincus.com/api/health` returned HTTP 200.
   - `https://admin.payincus.com/api/health` returned HTTP 200.
   - Local backend `http://127.0.0.1:3001/api/health` returned HTTP 200.
-  - `package.json` under `/opt/incudal/current` reports `0.9.9`.
+  - `package.json` under `/opt/incudal/current` reports `1.0.0`.
   - OTA log shows `System update completed successfully`.
-  - Task `103` database row is `success` with `errorMessage=null`.
-  - `pnpm verify:production` on production passes. After package `DEBGP` was paused, the remaining warnings are the empty `PAYMENT_CALLBACK_IP_WHITELIST` policy warnings until the local `1.0.0` candidate is released and production `.env` explicitly sets `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false`.
-  - Deployed scripts contain PayIncus branding markers for live acceptance, local env initialization, and atomic OTA migration. `install-panel.sh` remains a release/repository artifact and is not part of the current deployed scripts subset.
-  - Online docs `https://payincus.com/release/version-log` contains `v0.9.9`.
+  - Task `104` database row is `success` with `errorMessage=null`.
+  - `pnpm verify:production` on production passes and records the empty payment callback IP whitelist as an intentional policy because `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false` is set.
+  - Deployed Agent installer template contains systemd CPU, memory, task and journal rate-limit markers.
+  - `/api/agent/manifest.json` returns `v1.0.0`; `/api/agent/binary/incudal-agent-linux-amd64.gz?v=v1.0.0&sha256=<manifest sha>` downloads with the expected sha256.
+  - Online docs `https://payincus.com/release/version-log` contains `v1.0.0`.
   - Deployed admin bundle contains `resource-risk-evidence-panel` and generated CSS with `background-color:#fff;opacity:1`, plus dark-mode opaque surface/code backgrounds.
   - Public API `https://pay.payincus.com/api/packages/public` returns `HKCMI soldOut=false`; `DEBGP` is no longer returned after package `#3` was set `active=false`.
 

@@ -31,6 +31,8 @@ Update the Chinese and English deployment docs and environment examples to docum
 
 Harden the host Agent before the 1.0.0 release: default heartbeat interval is now 60 seconds with a 30-second minimum, Incus instance state collection is limited to running instances with lower concurrency and a 500-instance cap, heartbeat logs are throttled, and the generated `incudal-agent.service` now includes CPU, memory, task and journal rate limits. Update Agent installation docs and systemd docs so existing hosts know to rerun the Agent installer to refresh the service template.
 
+The Agent binary version is also advanced to `v1.0.0` so the panel manifest can advertise the hardened Agent build to existing hosts. Binary self-upgrade updates the Agent executable; rerun the Agent installer on each host to rewrite the systemd unit with CPU, memory, task and journal limits.
+
 ## v0.9.9
 
 - Release commit / 发布提交: `e64ad2c`
