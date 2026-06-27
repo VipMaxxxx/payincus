@@ -6,16 +6,26 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `031d93c`
+- 最新发布提交 / Latest Release Commit: `6fb574b`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Release v0.9.6
-- 最新 tag / Latest tag: `v0.9.6`
+- 提交说明 / Commit subject: Release v0.9.7
+- 最新 tag / Latest tag: `v0.9.7`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.9.7
+
+- 发布提交 / Release commit: `6fb574b`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Release v0.9.7
+
+Fix the admin resource-risk evidence drawer so it renders above the admin chrome with solid light and dark backgrounds.
+
+Keep evidence snapshot cards, tables, and JSON blocks readable instead of inheriting transparent themed surfaces.
 
 ## v0.9.6
 
