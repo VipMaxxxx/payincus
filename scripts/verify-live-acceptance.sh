@@ -151,7 +151,7 @@ REPORT_FRONTEND_URL="${FRONTEND_URL_VALUE:-<missing>}"
 if [[ -n "$LIVE_ACCEPTANCE_REPORT" ]]; then
   mkdir -p "$(dirname "$LIVE_ACCEPTANCE_REPORT")"
   cat > "$LIVE_ACCEPTANCE_REPORT" <<REPORT
-# Incudal Live Acceptance Report
+# PayIncus Live Acceptance Report
 
 - generated_at: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
 - frontend_url: ${REPORT_FRONTEND_URL}

@@ -58,6 +58,7 @@ const nginxExample = readRepoFile('deploy/nginx-split-intranet.conf.example')
 const backendServiceExample = readRepoFile('deploy/incudal-backend.service.example')
 const installPanel = readRepoFile('scripts/install-panel.sh')
 const initEnv = readRepoFile('scripts/init-env.sh')
+const migrateAtomicLayout = readRepoFile('scripts/migrate-ota-atomic-layout.sh')
 const verifySplitHost = readRepoFile('scripts/verify-split-host.sh')
 const verifyProductionReadiness = readRepoFile('scripts/verify-production-readiness.sh')
 const verifyLogHeaderExposure = readRepoFile('scripts/verify-log-header-exposure.sh')
@@ -417,6 +418,19 @@ assert.ok(
     readme.includes('LIVE_PAYMENT_PROOF_REF') &&
     readme.includes('LIVE_LOG_HEADER_PROOF_REF'),
   'README must document production readiness verification, config-only mode, live acceptance wrapper, and live proof references'
+)
+assert.ok(
+  installPanel.includes('PayIncus 面板一键部署脚本') &&
+    installPanel.includes('PayIncus 容器虚拟化管理平台') &&
+    installPanel.includes('PayIncus 面板部署成功') &&
+    installPanel.includes('/CN=incudal-panel/O=PayIncus') &&
+    !installPanel.includes('Incudal 面板一键部署脚本') &&
+    !installPanel.includes('Description=Incudal 容器虚拟化管理平台') &&
+    initEnv.includes('PayIncus 本地 .env 初始化脚本') &&
+    migrateAtomicLayout.includes('Description=PayIncus backend API') &&
+    verifyLiveAcceptance.includes('# PayIncus Live Acceptance Report') &&
+    !verifyLiveAcceptance.includes('# Incudal Live Acceptance Report'),
+  'public installer, migration service templates, init-env, and live acceptance report must use PayIncus branding while preserving incudal runtime paths'
 )
 assert.ok(
   serverEnvConfig.includes("process.env.ENV_FILE ? resolve(process.env.ENV_FILE) : ''") &&
