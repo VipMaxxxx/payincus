@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-51e2df0 Harden OTA Prisma client generation
+20f9209 Add manual resource risk controls
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,25 +29,26 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-55a1280 Update version log for v0.8.5
+83c25e6 Update version log for v0.8.6
 ```
 
 ## Latest Production OTA Proof
 
-- Production version: `v0.8.5`
-- Release tag commit: `51e2df00fb0e`
-- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.8.5-20260627043444`
-- OTA task: `89`, status `success`, backup path `/opt/incudal/releases/v0.8.4-20260627042200`
-- GitHub Actions: `Build & Release` for `v0.8.5` succeeded, `CI` on `main` succeeded, docs Pages deployment succeeded.
+- Production version: `v0.8.6`
+- Release tag commit: `20f9209aff5e`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.8.6-20260627050001`
+- OTA task: `90`, status `success`, completed at `2026-06-27T05:01:33Z`.
+- GitHub Actions: `Build & Release` for `v0.8.6` succeeded, `CI` on `main` succeeded, docs Pages deployment succeeded.
 - Release assets verified: linux amd64/arm64 tarballs, sha256 files, OTA manifest, and marketplace assets.
 - Production checks passed during OTA: split host verification, `pnpm verify:production`, `pnpm verify:log-header`.
 - Independent checks after OTA:
   - `https://pay.payincus.com/api/health` returned HTTP 200.
   - `https://admin.payincus.com/api/health` returned HTTP 200.
-  - `https://admin.payincus.com/admin/resource-risk` returned HTTP 200.
   - `https://admin.payincus.com/api/admin/resource-risk/overview` returned HTTP 401 without auth.
-  - Resource risk policy fields are readable through production Prisma Client: `orderRestrictScore=70`, `autoSuspendScore=90`, `autoSuspendEnabled=false`, `accountOrderRestrictEnabled=true`.
-  - Resource risk collector is writing production samples; sample count reached 100 during verification.
+  - `POST https://admin.payincus.com/api/admin/resource-risk/instances/1/manual-suspend` returned HTTP 401 without auth.
+  - Production assets contain the structured QoS tier editor text `新增档位` and the manual risk action API wiring.
+  - The old textarea helper text `每行：档位,带宽Mbps,触发分数` is absent from production admin assets.
+  - `systemctl is-active incudal-backend` returned `active`.
 
 ## Latest Resource Risk Work
 
@@ -64,6 +65,14 @@ Latest tracked repository commit at the time of this refresh:
 
 - The OTA runner now explicitly runs `pnpm --filter server exec prisma generate` after `prisma migrate deploy` in artifact atomic, artifact legacy, and git fallback update paths.
 - `server/scripts/test-resource-risk-guards.ts` now checks the key risk policy fields and auto-suspend/order-restrict service wiring.
+
+`v0.8.6` added manual resource risk controls:
+
+- Resource risk policy QoS tiers now use structured numeric rows instead of a CSV textarea; each row has level, bandwidth Mbps, and trigger score.
+- Admins can manually limit a risky instance's bandwidth and optionally restrict the linked account from new orders.
+- Admins can manually suspend or unsuspend an instance from the resource risk center; manual suspension writes risk events, updates the instance state, and can notify the user.
+- Admins can manually restrict the linked account from ordering when a specific instance needs ticket review.
+- Backend validation rejects invalid QoS tiers, invalid scores, missing manual reasons, and invalid manual bandwidth values.
 
 Recently updated/released files include:
 
