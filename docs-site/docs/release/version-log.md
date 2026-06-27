@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `e67fc89`
+- 当前 HEAD / Current HEAD: `d1290ac`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Handle Turnstile in split auth smoke
-- 最新 tag / Latest tag: `v0.9.2`
+- 提交说明 / Commit subject: Guard OTA workers against duplicate starts
+- 最新 tag / Latest tag: `v0.9.3`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.9.3
+
+- 发布提交 / Release commit: `d1290ac`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Guard OTA workers against duplicate starts
+
+### 其他变更 / Other Changes
+
+- Guard OTA workers against duplicate starts `d1290ac`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.9.2 `6bb06ee`
 
 ## v0.9.2
 
