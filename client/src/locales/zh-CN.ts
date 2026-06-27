@@ -1047,6 +1047,8 @@ export default {
             description: '选择套餐并配置您的容器实例',
             instanceName: '实例名称',
             instanceNamePlaceholder: 'my-instance',
+            regenerateName: '重新生成',
+            autoNameHint: '系统会按地区、用户和时间自动生成实例名称，您也可以手动修改。',
             selectPackage: '请选择套餐',
             selectSshKey: '请选择 SSH 密钥',
             creating: '创建中...',
@@ -1188,6 +1190,19 @@ export default {
             suspended: '实例已被封停，无法销毁，请先联系管理员解封',
             destroyTrafficLimit: '当前月流量周期无法销毁，已用流量达到或超过 5G',
             destroyFailed: '销毁实例失败',
+        },
+        card: {
+            region: '地区',
+            network: '网络',
+            bandwidth: '带宽',
+            traffic: '流量',
+            perMonth: '/月',
+            trafficReset: '重置流量',
+            price: '价格',
+            autoRenew: '自动续费',
+            manage: '管理',
+            push: 'PUSH',
+            renew: '续费',
         },
         // 移动端卡片
         mobileCard: {

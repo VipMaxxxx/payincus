@@ -569,37 +569,6 @@ function getIps(instance: Instance): Array<{ip: string, type: 'ipv4' | 'ipv6'}> 
   return ips
 }
 
-function getInstanceNetworkMode(instance: Instance): string {
-  return String((instance as any).networkMode || instance.network_mode || 'nat')
-}
-
-function getInstanceNetworkModeClass(instance: Instance): string {
-  switch (getInstanceNetworkMode(instance)) {
-    case 'nat':
-      return themeStore.isDark ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-700'
-    case 'nat_ipv6':
-      return themeStore.isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
-    case 'nat_ipv6_nat':
-      return themeStore.isDark ? 'bg-cyan-900/50 text-cyan-400' : 'bg-cyan-100 text-cyan-600'
-    case 'ipv6_only':
-      return themeStore.isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
-    case 'ipv6_nat':
-      return themeStore.isDark ? 'bg-teal-900/50 text-teal-400' : 'bg-teal-100 text-teal-600'
-    default:
-      return themeStore.isDark ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-700'
-  }
-}
-
-function getInstanceTypeBadgeClass(instance: Instance): string {
-  return (instance as any).instanceType === 'vm'
-    ? (themeStore.isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600')
-    : (themeStore.isDark ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-600')
-}
-
-function getInstanceTypeDisplayLabel(instance: Instance): string {
-  return (instance as any).instanceType === 'vm' ? t('common.instanceType.vm') : t('common.instanceType.container')
-}
-
 function getInstanceHostName(instance: Instance): string {
   return (instance as any).host?.name || (instance as any).host || '-'
 }
@@ -608,16 +577,85 @@ function getInstancePackageName(instance: Instance): string | null {
   return (instance as any).packageName || (instance as any).package?.name || null
 }
 
-function getCardActionButtonClass(variant: 'default' | 'danger' = 'default'): string {
-  if (variant === 'danger') {
-    return themeStore.isDark
-      ? 'border-red-500/20 bg-red-500/5 text-red-300 hover:border-red-500/35 hover:bg-red-500/10'
-      : 'border-red-200 bg-red-50/70 text-red-600 hover:border-red-300 hover:bg-red-100'
-  }
+function getInstancePlanName(instance: Instance): string {
+  return getInstancePackageName(instance) || instance.planName || t('instance.freeInstanceLabel')
+}
 
-  return themeStore.isDark
-    ? 'border-gray-800 bg-gray-900/60 text-gray-300 hover:border-gray-700 hover:bg-gray-900'
-    : 'border-gray-200 bg-gray-50/80 text-gray-600 hover:border-gray-300 hover:bg-gray-100'
+function getInstanceRegionCode(instance: Instance): string {
+  return String((instance as any).host?.country_code || (instance as any).hostCountryCode || 'us').toLowerCase()
+}
+
+function getInstanceRegionLabel(instance: Instance): string {
+  return getCountryLabel(getInstanceRegionCode(instance))
+}
+
+function getPrimaryIp(instance: Instance): string {
+  return getIps(instance)[0]?.ip || '-'
+}
+
+function getInstanceConfigSummary(instance: Instance): string {
+  return `${instance.cpu}${t('instance.mobileCard.cpuCore')} ${formatMemory(instance.memory)} ${formatDisk(instance.disk)}`
+}
+
+function formatNetworkRate(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null
+  const raw = String(value)
+  return /^\d+(\.\d+)?$/.test(raw) ? `${raw}M` : raw
+}
+
+function getInstanceBandwidthSummary(instance: Instance): string {
+  const ingress = formatNetworkRate(instance.limitsIngress || (instance as any).limits_ingress)
+  const egress = formatNetworkRate(instance.limitsEgress || (instance as any).limits_egress)
+  if (ingress && egress && ingress === egress) return ingress
+  return [ingress, egress].filter(Boolean).join(' / ') || '-'
+}
+
+function getInstanceTrafficLimitLabel(instance: Instance): string {
+  const limit = (instance as any).monthlyTrafficLimit
+  return limit ? formatBytes(Number(limit)) : t('instance.mobileCard.unlimited')
+}
+
+function getInstanceNetworkSummary(instance: Instance): string {
+  return `${t('instance.card.bandwidth')} ${getInstanceBandwidthSummary(instance)} ${t('instance.card.traffic')} ${getInstanceTrafficLimitLabel(instance)}${t('instance.card.perMonth')}`
+}
+
+function getInstanceTrafficUsage(instance: Instance): string {
+  const used = formatBytes(Number((instance as any).monthlyTrafficUsed || 0))
+  return `${used} / ${getInstanceTrafficLimitLabel(instance)}`
+}
+
+function getInstanceResetTrafficPrice(instance: Instance): string {
+  const value = Number((instance as any).trafficResetPrice ?? (instance as any).resetTrafficPrice ?? 0)
+  return value > 0 ? formatCurrency(value) : '-'
+}
+
+function getInstanceMonthlyPrice(instance: Instance): string {
+  const price = Number(instance.billingPrice ?? instance.planPrice ?? 0)
+  if (price <= 0) return '-'
+  return `${formatCurrency(price)}${t('instance.card.perMonth')}`
+}
+
+function canUseInstanceBillingAction(instance: Instance): boolean {
+  return canUseCustomerBillingActions.value && !!instance.packagePlanId
+}
+
+function getInstanceStatusTextClass(instance: Instance): string {
+  switch (instance.status?.toLowerCase()) {
+    case 'running':
+      return 'text-green-600'
+    case 'stopped':
+      return themeStore.isDark ? 'text-gray-400' : 'text-gray-600'
+    case 'suspended':
+    case 'error':
+      return 'text-red-600'
+    case 'creating':
+    case 'starting':
+    case 'stopping':
+    case 'restarting':
+      return 'text-yellow-600'
+    default:
+      return themeStore.isDark ? 'text-gray-400' : 'text-gray-600'
+  }
 }
 
 // 从镜像名称提取发行版标识（用于 DistroIcon 组件）
@@ -1050,6 +1088,45 @@ async function handleBatchAutoRenew(autoRenew: boolean): Promise<void> {
   } finally {
     batchActionLoading.value = ''
   }
+}
+
+async function handleSingleAutoRenew(instance: Instance, autoRenew: boolean): Promise<void> {
+  if (!canUseInstanceBillingAction(instance) || !!actionLoading.value[instance.id]) return
+
+  actionLoading.value = {
+    ...actionLoading.value,
+    [instance.id]: autoRenew ? 'autoRenewOn' : 'autoRenewOff'
+  }
+
+  try {
+    const result = await customerBillingApi.billing.setAutoRenewBatch([instance.id], autoRenew)
+    if (result.failedCount > 0) {
+      toast.warning(t('instance.batch.partialResult', {
+        success: result.successCount,
+        failed: result.failedCount,
+        skipped: result.skippedCount
+      }))
+    } else {
+      toast.success(t(autoRenew ? 'billing.autoRenewEnabled' : 'billing.autoRenewDisabled'))
+    }
+    await loadInstances(true)
+  } catch (error: any) {
+    toast.error(t('instance.batch.actionFailed') + ': ' + translateError(error))
+  } finally {
+    const next = { ...actionLoading.value }
+    delete next[instance.id]
+    actionLoading.value = next
+  }
+}
+
+async function openSingleRenewModal(instance: Instance): Promise<void> {
+  if (!canUseInstanceBillingAction(instance)) return
+  selectedIds.value = new Set([instance.id])
+  await openBatchRenewModal()
+}
+
+function openInstanceTransfer(instance: Instance): void {
+  void router.push({ path: '/transfers', query: { instanceId: String(instance.id) } })
 }
 
 async function openBatchRenewModal(): Promise<void> {
@@ -1984,287 +2061,165 @@ async function confirmBatchDestroy(): Promise<void> {
         <TransitionGroup
           name="instance-card-order"
           tag="div"
-          class="hidden sm:grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3"
+          class="hidden sm:grid grid-cols-1 gap-4 2xl:grid-cols-2"
         >
           <article
             v-for="instance in instances"
             :key="instance.id"
-            class="group relative overflow-hidden rounded-2xl border transition-colors duration-200"
+            class="group relative max-w-[640px] rounded-lg border p-4 shadow-sm transition-colors duration-200"
             :class="[
               instance.status?.toLowerCase() === 'creating' ? 'creating-card' : '',
               recentlyOrderedInstanceId === instance.id ? (themeStore.isDark ? 'is-order-feedback-dark' : 'is-order-feedback-light') : '',
               selectedIds.has(instance.id) ? (themeStore.isDark ? 'ring-1 ring-blue-500/40' : 'ring-1 ring-blue-500/30') : '',
               themeStore.isDark
                 ? 'border-gray-800 bg-gray-950 hover:border-gray-700'
-                : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                : 'border-gray-200 bg-white hover:border-gray-300'
             ]"
           >
-            <div class="flex h-full flex-col p-3.5">
-              <div class="flex items-start gap-2.5">
+            <div class="flex items-start justify-between gap-4">
+              <button type="button" class="min-w-0 flex-1 text-left" @click="openInstanceDetail(instance.id)">
+                <h2
+                  class="truncate text-[22px] font-bold leading-7"
+                  :class="themeStore.isDark ? 'text-gray-50' : 'text-gray-950'"
+                  :title="instance.name"
+                >
+                  {{ instance.name }}
+                </h2>
+                <div class="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+                  <span :class="['inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium', getStatusInfo(instance.status, t).class]">
+                    {{ getStatusInfo(instance.status, t).label }}
+                  </span>
+                  <span class="inline-flex min-w-0 items-center gap-1.5 text-sm" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'">
+                    <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span class="truncate font-mono">{{ getPrimaryIp(instance) }}</span>
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors"
+                :class="selectedIds.has(instance.id)
+                  ? 'border-blue-500 bg-blue-500 text-white'
+                  : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-transparent hover:border-gray-600' : 'border-gray-300 bg-white text-transparent hover:border-gray-400')"
+                :aria-pressed="selectedIds.has(instance.id)"
+                @click.stop="toggleSelect(instance.id)"
+              >
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+            </div>
+
+            <dl class="mt-3 grid grid-cols-[112px_minmax(0,1fr)] gap-y-1.5 text-[14px] leading-6">
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.region') }}</dt>
+              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+                <FlagIcon :code="getInstanceRegionCode(instance)" size="xs" class="mr-1 inline-flex align-[-1px]" />
+                {{ getInstanceRegionLabel(instance) }}
+              </dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.host') }}</dt>
+              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceHostName(instance) }}</dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.package') }}</dt>
+              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'" :title="getInstancePlanName(instance)">
+                {{ getInstancePlanName(instance) }}
+              </dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.config') }}</dt>
+              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceConfigSummary(instance) }}</dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.network') }}</dt>
+              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'" :title="getInstanceNetworkSummary(instance)">
+                {{ getInstanceNetworkSummary(instance) }}
+              </dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.trafficLabel') }}</dt>
+              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceTrafficUsage(instance) }}</dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.trafficReset') }}</dt>
+              <dd class="min-w-0 truncate text-orange-500">{{ getInstanceResetTrafficPrice(instance) }}</dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.price') }}</dt>
+              <dd class="min-w-0 truncate text-orange-500">{{ getInstanceMonthlyPrice(instance) }}</dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.expireAt') }}</dt>
+              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+                {{ getInstanceExpiryInfo(instance).dateText || '-' }}
+              </dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">
+                <span class="inline-flex items-center gap-1">
+                  {{ $t('instance.card.autoRenew') }}
+                  <svg class="h-3.5 w-3.5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                  </svg>
+                </span>
+              </dt>
+              <dd>
                 <button
                   type="button"
-                  class="group/avatar relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border transition-all duration-150"
-                  :class="themeStore.isDark
-                    ? 'border-gray-800 bg-gray-900 hover:border-gray-700'
-                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'"
-                  :aria-pressed="selectedIds.has(instance.id)"
-                  @click.stop="toggleSelect(instance.id)"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  :class="(instance as any).autoRenew
+                    ? 'bg-blue-600'
+                    : (themeStore.isDark ? 'bg-gray-700' : 'bg-gray-300')"
+                  :disabled="!canUseInstanceBillingAction(instance) || !!actionLoading[instance.id]"
+                  :aria-pressed="!!(instance as any).autoRenew"
+                  @click.stop="handleSingleAutoRenew(instance, !(instance as any).autoRenew)"
                 >
                   <span
-                    class="absolute inset-0 flex items-center justify-center transition-opacity duration-150"
-                    :class="selectedIds.has(instance.id) ? 'opacity-0' : 'opacity-100 group-hover/avatar:opacity-0'"
-                  >
-                    <InstanceDisplayIcon
-                      v-if="instance.iconBadgeId || getPaidIconType(instance)"
-                      :badge-id="instance.iconBadgeId"
-                      :fallback-icon="getPaidIconType(instance)"
-                      :alt="instance.name"
-                      :size="40"
-                    />
-                    <DistroIcon
-                      v-else
-                      :distro="getDistroFromName(instance.image)"
-                      :size="34"
-                    />
-                  </span>
-                  <span
-                    class="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150"
-                    :class="selectedIds.has(instance.id) ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100'"
-                  >
-                    <span
-                      class="flex h-5 w-5 items-center justify-center rounded-md border shadow-sm"
-                      :class="selectedIds.has(instance.id)
-                        ? 'border-blue-500 bg-blue-500 text-white'
-                        : (themeStore.isDark ? 'border-gray-600 bg-gray-950 text-transparent' : 'border-gray-300 bg-white text-transparent')"
-                    >
-                      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </span>
-                  </span>
+                    class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform"
+                    :class="(instance as any).autoRenew ? 'translate-x-5' : 'translate-x-0.5'"
+                  ></span>
                 </button>
+              </dd>
+            </dl>
 
-                <div class="min-w-0 flex-1 cursor-pointer" @click="openInstanceDetail(instance.id)">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <div
-                        class="truncate text-[14px] font-semibold leading-5"
-                        :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
-                      >
-                        {{ instance.name }}
-                      </div>
-                      <div
-                        class="mt-0.5 truncate text-xs"
-                        :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'"
-                      >
-                        {{ formatImageName(instance.image, (instance as any).imageName) }}
-                      </div>
-                    </div>
-                    <span :class="['badge badge-sm inline-flex items-center gap-1.5 shrink-0', getStatusInfo(instance.status, t).class]">
-                      <span :class="['w-1 h-1 rounded-full', getStatusInfo(instance.status, t).dot]"></span>
-                      <span class="text-[10px]">{{ getStatusInfo(instance.status, t).label }}</span>
-                    </span>
-                  </div>
-
-                  <div class="mt-1.5 flex flex-wrap items-center gap-1">
-                    <span
-                      class="inline-flex max-w-[9.5rem] items-center gap-1 rounded-full px-2 py-0.5 text-[10px] sm:max-w-[11rem] sm:gap-1.5 sm:text-[11px]"
-                      :class="themeStore.isDark ? 'bg-gray-900 text-gray-300 ring-1 ring-white/5' : 'bg-gray-50 text-gray-700 ring-1 ring-black/5'"
-                    >
-                      <FlagIcon :code="(instance as any).host?.country_code || (instance as any).hostCountryCode || 'us'" size="xs" />
-                      <span class="truncate">{{ getInstanceHostName(instance) }}</span>
-                    </span>
-                    <span
-                      v-if="getInstancePackageName(instance)"
-                      class="max-w-[9.5rem] truncate rounded-full px-2 py-0.5 text-[10px] sm:max-w-[11rem] sm:text-[11px]"
-                      :class="themeStore.isDark ? 'bg-blue-500/10 text-blue-300' : 'bg-blue-50 text-blue-700'"
-                      :title="getInstancePackageName(instance) || ''"
-                    >
-                      {{ getInstancePackageName(instance) }}
-                    </span>
-                    <span
-                      class="shrink-0 rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] whitespace-nowrap"
-                      :class="getInstanceTypeBadgeClass(instance)"
-                    >
-                      {{ getInstanceTypeDisplayLabel(instance) }}
-                    </span>
-                    <span
-                      class="max-w-[9rem] truncate rounded-full px-2 py-0.5 text-[10px] sm:max-w-[10rem] sm:text-[11px]"
-                      :class="getInstanceNetworkModeClass(instance)"
-                    >
-                      {{ $t('common.networkMode.' + getInstanceNetworkMode(instance)) }}
-                    </span>
-                    <span
-                      v-if="isAdmin"
-                      class="max-w-[8rem] truncate rounded-full px-2 py-0.5 text-[10px] sm:text-[11px]"
-                      :class="themeStore.isDark ? 'bg-gray-900 text-gray-300 ring-1 ring-white/5' : 'bg-gray-50 text-gray-700 ring-1 ring-black/5'"
-                    >
-                      {{ (instance as any).username || '-' }}
-                    </span>
-                  </div>
-                </div>
+            <div class="mt-4 flex items-center justify-between gap-3">
+              <div class="inline-flex min-w-0 items-center gap-2">
+                <span :class="['h-5 w-5 rounded-full border-4', getStatusInfo(instance.status, t).dot, themeStore.isDark ? 'border-gray-900' : 'border-gray-100']"></span>
+                <span class="truncate text-sm font-semibold" :class="getInstanceStatusTextClass(instance)">{{ getStatusInfo(instance.status, t).label }}</span>
               </div>
 
-              <div class="mt-auto">
-                <div
-                  class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-2"
-                  :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
-                  @click="openInstanceDetail(instance.id)"
+              <div class="flex shrink-0 items-center gap-2">
+                <InstanceOrderMenu
+                  v-if="canReorderInstances"
+                  :actions="INSTANCE_ORDER_ACTIONS"
+                  :labels="instanceOrderLabels"
+                  :label="$t('instance.order.label')"
+                  :disabled-actions="getInstanceOrderDisabledActions(instance.id)"
+                  :loading="orderLoading"
+                  :dark="themeStore.isDark"
+                  align="right"
+                  @reorder="reorderInstance(instance, $event)"
+                />
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
+                  :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  @click.stop="openInstanceDetail(instance.id)"
                 >
-                  <div class="min-w-0">
-                    <div class="text-[11px] text-themed-muted">{{ $t('instance.mobileCard.config') }}</div>
-                    <div class="mt-1 truncate text-[13px] font-medium sm:text-sm" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
-                      {{ instance.cpu }}% / {{ formatMemory(instance.memory) }} / {{ formatDisk(instance.disk) }}
-                    </div>
-                  </div>
-                  <div class="min-w-0">
-                    <div class="text-[11px] text-themed-muted">{{ $t('instance.mobileCard.quota') }}</div>
-                    <div class="mt-1 truncate text-[13px] font-medium sm:text-sm" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
-                      {{ (instance as any).portLimit ?? '-' }} / {{ (instance as any).snapshotLimit ?? '-' }} / {{ (instance as any).siteLimit ?? '-' }}
-                    </div>
-                  </div>
-                  <div class="min-w-0">
-                    <div class="text-[11px] text-themed-muted">{{ $t('instance.mobileCard.traffic') }}</div>
-                    <div class="mt-1 truncate text-[13px] font-medium sm:text-sm" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
-                      <template v-if="(instance as any).monthlyTrafficLimit">
-                        {{ formatBytes(Number((instance as any).monthlyTrafficUsed || 0)) }} / {{ formatBytes(Number((instance as any).monthlyTrafficLimit)) }}
-                      </template>
-                      <template v-else>
-                        {{ formatBytes(Number((instance as any).monthlyTrafficUsed || 0)) }} / {{ $t('instance.mobileCard.unlimited') }}
-                      </template>
-                    </div>
-                  </div>
-                  <div class="min-w-0">
-                    <div class="text-[11px] text-themed-muted">{{ $t('instance.expireAt') }}</div>
-                    <div class="mt-1 truncate text-[13px] font-medium sm:text-sm" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
-                      <span>{{ getInstanceExpiryInfo(instance).dateText || '-' }}</span>
-                      <span class="mx-1 text-themed-muted">·</span>
-                      <span :class="getInstanceExpiryInfo(instance).className" :title="getInstanceExpiryInfo(instance).title || ''">
-                        {{ getInstanceExpiryInfo(instance).remainingText }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  class="mt-2 grid grid-cols-1 gap-2 border-t pt-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
-                  :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
+                  {{ $t('instance.card.manage') }}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
+                  :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  @click.stop="openInstanceTransfer(instance)"
                 >
-                  <div class="min-h-[36px] min-w-0 cursor-pointer" @click="openInstanceDetail(instance.id)">
-                    <div class="mb-1 text-[11px] text-themed-muted">{{ $t('instance.mobileCard.ipAddress') }}</div>
-                    <div class="space-y-1">
-                      <template v-if="getIps(instance).length > 0">
-                        <div
-                          v-for="(ipObj, idx) in getIps(instance)"
-                          :key="idx"
-                          class="truncate font-mono text-xs"
-                          :class="[themeStore.isDark ? 'text-gray-300' : 'text-gray-700', ipObj.type === 'ipv6' ? 'opacity-80' : '']"
-                          :title="ipObj.ip"
-                        >
-                          {{ ipObj.ip }}
-                        </div>
-                      </template>
-                      <span v-else class="text-themed-muted text-xs">-</span>
-                    </div>
-                  </div>
-
-                  <div class="flex min-w-[9.5rem] flex-wrap items-center justify-end gap-1.5 sm:max-w-[18rem] sm:justify-self-end">
-                    <InstanceOrderMenu
-                      v-if="canReorderInstances"
-                      :actions="INSTANCE_ORDER_ACTIONS"
-                      :labels="instanceOrderLabels"
-                      :label="$t('instance.order.label')"
-                      :disabled-actions="getInstanceOrderDisabledActions(instance.id)"
-                      :loading="orderLoading"
-                      :dark="themeStore.isDark"
-                      align="right"
-                      @reorder="reorderInstance(instance, $event)"
-                    />
-                    <button
-                      v-if="instance.status?.toLowerCase() === 'stopped'"
-                      :disabled="!!actionLoading[instance.id]"
-                      class="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors"
-                      :class="getCardActionButtonClass()"
-                      :title="$t('instance.actions.start')"
-                      :aria-label="$t('instance.actions.start')"
-                      @click.stop="handleAction(instance, 'start')"
-                    >
-                      <svg v-if="actionLoading[instance.id] === 'start'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                      </svg>
-                      <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      </svg>
-                    </button>
-                    <button
-                      v-if="instance.status?.toLowerCase() === 'running'"
-                      :disabled="!!actionLoading[instance.id]"
-                      class="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors"
-                      :class="getCardActionButtonClass()"
-                      :title="$t('instance.actions.stop')"
-                      :aria-label="$t('instance.actions.stop')"
-                      @click.stop="handleAction(instance, 'stop')"
-                    >
-                      <svg v-if="actionLoading[instance.id] === 'stop'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                      </svg>
-                      <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <rect x="5" y="5" width="10" height="10" rx="1.8" />
-                      </svg>
-                    </button>
-
-                    <button
-                      v-if="instance.status?.toLowerCase() === 'running'"
-                      :disabled="!!actionLoading[instance.id]"
-                      class="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors"
-                      :class="getCardActionButtonClass()"
-                      :title="$t('instance.actions.restart')"
-                      :aria-label="$t('instance.actions.restart')"
-                      @click.stop="handleAction(instance, 'restart')"
-                    >
-                      <svg v-if="actionLoading[instance.id] === 'restart'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                      </svg>
-                      <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </button>
-
-                    <button
-                      v-if="!instance.packagePlanId && (instance as any).allow_instance_deletion !== false"
-                      :disabled="!!actionLoading[instance.id]"
-                      class="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors"
-                      :class="getCardActionButtonClass('danger')"
-                      :title="$t('instance.actions.delete')"
-                      :aria-label="$t('instance.actions.delete')"
-                      @click.stop="handleAction(instance, 'delete')"
-                    >
-                      <svg v-if="actionLoading[instance.id] === 'delete'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                      </svg>
-                      <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-
-                    <button
-                      type="button"
-                      class="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors"
-                      :class="getCardActionButtonClass()"
-                      :title="$t('instance.details')"
-                      :aria-label="$t('instance.details')"
-                      @click.stop="openInstanceDetail(instance.id)"
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+                  {{ $t('instance.card.push') }}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-400"
+                  :disabled="!canUseInstanceBillingAction(instance) || !!actionLoading[instance.id]"
+                  @click.stop="openSingleRenewModal(instance)"
+                >
+                  {{ $t('instance.card.renew') }}
+                </button>
               </div>
             </div>
           </article>
