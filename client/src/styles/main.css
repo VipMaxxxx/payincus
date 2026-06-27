@@ -1028,11 +1028,23 @@
 }
 
 /* ============ 主题感知的背景颜色 ============ */
+.bg-themed-surface {
+  @apply bg-white;
+}
+
 .dark .bg-themed {
   @apply bg-gray-900;
 }
 
 .light .bg-themed {
+  @apply bg-white;
+}
+
+.dark .bg-themed-surface {
+  @apply bg-gray-900;
+}
+
+.light .bg-themed-surface {
   @apply bg-white;
 }
 

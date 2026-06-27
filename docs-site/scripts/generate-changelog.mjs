@@ -105,7 +105,7 @@ function commitsBetween(fromRef, toRef) {
 }
 
 function isDocumentationSyncCommit(subject) {
-  return /^(Update handoff after|Update version log for|Refresh docs version log)/i.test(subject)
+  return /\b(handoff|version log)\b/i.test(subject)
 }
 
 function tagContent(tag, format) {
