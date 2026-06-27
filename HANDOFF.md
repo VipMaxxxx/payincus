@@ -122,6 +122,7 @@ Remaining before calling the whole commercial-operation objective complete:
 
 - Current `v0.9.5` production OTA is complete and verified. `v0.9.4` final-acceptance proof remains the latest full live proof report; `v0.9.5` was a UI/docs patch and passed OTA production checks.
 - Accepted production warnings remain: `PAYMENT_CALLBACK_IP_WHITELIST` is empty and public package `DEBGP` is active while current online bound hosts cannot satisfy its minimum CPU/memory requirement.
+  Current read-only production capacity snapshot for this warning: package `DEBGP` (`id=3`) has one active unsold plan requiring `cpu=30` and `memory=256`; bound online host `DE-01` (`id=6`) reports `cpuAllowanceMax=400`, non-deleted instance CPU usage `390`, free CPU `10`, `memoryMax=4096`, non-deleted instance memory usage `3328`, free memory `768`, so it cannot create the minimum plan until capacity is increased or the package is paused from public sale.
 - With Turnstile enabled and no `SMOKE_TURNSTILE_TOKEN`, split auth smoke verifies Turnstile enforcement and skips the full login-chain smoke. Provide a valid Turnstile token if a full automated login-chain proof is required.
 - Keep watching the high-risk surfaces touched by `v0.9.0`: Integration Center health checks, manual recharge, refund/reconciliation workbench, extension capability review blocking, delivery/plan-upgrade sync repair, and split user/admin login boundaries.
 

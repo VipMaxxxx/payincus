@@ -31,6 +31,13 @@ pnpm verify:production-proof-snapshot
 
 `verify:production-proof-snapshot` 只读数据库并输出可分享的脱敏 JSON。它不会输出数据库连接串、宿主机 URL、证书路径、安装 Token、Agent 密钥、支付订单号、支付商配置、回调原文、SMTP 密码、Lsky Token、通知渠道配置、实例 root 密码、用户邮箱、IP 或 User-Agent。用它确认支付回调、Agent 上报、实例/流量状态和生命周期日志还缺哪些动作。
 
+## 生产告警处理
+
+`verify:production` 输出 `WARN` 时不一定代表程序不可用，但必须在验收记录里写清楚处理方式。
+
+- `PAYMENT_CALLBACK_IP_WHITELIST is empty`：表示没有配置统一支付回调 IP 白名单。若支付商有固定回调出口，建议在 `.env` 配置 `PAYMENT_CALLBACK_IP_WHITELIST`；若支付商没有固定出口，只能依赖签名验签、订单幂等和金额校验，并在验收报告中记录这个运营选择。
+- `Public package ... cannot satisfy its minimum CPU/memory requirement`：表示某个公开套餐仍在售，但绑定的在线宿主机扣除未删除实例占用后，已经无法满足该套餐最小可购买方案。闭环方式是增加宿主机可用 CPU/内存、迁移/清理实例、给套餐绑定有余量的宿主机，或暂停该套餐公开销售；不要把这个告警当成前端显示问题处理。
+
 ## 最终验收
 
 最终验收需要真实业务证据，不能只靠本地测试。

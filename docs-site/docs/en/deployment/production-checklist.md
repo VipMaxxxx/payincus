@@ -27,6 +27,13 @@ pnpm verify:production-proof-snapshot
 
 `verify:production-proof-snapshot` reads the database and prints shareable redacted JSON. It does not print the database URL, host URLs, certificate paths, install tokens, Agent secrets, payment order numbers, provider config, callback body, SMTP password, Lsky token, notification channel config, instance root passwords, user emails, IPs or User-Agent values. Use it to confirm payment callbacks, Agent reports, instance/traffic state and missing lifecycle log actions.
 
+## Production Warnings
+
+A `WARN` line from `verify:production` does not always mean the application is down, but the acceptance record must explain the decision.
+
+- `PAYMENT_CALLBACK_IP_WHITELIST is empty`: no global payment callback IP allowlist is configured. If the payment provider publishes fixed callback source IPs, configure `PAYMENT_CALLBACK_IP_WHITELIST` in `.env`. If the provider does not provide stable source IPs, rely on signature verification, order idempotency and amount checks, then record that operator decision in the acceptance report.
+- `Public package ... cannot satisfy its minimum CPU/memory requirement`: a public package is still for sale, but its online bound hosts cannot create the smallest available plan after subtracting non-deleted instance usage. Close this by increasing host CPU/memory, migrating or cleaning instances, binding the package to a host with spare capacity, or pausing the package from public sale. Do not treat this as a display-only frontend issue.
+
 ## Must-pass Items
 
 - User domain serves `client/dist/user`.
