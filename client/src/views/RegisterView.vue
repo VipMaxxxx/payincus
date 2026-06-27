@@ -323,7 +323,7 @@ async function handleRegister(): Promise<void> {
     class="min-h-screen flex items-center justify-center p-4"
     :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'"
   >
-    <div class="w-full max-w-sm">
+    <div class="w-full max-w-lg">
       <ThemeTemplateSlot
         slot-name="public.auth.aside"
         container-class="mb-6"
@@ -409,15 +409,15 @@ async function handleRegister(): Promise<void> {
               {{ $t('auth.email') }} <span class="text-red-500">*</span>
             </label>
             <!-- 邮箱白名单模式：左边输入用户名，右边选择域名 -->
-            <div v-if="emailDomainWhitelistEnabled && allowedEmailDomains.length > 0" class="flex gap-2">
+            <div v-if="emailDomainWhitelistEnabled && allowedEmailDomains.length > 0" class="flex flex-col gap-2 sm:flex-row sm:items-center">
               <input 
                 v-model="emailUsername" 
                 type="text" 
-                class="input flex-1" 
+                class="input min-w-0 flex-1" 
                 :placeholder="$t('auth.emailUsernamePlaceholder')" 
               />
               <div class="flex items-center text-themed-muted">@</div>
-              <select v-model="selectedEmailDomain" class="input w-auto min-w-[140px]">
+              <select v-model="selectedEmailDomain" class="input w-full sm:w-auto sm:min-w-[140px]">
                 <option v-for="domain in allowedEmailDomains" :key="domain" :value="domain">
                   {{ domain }}
                 </option>
@@ -435,17 +435,17 @@ async function handleRegister(): Promise<void> {
             >
               {{ $t('auth.emailCode') }} <span class="text-red-500">*</span>
             </label>
-            <div class="flex gap-2">
+            <div class="flex flex-col gap-2 sm:flex-row">
               <input 
                 v-model="form.emailCode" 
                 type="text" 
-                class="input flex-1" 
+                class="input min-w-0 flex-1" 
                 maxlength="6"
                 :placeholder="$t('auth.emailCodePlaceholder')" 
               />
               <button
                 type="button"
-                class="btn-secondary whitespace-nowrap px-4"
+                class="btn-secondary w-full whitespace-nowrap px-4 sm:w-auto"
                 :disabled="sendingCode || codeCountdown > 0 || !form.email || (turnstileEnabled && !turnstileToken)"
                 :title="!form.email ? $t('auth.enterEmailFirst') : (turnstileEnabled && !turnstileToken) ? $t('auth.turnstileRequired') : ''"
                 @click="handleSendCodeClick"

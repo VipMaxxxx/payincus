@@ -21,7 +21,8 @@ const langMenuRef = ref<HTMLElement | null>(null)
 
 const navigation = computed(() => [
   { label: t('publicSite.nav.home'), compactLabel: t('publicSite.nav.overview'), to: '/' },
-  { label: t('publicSite.nav.products'), compactLabel: t('publicSite.nav.products'), to: '/market' }
+  { label: t('publicSite.nav.products'), compactLabel: t('publicSite.nav.products'), to: '/market' },
+  { label: t('publicSite.nav.help'), compactLabel: t('publicSite.nav.help'), to: '/help' }
 ])
 
 const isLoginRoute = computed(() => route.name === 'login')

@@ -182,7 +182,7 @@ function getProviderInfo(provider: string): ProviderInfo {
     class="min-h-screen flex items-center justify-center p-4"
     :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'"
   >
-    <div class="w-full max-w-sm">
+    <div class="w-full max-w-md">
       <ThemeTemplateSlot
         slot-name="public.auth.aside"
         container-class="mb-6"

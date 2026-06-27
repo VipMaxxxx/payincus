@@ -27,9 +27,9 @@ const hiddenHostingRouteNames = new Set([
 
 // 不需要布局的页面
 const noLayoutRoutes: string[] = ['login', 'register']
-const publicSiteRouteNames = new Set(['portal', 'market'])
+const publicSiteRouteNames = new Set(['portal', 'market', 'help', 'help-article'])
 const showLayout = computed<boolean>(() => {
-  return authStore.isAuthenticated && !noLayoutRoutes.includes(route.name as string)
+  return authStore.isAuthenticated && !noLayoutRoutes.includes(route.name as string) && !showPublicSiteLayout.value
 })
 const showPublicSiteLayout = computed<boolean>(() => {
   return typeof route.name === 'string' && publicSiteRouteNames.has(route.name)

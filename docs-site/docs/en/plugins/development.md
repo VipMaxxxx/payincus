@@ -42,6 +42,8 @@ Declare admin pages with `adminPages`. PayIncus opens them in protected sandbox 
 
 Declare user-facing pages with `userPages`. After an extension is enabled, the user portal reads visible entries from `/api/plugins/enabled-client-extensions`; admin entries are read from `/api/plugins/enabled-admin-client-extensions` and are only available to administrators.
 
+After the extension is enabled, PayIncus renders them in the Extension Center and in the declared user or admin extension slots according to the manifest.
+
 ```json
 {
   "slot": "user.sidebar.extra",

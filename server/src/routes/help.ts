@@ -138,21 +138,24 @@ export default async function helpRoutes(fastify: FastifyInstance) {
       page?: string
       pageSize?: string
       category?: string
+      search?: string
     }
   }>('/', async (request: FastifyRequest<{
     Querystring: {
       page?: string
       pageSize?: string
       category?: string
+      search?: string
     }
   }>) => {
-    const { category } = request.query
+    const { category, search } = request.query
 
     const result = await db.getHelpArticles({
       page: parsePositiveInteger(request.query.page, 1, 100000),
       pageSize: parsePositiveInteger(request.query.pageSize, 20, 100),
       publishedOnly: true,
-      category: category || undefined
+      category: category || undefined,
+      search: search || undefined
     })
 
     return {
@@ -305,6 +308,7 @@ export default async function helpRoutes(fastify: FastifyInstance) {
       page?: string
       pageSize?: string
       category?: string
+      search?: string
     }
   }>('/admin', {
     onRequest: [fastify.authenticateAdmin]
@@ -313,15 +317,17 @@ export default async function helpRoutes(fastify: FastifyInstance) {
       page?: string
       pageSize?: string
       category?: string
+      search?: string
     }
   }>, _reply: FastifyReply) => {
-    const { category } = request.query
+    const { category, search } = request.query
 
     const result = await db.getHelpArticles({
       page: parsePositiveInteger(request.query.page, 1, 100000),
       pageSize: parsePositiveInteger(request.query.pageSize, 20, 100),
       publishedOnly: false,
-      category: category || undefined
+      category: category || undefined,
+      search: search || undefined
     })
 
     return {

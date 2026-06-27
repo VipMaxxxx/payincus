@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
@@ -51,13 +51,8 @@ const packages = ref<PublicPackage[]>([])
 const regions = ref<PublicRegion[]>([])
 const loading = ref(true)
 const loadError = ref('')
-const detailColumnRef = ref<HTMLElement | null>(null)
-const detailCardRef = ref<HTMLElement | null>(null)
-const detailColumnStyle = ref<Record<string, string>>({})
-const detailCardStyle = ref<Record<string, string>>({})
 
 let searchTimer: number | null = null
-let detailCardFrame: number | null = null
 
 function getRegionLabel(code: string): string {
   return getLocalizedCountryName(code, locale.value, (key, fallback) => t(key, fallback))
@@ -129,94 +124,49 @@ const selectedPlan = computed(() => {
   return selectedPackage.value.plans.find(plan => plan.id === selectedPlanId.value && !plan.isSoldOut) || null
 })
 
-const ui = computed(() => themeStore.isDark
-  ? {
-      heroTint: 'bg-[linear-gradient(180deg,rgba(26,44,82,0.55)_0%,rgba(26,44,82,0.25)_45%,rgba(17,20,24,0)_100%)]',
-      body: 'text-[#c3c6cf]',
-      title: 'text-[#e3e2e6]',
-      badge: 'border-[#284777] bg-[#1a2c52] text-[#d3e3fd]',
-      badgeDot: 'bg-[#a8c7fa]',
-      infoBanner: 'bg-[#1a2c52] text-[#d3e3fd]',
-      summaryCard: 'border-[#43474e] bg-[#1d2024]',
-      summaryLabel: 'text-[#8e9199]',
-      summaryValue: 'text-[#e3e2e6]',
-      filterWrap: 'border-[#43474e] bg-[#1d2024]',
-      chipActive: 'bg-[#a8c7fa] text-[#062e6f]',
-      chipIdle: 'bg-[#272a2f] text-[#c3c6cf] hover:bg-[#313438]',
-      searchInput: 'border-[#43474e] bg-[#111418] text-[#e3e2e6] placeholder:text-[#8e9199] focus:border-[#a8c7fa]',
-      searchClear: 'text-[#8e9199] hover:bg-[#272a2f] hover:text-[#e3e2e6]',
-      errorBanner: 'bg-[#3a1618] text-[#ffb4ab] border border-[#5a2a2d]',
-      skeleton: 'bg-[#272a2f]',
-      emptyState: 'border-[#43474e] bg-[#1d2024] text-[#8e9199]',
-      emptyStateTitle: 'text-[#e3e2e6]',
-      emptyStateButton: 'bg-[#d3e3fd] text-[#041e49] hover:bg-[#c1d6fc] dark:bg-[#284777] dark:text-[#d3e3fd] dark:hover:bg-[#304f81]',
-      packageCard: 'bg-[#1d2024] shadow-[0_1px_2px_rgba(0,0,0,0.3),0_1px_3px_1px_rgba(0,0,0,0.15)] hover:bg-[#22252a] hover:shadow-[0_1px_3px_rgba(0,0,0,0.3),0_4px_8px_3px_rgba(0,0,0,0.15)]',
-      packageCardSelected: 'bg-[#1a2c52] text-[#d3e3fd] shadow-[0_1px_3px_rgba(0,0,0,0.3),0_4px_8px_3px_rgba(0,0,0,0.2)]',
-      packageCardMuted: 'text-[#8e9199]',
-      chipKvm: 'border border-[#ffdfa6]/60 text-[#ffdfa6]',
-      chipLxc: 'border border-[#8e9199]/60 text-[#c3c6cf]',
-      chipInStock: 'border border-[#a1cdb3]/60 text-[#a1cdb3]',
-      chipSoldOut: 'border border-[#ffb4ab]/60 text-[#ffb4ab]',
-      chipOfficial: 'border border-[#a8c7fa]/70 text-[#a8c7fa]',
-      chipMarket: 'border border-[#a1cdb3]/70 text-[#a1cdb3]',
-      statChip: 'border border-[#43474e] text-[#c3c6cf]',
-      statDivider: 'border-[#43474e]',
-      statBlockLabel: 'text-[#8e9199]',
-      detailCard: 'border-[#43474e] bg-[#1d2024] shadow-[0_4px_8px_3px_rgba(0,0,0,0.15),0_1px_3px_rgba(0,0,0,0.3)]',
-      detailSummaryCard: 'bg-[#1a2c52] text-[#d3e3fd]',
-      detailSummaryLabel: 'text-[#a8c7fa]',
-      detailSummaryIcon: 'text-[#a8c7fa]',
-      planIdle: 'bg-[#272a2f] text-[#e3e2e6] hover:bg-[#303339]',
-      planSelected: 'bg-[#1a2c52] text-[#d3e3fd]',
-      radioIdle: 'border-[#8e9199]',
-      radioActive: 'border-[#a8c7fa] bg-[#a8c7fa]',
-      infoCard: 'bg-[#272a2f] text-[#c3c6cf]',
-      ctaButton: 'bg-[#a8c7fa] text-[#062e6f] shadow-[0_1px_2px_rgba(0,0,0,0.3),0_1px_3px_1px_rgba(0,0,0,0.15)] hover:bg-[#bdd3fb]'
-    }
-  : {
-      heroTint: 'bg-[linear-gradient(180deg,rgba(211,227,253,0.7)_0%,rgba(223,235,254,0.35)_45%,rgba(252,252,253,0)_100%)]',
-      body: 'text-[#43474e]',
-      title: 'text-[#1a1b20]',
-      badge: 'border-[#aac7fa]/60 bg-[#d3e3fd] text-[#041e49]',
-      badgeDot: 'bg-[#0b57d0]',
-      infoBanner: 'bg-[#d3e3fd] text-[#041e49]',
-      summaryCard: 'bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08),0_1px_3px_1px_rgba(15,23,42,0.06)]',
-      summaryLabel: 'text-[#74777f]',
-      summaryValue: 'text-[#1a1b20]',
-      filterWrap: 'bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08),0_1px_3px_1px_rgba(15,23,42,0.06)]',
-      chipActive: 'bg-[#0b57d0] text-white',
-      chipIdle: 'bg-[#eef0f8] text-[#1a1b20] hover:bg-[#e1e5f1]',
-      searchInput: 'border-[#c3c6cf] bg-white text-[#1a1b20] placeholder:text-[#74777f] focus:border-[#0b57d0]',
-      searchClear: 'text-[#74777f] hover:bg-[#eef0f8] hover:text-[#1a1b20]',
-      errorBanner: 'bg-[#ffedea] text-[#93000a] border border-[#ffb4ab]',
-      skeleton: 'bg-[#e2e4ed]',
-      emptyState: 'border-[#c3c6cf] bg-white text-[#74777f]',
-      emptyStateTitle: 'text-[#1a1b20]',
-      emptyStateButton: 'bg-[#d3e3fd] text-[#041e49] hover:bg-[#c1d6fc]',
-      packageCard: 'bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08),0_1px_3px_1px_rgba(15,23,42,0.06)] hover:bg-[#f8f9fc] hover:shadow-[0_1px_3px_rgba(15,23,42,0.1),0_4px_8px_3px_rgba(15,23,42,0.08)]',
-      packageCardSelected: 'bg-[#d3e3fd] text-[#041e49] shadow-[0_1px_3px_rgba(11,87,208,0.15),0_4px_8px_3px_rgba(11,87,208,0.1)]',
-      packageCardMuted: 'text-[#74777f]',
-      chipKvm: 'border border-[#7a5900]/40 text-[#7a5900]',
-      chipLxc: 'border border-[#74777f]/40 text-[#43474e]',
-      chipInStock: 'border border-[#3a6a49]/40 text-[#3a6a49]',
-      chipSoldOut: 'border border-[#ba1a1a]/40 text-[#ba1a1a]',
-      chipOfficial: 'border border-[#0b57d0]/40 text-[#0b57d0]',
-      chipMarket: 'border border-[#3a6a49]/40 text-[#3a6a49]',
-      statChip: 'border border-[#c3c6cf] text-[#43474e]',
-      statDivider: 'border-[#e3e5ec]',
-      statBlockLabel: 'text-[#74777f]',
-      detailCard: 'border-[#c3c6cf] bg-white shadow-[0_4px_8px_3px_rgba(15,23,42,0.08),0_1px_3px_rgba(15,23,42,0.06)]',
-      detailSummaryCard: 'bg-[#d3e3fd] text-[#041e49]',
-      detailSummaryLabel: 'text-[#1a4191]',
-      detailSummaryIcon: 'text-[#0b57d0]',
-      planIdle: 'bg-[#eef0f8] text-[#1a1b20] hover:bg-[#e1e5f1]',
-      planSelected: 'bg-[#d3e3fd] text-[#041e49]',
-      radioIdle: 'border-[#74777f]',
-      radioActive: 'border-[#0b57d0] bg-[#0b57d0]',
-      infoCard: 'bg-[#eef0f8] text-[#43474e]',
-      ctaButton: 'bg-[#0b57d0] text-white shadow-[0_1px_2px_rgba(11,87,208,0.3),0_1px_3px_1px_rgba(11,87,208,0.15)] hover:bg-[#0848ad]'
-    }
-)
+const ui = computed(() => ({
+  heroTint: themeStore.isDark ? 'bg-themed-secondary/40' : 'bg-themed-secondary/60',
+  body: 'text-themed-muted',
+  title: 'text-themed',
+  badge: 'border-themed bg-themed-surface text-themed',
+  badgeDot: 'bg-accent',
+  infoBanner: 'border border-themed bg-themed-surface text-themed',
+  summaryCard: 'border border-themed bg-themed-surface shadow-sm',
+  summaryLabel: 'text-themed-muted',
+  summaryValue: 'text-themed',
+  filterWrap: 'border border-themed bg-themed-surface shadow-sm',
+  chipActive: 'bg-accent text-white',
+  chipIdle: 'bg-themed-secondary text-themed hover:bg-themed-hover',
+  searchInput: 'border-themed bg-themed text-themed placeholder:text-themed-muted focus:border-accent',
+  searchClear: 'text-themed-muted hover:bg-themed-hover hover:text-themed',
+  errorBanner: 'bg-red-500/10 text-red-500 border border-red-500/20',
+  skeleton: 'bg-themed-secondary',
+  emptyState: 'border-themed bg-themed-surface text-themed-muted',
+  emptyStateTitle: 'text-themed',
+  emptyStateButton: 'bg-accent text-white hover:opacity-90',
+  packageCard: 'border border-themed bg-themed-surface shadow-sm hover:bg-themed-hover',
+  packageCardSelected: 'border border-accent bg-accent/10 text-themed shadow-sm',
+  packageCardMuted: 'text-themed-muted',
+  chipKvm: 'border border-amber-500/40 text-amber-600 dark:text-amber-300',
+  chipLxc: 'border border-themed text-themed-muted',
+  chipInStock: 'border border-green-500/40 text-green-600 dark:text-green-300',
+  chipSoldOut: 'border border-red-500/40 text-red-500',
+  chipOfficial: 'border border-accent/50 text-accent',
+  chipMarket: 'border border-green-500/50 text-green-600 dark:text-green-300',
+  statChip: 'border border-themed text-themed-muted',
+  statDivider: 'border-themed',
+  statBlockLabel: 'text-themed-muted',
+  detailCard: 'border border-themed bg-themed-surface shadow-sm',
+  detailSummaryCard: 'bg-themed-secondary text-themed',
+  detailSummaryLabel: 'text-themed-muted',
+  detailSummaryIcon: 'text-accent',
+  planIdle: 'bg-themed-secondary text-themed hover:bg-themed-hover',
+  planSelected: 'bg-accent/10 text-themed',
+  radioIdle: 'border-themed',
+  radioActive: 'border-accent bg-accent',
+  infoCard: 'bg-themed-secondary text-themed-muted',
+  ctaButton: 'bg-accent text-white shadow-sm hover:opacity-90'
+}))
 
 const summaryCards = computed(() => [
   { label: t('publicSite.market.summary.total'), value: String(packages.value.length) },
@@ -583,74 +533,6 @@ function createInstance(pkg: PublicPackage): void {
   })
 }
 
-function resetFloatingDetailCard(): void {
-  detailColumnStyle.value = {}
-  detailCardStyle.value = {}
-}
-
-// 右侧详情卡需要跨过当前 section 和页脚区域持续停驻，
-// 单纯依赖 sticky 会在左列过短时提前失效，所以这里改为手动计算 fixed 位置。
-function updateFloatingDetailCard(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const detailColumn = detailColumnRef.value
-  const detailCard = detailCardRef.value
-
-  if (!detailColumn || !detailCard || window.innerWidth < 1024) {
-    resetFloatingDetailCard()
-    return
-  }
-
-  const header = document.querySelector('header')
-  const footer = document.querySelector('footer')
-  const headerHeight = header instanceof HTMLElement ? header.getBoundingClientRect().height : 64
-  const topOffset = Math.round(headerHeight + 32)
-  const bottomGap = 24
-  const columnRect = detailColumn.getBoundingClientRect()
-
-  if (columnRect.top > topOffset) {
-    resetFloatingDetailCard()
-    return
-  }
-
-  const footerTop = footer instanceof HTMLElement ? footer.getBoundingClientRect().top : window.innerHeight
-  const naturalCardHeight = detailCard.scrollHeight
-  const maxCardHeight = Math.max(0, window.innerHeight - topOffset - bottomGap)
-  const renderedCardHeight = Math.min(naturalCardHeight, maxCardHeight)
-  const footerCollisionOffset = Math.max(0, topOffset + renderedCardHeight + bottomGap - footerTop)
-
-  detailColumnStyle.value = {
-    height: `${renderedCardHeight}px`
-  }
-
-  detailCardStyle.value = {
-    position: 'fixed',
-    // 页脚进入碰撞区后，让卡片继续固定，但被 footer 顶着向上移动。
-    top: `${topOffset - footerCollisionOffset}px`,
-    width: `${columnRect.width}px`,
-    maxHeight: `${maxCardHeight}px`,
-    overflowY: 'auto',
-    zIndex: '30'
-  }
-}
-
-function scheduleFloatingDetailCardUpdate(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  if (detailCardFrame !== null) {
-    window.cancelAnimationFrame(detailCardFrame)
-  }
-
-  detailCardFrame = window.requestAnimationFrame(() => {
-    detailCardFrame = null
-    updateFloatingDetailCard()
-  })
-}
-
 watch(
   () => route.fullPath,
   () => {
@@ -658,42 +540,14 @@ watch(
   }
 )
 
-watch(
-  [
-    loading,
-    packageSource,
-    selectedRegion,
-    selectedPackageId,
-    selectedPlanId,
-    searchQuery,
-    () => filteredPackages.value.length
-  ],
-  async () => {
-    await nextTick()
-    scheduleFloatingDetailCardUpdate()
-  }
-)
-
 onMounted(() => {
-  window.addEventListener('scroll', scheduleFloatingDetailCardUpdate, { passive: true })
-  window.addEventListener('resize', scheduleFloatingDetailCardUpdate, { passive: true })
   void loadData(selectedPackageId.value)
-  void nextTick(() => {
-    scheduleFloatingDetailCardUpdate()
-  })
 })
 
 onUnmounted(() => {
   if (searchTimer !== null) {
     window.clearTimeout(searchTimer)
   }
-
-  if (detailCardFrame !== null) {
-    window.cancelAnimationFrame(detailCardFrame)
-  }
-
-  window.removeEventListener('scroll', scheduleFloatingDetailCardUpdate)
-  window.removeEventListener('resize', scheduleFloatingDetailCardUpdate)
 })
 </script>
 
@@ -711,7 +565,7 @@ onUnmounted(() => {
               {{ t('publicSite.market.badge') }}
             </div>
 
-            <h1 class="mt-6 text-4xl font-normal tracking-[-0.02em] sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]" :class="ui.title">
+            <h1 class="mt-6 text-4xl font-normal tracking-normal sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]" :class="ui.title">
               {{ t('publicSite.market.title') }}
             </h1>
             <p class="mt-5 max-w-2xl text-base leading-7 sm:text-lg sm:leading-8" :class="ui.body">
@@ -736,7 +590,7 @@ onUnmounted(() => {
               <div class="text-xs font-medium" :class="ui.summaryLabel">
                 {{ card.label }}
               </div>
-              <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.summaryValue">
+              <div class="mt-2 text-2xl font-normal tracking-normal" :class="ui.summaryValue">
                 {{ card.value }}
               </div>
             </div>
@@ -758,19 +612,18 @@ onUnmounted(() => {
         >
           <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div
-              class="inline-flex overflow-hidden rounded-full p-1 self-start"
-              :class="themeStore.isDark ? 'bg-[#272a2f]' : 'bg-[#eef0f8]'"
+              class="inline-flex self-start overflow-hidden rounded-full bg-themed-secondary p-1"
             >
               <button
-                class="h-9 rounded-full px-5 text-sm font-medium tracking-[0.01em] transition-colors duration-150"
-                :class="packageSource === 'official' ? ui.chipActive : 'text-[#43474e] hover:bg-black/5 dark:text-[#c3c6cf] dark:hover:bg-white/5'"
+                class="h-9 rounded-full px-5 text-sm font-medium tracking-normal transition-colors duration-150"
+                :class="packageSource === 'official' ? ui.chipActive : ui.chipIdle"
                 @click="switchSource('official')"
               >
                 {{ t('publicSite.market.official') }}
               </button>
               <button
-                class="h-9 rounded-full px-5 text-sm font-medium tracking-[0.01em] transition-colors duration-150"
-                :class="packageSource === 'market' ? ui.chipActive : 'text-[#43474e] hover:bg-black/5 dark:text-[#c3c6cf] dark:hover:bg-white/5'"
+                class="h-9 rounded-full px-5 text-sm font-medium tracking-normal transition-colors duration-150"
+                :class="packageSource === 'market' ? ui.chipActive : ui.chipIdle"
                 @click="switchSource('market')"
               >
                 {{ t('publicSite.market.market') }}
@@ -784,7 +637,7 @@ onUnmounted(() => {
               <input
                 v-model="searchQuery"
                 type="text"
-                class="h-12 w-full rounded-full border pl-11 pr-12 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#0b57d0]/30 dark:focus:ring-[#a8c7fa]/30"
+                class="h-12 w-full rounded-full border pl-11 pr-12 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-accent/30"
                 :class="ui.searchInput"
                 :placeholder="t('publicSite.market.searchPlaceholder')"
                 @input="handleSearchInput"
@@ -891,20 +744,20 @@ onUnmounted(() => {
                   <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                       <span
-                        class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                        class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-normal"
                         :class="pkg.instance_type === 'vm' ? ui.chipKvm : ui.chipLxc"
                       >
                         {{ pkg.instance_type === 'vm' ? 'KVM' : 'LXC' }}
                       </span>
                       <span
-                        class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                        class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-normal"
                         :class="pkg.soldOut ? ui.chipSoldOut : ui.chipInStock"
                       >
                         {{ pkg.soldOut ? t('publicSite.market.soldOut') : t('publicSite.market.inStock') }}
                       </span>
                     </div>
 
-                    <div class="mt-4 truncate text-lg font-medium tracking-[-0.01em]">
+                    <div class="mt-4 truncate text-lg font-medium tracking-normal">
                       {{ pkg.name }}
                     </div>
                     <p class="mt-2 line-clamp-2 text-sm leading-5" :class="selectedPackage?.id === pkg.id ? '' : ui.packageCardMuted">
@@ -922,7 +775,7 @@ onUnmounted(() => {
                   </div>
                 </div>
 
-                <div class="mt-5 grid grid-cols-2 gap-6 border-t pt-4" :class="selectedPackage?.id === pkg.id ? 'border-[#0b57d0]/20 dark:border-[#a8c7fa]/20' : ui.statDivider">
+                <div class="mt-5 grid grid-cols-2 gap-6 border-t pt-4" :class="selectedPackage?.id === pkg.id ? 'border-accent/30' : ui.statDivider">
                   <div>
                     <div class="text-[11px] font-medium" :class="selectedPackage?.id === pkg.id ? 'opacity-70' : ui.statBlockLabel">{{ t('publicSite.market.labels.plans') }}</div>
                     <div class="mt-1 text-sm font-medium">{{ getPlanLabel(pkg) }}</div>
@@ -936,34 +789,28 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div
-            ref="detailColumnRef"
-            class="min-w-0 lg:self-start"
-            :style="detailColumnStyle"
-          >
+          <div class="min-w-0 lg:self-start">
             <div
-              ref="detailCardRef"
-              class="rounded-3xl border p-6"
+              class="rounded-3xl border p-6 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto"
               :class="ui.detailCard"
-              :style="detailCardStyle"
             >
               <template v-if="selectedPackage">
                 <div class="flex flex-wrap items-center gap-2">
                   <span
-                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-normal"
                     :class="selectedPackage.sourceType === 'official' ? ui.chipOfficial : ui.chipMarket"
                   >
                     {{ selectedPackage.sourceType === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
                   </span>
                   <span
-                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-normal"
                     :class="selectedPackage.instance_type === 'vm' ? ui.chipKvm : ui.chipLxc"
                   >
                     {{ selectedPackage.instance_type === 'vm' ? 'KVM' : 'LXC' }}
                   </span>
                 </div>
 
-                <h2 class="mt-4 text-2xl font-normal tracking-[-0.02em]" :class="ui.title">
+                <h2 class="mt-4 text-2xl font-normal tracking-normal" :class="ui.title">
                   {{ selectedPackage.name }}
                 </h2>
                 <p class="mt-3 text-sm leading-6" :class="ui.body">
@@ -1016,7 +863,7 @@ onUnmounted(() => {
                           class="mt-1 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2"
                           :class="selectedPlan?.id === plan.id ? ui.radioActive : ui.radioIdle"
                         >
-                          <div v-if="selectedPlan?.id === plan.id" class="h-1.5 w-1.5 rounded-full" :class="themeStore.isDark ? 'bg-[#062e6f]' : 'bg-white'"></div>
+                          <div v-if="selectedPlan?.id === plan.id" class="h-1.5 w-1.5 rounded-full bg-accent"></div>
                         </div>
                         <div class="min-w-0 flex-1">
                           <div class="flex items-start justify-between gap-3">
@@ -1092,7 +939,7 @@ onUnmounted(() => {
                         </div>
                       </div>
                       <div class="shrink-0 text-right">
-                        <div class="text-xl font-normal tracking-[-0.02em]" :class="ui.title">
+                        <div class="text-xl font-normal tracking-normal" :class="ui.title">
                           {{ configStore.freeSiteMode ? freeSiteCopy.moneyJustForShow : `¥${formatPublicPrice(selectedPlan.price)}` }}
                         </div>
                         <div class="mt-0.5 text-[11px]" :class="ui.statBlockLabel">
@@ -1148,7 +995,7 @@ onUnmounted(() => {
                 </div>
 
                 <button
-                  class="mt-8 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-60"
+                  class="mt-8 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-medium tracking-normal transition-[background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-60"
                   :class="ui.ctaButton"
                   :disabled="selectedPackage.soldOut || (selectedPackage.isPaid && !selectedPlan)"
                   @click="createInstance(selectedPackage)"

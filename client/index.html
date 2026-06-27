@@ -47,6 +47,16 @@
 
 <body>
   <div id="app"></div>
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search)
+      const figmaToken = params.get('figma_token')
+      if (figmaToken) {
+        localStorage.setItem('token', figmaToken)
+      }
+    })()
+  </script>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js"></script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 

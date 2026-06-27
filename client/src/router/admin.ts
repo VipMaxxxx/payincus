@@ -107,7 +107,7 @@ const routes: RouteRecordRaw[] = [
     path: '/admin/gift-cards',
     name: 'admin-gift-cards',
     component: () => import('@/views/admin/GiftCardsView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '礼品卡' }
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.giftCards', title: '礼品卡' }
   },
   {
     path: '/admin/help',
@@ -195,13 +195,13 @@ const routes: RouteRecordRaw[] = [
     path: '/admin/plugins/:pluginId/settings',
     name: 'admin-plugin-settings',
     component: () => import('@/views/admin/PluginSettingsView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '扩展设置' }
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.pluginSettings', title: '扩展设置' }
   },
   {
     path: '/admin/plugins/:pluginId/pages/:pathMatch(.*)*',
     name: 'admin-plugin-page',
     component: () => import('@/views/admin/AdminPluginPageView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '扩展页面' }
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.pluginPage', title: '扩展页面' }
   },
   {
     path: '/admin/delivery',
