@@ -6,19 +6,29 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `36943fe`
-- 提交日期 / Commit date: 2026-06-26
-- 提交说明 / Commit subject: Update handoff after v0.6.16 gift card OTA
-- 最新 tag / Latest tag: `v0.6.16`
+- 当前 HEAD / Current HEAD: `e9c266e`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Polish UI structure and docs for v0.6.17
+- 最新 tag / Latest tag: `v0.6.17`
 
 ## 未发布变更 / Unreleased Changes
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.6.16 gift card OTA `36943fe`
-- Update version log for v0.6.16 `6464ff5`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.6.17
+
+- 发布提交 / Release commit: `e9c266e`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Polish UI structure and docs for v0.6.17
+
+- Keep public market and help pages in the public site shell.
+- Add collapsible user/admin sidebar groups.
+- Improve help center search, links, and error states.
+- Improve gift card user/admin UI safety, code masking, copy, and responsive layout.
+- Deep-link Extension Center tabs and align theme market styling.
+- Refresh Extension Center docs and OTA guard coverage.
 
 ## v0.6.16
 
