@@ -6,16 +6,28 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `a69542b`
+- 最新发布提交 / Latest Release Commit: `e64ad2c`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Release v0.9.8
-- 最新 tag / Latest tag: `v0.9.8`
+- 提交说明 / Commit subject: Release v0.9.9
+- 最新 tag / Latest tag: `v0.9.9`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.9.9
+
+- 发布提交 / Release commit: `e64ad2c`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Release v0.9.9
+
+Update public installer, environment initialization, atomic OTA migration and live acceptance report wording to use PayIncus branding.
+
+Keep `/opt/incudal`, the `incudal` system user, the `incudal-backend` service name and release artifact names unchanged for runtime and OTA compatibility.
+
+Add guard coverage so future split-deployment changes cannot reintroduce old public-facing Incudal branding in installer or production proof output.
 
 ## v0.9.8
 
