@@ -19,24 +19,54 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-430d0bc Document resource risk operations
+776950a Update version log for v0.9.0
 ```
 
-GitHub remote `payincus/main` is aligned at `430d0bc` before the current uncommitted `v0.9.0` candidate work.
+GitHub remote `payincus/main` is aligned at `776950a`.
 
-The current local tree is intentionally dirty with a large unreleased feature bundle. Do not reset it. At the time of this refresh there are 63 changed/new files, including backend routes, Prisma migrations, admin UI, docs-site pages, README, package versions, and guard tests.
+The current local tree should be clean after pulling `payincus/main`. Do not reset if new local changes appear; inspect them first.
 
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-430d0bc Document resource risk operations
+776950a Update version log for v0.9.0
 ```
 
-## Current Local Unreleased Work
+## Latest GitHub Release Work
 
-Local version files currently report `0.9.0` in `package.json`, `client/package.json`, and `server/package.json`. This is a release candidate, not a production-proven OTA yet.
+`v0.9.0` is published on GitHub and has release artifacts. This is not yet production-proven OTA in this handoff; production remains on `v0.8.9` until the admin/system-update flow or equivalent server update applies it and live proof is recorded.
 
-The current uncommitted bundle includes:
+Release commits:
+
+```text
+aa087db Release v0.9.0
+776950a Update version log for v0.9.0
+```
+
+GitHub workflow proof:
+
+```text
+Build & Release: run 28287778837 completed success
+CI: run 28287777773 completed success
+Docs Pages: run 28287777764 completed success
+```
+
+Release assets verified for `v0.9.0`:
+
+```text
+incudal-v0.9.0-linux-amd64.tar.gz
+incudal-v0.9.0-linux-amd64.tar.gz.sha256
+incudal-v0.9.0-linux-arm64.tar.gz
+incudal-v0.9.0-linux-arm64.tar.gz.sha256
+incudal-v0.9.0-ota-manifest.json
+ota-manifest.json
+payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
+payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
+payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
+plugin-market-index.json
+```
+
+The `v0.9.0` bundle includes:
 
 - Integration Center: admin entry, backend health-check routes, persisted health history, and docs coverage for SMTP, Lsky, Telegram, payment providers, global notifications, remote storage, Agent/Incus, OTA, extension market, and theme market.
 - Billing and payment operations: manual recharge provider flow, payment-provider secret handling guards, plugin gateway refund workbench, refund reconciliation cases, and safer payment detail redaction.
@@ -57,12 +87,11 @@ OAuth/mail/payment secret handling, refresh token storage, plugin/runtime,
 resource risk, and integration health passed during the working session.
 ```
 
-Remaining before calling this release complete:
+Remaining before calling production `v0.9.0` complete:
 
-- Commit the local `0.9.0` candidate bundle with a clear public release subject.
-- Create/publish tag `v0.9.0` and GitHub Release/OTA artifacts.
-- Regenerate docs-site version logs after the release/tag commit.
 - Run production OTA from the admin system-update flow or equivalent release process.
+- Verify `/opt/incudal/current/package.json` reports `0.9.0`.
+- Record the OTA task id, release symlink, backup path, update logs, backend service state, and public health checks.
 - Verify production with real `/opt/incudal/.env`, live domains, database checks, split-host checks, and final proof refs. The latest local `verify:production` run intentionally used `RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0`, so it proves static readiness only.
 
 ## Latest Production OTA Proof
