@@ -6,22 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `430d0bc`
+- 当前 HEAD / Current HEAD: `aa087db`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Document resource risk operations
-- 最新 tag / Latest tag: `v0.8.9`
+- 提交说明 / Commit subject: Release v0.9.0
+- 最新 tag / Latest tag: `v0.9.0`
 
 ## 未发布变更 / Unreleased Changes
 
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+
+## 历史版本 / Historical Versions
+
+## v0.9.0
+
+- 发布提交 / Release commit: `aa087db`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Release v0.9.0
+
 ### 其他变更 / Other Changes
 
+- Release v0.9.0 `aa087db`
 - Document resource risk operations `430d0bc`
 
 ### 改进与调整 / Improvements and Adjustments
 
 - Update handoff after v0.8.9 OTA `e40d30b`
-
-## 历史版本 / Historical Versions
 
 ## v0.8.9
 

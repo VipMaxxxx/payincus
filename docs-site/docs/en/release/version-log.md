@@ -6,22 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `430d0bc`
+- Current HEAD / 当前 HEAD: `aa087db`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Document resource risk operations
-- Latest tag / 最新 tag: `v0.8.9`
+- Commit subject / 提交说明: Release v0.9.0
+- Latest tag / 最新 tag: `v0.9.0`
 
 ## Unreleased Changes / 未发布变更
 
+- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+
+## Historical Versions / 历史版本
+
+## v0.9.0
+
+- Release commit / 发布提交: `aa087db`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Release v0.9.0
+
 ### Other Changes / 其他变更
 
+- Release v0.9.0 `aa087db`
 - Document resource risk operations `430d0bc`
 
 ### Improvements and Adjustments / 改进与调整
 
 - Update handoff after v0.8.9 OTA `e40d30b`
-
-## Historical Versions / 历史版本
 
 ## v0.8.9
 
