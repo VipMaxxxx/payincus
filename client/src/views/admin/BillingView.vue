@@ -292,6 +292,9 @@ const upgradeData = ref<{
     cpu: number
     memory: number
     disk: number
+    canUpgrade?: boolean
+    cannotUpgradeReason?: string | null
+    resourceWarnings?: string[] | null
   }>
   userBalance: number
 }>({
@@ -309,6 +312,13 @@ const upgradePriceDiff = computed(() => {
   if (!newPlan) return 0
   return newPlan.priceDiff
 })
+
+const selectedUpgradePlan = computed(() => {
+  if (!selectedPlanId.value) return null
+  return upgradeData.value.availablePlans.find(p => p.id === selectedPlanId.value) || null
+})
+
+const selectedUpgradePlanBlocked = computed(() => selectedUpgradePlan.value?.canUpgrade === false)
 
 const selectedInstanceIdSet = computed(() => new Set(selectedInstanceIds.value))
 
@@ -1041,7 +1051,11 @@ async function openUpgradeModal(instance: any) {
 // 执行升级
 async function executeUpgrade() {
   if (!upgradeTarget.value || !selectedPlanId.value) return
-  
+  if (selectedUpgradePlanBlocked.value) {
+    toast.error(selectedUpgradePlan.value?.resourceWarnings?.[0] || '实例所在节点资源不足，无法升级方案')
+    return
+  }
+
   upgradeSubmitting.value = true
   try {
     const res = await api.admin.upgradePlan(upgradeTarget.value.id, selectedPlanId.value)
@@ -2807,13 +2821,20 @@ function copyToClipboard(text: string) {
               <div v-if="upgradeData.availablePlans.length > 0">
                 <label class="label">{{ $t('admin.billing.selectNewPlan') }} *</label>
                 <div class="space-y-2 max-h-48 overflow-y-auto">
-                  <label 
-                    v-for="plan in upgradeData.availablePlans" 
+                  <label
+                    v-for="plan in upgradeData.availablePlans"
                     :key="plan.id"
-                    class="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
-                    :class="selectedPlanId === plan.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-themed hover:bg-gray-50 dark:hover:bg-gray-800'"
+                    class="flex items-start gap-3 p-3 rounded-lg border transition-colors"
+                    :class="[
+                      plan.canUpgrade === false
+                        ? 'cursor-not-allowed opacity-60 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+                        : 'cursor-pointer',
+                      selectedPlanId === plan.id
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-themed hover:bg-gray-50 dark:hover:bg-gray-800'
+                    ]"
                   >
-                    <input v-model="selectedPlanId" type="radio" :value="plan.id" class="radio mt-1" />
+                    <input v-model="selectedPlanId" type="radio" :value="plan.id" class="radio mt-1" :disabled="plan.canUpgrade === false" />
                     <div class="flex-1">
                       <div class="font-medium">{{ plan.name }}</div>
                       <div class="text-sm text-themed-muted">
@@ -2822,6 +2843,9 @@ function copyToClipboard(text: string) {
                       </div>
                       <div class="text-xs text-themed-muted mt-1">
                         CPU {{ plan.cpu }}% | {{ plan.memory }}MB RAM | {{ plan.disk }}MB {{ $t('admin.billing.diskLabel') }}
+                      </div>
+                      <div v-if="plan.canUpgrade === false && plan.resourceWarnings?.length" class="mt-2 text-xs text-red-600 dark:text-red-300">
+                        {{ plan.resourceWarnings[0] }}
                       </div>
                     </div>
                   </label>
@@ -2844,6 +2868,9 @@ function copyToClipboard(text: string) {
                 <p v-if="upgradePriceDiff > upgradeData.userBalance" class="text-xs text-red-600 dark:text-red-400 mt-2 font-medium">
                   ⚠️ {{ $t('admin.billing.insufficientBalance') }}
                 </p>
+                <p v-else-if="selectedUpgradePlanBlocked" class="text-xs text-red-600 dark:text-red-400 mt-2 font-medium">
+                  ⚠️ {{ selectedUpgradePlan?.resourceWarnings?.[0] || '实例所在节点资源不足，无法升级方案' }}
+                </p>
                 <p v-else class="text-xs mt-1" :class="upgradePriceDiff > upgradeData.userBalance ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'">
                   {{ $t('admin.billing.priceDifferenceHint') }}
                 </p>
@@ -2855,7 +2882,7 @@ function copyToClipboard(text: string) {
             <button class="btn btn-ghost" @click="showUpgradeModal = false">{{ $t('common.cancel') }}</button>
             <button
               class="btn btn-primary"
-              :disabled="upgradeSubmitting || !selectedPlanId || upgradeData.availablePlans.length === 0"
+              :disabled="upgradeSubmitting || !selectedPlanId || selectedUpgradePlanBlocked || upgradeData.availablePlans.length === 0"
               @click="executeUpgrade"
             >
               {{ upgradeSubmitting ? $t('common.processing') : $t('admin.billing.confirmUpgrade') }}

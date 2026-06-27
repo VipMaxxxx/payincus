@@ -20,6 +20,8 @@ import {
 import { shouldSyncInstanceSwapSizeWithPlan } from '../lib/instance-swap.js'
 import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
 import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
+import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
+import { reservePlanUpgradeCapacityWithLock, type PlanUpgradeCapacityCheck } from './hosts.js'
 import {
   HOSTING_BALANCE_LOG_LOCK_NAMESPACE,
   USER_BALANCE_LOCK_NAMESPACE,
@@ -720,6 +722,8 @@ export async function performPlanChange(
   needRestart: boolean  // 标记是否需要重启
   refundAmount?: number // 降级时的退款金额
   hostingIncomeResult?: { hostOwnerId: number; hostName: string } | null // 托管收入结果
+  bandwidthLimit: string | null
+  capacity: PlanUpgradeCapacityCheck
 }> {
   const pkg = await prisma.package.findUnique({
     where: { id: newPlan.packageId },
@@ -752,6 +756,10 @@ export async function performPlanChange(
 
   // 计算升级差价
   const changeResult = await calculatePlanChange(instance, newPlan)
+  const normalizedPlanTrafficLimitSpeed = normalizePlanTrafficLimitSpeed(newPlan.trafficLimitSpeed)
+  if (normalizedPlanTrafficLimitSpeed === undefined) {
+    throw new Error('新方案带宽配置无效')
+  }
 
   // 检查是否可以变更
   if (!changeResult.canChange) {
@@ -780,6 +788,11 @@ export async function performPlanChange(
 
     if (!user) {
       throw new Error('用户不存在')
+    }
+
+    const capacity = await reservePlanUpgradeCapacityWithLock(tx, instance, newPlan)
+    if (!capacity.canUpgrade) {
+      throw new Error(`HOST_RESOURCES_INSUFFICIENT:${capacity.reason || 'unknown'}`)
     }
 
     const oldBalance = Number(user.balance)
@@ -898,6 +911,8 @@ export async function performPlanChange(
               ? newPlan.swapSize
               : instance.swapSize),
         monthlyTrafficLimit,
+        limitsIngress: normalizedPlanTrafficLimitSpeed,
+        limitsEgress: normalizedPlanTrafficLimitSpeed,
         trafficStatus: calculateInstanceTrafficStatus(instance.monthlyTrafficUsed, monthlyTrafficLimit),
         // 更新冷却期时间
         lastPlanChangeAt: new Date(),
@@ -925,7 +940,7 @@ export async function performPlanChange(
       }
     })
 
-    return { hostingIncomeResult }
+    return { hostingIncomeResult, capacity }
   })
 
   return {
@@ -933,7 +948,9 @@ export async function performPlanChange(
     newConfig: changeResult.newConfig,
     needRestart: true,  // 升降级后需要重启实例才能生效
     refundAmount,
-    hostingIncomeResult: txResult.hostingIncomeResult
+    hostingIncomeResult: txResult.hostingIncomeResult,
+    bandwidthLimit: normalizedPlanTrafficLimitSpeed,
+    capacity: txResult.capacity
   }
 }
 

@@ -3410,6 +3410,17 @@ export interface ChangePlanPreview {
     disk: number
   }
   resourceWarnings: string[] | null
+  resourceCapacity?: {
+    canUpgrade: boolean
+    reason: string | null
+    message: string | null
+    hostId: number
+    deltas: { cpu: number; memory: number; disk: number }
+    currentUsage: { cpu: number; memory: number; disk: number }
+    projectedUsage: { cpu: number; memory: number; disk: number }
+    limits: { cpu: number | null; memory: number | null; disk: number | null }
+    available: { cpu: number | null; memory: number | null; disk: number | null }
+  }
   // 可变更状态
   canChange: boolean
   cannotChangeReason?: string

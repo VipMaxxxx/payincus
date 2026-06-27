@@ -593,7 +593,7 @@ export async function getAvailableHosts(
   packageHostIds: number[] | null = null,
   cpu: number,
   memory: number,
-  _disk: number,
+  disk: number,
   options: {
     userId?: number       // 当前用户ID
     packageOwnerId?: number  // 套餐所有者ID（如果是共享套餐）
@@ -717,7 +717,11 @@ export async function getAvailableHosts(
         return false
       }
 
-      // 磁盘配额检查已移除：不再限制磁盘空间
+      const diskTotal = host.storageSize ? host.storageSize * 1024 : 0
+      if (diskTotal <= 0 || (host.diskUsedCalculated + disk) > diskTotal) {
+        return false
+      }
+
       return true
     })
     .sort((a, b) => (b.memoryMax - b.memoryUsedCalculated) - (a.memoryMax - a.memoryUsedCalculated))

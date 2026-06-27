@@ -7001,6 +7001,7 @@ export default {
         cannotChange: 'Cannot Upgrade Now',
         cannotChangeRemainingDays: 'Less than {days} days remaining, cannot upgrade plan',
         cannotChangeInstanceStatus: 'Current instance status does not allow plan upgrade, only running or stopped instances can be modified',
+        cannotChangeHostResources: 'The instance host does not have enough resources for this upgrade',
         cannotChangeUnknown: 'Cannot upgrade plan at this time',
         // Calculation details
         oldDailyPrice: 'Current Daily Rate',
