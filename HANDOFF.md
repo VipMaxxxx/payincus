@@ -179,8 +179,7 @@ Remaining before calling the whole commercial-operation objective complete:
   - Deployed scripts contain PayIncus branding markers for live acceptance, local env initialization, and atomic OTA migration. `install-panel.sh` remains a release/repository artifact and is not part of the current deployed scripts subset.
   - Online docs `https://payincus.com/release/version-log` contains `v0.9.9`.
   - Deployed admin bundle contains `resource-risk-evidence-panel` and generated CSS with `background-color:#fff;opacity:1`, plus dark-mode opaque surface/code backgrounds.
-  - `checkPackagesSoldOut([1, 3])` on production returns `HKCMI=false`, `DEBGP=true`.
-  - Public API `https://pay.payincus.com/api/packages/public` returns `DEBGP soldOut=true` and `HKCMI soldOut=false`.
+  - Public API `https://pay.payincus.com/api/packages/public` returns `HKCMI soldOut=false`; `DEBGP` is no longer returned after package `#3` was set `active=false`.
 
 Historical note:
 
