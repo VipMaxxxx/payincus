@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-f48f228 Update version log for v0.6.17
+d60bf6d Fix instance transfer path release guard
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-f48f228 Update version log for v0.6.17
+d60bf6d Fix instance transfer path release guard
 ```
 
 Recently updated/released files include:
@@ -201,77 +201,75 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.6.17 Polish UI structure and docs for v0.6.17
-feature commit/tag: e9c266e
-version-log commit: f48f228
-previous production boundary: v0.6.16
-previous gift-card Turnstile body verification commit/tag: 69ac384 (v0.6.16)
+v0.6.19 Instance card OTA fix
+feature commit/tag: 5c8668a (v0.6.18, Release failed on boundary guard)
+release guard fix commit/tag: d60bf6d (v0.6.19)
+previous production boundary: v0.6.17
+previous UI/docs polish commit/tag: e9c266e (v0.6.17)
 ```
 
 GitHub Actions:
 
 ```text
+Build & Release for tag v0.6.19: run 28274947080 completed successfully.
+Build & Release for tag v0.6.18: run 28274678800 failed on frontend boundary guard and did not publish usable OTA assets.
+CI for main commit d60bf6d: run 28274945704 completed successfully.
 Build & Release for tag v0.6.17: run 28273514353 completed successfully.
 CI for version-log commit f48f228: run 28273513148 completed successfully.
 Docs Pages for version-log commit f48f228: run 28273513149 completed successfully.
-Build & Release for tag v0.6.16: run 28229134845 completed successfully.
-CI for version-log commit 6464ff5: run 28229131489 completed successfully.
-Docs Pages for version-log commit 6464ff5: run 28229131464 completed successfully.
-Build & Release for tag v0.6.15: run 28228009917 completed successfully.
-CI for version-log commit ea25112: run 28228007358 completed successfully.
-Docs Pages for version-log commit ea25112: run 28228007369 completed successfully.
 ```
 
-Release assets confirmed for `v0.6.17`:
+Release assets confirmed for `v0.6.19`:
 
 ```text
 ota-manifest.json
-incudal-v0.6.17-linux-amd64.tar.gz
-incudal-v0.6.17-linux-amd64.tar.gz.sha256
-incudal-v0.6.17-linux-arm64.tar.gz
-incudal-v0.6.17-linux-arm64.tar.gz.sha256
-incudal-v0.6.17-ota-manifest.json
+incudal-v0.6.19-linux-amd64.tar.gz
+incudal-v0.6.19-linux-amd64.tar.gz.sha256
+incudal-v0.6.19-linux-arm64.tar.gz
+incudal-v0.6.19-linux-arm64.tar.gz.sha256
+incudal-v0.6.19-ota-manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 plugin-market-index.json
 ```
 
-Published `v0.6.17` OTA manifest:
+Published `v0.6.19` OTA manifest:
 
 ```text
-version: v0.6.17
-gitCommit: e9c266ed0a2f
-buildTime: 2026-06-27T00:56:03.384Z
-amd64 artifact: incudal-v0.6.17-linux-amd64.tar.gz
-amd64 size: 92384114
-amd64 sha256: 07008dbd6989f2a0fd2964c1b09a967163f6a6f8e0783b7290b2493dd62c8525
-arm64 artifact: incudal-v0.6.17-linux-arm64.tar.gz
-arm64 size: 91466292
-arm64 sha256: 97f98d28cd5571010f00268d745fa2745ea5fc8afe3a6acda914690acab63a03
+version: v0.6.19
+gitCommit: d60bf6d5fd55
+buildTime: 2026-06-27T01:51:48.921Z
+amd64 artifact: incudal-v0.6.19-linux-amd64.tar.gz
+amd64 size: 92384723
+amd64 sha256: 943adf49cb4ef493bad62f511915a50d78a7e299bb0a5a8998c2ff15d223307b
+arm64 artifact: incudal-v0.6.19-linux-arm64.tar.gz
+arm64 size: 91482471
+arm64 sha256: 7197394361749ff3c17be2fb15408ab90a6b29b83b44e0490f9c2fc03efb219e
 ```
 
 Production OTA proof:
 
 ```text
-latest proven production version: v0.6.17
-task: #83
-target: v0.6.17
+latest proven production version: v0.6.19
+task: #84
+target: v0.6.19
 status: success
-started: 2026-06-27 01:01:23 UTC
-finished: 2026-06-27 01:02:52 UTC
-backup path: /opt/incudal/releases/v0.6.16-20260626092551
-logPath: /opt/incudal/update-logs/system-update-83.log
-release dir: /opt/incudal/releases/v0.6.17-20260627010123
-current release: /opt/incudal/releases/v0.6.17-20260627010123
-version.json: version/tag v0.6.17, commit e9c266ed0a2f, buildTime 2026-06-27T00:55:34.686Z, deployedAt 2026-06-27T01:01:45.668Z
+started: 2026-06-27 01:54:26 UTC
+finished: 2026-06-27 01:55:58 UTC
+backup path: /opt/incudal/releases/v0.6.17-20260627010123
+logPath: /opt/incudal/update-logs/system-update-84.log
+release dir: /opt/incudal/releases/v0.6.19-20260627015426
+current release: /opt/incudal/releases/v0.6.19-20260627015426
+version.json: version/tag v0.6.19, commit d60bf6d5fd55, buildTime 2026-06-27T01:51:48.921Z
 backend service: `incudal-backend` active after restart
 backend health after update: `http://127.0.0.1:3001/api/health` returned `{"status":"ok"}`
 verify-split-host: passed for user/admin domains, proxied API, proxied WebSocket, and direct backend health
 production readiness: `pnpm verify:production` passed on `/opt/incudal/current`
 log/header exposure: `pnpm verify:log-header` passed; configured secret values were not found in logs or headers
 public health after update: `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned `{"status":"ok"}`
-UI/docs proof: public market/help routes stay in the public shell, user/admin sidebars use grouped collapsible navigation, help search/error/link behavior is live, gift-card code masking/copy/responsive UI is live, Extension Center tabs are deep-linkable, and docs/version logs are updated for `v0.6.17`.
+UI proof: user instance cards use the product-card layout, management/PUSH/renew actions are wired through guarded helpers, and instance creation can auto-generate names with server-side fallback.
+Docs proof: version logs were regenerated after `v0.6.19`.
 ```
 
 Production warnings observed during `pnpm verify:production`:
@@ -281,7 +279,7 @@ PAYMENT_CALLBACK_IP_WHITELIST is empty; provider-specific defaults apply only wh
 Public package #1 (HKCMI) is active but online bound hosts cannot satisfy its minimum CPU/memory requirement.
 ```
 
-These are existing operational warnings and did not block the `v0.6.17` OTA.
+These are existing operational warnings and did not block the `v0.6.19` OTA.
 
 Important release-chain note:
 
@@ -296,7 +294,9 @@ v0.6.13 adds the visible user gift-card Turnstile verification page.
 v0.6.14 fixes reliable user gift-card Turnstile token submission and redeemed-card list visibility.
 v0.6.15 persists expired gift-card status outside the rolled-back error path.
 v0.6.16 fixes gift-card user Turnstile body-token verification by moving the check after body parsing.
-v0.6.17 polishes public/user/admin UI structure, help search, gift-card safety UI, Extension Center tab routing, docs, and guard coverage; it is the current production boundary.
+v0.6.17 polishes public/user/admin UI structure, help search, gift-card safety UI, Extension Center tab routing, docs, and guard coverage.
+v0.6.18 includes the instance card and auto-name feature commit but its Release failed on frontend boundary guard and must not be used for OTA.
+v0.6.19 fixes the instance transfer path boundary guard and is the current production boundary.
 ```
 
 Previous production-proof closure:
