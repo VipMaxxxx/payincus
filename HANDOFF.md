@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-d60bf6d Fix instance transfer path release guard
+4a131d7 Harden storage readiness and traffic reset
 ```
 
 GitHub remote `payincus/main` was aligned after the handoff refresh commits.
@@ -29,7 +29,7 @@ The tracked tree should be clean against `payincus/main` after pulling. The loca
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-d60bf6d Fix instance transfer path release guard
+4a131d7 Harden storage readiness and traffic reset
 ```
 
 Recently updated/released files include:
@@ -201,51 +201,61 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.6.19 Instance card OTA fix
-feature commit/tag: 5c8668a (v0.6.18, Release failed on boundary guard)
-release guard fix commit/tag: d60bf6d (v0.6.19)
-previous production boundary: v0.6.17
-previous UI/docs polish commit/tag: e9c266e (v0.6.17)
+v0.8.1 Storage readiness and traffic reset OTA
+release commit/tag: 4a131d7 (v0.8.1)
+previous production release: d60bf6d (v0.6.19)
+versioning note: OTA tags now continue with carry at 10, e.g. 0.8.9 -> 0.9.0.
 ```
 
 GitHub Actions:
 
 ```text
-Build & Release for tag v0.6.19: run 28274947080 completed successfully.
-Build & Release for tag v0.6.18: run 28274678800 failed on frontend boundary guard and did not publish usable OTA assets.
-CI for main commit d60bf6d: run 28274945704 completed successfully.
-Build & Release for tag v0.6.17: run 28273514353 completed successfully.
-CI for version-log commit f48f228: run 28273513148 completed successfully.
-Docs Pages for version-log commit f48f228: run 28273513149 completed successfully.
+Build & Release for tag v0.8.1: run 28275824753 completed successfully.
+CI for main commit 4a131d7: run 28275823541 completed successfully.
+Build & Release for previous tag v0.6.19: run 28274947080 completed successfully.
 ```
 
-Release assets confirmed for `v0.6.19`:
+Release assets confirmed for `v0.8.1`:
 
 ```text
 ota-manifest.json
-incudal-v0.6.19-linux-amd64.tar.gz
-incudal-v0.6.19-linux-amd64.tar.gz.sha256
-incudal-v0.6.19-linux-arm64.tar.gz
-incudal-v0.6.19-linux-arm64.tar.gz.sha256
-incudal-v0.6.19-ota-manifest.json
+incudal-v0.8.1-linux-amd64.tar.gz
+incudal-v0.8.1-linux-amd64.tar.gz.sha256
+incudal-v0.8.1-linux-arm64.tar.gz
+incudal-v0.8.1-linux-arm64.tar.gz.sha256
+incudal-v0.8.1-ota-manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 plugin-market-index.json
 ```
 
-Published `v0.6.19` OTA manifest:
+Published `v0.8.1` OTA manifest:
 
 ```text
-version: v0.6.19
-gitCommit: d60bf6d5fd55
-buildTime: 2026-06-27T01:51:48.921Z
-amd64 artifact: incudal-v0.6.19-linux-amd64.tar.gz
-amd64 size: 92384723
-amd64 sha256: 943adf49cb4ef493bad62f511915a50d78a7e299bb0a5a8998c2ff15d223307b
-arm64 artifact: incudal-v0.6.19-linux-arm64.tar.gz
-arm64 size: 91482471
-arm64 sha256: 7197394361749ff3c17be2fb15408ab90a6b29b83b44e0490f9c2fc03efb219e
+version: v0.8.1
+gitCommit: 4a131d7a94c1
+buildTime: 2026-06-27T02:28:35.122Z
+amd64 artifact: incudal-v0.8.1-linux-amd64.tar.gz
+amd64 size: 92367971
+amd64 sha256: a9878bde60079c079faa2d7a6a95e62a374d3a7d6915e3804132ed6851840009
+arm64 artifact: incudal-v0.8.1-linux-arm64.tar.gz
+arm64 size: 91471770
+arm64 sha256: c112029a162f3d07157a63d4196fae3e1488fae88dfe43ab7e1fbfe28d2c209e
+```
+
+Previous v0.6.19 production OTA proof:
+
+```text
+task: #85
+fromVersion: v0.6.19
+targetVersion: v0.8.1
+release dir: /opt/incudal/releases/v0.8.1-20260627023143
+log: /opt/incudal/update-logs/system-update-85.log
+status: success at 2026-06-27T02:33:15.083Z
+public health: https://pay.payincus.com/api/health -> ok
+admin health: https://admin.payincus.com/api/health -> ok
+current version.json: v0.8.1 / 4a131d7a94c1
 ```
 
 Production OTA proof:
@@ -279,7 +289,7 @@ PAYMENT_CALLBACK_IP_WHITELIST is empty; provider-specific defaults apply only wh
 Public package #1 (HKCMI) is active but online bound hosts cannot satisfy its minimum CPU/memory requirement.
 ```
 
-These are existing operational warnings and did not block the `v0.6.19` OTA.
+These are existing operational warnings and did not block the `v0.8.1` OTA.
 
 Important release-chain note:
 
@@ -296,7 +306,8 @@ v0.6.15 persists expired gift-card status outside the rolled-back error path.
 v0.6.16 fixes gift-card user Turnstile body-token verification by moving the check after body parsing.
 v0.6.17 polishes public/user/admin UI structure, help search, gift-card safety UI, Extension Center tab routing, docs, and guard coverage.
 v0.6.18 includes the instance card and auto-name feature commit but its Release failed on frontend boundary guard and must not be used for OTA.
-v0.6.19 fixes the instance transfer path boundary guard and is the current production boundary.
+v0.6.19 fixes the instance transfer path boundary guard and was the previous production boundary.
+v0.8.1 hardens storage pool sellability/creation guards, fixes loop storage source handling, adds user self-service instance traffic reset, and is the current production boundary.
 ```
 
 Previous production-proof closure:
