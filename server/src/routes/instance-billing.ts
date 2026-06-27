@@ -10,6 +10,7 @@ import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { sendHostManagedInstanceNotification, sendNotification } from '../lib/notifier.js'
 import { getIncusClient, patchInstanceResources } from '../lib/incus/index.js'
+import { restoreBandwidth } from '../lib/incus/incus-traffic.js'
 import { sendRenewSuccessEmail } from '../lib/mailer.js'
 import { calculateDailyPrice } from '../lib/billing-calc.js'
 import type { BillingRecordType } from '@prisma/client'
@@ -80,6 +81,23 @@ function normalizeBillingRecordType(value: string | undefined): BillingRecordTyp
 function parsePositiveIntegerInput(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) return null
   return value
+}
+
+function formatUpgradeCapacityMessage(reason?: string | null): string {
+  switch (reason) {
+    case 'host_not_found':
+      return '实例所在节点不存在'
+    case 'host_not_online':
+      return '实例所在节点不在线'
+    case 'cpu_insufficient':
+      return '实例所在节点 CPU 配额不足'
+    case 'memory_insufficient':
+      return '实例所在节点内存不足'
+    case 'disk_insufficient':
+      return '实例所在节点磁盘容量不足'
+    default:
+      return '实例所在节点资源不足'
+  }
 }
 
 async function dispatchInstanceUpgradeServiceExtensions(input: {
@@ -813,6 +831,9 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
         return reply.code(400).send({ error: '不支持降级，只能升级到更高配置的方案', code: 'DOWNGRADE_NOT_ALLOWED' })
       }
 
+      const capacity = await db.checkPlanUpgradeCapacity(instance, newPlan)
+      const capacityMessage = capacity.canUpgrade ? null : formatUpgradeCapacityMessage(capacity.reason)
+
       return {
         preview: {
           oldPlan: {
@@ -843,13 +864,13 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
           isUpgrade: preview.isUpgrade,
           newExpiresAt: preview.newExpiresAt.toISOString(),
           newConfig: preview.newConfig,
-          // 升级不需要资源警告
-          resourceWarnings: null,
+          resourceWarnings: capacityMessage ? [capacityMessage] : null,
+          resourceCapacity: capacity,
           // 可变更状态（综合考虑实例状态和 db 层返回的剩余天数检查）
-          canChange: statusCanChange && preview.canChange,
+          canChange: statusCanChange && preview.canChange && capacity.canUpgrade,
           cannotChangeReason: !statusCanChange 
             ? 'instance_status_invalid'  // 实例状态不允许变更
-            : preview.cannotChangeReason
+            : (preview.cannotChangeReason || (capacity.canUpgrade ? undefined : capacity.reason || 'host_resources_insufficient'))
         }
       }
     } catch (error) {
@@ -954,23 +975,6 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
         request.log.warn(err, '实例方案已更新，流量状态即时复核失败')
       }
 
-      // 计算资源变化量并更新宿主机资源统计
-      const cpuDelta = newPlan.cpu - instance.cpu
-      const memoryDelta = newPlan.memory - instance.memory
-      const diskDelta = newPlan.disk - instance.disk
-      
-      if (cpuDelta !== 0 || memoryDelta !== 0 || diskDelta !== 0) {
-        const host = await db.getHostById(instance.hostId)
-        if (host) {
-          await db.updateHostResources(instance.hostId, {
-            cpuUsed: host.cpu_used + cpuDelta,
-            memoryUsed: host.memory_used + memoryDelta,
-            diskUsed: host.disk_used + diskDelta
-          })
-          console.log(`[ChangePlan] 实例 ${instance.name} 资源变化: CPU ${cpuDelta > 0 ? '+' : ''}${cpuDelta}%, Memory ${memoryDelta > 0 ? '+' : ''}${memoryDelta}MB, Disk ${diskDelta > 0 ? '+' : ''}${diskDelta}MB`)
-        }
-      }
-
       // 同步配置到 Incus
       let incusSyncSuccess = false
       let incusSyncError: string | null = null
@@ -984,8 +988,9 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
             memory: newPlan.memory,
             disk: newPlan.disk
           })
+          await restoreBandwidth(client, instance.incusId, result.bandwidthLimit, result.bandwidthLimit)
           incusSyncSuccess = true
-          console.log(`[ChangePlan] 实例 ${instance.name} Incus 配置同步成功: CPU=${newPlan.cpu}%, Memory=${newPlan.memory}MB, Disk=${newPlan.disk}MB`)
+          console.log(`[ChangePlan] 实例 ${instance.name} Incus 配置同步成功: CPU=${newPlan.cpu}%, Memory=${newPlan.memory}MB, Disk=${newPlan.disk}MB, Bandwidth=${result.bandwidthLimit || 'unlimited'}`)
         }
       } catch (incusErr) {
         incusSyncError = incusErr instanceof Error ? incusErr.message : String(incusErr)
@@ -1060,6 +1065,14 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '升降级失败'
+      if (errorMessage.includes('HOST_RESOURCES_INSUFFICIENT')) {
+        const reason = errorMessage.split(':')[1]
+        return reply.code(400).send({
+          error: formatUpgradeCapacityMessage(reason),
+          code: 'HOST_RESOURCES_INSUFFICIENT',
+          reason
+        })
+      }
       return reply.code(400).send({ error: errorMessage })
     }
   })

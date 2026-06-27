@@ -108,6 +108,17 @@ const cannotChangeReasonText = computed(() => {
   if (reason === 'instance_status_invalid') {
     return t('billing.cannotChangeInstanceStatus')
   }
+
+  if (
+    reason === 'host_resources_insufficient' ||
+    reason === 'host_not_found' ||
+    reason === 'host_not_online' ||
+    reason === 'cpu_insufficient' ||
+    reason === 'memory_insufficient' ||
+    reason === 'disk_insufficient'
+  ) {
+    return preview.value.resourceWarnings?.[0] || t('billing.cannotChangeHostResources')
+  }
   
   return t('billing.cannotChangeUnknown')
 })
@@ -506,6 +517,9 @@ function handleClose() {
                     {{ t('billing.cannotChange') }}
                   </div>
                   <div class="mt-1">{{ cannotChangeReasonText }}</div>
+                  <ul v-if="preview.resourceWarnings?.length" class="mt-2 list-disc list-inside space-y-1">
+                    <li v-for="warning in preview.resourceWarnings" :key="warning">{{ warning }}</li>
+                  </ul>
                 </div>
 
                 <!-- 升级标识 -->

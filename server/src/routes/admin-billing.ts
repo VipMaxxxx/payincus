@@ -39,6 +39,7 @@ import { generateRandomIPv4, generateRandomIPv6 } from '../lib/ip-calculator.js'
 import { validateCommandsOwnership, mergeCommandContents, getImageDistroFromAlias } from '../db/custom-init-commands.js'
 import { customAlphabet } from 'nanoid'
 import { buildInstanceConfig, getIncusClient, createInstance, deleteInstance, startInstance, stopInstance, getInstanceState } from '../lib/incus/index.js'
+import { restoreBandwidth } from '../lib/incus/incus-traffic.js'
 import { calculateCreateBilling, getMaxRefundable } from '../db/billing-operations.js'
 import { shouldSyncInstanceSwapSizeWithPlan } from '../lib/instance-swap.js'
 import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
@@ -4951,10 +4952,12 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
               preciseRemainingDays: true,
               minRemainingDays: null
             })
+            const capacity = await db.checkPlanUpgradeCapacity(instance, plan)
 
             return {
               plan,
-              preview
+              preview,
+              capacity
             }
           })
       )
@@ -4962,7 +4965,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       // 过滤出可升级的方案，并直接返回服务端报价结果
       const availablePlans = quotedPlans
         .filter(item => item.preview.isUpgrade)
-        .map(({ plan, preview }) => ({
+        .map(({ plan, preview, capacity }) => ({
           id: plan.id,
           name: plan.name,
           description: plan.description,
@@ -4980,7 +4983,19 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           trafficLimit: plan.trafficLimit.toString(),
           isSoldOut: plan.isSoldOut,
           slaGuarantee: plan.slaGuarantee,
-          priceDiff: preview.priceDiff
+          priceDiff: preview.priceDiff,
+          canUpgrade: capacity.canUpgrade,
+          cannotUpgradeReason: capacity.canUpgrade ? null : capacity.reason,
+          resourceWarnings: capacity.canUpgrade ? null : [
+            capacity.reason === 'cpu_insufficient'
+              ? '实例所在节点 CPU 配额不足'
+              : capacity.reason === 'memory_insufficient'
+                ? '实例所在节点内存不足'
+                : capacity.reason === 'disk_insufficient'
+                  ? '实例所在节点磁盘容量不足'
+                  : '实例所在节点资源不足'
+          ],
+          resourceCapacity: capacity
         }))
 
       const remainingDays = instance.expiresAt
@@ -5089,6 +5104,11 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '只能升级到更高价格的方案' })
       }
 
+      const normalizedPlanTrafficLimitSpeed = normalizePlanTrafficLimitSpeed(newPlan.trafficLimitSpeed)
+      if (normalizedPlanTrafficLimitSpeed === undefined) {
+        return reply.status(400).send({ error: '新方案带宽配置无效' })
+      }
+
       const priceDifference = changeQuote.priceDiff
 
       // 8. 验证用户余额
@@ -5103,7 +5123,9 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       const resourcesChanged = (
         newPlan.cpu !== currentPlan.cpu ||
         newPlan.memory !== currentPlan.memory ||
-        newPlan.disk !== currentPlan.disk
+        newPlan.disk !== currentPlan.disk ||
+        normalizedPlanTrafficLimitSpeed !== instance.limitsIngress ||
+        normalizedPlanTrafficLimitSpeed !== instance.limitsEgress
       )
 
       // 10. 执行事务：扣款 + 更新数据库
@@ -5115,6 +5137,11 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           hostId: instance.hostId,
           baseTrafficLimit: newPlan.trafficLimit
         })
+
+        const capacity = await db.reservePlanUpgradeCapacityWithLock(tx, instance, newPlan)
+        if (!capacity.canUpgrade) {
+          throw new Error(`HOST_RESOURCES_INSUFFICIENT:${capacity.reason || 'unknown'}`)
+        }
 
         // 扣除用户余额
         if (priceDifference > 0) {
@@ -5172,6 +5199,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
                   ? newPlan.swapSize
                   : instance.swapSize),
             monthlyTrafficLimit,
+            limitsIngress: normalizedPlanTrafficLimitSpeed,
+            limitsEgress: normalizedPlanTrafficLimitSpeed,
             trafficStatus: calculateInstanceTrafficStatus(instance.monthlyTrafficUsed, monthlyTrafficLimit),
             // 更新计费信息（续费价格和周期）
             billingPrice: Number(newPlan.price) / 100,
@@ -5212,22 +5241,11 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
             memory: newPlan.memory,
             disk: newPlan.disk
           })
+          await restoreBandwidth(client, instance.incusId, normalizedPlanTrafficLimitSpeed, normalizedPlanTrafficLimitSpeed)
           console.log(`[Upgrade Plan] Synced resources to Incus for instance ${instance.name}`)
         } catch (incusErr) {
           // Incus 同步失败不影响数据库更新，但记录日志
           request.log.error(incusErr, `Incus 资源同步失败: ${instance.name}`)
-        }
-
-        // 更新宿主机资源使用量
-        const cpuDelta = newPlan.cpu - currentPlan.cpu
-        const memoryDelta = newPlan.memory - currentPlan.memory
-        const diskDelta = newPlan.disk - currentPlan.disk
-        if (cpuDelta !== 0 || memoryDelta !== 0 || diskDelta !== 0) {
-          await db.updateHostResources(instance.hostId, {
-            cpuUsed: instance.host.cpuUsed + cpuDelta,
-            memoryUsed: instance.host.memoryUsed + memoryDelta,
-            diskUsed: instance.host.diskUsed + diskDelta
-          })
         }
       }
 
@@ -5264,6 +5282,20 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       }
       if (errorMessage.includes('BALANCE_INSUFFICIENT')) {
         return reply.status(400).send({ error: '用户余额不足' })
+      }
+      if (errorMessage.includes('HOST_RESOURCES_INSUFFICIENT')) {
+        const reason = errorMessage.split(':')[1]
+        return reply.status(400).send({
+          error: reason === 'cpu_insufficient'
+            ? '实例所在节点 CPU 配额不足'
+            : reason === 'memory_insufficient'
+              ? '实例所在节点内存不足'
+              : reason === 'disk_insufficient'
+                ? '实例所在节点磁盘容量不足'
+                : '实例所在节点资源不足',
+          code: 'HOST_RESOURCES_INSUFFICIENT',
+          reason
+        })
       }
       request.log.error(error, '升级方案失败')
       return reply.status(500).send({ error: '升级方案失败' })

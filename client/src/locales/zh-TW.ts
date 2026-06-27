@@ -7356,6 +7356,7 @@ export default {
         cannotChange: '暫時無法升級',
         cannotChangeRemainingDays: '剩餘天數不足 {days} 天，無法升級方案',
         cannotChangeInstanceStatus: '當前實例狀態不允許升級方案，僅運行中或已停止的實例可以操作',
+        cannotChangeHostResources: '實例所在節點資源不足，無法升級方案',
         cannotChangeUnknown: '當前無法升級方案',
         // 計算詳情
         oldDailyPrice: '原方案日價',

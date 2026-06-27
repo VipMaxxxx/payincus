@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "description": "Incudal 后端服务",
   "type": "module",
   "main": "dist/app.js",
@@ -144,6 +144,7 @@
     "test:production-proof-snapshot-redaction": "node --import tsx scripts/test-production-proof-snapshot-redaction.ts",
     "test:payment-provider-outbound-guard": "node --import tsx scripts/test-payment-provider-outbound-guard.ts",
     "test:plan-bandwidth-limit-guards": "node --import tsx scripts/test-plan-bandwidth-limit-guards.ts",
+    "test:plan-upgrade-capacity-guards": "node --import tsx scripts/test-plan-upgrade-capacity-guards.ts",
     "test:points-mutation-amount-guards": "node --import tsx scripts/test-points-mutation-amount-guards.ts",
     "test:recharge-callback-payload-guard": "node --import tsx scripts/test-recharge-callback-payload-guard.ts",
     "test:recharge-callback-url-guard": "node --import tsx scripts/test-recharge-callback-url-guard.ts",

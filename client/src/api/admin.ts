@@ -3707,6 +3707,9 @@ const api = {
         trafficLimit: string
         isSoldOut: boolean
         slaGuarantee: number | null
+        canUpgrade?: boolean
+        cannotUpgradeReason?: string | null
+        resourceWarnings?: string[] | null
       }>
       userBalance: number
     }> => http.get(`/admin/instances/${instanceId}/available-plans`),

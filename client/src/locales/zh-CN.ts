@@ -7009,6 +7009,7 @@ export default {
         cannotChange: '暂时无法升级',
         cannotChangeRemainingDays: '剩余天数不足 {days} 天，无法升级方案',
         cannotChangeInstanceStatus: '当前实例状态不允许升级方案，仅运行中或已停止的实例可以操作',
+        cannotChangeHostResources: '实例所在节点资源不足，无法升级方案',
         cannotChangeUnknown: '当前无法升级方案',
         // 计算详情
         oldDailyPrice: '原方案日价',

@@ -4,11 +4,50 @@
  */
 
 import { prisma } from './prisma.js'
-import type { Prisma } from '@prisma/client'
+import type { Instance, PackagePlan, Prisma } from '@prisma/client'
 import type { Host } from '../types/database.js'
 import { resolveStoragePoolForNewInstance } from './storage-pools.js'
 
 type DbClient = Prisma.TransactionClient | typeof prisma
+
+export type PlanUpgradeCapacityReason =
+  | 'host_not_found'
+  | 'host_not_online'
+  | 'cpu_insufficient'
+  | 'memory_insufficient'
+  | 'disk_insufficient'
+
+export interface PlanUpgradeCapacityCheck {
+  canUpgrade: boolean
+  reason: PlanUpgradeCapacityReason | null
+  message: string | null
+  hostId: number
+  deltas: {
+    cpu: number
+    memory: number
+    disk: number
+  }
+  currentUsage: {
+    cpu: number
+    memory: number
+    disk: number
+  }
+  projectedUsage: {
+    cpu: number
+    memory: number
+    disk: number
+  }
+  limits: {
+    cpu: number | null
+    memory: number | null
+    disk: number | null
+  }
+  available: {
+    cpu: number | null
+    memory: number | null
+    disk: number | null
+  }
+}
 
 /**
  * 获取所有主�?
@@ -455,6 +494,176 @@ export async function updateHostResources(id: number, resources: {
   })
 }
 
+function buildPlanUpgradeCapacityResult(input: {
+  instance: Pick<Instance, 'hostId' | 'cpu' | 'memory' | 'disk'>
+  newPlan: Pick<PackagePlan, 'cpu' | 'memory' | 'disk'>
+  host: {
+    id: number
+    status: string
+    cpuUsed: number
+    memoryUsed: number
+    diskUsed: number
+    cpuAllowanceMax: number | null
+    memoryMax: number | null
+    storageSize: number | null
+  } | null
+  aggregate: { cpuUsed: number; memoryUsed: number; diskUsed: number }
+}): PlanUpgradeCapacityCheck {
+  const { instance, newPlan, host, aggregate } = input
+  const deltas = {
+    cpu: newPlan.cpu - instance.cpu,
+    memory: newPlan.memory - instance.memory,
+    disk: newPlan.disk - instance.disk
+  }
+
+  const zeroUsage = { cpu: 0, memory: 0, disk: 0 }
+  const emptyLimits = { cpu: null, memory: null, disk: null }
+  const emptyAvailable = { cpu: null, memory: null, disk: null }
+
+  if (!host) {
+    return {
+      canUpgrade: false,
+      reason: 'host_not_found',
+      message: 'HOST_NOT_FOUND',
+      hostId: instance.hostId,
+      deltas,
+      currentUsage: zeroUsage,
+      projectedUsage: zeroUsage,
+      limits: emptyLimits,
+      available: emptyAvailable
+    }
+  }
+
+  const currentUsage = {
+    cpu: Math.max(aggregate.cpuUsed, host.cpuUsed ?? 0),
+    memory: Math.max(aggregate.memoryUsed, host.memoryUsed ?? 0),
+    disk: Math.max(aggregate.diskUsed, host.diskUsed ?? 0)
+  }
+  const projectedUsage = {
+    cpu: currentUsage.cpu + deltas.cpu,
+    memory: currentUsage.memory + deltas.memory,
+    disk: currentUsage.disk + deltas.disk
+  }
+  const limits = {
+    cpu: host.cpuAllowanceMax && host.cpuAllowanceMax > 0 ? host.cpuAllowanceMax : null,
+    memory: host.memoryMax && host.memoryMax > 0 ? host.memoryMax : null,
+    disk: host.storageSize && host.storageSize > 0 ? host.storageSize * 1024 : null
+  }
+  const available = {
+    cpu: limits.cpu === null ? null : Math.max(0, limits.cpu - currentUsage.cpu),
+    memory: limits.memory === null ? null : Math.max(0, limits.memory - currentUsage.memory),
+    disk: limits.disk === null ? null : Math.max(0, limits.disk - currentUsage.disk)
+  }
+
+  if (host.status !== 'online') {
+    return { canUpgrade: false, reason: 'host_not_online', message: 'HOST_NOT_ONLINE', hostId: host.id, deltas, currentUsage, projectedUsage, limits, available }
+  }
+
+  if (deltas.cpu > 0 && (limits.cpu === null || projectedUsage.cpu > limits.cpu)) {
+    return { canUpgrade: false, reason: 'cpu_insufficient', message: 'CPU_INSUFFICIENT', hostId: host.id, deltas, currentUsage, projectedUsage, limits, available }
+  }
+
+  if (deltas.memory > 0 && (limits.memory === null || projectedUsage.memory > limits.memory)) {
+    return { canUpgrade: false, reason: 'memory_insufficient', message: 'MEMORY_INSUFFICIENT', hostId: host.id, deltas, currentUsage, projectedUsage, limits, available }
+  }
+
+  if (deltas.disk > 0 && (limits.disk === null || projectedUsage.disk > limits.disk)) {
+    return { canUpgrade: false, reason: 'disk_insufficient', message: 'DISK_INSUFFICIENT', hostId: host.id, deltas, currentUsage, projectedUsage, limits, available }
+  }
+
+  return { canUpgrade: true, reason: null, message: null, hostId: host.id, deltas, currentUsage, projectedUsage, limits, available }
+}
+
+export async function checkPlanUpgradeCapacity(
+  instance: Pick<Instance, 'hostId' | 'cpu' | 'memory' | 'disk'>,
+  newPlan: Pick<PackagePlan, 'cpu' | 'memory' | 'disk'>,
+  client: DbClient = prisma
+): Promise<PlanUpgradeCapacityCheck> {
+  const [host, resourceSum] = await Promise.all([
+    client.host.findUnique({
+      where: { id: instance.hostId },
+      select: {
+        id: true,
+        status: true,
+        cpuUsed: true,
+        memoryUsed: true,
+        diskUsed: true,
+        cpuAllowanceMax: true,
+        memoryMax: true,
+        storageSize: true
+      }
+    }),
+    client.instance.aggregate({
+      where: { hostId: instance.hostId, status: { not: 'deleted' } },
+      _sum: { cpu: true, memory: true, disk: true }
+    })
+  ])
+
+  return buildPlanUpgradeCapacityResult({
+    instance,
+    newPlan,
+    host,
+    aggregate: {
+      cpuUsed: resourceSum._sum.cpu ?? 0,
+      memoryUsed: resourceSum._sum.memory ?? 0,
+      diskUsed: resourceSum._sum.disk ?? 0
+    }
+  })
+}
+
+export async function reservePlanUpgradeCapacityWithLock(
+  tx: Prisma.TransactionClient,
+  instance: Pick<Instance, 'hostId' | 'cpu' | 'memory' | 'disk'>,
+  newPlan: Pick<PackagePlan, 'cpu' | 'memory' | 'disk'>
+): Promise<PlanUpgradeCapacityCheck> {
+  const hosts = await tx.$queryRaw<Array<{
+    id: number
+    status: string
+    cpuUsed: number
+    memoryUsed: number
+    diskUsed: number
+    cpuAllowanceMax: number | null
+    memoryMax: number | null
+    storageSize: number | null
+  }>>`
+    SELECT id, status, cpu_used AS "cpuUsed", memory_used AS "memoryUsed", disk_used AS "diskUsed",
+           cpu_allowance_max AS "cpuAllowanceMax", memory_max AS "memoryMax", storage_size AS "storageSize"
+    FROM hosts
+    WHERE id = ${instance.hostId}
+    FOR UPDATE
+  `
+  const resourceSum = await tx.instance.aggregate({
+    where: { hostId: instance.hostId, status: { not: 'deleted' } },
+    _sum: { cpu: true, memory: true, disk: true }
+  })
+
+  const capacity = buildPlanUpgradeCapacityResult({
+    instance,
+    newPlan,
+    host: hosts[0] ?? null,
+    aggregate: {
+      cpuUsed: resourceSum._sum.cpu ?? 0,
+      memoryUsed: resourceSum._sum.memory ?? 0,
+      diskUsed: resourceSum._sum.disk ?? 0
+    }
+  })
+
+  if (!capacity.canUpgrade) return capacity
+
+  if (capacity.deltas.cpu !== 0 || capacity.deltas.memory !== 0 || capacity.deltas.disk !== 0) {
+    await tx.host.update({
+      where: { id: instance.hostId },
+      data: {
+        cpuUsed: Math.max(0, capacity.projectedUsage.cpu),
+        memoryUsed: Math.max(0, capacity.projectedUsage.memory),
+        diskUsed: Math.max(0, capacity.projectedUsage.disk)
+      }
+    })
+  }
+
+  return capacity
+}
+
 /**
  * 删除主机
  * 注意：在删除宿主机之前，必须先删除所有关联的记录以解除外键约�?
@@ -673,6 +882,12 @@ export async function selectAvailableHost(options: {
       continue
     }
 
+    const diskTotal = host.storageSize ? host.storageSize * 1024 : 0
+    if (diskTotal <= 0 || (diskUsedEffective + disk) > diskTotal) {
+      console.log(`[selectAvailableHost] Host ${host.name} disk insufficient: ${diskUsedEffective} + ${disk} > ${diskTotal}`)
+      continue
+    }
+
     const storagePoolName = await resolveStoragePoolForNewInstance(host.id, { packageId })
     if (!storagePoolName) {
       console.log(`[selectAvailableHost] 宿主机 ${host.name} 未配置可用于实例系统盘的存储池`)
@@ -868,6 +1083,12 @@ export async function selectAndReserveHostWithLock(
     }
     if ((memoryUsedEffective + memory) > memoryMax) {
       console.log(`[selectAndReserveHostWithLock] 宿主�?${host.name} 内存配额不足: ${memoryUsedEffective} + ${memory} > ${memoryMax}`)
+      continue
+    }
+
+    const diskTotal = host.storage_size ? host.storage_size * 1024 : 0
+    if (diskTotal <= 0 || (diskUsedEffective + disk) > diskTotal) {
+      console.log(`[selectAndReserveHostWithLock] Host ${host.name} disk insufficient: ${diskUsedEffective} + ${disk} > ${diskTotal}`)
       continue
     }
 
