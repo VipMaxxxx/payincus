@@ -11,6 +11,7 @@ export const ErrorCode = {
     FORBIDDEN: 'FORBIDDEN',
     ADMIN_REQUIRED: 'ADMIN_REQUIRED',
     FEATURE_DISABLED: 'FEATURE_DISABLED',
+    INVALID_INPUT: 'INVALID_INPUT',
 
     // User errors
     USER_NOT_FOUND: 'USER_NOT_FOUND',
@@ -357,6 +358,7 @@ export const ErrorMessages: Record<ErrorCodeType, string> = {
     [ErrorCode.FORBIDDEN]: 'Access denied',
     [ErrorCode.ADMIN_REQUIRED]: 'Admin privileges required',
     [ErrorCode.FEATURE_DISABLED]: 'This feature has been disabled',
+    [ErrorCode.INVALID_INPUT]: 'Invalid input',
 
     // User errors
     [ErrorCode.USER_NOT_FOUND]: 'User not found',

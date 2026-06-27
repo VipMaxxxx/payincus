@@ -65,8 +65,14 @@ assert(
     riskService.includes('accountOrderRestrictEnabled') &&
     riskService.includes('autoSuspendEnabled') &&
     riskService.includes('restrictUserOrdersForRisk') &&
+    riskService.includes('export async function manualLimitInstanceRisk') &&
+    riskService.includes('export async function manualSuspendInstanceRisk') &&
+    riskService.includes('export async function manualUnsuspendInstanceRisk') &&
+    riskService.includes('export async function manualRestrictOrdersForInstanceRisk') &&
+    riskService.includes("type: 'manual_suspend'") &&
+    riskService.includes("type: 'manual_qos_limited'") &&
     riskService.includes('startResourceRiskScheduler'),
-  'resource risk service must evaluate bandwidth, CPU, packet anomaly, scan signals, apply QoS, restrict orders, and run on a scheduler'
+  'resource risk service must evaluate bandwidth, CPU, packet anomaly, scan signals, apply QoS, support manual actions, restrict orders, and run on a scheduler'
 )
 
 assert(
@@ -83,7 +89,12 @@ assert(
     riskRoute.includes("'/resource-risk/review-ticket'") &&
     riskRoute.includes("'/admin/resource-risk/policy'") &&
     riskRoute.includes("'/admin/resource-risk/instances'") &&
+    riskRoute.includes("'/admin/resource-risk/instances/:id/manual-qos'") &&
+    riskRoute.includes("'/admin/resource-risk/instances/:id/manual-suspend'") &&
+    riskRoute.includes("'/admin/resource-risk/instances/:id/manual-unsuspend'") &&
+    riskRoute.includes("'/admin/resource-risk/instances/:id/manual-order-restrict'") &&
     riskRoute.includes("'/admin/resource-risk/order-restrictions/:id/release'") &&
+    riskRoute.includes('parseQosTiers(body.qosTiers)') &&
     app.includes("await fastify.register(resourceRiskRoutes, { prefix: '/api' })") &&
     app.includes('startResourceRiskScheduler()') &&
     riskService.includes('autoSuspendInstance') &&
@@ -93,9 +104,13 @@ assert(
 )
 
 assert(
-  adminApi.includes('resourceRisk:') &&
+    adminApi.includes('resourceRisk:') &&
     adminApi.includes("http.get('/admin/resource-risk/overview')") &&
     adminApi.includes("http.put('/admin/resource-risk/policy'") &&
+    adminApi.includes('manualQos') &&
+    adminApi.includes('manualSuspend') &&
+    adminApi.includes('manualUnsuspend') &&
+    adminApi.includes('manualOrderRestrict') &&
     clientApi.includes('createReviewTicket') &&
     adminRouter.includes("path: '/admin/resource-risk'") &&
     adminNav.includes("path: '/admin/resource-risk'") &&
@@ -103,6 +118,10 @@ assert(
     adminView.includes('事件流水') &&
     adminView.includes('下单限制') &&
     adminView.includes('QoS 档位') &&
+    adminView.includes('policyForm.qosTiers') &&
+    adminView.includes('addQosTier') &&
+    adminView.includes('manualSuspend(item)') &&
+    !adminView.includes('qosTiersText') &&
     createView.includes('orderRiskReviewAvailable') &&
     createView.includes('api.resourceRisk.createReviewTicket') &&
     zhLocale.includes('ORDER_RESTRICTED_BY_RISK') &&

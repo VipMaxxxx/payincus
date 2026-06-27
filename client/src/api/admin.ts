@@ -234,6 +234,23 @@ export interface ResourceRiskPolicy {
   accountOrderRestrictEnabled: boolean
 }
 
+export interface ResourceRiskManualQosInput {
+  bandwidthMbps: number
+  reason: string
+  restrictOrders?: boolean
+}
+
+export interface ResourceRiskManualSuspendInput {
+  reason: string
+  restrictOrders?: boolean
+  notifyUser?: boolean
+}
+
+export interface ResourceRiskManualUnsuspendInput {
+  reason: string
+  notifyUser?: boolean
+}
+
 export interface ResourceRiskState {
   id: number
   instanceId: number
@@ -2364,6 +2381,14 @@ const api = {
       http.post(`/admin/resource-risk/instances/${id}/evaluate`),
     releaseInstance: (id: number, reason: string): Promise<{ state: ResourceRiskState }> =>
       http.post(`/admin/resource-risk/instances/${id}/release`, { reason }),
+    manualQos: (id: number, data: ResourceRiskManualQosInput): Promise<{ state: ResourceRiskState }> =>
+      http.post(`/admin/resource-risk/instances/${id}/manual-qos`, data),
+    manualSuspend: (id: number, data: ResourceRiskManualSuspendInput): Promise<{ state: ResourceRiskState }> =>
+      http.post(`/admin/resource-risk/instances/${id}/manual-suspend`, data),
+    manualUnsuspend: (id: number, data: ResourceRiskManualUnsuspendInput): Promise<{ state: ResourceRiskState }> =>
+      http.post(`/admin/resource-risk/instances/${id}/manual-unsuspend`, data),
+    manualOrderRestrict: (id: number, reason: string): Promise<{ restriction: UserOrderRestrictionRecord }> =>
+      http.post(`/admin/resource-risk/instances/${id}/manual-order-restrict`, { reason }),
     releaseRestriction: (id: number, data: { reason: string; ticketId?: number | null }): Promise<{ restriction: UserOrderRestrictionRecord }> =>
       http.post(`/admin/resource-risk/order-restrictions/${id}/release`, data)
   },
