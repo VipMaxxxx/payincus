@@ -75,10 +75,11 @@ ADMIN_PASSWORD=change_me_admin_password
 
 ```dotenv
 PAYMENT_CALLBACK_IP_WHITELIST=
+PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=true
 PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false
 ```
 
-生产建议配置支付商回调 IP 白名单。只有在支付商无法提供固定回调 IP 且你已经确认签名校验可靠时，才考虑特殊处理。
+生产建议配置支付商回调 IP 白名单。若支付商无法提供固定回调 IP，且运营方明确接受不使用来源 IP 白名单，则设置 `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false`，同时保持 `PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false`。这表示不跳过已有白名单校验，只是在没有可用固定来源 IP 时接受空白名单；回调仍必须通过签名验签、交易状态、金额匹配和 `payment_callbacks` 幂等校验后才会入账。
 
 ## 后台 OTA
 

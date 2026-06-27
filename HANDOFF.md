@@ -154,8 +154,9 @@ v0.9.9:
 Remaining before calling the whole commercial-operation objective complete:
 
 - Current `v0.9.9` production OTA is complete and verified. `v0.9.4` final-acceptance proof remains the latest full live proof report; `v0.9.9` was a public branding/guard patch and passed OTA production checks.
-- Accepted production warnings remain: `PAYMENT_CALLBACK_IP_WHITELIST` is empty and public package `DEBGP` is active while current online bound hosts cannot satisfy its minimum CPU/memory/disk requirement.
-  Current read-only production capacity snapshot for this warning: package `DEBGP` (`id=3`) has one active unsold plan requiring `cpu=30`, `memory=256`, and disk capacity; bound online host `DE-01` (`id=6`) reports `cpuAllowanceMax=400`, non-deleted instance CPU usage `390`, free CPU `10`, `memoryMax=4096`, non-deleted instance memory usage `3328`, free memory `768`, `storageSize=60GB`, non-deleted instance disk usage `26624MB`, and free disk `34816MB`. It cannot create the minimum plan because CPU is already below the minimum requirement. In `v0.9.6`, the public package API now reports `DEBGP soldOut=true`, so the market should block purchase while still surfacing the operational capacity warning.
+- `DEBGP` production capacity warning was closed operationally on 2026-06-27 by setting package `#3` (`DEBGP`) `active=false`; package data and host binding were preserved for later re-enable after capacity is added.
+- `PAYMENT_CALLBACK_IP_WHITELIST` remains empty by operator decision. The local `1.0.0` candidate adds `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false` so production readiness records this as an explicit no-fixed-source-IP policy while keeping `PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false` and preserving signature/status/amount/idempotency requirements. This candidate is not tagged or OTA-applied yet.
+- The local `1.0.0` candidate hardens the host Agent against CPU/log pressure: default heartbeat 60s, minimum 30s, Incus state concurrency 3, 500-instance report cap, non-running instances skip `/state`, heartbeat log throttling, and generated `incudal-agent.service` CPU/memory/task/journal rate limits. Existing hosts must rerun the Agent installer after release to refresh old service templates.
 - With Turnstile enabled and no `SMOKE_TURNSTILE_TOKEN`, split auth smoke verifies Turnstile enforcement and skips the full login-chain smoke. Provide a valid Turnstile token if a full automated login-chain proof is required.
 - Keep watching the high-risk surfaces touched by `v0.9.0`: Integration Center health checks, manual recharge, refund/reconciliation workbench, extension capability review blocking, delivery/plan-upgrade sync repair, and split user/admin login boundaries.
 
@@ -174,7 +175,7 @@ Remaining before calling the whole commercial-operation objective complete:
   - `package.json` under `/opt/incudal/current` reports `0.9.9`.
   - OTA log shows `System update completed successfully`.
   - Task `103` database row is `success` with `errorMessage=null`.
-  - `pnpm verify:production` on production passes with accepted warnings for empty `PAYMENT_CALLBACK_IP_WHITELIST` and `DEBGP` capacity.
+  - `pnpm verify:production` on production passes. After package `DEBGP` was paused, the remaining warnings are the empty `PAYMENT_CALLBACK_IP_WHITELIST` policy warnings until the local `1.0.0` candidate is released and production `.env` explicitly sets `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false`.
   - Deployed scripts contain PayIncus branding markers for live acceptance, local env initialization, and atomic OTA migration. `install-panel.sh` remains a release/repository artifact and is not part of the current deployed scripts subset.
   - Online docs `https://payincus.com/release/version-log` contains `v0.9.9`.
   - Deployed admin bundle contains `resource-risk-evidence-panel` and generated CSS with `background-color:#fff;opacity:1`, plus dark-mode opaque surface/code backgrounds.

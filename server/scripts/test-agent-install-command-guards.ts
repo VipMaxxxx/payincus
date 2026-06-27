@@ -72,6 +72,17 @@ assert.ok(
   'Agent install script fallback binary downloads must keep the same sha256 verification requirement'
 )
 assert.ok(
+  installScriptSource.includes('HEARTBEAT_INTERVAL="${INCUDAL_HEARTBEAT_INTERVAL_SECONDS:-60}"') &&
+    installScriptSource.includes('normalize_heartbeat_interval') &&
+    installScriptSource.includes('[ "${value}" -ge 30 ]') &&
+    installScriptSource.includes('CPUQuota=20%') &&
+    installScriptSource.includes('MemoryMax=256M') &&
+    installScriptSource.includes('TasksMax=128') &&
+    installScriptSource.includes('LogRateLimitIntervalSec=30s') &&
+    installScriptSource.includes('LogRateLimitBurst=120'),
+  'Agent install script must install conservative heartbeat defaults plus systemd CPU, memory, task, and journal rate limits'
+)
+assert.ok(
   agentRouteSource.includes('interface AgentBinaryQuery') &&
     agentRouteSource.includes('Querystring: AgentBinaryQuery'),
   'Agent binary proxy must type and read version/checksum query parameters'

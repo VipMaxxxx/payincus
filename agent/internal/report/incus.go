@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	maxReportedIncusInstances = 1000
-	incusStateConcurrency     = 8
+	maxReportedIncusInstances = 500
+	incusStateConcurrency     = 3
 )
 
 var externalGuestInterfacePattern = regexp.MustCompile(`^(eth[0-9]+|en(?:o|p|s|x)[a-z0-9]+)$`)
@@ -197,7 +197,7 @@ func buildIncusInstanceReportItem(client *http.Client, instance incusInstanceSum
 		"type":       instance.Type,
 	}
 
-	if instance.Name == "" {
+	if instance.Name == "" || !isRunningIncusStatus(instance.Status, instance.StatusCode) {
 		return item
 	}
 
@@ -228,6 +228,11 @@ func buildIncusInstanceReportItem(client *http.Client, instance incusInstanceSum
 	}
 
 	return item
+}
+
+func isRunningIncusStatus(status string, statusCode int) bool {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	return normalized == "running" || statusCode == 103
 }
 
 func getTrafficCountersFromIncusState(instanceName string, state incusInstanceState) trafficCounters {

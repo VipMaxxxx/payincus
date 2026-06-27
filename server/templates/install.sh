@@ -152,30 +152,30 @@ extract_agent_panel_url() {
 }
 
 normalize_agent_interval() {
-    local value="${1:-30}"
-    if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 5 && value <= 3600 )); then
+    local value="${1:-60}"
+    if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 30 && value <= 3600 )); then
         echo "$value"
     else
-        echo "30"
+        echo "60"
     fi
 }
 
 prompt_agent_heartbeat_interval() {
     local default_interval=""
-    default_interval=$(normalize_agent_interval "${1:-30}")
+    default_interval=$(normalize_agent_interval "${1:-60}")
 
     if [[ ! -t 0 ]]; then
         AGENT_HEARTBEAT_INTERVAL_SECONDS="$default_interval"
         return 0
     fi
 
-    echo -ne "  ${BOLD}Agent 上报间隔秒数 [默认 ${default_interval}，范围 5-3600]: ${NC}"
+    echo -ne "  ${BOLD}Agent 上报间隔秒数 [默认 ${default_interval}，范围 30-3600]: ${NC}"
     local agent_interval=""
     read -r agent_interval
 
     if [[ -z "$agent_interval" ]]; then
         AGENT_HEARTBEAT_INTERVAL_SECONDS="$default_interval"
-    elif [[ "$agent_interval" =~ ^[0-9]+$ ]] && (( agent_interval >= 5 && agent_interval <= 3600 )); then
+    elif [[ "$agent_interval" =~ ^[0-9]+$ ]] && (( agent_interval >= 30 && agent_interval <= 3600 )); then
         AGENT_HEARTBEAT_INTERVAL_SECONDS="$agent_interval"
     else
         warn "Agent 上报间隔无效，已使用默认 ${default_interval} 秒"
@@ -480,28 +480,28 @@ read_token() {
 # ========================== Agent 上报间隔 ==========================
 configure_agent_heartbeat_interval() {
     if [[ "$AGENT_ENABLED" != "true" || ( -z "$AGENT_INSTALL_TOKEN" && ( -z "$AGENT_ID" || -z "$AGENT_SECRET" ) ) ]]; then
-        AGENT_HEARTBEAT_INTERVAL_SECONDS="30"
+        AGENT_HEARTBEAT_INTERVAL_SECONDS="60"
         return 0
     fi
 
     if [[ ! -t 0 ]]; then
-        AGENT_HEARTBEAT_INTERVAL_SECONDS="30"
+        AGENT_HEARTBEAT_INTERVAL_SECONDS="60"
         return 0
     fi
 
     echo -e "\n${CYAN}==> (可选) Agent 上报间隔${NC}"
-    echo -e "  ${DIM}默认 30 秒；面板宿主机状态卡片会自动跟随此间隔刷新${NC}"
-    echo -ne "  ${BOLD}Agent 上报间隔秒数 [默认 30，范围 5-3600]: ${NC}"
+    echo -e "  ${DIM}默认 60 秒；面板宿主机状态卡片会自动跟随此间隔刷新${NC}"
+    echo -ne "  ${BOLD}Agent 上报间隔秒数 [默认 60，范围 30-3600]: ${NC}"
     local agent_interval=""
     read -r agent_interval
 
     if [[ -z "$agent_interval" ]]; then
-        AGENT_HEARTBEAT_INTERVAL_SECONDS="30"
-    elif [[ "$agent_interval" =~ ^[0-9]+$ ]] && (( agent_interval >= 5 && agent_interval <= 3600 )); then
+        AGENT_HEARTBEAT_INTERVAL_SECONDS="60"
+    elif [[ "$agent_interval" =~ ^[0-9]+$ ]] && (( agent_interval >= 30 && agent_interval <= 3600 )); then
         AGENT_HEARTBEAT_INTERVAL_SECONDS="$agent_interval"
     else
-        warn "Agent 上报间隔无效，已使用默认 30 秒"
-        AGENT_HEARTBEAT_INTERVAL_SECONDS="30"
+        warn "Agent 上报间隔无效，已使用默认 60 秒"
+        AGENT_HEARTBEAT_INTERVAL_SECONDS="60"
     fi
 }
 
@@ -1526,7 +1526,7 @@ run_incudal_agent_installer() {
     local install_token="${2:-}"
     local agent_id="${3:-}"
     local agent_secret="${4:-}"
-    local heartbeat_interval="${5:-30}"
+    local heartbeat_interval="${5:-60}"
     local binary_url="${6:-}"
     local binary_sha256="${7:-}"
 
@@ -1582,7 +1582,7 @@ show_incudal_agent_status() {
     panel_url=$(read_agent_config_value "panel_url" || true)
     agent_id=$(read_agent_config_value "agent_id" || true)
     heartbeat_interval=$(read_agent_config_value "heartbeat_interval_seconds" || true)
-    heartbeat_interval=$(normalize_agent_interval "${heartbeat_interval:-30}")
+    heartbeat_interval=$(normalize_agent_interval "${heartbeat_interval:-60}")
 
     if [[ -f "$AGENT_CONFIG_FILE" ]]; then
         echo -e "  配置文件  :  ${GREEN}${AGENT_CONFIG_FILE}${NC}"
@@ -1651,7 +1651,7 @@ update_incudal_agent_from_config() {
     agent_id=$(read_agent_config_value "agent_id" || true)
     agent_secret=$(read_agent_config_value "agent_secret" || true)
     heartbeat_interval=$(read_agent_config_value "heartbeat_interval_seconds" || true)
-    heartbeat_interval=$(normalize_agent_interval "${heartbeat_interval:-30}")
+    heartbeat_interval=$(normalize_agent_interval "${heartbeat_interval:-60}")
 
     if [[ -z "$panel_url" || -z "$agent_id" || -z "$agent_secret" ]]; then
         warn "本机没有完整的 Agent 配置，无法直接更新"
@@ -1691,7 +1691,7 @@ install_incudal_agent_with_token() {
 
     local current_interval=""
     current_interval=$(read_agent_config_value "heartbeat_interval_seconds" || true)
-    prompt_agent_heartbeat_interval "${current_interval:-30}"
+    prompt_agent_heartbeat_interval "${current_interval:-60}"
 
     run_incudal_agent_installer "$panel_url" "$install_token" "" "" "$AGENT_HEARTBEAT_INTERVAL_SECONDS" "$AGENT_BINARY_URL" "$AGENT_BINARY_SHA256"
 }

@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	DefaultHeartbeatIntervalSeconds = 30
-	MinHeartbeatIntervalSeconds     = 5
+	DefaultHeartbeatIntervalSeconds = 60
+	MinHeartbeatIntervalSeconds     = 30
 	MaxHeartbeatIntervalSeconds     = 3600
 )
 

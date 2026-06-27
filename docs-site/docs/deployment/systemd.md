@@ -94,6 +94,22 @@ sudo journalctl -u 'incudal-online-rollback@*' -n 200 --no-pager
 
 后台 OTA 任务日志还会写入 `SYSTEM_UPDATE_LOG_DIR`，默认是 `/opt/incudal/update-logs`。
 
+## Agent 服务
+
+宿主机 Agent 由后台生成的 Agent 安装命令写入 `incudal-agent.service`。当前模板会限制 Agent 自身资源和 journal 写入速率：
+
+```text
+CPUQuota=20%
+MemoryMax=256M
+TasksMax=128
+StandardOutput=journal
+StandardError=journal
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=120
+```
+
+如果宿主机曾经安装过旧 Agent，需要在面板更新后重新复制后台 Agent 安装命令并在宿主机执行一次。只靠 Agent 二进制自升级不会自动改写旧 systemd service，因此旧节点可能仍缺少 CPU、内存和日志速率限制。
+
 ## 验证
 
 ```bash

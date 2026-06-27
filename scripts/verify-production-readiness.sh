@@ -177,6 +177,7 @@ ADMIN_FRONTEND_URL_VALUE="$(trim_slash "$(config_value ADMIN_FRONTEND_URL)")"
 SITE_URL_VALUE="$(trim_slash "$(config_value SITE_URL)")"
 PAYMENT_CALLBACK_BASE_URL_VALUE="$(trim_slash "$(config_value PAYMENT_CALLBACK_BASE_URL)")"
 PAYMENT_CALLBACK_IP_WHITELIST_VALUE="$(config_value PAYMENT_CALLBACK_IP_WHITELIST)"
+PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED_VALUE="$(config_value PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED)"
 PAYMENT_CALLBACK_SKIP_IP_WHITELIST_VALUE="$(config_value PAYMENT_CALLBACK_SKIP_IP_WHITELIST)"
 COOKIE_DOMAIN_VALUE="$(config_value COOKIE_DOMAIN)"
 BACKEND_URL_VALUE="$(trim_slash "${BACKEND_URL:-$(config_value BACKEND_URL)}")"
@@ -215,6 +216,8 @@ fi
 require_equals PAYMENT_CALLBACK_SKIP_IP_WHITELIST "$PAYMENT_CALLBACK_SKIP_IP_WHITELIST_VALUE" false
 if [[ -n "$PAYMENT_CALLBACK_IP_WHITELIST_VALUE" ]]; then
   validate_ip_whitelist "$PAYMENT_CALLBACK_IP_WHITELIST_VALUE"
+elif [[ "$PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED_VALUE" == "false" ]]; then
+  log "PAYMENT_CALLBACK_IP_WHITELIST is intentionally empty; callbacks still require signature/status/amount/idempotency checks"
 else
   warn "PAYMENT_CALLBACK_IP_WHITELIST is empty; callbacks still require signature/status/amount/idempotency checks, but provider source IPs should be configured when available"
 fi

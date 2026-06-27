@@ -28,6 +28,14 @@ assert.ok(
 )
 
 assert.ok(
+  hostInstallScript.includes('normalize_agent_interval()') &&
+    hostInstallScript.includes('local value="${1:-60}"') &&
+    hostInstallScript.includes('value >= 30 && value <= 3600') &&
+    hostInstallScript.includes('Agent 上报间隔秒数 [默认 60，范围 30-3600]'),
+  'host install script must keep Agent heartbeat interval at a conservative 60s default and 30s minimum'
+)
+
+assert.ok(
   hostInstallScript.includes('cert_file=$(mktemp /tmp/incudal-panel-cert.XXXXXX.crt)') &&
     hostInstallScript.includes('curl -sSf "$cert_url" -o "$cert_file"') &&
     hostInstallScript.includes('面板证书已存在，更新为当前证书') &&
