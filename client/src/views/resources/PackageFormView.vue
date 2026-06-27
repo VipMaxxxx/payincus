@@ -111,6 +111,7 @@ interface PackageForm {
   nested: boolean
   active: boolean
   monthlyTrafficLimitGB: string
+  trafficResetPrice: number
   // 实例配额
   portLimit: number | null
   snapshotLimit: number | null
@@ -149,6 +150,7 @@ const formError = ref('')
 const storageUnits = ['B', 'kB', 'MB', 'GB', 'TB', 'PB']
 const networkUnits = ['Mbit']
 const publicPackageMaxInstanceOptions = [1, 2, 3, 4, 5]
+const MAX_TRAFFIC_RESET_PRICE = 999999.99
 
 // 网络模式（场景化 5 种选项，与节点创建页一致）
 const networkModes = [
@@ -242,6 +244,7 @@ function getDefaultForm(): PackageForm {
     nested: false,
     active: true,
     monthlyTrafficLimitGB: '',
+    trafficResetPrice: 0,
     // 实例配额默认值
     portLimit: 20,
     snapshotLimit: 10,
@@ -301,6 +304,18 @@ function normalizeTrafficMultiplier(value: unknown): number {
   const num = Number(value)
   if (!Number.isFinite(num) || num <= 0) return 1
   return Math.round(Math.min(Math.max(num, 0.001), 100) * 1000) / 1000
+}
+
+function normalizeMoneyCents(value: unknown): number | null {
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount < 0 || amount > MAX_TRAFFIC_RESET_PRICE) {
+    return null
+  }
+  const cents = amount * 100
+  if (Math.abs(cents - Math.round(cents)) >= 1e-8) {
+    return null
+  }
+  return Math.round(cents)
 }
 
 // Parse storage value with unit (e.g., "100MB" -> { value: "100", unit: "MB" })
@@ -584,6 +599,7 @@ async function loadPackage(id: number): Promise<void> {
       nested: pkg.nested === 1 || pkg.nested === true,
       active: pkg.active === 1 || pkg.active === true,
       monthlyTrafficLimitGB: bytesToGB(pkg.monthly_traffic_limit),
+      trafficResetPrice: Number(pkg.traffic_reset_price || 0) / 100,
       // 实例配额
       portLimit: pkg.port_limit ?? 20,
       snapshotLimit: pkg.snapshot_limit ?? 10,
@@ -694,6 +710,12 @@ async function savePackage(): Promise<void> {
     return
   }
 
+  const trafficResetPriceCents = normalizeMoneyCents(form.value.trafficResetPrice)
+  if (trafficResetPriceCents === null) {
+    formError.value = `流量重置价格必须在 0-${MAX_TRAFFIC_RESET_PRICE.toFixed(2)} 元之间，且最多两位小数`
+    return
+  }
+
   // 更新表单值为验证后的数值
   form.value.limitsCpuPriority = cpuPriority
   form.value.bootAutostartPriority = bootPriority
@@ -732,6 +754,7 @@ async function savePackage(): Promise<void> {
       nested: form.value.nested,
       active: form.value.active,
       monthlyTrafficLimit: trafficLimitBytes,
+      trafficResetPrice: trafficResetPriceCents,
       // 实例配额
       portLimit: form.value.portLimit ?? undefined,
       snapshotLimit: form.value.snapshotLimit ?? undefined,
@@ -1224,6 +1247,18 @@ function goBack(): void {
               class="input" 
               :placeholder="t('admin.packages.unlimitedPlaceholder')" 
             />
+          </div>
+          <div>
+            <label class="block text-xs text-themed-muted mb-1.5">流量重置价格（元）</label>
+            <input
+              v-model.number="form.trafficResetPrice"
+              type="number"
+              class="input"
+              min="0"
+              :max="MAX_TRAFFIC_RESET_PRICE"
+              step="0.01"
+            />
+            <p class="text-xs text-themed-muted mt-1">用户自助重置月流量时扣费，0 表示免费。</p>
           </div>
         </div>
       </div>

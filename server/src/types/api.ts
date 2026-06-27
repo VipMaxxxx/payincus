@@ -176,6 +176,7 @@ export interface CreatePackageRequest {
   backupLimit?: number
   siteLimit?: number
   monthlyTrafficLimit?: string | null
+  trafficResetPrice?: number
   // 存储 I/O 限制
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string
@@ -221,6 +222,7 @@ export interface UpdatePackageRequest {
   backupLimit?: number
   siteLimit?: number
   monthlyTrafficLimit?: string | null
+  trafficResetPrice?: number
   // 存储 I/O 限制
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string

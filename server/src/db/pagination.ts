@@ -476,7 +476,13 @@ export async function getInstancesPaginated(options: PaginationOptions = {}): Pr
         select: {
           name: true,
           allowInstanceDeletion: true,
-          instanceType: true
+          instanceType: true,
+          trafficResetPrice: true
+        }
+      },
+      packagePlan: {
+        select: {
+          trafficResetPrice: true
         }
       }
     },
@@ -563,6 +569,7 @@ export async function getInstancesPaginated(options: PaginationOptions = {}): Pr
       package_name: i.package?.name || null,
       package_plan_id: i.packagePlanId,
       billing_price: i.billingPrice ? Number(i.billingPrice) : null,
+      traffic_reset_price: Number(i.packagePlan?.trafficResetPrice ?? i.package?.trafficResetPrice ?? 0) / 100,
       package_instance_type: i.package?.instanceType || 'container',
       allow_instance_deletion: i.package?.allowInstanceDeletion ?? true
     })),
