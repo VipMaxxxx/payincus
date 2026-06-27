@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `4f5bb5e`
+- 当前 HEAD / Current HEAD: `1a82f05`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Add package traffic reset pricing
-- 最新 tag / Latest tag: `v0.8.2`
+- 提交说明 / Commit subject: Fix instance bandwidth and billing nav display
+- 最新 tag / Latest tag: `v0.8.3`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.8.3
+
+- 发布提交 / Release commit: `1a82f05`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Fix instance bandwidth and billing nav display
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix instance bandwidth and billing nav display `1a82f05`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after v0.8.2 OTA `81924bc`
+- Update version log for v0.8.2 `ef43193`
 
 ## v0.8.2
 
