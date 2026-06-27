@@ -90,6 +90,26 @@ export async function markSystemUpdateTaskRunning(id: number) {
   })
 }
 
+export async function tryMarkSystemUpdateTaskRunning(
+  id: number,
+  allowedStatuses: SystemUpdateTaskStatus[],
+  logPath?: string
+): Promise<boolean> {
+  const result = await prisma.systemUpdateTask.updateMany({
+    where: {
+      id,
+      status: { in: allowedStatuses }
+    },
+    data: {
+      status: 'running',
+      startedAt: new Date(),
+      errorMessage: null,
+      ...(logPath ? { logPath } : {})
+    }
+  })
+  return result.count === 1
+}
+
 export async function markSystemUpdateTaskFinished(id: number, input: {
   status: 'success' | 'failed' | 'rolled_back'
   errorMessage?: string | null

@@ -4,6 +4,7 @@ import { existsSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { spawn } from 'child_process'
 import { prisma, closePrismaDatabase } from '../db/prisma.js'
+import { tryMarkSystemUpdateTaskRunning } from '../db/system-update-tasks.js'
 
 const taskId = Number(process.argv[2])
 const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())
@@ -149,10 +150,11 @@ async function main(): Promise<void> {
     throw new Error('Backup path is invalid or does not exist')
   }
 
-  await prisma.systemUpdateTask.update({
-    where: { id: taskId },
-    data: { status: 'running', logPath, errorMessage: null }
-  })
+  const claimed = await tryMarkSystemUpdateTaskRunning(taskId, ['success', 'failed'], logPath)
+  if (!claimed) {
+    await log(`System rollback task ${taskId} is already claimed or not rollbackable; skipping duplicate worker`)
+    return
+  }
 
   try {
     const rollbackBackup = `${installDir}.pre-rollback.${new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`

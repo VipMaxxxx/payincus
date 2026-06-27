@@ -7,6 +7,7 @@ import { spawn } from 'child_process'
 import { Readable } from 'stream'
 import { pipeline } from 'stream/promises'
 import { prisma, closePrismaDatabase } from '../db/prisma.js'
+import { tryMarkSystemUpdateTaskRunning } from '../db/system-update-tasks.js'
 import {
   getCurrentVersionMetadata,
   getOtaReleaseInfo,
@@ -786,7 +787,11 @@ async function main(): Promise<void> {
   }
 
   await mkdir(logDir, { recursive: true })
-  await updateTask({ status: 'running', startedAt: new Date(), logPath })
+  const claimed = await tryMarkSystemUpdateTaskRunning(taskId, ['pending'], logPath)
+  if (!claimed) {
+    await log(`System update task ${taskId} is already claimed or finished; skipping duplicate worker`)
+    return
+  }
   await log(`Starting system update task ${taskId} -> ${targetVersion}`)
   await assertRequiredCommands()
   await cleanupUpdateDownloadDir('更新开始前')

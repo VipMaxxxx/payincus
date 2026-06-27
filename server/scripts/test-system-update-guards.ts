@@ -26,6 +26,7 @@ const updateService = read('deploy/incudal-online-update@.service.example')
 const rollbackService = read('deploy/incudal-online-rollback@.service.example')
 const runTask = read('server/src/scripts/run-system-update-task.ts')
 const rollbackTask = read('server/src/scripts/rollback-system-update-task.ts')
+const systemUpdateTasksDb = read('server/src/db/system-update-tasks.ts')
 const rootPackage = read('package.json')
 const serverPackage = read('server/package.json')
 
@@ -104,8 +105,20 @@ assert.ok(
     runTask.includes('waitForBackendHealth()') &&
     runTask.includes("verify:production") &&
     runTask.includes("verify:log-header") &&
-    runTask.includes("smoke:agent-release"),
+    runTask.includes("smoke:agent-release") &&
+    runTask.includes("tryMarkSystemUpdateTaskRunning(taskId, ['pending'], logPath)") &&
+    runTask.includes('already claimed or finished; skipping duplicate worker'),
   'online updater must build, migrate, guard, restart, and verify before marking success'
+)
+
+assert.ok(
+  systemUpdateTasksDb.includes('export async function tryMarkSystemUpdateTaskRunning') &&
+    systemUpdateTasksDb.includes('updateMany({') &&
+    systemUpdateTasksDb.includes('status: { in: allowedStatuses }') &&
+    systemUpdateTasksDb.includes('return result.count === 1') &&
+    rollbackTask.includes("tryMarkSystemUpdateTaskRunning(taskId, ['success', 'failed'], logPath)") &&
+    rollbackTask.includes('already claimed or not rollbackable; skipping duplicate worker'),
+  'online update and rollback workers must atomically claim tasks before touching staging, downloads, releases, or rollback paths'
 )
 
 assert.ok(
