@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const docsSiteDir = resolve(scriptDir, '..')
 const repoRoot = resolve(docsSiteDir, '..')
+const releaseNotesDir = resolve(docsSiteDir, 'release-notes')
 
 const locales = [
   {
@@ -152,6 +153,25 @@ function tagBodyLines(tag) {
   return lines.length > 0 ? [...lines, ''] : []
 }
 
+function releaseNoteOverrideLines(tag) {
+  const filePath = resolve(releaseNotesDir, `${tag}.md`)
+  if (!existsSync(filePath)) return []
+
+  const content = readFileSync(filePath, 'utf8')
+  const lines = []
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = normalizeProductWording(rawLine.trimEnd())
+    if (!line.trim()) {
+      if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
+      continue
+    }
+    lines.push(line)
+  }
+
+  while (lines[lines.length - 1] === '') lines.pop()
+  return lines.length > 0 ? [...lines, ''] : []
+}
+
 function classify(subject, locale) {
   const text = subject.toLowerCase()
   if (/(fix|repair|rollback|tolerate|stabilize|harden)/.test(text)) return locale.groups.fixes
@@ -228,8 +248,9 @@ function render() {
     lines.push(`- ${locale.commitDate}: ${meta.date}`)
     lines.push(`- ${locale.commitSubject}: ${meta.subject}`)
     lines.push('')
-    const releaseNotes = tagBodyLines(tag)
-    lines.push(...(releaseNotes.length > 0 ? releaseNotes : groupedCommitLines(commits, locale)))
+    const releaseNotes = releaseNoteOverrideLines(tag)
+    const fallbackReleaseNotes = tagBodyLines(tag)
+    lines.push(...(releaseNotes.length > 0 ? releaseNotes : (fallbackReleaseNotes.length > 0 ? fallbackReleaseNotes : groupedCommitLines(commits, locale))))
   }
 
   lines.push(`## ${locale.generation}`, '')

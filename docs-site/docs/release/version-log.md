@@ -6,18 +6,28 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `6fb574b`
+- 最新发布提交 / Latest Release Commit: `a69542b`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Release v0.9.7
-- 最新 tag / Latest tag: `v0.9.7`
+- 提交说明 / Commit subject: Release v0.9.8
+- 最新 tag / Latest tag: `v0.9.8`
 
 ## 未发布变更 / Unreleased Changes
 
-### 其他变更 / Other Changes
-
-- Clarify capacity sold-out docs `3ffef07`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.9.8
+
+- 发布提交 / Release commit: `a69542b`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Release v0.9.8
+
+Fix the admin resource-risk evidence drawer with scoped opaque panel, card, table and JSON backgrounds so the evidence detail view no longer appears transparent over the underlying risk list.
+
+Clarify production readiness warnings for empty payment callback IP allowlists: callbacks still require signature verification, trade-status validation, amount matching and `payment_callbacks` idempotency before balance credit.
+
+Add DB readiness detail that identifies active payment providers without built-in callback IP defaults when no global callback source IP allowlist is configured.
 
 ## v0.9.7
 

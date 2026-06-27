@@ -185,7 +185,7 @@ Historical note:
 
 Known follow-up:
 
-- `pnpm verify:production` still warns that public package `HKCMI` is active but online bound hosts cannot satisfy its minimum CPU/memory requirement. This is an existing capacity/business configuration warning, not a v0.8.9 deployment failure.
+- Superseded historical note: current production warning status is tracked in "Latest Production OTA Proof" above. Do not use this old v0.8.8 note as the current capacity source of truth.
 
 ## Latest Instance Upgrade Work
 
