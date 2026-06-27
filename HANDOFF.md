@@ -22,11 +22,11 @@ Use `git log --oneline --decorate -5` as the authoritative current HEAD because 
 b8c4119 Update version log for v0.9.5
 ```
 
-GitHub remote `payincus/main` is aligned at `b8c4119`.
+GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
 
 The current local tree should be clean after pulling `payincus/main`. Do not reset if new local changes appear; inspect them first.
 
-Latest tracked repository commit at the time of this refresh:
+Latest product/docs release boundary at the time of this refresh:
 
 ```text
 b8c4119 Update version log for v0.9.5
@@ -48,7 +48,8 @@ GitHub workflow proof:
 ```text
 Build & Release: run 28289824914 completed success
 CI: run 28289823365 completed success
-Docs Pages: run 28289750284 completed success for the previous docs commit; Pages will redeploy from the v0.9.5 version-log push.
+Docs Pages: run 28290037521 completed success for the v0.9.5 version-log push.
+Latest handoff-only CI: run 28290067013 completed success.
 ```
 
 Release assets verified for `v0.9.5`:
@@ -912,9 +913,9 @@ Storage-pool note:
 - If Incus returns `not authorized`, rerun a fresh host install command on the real Incus host to refresh the `panel` trust entry.
 - If Incus returns `Error loading "zfs" module` or `modprobe: FATAL: Module zfs not found`, install matching headers and make `zfs-dkms`/`modprobe zfs` work, or use LVM/Btrfs/DIR.
 
-## Plugin Center Status
+## Extension Center Status
 
-Plugin center development has been committed, pushed and released as `v0.0.12`.
+Extension Center development was originally committed, pushed, and released as `v0.0.12`; later releases renamed the user-facing surface to Extension Center while preserving internal `plugin` route and package names for compatibility.
 
 Implemented backend scope:
 
