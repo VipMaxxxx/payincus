@@ -1,6 +1,6 @@
 {
   "name": "client",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Incudal 前端客户端",
   "type": "module",
   "scripts": {

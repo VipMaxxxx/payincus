@@ -587,6 +587,10 @@ async function applyArtifactAtomic(stagingDir: string, timestamp: string): Promi
     timeoutMs: 300000,
     cwd: releaseDir
   })
+  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'generate'], {
+    timeoutMs: 180000,
+    cwd: releaseDir
+  })
   await writeVersionFile(releaseDir)
   await chownInstallDir()
   await switchCurrentRelease(releaseDir)
@@ -608,6 +612,7 @@ async function applyArtifactLegacy(stagingDir: string, backupDir: string): Promi
     env: { CI: '1' }
   })
   await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
+  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'generate'], { timeoutMs: 180000 })
   await writeVersionFile()
   return backupDir
 }
@@ -650,6 +655,7 @@ async function applyGitUpdate(backupDir: string): Promise<string> {
   })
   await run('pnpm', ['build'], { timeoutMs: 900000 })
   await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
+  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'generate'], { timeoutMs: 180000 })
   await run('pnpm', ['--filter', 'server', 'test:frontend-dist-boundary-guards'], { timeoutMs: 120000 })
   await run('pnpm', ['--filter', 'server', 'test:frontend-route-guards'], { timeoutMs: 120000 })
   await writeVersionFile()
