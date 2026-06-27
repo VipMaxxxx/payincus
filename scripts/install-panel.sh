@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Incudal 面板一键部署脚本（产物包模式）
+# PayIncus 面板一键部署脚本（产物包模式）
 #
 # 功能：
 #   - 安装 Node.js 22、PostgreSQL 16、Redis 7
@@ -308,7 +308,7 @@ show_banner() {
     echo ""
     echo -e "${CYAN}  ╔══════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}  ║                                                  ║${NC}"
-    echo -e "${CYAN}  ║          ${BOLD}Incudal 面板一键部署脚本${NC}${CYAN}                ║${NC}"
+    echo -e "${CYAN}  ║          ${BOLD}PayIncus 面板一键部署脚本${NC}${CYAN}               ║${NC}"
     echo -e "${CYAN}  ║          ${DIM}Pre-built Package Deploy${NC}${CYAN}                ║${NC}"
     echo -e "${CYAN}  ║                                                  ║${NC}"
     echo -e "${CYAN}  ╚══════════════════════════════════════════════════╝${NC}"
@@ -604,7 +604,7 @@ wait_for_manual_package() {
 
 # ========================== 统一入口：获取产物包 ==========================
 obtain_release() {
-    step "获取 Incudal 产物包..."
+    step "获取 PayIncus 产物包..."
 
     # ---- 阶段 0：检查是否已有手动放置的包 ----
     local existing_pkg=""
@@ -782,7 +782,7 @@ generate_panel_cert() {
         -keyout "$key_file" \
         -out "$cert_file" \
         -days 3650 -nodes \
-        -subj "/CN=incudal-panel/O=Incudal" \
+        -subj "/CN=incudal-panel/O=PayIncus" \
         2>/dev/null
 
     # 设置权限：只有 incudal 用户可读
@@ -841,7 +841,7 @@ generate_env() {
 
     cat > "$ENV_FILE" << EOF
 # ============================================================================
-# Incudal 环境配置
+# PayIncus 环境配置
 # 由安装脚本自动生成于 $(date '+%Y-%m-%d %H:%M:%S')
 # ============================================================================
 
@@ -971,7 +971,7 @@ create_service() {
 
     cat > "$SERVICE_FILE" << EOF
 [Unit]
-Description=Incudal 容器虚拟化管理平台
+Description=PayIncus 容器虚拟化管理平台
 Documentation=https://github.com/${GITHUB_REPO}
 After=network.target postgresql.service redis-server.service
 Requires=postgresql.service redis-server.service
@@ -1386,7 +1386,7 @@ setup_cf_tunnel() {
 
 # ========================== 启动服务 ==========================
 start_service() {
-    step "启动 Incudal 服务..."
+    step "启动 PayIncus 服务..."
 
     systemctl start "$SERVICE_NAME"
 
@@ -1394,7 +1394,7 @@ start_service() {
     sleep 3
 
     if systemctl is-active --quiet "$SERVICE_NAME"; then
-        log "Incudal 服务启动成功！"
+        log "PayIncus 服务启动成功！"
     else
         error "服务启动失败，查看日志："
         journalctl -u "$SERVICE_NAME" --no-pager -n 20
@@ -1411,7 +1411,7 @@ show_result() {
 
     echo ""
     divider
-    echo -e "  ${GREEN}${BOLD}✅ Incudal 面板部署成功！${NC}"
+    echo -e "  ${GREEN}${BOLD}✅ PayIncus 面板部署成功！${NC}"
     divider
     echo ""
     echo -e "  ${BOLD}面板信息${NC}"
@@ -1445,11 +1445,11 @@ do_upgrade() {
     check_os
 
     if ! check_existing; then
-        error "未检测到已安装的 Incudal，请先执行全新安装"
+        error "未检测到已安装的 PayIncus，请先执行全新安装"
         exit 1
     fi
 
-    info "检测到已安装的 Incudal，准备升级..."
+    info "检测到已安装的 PayIncus，准备升级..."
 
     apt-get update -qq >/dev/null 2>&1
     install_system_tools
@@ -1485,7 +1485,7 @@ do_upgrade() {
 
     echo ""
     divider
-    echo -e "  ${GREEN}${BOLD}✅ Incudal 升级到 ${version} 完成！${NC}"
+    echo -e "  ${GREEN}${BOLD}✅ PayIncus 升级到 ${version} 完成！${NC}"
     divider
 }
 
@@ -1494,7 +1494,7 @@ do_uninstall() {
     show_banner
 
     echo -e "  ${RED}${BOLD}⚠️  警告：卸载将执行以下操作：${NC}"
-    echo -e "  ${RED}  1. 停止并删除 Incudal systemd 服务${NC}"
+    echo -e "  ${RED}  1. 停止并删除 PayIncus systemd 服务${NC}"
     echo -e "  ${RED}  2. 删除安装目录 ${INSTALL_DIR}${NC}"
     echo -e "  ${RED}  3. 删除系统用户 ${RUN_USER}${NC}"
     echo -e "  ${YELLOW}  注意：PostgreSQL/Redis 和数据库数据不会被删除${NC}"
@@ -1530,7 +1530,7 @@ do_uninstall() {
     systemctl reload nginx 2>/dev/null || true
 
     echo ""
-    log "Incudal 已完全卸载"
+    log "PayIncus 已完全卸载"
     info "数据库数据保留在 PostgreSQL 中，如需删除请手动执行："
     echo -e "  ${CYAN}sudo -u postgres psql -c \"DROP DATABASE incudal;\"${NC}"
     echo -e "  ${CYAN}sudo -u postgres psql -c \"DROP USER incudal;\"${NC}"
@@ -1542,7 +1542,7 @@ do_install() {
     check_os
 
     if check_existing; then
-        warn "检测到已安装的 Incudal (${INSTALL_DIR})"
+        warn "检测到已安装的 PayIncus (${INSTALL_DIR})"
         info "产物包已解压就绪，将跳过下载步骤，直接从配置阶段继续"
         info "如需全新安装，请先运行: sudo bash $0 --uninstall"
         echo "" >&2
@@ -1667,14 +1667,14 @@ main() {
             do_uninstall
             ;;
         --help|-h)
-            echo "Incudal 面板部署脚本 v${SCRIPT_VERSION}"
+            echo "PayIncus 面板部署脚本 v${SCRIPT_VERSION}"
             echo ""
             echo "用法: sudo bash $0 [选项]"
             echo ""
             echo "选项:"
             echo "  (无参数)      全新安装"
             echo "  --upgrade     升级已有安装"
-            echo "  --uninstall   卸载 Incudal"
+            echo "  --uninstall   卸载 PayIncus"
             echo "  --help        显示帮助"
             ;;
         *)

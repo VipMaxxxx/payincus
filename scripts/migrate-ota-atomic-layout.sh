@@ -53,7 +53,7 @@ write_systemd_units() {
 
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
-Description=Incudal backend API
+Description=PayIncus backend API
 Documentation=https://github.com/${GITHUB_REPO}
 After=network.target postgresql.service redis-server.service
 Wants=network.target
