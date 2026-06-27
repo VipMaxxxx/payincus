@@ -604,7 +604,14 @@ function getInstanceConfigSummary(instance: Instance): string {
 function formatNetworkRate(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null
   const raw = String(value)
-  return /^\d+(\.\d+)?$/.test(raw) ? `${raw}M` : raw
+  const unitMatch = raw.trim().match(/^(\d+(?:\.\d+)?)\s*(m|g)?(?:bit|bps)?$/i)
+  if (unitMatch) {
+    const numeric = Number(unitMatch[1])
+    if (!Number.isFinite(numeric) || numeric <= 0) return null
+    const mbps = numeric * (unitMatch[2]?.toLowerCase() === 'g' ? 1024 : 1)
+    return `${Number.isInteger(mbps) ? mbps.toFixed(0) : mbps.toFixed(1)} Mbps`
+  }
+  return raw.replace(/Mbit/gi, 'Mbps').replace(/Gbit/gi, 'Gbps')
 }
 
 function getInstanceBandwidthSummary(instance: Instance): string {

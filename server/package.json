@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "Incudal 后端服务",
   "type": "module",
   "main": "dist/app.js",

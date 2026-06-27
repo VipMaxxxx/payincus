@@ -771,6 +771,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           billing_price: number | null
           monthly_traffic_limit: string | null
           monthly_traffic_used: string
+          limits_ingress: string | null
+          limits_egress: string | null
           allow_instance_deletion: boolean
           port_limit: number | null
           snapshot_limit: number | null
@@ -812,6 +814,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           trafficResetPrice?: number
           monthlyTrafficLimit?: string | null
           monthlyTrafficUsed?: string
+          limitsIngress?: string | null
+          limitsEgress?: string | null
           allow_instance_deletion?: boolean
           portLimit?: number | null
           snapshotLimit?: number | null
@@ -857,6 +861,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           trafficResetPrice: Number((instance as any).traffic_reset_price || 0),
           monthlyTrafficLimit: instance.monthly_traffic_limit || null,
           monthlyTrafficUsed: instance.monthly_traffic_used || '0',
+          limitsIngress: instance.limits_ingress || null,
+          limitsEgress: instance.limits_egress || null,
           allow_instance_deletion: instance.allow_instance_deletion,
           portLimit: instance.port_limit,
           snapshotLimit: instance.snapshot_limit,

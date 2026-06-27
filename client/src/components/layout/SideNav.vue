@@ -46,11 +46,16 @@ const footerTelegramLink = computed(() => {
   return link || null
 })
 
+const navLabelFallbacks: Record<string, string> = {
+  'nav.billing': '计费'
+}
+
 function getNavLabel(item: MenuItem): string {
   if (item.labelText) return item.labelText
   if (!item.label) return ''
   const translated = t(item.label)
   if (translated && translated !== item.label) return translated
+  if (navLabelFallbacks[item.label]) return navLabelFallbacks[item.label]
   return item.label.split('.').pop() || item.label
 }
 

@@ -477,6 +477,8 @@ export async function getInstancesPaginated(options: PaginationOptions = {}): Pr
           name: true,
           allowInstanceDeletion: true,
           instanceType: true,
+          limitsIngress: true,
+          limitsEgress: true,
           trafficResetPrice: true
         }
       },
@@ -529,8 +531,8 @@ export async function getInstancesPaginated(options: PaginationOptions = {}): Pr
       limits_write: i.limitsWrite,
       limits_read_iops: i.limitsReadIops,
       limits_write_iops: i.limitsWriteIops,
-      limits_ingress: i.limitsIngress,
-      limits_egress: i.limitsEgress,
+      limits_ingress: i.limitsIngress ?? i.package?.limitsIngress ?? null,
+      limits_egress: i.limitsEgress ?? i.package?.limitsEgress ?? null,
       limits_processes: i.limitsProcesses,
       limits_cpu_priority: i.limitsCpuPriority,
       boot_autostart: i.bootAutostart,
