@@ -201,61 +201,65 @@ Do not reset or discard changes unless the user explicitly approves.
 Latest completed feature bundle:
 
 ```text
-v0.8.1 Storage readiness and traffic reset OTA
-release commit/tag: 4a131d7 (v0.8.1)
-previous production release: d60bf6d (v0.6.19)
+v0.8.2 Package/plan traffic reset pricing OTA
+release commit/tag: 4f5bb5e (v0.8.2)
+version-log commit: ef43193
+previous production release: 4a131d7 (v0.8.1)
 versioning note: OTA tags now continue with carry at 10, e.g. 0.8.9 -> 0.9.0.
 ```
 
 GitHub Actions:
 
 ```text
+Build & Release for tag v0.8.2: run 28276692386 completed successfully; public OTA manifest and amd64/arm64 artifacts are available.
+CI for main commit ef43193: run 28276690725 was started by the version-log push; GitHub API later rate-limited unauthenticated status polling, but local type-check/build gates passed and Docs Pages run 28276690722 completed successfully.
 Build & Release for tag v0.8.1: run 28275824753 completed successfully.
 CI for main commit 4a131d7: run 28275823541 completed successfully.
 Build & Release for previous tag v0.6.19: run 28274947080 completed successfully.
 ```
 
-Release assets confirmed for `v0.8.1`:
+Release assets confirmed for `v0.8.2`:
 
 ```text
 ota-manifest.json
-incudal-v0.8.1-linux-amd64.tar.gz
-incudal-v0.8.1-linux-amd64.tar.gz.sha256
-incudal-v0.8.1-linux-arm64.tar.gz
-incudal-v0.8.1-linux-arm64.tar.gz.sha256
-incudal-v0.8.1-ota-manifest.json
+incudal-v0.8.2-linux-amd64.tar.gz
+incudal-v0.8.2-linux-amd64.tar.gz.sha256
+incudal-v0.8.2-linux-arm64.tar.gz
+incudal-v0.8.2-linux-arm64.tar.gz.sha256
+incudal-v0.8.2-ota-manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 plugin-market-index.json
 ```
 
-Published `v0.8.1` OTA manifest:
+Published `v0.8.2` OTA manifest:
 
 ```text
-version: v0.8.1
-gitCommit: 4a131d7a94c1
-buildTime: 2026-06-27T02:28:35.122Z
-amd64 artifact: incudal-v0.8.1-linux-amd64.tar.gz
-amd64 size: 92367971
-amd64 sha256: a9878bde60079c079faa2d7a6a95e62a374d3a7d6915e3804132ed6851840009
-arm64 artifact: incudal-v0.8.1-linux-arm64.tar.gz
-arm64 size: 91471770
-arm64 sha256: c112029a162f3d07157a63d4196fae3e1488fae88dfe43ab7e1fbfe28d2c209e
+version: v0.8.2
+gitCommit: 4f5bb5ec153b
+buildTime: 2026-06-27T03:06:04.471Z
+amd64 artifact: incudal-v0.8.2-linux-amd64.tar.gz
+amd64 size: 92387398
+amd64 sha256: 5cbe8e11b50c8d8fc00e932c2ac2762eb39a2fed54c4c0d011d7697e0375bd7a
+arm64 artifact: incudal-v0.8.2-linux-arm64.tar.gz
+arm64 size: 91471983
+arm64 sha256: c6084b8e711e3cdd2d4d9c57c60eb71501e8e292a8fdd2a5ec7c5e601e47fdcd
 ```
 
-Previous v0.6.19 production OTA proof:
+Production OTA proof:
 
 ```text
-task: #85
-fromVersion: v0.6.19
-targetVersion: v0.8.1
-release dir: /opt/incudal/releases/v0.8.1-20260627023143
-log: /opt/incudal/update-logs/system-update-85.log
-status: success at 2026-06-27T02:33:15.083Z
+task: #86
+fromVersion: v0.8.1
+targetVersion: v0.8.2
+release dir: /opt/incudal/releases/v0.8.2-20260627030924
+log: /opt/incudal/update-logs/system-update-86.log
+status: success at 2026-06-27T03:10:57.158Z
 public health: https://pay.payincus.com/api/health -> ok
 admin health: https://admin.payincus.com/api/health -> ok
-current version.json: v0.8.1 / 4a131d7a94c1
+current version.json: v0.8.2 / 4f5bb5ec153b
+checks: migration 20260627024500_add_package_traffic_reset_price applied; backend health passed; verify-split-host, verify:production, verify:log-header passed; OTA cache cleanup and release pruning completed.
 ```
 
 Production OTA proof:
