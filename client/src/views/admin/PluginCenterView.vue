@@ -1,16 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '@/api/admin'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { useToast } from '@/stores/toast'
 import type { PayIncusThemeConfigField, PluginEventLog, PluginEventSummary, PluginMarketEntry, PluginMarketGovernance, PluginMarketSubmission, PluginMarketSubmissionReviewStatus, PluginRecord, PluginStorageBackupArchive, PluginStorageBackupRemoteArchive, PluginStorageUsage, PluginTask, PublicPluginActionRateLimitDefault, PublicPluginActionRateLimitPolicy, ThemeMarketEntry, ThemeMarketGovernance, ThemeMarketSubmission, ThemeMarketSubmissionReviewStatus, ThemePackageRecord } from '@/types/api'
 
 const toast = useToast()
+const route = useRoute()
 const router = useRouter()
 type ThemeConfigDraftValue = string | number | boolean | string[]
 type ThemeConfigFieldEntry = [string, PayIncusThemeConfigField]
 type PluginCenterTab = 'installed' | 'market' | 'submissions' | 'themes' | 'limits' | 'events' | 'tasks'
+const pluginCenterTabKeys: PluginCenterTab[] = ['installed', 'market', 'submissions', 'themes', 'limits', 'events', 'tasks']
+
+function normalizePluginCenterTab(value: unknown): PluginCenterTab {
+  return typeof value === 'string' && pluginCenterTabKeys.includes(value as PluginCenterTab)
+    ? value as PluginCenterTab
+    : 'installed'
+}
 
 interface ActionRateLimitDraft {
   pluginId: string
@@ -46,7 +54,7 @@ const eventsLoading = ref(false)
 const retryingEvents = ref(false)
 const actionRateLimitsLoading = ref(false)
 const savingActionRateLimits = ref(false)
-const activeTab = ref<PluginCenterTab>('installed')
+const activeTab = ref<PluginCenterTab>(normalizePluginCenterTab(route.query.tab))
 const selectedPluginId = ref<string | null>(null)
 const pluginStorageUsage = ref<PluginStorageUsage | null>(null)
 const pluginStorageBackupArchives = ref<PluginStorageBackupArchive[]>([])
@@ -1391,7 +1399,7 @@ async function uninstallSelectedPlugin() {
 
 async function selectTask(task: PluginTask) {
   selectedTaskId.value = task.id
-  activeTab.value = 'tasks'
+  activateTab('tasks')
   ensureSelectedTaskVisible()
   await loadSelectedTaskLogs()
 }
@@ -1429,48 +1437,56 @@ function ensureSelectedTaskVisible() {
   }
 }
 
+function activateTab(tab: PluginCenterTab): void {
+  activeTab.value = tab
+  if (route.query.tab !== tab) {
+    void router.replace({
+      query: {
+        ...route.query,
+        tab: tab === 'installed' ? undefined : tab
+      }
+    })
+  }
+}
+
 function openMarketTab() {
+  activateTab('market')
   if (market.value.length === 0 && !marketLoading.value) {
     void loadMarket()
-    return
   }
-  activeTab.value = 'market'
 }
 
 function openTasksTab() {
-  activeTab.value = 'tasks'
+  activateTab('tasks')
   void loadSelectedTaskLogs()
 }
 
 function openSubmissionsTab() {
+  activateTab('submissions')
   if (submissions.value.length === 0 && !submissionsLoading.value) {
     void loadSubmissions()
-    return
   }
-  activeTab.value = 'submissions'
 }
 
 function openThemesTab() {
+  activateTab('themes')
   if (themes.value.length === 0 && !themesLoading.value) void loadThemes()
   if (themeMarket.value.length === 0 && !themeMarketLoading.value) void loadThemeMarket()
   if (themeSubmissions.value.length === 0 && !themeSubmissionsLoading.value) void loadThemeSubmissions()
-  activeTab.value = 'themes'
 }
 
 function openEventsTab() {
+  activateTab('events')
   if (pluginEvents.value.length === 0 && !eventsLoading.value) {
     void loadPluginEvents()
-    return
   }
-  activeTab.value = 'events'
 }
 
 function openActionRateLimitsTab() {
+  activateTab('limits')
   if (actionRateLimitDrafts.value.length === 0 && !actionRateLimitsLoading.value) {
     void loadActionRateLimits()
-    return
   }
-  activeTab.value = 'limits'
 }
 
 function setActiveTab(tab: typeof activeTab.value) {
@@ -1498,7 +1514,7 @@ function setActiveTab(tab: typeof activeTab.value) {
     openActionRateLimitsTab()
     return
   }
-  activeTab.value = tab
+  activateTab(tab)
 }
 
 function onFileChange(event: Event) {
@@ -1513,6 +1529,9 @@ function onThemeFileChange(event: Event) {
 
 onMounted(async () => {
   await refreshAll()
+  if (activeTab.value !== 'installed') {
+    setActiveTab(activeTab.value)
+  }
 })
 
 watch(selectedPluginId, pluginId => {
@@ -1523,6 +1542,13 @@ watch(selectedPluginId, pluginId => {
     pluginStorageUsage.value = null
     pluginStorageBackupArchives.value = []
     pluginStorageUsageError.value = ''
+  }
+})
+
+watch(() => route.query.tab, tab => {
+  const normalized = normalizePluginCenterTab(tab)
+  if (normalized !== activeTab.value) {
+    setActiveTab(normalized)
   }
 })
 </script>
@@ -1619,7 +1645,7 @@ watch(selectedPluginId, pluginId => {
     <div v-if="loading" class="py-16 text-center text-themed-muted">加载中...</div>
 
     <template v-else>
-      <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <div class="sticky top-0 z-10 overflow-hidden rounded-lg border border-themed bg-themed-surface">
         <div class="flex flex-col gap-4 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 class="text-lg font-semibold text-themed">{{ activeTabMeta.label }}</h2>
@@ -1630,7 +1656,7 @@ watch(selectedPluginId, pluginId => {
               v-for="tab in tabs"
               :key="tab.key"
               class="rounded border px-3 py-2 text-sm font-medium transition"
-              :class="activeTab === tab.key ? 'border-gray-900 bg-gray-900 text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
+              :class="activeTab === tab.key ? 'border-accent bg-accent text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
               @click="setActiveTab(tab.key)"
             >
               {{ tab.label }}
@@ -2583,7 +2609,7 @@ watch(selectedPluginId, pluginId => {
             </button>
             <div class="flex flex-wrap gap-2">
               <button
-              v-for="result in (['retry_pending', 'dead_letter', 'duplicate_skipped', 'success', 'all'] as const)"
+                v-for="result in (['retry_pending', 'dead_letter', 'duplicate_skipped', 'success', 'all'] as const)"
                 :key="result"
                 class="rounded border px-3 py-2 text-sm font-medium transition"
                 :class="eventResultFilter === result ? 'border-gray-900 bg-gray-900 text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"

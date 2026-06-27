@@ -430,10 +430,11 @@ assert.ok(
 )
 assert.ok(
   appSource.includes("import PublicSiteLayout from '@/components/public/PublicSiteLayout.vue'") &&
-    appSource.includes("const publicSiteRouteNames = new Set(['portal', 'market'])") &&
+    appSource.includes("const publicSiteRouteNames = new Set(['portal', 'market', 'help', 'help-article'])") &&
     appSource.includes('const showPublicSiteLayout = computed<boolean>') &&
+    appSource.includes('!showPublicSiteLayout.value') &&
     appSource.includes('<PublicSiteLayout v-else-if="showPublicSiteLayout">'),
-  'App shell must wrap public portal and market routes with the public site header/footer layout'
+  'App shell must wrap public portal, market, and help routes with the public site header/footer layout'
 )
 assert.ok(
   adminMainSource.includes("import App from './AdminApp.vue'") &&

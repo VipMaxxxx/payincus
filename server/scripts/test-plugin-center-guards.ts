@@ -147,11 +147,12 @@ assert.ok(
     pluginSettingsView.includes('返回扩展中心确认扩展是否已安装') &&
     readme.includes('plugin-templates/       扩展开发模板') &&
     readme.includes('扩展开发：`docs-site/docs/plugins/overview.md`') &&
-    docsIndex.includes('title: 扩展中心') &&
-    docsIndex.includes('在线扩展市场') &&
-    docsIndex.includes('[扩展开发](/plugins/overview)：扩展中心') &&
-    enDocsIndex.includes('title: Extension Center') &&
-    enDocsIndex.includes('[Extension Development](/en/plugins/overview): Extension Center') &&
+	    docsIndex.includes('title: PayIncus') &&
+	    docsIndex.includes('扩展市场、主题系统和后台 OTA') &&
+	    docsIndex.includes('[扩展开发](/plugins/overview)：扩展中心') &&
+	    enDocsIndex.includes('title: PayIncus') &&
+	    enDocsIndex.includes('extension marketplace, themes, and admin OTA updates') &&
+	    enDocsIndex.includes('[Extension Development](/en/plugins/overview): Extension Center') &&
     adminOverviewDocs.includes('| 扩展中心 | `/admin/plugins` | 已安装扩展、扩展市场') &&
     enAdminOverviewDocs.includes('## Extension Center') &&
     enAdminOverviewDocs.includes('Extension Market') &&

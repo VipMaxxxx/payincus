@@ -106,10 +106,6 @@ const proofItems: ProofItem[] = [
   }
 ]
 
-const completedProofItems = 13
-const totalProofItems = 13
-const remainingProofItems = 0
-
 const commands: CommandItem[] = [
   {
     title: '只读 proof 快照',
@@ -164,7 +160,10 @@ const proofStats = computed(() => {
   return { total, verified, partial, pending, operator, waived }
 })
 
-const progressPercent = computed(() => Math.round((completedProofItems / totalProofItems) * 100))
+const closedProofItems = computed(() => proofStats.value.verified + proofStats.value.waived)
+const remainingProofItems = computed(() => proofStats.value.partial + proofStats.value.pending)
+const attentionProofItems = computed(() => remainingProofItems.value + proofStats.value.operator)
+const progressPercent = computed(() => Math.round((closedProofItems.value / proofStats.value.total) * 100))
 
 function statusLabel(status: ProofStatus): string {
   const labels: Record<ProofStatus, string> = {
@@ -234,27 +233,27 @@ async function copyCommand(key: string, command: string): Promise<void> {
 
     <section class="grid grid-cols-1 gap-4 md:grid-cols-4">
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">生产 proof 进度</div>
+        <div class="text-sm text-themed-muted">生产 proof 收口</div>
         <div class="mt-2 text-3xl font-semibold text-themed">{{ progressPercent }}%</div>
         <div class="mt-2 h-2 rounded-full bg-themed-muted">
           <div class="h-2 rounded-full bg-blue-500" :style="{ width: `${progressPercent}%` }"></div>
         </div>
-        <div class="mt-2 text-xs text-themed-muted">{{ completedProofItems }}/{{ totalProofItems }} 项验收口径已收口</div>
+        <div class="mt-2 text-xs text-themed-muted">{{ closedProofItems }}/{{ proofStats.total }} 项已证明或已豁免</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">已有证据项</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ completedProofItems }}</div>
-        <div class="mt-2 text-xs text-themed-muted">历史 proof 需跟随版本和配置变化复核</div>
+        <div class="text-sm text-themed-muted">已证明证据</div>
+        <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.verified }}</div>
+        <div class="mt-2 text-xs text-themed-muted">历史 proof 仍需跟随版本和配置变化复核</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">待补真实证据</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ remainingProofItems }}</div>
-        <div class="mt-2 text-xs text-themed-muted">当前无最终 Go blocker</div>
+        <div class="text-sm text-themed-muted">待补 / 需操作</div>
+        <div class="mt-2 text-3xl font-semibold text-themed">{{ attentionProofItems }}</div>
+        <div class="mt-2 text-xs text-themed-muted">不等同于最终 Go blocker，需按状态分账处理</div>
       </div>
       <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">高风险操作窗口</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.operator }}</div>
-        <div class="mt-2 text-xs text-themed-muted">回滚仍需维护窗口单独确认</div>
+        <div class="text-sm text-themed-muted">已豁免 / 维护窗口</div>
+        <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.waived }} / {{ proofStats.operator }}</div>
+        <div class="mt-2 text-xs text-themed-muted">豁免项和维护窗口不得写成已执行 proof</div>
       </div>
     </section>
 

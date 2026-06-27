@@ -35,6 +35,10 @@ features:
     details: Public API, OAuth Provider, SDK, events, action runtime, and extension storage form the developer platform.
 ---
 
+::: info Extension Center
+[Extension Development](/en/plugins/overview): Extension Center, online marketplace, themes, OAuth Provider, Public API, and SDK entrypoints for third-party developers.
+:::
+
 <section class="payincus-section">
   <p class="payincus-kicker">What is PayIncus?</p>
   <h2>A delivery, billing, and operations console for hosting businesses</h2>

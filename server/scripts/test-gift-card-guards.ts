@@ -23,6 +23,9 @@ const adminView = read('client/src/views/admin/GiftCardsView.vue')
 const turnstileWidget = read('client/src/components/TurnstileWidget.vue')
 const userNav = read('client/src/config/side-nav-items-user.ts')
 const adminNav = read('client/src/config/side-nav-items-admin.ts')
+const zhLocale = read('client/src/locales/zh-CN.ts')
+const enLocale = read('client/src/locales/en.ts')
+const twLocale = read('client/src/locales/zh-TW.ts')
 const serverPackage = read('server/package.json')
 const rootPackage = read('package.json')
 
@@ -129,7 +132,10 @@ assert(
     userView.includes('@verify="onTurnstileVerify"') &&
     turnstileWidget.includes("@update:model-value=\"onVerify\"") &&
     turnstileWidget.includes('@expired="onExpire"') &&
-    userView.includes('请先完成人机验证'),
+    userView.includes("t('giftCards.toast.turnstileRequired')") &&
+    zhLocale.includes("turnstileRequired: '请先完成人机验证'") &&
+    enLocale.includes("turnstileRequired: 'Complete verification first'") &&
+    twLocale.includes("turnstileRequired: '請先完成人機驗證'"),
   'user gift card redemption and balance-funded generation must keep visible Turnstile protection after body parsing and reliably submit the widget token'
 )
 
@@ -144,15 +150,18 @@ assert(
     adminApi.includes("http.post('/gift-cards/admin/generate'") &&
     adminApi.includes("http.post('/gift-cards/admin/batch'") &&
     userRouter.includes("path: '/gift-cards'") &&
-    adminRouter.includes("path: '/admin/gift-cards'") &&
-    userNav.includes("path: '/gift-cards'") &&
-    adminNav.includes("path: '/admin/gift-cards'") &&
-    userView.includes('TurnstileWidget') &&
-    userView.includes('兑换礼品卡') &&
-    adminView.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
-    adminView.includes('显示完整兑换码') &&
-    serverPackage.includes('"test:gift-card-guards"') &&
-    rootPackage.includes('pnpm --filter server test:gift-card-guards'),
+	    adminRouter.includes("path: '/admin/gift-cards'") &&
+	    userNav.includes("path: '/gift-cards'") &&
+	    adminNav.includes("path: '/admin/gift-cards'") &&
+	    userView.includes('TurnstileWidget') &&
+	    userView.includes("t('giftCards.redeemTitle')") &&
+	    zhLocale.includes("redeemTitle: '兑换礼品卡'") &&
+	    adminView.includes("t('giftCardsAdmin.description')") &&
+	    zhLocale.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+	    adminView.includes("t('giftCardsAdmin.revealCode')") &&
+	    zhLocale.includes("revealCode: '显示完整兑换码'") &&
+	    serverPackage.includes('"test:gift-card-guards"') &&
+	    rootPackage.includes('pnpm --filter server test:gift-card-guards'),
   'gift card routes, client pages, API wrappers, nav entries, and guard script must be wired into the platform'
 )
 

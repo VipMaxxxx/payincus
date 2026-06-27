@@ -27,10 +27,13 @@ const page = ref<number>(1)
 const pageSize = ref<number>(10)
 const total = ref<number>(0)
 const totalPages = ref<number>(0)
+const searchQuery = ref(typeof route.query.q === 'string' ? route.query.q : '')
+const loadError = ref('')
 
 // 详情视图
 const currentArticle = ref<HelpArticle | null>(null)
 const articleLoading = ref<boolean>(false)
+const articleError = ref('')
 // 标记是否已完成首次加载（用于区分初始状态和真正的404）
 const articleLoaded = ref<boolean>(false)
 
@@ -40,7 +43,7 @@ interface CategoryWithCount {
   count: number
 }
 const categories = ref<CategoryWithCount[]>([])
-const selectedCategory = ref<string>('')
+const selectedCategory = ref<string>(typeof route.query.category === 'string' ? route.query.category : '')
 
 // 分类配置（从服务器加载）
 interface Category {
@@ -111,10 +114,14 @@ async function loadCategories(): Promise<void> {
 
 async function loadArticles(): Promise<void> {
   loading.value = true
+  loadError.value = ''
   try {
-    const params: { page: number; pageSize: number; category?: string } = { page: page.value, pageSize: pageSize.value }
+    const params: { page: number; pageSize: number; category?: string; search?: string } = { page: page.value, pageSize: pageSize.value }
     if (selectedCategory.value) {
       params.category = selectedCategory.value
+    }
+    if (searchQuery.value.trim()) {
+      params.search = searchQuery.value.trim()
     }
     const response = await api.help.list(params)
     const data = response as { articles?: HelpArticle[]; total?: number; totalPages?: number }
@@ -123,6 +130,7 @@ async function loadArticles(): Promise<void> {
     totalPages.value = data.totalPages || 1
   } catch (err) {
     console.error('Failed to load articles:', err)
+    loadError.value = t('help.loadFailed')
   } finally {
     loading.value = false
   }
@@ -131,11 +139,13 @@ async function loadArticles(): Promise<void> {
 async function loadArticle(slug: string): Promise<void> {
   articleLoading.value = true
   articleLoaded.value = false
+  articleError.value = ''
   try {
     const response = await api.help.getBySlug(slug)
     currentArticle.value = (response as { article?: HelpArticle }).article || null
   } catch (err) {
     console.error('Failed to load article:', err)
+    articleError.value = t('help.loadFailed')
     currentArticle.value = null
   } finally {
     articleLoading.value = false
@@ -143,14 +153,34 @@ async function loadArticle(slug: string): Promise<void> {
   }
 }
 
+function syncListQuery(): void {
+  router.replace({
+    name: 'help',
+    query: {
+      ...(selectedCategory.value ? { category: selectedCategory.value } : {}),
+      ...(searchQuery.value.trim() ? { q: searchQuery.value.trim() } : {})
+    }
+  })
+}
+
 function filterByCategory(cat: string): void {
   selectedCategory.value = cat
   page.value = 1
+  syncListQuery()
   loadArticles()
 }
 
-function goToArticle(slug: string): void {
-  router.push(`/help/${slug}`)
+function applySearch(): void {
+  page.value = 1
+  syncListQuery()
+  loadArticles()
+}
+
+function clearSearch(): void {
+  searchQuery.value = ''
+  page.value = 1
+  syncListQuery()
+  loadArticles()
 }
 
 function goBack(): void {
@@ -193,167 +223,195 @@ function formatDate(dateStr: string | null | undefined): string {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
-    <!-- Header -->
-    <div class="page-header">
-      <div>
-        <!-- 详情视图加载中时显示返回按钮和骨架屏 -->
-        <template v-if="isDetailView && !articleLoaded">
-          <div class="mb-2">
-            <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span class="text-sm">{{ $t('help.backToHelp') }}</span>
-            </button>
-          </div>
-          <div class="h-7 w-48 bg-themed-tertiary rounded animate-pulse"></div>
-        </template>
-        <!-- 详情视图加载完成后显示文章标题 -->
-        <template v-else-if="isDetailView && currentArticle">
-          <div class="mb-2">
-            <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span class="text-sm">{{ $t('help.backToHelp') }}</span>
-            </button>
-          </div>
-          <h1 class="page-title">{{ currentArticle.title }}</h1>
-          <p class="text-sm text-themed-muted">
-            {{ $t('help.updatedAt', { date: formatDate(currentArticle.updated_at) }) }}
-          </p>
-        </template>
-        <!-- 列表视图 -->
-        <template v-else-if="!isDetailView">
-          <h1 class="page-title">{{ $t('help.title') }}</h1>
-          <p class="page-description">{{ $t('help.description') }}</p>
-        </template>
-        <!-- 详情视图 404 情况 -->
-        <template v-else-if="isDetailView && articleLoaded && !currentArticle">
-          <div class="mb-2">
-            <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span class="text-sm">{{ $t('help.backToHelp') }}</span>
-            </button>
-          </div>
-          <h1 class="page-title">{{ $t('help.title') }}</h1>
-        </template>
-      </div>
-    </div>
-
-    <!-- Article List View -->
-    <template v-if="!isDetailView">
-      <!-- Category Filter -->
-      <div v-if="categories.length > 0" class="flex flex-wrap gap-2">
-        <button
-          :class="[
-            'px-3 py-1.5 text-sm rounded-lg transition-colors',
-            !selectedCategory 
-              ? 'bg-accent text-white' 
-              : 'bg-themed-secondary text-themed-secondary hover:text-themed'
-          ]"
-          @click="filterByCategory('')"
-        >
-          {{ $t('help.all') }}
-        </button>
-        <button
-          v-for="cat in categories"
-          :key="cat.category"
-          :class="[
-            'px-3 py-1.5 text-sm rounded-lg transition-colors',
-            selectedCategory === cat.category 
-              ? 'bg-accent text-white' 
-              : 'bg-themed-secondary text-themed-secondary hover:text-themed'
-          ]"
-          @click="filterByCategory(cat.category)"
-        >
-          {{ getCategoryLabel(cat.category) }}
-          <span class="ml-1 opacity-60">({{ cat.count }})</span>
-        </button>
-      </div>
-
-      <!-- Loading -->
-      <div v-if="loading" class="card p-8 text-center text-themed-muted">
-        <svg class="w-6 h-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      </div>
-      
-      <!-- Empty -->
-      <div v-else-if="articles.length === 0" class="card p-8 text-center text-themed-muted">
-        {{ $t('help.noArticles') }}
-      </div>
-
-      <!-- Article List -->
-      <div v-else class="space-y-3">
-        <div 
-          v-for="article in articles" 
-          :key="article.id"
-          class="card p-4 cursor-pointer hover:border-accent/50 transition-colors"
-          @click="goToArticle(article.slug)"
-        >
-          <div class="flex items-start justify-between">
-            <div>
-              <h3 class="text-themed font-medium hover:text-accent transition-colors">{{ article.title }}</h3>
-              <div class="flex items-center gap-3 mt-1 text-sm text-themed-muted">
-                <span 
-                  class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-themed-tertiary rounded text-xs"
-                >
-                  <span 
-                    class="w-2 h-2 rounded-full" 
-                    :style="{ backgroundColor: getCategoryColor(article.category) }"
-                  ></span>
-                  {{ getCategoryLabel(article.category) }}
-                </span>
-                <span>{{ formatDate(article.updated_at) }}</span>
-              </div>
+  <div class="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 animate-fade-in">
+    <div class="space-y-6">
+      <!-- Header -->
+      <div class="page-header">
+        <div>
+          <!-- 详情视图加载中时显示返回按钮和骨架屏 -->
+          <template v-if="isDetailView && !articleLoaded">
+            <div class="mb-2">
+              <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+              </button>
             </div>
-            <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
+            <div class="h-7 w-48 bg-themed-tertiary rounded animate-pulse"></div>
+          </template>
+          <!-- 详情视图加载完成后显示文章标题 -->
+          <template v-else-if="isDetailView && currentArticle">
+            <div class="mb-2">
+              <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+              </button>
+            </div>
+            <h1 class="page-title">{{ currentArticle.title }}</h1>
+            <p class="text-sm text-themed-muted">
+              {{ $t('help.updatedAt', { date: formatDate(currentArticle.updated_at) }) }}
+            </p>
+          </template>
+          <!-- 列表视图 -->
+          <template v-else-if="!isDetailView">
+            <h1 class="page-title">{{ $t('help.title') }}</h1>
+            <p class="page-description">{{ $t('help.description') }}</p>
+          </template>
+          <!-- 详情视图 404 情况 -->
+          <template v-else-if="isDetailView && articleLoaded && !currentArticle">
+            <div class="mb-2">
+              <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+              </button>
+            </div>
+            <h1 class="page-title">{{ $t('help.title') }}</h1>
+          </template>
+        </div>
+      </div>
+
+      <!-- Article List View -->
+      <template v-if="!isDetailView">
+        <form class="card p-3" @submit.prevent="applySearch">
+          <label class="sr-only" for="help-search">{{ $t('help.search') }}</label>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <input
+              id="help-search"
+              v-model="searchQuery"
+              class="input flex-1"
+              type="search"
+              :placeholder="$t('help.search')"
+            />
+            <div class="flex gap-2">
+              <button class="btn-primary flex-1 sm:flex-none" type="submit">{{ $t('common.search') }}</button>
+              <button v-if="searchQuery" class="btn-secondary flex-1 sm:flex-none" type="button" @click="clearSearch">{{ $t('help.clearSearch') }}</button>
+            </div>
+          </div>
+        </form>
+
+        <!-- Category Filter -->
+        <div v-if="categories.length > 0" class="flex flex-wrap gap-2">
+          <button
+            :class="[
+              'px-3 py-1.5 text-sm rounded-lg transition-colors',
+              !selectedCategory 
+                ? 'bg-accent text-white' 
+                : 'bg-themed-secondary text-themed-secondary hover:text-themed'
+            ]"
+            @click="filterByCategory('')"
+          >
+            {{ $t('help.all') }}
+          </button>
+          <button
+            v-for="cat in categories"
+            :key="cat.category"
+            :class="[
+              'px-3 py-1.5 text-sm rounded-lg transition-colors',
+              selectedCategory === cat.category 
+                ? 'bg-accent text-white' 
+                : 'bg-themed-secondary text-themed-secondary hover:text-themed'
+            ]"
+            @click="filterByCategory(cat.category)"
+          >
+            {{ getCategoryLabel(cat.category) }}
+            <span class="ml-1 opacity-60">({{ cat.count }})</span>
+          </button>
+        </div>
+
+        <div v-if="loadError" class="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-500">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>{{ loadError }}</span>
+            <button class="btn-secondary btn-sm" @click="loadArticles">{{ $t('common.retry') }}</button>
           </div>
         </div>
-      </div>
 
-      <!-- Pagination -->
-      <div v-if="totalPages > 1" class="flex items-center justify-between text-sm text-themed-muted">
-        <span>{{ $t('help.totalArticles', { count: total }) }}</span>
-        <div class="flex items-center gap-2">
-          <button :disabled="page <= 1" class="btn-ghost btn-sm" @click="page--; loadArticles()">{{ $t('instance.prevPage') }}</button>
-          <span>{{ page }} / {{ totalPages }}</span>
-          <button :disabled="page >= totalPages" class="btn-ghost btn-sm" @click="page++; loadArticles()">{{ $t('instance.nextPage') }}</button>
+        <!-- Loading -->
+        <div v-if="loading" class="card p-8 text-center text-themed-muted">
+          <svg class="w-6 h-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p class="mt-3 text-sm">{{ $t('help.loading') }}</p>
         </div>
-      </div>
-    </template>
+      
+        <!-- Empty -->
+        <div v-else-if="articles.length === 0" class="card p-8 text-center text-themed-muted">
+          {{ searchQuery.trim() ? $t('help.noSearchResults') : $t('help.noArticles') }}
+        </div>
 
-    <!-- Article Detail View -->
-    <template v-else>
-      <!-- Loading（加载中或尚未开始加载时显示） -->
-      <div v-if="articleLoading || !articleLoaded" class="card p-8 text-center text-themed-muted">
-        <svg class="w-6 h-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      </div>
+        <!-- Article List -->
+        <div v-else class="space-y-3">
+          <RouterLink 
+            v-for="article in articles" 
+            :key="article.id"
+            :to="{ name: 'help-article', params: { slug: article.slug } }"
+            class="card block p-4 hover:border-accent/50 transition-colors"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h3 class="break-words text-themed font-medium hover:text-accent transition-colors">{{ article.title }}</h3>
+                <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-themed-muted">
+                  <span 
+                    class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-themed-tertiary rounded text-xs"
+                  >
+                    <span 
+                      class="w-2 h-2 rounded-full" 
+                      :style="{ backgroundColor: getCategoryColor(article.category) }"
+                    ></span>
+                    {{ getCategoryLabel(article.category) }}
+                  </span>
+                  <span>{{ formatDate(article.updated_at) }}</span>
+                </div>
+              </div>
+              <svg class="mt-0.5 h-5 w-5 shrink-0 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </RouterLink>
+        </div>
 
-      <!-- Not Found（仅在加载完成后且文章为空时显示） -->
-      <div v-else-if="articleLoaded && !currentArticle" class="card p-8 text-center">
-        <svg class="w-12 h-12 mx-auto text-themed-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p class="text-themed-muted mb-4">{{ $t('help.articleNotFound') }}</p>
-        <button class="btn-secondary" @click="goBack">{{ $t('help.backToHelp') }}</button>
-      </div>
+        <!-- Pagination -->
+        <div v-if="totalPages > 1" class="flex flex-col gap-3 text-sm text-themed-muted sm:flex-row sm:items-center sm:justify-between">
+          <span>{{ $t('help.totalArticles', { count: total }) }}</span>
+          <div class="flex items-center gap-2">
+            <button :disabled="page <= 1" class="btn-ghost btn-sm" @click="page--; loadArticles()">{{ $t('instance.prevPage') }}</button>
+            <span>{{ page }} / {{ totalPages }}</span>
+            <button :disabled="page >= totalPages" class="btn-ghost btn-sm" @click="page++; loadArticles()">{{ $t('instance.nextPage') }}</button>
+          </div>
+        </div>
+      </template>
 
-      <!-- Article Content -->
-      <div v-else class="card p-6 md:p-8">
-        <div class="markdown-body" v-html="articleHtml"></div>
-      </div>
-    </template>
+      <!-- Article Detail View -->
+      <template v-else>
+        <!-- Loading（加载中或尚未开始加载时显示） -->
+        <div v-if="articleLoading || !articleLoaded" class="card p-8 text-center text-themed-muted">
+          <svg class="w-6 h-6 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p class="mt-3 text-sm">{{ $t('help.loading') }}</p>
+        </div>
+
+        <!-- Not Found（仅在加载完成后且文章为空时显示） -->
+        <div v-else-if="articleLoaded && !currentArticle" class="card p-8 text-center">
+          <svg class="w-12 h-12 mx-auto text-themed-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="text-themed-muted mb-4">{{ articleError || $t('help.articleNotFound') }}</p>
+          <button class="btn-secondary" @click="goBack">{{ $t('help.backToHelp') }}</button>
+        </div>
+
+        <!-- Article Content -->
+        <div v-else class="card p-6 md:p-8">
+          <div class="markdown-body" v-html="articleHtml"></div>
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 

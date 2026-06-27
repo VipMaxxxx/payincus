@@ -165,7 +165,7 @@ const routes: RouteRecordRaw[] = [
     path: '/gift-cards',
     name: 'gift-cards',
     component: () => import('@/views/GiftCardsView.vue'),
-    meta: { requiresAuth: true, requiresUser: true, title: '礼品卡' }
+    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.giftCards', title: '礼品卡' }
   },
   {
     path: '/extensions',
@@ -177,7 +177,7 @@ const routes: RouteRecordRaw[] = [
     path: '/oauth/authorize',
     name: 'oauth-authorize',
     component: () => import('@/views/OAuthAuthorizeView.vue'),
-    meta: { requiresAuth: true, requiresUser: true, title: 'OAuth 授权' }
+    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.oauthAuthorize', title: 'OAuth 授权' }
   },
   {
     path: '/plugins/:pathMatch(.*)*',
@@ -254,13 +254,13 @@ const routes: RouteRecordRaw[] = [
     path: '/help',
     name: 'help',
     component: () => import('@/views/HelpView.vue'),
-    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.help', title: '帮助' }
+    meta: { titleKey: 'nav.help', title: '帮助' }
   },
   {
     path: '/help/:slug',
     name: 'help-article',
     component: () => import('@/views/HelpView.vue'),
-    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.help', title: '帮助' }
+    meta: { titleKey: 'nav.help', title: '帮助' }
   },
   // Inbox (notifications)
   {

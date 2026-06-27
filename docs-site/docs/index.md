@@ -35,6 +35,10 @@ features:
     details: Public API、OAuth Provider、SDK、事件、action runtime 和扩展存储组成开发平台。
 ---
 
+::: info 扩展中心
+[扩展开发](/plugins/overview)：扩展中心、在线扩展市场、主题系统、OAuth Provider、Public API 和 SDK 组成第三方开发入口。
+:::
+
 <section class="payincus-section">
   <p class="payincus-kicker">项目定位</p>
   <h2>给 hosting 业务使用的交付、计费和运营控制台</h2>

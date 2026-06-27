@@ -212,18 +212,25 @@ onMounted(loadOverview)
                 </td>
                 <td class="px-5 py-4">
                   <div class="space-y-2 min-w-[220px]">
-                    <div v-for="item in [
-                      { label: 'CPU', ratio: host.capacity.cpuUsageRatio, text: `${formatNumber(host.capacity.cpuUsed)} / ${formatNumber(host.capacity.cpuTotal)}%` },
-                      { label: '内存', ratio: host.capacity.memoryUsageRatio, text: `${formatMb(host.capacity.memoryUsed)} / ${formatMb(host.capacity.memoryTotal)}` },
-                      { label: '磁盘', ratio: host.capacity.diskUsageRatio, text: `${formatMb(host.capacity.diskUsed)} / ${formatMb(host.capacity.diskTotal)}` },
-                      { label: '端口', ratio: host.capacity.natPortUsageRatio, text: `${formatNumber(host.capacity.natPortUsed)} / ${formatNumber(host.capacity.natPortTotal)}` }
-                    ]" :key="item.label">
+                    <div
+                      v-for="item in [
+                        { label: 'CPU', ratio: host.capacity.cpuUsageRatio, text: `${formatNumber(host.capacity.cpuUsed)} / ${formatNumber(host.capacity.cpuTotal)}%` },
+                        { label: '内存', ratio: host.capacity.memoryUsageRatio, text: `${formatMb(host.capacity.memoryUsed)} / ${formatMb(host.capacity.memoryTotal)}` },
+                        { label: '磁盘', ratio: host.capacity.diskUsageRatio, text: `${formatMb(host.capacity.diskUsed)} / ${formatMb(host.capacity.diskTotal)}` },
+                        { label: '端口', ratio: host.capacity.natPortUsageRatio, text: `${formatNumber(host.capacity.natPortUsed)} / ${formatNumber(host.capacity.natPortTotal)}` }
+                      ]"
+                      :key="item.label"
+                    >
                       <div class="flex justify-between text-xs text-themed-muted">
                         <span>{{ item.label }}</span>
                         <span>{{ item.text }} · {{ formatPercent(item.ratio) }}</span>
                       </div>
                       <div class="h-1.5 rounded bg-themed-muted">
-                        <div class="h-1.5 rounded" :class="usageBarClass(item.ratio)" :style="{ width: `${Math.min(item.ratio * 100, 100)}%` }" />
+                        <div
+                          class="h-1.5 rounded"
+                          :class="usageBarClass(item.ratio)"
+                          :style="{ width: `${Math.min(item.ratio * 100, 100)}%` }"
+                        />
                       </div>
                     </div>
                   </div>

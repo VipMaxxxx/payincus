@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
 import type { GiftCardRecord, GiftCardStats, GiftCardStatus } from '@/types/api'
 
+const { t, locale } = useI18n()
 const toast = useToast()
 
 const records = ref<GiftCardRecord[]>([])
@@ -24,23 +26,29 @@ const form = ref({
 })
 
 const selectedCount = computed(() => selectedIds.value.size)
+const statusOptions = computed<Array<{ value: GiftCardStatus | ''; label: string }>>(() => [
+  { value: '', label: t('giftCards.status.all') },
+  { value: 'active', label: t('giftCards.status.active') },
+  { value: 'used', label: t('giftCards.status.used') },
+  { value: 'disabled', label: t('giftCards.status.disabled') },
+  { value: 'expired', label: t('giftCards.status.expired') }
+])
 
 function formatMoney(value: number): string {
-  return `¥${Number(value || 0).toFixed(2)}`
+  return new Intl.NumberFormat(locale.value, {
+    style: 'currency',
+    currency: 'CNY',
+    maximumFractionDigits: 2
+  }).format(value || 0)
 }
 
 function formatDate(value?: string | null): string {
-  if (!value) return '永久有效'
-  return new Date(value).toLocaleString('zh-CN')
+  if (!value) return t('giftCards.neverExpires')
+  return new Date(value).toLocaleString(locale.value)
 }
 
 function statusLabel(status: GiftCardStatus): string {
-  return {
-    active: '可使用',
-    used: '已兑换',
-    disabled: '已停用',
-    expired: '已过期'
-  }[status]
+  return t(`giftCards.status.${status}`)
 }
 
 function statusClass(status: GiftCardStatus): string {
@@ -68,7 +76,7 @@ async function loadData(): Promise<void> {
     stats.value = statsResponse
     selectedIds.value = new Set()
   } catch (err: any) {
-    toast.error('加载礼品卡失败：' + (err?.message || String(err)))
+    toast.error(t('giftCardsAdmin.toast.loadFailed', { message: err?.message || String(err) }))
   } finally {
     loading.value = false
   }
@@ -81,7 +89,7 @@ async function createCards(): Promise<void> {
     ? undefined
     : Number(form.value.balanceValue)
   if (!Number.isFinite(faceValue) || faceValue <= 0 || !Number.isSafeInteger(count) || count < 1) {
-    toast.warning('请输入有效面值和数量')
+    toast.warning(t('giftCardsAdmin.toast.invalidCreateForm'))
     return
   }
 
@@ -96,15 +104,15 @@ async function createCards(): Promise<void> {
     if (count === 1) {
       const response = await api.giftCards.generate(payload)
       batchResult.value = { batchId: '', codes: [response.giftCard] }
-      toast.success('礼品卡已生成')
+      toast.success(t('giftCardsAdmin.toast.created'))
     } else {
       const response = await api.giftCards.batch({ ...payload, count })
       batchResult.value = { batchId: response.batchId, codes: response.codes }
-      toast.success(`已批量生成 ${response.count} 张礼品卡`)
+      toast.success(t('giftCardsAdmin.toast.batchCreated', { count: response.count }))
     }
     await loadData()
   } catch (err: any) {
-    toast.error('生成礼品卡失败：' + (err?.message || String(err)))
+    toast.error(t('giftCardsAdmin.toast.createFailed', { message: err?.message || String(err) }))
   } finally {
     saving.value = false
   }
@@ -114,49 +122,49 @@ async function updateCardStatus(card: GiftCardRecord): Promise<void> {
   try {
     if (card.status === 'disabled') {
       await api.giftCards.enable(card.id)
-      toast.success('礼品卡已启用')
+      toast.success(t('giftCardsAdmin.toast.enabled'))
     } else {
       await api.giftCards.disable(card.id)
-      toast.success('礼品卡已停用')
+      toast.success(t('giftCardsAdmin.toast.disabled'))
     }
     await loadData()
   } catch (err: any) {
-    toast.error('更新状态失败：' + (err?.message || String(err)))
+    toast.error(t('giftCardsAdmin.toast.updateFailed', { message: err?.message || String(err) }))
   }
 }
 
 async function deleteCard(card: GiftCardRecord): Promise<void> {
-  if (!confirm(`确认删除礼品卡 ${card.codeMasked || card.code}？已兑换礼品卡不能删除。`)) return
+  if (!confirm(t('giftCardsAdmin.confirm.deleteOne', { code: card.codeMasked || card.code }))) return
   try {
     await api.giftCards.delete(card.id)
-    toast.success('礼品卡已删除')
+    toast.success(t('giftCardsAdmin.toast.deleted'))
     await loadData()
   } catch (err: any) {
-    toast.error('删除失败：' + (err?.message || String(err)))
+    toast.error(t('giftCardsAdmin.toast.deleteFailed', { message: err?.message || String(err) }))
   }
 }
 
 async function batchDisable(): Promise<void> {
   const ids = Array.from(selectedIds.value)
-  if (ids.length === 0) return
+  if (ids.length === 0 || !confirm(t('giftCardsAdmin.confirm.disableSelected', { count: ids.length }))) return
   try {
     const response = await api.giftCards.batchDisable(ids)
-    toast.success(`已停用 ${response.count} 张礼品卡`)
+    toast.success(t('giftCardsAdmin.toast.batchDisabled', { count: response.count }))
     await loadData()
   } catch (err: any) {
-    toast.error('批量停用失败：' + (err?.message || String(err)))
+    toast.error(t('giftCardsAdmin.toast.batchDisableFailed', { message: err?.message || String(err) }))
   }
 }
 
 async function batchDelete(): Promise<void> {
   const ids = Array.from(selectedIds.value)
-  if (ids.length === 0 || !confirm(`确认删除选中的 ${ids.length} 张礼品卡？`)) return
+  if (ids.length === 0 || !confirm(t('giftCardsAdmin.confirm.deleteSelected', { count: ids.length }))) return
   try {
     const response = await api.giftCards.batchDelete(ids)
-    toast.success(`已删除 ${response.count} 张礼品卡`)
+    toast.success(t('giftCardsAdmin.toast.batchDeleted', { count: response.count }))
     await loadData()
   } catch (err: any) {
-    toast.error('批量删除失败：' + (err?.message || String(err)))
+    toast.error(t('giftCardsAdmin.toast.batchDeleteFailed', { message: err?.message || String(err) }))
   }
 }
 
@@ -169,7 +177,7 @@ function toggleSelected(id: number, checked: boolean): void {
 
 async function copyCodes(codes: GiftCardRecord[]): Promise<void> {
   await navigator.clipboard.writeText(codes.map(card => card.code).join('\n'))
-  toast.success('兑换码已复制')
+  toast.success(t('giftCards.toast.copied'))
 }
 
 onMounted(loadData)
@@ -179,54 +187,71 @@ onMounted(loadData)
   <div class="space-y-6 animate-fade-in">
     <div class="page-header">
       <div>
-        <h1 class="page-title">礼品卡管理</h1>
-        <p class="page-description">生成和管理可兑换到账户余额的礼品卡。生产环境需要配置 PAYINCUS_GIFT_CARD_ADMIN_IDS 后才能操作。</p>
+        <h1 class="page-title">{{ t('giftCardsAdmin.title') }}</h1>
+        <p class="page-description">{{ t('giftCardsAdmin.description') }}</p>
       </div>
       <button class="btn-secondary" :disabled="loading" @click="loadData">
-        {{ loading ? '加载中...' : '刷新' }}
+        {{ loading ? t('giftCards.loading') : t('giftCards.refresh') }}
       </button>
     </div>
 
     <div v-if="stats" class="grid gap-4 md:grid-cols-4">
       <div class="card p-4">
-        <div class="text-sm text-themed-muted">可用礼品卡</div>
+        <div class="text-sm text-themed-muted">{{ t('giftCardsAdmin.stats.active') }}</div>
         <div class="mt-2 text-2xl font-semibold text-themed">{{ stats.active }}</div>
       </div>
       <div class="card p-4">
-        <div class="text-sm text-themed-muted">已兑换</div>
+        <div class="text-sm text-themed-muted">{{ t('giftCardsAdmin.stats.used') }}</div>
         <div class="mt-2 text-2xl font-semibold text-themed">{{ stats.used }}</div>
       </div>
       <div class="card p-4">
-        <div class="text-sm text-themed-muted">未兑余额</div>
+        <div class="text-sm text-themed-muted">{{ t('giftCardsAdmin.stats.outstanding') }}</div>
         <div class="mt-2 text-2xl font-semibold text-themed">{{ formatMoney(stats.outstandingValue) }}</div>
       </div>
       <div class="card p-4">
-        <div class="text-sm text-themed-muted">已兑金额</div>
+        <div class="text-sm text-themed-muted">{{ t('giftCardsAdmin.stats.redeemed') }}</div>
         <div class="mt-2 text-2xl font-semibold text-themed">{{ formatMoney(stats.totalRedeemedValue) }}</div>
       </div>
     </div>
 
     <section class="card p-6">
-      <h2 class="text-base font-semibold text-themed">生成礼品卡</h2>
-      <div class="mt-4 grid gap-3 lg:grid-cols-[140px_140px_120px_220px_minmax(0,1fr)_auto]">
-        <input v-model.number="form.faceValue" class="input" type="number" min="0.01" max="10000" step="0.01" placeholder="面值" />
-        <input v-model.number="form.balanceValue" class="input" type="number" min="0.01" max="10000" step="0.01" placeholder="到账金额" />
-        <input v-model.number="form.count" class="input" type="number" min="1" max="500" step="1" placeholder="数量" />
-        <input v-model="form.expiresAt" class="input" type="datetime-local" />
-        <input v-model="form.remark" class="input" maxlength="200" placeholder="备注，可选" />
-        <button class="btn-primary" :disabled="saving" @click="createCards">
-          {{ saving ? '生成中...' : '生成' }}
-        </button>
+      <h2 class="text-base font-semibold text-themed">{{ t('giftCardsAdmin.generateTitle') }}</h2>
+      <div class="mt-4 grid gap-4 lg:grid-cols-6">
+        <label class="space-y-1">
+          <span class="text-xs font-medium text-themed-muted">{{ t('giftCardsAdmin.faceValueLabel') }}</span>
+          <input v-model.number="form.faceValue" class="input" type="number" min="0.01" max="10000" step="0.01" :placeholder="t('giftCardsAdmin.faceValuePlaceholder')" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-medium text-themed-muted">{{ t('giftCardsAdmin.balanceValueLabel') }}</span>
+          <input v-model.number="form.balanceValue" class="input" type="number" min="0.01" max="10000" step="0.01" :placeholder="t('giftCardsAdmin.balanceValuePlaceholder')" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-medium text-themed-muted">{{ t('giftCardsAdmin.countLabel') }}</span>
+          <input v-model.number="form.count" class="input" type="number" min="1" max="500" step="1" :placeholder="t('giftCardsAdmin.countPlaceholder')" />
+        </label>
+        <label class="space-y-1 lg:col-span-2">
+          <span class="text-xs font-medium text-themed-muted">{{ t('giftCardsAdmin.expiresAtLabel') }}</span>
+          <input v-model="form.expiresAt" class="input" type="datetime-local" />
+        </label>
+        <label class="space-y-1 lg:col-span-5">
+          <span class="text-xs font-medium text-themed-muted">{{ t('giftCardsAdmin.remarkLabel') }}</span>
+          <input v-model="form.remark" class="input" maxlength="200" :placeholder="t('giftCards.remarkPlaceholder')" />
+        </label>
+        <div class="flex items-end">
+          <button class="btn-primary w-full" :disabled="saving" @click="createCards">
+            {{ saving ? t('giftCards.generating') : t('giftCards.generate') }}
+          </button>
+        </div>
       </div>
     </section>
 
     <section v-if="batchResult" class="rounded-lg border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-800">
       <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <div class="font-medium">本次生成的完整兑换码</div>
-          <div v-if="batchResult.batchId" class="mt-1 text-xs">批次：{{ batchResult.batchId }}</div>
+          <div class="font-medium">{{ t('giftCardsAdmin.batchResultTitle') }}</div>
+          <div v-if="batchResult.batchId" class="mt-1 text-xs">{{ t('giftCardsAdmin.batchId', { batchId: batchResult.batchId }) }}</div>
         </div>
-        <button class="btn-secondary btn-sm" @click="copyCodes(batchResult.codes)">复制全部</button>
+        <button class="btn-secondary btn-sm" @click="copyCodes(batchResult.codes)">{{ t('giftCardsAdmin.copyAll') }}</button>
       </div>
       <pre class="mt-3 max-h-56 overflow-auto rounded bg-white/70 p-3 font-mono text-xs">{{ batchResult.codes.map(card => card.code).join('\n') }}</pre>
     </section>
@@ -235,34 +260,67 @@ onMounted(loadData)
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex flex-col gap-3 sm:flex-row">
           <select v-model="statusFilter" class="input w-full sm:w-44" @change="loadData">
-            <option value="">全部状态</option>
-            <option value="active">可使用</option>
-            <option value="used">已兑换</option>
-            <option value="disabled">已停用</option>
-            <option value="expired">已过期</option>
+            <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
           </select>
           <label class="flex h-10 items-center gap-2 text-sm text-themed">
             <input v-model="revealCode" type="checkbox" class="h-4 w-4 rounded text-accent" @change="loadData" />
-            显示完整兑换码
+            {{ t('giftCardsAdmin.revealCode') }}
           </label>
         </div>
         <div class="flex gap-2">
-          <button class="btn-secondary" :disabled="selectedCount === 0" @click="batchDisable">批量停用</button>
-          <button class="btn-ghost text-error" :disabled="selectedCount === 0" @click="batchDelete">批量删除</button>
+          <button class="btn-secondary" :disabled="selectedCount === 0" @click="batchDisable">{{ t('giftCardsAdmin.batchDisable') }}</button>
+          <button class="btn-ghost text-error" :disabled="selectedCount === 0" @click="batchDelete">{{ t('giftCardsAdmin.batchDelete') }}</button>
         </div>
       </div>
 
-      <div class="mt-5 overflow-x-auto">
+      <div class="mt-5 space-y-3 md:hidden">
+        <div v-for="card in records" :key="card.id" class="rounded-lg border border-themed bg-themed-surface p-4">
+          <div class="flex items-start gap-3">
+            <input type="checkbox" class="mt-1 h-4 w-4 rounded text-accent" :checked="selectedIds.has(card.id)" @change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)" />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-start justify-between gap-3">
+                <code class="break-all font-mono text-xs text-themed">{{ card.code }}</code>
+                <span class="shrink-0 text-sm" :class="statusClass(card.status)">{{ statusLabel(card.status) }}</span>
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div class="text-xs text-themed-muted">{{ t('giftCards.amount') }}</div>
+                  <div class="font-medium text-themed">{{ formatMoney(card.balanceValue) }}</div>
+                  <div class="text-xs text-themed-muted">{{ t('giftCardsAdmin.faceValue', { amount: formatMoney(card.faceValue) }) }}</div>
+                </div>
+                <div>
+                  <div class="text-xs text-themed-muted">{{ t('giftCards.expiresAt') }}</div>
+                  <div class="text-themed">{{ formatDate(card.expiresAt) }}</div>
+                </div>
+              </div>
+              <div class="mt-3 space-y-1 text-xs text-themed-muted">
+                <div>{{ t('giftCardsAdmin.createdBy', { user: card.createdBy?.username || '-' }) }}</div>
+                <div>{{ t('giftCardsAdmin.owner', { user: card.owner?.username || '-' }) }}</div>
+                <div>{{ t('giftCardsAdmin.usedBy', { user: card.usedBy?.username || '-' }) }}</div>
+              </div>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <button v-if="card.status === 'active' || card.status === 'disabled'" class="btn-secondary btn-sm" @click="updateCardStatus(card)">
+                  {{ card.status === 'disabled' ? t('giftCardsAdmin.enable') : t('giftCardsAdmin.disable') }}
+                </button>
+                <button v-if="card.status !== 'used'" class="btn-danger btn-sm" @click="deleteCard(card)">{{ t('giftCardsAdmin.delete') }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-if="!loading && records.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+      </div>
+
+      <div class="mt-5 hidden overflow-x-auto md:block">
         <table class="min-w-full text-sm">
           <thead class="border-b border-themed text-left text-themed-muted">
             <tr>
               <th class="py-3 pr-4"></th>
-              <th class="py-3 pr-4">兑换码</th>
-              <th class="py-3 pr-4">金额</th>
-              <th class="py-3 pr-4">状态</th>
-              <th class="py-3 pr-4">创建/使用</th>
-              <th class="py-3 pr-4">有效期</th>
-              <th class="py-3 pr-4">操作</th>
+              <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+              <th class="py-3 pr-4">{{ t('giftCards.amount') }}</th>
+              <th class="py-3 pr-4">{{ t('giftCards.statusTitle') }}</th>
+              <th class="py-3 pr-4">{{ t('giftCardsAdmin.createdAndUsed') }}</th>
+              <th class="py-3 pr-4">{{ t('giftCards.expiresAt') }}</th>
+              <th class="py-3 pr-4">{{ t('giftCards.action') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -275,26 +333,26 @@ onMounted(loadData)
               </td>
               <td class="py-3 pr-4 text-themed">
                 <div>{{ formatMoney(card.balanceValue) }}</div>
-                <div class="text-xs text-themed-muted">面值 {{ formatMoney(card.faceValue) }}</div>
+                <div class="text-xs text-themed-muted">{{ t('giftCardsAdmin.faceValue', { amount: formatMoney(card.faceValue) }) }}</div>
               </td>
               <td class="py-3 pr-4" :class="statusClass(card.status)">{{ statusLabel(card.status) }}</td>
               <td class="py-3 pr-4 text-xs text-themed-muted">
-                <div>创建：{{ card.createdBy?.username || '-' }}</div>
-                <div>持有：{{ card.owner?.username || '-' }}</div>
-                <div>使用：{{ card.usedBy?.username || '-' }}</div>
+                <div>{{ t('giftCardsAdmin.createdBy', { user: card.createdBy?.username || '-' }) }}</div>
+                <div>{{ t('giftCardsAdmin.owner', { user: card.owner?.username || '-' }) }}</div>
+                <div>{{ t('giftCardsAdmin.usedBy', { user: card.usedBy?.username || '-' }) }}</div>
               </td>
               <td class="py-3 pr-4 text-themed-muted">{{ formatDate(card.expiresAt) }}</td>
               <td class="py-3 pr-4">
                 <div class="flex flex-wrap gap-2">
                   <button v-if="card.status === 'active' || card.status === 'disabled'" class="btn-secondary btn-sm" @click="updateCardStatus(card)">
-                    {{ card.status === 'disabled' ? '启用' : '停用' }}
+                    {{ card.status === 'disabled' ? t('giftCardsAdmin.enable') : t('giftCardsAdmin.disable') }}
                   </button>
-                  <button v-if="card.status !== 'used'" class="btn-ghost btn-sm text-error" @click="deleteCard(card)">删除</button>
+                  <button v-if="card.status !== 'used'" class="btn-danger btn-sm" @click="deleteCard(card)">{{ t('giftCardsAdmin.delete') }}</button>
                 </div>
               </td>
             </tr>
             <tr v-if="!loading && records.length === 0">
-              <td colspan="7" class="py-8 text-center text-themed-muted">暂无礼品卡。</td>
+              <td colspan="7" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</td>
             </tr>
           </tbody>
         </table>

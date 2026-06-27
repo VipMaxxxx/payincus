@@ -50,6 +50,8 @@ const adminPluginMenuItems = ref<MenuItem[]>([])
 const hiddenExpandMenuNames = new Set(['my-hosts', 'my-packages', 'hosting-wallet'])
 const hiddenWhenTicketDisabledMenuNames = new Set(['tickets'])
 const hiddenWhenMailUnavailableMenuNames = new Set(['mail'])
+const collapsibleGroupLabels = new Set(['nav.operations', 'nav.billing', 'nav.resources', 'nav.system'])
+const collapsedGroupLabels = ref(new Set(['nav.operations', 'nav.billing', 'nav.resources', 'nav.system']))
 const navDashboardPath = dashboardPath()
 const shouldHideHostingFeature = computed(() =>
   !authStore.isAdmin && authStore.user?.canAccessHostingFeature === false
@@ -81,13 +83,66 @@ const menuItems = computed<MenuItem[]>(() => {
   }
 
   return baseItems.filter(item => {
-    if (item.divider && item.label === 'nav.expand') {
+    if (item.divider && (item.label === 'nav.expand' || item.label === 'nav.resources')) {
       return false
     }
 
     return !item.name || !hiddenExpandMenuNames.has(item.name)
   })
 })
+
+const activeGroupLabels = computed(() => {
+  const activeGroups = new Set<string>()
+  let currentGroup = ''
+  for (const item of menuItems.value) {
+    if (item.divider) {
+      currentGroup = item.label || ''
+      continue
+    }
+    if (currentGroup && isActive(item)) {
+      activeGroups.add(currentGroup)
+    }
+  }
+  return activeGroups
+})
+
+const visibleMenuItems = computed<MenuItem[]>(() => {
+  const visibleItems: MenuItem[] = []
+  let currentGroup = ''
+  for (const item of menuItems.value) {
+    if (item.divider) {
+      currentGroup = item.label || ''
+      visibleItems.push(item)
+      continue
+    }
+
+    const groupCollapsed = currentGroup &&
+      collapsibleGroupLabels.has(currentGroup) &&
+      collapsedGroupLabels.value.has(currentGroup) &&
+      !activeGroupLabels.value.has(currentGroup)
+
+    if (!groupCollapsed) {
+      visibleItems.push(item)
+    }
+  }
+  return visibleItems
+})
+
+function isGroupCollapsed(label?: string): boolean {
+  if (!label || activeGroupLabels.value.has(label)) return false
+  return collapsibleGroupLabels.has(label) && collapsedGroupLabels.value.has(label)
+}
+
+function toggleGroup(label?: string): void {
+  if (!label || !collapsibleGroupLabels.has(label)) return
+  const next = new Set(collapsedGroupLabels.value)
+  if (next.has(label)) {
+    next.delete(label)
+  } else {
+    next.add(label)
+  }
+  collapsedGroupLabels.value = next
+}
 
 function isActive(item: MenuItem): boolean {
   if (item.name === 'dashboard') return route.path === navDashboardPath
@@ -226,16 +281,28 @@ onUnmounted(() => {
 
     <!-- 导航菜单 -->
     <nav class="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-      <template v-for="item in menuItems" :key="item.name || item.label">
+      <template v-for="item in visibleMenuItems" :key="item.name || item.label">
         <!-- 分隔线 -->
         <div v-if="item.divider" class="pt-3 pb-2">
-          <div 
+          <button
             v-if="!collapsed || mobileOpen" 
-            class="px-2 text-2xs font-medium uppercase tracking-wider"
+            class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-2xs font-medium uppercase tracking-wider transition-colors hover:bg-themed-hover"
             :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
+            type="button"
+            @click="toggleGroup(item.label)"
           >
-            {{ t(item.label || '') }}
-          </div>
+            <span>{{ item.labelText || t(item.label || '') }}</span>
+            <svg
+              v-if="item.label && collapsibleGroupLabels.has(item.label)"
+              class="h-3 w-3 transition-transform"
+              :class="isGroupCollapsed(item.label) ? '-rotate-90' : 'rotate-0'"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
           <div 
             v-else 
             class="mx-2"

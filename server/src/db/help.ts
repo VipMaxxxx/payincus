@@ -23,6 +23,11 @@ function normalizeHelpCategory(value: string | null | undefined): string | null 
   return category ? category.slice(0, 80) : null
 }
 
+function normalizeHelpSearch(value: string | null | undefined): string | null {
+  const search = value?.trim()
+  return search ? search.slice(0, 128) : null
+}
+
 function articleToHelpArticle(article: NonNullable<Awaited<ReturnType<typeof prisma.helpArticle.findFirst>>>): HelpArticle {
   return {
     id: article.id,
@@ -47,6 +52,7 @@ export async function getHelpArticles(options: {
   pageSize?: number
   publishedOnly?: boolean
   category?: string | null
+  search?: string | null
   pinnedOnly?: boolean  // 只获取置顶文章
 } = {}): Promise<{
   items: Array<Pick<HelpArticle, 'id' | 'title' | 'slug' | 'category' | 'sort_order' | 'published' | 'pinned' | 'created_at' | 'updated_at'>>
@@ -58,6 +64,7 @@ export async function getHelpArticles(options: {
   const { page, pageSize } = clampHelpPagination(options.page, options.pageSize)
   const publishedOnly = options.publishedOnly ?? true
   const category = normalizeHelpCategory(options.category)
+  const search = normalizeHelpSearch(options.search)
   const pinnedOnly = options.pinnedOnly ?? false
 
   const where: any = {}
@@ -68,6 +75,14 @@ export async function getHelpArticles(options: {
 
   if (category) {
     where.category = category
+  }
+
+  if (search) {
+    where.OR = [
+      { title: { contains: search, mode: 'insensitive' } },
+      { content: { contains: search, mode: 'insensitive' } },
+      { category: { contains: search, mode: 'insensitive' } }
+    ]
   }
 
   if (pinnedOnly) {
