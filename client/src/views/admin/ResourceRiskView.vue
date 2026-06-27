@@ -1117,11 +1117,11 @@ onMounted(() => {
 
     <div
       v-if="evidenceLoading || evidenceDetail"
-      class="fixed inset-0 z-40 flex justify-end bg-black/40"
+      class="fixed inset-0 z-[80] flex justify-end bg-black/50 backdrop-blur-[1px]"
       @click.self="closeEvidence"
     >
-      <aside class="h-full w-full max-w-4xl overflow-y-auto border-l border-themed bg-themed-surface shadow-xl">
-        <div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-themed bg-themed-surface px-5 py-4">
+      <aside class="h-full w-full max-w-4xl overflow-y-auto border-l border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950">
+        <div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4 dark:border-gray-800 dark:bg-gray-950">
           <div>
             <h2 class="text-lg font-semibold text-themed">风险证据详情</h2>
             <p class="mt-1 text-sm text-themed-muted">
@@ -1145,39 +1145,39 @@ onMounted(() => {
 
         <div v-else-if="evidenceDetail" class="space-y-5 p-5">
           <section class="grid gap-3 md:grid-cols-4">
-            <div class="rounded-lg border border-themed p-3">
+            <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
               <div class="text-xs text-themed-muted">当前评分</div>
               <div class="mt-1 text-2xl font-semibold text-themed">{{ evidenceDetail.state.score }}</div>
             </div>
-            <div class="rounded-lg border border-themed p-3">
+            <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
               <div class="text-xs text-themed-muted">风险等级</div>
               <div class="mt-2"><span :class="badgeClass(evidenceDetail.state.level)">{{ evidenceDetail.state.level }}</span></div>
             </div>
-            <div class="rounded-lg border border-themed p-3">
+            <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
               <div class="text-xs text-themed-muted">当前状态</div>
               <div class="mt-1 text-themed">{{ evidenceDetail.state.status }}</div>
             </div>
-            <div class="rounded-lg border border-themed p-3">
+            <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
               <div class="text-xs text-themed-muted">限速</div>
               <div class="mt-1 text-themed">{{ evidenceDetail.state.currentBandwidthLimit || '-' }}</div>
             </div>
           </section>
 
-          <section class="rounded-lg border border-themed">
+          <section class="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
             <div class="border-b border-themed px-4 py-3">
               <h3 class="font-semibold text-themed">当前证据快照</h3>
             </div>
-            <pre class="max-h-72 overflow-auto whitespace-pre-wrap break-words p-4 text-xs text-themed-muted">{{ stringifyEvidence(evidenceDetail.state.evidence) }}</pre>
+            <pre class="max-h-72 overflow-auto whitespace-pre-wrap break-words bg-gray-50 p-4 text-xs text-themed-muted dark:bg-gray-950">{{ stringifyEvidence(evidenceDetail.state.evidence) }}</pre>
           </section>
 
           <section class="grid gap-4 xl:grid-cols-2">
-            <div class="rounded-lg border border-themed">
+            <div class="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
               <div class="border-b border-themed px-4 py-3">
                 <h3 class="font-semibold text-themed">24 小时趋势</h3>
               </div>
               <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                  <thead class="bg-themed-secondary text-themed-muted">
+                  <thead class="bg-gray-50 text-themed-muted dark:bg-gray-950">
                     <tr>
                       <th class="p-3 text-left">时间</th>
                       <th class="p-3 text-left">平均/峰值带宽</th>
@@ -1202,13 +1202,13 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="rounded-lg border border-themed">
+            <div class="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
               <div class="border-b border-themed px-4 py-3">
                 <h3 class="font-semibold text-themed">7 天趋势</h3>
               </div>
               <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                  <thead class="bg-themed-secondary text-themed-muted">
+                  <thead class="bg-gray-50 text-themed-muted dark:bg-gray-950">
                     <tr>
                       <th class="p-3 text-left">日期</th>
                       <th class="p-3 text-left">平均/峰值带宽</th>
@@ -1234,13 +1234,13 @@ onMounted(() => {
             </div>
           </section>
 
-          <section class="rounded-lg border border-themed">
+          <section class="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
             <div class="border-b border-themed px-4 py-3">
               <h3 class="font-semibold text-themed">最近资源样本</h3>
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full text-sm">
-                <thead class="bg-themed-secondary text-themed-muted">
+                <thead class="bg-gray-50 text-themed-muted dark:bg-gray-950">
                   <tr>
                     <th class="p-3 text-left">采样时间</th>
                     <th class="p-3 text-left">带宽</th>
@@ -1268,7 +1268,7 @@ onMounted(() => {
           </section>
 
           <section class="grid gap-4 lg:grid-cols-2">
-            <div class="rounded-lg border border-themed">
+            <div class="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
               <div class="border-b border-themed px-4 py-3">
                 <h3 class="font-semibold text-themed">风险事件时间线</h3>
               </div>
@@ -1280,13 +1280,13 @@ onMounted(() => {
                   </div>
                   <div class="mt-2 text-sm font-medium text-themed">{{ event.type }} · {{ event.scoreAfter }} / {{ event.scoreDelta >= 0 ? '+' : '' }}{{ event.scoreDelta }}</div>
                   <p class="mt-1 text-sm text-themed-muted">{{ event.message }}</p>
-                  <pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-themed-secondary p-2 text-xs text-themed-muted">{{ stringifyEvidence(event.evidence) }}</pre>
+                  <pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-gray-50 p-2 text-xs text-themed-muted dark:bg-gray-950">{{ stringifyEvidence(event.evidence) }}</pre>
                 </div>
                 <div v-if="evidenceDetail.events.length === 0" class="p-6 text-center text-themed-muted">暂无事件。</div>
               </div>
             </div>
 
-            <div class="rounded-lg border border-themed">
+            <div class="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
               <div class="border-b border-themed px-4 py-3">
                 <h3 class="font-semibold text-themed">处置审计</h3>
               </div>
@@ -1304,13 +1304,13 @@ onMounted(() => {
             </div>
           </section>
 
-          <section class="rounded-lg border border-themed">
+          <section class="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
             <div class="border-b border-themed px-4 py-3">
               <h3 class="font-semibold text-themed">关联下单限制</h3>
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full text-sm">
-                <thead class="bg-themed-secondary text-themed-muted">
+                <thead class="bg-gray-50 text-themed-muted dark:bg-gray-950">
                   <tr>
                     <th class="p-3 text-left">ID</th>
                     <th class="p-3 text-left">状态</th>
