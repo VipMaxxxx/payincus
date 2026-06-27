@@ -585,7 +585,7 @@ assert.ok(
   'admin-reachable instance detail must guard customer transfer, redeem, subscription, billing-destroy, and badge self-service features'
 )
 assert.ok(
-  instancesViewSource.includes("import { instanceCreatePath, instanceDetailPath, isAdminEntry, walletPath } from '@/utils/app-paths'") &&
+  instancesViewSource.includes("import { instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'") &&
     instancesViewSource.includes('interface CustomerBillingApi') &&
     instancesViewSource.includes('const customerBillingApi = api as typeof api & CustomerBillingApi') &&
     instancesViewSource.includes('const canUseCustomerBillingActions = computed<boolean>(() => !isAdminEntry && !isViewingAnotherUsersInstances.value)') &&
