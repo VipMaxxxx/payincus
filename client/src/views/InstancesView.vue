@@ -17,7 +17,7 @@ import DistroIcon from '@/components/icons/DistroIcon.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
 import InstanceOrderMenu from '@/components/instance/InstanceOrderMenu.vue'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel } from '@/utils/freeSiteFun'
-import { instanceCreatePath, instanceDetailPath, isAdminEntry, walletPath } from '@/utils/app-paths'
+import { instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'InstancesView' })
@@ -1126,7 +1126,7 @@ async function openSingleRenewModal(instance: Instance): Promise<void> {
 }
 
 function openInstanceTransfer(instance: Instance): void {
-  void router.push({ path: '/transfers', query: { instanceId: String(instance.id) } })
+  void router.push({ path: transfersPath(), query: { instanceId: String(instance.id) } })
 }
 
 async function openBatchRenewModal(): Promise<void> {
