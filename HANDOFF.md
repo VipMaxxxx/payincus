@@ -19,46 +19,46 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-776950a Update version log for v0.9.0
+5c4bb3b Update version log for v0.9.4
 ```
 
-GitHub remote `payincus/main` is aligned at `776950a`.
+GitHub remote `payincus/main` is aligned at `5c4bb3b`.
 
 The current local tree should be clean after pulling `payincus/main`. Do not reset if new local changes appear; inspect them first.
 
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-776950a Update version log for v0.9.0
+5c4bb3b Update version log for v0.9.4
 ```
 
 ## Latest GitHub Release Work
 
-`v0.9.0` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
+`v0.9.4` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
 
 Release commits:
 
 ```text
-aa087db Release v0.9.0
-776950a Update version log for v0.9.0
+15e6c63 Close OTA worker database on skipped duplicate
+5c4bb3b Update version log for v0.9.4
 ```
 
 GitHub workflow proof:
 
 ```text
-Build & Release: run 28287778837 completed success
-CI: run 28287777773 completed success
-Docs Pages: run 28287777764 completed success
+Build & Release: run 28289317161 completed success
+CI: run 28289315929 completed success
+Docs Pages: run 28289315914 completed success
 ```
 
-Release assets verified for `v0.9.0`:
+Release assets expected and published by the successful `v0.9.4` release workflow:
 
 ```text
-incudal-v0.9.0-linux-amd64.tar.gz
-incudal-v0.9.0-linux-amd64.tar.gz.sha256
-incudal-v0.9.0-linux-arm64.tar.gz
-incudal-v0.9.0-linux-arm64.tar.gz.sha256
-incudal-v0.9.0-ota-manifest.json
+incudal-v0.9.4-linux-amd64.tar.gz
+incudal-v0.9.4-linux-amd64.tar.gz.sha256
+incudal-v0.9.4-linux-arm64.tar.gz
+incudal-v0.9.4-linux-arm64.tar.gz.sha256
+incudal-v0.9.4-ota-manifest.json
 ota-manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
@@ -66,7 +66,14 @@ payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 plugin-market-index.json
 ```
 
-The `v0.9.0` bundle includes:
+The current `v0.9.4` bundle includes the `v0.9.0` commercial-operation baseline plus the follow-up OTA/smoke hardening:
+
+- `v0.9.1`: split auth smoke now runs from production artifacts through `dist/scripts/smoke-split-auth.js`.
+- `v0.9.2`: split auth smoke is Turnstile-aware; without `SMOKE_TURNSTILE_TOKEN`, it treats enforced Turnstile as a protected login proof and skips the login-chain portion instead of failing the OTA.
+- `v0.9.3`: OTA update and rollback workers use atomic task-claim guards to avoid duplicate workers mutating the same task.
+- `v0.9.4`: duplicate OTA workers close the Prisma database connection before returning, so skipped duplicate oneshot services exit cleanly instead of hanging.
+
+The `v0.9.0` commercial-operation baseline includes:
 
 - Integration Center: admin entry, backend health-check routes, persisted health history, and docs coverage for SMTP, Lsky, Telegram, payment providers, global notifications, remote storage, Agent/Incus, OTA, extension market, and theme market.
 - Billing and payment operations: manual recharge provider flow, payment-provider secret handling guards, plugin gateway refund workbench, refund reconciliation cases, and safer payment detail redaction.
@@ -78,37 +85,59 @@ The `v0.9.0` bundle includes:
 Local validation already completed for this candidate:
 
 ```text
-pnpm test                         passed
-pnpm build                        passed
-pnpm --dir docs-site --ignore-workspace build  passed
-RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0 ... pnpm verify:production  passed
-targeted guards for admin routes, split deploy config, ticket image security,
-OAuth/mail/payment secret handling, refresh token storage, plugin/runtime,
-resource risk, and integration health passed during the working session.
+v0.9.1:
+  pnpm --filter server test:split-deploy-config  passed
+  pnpm --filter server type-check                passed
+  pnpm --filter server build                     passed
+  pnpm build                                     passed
+  pnpm --dir docs-site --ignore-workspace build  passed
+v0.9.2:
+  pnpm --filter server test:split-deploy-config  passed
+  pnpm --filter server type-check                passed
+  pnpm --filter server build                     passed
+  pnpm build                                     passed
+  pnpm --dir docs-site --ignore-workspace build  passed
+v0.9.3:
+  pnpm --filter server test:system-update-guards passed
+  pnpm --filter server type-check                passed
+  pnpm --filter server build                     passed
+  pnpm build                                     passed
+  pnpm --dir docs-site --ignore-workspace build  passed
+v0.9.4:
+  pnpm --filter server test:system-update-guards passed
+  pnpm --filter server type-check                passed
+  pnpm --filter server build                     passed
+  pnpm build                                     passed
+  pnpm --dir docs-site --ignore-workspace build  passed
 ```
 
 Remaining before calling the whole commercial-operation objective complete:
 
-- Optional final-acceptance proof refs are still not collected for a fresh real payment/log-header proof run. Production OTA itself is complete and verified.
+- Current `v0.9.4` production OTA and final-acceptance proof are complete.
+- Accepted production warnings remain: `PAYMENT_CALLBACK_IP_WHITELIST` is empty and public package `DEBGP` is active while current online bound hosts cannot satisfy its minimum CPU/memory requirement.
+- With Turnstile enabled and no `SMOKE_TURNSTILE_TOKEN`, split auth smoke verifies Turnstile enforcement and skips the full login-chain smoke. Provide a valid Turnstile token if a full automated login-chain proof is required.
 - Keep watching the high-risk surfaces touched by `v0.9.0`: Integration Center health checks, manual recharge, refund/reconciliation workbench, extension capability review blocking, delivery/plan-upgrade sync repair, and split user/admin login boundaries.
 
 ## Latest Production OTA Proof
 
-- Production version: `v0.9.0`
-- Release tag commit: `aa087db`
-- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.9.0-20260627113344`
-- OTA task: `94`, status `success`, completed at `2026-06-27T11:35:14.559Z`; backup path `/opt/incudal/releases/v0.8.9-20260627074826`; log path `/opt/incudal/update-logs/system-update-94.log`.
-- GitHub Actions: `Build & Release` for `v0.9.0` succeeded, `CI` on `main` succeeded, docs Pages deployment succeeded.
-- Release assets verified: linux amd64/arm64 tarballs, sha256 files, OTA manifest, and marketplace assets.
+- Production version: `v0.9.4`
+- Release tag commit: `15e6c63`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.9.4-20260627123842`
+- OTA task: `98`, status `success`; log path `/opt/incudal/update-logs/system-update-98.log`.
+- GitHub Actions: `Build & Release` for `v0.9.4` succeeded, `CI` on `main` succeeded, docs Pages deployment succeeded.
 - Production checks passed during OTA: split host verification, `pnpm verify:production`, `pnpm verify:log-header`.
 - Independent checks after OTA:
   - `https://pay.payincus.com/api/health` returned HTTP 200.
   - `https://admin.payincus.com/api/health` returned HTTP 200.
-  - Local backend health `http://127.0.0.1:3001/api/health` returned HTTP 200.
   - `systemctl is-active incudal-backend` returned `active`.
-  - `package.json` under `/opt/incudal/current` reports `0.9.0`.
+  - `package.json` under `/opt/incudal/current` reports `0.9.4`.
   - OTA log shows `System update completed successfully`.
-  - Fresh post-OTA checks from `/opt/incudal/releases/v0.9.0-20260627113344` passed: `pnpm verify:production` and `pnpm verify:log-header`.
+  - Fresh post-OTA final acceptance from current `v0.9.4` passed: `/tmp/incudal-proof/final-acceptance-v0.9.4.md`.
+  - Duplicate-start verification on OTA task `98` exited cleanly as `inactive`, kept the symlink unchanged, and logged `System update task 98 is already claimed or finished; skipping duplicate worker`.
+
+Historical note:
+
+- Duplicate-start verification on task `97` found the `v0.9.3` skipped-worker path could leave Prisma open and keep the systemd oneshot active. `v0.9.4` fixed that path and verified the duplicate service now exits cleanly.
 
 ## Latest Independence / Docs Release Work
 
