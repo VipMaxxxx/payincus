@@ -1734,8 +1734,8 @@ export interface Instance {
   disk: number
   ipv4: string | null
   ipv6: string | null
-  network_mode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'  // camelCase 别名
+  network_mode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'  // camelCase 别名
   ssh_port: number | null
   root_password?: string | null  // Removed from API responses for security
   port_limit: number | null
@@ -1847,7 +1847,7 @@ export interface CreateInstanceRequest {
   disk: number
   hostId: number
   sshKeyId: number
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   portLimit?: number
   snapshotLimit?: number
   backupLimit?: number
@@ -2278,8 +2278,8 @@ export interface Package {
   memory_max: number
   disk_max: number
   bandwidth_max: number | null
-  network_mode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'  // camelCase 别名
+  network_mode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'  // camelCase 别名
   instance_type?: 'container' | 'vm'  // 实例类型
   host_ids: number[]  // 绑定的宿主机ID列表
   host_storage_pools?: Record<string, string | null>
@@ -2361,7 +2361,7 @@ export interface CreatePackageRequest {
   memoryMax: number
   diskMax: number
   bandwidthMax?: number
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType?: 'container' | 'vm'  // 实例类型
   hostIds: number[]  // 必须至少绑定一个宿主机
   hostStoragePools?: Record<string, string | null>
@@ -2409,7 +2409,7 @@ export interface UpdatePackageRequest {
   memoryMax?: number
   diskMax?: number
   bandwidthMax?: number
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType?: 'container' | 'vm'  // 实例类型
   hostIds?: number[]  // 如果提供，将更新绑定的宿主机（必须至少一个）
   hostStoragePools?: Record<string, string | null>

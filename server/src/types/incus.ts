@@ -185,7 +185,7 @@ export interface BuildInstanceConfigOptions {
   disk: number
   swapEnabled?: boolean
   swapSize?: number | null
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   sshKey?: string
   password?: string
   nested?: boolean

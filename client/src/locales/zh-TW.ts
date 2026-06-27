@@ -156,6 +156,8 @@ export default {
             nat_ipv6_nat: 'IPv4 NAT & IPv6 NAT',
             ipv6_only: 'IPv6 Only',
             ipv6_nat: 'IPv6 NAT',
+            public_ipv4: '獨立 IPv4',
+            public_ipv4_ipv6: '獨立 IPv4 & 獨立 IPv6',
         },
         // 實例類型
         instanceType: {
@@ -4570,6 +4572,7 @@ export default {
             tabConfig: '設定',
             tabInstances: '實例',
             tabStorage: '儲存',
+            tabPublicIpv4: '獨立 IPv4',
             tabImages: '映像檔',
             tabOps: '運維',
             tabCreate: '創建',

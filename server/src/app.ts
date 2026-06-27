@@ -23,6 +23,7 @@ import { checkJwtConfig, isAccessTokenInvalidated } from './lib/security.js'
 
 // 导入日志敏感信息过滤器
 import { logSerializers } from './lib/log-sanitizer.js'
+import { networkModeAllowsPortMapping, networkModeNeedsPublicIpv4 } from './lib/network-modes.js'
 import { getTrustProxyEnabled } from './lib/trust-proxy-config.js'
 import { getCorsOrigins } from './lib/origin-config.js'
 
@@ -839,14 +840,13 @@ const start = async (): Promise<void> => {
     }, 5 * 60 * 1000) // 5分钟
 
     // 启动创建超时清理任务（清理10分钟仍处于创建中的实例）
-    const { getStuckCreatingInstances, getHostById, compensateFailedInstancePurchase } = await import('./db/index.js')
+    const { getStuckCreatingInstances, getHostById, compensateFailedInstancePurchase, releasePublicIpv4ForInstance } = await import('./db/index.js')
     const { getIncusClient, deleteInstance } = await import('./lib/incus/index.js')
     const { createLog } = await import('./db/logs.js')
     const CREATE_TIMEOUT_MS = 10 * 60 * 1000 // 10分钟
     const CREATE_TIMEOUT_CHECK_INTERVAL = 2 * 60 * 1000 // 每2分钟检查一次
     
-    const instanceCreationReservesPorts = (networkMode: string) =>
-      ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(networkMode)
+    const instanceCreationReservesPorts = (networkMode: string) => networkModeAllowsPortMapping(networkMode)
 
     const runCreateTimeoutCleanup = async () => {
       try {
@@ -888,6 +888,15 @@ const start = async (): Promise<void> => {
             console.log(`[CreateTimeout] 实例 ${instance.name} 资源已回滚`)
           } catch (rollbackErr) {
             console.error(`[CreateTimeout] 资源回滚失败:`, rollbackErr)
+          }
+
+          if (networkModeNeedsPublicIpv4(instance.network_mode)) {
+            try {
+              await prisma.$transaction((tx) => releasePublicIpv4ForInstance(tx, instance.id))
+              console.log(`[CreateTimeout] 实例 ${instance.name} 独立 IPv4 已释放`)
+            } catch (releaseErr) {
+              console.error(`[CreateTimeout] 释放独立 IPv4 失败:`, releaseErr)
+            }
           }
 
           try {

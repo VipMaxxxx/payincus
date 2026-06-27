@@ -16,6 +16,7 @@ import { parseNullablePostgresBigIntInput, parseRequiredPostgresBigIntInput } fr
 import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
 import { calculateVipLevel, getVipBadgeStyleForLevel, getVipRules } from '../services/vip-levels.js'
 import { listEnabledServiceExtensionTargets } from '../lib/plugin-extension-dispatch.js'
+import { ACTIVE_PACKAGE_NETWORK_MODES } from '../lib/network-modes.js'
 
 const KVM_UNSUPPORTED_NETWORK_MODES = new Set(['nat_ipv6_nat', 'ipv6_nat'])
 const MAX_PACKAGE_PLAN_NAME_LENGTH = 50
@@ -590,7 +591,7 @@ function normalizePackageInput(input: unknown, options: { requireAll: boolean })
   normalized.memoryMax = optionalPackageInteger(input, 'memoryMax', '内存', 128, 1048576)
   normalized.diskMax = optionalPackageInteger(input, 'diskMax', '磁盘', 512, 104857600)
   normalized.bandwidthMax = optionalPackageInteger(input, 'bandwidthMax', '带宽', 0, POSTGRES_INT_MAX)
-  normalized.networkMode = optionalPackageEnum(input, 'networkMode', '网络模式', ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_only', 'ipv6_nat'])
+  normalized.networkMode = optionalPackageEnum(input, 'networkMode', '网络模式', ACTIVE_PACKAGE_NETWORK_MODES)
   normalized.instanceType = optionalPackageEnum(input, 'instanceType', '实例类型', ['container', 'vm'])
   normalized.hostIds = normalizePackageHostIds(input, options.requireAll)
   normalized.hostStoragePools = normalizePackageHostStoragePools(input)
@@ -1659,7 +1660,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
           memoryMax: { type: 'integer', minimum: 128 },
           diskMax: { type: 'integer', minimum: 512 },
           bandwidthMax: { type: 'integer' },
-          networkMode: { type: 'string', enum: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_only', 'ipv6_nat'] },
+          networkMode: { type: 'string', enum: ACTIVE_PACKAGE_NETWORK_MODES },
           instanceType: { type: 'string', enum: ['container', 'vm'] },
           hostIds: { type: 'array', items: { type: 'integer' }, minItems: 1 },
           hostStoragePools: {
@@ -1851,7 +1852,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
           memoryMax: { type: 'integer', minimum: 128 },
           diskMax: { type: 'integer', minimum: 512 },
           bandwidthMax: { type: 'integer' },
-          networkMode: { type: 'string', enum: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_only', 'ipv6_nat'] },
+          networkMode: { type: 'string', enum: ACTIVE_PACKAGE_NETWORK_MODES },
           instanceType: { type: 'string', enum: ['container', 'vm'] },
           hostIds: { type: 'array', items: { type: 'integer' }, minItems: 1 },
           hostStoragePools: {

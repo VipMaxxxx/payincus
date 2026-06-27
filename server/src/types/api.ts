@@ -70,7 +70,7 @@ export interface CreateInstanceRequest {
   disk: number
   hostId: number
   sshKeyId: number
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   portLimit?: number
   snapshotLimit?: number
   backupLimit?: number
@@ -163,7 +163,7 @@ export interface CreatePackageRequest {
   memoryMax: number
   diskMax: number
   bandwidthMax?: number
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType?: 'container' | 'vm'  // 实例类型
   hostIds?: number[]
   hostStoragePools?: Record<string, string | null>
@@ -209,7 +209,7 @@ export interface UpdatePackageRequest {
   memoryMax?: number
   diskMax?: number
   bandwidthMax?: number
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType?: 'container' | 'vm'  // 实例类型
   hostIds?: number[]
   hostStoragePools?: Record<string, string | null>

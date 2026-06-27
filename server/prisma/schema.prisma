@@ -68,6 +68,8 @@ enum NetworkMode {
   nat_ipv6_nat // IPv4 NAT + IPv6 NAT（共享宿主机 IPv6）
   ipv6_only    // 纯 IPv6 独立（Routed），无 NAT 端口映射
   ipv6_nat     // 纯 IPv6 NAT（共享宿主机 IPv6），无 NAT 端口映射
+  public_ipv4  // 独立 IPv4（Routed）
+  public_ipv4_ipv6 // 独立 IPv4 + 独立 IPv6（Routed）
 }
 
 // 存储池用途枚举
@@ -975,6 +977,8 @@ model Host {
   resourceRiskEvents  InstanceRiskEvent[]
   resourceRiskSamples InstanceResourceSample[]
   ipAddresses  IpAddress[]
+  publicIpv4Pools PublicIpv4Pool[]
+  publicIpv4Addresses PublicIpv4Address[]
   allowedImages HostAllowedImage[]
   portMappings PortMapping[]
   packageHosts PackageHost[]
@@ -1373,6 +1377,7 @@ model Instance {
   orderRestrictions UserOrderRestriction[] @relation("UserOrderRestrictionSourceInstance")
   transfers       InstanceTransfer[]
   ipAddresses     IpAddress[]
+  publicIpv4Address PublicIpv4Address?
   ipv6Subnets     Ipv6Subnet[]
   proxySites       ProxySite[]
   instanceTasks    InstanceTask[]
@@ -1404,6 +1409,12 @@ enum IpType {
   inet6
 }
 
+enum PublicIpv4AddressStatus {
+  free
+  assigned
+  disabled
+}
+
 // IP 地址池模型 (支持多 IP)
 model IpAddress {
   id        Int     @id @default(autoincrement())
@@ -1426,6 +1437,53 @@ model IpAddress {
   @@index([hostId, address])
   @@index([instanceId])
   @@map("ip_addresses")
+}
+
+model PublicIpv4Pool {
+  id           Int      @id @default(autoincrement())
+  hostId       Int      @map("host_id")
+  name         String
+  cidr         String?
+  gateway      String
+  prefixLength Int      @default(32) @map("prefix_length")
+  dns          Json     @default("[]")
+  routeMode    String   @default("routed") @map("route_mode")
+  enabled      Boolean  @default(true)
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  host      Host                @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  addresses PublicIpv4Address[]
+
+  @@index([hostId, enabled])
+  @@map("public_ipv4_pools")
+}
+
+model PublicIpv4Address {
+  id           Int                     @id @default(autoincrement())
+  poolId       Int?                    @map("pool_id")
+  hostId       Int                     @map("host_id")
+  instanceId   Int?                    @unique @map("instance_id")
+  address      String
+  prefixLength Int                     @default(32) @map("prefix_length")
+  gateway      String?
+  dns          Json                    @default("[]")
+  status       PublicIpv4AddressStatus @default(free)
+  assignedAt   DateTime?               @map("assigned_at")
+  releasedAt   DateTime?               @map("released_at")
+  notes        String?
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
+
+  pool     PublicIpv4Pool? @relation(fields: [poolId], references: [id], onDelete: SetNull)
+  host     Host            @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  instance Instance?       @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
+  @@unique([hostId, address])
+  @@index([hostId, status])
+  @@index([poolId, status])
+  @@map("public_ipv4_addresses")
 }
 
 // IPv6 网段分配模型

@@ -46,6 +46,18 @@ assert.ok(
 )
 
 assert.ok(
+  hostInstallScript.includes('独立 IPv4') &&
+    hostInstallScript.includes('独立 IPv4 + 独立 IPv6') &&
+    hostInstallScript.includes('新节点、新套餐和新实例不再以 IPv6 NAT 作为目标能力。') &&
+    hostInstallScript.includes('ipv6_block="ipv6.address: none"') &&
+    !hostInstallScript.includes('${GREEN}IPv4 NAT + IPv6 NAT${NC}') &&
+    !hostInstallScript.includes('${GREEN}IPv6 NAT${NC}') &&
+    !hostInstallScript.includes('网桥 NAT 双通道模式') &&
+    !hostInstallScript.includes('Bridge: Auto+NAT'),
+  'host install script must document dedicated IPv4/IPv6 targets and stop presenting IPv6 NAT as a new node capability'
+)
+
+assert.ok(
   hostRoutes.includes('function getPanelCertificatePaths') &&
     hostRoutes.includes("appDir.endsWith('/current') ? dirname(appDir) : null") &&
     hostRoutes.includes("join(installDir, 'server/certs/client.crt')") &&

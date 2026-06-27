@@ -407,8 +407,8 @@ show_network_mode_help() {
     echo -e "  适合没有 IPv6 网段或不需要 IPv6 的场景。"
     echo ""
     echo -e "  ${CYAN}模式 2：IPv4 + IPv6${NC}"
-    echo -e "  节点同时启用 IPv4 NAT 和 IPv6 路由转发。"
-    echo -e "  安装后可在面板创建以下任意 IPv6 网络模式的实例。"
+    echo -e "  节点启用 IPv4 NAT 和 IPv6 routed 转发。"
+    echo -e "  安装后可在面板创建独立 IPv6 或双栈实例。"
     echo ""
     echo -e "  ${BOLD}面板实例网络模式（在面板创建实例/套餐时选择）：${NC}"
     echo ""
@@ -416,27 +416,29 @@ show_network_mode_help() {
     echo -e "  宿主机仅有 IPv4，通过端口映射给容器提供对外服务。"
     echo -e "  ${DIM}节点要求：模式 1 或 模式 2 均可${NC}"
     echo ""
-    echo -e "  ${GREEN}IPv4 NAT + IPv6${NC}"
+    echo -e "  ${GREEN}IPv4 NAT + 独立 IPv6${NC}"
     echo -e "  宿主机拥有 IPv4 + 独立公网 IPv6 地址（双栈）。"
-    echo -e "  IPv4 通过端口映射，IPv6 根据网段选择独立分配给容器。"
+    echo -e "  IPv4 通过端口映射，IPv6 从 routed 子网独立分配给实例。"
     echo -e "  ${DIM}节点要求：模式 2 + 配置 IPv6 子网${NC}"
-    echo ""
-    echo -e "  ${GREEN}IPv4 NAT + IPv6 NAT${NC}"
-    echo -e "  宿主机拥有 IPv4 + IPv6（均为 NAT 共享宿主机出口）。"
-    echo -e "  适用于宿主机只有单个 IPv6 地址或者不分配 IPv6 网段，全局共享宿主机的 IPv6。"
-    echo -e "  ${DIM}节点要求：模式 2，无需 IPv6 子网${NC}"
     echo ""
     echo -e "  ${GREEN}IPv6 Only${NC}"
-    echo -e "  宿主机仅有独立公网 IPv6（无 IPv4）。"
+    echo -e "  实例仅分配独立公网 IPv6，不开放 IPv4 NAT 端口映射。"
     echo -e "  ${DIM}节点要求：模式 2 + 配置 IPv6 子网${NC}"
     echo ""
-    echo -e "  ${GREEN}IPv6 NAT${NC}"
-    echo -e "  宿主机仅有单个 IPv6（共享宿主机 IPv6 出口，无 IPv4）。"
-    echo -e "  ${DIM}节点要求：模式 2，无需 IPv6 子网${NC}"
+    echo -e "  ${GREEN}独立 IPv4${NC}"
+    echo -e "  实例从面板维护的独立 IPv4 地址池分配公网 IPv4。"
+    echo -e "  ${DIM}节点要求：模式 1 或 模式 2 + 面板配置独立 IPv4 地址池${NC}"
+    echo ""
+    echo -e "  ${GREEN}独立 IPv4 + 独立 IPv6${NC}"
+    echo -e "  实例同时分配独立公网 IPv4 和 routed 独立 IPv6。"
+    echo -e "  ${DIM}节点要求：模式 2 + IPv6 子网 + 面板配置独立 IPv4 地址池${NC}"
+    echo ""
+    echo -e "  ${YELLOW}旧模式说明：${NC}IPv6 NAT 旧值仅用于历史数据兼容，"
+    echo -e "  新节点、新套餐和新实例不再以 IPv6 NAT 作为目标能力。"
     echo ""
     echo -e "  ${YELLOW}提示：${NC}本脚本选择模式 2 后，会自动检测宿主机 IPv6，"
-    echo -e "  并帮助计算适合面板使用的 IPv6 子网。安装完成后在面板"
-    echo -e "  「节点管理」中填入子网信息即可。"
+    echo -e "  并帮助计算适合面板使用的 routed IPv6 子网。安装完成后在面板"
+    echo -e "  「节点管理」中填入子网信息；独立 IPv4 需要另在面板录入地址池。"
     echo ""
     divider
     echo ""
@@ -1068,11 +1070,11 @@ net.ipv6.conf.all.forwarding = 1
 net.ipv6.conf.default.forwarding = 1
 EOF
 
-    # IPv6 NAT 模式追加代理与路由通告参数
+    # 独立 IPv6 routed 模式追加代理与路由通告参数
     if [[ "$MODE" == "nat_ipv6" ]]; then
         cat >> /etc/sysctl.d/99-incus.conf <<EOF
 
-# IPv6 NAT 模式专用参数
+# 独立 IPv6 routed 模式专用参数
 net.ipv6.conf.all.proxy_ndp = 1
 net.ipv6.conf.all.accept_ra = 2
 net.ipv6.conf.default.accept_ra = 2
@@ -1375,16 +1377,14 @@ init_incus() {
     # 生成 preseed 配置
     local ipv6_block
     if [[ "$MODE" == "nat_ipv6" ]]; then
-        info "面板受控模式 (IPv4 NAT + IPv6 环境): 准备建立内核转发链路"
+        info "面板受控模式 (IPv4 NAT + 独立 IPv6 routed): 准备建立内核转发链路"
         if [[ -n "${IPV6_SUBNET:-}" ]]; then
-            # 有独立子网：routed 模式走 eth1 独立分配 IPv6，但网桥同时启用 IPv6 NAT 作为保底
-            # 这样 nat_ipv6_nat 模式的实例也能在同一节点上通过桥共享 IPv6 出口
-            ipv6_block="ipv6.address: auto\n      ipv6.nat: \"true\"\n      ipv6.dhcp: \"true\""
-            info "▶ [IPv6 配置分支] 独立路由网段 + 网桥 NAT 双通道模式，routed 直通与 NAT 共享可共存。"
+            # 有独立子网：实例 IPv6 由 eth1 routed 设备分配，网桥不再启用 IPv6 NAT。
+            ipv6_block="ipv6.address: none"
+            info "▶ [IPv6 配置分支] 独立 routed 子网模式，实例 IPv6 将由面板按子网分配。"
         else
-            # 用户选择单 IP 共享，网桥需要负责分发 ULA (内部 IPv6) 并 NAT 出口
-            ipv6_block="ipv6.address: auto\n      ipv6.nat: \"true\"\n      ipv6.dhcp: \"true\""
-            info "▶ [IPv6 配置分支] 单一公共 IP 模式 (Bridge: Auto+NAT)，已激活内部 IPv6 出站共享代理功能。"
+            ipv6_block="ipv6.address: none"
+            warn "未检测到可用于 routed 的 IPv6 子网；本节点不会启用 IPv6 NAT，新套餐请不要选择独立 IPv6。"
         fi
         
         # [核心修复区] Debian 默认闭合的内核转发
@@ -1411,20 +1411,15 @@ EOF
     else
         # MODE=nat（仅 IPv4）：检测是否为纯 IPv6 环境
         if [[ "$IS_PURE_IPV6" == "true" ]]; then
-            # 纯 IPv6 宿主机即使选了"仅 IPv4"，也必须启用桥 IPv6 NAT，否则容器完全断网
-            ipv6_block="ipv6.address: auto\n      ipv6.nat: \"true\"\n      ipv6.dhcp: \"true\""
-            info "▶ [IPv6 自动修正] 检测到纯 IPv6 环境，已自动启用网桥 IPv6 NAT 防止容器断网。"
+            ipv6_block="ipv6.address: none"
+            warn "检测到纯 IPv6 环境；模式 1 不启用 IPv6 NAT，建议改用模式 2 并配置独立 IPv6 子网。"
         else
             ipv6_block="ipv6.address: none"
         fi
     fi
 
-    # 纯 IPv6 环境：网桥必须强制配置 100% 纯 NAT64 提供商，防止容器内的双栈域名引发 IPv4 DNS 污染死锁超时
+    # 纯 IPv6 环境不再配置网桥 IPv6 NAT / NAT64，避免把 IPv6 NAT 当作新节点目标能力。
     local dns_block=""
-    if [[ "$IS_PURE_IPV6" == "true" ]]; then
-        dns_block="dns.nameservers: 2a00:1098:2b::1,2a01:4f8:c2c:123f::1,2001:67c:2b0::4"
-        info "纯 IPv6 环境：已为网桥独家配置纯公益 NAT64/DNS64 集群，护航出站"
-    fi
 
     # 写入文件
     cat > "$PRESEED_FILE" <<YAML

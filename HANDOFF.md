@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-06-27 CST
+Last updated: 2026-06-28 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -159,6 +159,21 @@ Remaining before calling the whole commercial-operation objective complete:
 - `v1.0.0` hardens the host Agent against CPU/log pressure: default heartbeat 60s, minimum 30s, Incus state concurrency 3, 500-instance report cap, non-running instances skip `/state`, heartbeat log throttling, and generated `incudal-agent.service` CPU/memory/task/journal rate limits. Existing hosts must rerun the Agent installer after release to refresh old service templates. Production `/opt/incudal/agent-release` now serves Agent manifest `v1.0.0`; already-installed Agents can self-upgrade their binary, but systemd CPU/memory/journal limits still require rerunning the installer because the binary upgrade does not rewrite the unit file.
 - With Turnstile enabled and no `SMOKE_TURNSTILE_TOKEN`, split auth smoke verifies Turnstile enforcement and skips the full login-chain smoke. Provide a valid Turnstile token if a full automated login-chain proof is required.
 - Keep watching the high-risk surfaces touched by `v0.9.0`: Integration Center health checks, manual recharge, refund/reconciliation workbench, extension capability review blocking, delivery/plan-upgrade sync repair, and split user/admin login boundaries.
+
+## v1.0.1 In Progress
+
+- Target version: `v1.0.1`.
+- Scope: dedicated IPv4 and dedicated IPv4 + dedicated IPv6 delivery, host public IPv4 IPAM, package network mode cleanup, and consistent resource rollback.
+- IPv6 NAT is intentionally not a new target capability. `nat_ipv6_nat` and `ipv6_nat` remain only for legacy data compatibility.
+- Local validation completed so far:
+  - `DATABASE_URL='postgresql://user:pass@127.0.0.1:5432/payincus' pnpm --filter server exec prisma generate` passed.
+  - `pnpm --filter server type-check` passed.
+  - `pnpm --filter client type-check` passed.
+  - `pnpm --filter server test:host-install-script-guards` passed.
+  - `pnpm --filter server test:instance-create-failure-compensation` passed.
+  - `pnpm --filter server test:package-input-guards` passed.
+  - `pnpm build` passed.
+  - `pnpm --dir docs-site --ignore-workspace build` passed.
 
 ## Latest Production OTA Proof
 

@@ -147,6 +147,8 @@ export default {
             nat_ipv6_nat: 'IPv4 NAT & IPv6 NAT',
             ipv6_only: 'IPv6 Only',
             ipv6_nat: 'IPv6 NAT',
+            public_ipv4: 'Dedicated IPv4',
+            public_ipv4_ipv6: 'Dedicated IPv4 & Dedicated IPv6',
         },
         // Instance types
         instanceType: {
@@ -3720,6 +3722,7 @@ export default {
             tabConfig: 'Config',
             tabInstances: 'Instances',
             tabStorage: 'Storage',
+            tabPublicIpv4: 'Dedicated IPv4',
             tabImages: 'Images',
             tabOps: 'Ops',
             tabCreate: 'Create',

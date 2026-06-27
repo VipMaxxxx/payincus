@@ -7,6 +7,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/routes/packages.ts'), 'utf8')
+const networkModesSource = readFileSync(resolve(__dirname, '../src/lib/network-modes.ts'), 'utf8')
+const packageFormSource = readFileSync(resolve(__dirname, '../../client/src/views/resources/PackageFormView.vue'), 'utf8')
 
 function includes(pattern: string, label: string): void {
   assert.ok(source.includes(pattern), `Missing ${label}: ${pattern}`)
@@ -22,6 +24,14 @@ function routeSection(start: string, end: string): string {
   const endIndex = source.indexOf(end, startIndex + start.length)
   assert.notEqual(endIndex, -1, `Missing section end: ${end}`)
   return source.slice(startIndex, endIndex)
+}
+
+function sourceSection(input: string, start: string, end: string): string {
+  const startIndex = input.indexOf(start)
+  assert.notEqual(startIndex, -1, `Missing section start: ${start}`)
+  const endIndex = input.indexOf(end, startIndex + start.length)
+  assert.notEqual(endIndex, -1, `Missing section end: ${end}`)
+  return input.slice(startIndex, endIndex)
 }
 
 includes('const MAX_PACKAGE_HOST_BINDINGS = 1000', 'package host binding cap')
@@ -76,5 +86,29 @@ assert.ok(
 
 includes('parseNullablePostgresBigIntInput(monthlyTrafficLimit)', 'normalized package monthly traffic parsing')
 includes('hostTrafficMultipliers', 'normalized host traffic multipliers threaded into DB update')
+
+const activeNetworkModeSection = sourceSection(
+  networkModesSource,
+  'export const ACTIVE_PACKAGE_NETWORK_MODES: NetworkMode[] = [',
+  ']\n\nexport const LEGACY_IPV6_NAT_NETWORK_MODES'
+)
+
+assert.ok(
+  source.includes('ACTIVE_PACKAGE_NETWORK_MODES') &&
+    source.includes("networkMode: { type: 'string', enum: ACTIVE_PACKAGE_NETWORK_MODES }") &&
+    activeNetworkModeSection.includes("'public_ipv4'") &&
+    activeNetworkModeSection.includes("'public_ipv4_ipv6'") &&
+    !activeNetworkModeSection.includes("'nat_ipv6_nat'") &&
+    !activeNetworkModeSection.includes("'ipv6_nat'"),
+  'new package network mode enum must expose public IPv4 modes and exclude legacy IPv6 NAT modes'
+)
+
+assert.ok(
+  packageFormSource.includes("{ value: 'public_ipv4', labelKey: 'common.networkMode.public_ipv4' }") &&
+    packageFormSource.includes("{ value: 'public_ipv4_ipv6', labelKey: 'common.networkMode.public_ipv4_ipv6' }") &&
+    !packageFormSource.includes("{ value: 'nat_ipv6_nat'") &&
+    !packageFormSource.includes("{ value: 'ipv6_nat'"),
+  'package form network selector must expose public IPv4 modes and hide legacy IPv6 NAT modes'
+)
 
 console.log('package input guard tests passed')

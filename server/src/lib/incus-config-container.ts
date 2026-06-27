@@ -53,7 +53,7 @@ export interface IncusConfigParams {
   rootPassword: string
   sshKey?: string
   type?: 'container' | 'virtual-machine'
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   /** 可选: 面板计算出的静态 IP 配置，不提供则使用 DHCP */
   network?: StaticNetworkConfig
   /** 可选: 用户自定义初始化命令（多行文本，按换行分割） */

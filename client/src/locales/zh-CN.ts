@@ -147,6 +147,8 @@ export default {
             nat_ipv6_nat: 'IPv4 NAT & IPv6 NAT',
             ipv6_only: 'IPv6 Only',
             ipv6_nat: 'IPv6 NAT',
+            public_ipv4: '独立 IPv4',
+            public_ipv4_ipv6: '独立 IPv4 & 独立 IPv6',
         },
         // 实例类型
         instanceType: {
@@ -3724,6 +3726,7 @@ export default {
             tabConfig: '配置',
             tabInstances: '实例',
             tabStorage: '存储',
+            tabPublicIpv4: '独立 IPv4',
             tabImages: '镜像',
             tabOps: '运维',
             tabCreate: '创建',

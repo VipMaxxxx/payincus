@@ -6,7 +6,14 @@ import {
   advisoryTransactionLockString
 } from '../db/advisory-locks.js'
 
-type InstanceNetworkMode = 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+type InstanceNetworkMode =
+  | 'nat'
+  | 'nat_ipv6'
+  | 'nat_ipv6_nat'
+  | 'ipv6_only'
+  | 'ipv6_nat'
+  | 'public_ipv4'
+  | 'public_ipv4_ipv6'
 
 interface NetworkAddressEntry {
   family: string
@@ -50,7 +57,7 @@ export interface PersistedInstanceNetworkAddresses {
   newIpv6: string | null
 }
 
-const ROUTED_IPV6_MODES = new Set<InstanceNetworkMode>(['nat_ipv6', 'ipv6_only'])
+const ROUTED_IPV6_MODES = new Set<InstanceNetworkMode>(['nat_ipv6', 'ipv6_only', 'public_ipv4_ipv6'])
 const SHARED_IPV6_MODES = new Set<InstanceNetworkMode>(['nat_ipv6_nat', 'ipv6_nat'])
 const SKIPPED_INTERFACES = ['lo', 'docker', 'br-', 'veth', 'warp', 'CloudflareWARP']
 
@@ -84,6 +91,8 @@ function getInstanceMode(mode: string | null | undefined): InstanceNetworkMode {
     case 'nat_ipv6_nat':
     case 'ipv6_only':
     case 'ipv6_nat':
+    case 'public_ipv4':
+    case 'public_ipv4_ipv6':
       return mode
     default:
       return 'nat'

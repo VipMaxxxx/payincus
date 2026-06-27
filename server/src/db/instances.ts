@@ -297,7 +297,7 @@ export async function createInstance(data: {
   cpu: number
   memory: number
   disk: number
-  networkMode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   snapshotSpecs?: Record<string, unknown>
   sshPort?: number | null
   rootPassword?: string | null

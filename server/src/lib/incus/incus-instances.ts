@@ -7,6 +7,7 @@ import type { IncusInstance, IncusOperation } from '../../types/incus.js'
 import { allowanceToCores } from '../cpu-allowance.js'
 import type { BuildInstanceConfigOptions, IPv6Config } from '../../types/incus.js'
 import { buildNetworkDevices, generateCloudInitNetworkConfig, hasIpv6Support } from '../network-payload-builder.js'
+import { networkModeNeedsNatIpv4 } from '../network-modes.js'
 import { generateVmNicMacs } from '../vm-network-identifiers.js'
 import { resolveIncusSwapValue } from '../instance-swap.js'
 
@@ -858,7 +859,7 @@ export function buildInstanceConfig(options: BuildInstanceConfigOptions): Record
   // 不支持 routed 模式的 eth1 IPv6 网卡。这里必须用 v2 配置覆盖，确保 eth1 正确配置。
   // 关键：VM 的 network-config 由 generateVmConfig 生成（含 MAC 匹配），绝不能被覆盖！
   // VM 内部网卡名为 enp5s0/enp6s0（非 eth0/eth1），只有 MAC 匹配才能正确识别。
-  if (hasIpv6Support(networkMode) && effectiveIpv6Config && ipv4Address && instanceType !== 'vm') {
+  if (hasIpv6Support(networkMode) && networkModeNeedsNatIpv4(networkMode) && effectiveIpv6Config && ipv4Address && instanceType !== 'vm') {
     // 构建 IPv6 地址列表
     const ipv6List = [effectiveIpv6Config.primaryIp]
     if (effectiveIpv6Config.extraIps && effectiveIpv6Config.extraIps.length > 0) {
@@ -979,4 +980,3 @@ export async function ensureBridgeIpv6(
     console.warn(`[ensureBridgeIpv6] 网桥 IPv6 校验失败（${bridgeName}）:`, err)
   }
 }
-

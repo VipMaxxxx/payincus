@@ -39,16 +39,18 @@ assert.ok(
 )
 
 assert.ok(
-  appSource.includes('const { getStuckCreatingInstances, getHostById, compensateFailedInstancePurchase } = await import') &&
+  appSource.includes('const { getStuckCreatingInstances, getHostById, compensateFailedInstancePurchase, releasePublicIpv4ForInstance } = await import') &&
     appSource.includes("status: 'creating' // 原子条件：只有状态仍为 creating 时才更新") &&
     appSource.includes('const compensation = await compensateFailedInstancePurchase(instance.id, instance.user_id, instance.host_id)'),
   'create-timeout cleanup must run the same paid purchase compensation after winning creating->error transition'
 )
 
 assert.ok(
-  appSource.includes("['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(networkMode)") &&
-    appSource.includes('portCount: instanceCreationReservesPorts(instance.network_mode) ? (instance.port_limit || 0) : 0'),
-  'create-timeout cleanup must release the same reserved port quota modes as instance creation'
+  appSource.includes('const instanceCreationReservesPorts = (networkMode: string) => networkModeAllowsPortMapping(networkMode)') &&
+    appSource.includes('portCount: instanceCreationReservesPorts(instance.network_mode) ? (instance.port_limit || 0) : 0') &&
+    appSource.includes('if (networkModeNeedsPublicIpv4(instance.network_mode))') &&
+    appSource.includes('await prisma.$transaction((tx) => releasePublicIpv4ForInstance(tx, instance.id))'),
+  'create-timeout cleanup must use the shared network-mode helper for port quota and release reserved public IPv4 addresses'
 )
 
 const adminAsyncSection = section(
@@ -60,9 +62,10 @@ const adminAsyncSection = section(
 assert.ok(
   adminAsyncSection.includes("where: { id: instanceId, status: 'creating' }") &&
     adminAsyncSection.includes('await db.rollbackResources({') &&
+    adminAsyncSection.includes('await prisma.$transaction((tx) => db.releasePublicIpv4ForInstance(tx, instanceId))') &&
     adminAsyncSection.includes('await db.compensateFailedInstancePurchase(instanceId, userId, host.id)') &&
     adminAsyncSection.includes('await deleteInstance(client, config.name)'),
-  'admin paid instance async failures must atomically claim creating->error, release host resources, compensate billing, and clean Incus leftovers'
+  'admin paid instance async failures must atomically claim creating->error, release host resources/public IPv4, compensate billing, and clean Incus leftovers'
 )
 
 assert.ok(
@@ -82,9 +85,32 @@ const managedAsyncSection = section(
 assert.ok(
   managedAsyncSection.includes("where: { id: instanceId, status: 'creating' }") &&
     managedAsyncSection.includes('await db.rollbackResources({') &&
+    managedAsyncSection.includes('await prisma.$transaction((tx) => db.releasePublicIpv4ForInstance(tx, instanceId))') &&
     managedAsyncSection.includes('await db.compensateFailedInstancePurchase(instanceId, instance.userId, instance.hostId)') &&
     managedAsyncSection.includes('await deleteInstance(client, config.name)'),
-  'managed host-owner/admin gifted instance async failures must claim creating->error, release resources, compensate any paid ledger, and clean Incus leftovers'
+  'managed host-owner/admin gifted instance async failures must claim creating->error, release resources/public IPv4, compensate any paid ledger, and clean Incus leftovers'
+)
+
+assert.ok(
+  instancesSource.includes('宿主机 ${host.name} 没有可用独立 IPv4 地址') &&
+    instancesSource.includes('[Provisioning] 独立 IPv4 分配失败后资源回滚失败') &&
+    instancesSource.includes('[Provisioning] 独立 IPv4 分配失败后计费补偿失败'),
+  'user instance creation must rollback resources and compensate purchase when public IPv4 allocation races to empty'
+)
+
+assert.ok(
+  adminBillingSource.includes('宿主机 ${host.name} 没有可用独立 IPv4 地址') &&
+    adminBillingSource.includes('[Admin Create Instance] 独立 IPv4 分配失败后资源回滚失败') &&
+    adminBillingSource.includes('[Admin Create Instance] 独立 IPv4 分配失败后计费补偿失败'),
+  'admin instance creation must rollback resources and compensate purchase when public IPv4 allocation races to empty'
+)
+
+const hostRoutesSource = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'utf8')
+assert.ok(
+  hostRoutesSource.includes('宿主机 ${lockedHost!.name} 没有可用独立 IPv4 地址') &&
+    hostRoutesSource.includes('[Host Create For User] failed to rollback resources after public IPv4 allocation miss') &&
+    hostRoutesSource.includes('[Host Create For User] failed to compensate purchase after public IPv4 allocation miss'),
+  'host-owner instance creation must rollback resources and compensate purchase when public IPv4 allocation races to empty'
 )
 
 assert.ok(

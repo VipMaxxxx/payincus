@@ -105,7 +105,7 @@ interface PackageForm {
   hostIds: number[]
   hostStoragePools: Record<string, string>
   hostTrafficMultipliers: Record<string, number>
-  networkMode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType: 'container' | 'vm'  // 实例类型
   privileged: boolean
   nested: boolean
@@ -152,13 +152,13 @@ const networkUnits = ['Mbit']
 const publicPackageMaxInstanceOptions = [1, 2, 3, 4, 5]
 const MAX_TRAFFIC_RESET_PRICE = 999999.99
 
-// 网络模式（场景化 5 种选项，与节点创建页一致）
+// 网络模式（旧 IPv6 NAT 模式仅保留历史数据兼容，不再作为新套餐选项）
 const networkModes = [
   { value: 'nat', labelKey: 'common.networkMode.nat' },
   { value: 'nat_ipv6', labelKey: 'common.networkMode.nat_ipv6' },
-  { value: 'nat_ipv6_nat', labelKey: 'common.networkMode.nat_ipv6_nat' },
   { value: 'ipv6_only', labelKey: 'common.networkMode.ipv6_only' },
-  { value: 'ipv6_nat', labelKey: 'common.networkMode.ipv6_nat' }
+  { value: 'public_ipv4', labelKey: 'common.networkMode.public_ipv4' },
+  { value: 'public_ipv4_ipv6', labelKey: 'common.networkMode.public_ipv4_ipv6' }
 ]
 const disallowedKvmNetworkModes = new Set(['nat_ipv6_nat', 'ipv6_nat'])
 const availableNetworkModes = computed(() => {

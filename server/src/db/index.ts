@@ -87,6 +87,7 @@ export * from './package-shares.js'
 
 // 导出 IP 地址相关操作
 export * from './ip-addresses.js'
+export * from './public-ipv4.js'
 
 // 导出存储池相关操作
 export * from './storage-pools.js'

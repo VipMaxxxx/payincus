@@ -123,6 +123,15 @@ export interface Host {
 
 // ==================== 套餐相关 ====================
 
+export type NetworkMode =
+  | 'nat'
+  | 'nat_ipv6'
+  | 'nat_ipv6_nat'
+  | 'ipv6_only'
+  | 'ipv6_nat'
+  | 'public_ipv4'
+  | 'public_ipv4_ipv6'
+
 export interface Package {
   id: number
   user_id?: number  // 套餐所有者
@@ -132,7 +141,7 @@ export interface Package {
   memory_max: number
   disk_max: number
   bandwidth_max: number | null
-  network_mode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  network_mode: NetworkMode
   instance_type: 'container' | 'vm' | 'both'  // 实例类型 (套餐实际不会使用 both)
   privileged: number
   nested: number
@@ -196,7 +205,7 @@ export interface Instance {
   disk: number
   ipv4: string | null
   ipv6: string | null
-  network_mode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  network_mode: NetworkMode
   ssh_port: number | null
   root_password: string | null
   port_limit: number | null

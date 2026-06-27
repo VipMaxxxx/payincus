@@ -9,14 +9,14 @@
  */
 
 import type { IncusClient } from './incus/incus-client.js'
+import { networkModeNeedsPublicIpv4, networkModeNeedsRoutedIpv6 } from './network-modes.js'
+import type { NetworkMode } from './network-modes.js'
 import { getInstance, restartInstance } from './incus/incus-instances.js'
 import { IPV4_CONFIG } from './ip-calculator.js'
 import type { VmNicMacs } from './vm-network-identifiers.js'
 import { generateVmNicMacs } from './vm-network-identifiers.js'
 
 // ==================== 类型定义 ====================
-
-export type NetworkMode = 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
 
 /**
  * IPv6 配置结构
@@ -78,15 +78,17 @@ export function buildNetworkDevices(options: BuildNetworkDevicesOptions): Record
 
   const devices: Record<string, Record<string, string>> = {}
 
-  // eth0: IPv4 NAT (所有模式都需要)
+  const hasPublicIpv4 = networkModeNeedsPublicIpv4(networkMode)
+
+  // eth0: IPv4 NAT 或独立 IPv4 routed
   const eth0Device: Record<string, string> = {
     type: 'nic',
-    nictype: 'bridged',
-    parent: natBridge,
+    nictype: hasPublicIpv4 ? 'routed' : 'bridged',
+    parent: hasPublicIpv4 ? hostInterface : natBridge,
     name: 'eth0'
   }
 
-  // 固定内网 IPv4 地址 (DHCP 静态租约)
+  // 固定 IPv4 地址：NAT 模式为内网静态租约，独立 IPv4 模式为 routed 公网地址。
   if (ipv4Address) {
     eth0Device['ipv4.address'] = ipv4Address
   }
@@ -105,7 +107,7 @@ export function buildNetworkDevices(options: BuildNetworkDevicesOptions): Record
   devices['eth0'] = eth0Device
 
   // eth1: IPv6 Routed (仅 nat_ipv6 和 ipv6_only 模式需要独立 IPv6 地址)
-  const hasRoutedIpv6 = networkMode === 'nat_ipv6' || networkMode === 'ipv6_only'
+  const hasRoutedIpv6 = networkModeNeedsRoutedIpv6(networkMode)
 
   if (hasRoutedIpv6 && ipv6Config) {
     // 构建 IP 地址列表
@@ -412,7 +414,7 @@ export async function removeInstanceIpv6(
  * 判断网络模式是否需要独立 IPv6 地址（Routed 模式）
  */
 export function hasIpv6Support(networkMode: NetworkMode): boolean {
-  return networkMode === 'nat_ipv6' || networkMode === 'ipv6_only'
+  return networkModeNeedsRoutedIpv6(networkMode)
 }
 
 /**

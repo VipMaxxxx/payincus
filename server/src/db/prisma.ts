@@ -14,7 +14,7 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-const CURRENT_NETWORK_MODES = ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_only', 'ipv6_nat'] as const
+const CURRENT_NETWORK_MODES = ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_only', 'ipv6_nat', 'public_ipv4', 'public_ipv4_ipv6'] as const
 const LEGACY_NETWORK_MODE_MAP: Record<string, (typeof CURRENT_NETWORK_MODES)[number]> = {
   nat: 'nat',
   nat_ipv6: 'nat_ipv6',
@@ -24,7 +24,9 @@ const LEGACY_NETWORK_MODE_MAP: Record<string, (typeof CURRENT_NETWORK_MODES)[num
   ipv4_ipv6: 'nat_ipv6',
   nat_ipv6_nat: 'nat_ipv6_nat',
   ipv6_nat: 'ipv6_nat',
-  ipv6_only: 'ipv6_only'
+  ipv6_only: 'ipv6_only',
+  public_ipv4: 'public_ipv4',
+  public_ipv4_ipv6: 'public_ipv4_ipv6'
 }
 
 // 验证 DATABASE_URL
@@ -118,6 +120,8 @@ async function normalizeLegacyNetworkModesForPool(dbPool: Pool): Promise<void> {
         WHEN 'nat_ipv6_nat' THEN 'nat_ipv6_nat'::"NetworkMode"
         WHEN 'ipv6_nat' THEN 'ipv6_nat'::"NetworkMode"
         WHEN 'ipv6_only' THEN 'ipv6_only'::"NetworkMode"
+        WHEN 'public_ipv4' THEN 'public_ipv4'::"NetworkMode"
+        WHEN 'public_ipv4_ipv6' THEN 'public_ipv4_ipv6'::"NetworkMode"
         ELSE ${columnName}
       END
       WHERE ${columnName}::text IN (${legacyModesSql})

@@ -46,6 +46,7 @@ import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js
 import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
 import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
 import type { Host } from '../types/database.js'
+import type { PublicIpv4Assignment } from '../db/public-ipv4.js'
 import { INSTANCE_OPERATION_LOCK_NAMESPACE, USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
 import { sanitizeObject } from '../lib/log-sanitizer.js'
 import {
@@ -53,6 +54,13 @@ import {
   listEnabledGatewayExtensionTargets
 } from '../lib/plugin-extension-dispatch.js'
 import { recordPlanUpgradeSyncFailure } from '../services/plan-upgrade-sync-repair.js'
+import {
+  networkModeAllowsPortMapping,
+  networkModeNeedsNatIpv4,
+  networkModeNeedsPublicIpv4,
+  networkModeNeedsRoutedIpv6,
+  normalizeNetworkMode
+} from '../lib/network-modes.js'
 
 // 自定义 nanoid，只使用小写字母和数字
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
@@ -4567,7 +4575,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       }
 
       // 12. 生成配置
-      const networkMode = (pkg.network_mode || 'nat') as 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+      const networkMode = normalizeNetworkMode(pkg.network_mode)
       if (effectiveInstanceType === 'vm' && ['nat_ipv6_nat', 'ipv6_nat'].includes(networkMode)) {
         return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'KVM packages do not support IPv4 NAT & IPv6 NAT or IPv6 NAT network modes'))
       }
@@ -4611,7 +4619,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           hostId: hostId,
           ownerId: pkg.user_id!,
           packageId,
-          portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(networkMode) ? (selectedPlan?.portLimit || pkgWithExtras.port_limit || 0) : 0
+          networkMode,
+          portCount: networkModeAllowsPortMapping(networkMode) ? (selectedPlan?.portLimit || pkgWithExtras.port_limit || 0) : 0
         })
 
         if (!lockedHost) {
@@ -4806,19 +4815,42 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       // 16. 分配 IP
       let staticIPv4: string | null = null
       let staticIPv6: string | null = null
+      let publicIpv4Assignment: PublicIpv4Assignment | null = null
 
-      try {
-        let attempts = 0
-        const maxAttempts = 50
-        while (attempts < maxAttempts) {
-          staticIPv4 = generateRandomIPv4()
-          const exists = await db.isIpAddressExistsOnHost(staticIPv4, host.id)
-          if (!exists) break
-          attempts++
-          staticIPv4 = null
+      if (networkModeNeedsNatIpv4(networkMode)) {
+        try {
+          let attempts = 0
+          const maxAttempts = 50
+          while (attempts < maxAttempts) {
+            staticIPv4 = generateRandomIPv4()
+            const exists = await db.isIpAddressExistsOnHost(staticIPv4, host.id)
+            if (!exists) break
+            attempts++
+            staticIPv4 = null
+          }
+        } catch (err) {
+          console.error('[Admin Create Instance] IPv4 分配错误:', err)
         }
-      } catch (err) {
-        console.error('[Admin Create Instance] IPv4 分配错误:', err)
+      } else if (networkModeNeedsPublicIpv4(networkMode)) {
+        publicIpv4Assignment = await prisma.$transaction((tx) => db.reservePublicIpv4ForInstance(tx, { hostId: host.id, instanceId }))
+        if (!publicIpv4Assignment) {
+          await prisma.instance.updateMany({
+            where: { id: instanceId, status: 'creating' },
+            data: { status: 'error' }
+          }).catch((err) => console.error('[Admin Create Instance] 独立 IPv4 分配失败后实例状态更新失败:', err))
+          await db.rollbackResources({
+            hostId: host.id,
+            cpu: requestedCpu,
+            memory: requestedMemory,
+            disk: requestedDisk,
+            portCount: networkModeAllowsPortMapping(networkMode) ? (selectedPlan?.portLimit || pkgWithExtras.port_limit || 0) : 0
+          }).catch((err) => console.error('[Admin Create Instance] 独立 IPv4 分配失败后资源回滚失败:', err))
+          await db.compensateFailedInstancePurchase(instanceId, targetUser.id, host.id).catch((err) => {
+            console.error('[Admin Create Instance] 独立 IPv4 分配失败后计费补偿失败:', err)
+          })
+          return reply.status(503).send({ error: `宿主机 ${host.name} 没有可用独立 IPv4 地址` })
+        }
+        staticIPv4 = publicIpv4Assignment.address
       }
 
       const hostWithIpv6 = host as typeof host & {
@@ -4829,7 +4861,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       }
 
       // 仅 Routed 模式（需要独立 IPv6 地址）才从子网分配
-      const needsRoutedIPv6 = ['nat_ipv6', 'ipv6_only'].includes(networkMode)
+      const needsRoutedIPv6 = networkModeNeedsRoutedIpv6(networkMode)
       if (hostWithIpv6.ipv6_subnet && needsRoutedIPv6) {
         try {
           let attempts = 0
@@ -4848,6 +4880,11 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
 
       // VM 和容器都需要在 IP 分配完成后重新生成 cloud-init network-config
       let finalConfigPayload = configPayload
+      const ipv4Cidr = publicIpv4Assignment
+        ? `${publicIpv4Assignment.address}/${publicIpv4Assignment.prefixLength}`
+        : (staticIPv4 ? `${staticIPv4}/22` : null)
+      const ipv4Gateway = publicIpv4Assignment?.gateway || '10.10.0.1'
+      const ipv4Dns = publicIpv4Assignment?.dns || ['10.10.0.1']
       if (effectiveInstanceType === 'vm') {
         const { generateVmConfig } = await import('../lib/incus-config-vm.js')
         const vmResult = generateVmConfig({
@@ -4856,10 +4893,10 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           imageAlias: image,
           rootPassword: metaData.rootPassword,
           sshKey: sshKey,
-          network: staticIPv4 ? {
-            ipAddress: `${staticIPv4}/22`,
-            gateway: '10.10.0.1',  // NAT 网关 (与 incusbr0 一致)
-            dns: ['8.8.8.8', '1.1.1.1'],
+          network: staticIPv4 && ipv4Cidr ? {
+            ipAddress: ipv4Cidr,
+            gateway: ipv4Gateway,
+            dns: ipv4Dns,
             ipv6Address: staticIPv6 ? `${staticIPv6}` : undefined,
             ipv6Gateway: staticIPv6 ? (hostWithIpv6.ipv6_gateway || undefined) : undefined
           } : undefined,
@@ -4867,7 +4904,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         })
         finalConfigPayload = vmResult.configPayload
         console.log(`[Admin Create Instance] VM network-config 已更新: IPv4=${staticIPv4 || 'dhcp'}, IPv6=${staticIPv6 || 'none'}`)
-      } else if (staticIPv4) {
+      } else if (staticIPv4 && ipv4Cidr) {
         // 容器类型：重新生成包含静态 IP 的 cloud-init 配置
         const containerResult = generateIncusConfig({
           instanceName: name,
@@ -4877,9 +4914,9 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           networkMode,
           type: 'container',
           network: {
-            ipAddress: `${staticIPv4}/22`,
-            gateway: '10.10.0.1',
-            dns: ['8.8.8.8', '1.1.1.1'],
+            ipAddress: ipv4Cidr,
+            gateway: ipv4Gateway,
+            dns: ipv4Dns,
             ipv6Address: staticIPv6 ? `${staticIPv6}/128` : undefined,
             ipv6Gateway: staticIPv6 ? 'fe80::1' : undefined
           },
@@ -5550,7 +5587,7 @@ async function createInstanceAsync(
     swapEnabled?: boolean
     swapSize?: number | null
     cloudInitConfig?: Record<string, string>
-    networkMode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+    networkMode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
     nested?: boolean
     privileged?: boolean
     portLimit?: number
@@ -5718,12 +5755,18 @@ async function createInstanceAsync(
           cpu: resources.cpu,
           memory: resources.memory,
           disk: resources.disk,
-          portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(config.networkMode)
-            ? (config.portLimit || 0)
-            : 0
+          portCount: networkModeAllowsPortMapping(config.networkMode) ? (config.portLimit || 0) : 0
         })
       } catch (rollbackErr) {
         console.error(`[Admin Provisioning] 资源回滚失败:`, rollbackErr)
+      }
+
+      if (networkModeNeedsPublicIpv4(config.networkMode)) {
+        try {
+          await prisma.$transaction((tx) => db.releasePublicIpv4ForInstance(tx, instanceId))
+        } catch (releaseErr) {
+          console.error(`[Admin Provisioning] 释放独立 IPv4 失败:`, releaseErr)
+        }
       }
 
       try {

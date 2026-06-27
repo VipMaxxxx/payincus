@@ -19,7 +19,7 @@ export interface IncusConfigParams {
   network?: StaticNetworkConfig
   extraShellCommands?: string
   instanceIdSeed?: string
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
 }
 
 export interface IncusConfigResult {

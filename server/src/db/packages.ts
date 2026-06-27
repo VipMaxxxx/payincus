@@ -461,7 +461,7 @@ export async function createPackage(data: {
   memoryMax: number
   diskMax: number
   bandwidthMax?: number | null
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType?: 'container' | 'vm'  // 实例类型
   hostIds: number[]  // 必须至少绑定一个宿主机
   hostStoragePools?: Record<string, string | null>
@@ -532,7 +532,7 @@ async function createPackageUnchecked(data: {
   memoryMax: number
   diskMax: number
   bandwidthMax?: number | null
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType?: 'container' | 'vm'
   hostIds: number[]
   hostStoragePools?: Record<string, string | null>
@@ -657,7 +657,7 @@ export async function updatePackage(id: number, data: {
   memoryMax?: number
   diskMax?: number
   bandwidthMax?: number | null
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType?: 'container' | 'vm'  // 实例类型
   hostIds?: number[]  // 如果提供，将更新绑定的宿主机
   hostStoragePools?: Record<string, string | null>
@@ -736,7 +736,7 @@ async function updatePackageUnchecked(id: number, data: {
   memoryMax?: number
   diskMax?: number
   bandwidthMax?: number | null
-  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   instanceType?: 'container' | 'vm'
   hostIds?: number[]
   hostStoragePools?: Record<string, string | null>
@@ -776,7 +776,7 @@ async function updatePackageUnchecked(id: number, data: {
     memoryMax?: number
     diskMax?: number
     bandwidthMax?: number | null
-    networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+    networkMode?: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
     instanceType?: 'container' | 'vm'
     privileged?: boolean
     nested?: boolean

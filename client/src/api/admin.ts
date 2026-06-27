@@ -1663,6 +1663,26 @@ const api = {
       purpose?: 'instance_data' | 'instance_storage'
     }): Promise<{ success: boolean; message: string }> =>
       http.patch(`/hosts/${id}/storage-pools/${poolName}`, data),
+    getPublicIpv4Pools: (id: number): Promise<{ pools: Array<{
+      id: number
+      name: string
+      cidr: string | null
+      gateway: string
+      prefixLength: number
+      dns: string[]
+      enabled: boolean
+      notes: string | null
+      stats: { total: number; free: number; assigned: number; disabled: number }
+      addresses: Array<{ id: number; address: string; prefixLength: number; gateway: string | null; dns: string[]; status: 'free' | 'assigned' | 'disabled'; instanceId: number | null; assignedAt: string | null; releasedAt: string | null; notes: string | null }>
+    }> }> => http.get(`/hosts/${id}/public-ipv4/pools`),
+    createPublicIpv4Pool: (id: number, data: { name: string; cidr?: string; gateway: string; prefixLength: number; dns?: string[] | string; notes?: string; addresses?: string[] | string }): Promise<{ message: string; id: number }> =>
+      http.post(`/hosts/${id}/public-ipv4/pools`, data),
+    addPublicIpv4Addresses: (id: number, poolId: number, data: { addresses: string[] | string }): Promise<{ message: string; count: number }> =>
+      http.post(`/hosts/${id}/public-ipv4/pools/${poolId}/addresses`, data),
+    updatePublicIpv4AddressStatus: (id: number, addressId: number, status: 'free' | 'disabled'): Promise<{ message: string }> =>
+      http.patch(`/hosts/${id}/public-ipv4/addresses/${addressId}`, { status }),
+    deletePublicIpv4Address: (id: number, addressId: number): Promise<{ message: string }> =>
+      http.delete(`/hosts/${id}/public-ipv4/addresses/${addressId}`),
     // Caddy 管理
     getCaddy: (id: number): Promise<{
       enabled: boolean

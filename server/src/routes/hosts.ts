@@ -42,6 +42,13 @@ import { calculateCreateBilling } from '../db/billing-operations.js'
 import { getDnsRecordType } from '../lib/network-address.js'
 import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
 import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
+import {
+  networkModeAllowsPortMapping,
+  networkModeNeedsNatIpv4,
+  networkModeNeedsPublicIpv4,
+  networkModeNeedsRoutedIpv6,
+  normalizeNetworkMode
+} from '../lib/network-modes.js'
 import { issueHostAgentInstallToken } from '../lib/host-agent-credentials.js'
 import {
   persistResolvedInstanceNetworkAddresses,
@@ -3897,6 +3904,144 @@ export default async function hostRoutes(fastify: FastifyInstance) {
    * 获取宿主机 Caddy 状态和安装命令
    * GET /hosts/:id/caddy
    */
+
+  function parsePublicIpv4Lines(value: unknown): string[] {
+    if (Array.isArray(value)) return value.flatMap(item => parsePublicIpv4Lines(item))
+    if (typeof value !== 'string') return []
+    return value.split(/[\n,\s]+/).map(item => item.trim()).filter(Boolean)
+  }
+
+  function isValidIpv4Literal(value: string): boolean {
+    return /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/.test(value)
+  }
+
+  async function assertHostPublicIpv4Access(hostId: number, request: FastifyRequest, reply: FastifyReply) {
+    const host = await db.getHostById(hostId)
+    if (!host) {
+      reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
+      return null
+    }
+    if (host.user_id !== request.user.id && request.user.role !== 'admin') {
+      reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+      return null
+    }
+    return host
+  }
+
+  fastify.get<{ Params: { id: string } }>('/:id/public-ipv4/pools', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const hostId = parsePositiveRouteId(request.params.id)
+    if (!hostId) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    const host = await assertHostPublicIpv4Access(hostId, request, reply)
+    if (!host) return reply
+    const pools = await db.listPublicIpv4Pools(hostId)
+    return {
+      pools: pools.map(pool => ({
+        id: pool.id,
+        name: pool.name,
+        cidr: pool.cidr,
+        gateway: pool.gateway,
+        prefixLength: pool.prefixLength,
+        dns: pool.dns,
+        enabled: pool.enabled,
+        notes: pool.notes,
+        stats: {
+          total: pool.addresses.length,
+          free: pool.addresses.filter(item => item.status === 'free').length,
+          assigned: pool.addresses.filter(item => item.status === 'assigned').length,
+          disabled: pool.addresses.filter(item => item.status === 'disabled').length
+        },
+        addresses: pool.addresses.map(address => ({
+          id: address.id,
+          address: address.address,
+          prefixLength: address.prefixLength,
+          gateway: address.gateway,
+          dns: address.dns,
+          status: address.status,
+          instanceId: address.instanceId,
+          assignedAt: address.assignedAt?.toISOString() || null,
+          releasedAt: address.releasedAt?.toISOString() || null,
+          notes: address.notes
+        }))
+      }))
+    }
+  })
+
+  fastify.post<{ Params: { id: string }; Body: { name?: string; cidr?: string; gateway?: string; prefixLength?: number; dns?: string[] | string; notes?: string; addresses?: string[] | string } }>('/:id/public-ipv4/pools', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const hostId = parsePositiveRouteId(request.params.id)
+    if (!hostId) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    const host = await assertHostPublicIpv4Access(hostId, request, reply)
+    if (!host) return reply
+    const body = request.body || {}
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const gateway = typeof body.gateway === 'string' ? body.gateway.trim() : ''
+    const prefixLength = Number.isInteger(body.prefixLength) ? Number(body.prefixLength) : 32
+    const dns = parsePublicIpv4Lines(body.dns)
+    const addresses = parsePublicIpv4Lines(body.addresses)
+    if (!name) return reply.code(400).send({ error: '地址池名称不能为空' })
+    if (!isValidIpv4Literal(gateway)) return reply.code(400).send({ error: '网关 IPv4 地址无效' })
+    if (prefixLength < 1 || prefixLength > 32) return reply.code(400).send({ error: 'IPv4 前缀长度必须在 1-32 之间' })
+    if (dns.some(item => !isValidIpv4Literal(item))) return reply.code(400).send({ error: 'DNS IPv4 地址无效' })
+    if (addresses.some(item => !isValidIpv4Literal(item))) return reply.code(400).send({ error: '地址列表包含无效 IPv4' })
+    const pool = await db.createPublicIpv4Pool({ hostId, name, cidr: typeof body.cidr === 'string' ? body.cidr : null, gateway, prefixLength, dns, notes: typeof body.notes === 'string' ? body.notes : null, addresses })
+    await createLog(request.user.id, 'host', 'host.public_ipv4_pool.create', `Created public IPv4 pool "${name}" on host "${host.name}"`, 'success')
+    return reply.code(201).send({ message: '独立 IPv4 地址池已创建', id: pool.id })
+  })
+
+  fastify.post<{ Params: { id: string; poolId: string }; Body: { addresses?: string[] | string } }>('/:id/public-ipv4/pools/:poolId/addresses', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const hostId = parsePositiveRouteId(request.params.id)
+    const poolId = parsePositiveRouteId(request.params.poolId)
+    if (!hostId || !poolId) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    const host = await assertHostPublicIpv4Access(hostId, request, reply)
+    if (!host) return reply
+    const addresses = parsePublicIpv4Lines(request.body?.addresses)
+    if (addresses.length === 0) return reply.code(400).send({ error: '地址列表不能为空' })
+    if (addresses.some(item => !isValidIpv4Literal(item))) return reply.code(400).send({ error: '地址列表包含无效 IPv4' })
+    try {
+      const result = await db.addPublicIpv4Addresses({ hostId, poolId, addresses })
+      await createLog(request.user.id, 'host', 'host.public_ipv4_address.add', `Added ${result.count} public IPv4 addresses on host "${host.name}"`, 'success')
+      return { message: '独立 IPv4 地址已添加', count: result.count }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'PUBLIC_IPV4_POOL_NOT_FOUND') return reply.code(404).send({ error: '地址池不存在' })
+      throw err
+    }
+  })
+
+  fastify.patch<{ Params: { id: string; addressId: string }; Body: { status?: 'free' | 'disabled' } }>('/:id/public-ipv4/addresses/:addressId', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const hostId = parsePositiveRouteId(request.params.id)
+    const addressId = parsePositiveRouteId(request.params.addressId)
+    if (!hostId || !addressId) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    const host = await assertHostPublicIpv4Access(hostId, request, reply)
+    if (!host) return reply
+    const status = request.body?.status
+    if (status !== 'free' && status !== 'disabled') return reply.code(400).send({ error: '地址状态无效' })
+    try {
+      await db.setPublicIpv4AddressStatus(hostId, addressId, status)
+      await createLog(request.user.id, 'host', 'host.public_ipv4_address.update', `Updated public IPv4 address status on host "${host.name}"`, 'success')
+      return { message: '独立 IPv4 地址状态已更新' }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'PUBLIC_IPV4_ADDRESS_ASSIGNED') return reply.code(400).send({ error: '地址已分配，不能修改状态' })
+      if (err instanceof Error && err.message === 'PUBLIC_IPV4_ADDRESS_NOT_FOUND') return reply.code(404).send({ error: '地址不存在' })
+      throw err
+    }
+  })
+
+  fastify.delete<{ Params: { id: string; addressId: string } }>('/:id/public-ipv4/addresses/:addressId', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const hostId = parsePositiveRouteId(request.params.id)
+    const addressId = parsePositiveRouteId(request.params.addressId)
+    if (!hostId || !addressId) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    const host = await assertHostPublicIpv4Access(hostId, request, reply)
+    if (!host) return reply
+    try {
+      await db.deletePublicIpv4Address(hostId, addressId)
+      await createLog(request.user.id, 'host', 'host.public_ipv4_address.delete', `Deleted public IPv4 address on host "${host.name}"`, 'success')
+      return { message: '独立 IPv4 地址已删除' }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'PUBLIC_IPV4_ADDRESS_ASSIGNED') return reply.code(400).send({ error: '地址已分配，不能删除' })
+      if (err instanceof Error && err.message === 'PUBLIC_IPV4_ADDRESS_NOT_FOUND') return reply.code(404).send({ error: '地址不存在' })
+      throw err
+    }
+  })
+
   fastify.get<{
     Params: { id: string }
   }>('/:id/caddy', {
@@ -5732,7 +5877,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
           sshKey: '',
           password: '',
           cloudInitConfig: finalConfigPayload as { 'user.user-data': string; 'user.network-config'?: string } | undefined,
-          networkMode: (instance.networkMode || 'nat') as 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat',
+          networkMode: (instance.networkMode || 'nat') as 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6',
           nested: Boolean(pkgConfig.nested),
           privileged: Boolean(pkgConfig.privileged),
           instanceType: instanceType === 'vm' ? 'vm' : 'container',
@@ -6216,6 +6361,8 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       boot_host_shutdown_timeout?: number | null
     }
 
+    const networkMode = normalizeNetworkMode(pkg.network_mode)
+
     const preCheckHost = await db.selectAvailableHost({
       packageHostIds: packageHostIds.length > 0 ? packageHostIds : undefined,
       nodeSelectors: JSON.parse(pkgWithExtras.node_selectors || '[]'),
@@ -6224,7 +6371,8 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       disk: requestedDisk,
       hostId,
       ownerId: pkg.user_id!,
-      packageId
+      packageId,
+      networkMode
     })
 
     if (!preCheckHost) {
@@ -6260,7 +6408,6 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       }
     }
 
-    const networkMode = (pkg.network_mode || 'nat') as 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
     if (pkgInstanceType === 'vm' && ['nat_ipv6_nat', 'ipv6_nat'].includes(networkMode)) {
       return reply.code(400).send({ error: 'KVM packages do not support IPv4 NAT & IPv6 NAT or IPv6 NAT network modes' })
     }
@@ -6296,7 +6443,8 @@ export default async function hostRoutes(fastify: FastifyInstance) {
           hostId,
           ownerId: pkg.user_id!,
           packageId,
-          portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(networkMode) ? (selectedPlan?.portLimit || pkgWithExtras.port_limit || 0) : 0
+          networkMode,
+          portCount: networkModeAllowsPortMapping(networkMode) ? (selectedPlan?.portLimit || pkgWithExtras.port_limit || 0) : 0
         })
 
         if (!reservedHost) {
@@ -6419,18 +6567,41 @@ export default async function hostRoutes(fastify: FastifyInstance) {
 
       let staticIPv4: string | null = null
       let staticIPv6: string | null = null
+      let publicIpv4Assignment: any = null
 
-      try {
-        let attempts = 0
-        while (attempts < 50) {
-          staticIPv4 = generateRandomIPv4()
-          const exists = await db.isIpAddressExistsOnHost(staticIPv4, lockedHost.id)
-          if (!exists) break
-          attempts++
-          staticIPv4 = null
+      if (networkModeNeedsNatIpv4(networkMode)) {
+        try {
+          let attempts = 0
+          while (attempts < 50) {
+            staticIPv4 = generateRandomIPv4()
+            const exists = await db.isIpAddressExistsOnHost(staticIPv4, lockedHost.id)
+            if (!exists) break
+            attempts++
+            staticIPv4 = null
+          }
+        } catch (error) {
+          fastify.log.warn(error, '[Host Create For User] failed to allocate IPv4')
         }
-      } catch (error) {
-        fastify.log.warn(error, '[Host Create For User] failed to allocate IPv4')
+      } else if (networkModeNeedsPublicIpv4(networkMode)) {
+        publicIpv4Assignment = await prisma.$transaction((tx) => db.reservePublicIpv4ForInstance(tx, { hostId: lockedHost!.id, instanceId }))
+        if (!publicIpv4Assignment) {
+          await prisma.instance.updateMany({
+            where: { id: instanceId, status: 'creating' },
+            data: { status: 'error' }
+          }).catch((err) => fastify.log.error(err, '[Host Create For User] failed to mark instance error after public IPv4 allocation miss'))
+          await db.rollbackResources({
+            hostId: lockedHost!.id,
+            cpu: requestedCpu,
+            memory: requestedMemory,
+            disk: requestedDisk,
+            portCount: networkModeAllowsPortMapping(networkMode) ? (selectedPlan?.portLimit || pkgWithExtras.port_limit || 0) : 0
+          }).catch((err) => fastify.log.error(err, '[Host Create For User] failed to rollback resources after public IPv4 allocation miss'))
+          await db.compensateFailedInstancePurchase(instanceId, targetUser.id, lockedHost!.id).catch((err) => {
+            fastify.log.error(err, '[Host Create For User] failed to compensate purchase after public IPv4 allocation miss')
+          })
+          return reply.status(503).send({ error: `宿主机 ${lockedHost!.name} 没有可用独立 IPv4 地址` })
+        }
+        staticIPv4 = publicIpv4Assignment.address
       }
 
       const lockedHostWithIpv6 = lockedHost as typeof lockedHost & {
@@ -6441,7 +6612,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       }
 
       // 仅 Routed 模式（需要独立 IPv6 地址）才从子网分配
-      const needsRoutedIPv6 = ['nat_ipv6', 'ipv6_only'].includes(networkMode)
+      const needsRoutedIPv6 = networkModeNeedsRoutedIpv6(networkMode)
       if (lockedHostWithIpv6.ipv6_subnet && needsRoutedIPv6) {
         try {
           let attempts = 0
@@ -6458,6 +6629,11 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       }
 
       let finalConfigPayload = configPayload
+      const ipv4Cidr = publicIpv4Assignment
+        ? `${publicIpv4Assignment.address}/${publicIpv4Assignment.prefixLength}`
+        : (staticIPv4 ? `${staticIPv4}/22` : null)
+      const ipv4Gateway = publicIpv4Assignment?.gateway || '10.10.0.1'
+      const ipv4Dns = publicIpv4Assignment?.dns || ['10.10.0.1']
       if (pkgInstanceType === 'vm') {
         const { generateVmConfig } = await import('../lib/incus-config-vm.js')
         const vmResult = generateVmConfig({
@@ -6466,16 +6642,16 @@ export default async function hostRoutes(fastify: FastifyInstance) {
           imageAlias: image,
           rootPassword: metaData.rootPassword,
           sshKey,
-          network: staticIPv4 ? {
-            ipAddress: `${staticIPv4}/22`,
-            gateway: '10.10.0.1',
-            dns: ['8.8.8.8', '1.1.1.1'],
+          network: staticIPv4 && ipv4Cidr ? {
+            ipAddress: ipv4Cidr,
+            gateway: ipv4Gateway,
+            dns: ipv4Dns,
             ipv6Address: staticIPv6 || undefined,
             ipv6Gateway: staticIPv6 ? (lockedHostWithIpv6.ipv6_gateway || undefined) : undefined
           } : undefined
         })
         finalConfigPayload = vmResult.configPayload
-      } else if (staticIPv4) {
+      } else if (staticIPv4 && ipv4Cidr) {
         // 容器类型：重新生成包含静态 IP 的 cloud-init 配置
         const containerResult = generateIncusConfig({
           instanceName: name,
@@ -6485,9 +6661,9 @@ export default async function hostRoutes(fastify: FastifyInstance) {
           networkMode,
           type: 'container',
           network: {
-            ipAddress: `${staticIPv4}/22`,
-            gateway: '10.10.0.1',
-            dns: ['8.8.8.8', '1.1.1.1'],
+            ipAddress: ipv4Cidr,
+            gateway: ipv4Gateway,
+            dns: ipv4Dns,
             ipv6Address: staticIPv6 ? `${staticIPv6}/128` : undefined,
             ipv6Gateway: staticIPv6 ? 'fe80::1' : undefined
           }

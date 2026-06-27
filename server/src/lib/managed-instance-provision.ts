@@ -2,6 +2,7 @@ import { prisma } from '../db/prisma.js'
 import * as db from '../db/index.js'
 import { buildInstanceConfig, createInstance, deleteInstance, getIncusClient, getInstanceState, startInstance, stopInstance } from '../lib/incus/index.js'
 import type { Host } from '../types/database.js'
+import { networkModeAllowsPortMapping, networkModeNeedsPublicIpv4 } from './network-modes.js'
 
 export interface ManagedInstanceProvisionConfig {
   name: string
@@ -10,7 +11,7 @@ export interface ManagedInstanceProvisionConfig {
   memory: number
   disk: number
   cloudInitConfig?: Record<string, string>
-  networkMode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat'
+  networkMode: 'nat' | 'nat_ipv6' | 'nat_ipv6_nat' | 'ipv6_only' | 'ipv6_nat' | 'public_ipv4' | 'public_ipv4_ipv6'
   nested?: boolean
   privileged?: boolean
   portLimit?: number
@@ -184,12 +185,18 @@ export async function provisionManagedInstanceAsync(
             cpu: instance.cpu,
             memory: instance.memory,
             disk: instance.disk,
-            portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(instance.networkMode)
-              ? (instance.portLimit || 0)
-              : 0
+            portCount: networkModeAllowsPortMapping(instance.networkMode) ? (instance.portLimit || 0) : 0
           })
         } catch (rollbackError) {
           console.error(`[Managed Provisioning] failed to roll back resources for instance ${instanceId}:`, rollbackError)
+        }
+
+        if (networkModeNeedsPublicIpv4(instance.networkMode)) {
+          try {
+            await prisma.$transaction((tx) => db.releasePublicIpv4ForInstance(tx, instanceId))
+          } catch (releaseError) {
+            console.error(`[Managed Provisioning] failed to release public IPv4 for instance ${instanceId}:`, releaseError)
+          }
         }
 
         try {
