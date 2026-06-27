@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `7c476d2`
+- 当前 HEAD / Current HEAD: `51e2df0`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Add instance resource risk center
-- 最新 tag / Latest tag: `v0.8.4`
+- 提交说明 / Commit subject: Harden OTA Prisma client generation
+- 最新 tag / Latest tag: `v0.8.5`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.8.5
+
+- 发布提交 / Release commit: `51e2df0`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Harden OTA Prisma client generation
+
+### 修复与稳定性 / Fixes and Stability
+
+- Harden OTA Prisma client generation `51e2df0`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.8.4 `92f66d3`
 
 ## v0.8.4
 
