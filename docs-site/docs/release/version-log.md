@@ -6,19 +6,26 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `4fb5d03`
+- 最新发布提交 / Latest Release Commit: `031d93c`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Release v0.9.5
-- 最新 tag / Latest tag: `v0.9.5`
+- 提交说明 / Commit subject: Release v0.9.6
+- 最新 tag / Latest tag: `v0.9.6`
 
 ## 未发布变更 / Unreleased Changes
 
-### 其他变更 / Other Changes
-
-- Include disk capacity in package sold-out checks `00d64a8`
-- Document production readiness warnings `e5435c7`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.9.6
+
+- 发布提交 / Release commit: `031d93c`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Release v0.9.6
+
+Fix public package sold-out detection to include disk capacity, keeping market availability aligned with backend instance creation checks.
+
+Update production readiness warnings and docs to describe CPU, memory and disk capacity requirements.
 
 ## v0.9.5
 
@@ -40,10 +47,6 @@ Keep docs version logs focused on real release changes by filtering handoff and 
 
 - Close OTA worker database on skipped duplicate `15e6c63`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.9.3 `7fd8a40`
-
 ## v0.9.3
 
 - 发布提交 / Release commit: `d1290ac`
@@ -53,10 +56,6 @@ Keep docs version logs focused on real release changes by filtering handoff and 
 ### 其他变更 / Other Changes
 
 - Guard OTA workers against duplicate starts `d1290ac`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.9.2 `6bb06ee`
 
 ## v0.9.2
 
@@ -68,10 +67,6 @@ Keep docs version logs focused on real release changes by filtering handoff and 
 
 - Handle Turnstile in split auth smoke `e67fc89`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.9.1 `3f4a8fb`
-
 ## v0.9.1
 
 - 发布提交 / Release commit: `763baaf`
@@ -82,12 +77,6 @@ Keep docs version logs focused on real release changes by filtering handoff and 
 
 - Fix split auth smoke in production artifacts `763baaf`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.9.0 OTA `6a95103`
-- Update handoff after v0.9.0 release `bb15e8a`
-- Update version log for v0.9.0 `776950a`
-
 ## v0.9.0
 
 - 发布提交 / Release commit: `aa087db`
@@ -96,12 +85,7 @@ Keep docs version logs focused on real release changes by filtering handoff and 
 
 ### 其他变更 / Other Changes
 
-- Release v0.9.0 `aa087db`
 - Document resource risk operations `430d0bc`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.8.9 OTA `e40d30b`
 
 ## v0.8.9
 
@@ -129,11 +113,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Fix instance plan upgrade capacity checks `8df3634`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.8.6 OTA `de46154`
-- Update version log for v0.8.6 `83c25e6`
-
 ## v0.8.6
 
 - 发布提交 / Release commit: `20f9209`
@@ -143,11 +122,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 新增能力 / New Capabilities
 
 - Add manual resource risk controls `20f9209`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.8.5 OTA `a391ace`
-- Update version log for v0.8.5 `55a1280`
 
 ## v0.8.5
 
@@ -159,10 +133,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Harden OTA Prisma client generation `51e2df0`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.8.4 `92f66d3`
-
 ## v0.8.4
 
 - 发布提交 / Release commit: `7c476d2`
@@ -172,11 +142,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 新增能力 / New Capabilities
 
 - Add instance resource risk center `7c476d2`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.8.3 OTA `ee47e4b`
-- Update version log for v0.8.3 `78640e4`
 
 ## v0.8.3
 
@@ -188,11 +153,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Fix instance bandwidth and billing nav display `1a82f05`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.8.2 OTA `81924bc`
-- Update version log for v0.8.2 `ef43193`
-
 ## v0.8.2
 
 - 发布提交 / Release commit: `4f5bb5e`
@@ -203,10 +163,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Add package traffic reset pricing `4f5bb5e`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.8.1 `4454778`
-
 ## v0.8.1
 
 - 发布提交 / Release commit: `4a131d7`
@@ -216,10 +172,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 修复与稳定性 / Fixes and Stability
 
 - Harden storage readiness and traffic reset `4a131d7`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.6.19 OTA `89c4cad`
 
 ## v0.6.19
 
@@ -279,10 +231,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Persist expired gift card state `e3963e0`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.6.14 `33f37b9`
-
 ## v0.6.14
 
 - 发布提交 / Release commit: `370be98`
@@ -292,10 +240,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 修复与稳定性 / Fixes and Stability
 
 - Fix gift card Turnstile token flow `370be98`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.6.13 `d0f193c`
 
 ## v0.6.13
 
@@ -307,10 +251,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Fix user gift card Turnstile verification `f28e860`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.6.12 `dbd249e`
-
 ## v0.6.12
 
 - 发布提交 / Release commit: `f754493`
@@ -321,11 +261,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Fix admin gift card generation Turnstile gate `f754493`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.6.11 production OTA `fb9dc40`
-- Update version log for v0.6.11 `63879fc`
-
 ## v0.6.11
 
 - 发布提交 / Release commit: `4db8d45`
@@ -335,12 +270,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 新增能力 / New Capabilities
 
 - Add operations settings center `4db8d45`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.6.10 production OTA `3ad9e41`
-- Update version log for v0.6.10 `9297991`
-- Update version log for gift card center `eca75d9`
 
 ## v0.6.10
 
@@ -412,10 +341,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Skip source smoke in artifact acceptance / 验收脚本跳过产物源码 smoke `9fcbe28`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.6.5 / 更新 v0.6.5 版本日志 `0e55c41`
-
 ## v0.6.5
 
 - 发布提交 / Release commit: `cefd77a`
@@ -425,12 +350,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 改进与调整 / Improvements and Adjustments
 
 - Update final proof scope waiver / 更新最终验收豁免口径 `cefd77a`
-- Update handoff after v0.6.4 production OTA / 更新 v0.6.4 生产 OTA 交接 `108e089`
-- Update version log for v0.6.4 / 更新 v0.6.4 版本日志 `6b2e7d4`
-
-### 其他变更 / Other Changes
-
-- Refresh handoff Lsky preflight status / 刷新 Lsky 预检交接状态 `375c524`
 
 ## v0.6.4
 
@@ -441,8 +360,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 改进与调整 / Improvements and Adjustments
 
 - Update production proof workspace status / 更新生产验收工作台状态 `5eff38f`
-- Update handoff after v0.6.3 production OTA / 更新 v0.6.3 生产 OTA 交接 `d253b4a`
-- Update version log for v0.6.3 / 更新 v0.6.3 版本日志 `91d9c9d`
 
 ## v0.6.3
 
@@ -454,11 +371,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Harden Lsky commit proof permissions / 加固 Lsky 提交证明权限检查 `54aa45a`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.6.2 production OTA / 更新 v0.6.2 生产 OTA 交接 `2dc0858`
-- Update version log for v0.6.2 / 更新 v0.6.2 版本日志 `f6094bf`
-
 ## v0.6.2
 
 - 发布提交 / Release commit: `0f67f1d`
@@ -468,10 +380,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 其他变更 / Other Changes
 
 - Force artifact OTA dependency install / 强制重建 OTA 制品依赖 `0f67f1d`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.6.1 / 更新 v0.6.1 版本日志 `65df494`
 
 ## v0.6.1
 
@@ -483,10 +391,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Harden Lsky proof and artifact install output / 加固 Lsky proof 与制品安装输出 `0b408cc`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.6.0 / 更新 v0.6.0 版本日志 `a5e877c`
-
 ## v0.6.0
 
 - 发布提交 / Release commit: `50f0f8b`
@@ -496,11 +400,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 其他变更 / Other Changes
 
 - Summarize Lsky proof token abilities / 汇总 Lsky proof token 权限 `50f0f8b`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.5.9 production OTA `6f10519`
-- Update version log for v0.5.9 `2360bde`
 
 ## v0.5.9
 
@@ -512,10 +411,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Harden artifact OTA install directory handling `800c509`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.5.8 `4fd4dda`
-
 ## v0.5.8
 
 - 发布提交 / Release commit: `976a38a`
@@ -525,9 +420,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 改进与调整 / Improvements and Adjustments
 
 - Update production proof workspace status `976a38a`
-- Update handoff after v0.5.7 production OTA `2dc791c`
-- Update handoff for v0.5.7 release `8af7b58`
-- Update version log for v0.5.7 `233cfe6`
 
 ### 其他变更 / Other Changes
 
@@ -543,16 +435,9 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Harden online update runner environment `d470e7b`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff with latest Lsky preflight `75636e8`
-- Update handoff after v0.5.6 proof tooling `f712679`
-- Update version log for v0.5.6 `7c530ca`
-
 ### 其他变更 / Other Changes
 
 - Record latest Lsky proof access attempt `6c086cd`
-- Tighten remaining proof handoff scope `1bacbc2`
 
 ## v0.5.6
 
@@ -568,11 +453,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Document Lsky cleanup blocker evidence `9c04f22`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after SMTP provider proof `6c191a9`
-- Update version log for v0.5.5 `d5989fe`
-
 ## v0.5.5
 
 - 发布提交 / Release commit: `80d353e`
@@ -583,11 +463,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 
 - Expose SMTP provider proof metadata `80d353e`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after v0.5.4 production proof `89eb644`
-- Update version log for v0.5.4 `f630dac`
-
 ## v0.5.4
 
 - 发布提交 / Release commit: `bbae57c`
@@ -597,9 +472,6 @@ PayIncus independent baseline release with rebuilt public docs, SDK examples, ex
 ### 改进与调整 / Improvements and Adjustments
 
 - Update production proof workspace status `bbae57c`
-- Update handoff after Incus lifecycle production proof `5433e70`
-- Update handoff after v0.5.3 production proof `d3c675a`
-- Update version log for v0.5.3 `ad45707`
 
 ## v0.5.3
 
@@ -655,10 +527,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Document v0.4.7 cache deployment notes / 记录 v0.4.7 缓存部署说明 `4ce40ba`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.4.7 / 更新 v0.4.7 版本日志 `6aa34a1`
-
 ## v0.4.7
 
 - 发布提交 / Release commit: `4f5995d`
@@ -668,10 +536,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 修复与稳定性 / Fixes and Stability
 
 - Fix ticket AI runtime calls and SPA cache headers / 修复工单 AI 运行时调用与 SPA 缓存头 `4f5995d`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.4.6 / 更新 v0.4.6 版本日志 `07f1e34`
 
 ## v0.4.6
 
@@ -704,10 +568,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Fix ticket AI cached API fallback / 修复工单 AI 缓存 API 兜底 `d0d0c06`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.4.4 / 更新 v0.4.4 版本日志 `70ec05e`
-
 ## v0.4.4
 
 - 发布提交 / Release commit: `68abb17`
@@ -718,11 +578,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Add capacity and cost operations view / 新增容量与成本运营视图 `68abb17`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.4.3 OTA proof / 更新 v0.4.3 OTA 交接证明 `7b9e3b2`
-- Update version log for v0.4.3 / 更新 v0.4.3 版本日志 `3490fa1`
-
 ## v0.4.3
 
 - 发布提交 / Release commit: `b186fa8`
@@ -732,10 +587,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 修复与稳定性 / Fixes and Stability
 
 - Fix ticket AI runtime fallback / 修复工单 AI 运行时兜底 `b186fa8`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.4.2 / 更新 v0.4.2 版本日志 `1e62fcf`
 
 ## v0.4.2
 
@@ -757,11 +608,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Show installed plugin settings in sidebar / 安装后显示插件设置入口 `dfb4900`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.4.0 OTA proof / 更新 v0.4.0 OTA 证明交接 `15cdb65`
-- Update version log for v0.4.0 / 更新 v0.4.0 版本日志 `3dc1f66`
-
 ## v0.4.0
 
 - 发布提交 / Release commit: `b4d4cce`
@@ -771,10 +617,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 新增能力 / New Capabilities
 
 - Add standalone plugin settings pages / 新增独立插件设置页 `b4d4cce`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.3.9 / 更新 v0.3.9 版本日志 `62f4aef`
 
 ## v0.3.9
 
@@ -910,11 +752,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Add user lifecycle operations center / 新增用户生命周期运营中心 `651f0ba`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.3.1 OTA proof / 更新 v0.3.1 OTA 证明交接 `bd4d60d`
-- Update version log for v0.3.1 / 更新 v0.3.1 版本日志 `6b8aa1f`
-
 ## v0.3.1
 
 - 发布提交 / Release commit: `c71ade8`
@@ -924,11 +761,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 新增能力 / New Capabilities
 
 - Add customer success ticket workspace / 新增客服成功工单工作台 `c71ade8`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.3.0 OTA proof / 更新 v0.3.0 OTA 证明交接 `fd2634c`
-- Update version log for v0.3.0 / 更新 v0.3.0 版本日志 `2443c77`
 
 ## v0.3.0
 
@@ -940,11 +772,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Add SLA alert center / 新增 SLA 告警中心 `a721de8`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.2.9 OTA proof / 更新 v0.2.9 OTA 证明交接 `495cf5e`
-- Update version log for v0.2.9 / 更新 v0.2.9 版本日志 `9885685`
-
 ## v0.2.9
 
 - 发布提交 / Release commit: `62825b8`
@@ -955,11 +782,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Add delivery assurance operations workflow / 新增交付保障运营闭环 `62825b8`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.2.8 OTA proof / 更新 v0.2.8 OTA 证明交接 `f079082`
-- Update version log for v0.2.8 / 更新 v0.2.8 版本日志 `87bf91c`
-
 ## v0.2.8
 
 - 发布提交 / Release commit: `dc95c91`
@@ -969,11 +791,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 新增能力 / New Capabilities
 
 - Add financial reconciliation workflow / 新增财务对账闭环 `dc95c91`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.2.7 OTA proof / 更新 v0.2.7 OTA 证明交接 `522a67c`
-- Update version log for v0.2.7 / 更新 v0.2.7 版本日志 `2063fae`
 
 ## v0.2.7
 
@@ -1064,11 +881,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Add balance adjustment approval / 新增调账审批流 `0eb2178`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.2.3 OTA proof / 更新 v0.2.3 OTA 证明交接 `e5a5c2e`
-- Update version log for v0.2.3 / 更新 v0.2.3 版本日志 `cd63437`
-
 ## v0.2.3
 
 - 发布提交 / Release commit: `21a678c`
@@ -1078,11 +890,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 新增能力 / New Capabilities
 
 - Add order exception handling / 新增订单异常处理 `21a678c`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.2.2 OTA proof / 更新 v0.2.2 OTA 证明交接 `7a244bc`
-- Update version log for v0.2.2 / 更新 v0.2.2 版本日志 `fca61a1`
 
 ## v0.2.2
 
@@ -1099,11 +906,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 其他变更 / Other Changes
 
 - Separate demo docs from production guides / 区分演示文档与生产指南 `458dad6`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff for v0.2.1 OTA proof / 更新 v0.2.1 OTA 证明交接 `b246189`
-- Update version log for v0.2.1 / 更新 v0.2.1 版本日志 `7f2ac52`
 
 ## v0.2.1
 
@@ -1214,10 +1016,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Fix admin instance detail loading / 修复后台实例详情加载 `474ae02`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.1.5 / 更新 v0.1.5 版本日志 `248b05e`
-
 ## v0.1.5
 
 - 发布提交 / Release commit: `e865f4d`
@@ -1227,10 +1025,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 其他变更 / Other Changes
 
 - Localize operation logs in Chinese / 日志内容中文化 `e865f4d`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.1.4 / 更新 v0.1.4 版本日志 `dea5d77`
 
 ## v0.1.4
 
@@ -1242,10 +1036,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Prevent incompatible VM package host binding / 阻止不兼容 VM 套餐节点绑定 `ac2b679`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.1.3 / 更新 v0.1.3 版本日志 `8c5bbd8`
-
 ## v0.1.3
 
 - 发布提交 / Release commit: `5bec34f`
@@ -1255,10 +1045,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 修复与稳定性 / Fixes and Stability
 
 - Fix instance detail bandwidth rendering / 修复实例详情带宽渲染 `5bec34f`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.1.2 / 更新 v0.1.2 版本日志 `2f265f6`
 
 ## v0.1.2
 
@@ -1319,8 +1105,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 改进与调整 / Improvements and Adjustments
 
 - Polish update and plugin admin UI / 优化更新与插件后台界面 `6c06bd8`
-- Update handoff audit status / 更新交接审计状态 `3974ea2`
-- Update version log for v0.0.22 `847aaa6`
 
 ### 其他变更 / Other Changes
 
@@ -1340,12 +1124,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Record public production revalidation `f9ed41e`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff with live business proof `db4f18b`
-- Update handoff after v0.0.21 production proof `ade22e5`
-- Update version log for v0.0.21 `517b972`
-
 ## v0.0.21
 
 - 发布提交 / Release commit: `71cdcff`
@@ -1356,10 +1134,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Fix production OTA CLI start command `71cdcff`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.0.20 `40a245e`
-
 ## v0.0.20
 
 - 发布提交 / Release commit: `301fc2c`
@@ -1368,13 +1142,7 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 ### 修复与稳定性 / Fixes and Stability
 
-- Update version log for static root fix `301fc2c`
 - Fix production split static roots `5afc9a5`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff after storage pool release `3443585`
-- Update version log for v0.0.19 `5d17ef1`
 
 ## v0.0.19
 
@@ -1386,10 +1154,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Fix storage pool defaults and error guidance `97f87c5`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.0.18 `854bb87`
-
 ## v0.0.18
 
 - 发布提交 / Release commit: `368d195`
@@ -1399,18 +1163,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 修复与稳定性 / Fixes and Stability
 
 - Fix Agent binary installer cache query `368d195`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update handoff with Incus storage proof `c0f10f7`
-- Update handoff with v0.0.17 production verification `78d35cf`
-- Update handoff after v0.0.17 production check `e86669f`
-- Update version log for v0.0.17 `d93b1ef`
-
-### 其他变更 / Other Changes
-
-- Avoid stale head in handoff `f962435`
-- Correct handoff current head `4428fb9`
 
 ## v0.0.17
 
@@ -1422,10 +1174,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Fix Agent installer manifest parsing `60faf9a`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.0.16 `2466e80`
-
 ## v0.0.16
 
 - 发布提交 / Release commit: `a0a35fb`
@@ -1435,10 +1183,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 其他变更 / Other Changes
 
 - Refresh host panel trust certificate `a0a35fb`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.0.15 `2a79838`
 
 ## v0.0.15
 
@@ -1450,10 +1194,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 
 - Fix atomic OTA install root detection `a361779`
 
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.0.14 `91e5b32`
-
 ## v0.0.14
 
 - 发布提交 / Release commit: `6a0624a`
@@ -1463,10 +1203,6 @@ Preserve Lsky pathname/path fallback provider IDs so uploaded ticket images can 
 ### 新增能力 / New Capabilities
 
 - Clarify Debian host install support `6a0624a`
-
-### 改进与调整 / Improvements and Adjustments
-
-- Update version log for v0.0.13 `d458c85`
 
 ## v0.0.13
 

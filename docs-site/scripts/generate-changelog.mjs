@@ -105,7 +105,7 @@ function commitsBetween(fromRef, toRef) {
 }
 
 function isDocumentationSyncCommit(subject) {
-  return /\b(handoff|version log)\b/i.test(subject)
+  return /\b(handoff|version log)\b/i.test(subject) || /^Release v\d+\.\d+\.\d+/i.test(subject)
 }
 
 function tagContent(tag, format) {
@@ -221,7 +221,7 @@ function render() {
     const tag = tags[index]
     const nextTag = tags[index + 1]
     const meta = commitMeta(tag)
-    const commits = commitsBetween(nextTag, tag)
+    const commits = commitsBetween(nextTag, tag).filter((commit) => !isDocumentationSyncCommit(commit.subject))
 
     lines.push(`## ${tag}`, '')
     lines.push(`- ${locale.releaseCommit}: \`${meta.shortHash}\``)
