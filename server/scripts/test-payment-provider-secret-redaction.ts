@@ -2,15 +2,18 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import {
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:5432/payincus_test'
+
+const {
   MASKED_PAYMENT_SECRET_VALUE,
   mergePaymentProviderConfigForUpdate,
   sanitizePaymentProviderForResponse,
   validatePaymentProviderFinancialInput
-} from '../src/db/payment-providers.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+} = await import('../src/db/payment-providers.js')
 
 const rawConfig = {
   version: 'v2',

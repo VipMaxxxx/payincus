@@ -378,7 +378,7 @@ assert.ok(
     rechargeRefundMigration.includes('CREATE TYPE "RechargeRefundStatus"') &&
     rechargeRefundMigration.includes('CREATE TABLE "recharge_refund_requests"') &&
     rechargeRoute.includes("const PLUGIN_GATEWAY_PROVIDER_TYPE = 'plugin_gateway'") &&
-    rechargeRoute.includes("SUPPORTED_RECHARGE_PROVIDER_TYPES = new Set(['yipay', 'heleket', PLUGIN_GATEWAY_PROVIDER_TYPE])") &&
+    rechargeRoute.includes("SUPPORTED_RECHARGE_PROVIDER_TYPES = new Set(['yipay', 'heleket', PLUGIN_GATEWAY_PROVIDER_TYPE, MANUAL_PROVIDER_TYPE])") &&
     rechargeRoute.includes('validatePluginGatewayProviderTarget') &&
     rechargeRoute.includes('listEnabledGatewayExtensionTargets(hook, parsed.pluginConfig.providerCode)') &&
     rechargeRoute.includes('createPluginGatewayRechargePayUrl') &&

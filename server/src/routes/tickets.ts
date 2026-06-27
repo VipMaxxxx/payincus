@@ -17,9 +17,9 @@ import { sendNotification } from '../lib/notifier.js'
 import { assertSafeHttpUrl } from '../lib/outbound-security.js'
 import { emitPluginEvent } from '../lib/plugin-event-emitter.js'
 import {
+  ALLOWED_IMAGE_MIME_TYPES,
   cleanupUploadedTicketImages,
   isHandledTicketPayloadError,
-  normalizeAllowedImageMimeType,
   readTicketPayload,
   TICKET_UPLOAD_BODY_LIMIT,
   uploadTicketImages,
@@ -78,6 +78,11 @@ type ExtendedTicketStatus = TicketStatus | 'active'
 
 const TICKET_PROXY_FETCH_TIMEOUT_MS = 15_000
 const POSITIVE_INTEGER_ID_RE = /^[1-9]\d*$/
+
+function normalizeAllowedImageMimeType(value: string | null | undefined): string | null {
+  const normalized = value?.split(';')[0]?.trim().toLowerCase()
+  return normalized && ALLOWED_IMAGE_MIME_TYPES.has(normalized) ? normalized : null
+}
 
 function parsePositiveId(value: unknown): number | null {
   if (typeof value === 'number') {

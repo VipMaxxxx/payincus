@@ -6,7 +6,9 @@ import api, {
   type FinancialReconciliationItem,
   type FinancialReconciliationItemType,
   type FinancialReconciliationRun,
-  type FinancialReconciliationStatus
+  type FinancialReconciliationStatus,
+  type RechargeRefundRequest,
+  type RechargeRefundStatus
 } from '@/api/admin'
 import { useToast } from '@/stores/toast'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
@@ -67,8 +69,8 @@ const { t } = useI18n()
 const toast = useToast()
 
 // Tab 切换
-type BillingTab = 'overview' | 'instances' | 'records' | 'rechargeRecords' | 'reconciliation' | 'affConversions' | 'paymentProviders'
-const billingTabs: BillingTab[] = ['overview', 'instances', 'records', 'rechargeRecords', 'reconciliation', 'affConversions', 'paymentProviders']
+type BillingTab = 'overview' | 'instances' | 'records' | 'rechargeRecords' | 'refundRequests' | 'reconciliation' | 'affConversions' | 'paymentProviders'
+const billingTabs: BillingTab[] = ['overview', 'instances', 'records', 'rechargeRecords', 'refundRequests', 'reconciliation', 'affConversions', 'paymentProviders']
 function normalizeTab(tab: unknown): BillingTab {
   return typeof tab === 'string' && billingTabs.includes(tab as BillingTab)
     ? tab as BillingTab
@@ -187,6 +189,22 @@ const rechargeRecordsPageSize = ref(100)
 const rechargeRecordsTotal = ref(0)
 const rechargeRecordsFilter = ref('')
 const syncingRecordId = ref<number | null>(null)
+
+const refundRequests = ref<RechargeRefundRequest[]>([])
+const refundRequestsLoading = ref(false)
+const refundRequestsPage = ref(1)
+const refundRequestsPageSize = ref(20)
+const refundRequestsTotal = ref(0)
+const refundRequestsFilter = ref<'all' | RechargeRefundStatus>('all')
+const refundRequestsSearch = ref('')
+const retryingRefundId = ref<number | null>(null)
+const showOriginalRefundModal = ref(false)
+const originalRefundTarget = ref<any | null>(null)
+const originalRefundLoading = ref(false)
+const originalRefundForm = ref({
+  amount: 0,
+  reason: ''
+})
 
 const reconciliationDate = ref(new Date().toISOString().slice(0, 10))
 const reconciliation = ref<FinancialReconciliationRun | null>(null)
@@ -540,6 +558,9 @@ function loadTabData(tab: BillingTab) {
   if (tab === 'rechargeRecords' && rechargeRecords.value.length === 0) {
     loadRechargeRecords()
   }
+  if (tab === 'refundRequests' && refundRequests.value.length === 0) {
+    loadRefundRequests()
+  }
   if (tab === 'reconciliation' && !reconciliation.value) {
     loadFinancialReconciliation()
   }
@@ -617,6 +638,24 @@ async function loadRechargeRecords() {
     toast.error(t('admin.billing.loadRechargeRecordsFailed') + ': ' + err.message)
   } finally {
     rechargeRecordsLoading.value = false
+  }
+}
+
+async function loadRefundRequests() {
+  refundRequestsLoading.value = true
+  try {
+    const res = await api.admin.getRechargeRefundRequests({
+      page: refundRequestsPage.value,
+      pageSize: refundRequestsPageSize.value,
+      status: refundRequestsFilter.value === 'all' ? undefined : refundRequestsFilter.value,
+      search: refundRequestsSearch.value.trim() || undefined
+    })
+    refundRequests.value = res.refunds || []
+    refundRequestsTotal.value = res.total
+  } catch (err: any) {
+    toast.error(t('admin.billing.loadRefundRequestsFailed') + ': ' + err.message)
+  } finally {
+    refundRequestsLoading.value = false
   }
 }
 
@@ -718,6 +757,77 @@ async function syncRechargeRecord(record: any) {
     toast.error(err.message)
   } finally {
     syncingRecordId.value = null
+  }
+}
+
+async function retryRechargeRefund(refund: RechargeRefundRequest) {
+  if (retryingRefundId.value) return
+
+  retryingRefundId.value = refund.id
+  try {
+    const res = await api.admin.retryRechargeRefund(refund.id)
+    const index = refundRequests.value.findIndex(item => item.id === refund.id)
+    if (index >= 0) refundRequests.value[index] = res.refundRequest
+    if (res.success) {
+      toast.success(res.message || t('admin.billing.refundRetrySuccess'))
+    } else {
+      toast.info(res.message || t('admin.billing.refundRetryQueued'))
+    }
+    await Promise.all([loadRefundRequests(), loadRechargeRecords(), loadOverview()])
+  } catch (err: any) {
+    toast.error(err.message)
+  } finally {
+    retryingRefundId.value = null
+  }
+}
+
+function getRechargeRefundableAmount(record: any): number {
+  return Number(record.actualAmount ?? record.amount ?? 0)
+}
+
+function canCreateOriginalRefund(record: any): boolean {
+  return record?.status === 'completed' && record?.provider?.type === 'plugin_gateway'
+}
+
+function openCreateOriginalRefund(record: any) {
+  originalRefundTarget.value = record
+  originalRefundForm.value = {
+    amount: getRechargeRefundableAmount(record),
+    reason: ''
+  }
+  showOriginalRefundModal.value = true
+}
+
+async function submitCreateOriginalRefund() {
+  if (!originalRefundTarget.value || originalRefundLoading.value) return
+  const amount = Number(originalRefundForm.value.amount)
+  const reason = originalRefundForm.value.reason.trim()
+  if (!Number.isFinite(amount) || amount <= 0) {
+    toast.error(t('admin.billing.originalRefundInvalidAmount'))
+    return
+  }
+  if (!reason) {
+    toast.error(t('admin.billing.refundReasonRequired'))
+    return
+  }
+
+  originalRefundLoading.value = true
+  try {
+    const res = await api.admin.createRechargeRefund(originalRefundTarget.value.id, {
+      amount: Number(amount.toFixed(2)),
+      reason
+    })
+    showOriginalRefundModal.value = false
+    originalRefundTarget.value = null
+    originalRefundForm.value = { amount: 0, reason: '' }
+    toast.success(res.message || t('admin.billing.originalRefundCreateSuccess'))
+    refundRequestsPage.value = 1
+    await Promise.all([loadRefundRequests(), loadRechargeRecords(), loadOverview()])
+    switchTab('refundRequests')
+  } catch (err: any) {
+    toast.error(err.message)
+  } finally {
+    originalRefundLoading.value = false
   }
 }
 
@@ -1137,7 +1247,8 @@ function getReconciliationItemTypeLabel(type: FinancialReconciliationItemType): 
     recharge_missing_balance_log: '成功充值未入账',
     orphan_balance_log: '流水缺少来源',
     delivered_instance_missing_billing: '交付缺少扣费',
-    approved_adjustment_missing_balance_log: '审批缺少流水'
+    approved_adjustment_missing_balance_log: '审批缺少流水',
+    recharge_refund_lifecycle_issue: '原路退款异常'
   }
   return labels[type] || type
 }
@@ -1222,6 +1333,7 @@ function formatPriceDiff(value: number): string {
 const instancesTotalPages = computed(() => Math.ceil(instancesTotal.value / instancesPageSize.value))
 const recordsTotalPages = computed(() => Math.ceil(recordsTotal.value / recordsPageSize.value))
 const rechargeRecordsTotalPages = computed(() => Math.ceil(rechargeRecordsTotal.value / rechargeRecordsPageSize.value))
+const refundRequestsTotalPages = computed(() => Math.ceil(refundRequestsTotal.value / refundRequestsPageSize.value))
 
 function getRechargeStatusBadge(status: string) {
   const map: Record<string, string> = {
@@ -1231,6 +1343,31 @@ function getRechargeStatusBadge(status: string) {
     failed: 'badge-error'
   }
   return map[status] || ''
+}
+
+function getRefundStatusBadge(status: RechargeRefundStatus) {
+  const map: Record<RechargeRefundStatus, string> = {
+    pending: 'badge-warning',
+    processing: 'badge-info',
+    completed: 'badge-success',
+    failed: 'badge-error',
+    cancelled: 'badge-ghost'
+  }
+  return map[status] || ''
+}
+
+function getRefundStatusLabel(status: RechargeRefundStatus): string {
+  return t(`admin.billing.refundStatus.${status}`)
+}
+
+function getRefundProviderText(refund: RechargeRefundRequest): string {
+  const providerName = refund.provider?.name || '-'
+  const providerType = refund.provider?.type ? ` / ${refund.provider.type}` : ''
+  return `${providerName}${providerType}`
+}
+
+function getRefundProviderResult(refund: RechargeRefundRequest): string {
+  return refund.providerMessage || refund.failureReason || refund.providerStatus || '-'
 }
 
 // 获取支付渠道显示文本（渠道名 - 支付方式）
@@ -2086,7 +2223,14 @@ function copyToClipboard(text: string) {
               </div>
             </div>
 
-            <div class="flex justify-end">
+            <div class="flex justify-end gap-2">
+              <button
+                v-if="canCreateOriginalRefund(rec)"
+                class="btn btn-sm btn-ghost text-rose-500"
+                @click="openCreateOriginalRefund(rec)"
+              >
+                {{ $t('admin.billing.createOriginalRefund') }}
+              </button>
               <button
                 v-if="rec.status === 'pending'"
                 class="btn btn-sm btn-ghost text-blue-500"
@@ -2152,6 +2296,14 @@ function copyToClipboard(text: string) {
                 </td>
                 <td class="p-3 text-themed-muted whitespace-nowrap">{{ formatDate(rec.createdAt) }}</td>
                 <td class="p-3 whitespace-nowrap">
+                  <div class="flex items-center gap-2">
+                  <button
+                    v-if="canCreateOriginalRefund(rec)"
+                    class="btn btn-sm btn-ghost text-rose-500"
+                    @click="openCreateOriginalRefund(rec)"
+                  >
+                    {{ $t('admin.billing.createOriginalRefund') }}
+                  </button>
                   <button
                     v-if="rec.status === 'pending'"
                     class="btn btn-sm btn-ghost text-blue-500"
@@ -2160,7 +2312,8 @@ function copyToClipboard(text: string) {
                   >
                     {{ syncingRecordId === rec.id ? $t('common.syncing') : $t('admin.billing.sync') }}
                   </button>
-                  <span v-else class="text-themed-muted">-</span>
+                  <span v-if="!canCreateOriginalRefund(rec) && rec.status !== 'pending'" class="text-themed-muted">-</span>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -2206,6 +2359,201 @@ function copyToClipboard(text: string) {
             class="btn btn-sm btn-ghost"
             :disabled="rechargeRecordsPage >= rechargeRecordsTotalPages"
             @click="rechargeRecordsPage++; loadRechargeRecords()"
+          >
+            {{ $t('common.nextPage') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 原路退款 Tab -->
+    <div v-show="activeTab === 'refundRequests'">
+      <div class="card mb-4 p-4 md:p-5">
+        <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <div class="text-sm font-medium text-themed">{{ $t('admin.billing.tabs.refundRequests') }}</div>
+            <div class="mt-1 text-xs text-themed-muted">{{ $t('admin.billing.refundRequestsHint') }}</div>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-[160px_minmax(220px,360px)_auto]">
+            <select
+              v-model="refundRequestsFilter"
+              class="input"
+              @change="refundRequestsPage = 1; loadRefundRequests()"
+            >
+              <option value="all">{{ $t('admin.billing.allStatus') }}</option>
+              <option value="pending">{{ $t('admin.billing.refundStatus.pending') }}</option>
+              <option value="processing">{{ $t('admin.billing.refundStatus.processing') }}</option>
+              <option value="completed">{{ $t('admin.billing.refundStatus.completed') }}</option>
+              <option value="failed">{{ $t('admin.billing.refundStatus.failed') }}</option>
+              <option value="cancelled">{{ $t('admin.billing.refundStatus.cancelled') }}</option>
+            </select>
+            <input
+              v-model="refundRequestsSearch"
+              class="input"
+              :placeholder="$t('admin.billing.refundSearchPlaceholder')"
+              @keyup.enter="refundRequestsPage = 1; loadRefundRequests()"
+            />
+            <button
+              class="btn btn-ghost"
+              :disabled="refundRequestsLoading"
+              @click="refundRequestsPage = 1; loadRefundRequests()"
+            >
+              {{ $t('admin.billing.refreshRefunds') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <SkeletonLoader v-if="refundRequestsLoading" :count="5" />
+
+      <div v-else-if="refundRequests.length > 0" class="card overflow-hidden">
+        <div class="flex items-center justify-between gap-4 border-b border-themed px-5 py-4">
+          <div>
+            <div class="text-sm font-medium text-themed">{{ $t('admin.billing.refundWorkbenchTitle') }}</div>
+            <div class="mt-1 text-xs text-themed-muted">{{ $t('admin.billing.totalCount', { count: refundRequestsTotal }) }}</div>
+          </div>
+          <div class="hidden rounded-xl bg-themed-secondary px-3 py-2 text-xs text-themed-muted md:block">
+            {{ refundRequestsFilter === 'all' ? $t('admin.billing.allStatus') : getRefundStatusLabel(refundRequestsFilter) }}
+          </div>
+        </div>
+
+        <div class="divide-y divide-themed md:hidden">
+          <div v-for="refund in refundRequests" :key="refund.id" class="space-y-3 px-5 py-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate font-mono text-xs text-themed">
+                  <span class="cursor-pointer hover:text-blue-500" @click="copyToClipboard(refund.orderNo)">{{ refund.orderNo }}</span>
+                </div>
+                <div class="mt-1 text-sm text-themed">{{ refund.user?.username || '-' }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ formatDate(refund.createdAt) }}</div>
+              </div>
+              <span :class="['badge', getRefundStatusBadge(refund.status)]">{{ getRefundStatusLabel(refund.status) }}</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-xs uppercase tracking-wide text-themed-muted">{{ $t('admin.billing.originalRefundAmount') }}</div>
+                <div class="mt-1 text-themed">{{ formatMoney(refund.amount) }}</div>
+              </div>
+              <div>
+                <div class="text-xs uppercase tracking-wide text-themed-muted">{{ $t('admin.billing.provider') }}</div>
+                <div class="mt-1 text-themed">{{ getRefundProviderText(refund) }}</div>
+              </div>
+            </div>
+
+            <div class="space-y-1 text-xs text-themed-muted">
+              <div>{{ $t('admin.billing.reason') }}: {{ refund.reason }}</div>
+              <div>{{ $t('admin.billing.providerResult') }}: {{ getRefundProviderResult(refund) }}</div>
+              <div v-if="refund.providerRefundId" class="truncate font-mono" :title="refund.providerRefundId">
+                {{ $t('admin.billing.providerRefundId') }} {{ refund.providerRefundId }}
+              </div>
+            </div>
+
+            <div class="flex justify-end">
+              <button
+                v-if="refund.status === 'pending' || refund.status === 'processing' || refund.status === 'failed'"
+                class="btn btn-sm btn-ghost text-blue-500"
+                :disabled="retryingRefundId === refund.id"
+                @click="retryRechargeRefund(refund)"
+              >
+                {{ retryingRefundId === refund.id ? $t('common.syncing') : $t('admin.billing.retryRefund') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="hidden overflow-x-auto md:block">
+          <table class="w-full text-sm">
+            <thead class="bg-themed-secondary/80">
+              <tr>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.refundId') }}</th>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.rechargeOrderNo') }}</th>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.user') }}</th>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.originalRefundAmount') }}</th>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.provider') }}</th>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.rechargeStatusLabel') }}</th>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.providerResult') }}</th>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.time') }}</th>
+                <th class="text-left p-3 whitespace-nowrap">{{ $t('common.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="refund in refundRequests" :key="refund.id" class="border-t border-themed transition-colors hover:bg-themed-secondary/40">
+                <td class="p-3 font-mono text-xs whitespace-nowrap">#{{ refund.id }}</td>
+                <td class="p-3 font-mono text-xs whitespace-nowrap">
+                  <span class="cursor-pointer hover:text-blue-500" @click="copyToClipboard(refund.orderNo)">{{ refund.orderNo }}</span>
+                </td>
+                <td class="p-3 whitespace-nowrap">{{ refund.user?.username || '-' }}</td>
+                <td class="p-3 whitespace-nowrap">{{ formatMoney(refund.amount) }}</td>
+                <td class="p-3 whitespace-nowrap">{{ getRefundProviderText(refund) }}</td>
+                <td class="p-3 whitespace-nowrap">
+                  <span :class="['badge', getRefundStatusBadge(refund.status)]">{{ getRefundStatusLabel(refund.status) }}</span>
+                </td>
+                <td class="p-3 max-w-[280px] text-xs text-themed-muted">
+                  <div class="truncate" :title="getRefundProviderResult(refund)">{{ getRefundProviderResult(refund) }}</div>
+                  <div v-if="refund.providerRefundId" class="mt-1 truncate font-mono" :title="refund.providerRefundId">
+                    {{ $t('admin.billing.providerRefundId') }} {{ refund.providerRefundId }}
+                  </div>
+                  <div v-if="refund.failureReason" class="mt-1 truncate text-red-600 dark:text-red-400" :title="refund.failureReason">
+                    {{ refund.failureReason }}
+                  </div>
+                </td>
+                <td class="p-3 text-themed-muted whitespace-nowrap">
+                  <div>{{ formatDate(refund.createdAt) }}</div>
+                  <div v-if="refund.completedAt" class="mt-1 text-xs">{{ formatDate(refund.completedAt) }}</div>
+                </td>
+                <td class="p-3 whitespace-nowrap">
+                  <button
+                    v-if="refund.status === 'pending' || refund.status === 'processing' || refund.status === 'failed'"
+                    class="btn btn-sm btn-ghost text-blue-500"
+                    :disabled="retryingRefundId === refund.id"
+                    @click="retryRechargeRefund(refund)"
+                  >
+                    {{ retryingRefundId === refund.id ? $t('common.syncing') : $t('admin.billing.retryRefund') }}
+                  </button>
+                  <span v-else class="text-themed-muted">-</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div v-else class="card p-10 text-center">
+        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-rose-500/10 text-rose-600 dark:text-rose-300">
+          <BillingOverviewIcon name="ban" class="h-7 w-7" />
+        </div>
+        <div class="mt-4 text-base font-medium text-themed">{{ $t('admin.billing.noRefundRequests') }}</div>
+        <div class="mt-1 text-sm text-themed-muted">{{ $t('admin.billing.refundRequestsHint') }}</div>
+      </div>
+
+      <div v-if="refundRequests.length > 0" class="card mt-4 flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-center gap-2 text-sm text-themed-muted">
+          <span>{{ $t('admin.billing.perPage') }}</span>
+          <select
+            :value="refundRequestsPageSize"
+            class="input w-20 py-1"
+            @change="refundRequestsPageSize = Number(($event.target as HTMLSelectElement).value); refundRequestsPage = 1; loadRefundRequests()"
+          >
+            <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}</option>
+          </select>
+          <span>{{ $t('admin.billing.totalCount', { count: refundRequestsTotal }) }}</span>
+        </div>
+        <div v-if="refundRequestsTotalPages > 1" class="flex items-center gap-2">
+          <button
+            class="btn btn-sm btn-ghost"
+            :disabled="refundRequestsPage <= 1"
+            @click="refundRequestsPage--; loadRefundRequests()"
+          >
+            {{ $t('common.prevPage') }}
+          </button>
+          <span class="text-sm text-themed-muted">
+            {{ refundRequestsPage }} / {{ refundRequestsTotalPages }}
+          </span>
+          <button
+            class="btn btn-sm btn-ghost"
+            :disabled="refundRequestsPage >= refundRequestsTotalPages"
+            @click="refundRequestsPage++; loadRefundRequests()"
           >
             {{ $t('common.nextPage') }}
           </button>
@@ -2364,6 +2712,77 @@ function copyToClipboard(text: string) {
     <div v-show="activeTab === 'affConversions'">
       <AffReviewView v-if="hasVisitedAffConversions" embedded />
     </div>
+
+    <!-- 原路退款弹窗 -->
+    <Teleport to="body">
+      <div v-if="showOriginalRefundModal" class="modal-overlay" @click.self="showOriginalRefundModal = false">
+        <div class="modal-content max-w-md">
+          <div class="modal-header">
+            <h3 class="modal-title">{{ $t('admin.billing.originalRefundTitle') }}</h3>
+            <button class="btn btn-ghost btn-sm" :disabled="originalRefundLoading" @click="showOriginalRefundModal = false">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="modal-body space-y-4">
+            <div class="rounded-lg border border-themed bg-themed-secondary/60 p-3 text-sm">
+              <div class="flex justify-between gap-3">
+                <span class="text-themed-muted">{{ $t('admin.billing.rechargeOrderNo') }}</span>
+                <span class="font-mono text-xs text-themed">{{ originalRefundTarget?.orderNo }}</span>
+              </div>
+              <div class="mt-2 flex justify-between gap-3">
+                <span class="text-themed-muted">{{ $t('admin.billing.user') }}</span>
+                <span class="text-themed">{{ originalRefundTarget?.user?.username || '-' }}</span>
+              </div>
+              <div class="mt-2 flex justify-between gap-3">
+                <span class="text-themed-muted">{{ $t('admin.billing.provider') }}</span>
+                <span class="text-themed">{{ getPayChannelDisplay(originalRefundTarget || {}) }}</span>
+              </div>
+              <div class="mt-2 flex justify-between gap-3">
+                <span class="text-themed-muted">{{ $t('admin.billing.creditAmount') }}</span>
+                <span class="font-medium text-themed">{{ formatMoney(getRechargeRefundableAmount(originalRefundTarget || {})) }}</span>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+              {{ $t('admin.billing.originalRefundHint') }}
+            </div>
+
+            <div>
+              <label class="label">{{ $t('admin.billing.originalRefundAmount') }} *</label>
+              <input
+                v-model.number="originalRefundForm.amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                class="input w-full"
+              />
+            </div>
+
+            <div>
+              <label class="label">{{ $t('admin.billing.reason') }} *</label>
+              <textarea
+                v-model="originalRefundForm.reason"
+                class="input min-h-24 w-full"
+                maxlength="500"
+                :placeholder="$t('admin.billing.originalRefundReasonPlaceholder')"
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-ghost" :disabled="originalRefundLoading" @click="showOriginalRefundModal = false">
+              {{ $t('common.cancel') }}
+            </button>
+            <button class="btn btn-primary" :disabled="originalRefundLoading" @click="submitCreateOriginalRefund">
+              {{ originalRefundLoading ? $t('common.processing') : $t('admin.billing.confirmOriginalRefund') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- 操作弹窗 -->
     <Teleport to="body">

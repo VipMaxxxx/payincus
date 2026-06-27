@@ -57,7 +57,7 @@ COOKIE_SECURE=
 COOKIE_DOMAIN=
 ```
 
-Keep `COOKIE_DOMAIN` empty unless you intentionally design cross-domain refresh-cookie sharing.
+`COOKIE_DOMAIN` must stay empty so the customer portal and admin console subdomains do not share refresh cookies.
 
 ## Secrets
 

@@ -12,6 +12,9 @@ export interface RechargePaymentDetails {
     feeMode?: 'surcharge' | 'deduct'
     paymentMethod?: string | null
   }
+  manual?: {
+    instructions?: string | null
+  }
   heleket?: {
     invoiceCurrency?: string | null
     invoiceAmount?: number | null
@@ -29,6 +32,15 @@ export interface RechargePaymentDetails {
     merchantAmount?: string | null
     address?: string | null
     from?: string | null
+  }
+}
+
+export function buildManualRechargePaymentDetails(instructions: string): RechargePaymentDetails {
+  return {
+    kind: 'manual',
+    manual: {
+      instructions
+    }
   }
 }
 

@@ -30,11 +30,15 @@
 - 回滚到上一版 release。
 - 回滚后再更新回最新版。
 
-详细生产审计记录见仓库内：
+当前公开仓库的发布证据分为三类：
 
 ```text
-docs/production-audit.md
+HANDOFF.md
+docs-site/docs/deployment/production-checklist.md
+docs-site/docs/release/version-log.md
 ```
+
+`HANDOFF.md` 记录最近一次已证明的生产 OTA、当前本地待发布候选版本和剩余 live proof；生产验收页说明上线前后必须运行的命令；系统版本更新日志从 Git tag 和 commit 自动生成。旧的私有 `docs/production-audit.md` 不再作为当前公开仓库的文档入口。
 
 ## Git 更新日志
 

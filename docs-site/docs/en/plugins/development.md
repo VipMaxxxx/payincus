@@ -134,6 +134,19 @@ PUT /api/admin/plugins/:pluginId/config
 
 When an extension has `configSchema`, it can only save keys declared by the manifest. The server normalizes `number`, `checkbox`, `tags`, `email`, `color`, `file`, and `select` fields by type, and missing required fields return `INVALID_PLUGIN_CONFIG`. `type = file` fields show a controlled upload input in the admin settings page. The first version only allows PNG, JPEG, and WebP images, one file up to 2MB. Files are written to `PLUGIN_DATA_DIR/config-files`, and the config value can only store the platform-returned `/api/plugins/:pluginId/config-files/:key/:filename` URL. When the user portal reads that URL, the server verifies that the plugin is enabled, the manifest field is still `file`, and the current config value matches the file. `type = password` or `secret = true` fields are stored encrypted. Admin lists and the public config API do not echo the original value; saving an empty value keeps the existing secret unchanged. Every admin config save writes a `plugin.config_update` audit log. The log only records changed, created, updated, secret, and file key summaries. Config values are always redacted as `values=redacted`; token, password, secret, image URL, and other field values are never written into the log.
 
+## Capability Review
+
+When an extension is installed or updated, PayIncus extracts high-risk capabilities from the manifest and creates admin review records:
+
+- `capabilities.actions`: risk is classified from action scopes, idempotency, and declared behavior.
+- `serviceExtensions`: service lifecycle, upgrade, delivery, and service-panel extensions enter review.
+- `gatewayExtensions`: payment creation, verification, webhook, and `refund` hooks are treated as high risk.
+- `capabilities.storage`: scoped storage, private tables, or larger storage declarations enter review.
+
+Administrators handle these records in the Extension Center capability review page. Status values are `pending`, `approved`, `rejected`, and `revoked`; rejection and revocation require review notes. Before enabling an extension, the server checks the current version for `high` and `critical` capability records. Any unapproved record makes the enable request return `PLUGIN_CAPABILITY_REVIEW_REQUIRED`, and the extension does not enter runtime. Review actions write the `plugin.capability_review` admin audit log; blocked enable attempts write `plugin.capability_review.required`.
+
+Capability review does not authorize an extension to bypass PayIncus internal state machines. Even after approval, an extension can only execute through manifest allowlists, scopes, rate limits, idempotency keys, SSRF protection, audit logs, and the matching business entry point. Payments, balance, delivery, risk control, authentication, and permissions still use PayIncus internal final-state logic. Runtime-level fine-grained enforcement, batch audit export, and rollback playbooks will continue to be added for high-risk capabilities.
+
 ## Extension KV Storage
 
 Extensions can declare controlled KV storage for their own data. It is not a global database, and it cannot write PayIncus internal business tables. The current runtime supports the legacy user-level KV plus the first scoped KV version: `user`, `global`, and `service`.

@@ -91,7 +91,7 @@ export const rateLimitRules: RateLimitRule[] = [
         description: '重置密码 - 防止暴力破解验证码'
     },
 
-    // ========== 插件中心 (高风险后台操作) ==========
+    // ========== 扩展中心 (高风险后台操作) ==========
     {
         path: '/api/admin/plugins/upload',
         method: 'POST',

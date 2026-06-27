@@ -132,6 +132,19 @@ PUT /api/admin/plugins/:pluginId/config
 
 有 `configSchema` 的扩展只能保存 manifest 声明过的 key。服务端会按字段类型归一化 number、checkbox、tags、email、color、file 和 select，必填字段缺失会返回 `INVALID_PLUGIN_CONFIG`。`type = file` 的字段会在后台设置页提供受控上传入口；首版只允许 PNG、JPEG 和 WebP 图片，单文件不超过 2MB，文件写入 `PLUGIN_DATA_DIR/config-files`，配置值只能保存平台返回的 `/api/plugins/:pluginId/config-files/:key/:filename` URL。用户端读取该 URL 时会重新校验插件已启用、manifest 字段仍是 `file`，且当前配置值匹配该文件。`type = password` 或 `secret = true` 的字段会加密存储，后台列表和公共配置接口不会回显原值；保存时留空会保持已有密钥不变。每次后台保存扩展配置都会写入 `plugin.config_update` 审计日志，只记录 changed、created、updated、secret 和 file 字段 key 摘要，配置值固定脱敏为 `values=redacted`，不会把 token、password、secret、图片 URL 或其他字段值写入日志。
 
+## Capability 审核
+
+安装或更新扩展时，PayIncus 会从 manifest 中抽取高风险 capability，生成后台审核记录：
+
+- `capabilities.actions`：根据 action scopes、幂等策略和声明用途判定风险。
+- `serviceExtensions`：涉及服务生命周期、升级、交付或后台服务面板的扩展会进入审核。
+- `gatewayExtensions`：支付建单、主动验单、回调和 `refund` hook 默认按高风险处理。
+- `capabilities.storage`：声明 scoped storage、私有表或较大额度存储时会进入审核。
+
+管理员在后台扩展中心的“能力审核”页处理这些记录。状态包括 `pending`、`approved`、`rejected` 和 `revoked`；拒绝或撤销必须填写审核说明。启用扩展前，服务端会检查当前版本的 `high` / `critical` capability，任何未批准记录都会让启用请求返回 `PLUGIN_CAPABILITY_REVIEW_REQUIRED`，不会进入扩展运行态。审核动作会写入后台审计日志 `plugin.capability_review`，启用被拦截会写入 `plugin.capability_review.required`。
+
+Capability 审核不是直接授权扩展绕过 PayIncus 内部状态机。即使审核通过，扩展仍只能通过 manifest 白名单、scope、限流、幂等键、SSRF 防护、审计日志和对应业务入口执行。支付、余额、实例交付、风控、认证和权限仍由 PayIncus 内部链路负责最终状态变更。运行期更细粒度 enforcement、批量审计导出和回滚 playbook 会继续按高风险能力补齐。
+
 ## 扩展 KV 存储
 
 扩展可以声明受控 KV 存储，用于保存扩展自己的数据。它不是全局数据库，也不能写 PayIncus 内部业务表。当前支持旧版用户级 KV，以及 scoped KV 首版：`user`、`global` 和 `service`。

@@ -192,6 +192,18 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.plugins', title: '扩展中心' }
   },
   {
+    path: '/admin/themes',
+    name: 'admin-themes',
+    redirect: { path: '/admin/plugins', query: { tab: 'themes' } },
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.themes', title: '主题中心' }
+  },
+  {
+    path: '/admin/integrations',
+    name: 'admin-integrations',
+    component: () => import('@/views/admin/IntegrationsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.integrations', title: '集成中心' }
+  },
+  {
     path: '/admin/plugins/:pluginId/settings',
     name: 'admin-plugin-settings',
     component: () => import('@/views/admin/PluginSettingsView.vue'),

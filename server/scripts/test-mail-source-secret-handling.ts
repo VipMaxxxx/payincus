@@ -2,11 +2,14 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { MASKED_MAIL_SOURCE_API_KEY_VALUE, mergeMailSourceApiKeyForUpdate, sanitizeMailSourceForResponse } from '../src/db/mail.js'
-import { decryptSensitiveData, encryptSensitiveData, isEncrypted } from '../src/lib/security.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:5432/payincus_test'
+
+const { MASKED_MAIL_SOURCE_API_KEY_VALUE, mergeMailSourceApiKeyForUpdate, sanitizeMailSourceForResponse } = await import('../src/db/mail.js')
+const { decryptSensitiveData, encryptSensitiveData, isEncrypted } = await import('../src/lib/security.js')
 
 const source = {
   id: 1,

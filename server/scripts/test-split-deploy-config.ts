@@ -714,6 +714,7 @@ const allowedClientNetworkPrimitiveLines = new Map<string, string[]>([
   ['client/src/api/index.ts', ["fetch(buildApiUrl('/auth/refresh'), {"]],
   ['client/src/api/admin.ts', ["fetch(buildApiUrl('/auth/refresh'), {"]],
   ['client/src/components/layout/SideNav.vue', ["fetch(buildApiUrl('/admin/plugins'), {"]],
+  ['client/src/components/theme/ThemeTemplateSlot.vue', ['fetch(resolveThemeTemplateUrl(url), {']],
   ['client/src/components/TermsOfServiceModal.vue', ['fetch(`/tos/${lang}.md`)']],
   ['client/src/stores/theme.ts', ["fetch(buildApiUrl('/themes/active'), {"]],
   ['client/src/components/instance/TerminalModal.vue', ['new WebSocket(wsUrl)']],

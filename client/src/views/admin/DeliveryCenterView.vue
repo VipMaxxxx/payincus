@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
-import type { DeliveryAssuranceCaseStatus, DeliveryOverview, DeliveryTaskContext, InstanceTaskStatus } from '@/types/api'
+import type { DeliveryAssuranceCaseStatus, DeliveryCaseContext, DeliveryOverview, DeliveryTaskContext, InstanceTaskStatus } from '@/types/api'
 
 const toast = useToast()
 
@@ -11,15 +11,24 @@ const loading = ref(true)
 const refreshing = ref(false)
 const overview = ref<DeliveryOverview | null>(null)
 const tasks = ref<DeliveryTaskContext[]>([])
+const repairCases = ref<DeliveryCaseContext[]>([])
 const selectedTaskId = ref<number | null>(null)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const totalPages = ref(1)
+const repairPage = ref(1)
+const repairPageSize = ref(10)
+const repairTotal = ref(0)
+const repairTotalPages = ref(1)
 const statusFilter = ref<'all' | InstanceTaskStatus>('all')
+const repairStatusFilter = ref<'all' | DeliveryAssuranceCaseStatus>('all')
 const search = ref('')
+const repairSearch = ref('')
 const actionLoading = ref<string | null>(null)
+const caseActionLoading = ref<string | null>(null)
 const actionNote = ref('')
+const caseActionNote = ref('')
 const notifyMode = ref<'delayed' | 'recovered' | 'contact_support'>('contact_support')
 
 const statusOptions: Array<{ value: 'all' | InstanceTaskStatus; label: string }> = [
@@ -28,6 +37,15 @@ const statusOptions: Array<{ value: 'all' | InstanceTaskStatus; label: string }>
   { value: 'PROCESSING', label: '处理中' },
   { value: 'FAILED', label: '失败' },
   { value: 'COMPLETED', label: '成功' }
+]
+
+const caseStatusOptions: Array<{ value: 'all' | DeliveryAssuranceCaseStatus; label: string }> = [
+  { value: 'all', label: '全部状态' },
+  { value: 'pending_manual', label: '待人工处理' },
+  { value: 'auto_retryable', label: '可自动重试' },
+  { value: 'in_progress', label: '处理中' },
+  { value: 'recovered', label: '已恢复' },
+  { value: 'closed', label: '已关闭' }
 ]
 
 const summary = computed(() => overview.value?.summary)
@@ -107,6 +125,18 @@ function taskTypeLabel(type: string): string {
     clone: '克隆',
     recreate: '重建',
     change_host: '改节点'
+  }
+  return labels[type] || type
+}
+
+function issueTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    task_failed: '任务失败',
+    task_stale: '任务卡住',
+    host_offline: '节点离线',
+    agent_offline: 'Agent 离线',
+    resource_pressure: '资源压力',
+    plan_upgrade_sync_failed: '升级同步失败'
   }
   return labels[type] || type
 }
@@ -199,6 +229,38 @@ async function runCaseAction(action: 'takeover' | 'retry' | 'notify' | 'recovere
   }
 }
 
+function updateRepairCase(updatedCase: NonNullable<DeliveryCaseContext['assuranceCase']>) {
+  repairCases.value.forEach(item => {
+    if (item.assuranceCase.id === updatedCase.id) {
+      item.assuranceCase = updatedCase
+    }
+  })
+}
+
+async function runRepairCaseAction(item: DeliveryCaseContext, action: 'retry-sync' | 'recovered' | 'closed') {
+  if (caseActionLoading.value) return
+  const actionKey = `${action}:${item.id}`
+  caseActionLoading.value = actionKey
+  try {
+    if (action === 'retry-sync') {
+      const res = await api.delivery.retrySyncCase(item.id, caseActionNote.value || null)
+      updateRepairCase(res.case)
+      toast.success('已重试同步 Incus 资源配置')
+    } else {
+      const res = await api.delivery.resolveCase(item.id, action, caseActionNote.value || null)
+      updateRepairCase(res.case)
+      toast.success(action === 'recovered' ? '已标记恢复' : '已关闭修复任务')
+    }
+    caseActionNote.value = ''
+    await Promise.all([loadOverview(), loadRepairCases()])
+  } catch (err: any) {
+    toast.error('升级同步修复操作失败：' + (err?.message || String(err)))
+    await loadRepairCases()
+  } finally {
+    caseActionLoading.value = null
+  }
+}
+
 function toneClass(tone: string): string {
   if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
   if (tone === 'danger') return 'border-red-200 bg-red-50 text-red-700'
@@ -229,11 +291,23 @@ async function loadTasks() {
   }
 }
 
+async function loadRepairCases() {
+  const response = await api.delivery.cases({
+    page: repairPage.value,
+    pageSize: repairPageSize.value,
+    status: repairStatusFilter.value === 'all' ? undefined : repairStatusFilter.value,
+    search: repairSearch.value.trim() || undefined
+  })
+  repairCases.value = response.cases
+  repairTotal.value = response.total
+  repairTotalPages.value = response.totalPages || 1
+}
+
 async function refreshAll(silent = false) {
   if (silent) refreshing.value = true
   else loading.value = true
   try {
-    await Promise.all([loadOverview(), loadTasks()])
+    await Promise.all([loadOverview(), loadTasks(), loadRepairCases()])
   } catch (err: any) {
     toast.error('加载交付保障中心失败：' + (err?.message || String(err)))
   } finally {
@@ -253,8 +327,24 @@ function resetFilters() {
   applyFilters()
 }
 
+function applyRepairFilters() {
+  repairPage.value = 1
+  void refreshAll()
+}
+
+function resetRepairFilters() {
+  repairStatusFilter.value = 'all'
+  repairSearch.value = ''
+  applyRepairFilters()
+}
+
 function goPage(nextPage: number) {
   page.value = Math.min(Math.max(nextPage, 1), totalPages.value)
+  void refreshAll()
+}
+
+function goRepairPage(nextPage: number) {
+  repairPage.value = Math.min(Math.max(nextPage, 1), repairTotalPages.value)
   void refreshAll()
 }
 
@@ -320,6 +410,132 @@ onMounted(() => {
           <span class="rounded-md border px-2 py-1 text-sm font-semibold" :class="toneClass(item.tone)">
             {{ item.value }}
           </span>
+        </div>
+      </section>
+
+      <section class="rounded-lg border border-themed bg-themed-secondary">
+        <div class="border-b border-themed p-4">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div class="min-w-[220px]">
+              <h2 class="text-lg font-semibold text-themed">升级同步修复</h2>
+              <p class="mt-1 text-sm text-themed-muted">处理方案升级已扣费但 Incus 资源或带宽未同步的实例。</p>
+            </div>
+            <div class="min-w-[180px] lg:ml-auto">
+              <label class="mb-1 block text-sm text-themed-muted">状态</label>
+              <select v-model="repairStatusFilter" class="input w-full" @change="applyRepairFilters">
+                <option v-for="option in caseStatusOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+            <div class="min-w-[240px] flex-1">
+              <label class="mb-1 block text-sm text-themed-muted">搜索</label>
+              <input
+                v-model.trim="repairSearch"
+                class="input w-full"
+                placeholder="Case ID、实例 ID 或标题"
+                @keyup.enter="applyRepairFilters"
+              />
+            </div>
+            <button class="btn-primary" @click="applyRepairFilters">搜索</button>
+            <button class="btn-secondary" @click="resetRepairFilters">重置</button>
+          </div>
+          <textarea
+            v-model="caseActionNote"
+            class="input mt-3 min-h-[64px] w-full resize-y"
+            maxlength="500"
+            placeholder="可选：填写本次同步修复或人工结案备注"
+          />
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-left text-sm">
+            <thead class="border-b border-themed text-xs uppercase text-themed-muted">
+              <tr>
+                <th class="px-4 py-3 font-medium">Case</th>
+                <th class="px-4 py-3 font-medium">实例</th>
+                <th class="px-4 py-3 font-medium">目标资源</th>
+                <th class="px-4 py-3 font-medium">最近扣费</th>
+                <th class="px-4 py-3 font-medium">状态</th>
+                <th class="px-4 py-3 font-medium">错误</th>
+                <th class="px-4 py-3 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in repairCases" :key="item.id" class="border-b border-themed last:border-b-0">
+                <td class="px-4 py-3">
+                  <div class="font-medium text-themed">#{{ item.id }}</div>
+                  <div class="text-xs text-themed-muted">{{ issueTypeLabel(item.assuranceCase.issueType) }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="font-medium text-themed">{{ item.instance?.name || `#${item.instanceId}` }}</div>
+                  <div class="text-xs text-themed-muted">{{ item.user?.username || `用户 #${item.userId}` }} · {{ item.host?.name || `节点 #${item.hostId}` }}</div>
+                </td>
+                <td class="px-4 py-3 text-xs text-themed-muted">
+                  <div>CPU {{ item.instance?.cpu ?? '-' }}%</div>
+                  <div>内存 {{ item.instance?.memory ?? '-' }} MB</div>
+                  <div>磁盘 {{ item.instance?.disk ?? '-' }} MB</div>
+                  <div>带宽 {{ item.instance?.limitsIngress || '不限速' }} / {{ item.instance?.limitsEgress || '不限速' }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-themed">{{ formatAmount(item.billing?.amount) }}</div>
+                  <div class="text-xs text-themed-muted">{{ formatDate(item.billing?.createdAt) }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <span class="rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(item.assuranceCase.status)">
+                    {{ caseStatusLabel(item.assuranceCase.status) }}
+                  </span>
+                </td>
+                <td class="max-w-[260px] px-4 py-3">
+                  <div class="truncate text-xs text-themed-muted" :title="item.assuranceCase.lastError || ''">
+                    {{ item.assuranceCase.lastError || item.assuranceCase.title }}
+                  </div>
+                  <div v-if="item.assuranceCase.handledByUsername" class="mt-1 text-xs text-themed-muted">
+                    {{ item.assuranceCase.handledByUsername }} · {{ formatDate(item.assuranceCase.handledAt) }}
+                  </div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      class="btn-primary btn-sm"
+                      :disabled="!!caseActionLoading || item.assuranceCase.status === 'recovered' || item.assuranceCase.status === 'closed'"
+                      @click="runRepairCaseAction(item, 'retry-sync')"
+                    >
+                      {{ caseActionLoading === `retry-sync:${item.id}` ? '同步中...' : '重试同步' }}
+                    </button>
+                    <button
+                      class="btn-secondary btn-sm"
+                      :disabled="!!caseActionLoading || item.assuranceCase.status === 'recovered'"
+                      @click="runRepairCaseAction(item, 'recovered')"
+                    >
+                      标记恢复
+                    </button>
+                    <button
+                      class="btn-secondary btn-sm"
+                      :disabled="!!caseActionLoading || item.assuranceCase.status === 'closed'"
+                      @click="runRepairCaseAction(item, 'closed')"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="repairCases.length === 0">
+                <td colspan="7" class="px-4 py-10 text-center text-sm text-themed-muted">
+                  暂无升级同步修复任务
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between border-t border-themed p-4 text-sm text-themed-muted">
+          <span>共 {{ repairTotal }} 条</span>
+          <div class="flex items-center gap-2">
+            <button class="btn-secondary" :disabled="repairPage <= 1" @click="goRepairPage(repairPage - 1)">上一页</button>
+            <span>{{ repairPage }} / {{ repairTotalPages }}</span>
+            <button class="btn-secondary" :disabled="repairPage >= repairTotalPages" @click="goRepairPage(repairPage + 1)">下一页</button>
+          </div>
         </div>
       </section>
 

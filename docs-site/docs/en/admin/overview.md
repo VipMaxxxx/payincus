@@ -23,14 +23,14 @@ https://admin.example.com
 | Users | `/admin/users` | Accounts, roles, status, balance and customer registration links. |
 | Instances | `/admin/instances` | Global instance list and lifecycle operations. |
 | Admin create instance | `/admin/instances/create` | Manual delivery or correction workflows. |
-| Delivery Assurance | `/admin/delivery` | Instance delivery tasks, failure details, notification state, Agent/host/billing context and post-payment delivery troubleshooting actions. |
+| Delivery Assurance | `/admin/delivery` | Instance delivery tasks, upgrade sync repair cases, failure details, notification state, Agent/host/billing context and post-payment delivery troubleshooting actions. |
 | SLA & Alerts | `/admin/sla-alerts` | Scan and handle host, Agent, delivery, payment, notification, mail and OTA incidents. |
 | User Lifecycle | `/admin/user-lifecycle` | User lifecycle overview, tags, segments, commercial summary, targeted redeem codes, reminders and win-back actions. |
 | Tickets & Customer Success | `/admin/tickets` | Handle support tickets with user context, SLA state, linked objects, internal notes, handling timeline and safe support shortcuts. |
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Capacity & Cost | `/admin/capacity-cost` | Host sellable inventory, cost profiles, plan margin estimates, capacity alerts and 7/30-day trends. |
-| Resource Risk | `/admin/resource-risk` | Instance risk scores, bandwidth/CPU/packet anomalies, QoS policy, manual suspension and source-scoped order restriction handling. |
+| Resource Risk | `/admin/resource-risk` | Instance risk scores, bandwidth/CPU/packet anomalies, QoS policy, manual suspension, reason templates, source-scoped order restriction handling, evidence details, 24-hour/7-day trends, recent samples, event timelines, handling audit, and JSON export. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
 | Gift Cards | `/admin/gift-cards` | Create single or batch balance gift cards, review stats and redacted lists, and enable, disable or delete unused cards. |
 | Logs and Audit | `/admin/logs` | Audit logs and system operation records with risk levels, approval or verification hints, and redacted CSV export. |
@@ -40,7 +40,8 @@ https://admin.example.com
 - Billing center: `/admin/billing`.
 - Order center: `/admin/orders` aggregates recharge orders and instance billing records, with filters by type, status, user ID, order number, provider transaction ID and date range, order details, recharge exception handling, dispute status, refund or adjustment approval requests and approval execution.
 - Financial reconciliation: `/admin/billing?tab=reconciliation` generates one business-day reconciliation run, compares recharge, balance ledger, instance billing, adjustment approvals and hosting income, tracks differences and exports redacted CSV files.
-- Payment providers: `/admin/billing?tab=paymentProviders`.
+- Original-route refunds: `/admin/billing?tab=refundRequests` lists plugin payment gateway original-route refund requests, supports status and order/user/provider/refund-id search, and retries or syncs pending, processing or failed requests.
+- Payment providers: `/admin/billing?tab=paymentProviders`, including online providers and manual recharge instructions.
 - Affiliate review: `/admin/billing?tab=affConversions`.
 - Entertainment management: `/admin/entertainment`.
 - Gift cards: `/admin/gift-cards`. Production deployments must configure the `PAYINCUS_GIFT_CARD_ADMIN_IDS` administrator allowlist.
@@ -81,6 +82,7 @@ The operations overview is returned only by the admin statistics API and is not 
 - Instance, event and order restriction tables show up to 10 rows per page, with pagination for older records.
 - Manual suspension, unsuspension, order restriction and release all require an admin reason and write audit records.
 - Releasing order restrictions is source-scoped. Only an active restriction created by the current instance shows the release action; if another instance under the same account caused the active restriction, the row shows an account-restricted state instead.
+- Instance evidence details summarize the current evidence snapshot, 24-hour/7-day trends, recent resource samples, risk event timeline, handling audit, and linked order restrictions, with JSON export for false-positive review and sustained-abuse investigation.
 - Resource risk data is not exposed to user APIs. User-facing responses do not include backend score policy, manual notes or restriction records belonging to other accounts.
 
 ## Order and Payment Operations
@@ -110,6 +112,7 @@ The operations overview is returned only by the admin statistics API and is not 
 `/admin/delivery` handles paid resources that were not delivered, are stuck, or failed during delivery:
 
 - Delivery tasks are shown as pending, processing, failed or completed. Failed tasks and tasks processing for more than 30 minutes are turned into assurance cases.
+- If a plan upgrade has already updated billing/database state but Incus CPU, memory, disk or bandwidth sync fails, PayIncus creates an upgrade sync repair case that administrators can retry or close manually.
 - Assurance statuses are pending manual handling, auto retryable, in progress, recovered and closed.
 - Only idempotent start, stop and restart tasks can be requeued automatically. Rebuild, recreate, clone and host-change tasks require manual takeover.
 - Task details include user, instance, host, Agent heartbeat, host resource usage, latest billing record and a redacted failure reason.
@@ -181,7 +184,15 @@ The operations overview is returned only by the admin statistics API and is not 
 
 ## Extension Center
 
-`/admin/plugins` splits extension management into Installed, Extension Market and Install Tasks pages. Administrators can upload extension packages, install from the online governed market index, enable or disable extensions, open standalone extension settings pages from the left sidebar and inspect paginated install task logs.
+`/admin/plugins` splits extension management into Installed, Extension Market, Capability Review, and Install Tasks pages. Administrators can upload extension packages, install from the online governed market index, review high-risk capabilities, enable or disable extensions, open standalone extension settings pages from the left sidebar, and inspect paginated install task logs. Unapproved high-risk capability records block extension enablement.
+
+## Theme Center
+
+`/admin/themes` is the dedicated theme management entry. It reuses the Extension Center theme page for uploads, online theme marketplace installs, theme submission review, scanning, publishing, previews, enablement, configuration, and default rollback.
+
+## Integration Center
+
+`/admin/integrations` summarizes SMTP, Lsky, Telegram, recharge payment providers, global notification channels, remote storage, Agent/Incus nodes, the OTA update source, extension marketplace sources, and theme marketplace sources. It also provides one-click health checks, persists recent warning/error records, shows 7-day success rates, then links operators back to the existing configuration pages for changes.
 
 ## OTA
 

@@ -13,6 +13,7 @@ import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { sanitizeTokensInString } from '../lib/log-sanitizer.js'
 import { sendNotification } from '../lib/notifier.js'
+import { retryPlanUpgradeSyncCase } from '../services/plan-upgrade-sync-repair.js'
 
 const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
 const TASK_STATUSES = new Set<InstanceTaskStatus>(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'])
@@ -269,6 +270,40 @@ function getTaskWhere(query: DeliveryQuery): Prisma.InstanceTaskWhereInput {
   return where
 }
 
+function getRepairCaseWhere(query: DeliveryQuery): Prisma.DeliveryAssuranceCaseWhereInput {
+  const search = normalizeSearch(query.search)
+  const status = CASE_STATUSES.has(query.status as DeliveryAssuranceCaseStatus)
+    ? query.status as DeliveryAssuranceCaseStatus
+    : undefined
+  const where: Prisma.DeliveryAssuranceCaseWhereInput = {
+    issueType: 'plan_upgrade_sync_failed'
+  }
+
+  if (status) {
+    where.status = status
+  }
+
+  if (search) {
+    const numericId = POSITIVE_ROUTE_ID_PATTERN.test(search) ? Number(search) : null
+    where.OR = [
+      ...(numericId && Number.isSafeInteger(numericId)
+        ? [
+            { id: numericId },
+            { instanceId: numericId }
+          ]
+        : []),
+      {
+        title: {
+          contains: search,
+          mode: 'insensitive'
+        }
+      }
+    ]
+  }
+
+  return where
+}
+
 async function attachTaskContext(tasks: Array<{
   id: number
   instanceId: number
@@ -379,6 +414,101 @@ async function attachTaskContext(tasks: Array<{
           amount: Number(billingMap.get(task.instanceId)!.amount),
           createdAt: billingMap.get(task.instanceId)!.createdAt,
           balanceLogId: billingMap.get(task.instanceId)!.balanceLogId
+        }
+      : null
+  }))
+}
+
+async function attachCaseContext(cases: Array<{
+  id: number
+  taskId: number | null
+  instanceId: number
+  hostId: number
+  userId: number
+  status: DeliveryAssuranceCaseStatus
+  issueType: DeliveryAssuranceIssueType
+  severity: string
+  retryable: boolean
+  retryTaskId: number | null
+  title: string
+  lastError: string | null
+  detail: Prisma.JsonValue | null
+  note: string | null
+  handledByUserId: number | null
+  handledByUsername: string | null
+  handledAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+}>) {
+  const userIds = [...new Set(cases.map(item => item.userId))]
+  const hostIds = [...new Set(cases.map(item => item.hostId))]
+  const instanceIds = [...new Set(cases.map(item => item.instanceId))]
+
+  const [users, hosts, instances, billingRecords] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, email: true, status: true }
+    }),
+    prisma.host.findMany({
+      where: { id: { in: hostIds } },
+      select: { id: true, name: true, status: true, location: true, countryCode: true }
+    }),
+    prisma.instance.findMany({
+      where: { id: { in: instanceIds } },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        incusId: true,
+        image: true,
+        cpu: true,
+        memory: true,
+        disk: true,
+        limitsIngress: true,
+        limitsEgress: true
+      }
+    }),
+    prisma.instanceBillingRecord.findMany({
+      where: {
+        instanceId: { in: instanceIds },
+        type: 'upgrade'
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        instanceId: true,
+        type: true,
+        amount: true,
+        createdAt: true,
+        balanceLogId: true
+      }
+    })
+  ])
+
+  const userMap = new Map(users.map(user => [user.id, user]))
+  const hostMap = new Map(hosts.map(host => [host.id, host]))
+  const instanceMap = new Map(instances.map(instance => [instance.id, instance]))
+  const billingMap = new Map<number, typeof billingRecords[number]>()
+  for (const record of billingRecords) {
+    if (!billingMap.has(record.instanceId)) billingMap.set(record.instanceId, record)
+  }
+
+  return cases.map(deliveryCase => ({
+    id: deliveryCase.id,
+    instanceId: deliveryCase.instanceId,
+    hostId: deliveryCase.hostId,
+    userId: deliveryCase.userId,
+    instance: instanceMap.get(deliveryCase.instanceId) || null,
+    user: userMap.get(deliveryCase.userId) || null,
+    host: hostMap.get(deliveryCase.hostId) || null,
+    assuranceCase: serializeCase(deliveryCase),
+    billing: billingMap.get(deliveryCase.instanceId)
+      ? {
+          id: billingMap.get(deliveryCase.instanceId)!.id,
+          type: billingMap.get(deliveryCase.instanceId)!.type,
+          amount: Number(billingMap.get(deliveryCase.instanceId)!.amount),
+          createdAt: billingMap.get(deliveryCase.instanceId)!.createdAt,
+          balanceLogId: billingMap.get(deliveryCase.instanceId)!.balanceLogId
         }
       : null
   }))
@@ -553,6 +683,35 @@ export default async function adminDeliveryRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.get<{ Querystring: DeliveryQuery }>('/cases', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request: FastifyRequest<{ Querystring: DeliveryQuery }>, reply: FastifyReply) => {
+    const page = parsePositiveInteger(request.query.page, 1)
+    const pageSize = normalizePageSize(request.query.pageSize)
+    if (request.query.status && !CASE_STATUSES.has(request.query.status as DeliveryAssuranceCaseStatus)) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const where = getRepairCaseWhere(request.query)
+    const [cases, total] = await Promise.all([
+      prisma.deliveryAssuranceCase.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      }),
+      prisma.deliveryAssuranceCase.count({ where })
+    ])
+
+    return {
+      cases: await attachCaseContext(cases),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize)
+    }
+  })
+
   fastify.post<{ Params: RouteIdParams; Body: CaseActionBody }>('/tasks/:id/takeover', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request, reply) => {
@@ -706,6 +865,68 @@ export default async function adminDeliveryRoutes(fastify: FastifyInstance) {
       })
       await addCaseAction(updated.id, status === 'recovered' ? 'mark_recovered' : 'close', actor, note, { taskId, status })
       await createLog(actor.id, 'delivery', status === 'recovered' ? 'delivery.mark_recovered' : 'delivery.close', `更新交付问题 #${updated.id} 为 ${status}`, 'success')
+      return { case: serializeCase(updated) }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('备注')) return reply.code(400).send({ error: err.message })
+      request.log.error(err, '更新交付问题状态失败')
+      return reply.code(500).send({ error: '更新交付问题状态失败' })
+    }
+  })
+
+  fastify.post<{ Params: RouteIdParams; Body: CaseActionBody }>('/cases/:id/retry-sync', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request, reply) => {
+    const caseId = parsePositiveInteger(request.params.id, 0)
+    if (!caseId) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+
+    try {
+      const note = normalizeNote(request.body?.note)
+      const updated = await retryPlanUpgradeSyncCase(caseId, request.user!, note)
+      return { case: serializeCase(updated) }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('备注')) return reply.code(400).send({ error: err.message })
+      const deliveryCase = (err as Error & { deliveryCase?: unknown })?.deliveryCase
+      request.log.error(err, '重试实例升级资源同步失败')
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : '重试实例升级资源同步失败',
+        case: serializeCase(deliveryCase)
+      })
+    }
+  })
+
+  fastify.post<{ Params: RouteIdParams; Body: CaseActionBody }>('/cases/:id/resolve', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request, reply) => {
+    const caseId = parsePositiveInteger(request.params.id, 0)
+    if (!caseId) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+
+    try {
+      const status = CASE_STATUSES.has(request.body?.status as DeliveryAssuranceCaseStatus)
+        ? request.body!.status as DeliveryAssuranceCaseStatus
+        : null
+      if (status !== 'recovered' && status !== 'closed') {
+        return reply.code(400).send({ error: '结案状态只能是 recovered 或 closed' })
+      }
+      const deliveryCase = await prisma.deliveryAssuranceCase.findUnique({ where: { id: caseId } })
+      if (!deliveryCase) return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+      if (deliveryCase.issueType !== 'plan_upgrade_sync_failed') {
+        return reply.code(409).send({ error: '该交付保障问题不支持 case 级结案' })
+      }
+      const note = normalizeNote(request.body?.note)
+      const actor = request.user!
+      const updated = await prisma.deliveryAssuranceCase.update({
+        where: { id: caseId },
+        data: {
+          status,
+          retryable: status === 'recovered' ? false : deliveryCase.retryable,
+          note,
+          handledByUserId: actor.id,
+          handledByUsername: actor.username,
+          handledAt: new Date()
+        }
+      })
+      await addCaseAction(updated.id, status === 'recovered' ? 'mark_recovered' : 'close', actor, note, { caseId, status })
+      await createLog(actor.id, 'delivery', status === 'recovered' ? 'delivery.case_mark_recovered' : 'delivery.case_close', `更新交付问题 #${updated.id} 为 ${status}`, 'success')
       return { case: serializeCase(updated) }
     } catch (err) {
       if (err instanceof Error && err.message.includes('备注')) return reply.code(400).send({ error: err.message })

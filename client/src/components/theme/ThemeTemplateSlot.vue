@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useThemeStore } from '@/stores/theme'
+import { buildApiUrl } from '@/utils/api-url'
 
 const props = defineProps<{
   slotName: string
@@ -16,6 +17,11 @@ let controller: AbortController | null = null
 const templateUrl = computed(() => themeStore.getActiveThemeTemplateUrl(props.slotName))
 const shouldRender = computed(() => !!templateUrl.value && !!html.value && !failed.value)
 
+function resolveThemeTemplateUrl(url: string): string {
+  if (/^https?:\/\//i.test(url) || url.startsWith('/api/')) return url
+  return buildApiUrl(url)
+}
+
 async function loadTemplate(): Promise<void> {
   const url = templateUrl.value
   html.value = ''
@@ -26,7 +32,7 @@ async function loadTemplate(): Promise<void> {
   controller = new AbortController()
   loading.value = true
   try {
-    const response = await fetch(url, {
+    const response = await fetch(resolveThemeTemplateUrl(url), {
       headers: { Accept: 'text/html' },
       credentials: 'include',
       signal: controller.signal

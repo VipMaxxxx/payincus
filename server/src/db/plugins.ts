@@ -3,6 +3,7 @@ import { join } from 'path'
 import { Prisma } from '@prisma/client'
 import type {
   Plugin,
+  PluginCapabilityReview,
   PluginConfig,
   PluginEventLog,
   PluginInstallTask,
@@ -26,9 +27,17 @@ type PluginWithRelations = Plugin & {
   configs?: PluginConfig[]
   tasks?: PluginInstallTask[]
   eventLogs?: PluginEventLog[]
+  capabilityReviews?: PluginCapabilityReview[]
   installedBy?: { username: string } | null
   enabledBy?: { username: string } | null
 }
+
+type PluginCapabilityReviewWithPlugin = PluginCapabilityReview & {
+  plugin?: Pick<Plugin, 'name' | 'status' | 'enabled' | 'currentVersion'> | null
+}
+
+export type PluginCapabilityReviewStatus = 'pending' | 'approved' | 'rejected' | 'revoked'
+export type PluginCapabilityRiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
 export interface SerializedPlugin {
   id: number
@@ -45,6 +54,30 @@ export interface SerializedPlugin {
   createdAt: string
   updatedAt: string
   latestVersion: SerializedPluginVersion | null
+  capabilityReviews?: SerializedPluginCapabilityReview[]
+}
+
+export interface SerializedPluginCapabilityReview {
+  id: number
+  pluginId: string
+  pluginName: string | null
+  pluginStatus: PluginStatus | null
+  pluginEnabled: boolean | null
+  pluginCurrentVersion: string | null
+  manifestVersion: string
+  capabilityKey: string
+  capabilityType: string
+  title: string
+  description: string | null
+  riskLevel: string
+  status: string
+  scopes: string[]
+  hooks: string[]
+  reviewNotes: string | null
+  reviewedByUserId: number | null
+  reviewedAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface SerializedPluginVersion {
@@ -162,7 +195,7 @@ export function serializePluginVersion(version: PluginVersion): SerializedPlugin
 
 export function serializePlugin(plugin: PluginWithRelations): SerializedPlugin {
   const latestVersion = plugin.versions?.[0] || null
-  return {
+  const serialized: SerializedPlugin = {
     id: plugin.id,
     pluginId: plugin.pluginId,
     name: plugin.name,
@@ -178,6 +211,280 @@ export function serializePlugin(plugin: PluginWithRelations): SerializedPlugin {
     updatedAt: plugin.updatedAt.toISOString(),
     latestVersion: latestVersion ? serializePluginVersion(latestVersion) : null
   }
+  if (plugin.capabilityReviews) {
+    serialized.capabilityReviews = plugin.capabilityReviews.map(serializePluginCapabilityReview)
+  }
+  return serialized
+}
+
+function jsonStringArray(value: Prisma.JsonValue | null): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+export function serializePluginCapabilityReview(review: PluginCapabilityReviewWithPlugin): SerializedPluginCapabilityReview {
+  return {
+    id: review.id,
+    pluginId: review.pluginId,
+    pluginName: review.plugin?.name ?? null,
+    pluginStatus: review.plugin?.status ?? null,
+    pluginEnabled: review.plugin?.enabled ?? null,
+    pluginCurrentVersion: review.plugin?.currentVersion ?? null,
+    manifestVersion: review.manifestVersion,
+    capabilityKey: review.capabilityKey,
+    capabilityType: review.capabilityType,
+    title: review.title,
+    description: review.description,
+    riskLevel: review.riskLevel,
+    status: review.status,
+    scopes: jsonStringArray(review.scopes),
+    hooks: jsonStringArray(review.hooks),
+    reviewNotes: review.reviewNotes,
+    reviewedByUserId: review.reviewedByUserId,
+    reviewedAt: review.reviewedAt?.toISOString() || null,
+    createdAt: review.createdAt.toISOString(),
+    updatedAt: review.updatedAt.toISOString()
+  }
+}
+
+interface ManifestCapabilityReviewInput {
+  capabilityKey: string
+  capabilityType: string
+  title: string
+  description?: string | null
+  riskLevel: PluginCapabilityRiskLevel
+  scopes: string[]
+  hooks: string[]
+}
+
+function highestRisk(...levels: PluginCapabilityRiskLevel[]): PluginCapabilityRiskLevel {
+  const order: Record<PluginCapabilityRiskLevel, number> = { low: 1, medium: 2, high: 3, critical: 4 }
+  return levels.reduce((best, level) => order[level] > order[best] ? level : best, 'low' as PluginCapabilityRiskLevel)
+}
+
+function classifyActionRisk(action: { name: string; method: string; path: string; scopes?: string[] }): PluginCapabilityRiskLevel {
+  const text = `${action.name} ${action.method} ${action.path} ${(action.scopes || []).join(' ')}`.toLowerCase()
+  if (/(payment|refund|recharge|billing|balance|wallet|order|admin|user:write|users:write)/.test(text)) return 'critical'
+  if (/(write|delete|create|operate|services:operate|tickets:write|notifications:send)/.test(text)) return 'high'
+  if (action.method !== 'GET') return 'medium'
+  return 'low'
+}
+
+function classifyServiceExtensionRisk(hooks: string[]): PluginCapabilityRiskLevel {
+  if (hooks.some(hook => ['provision', 'terminate'].includes(hook))) return 'critical'
+  if (hooks.some(hook => ['suspend', 'unsuspend', 'upgrade'].includes(hook))) return 'high'
+  return 'medium'
+}
+
+function classifyGatewayExtensionRisk(hooks: string[]): PluginCapabilityRiskLevel {
+  if (hooks.some(hook => ['createPayment', 'verifyPayment', 'refund', 'webhook'].includes(hook))) return 'critical'
+  return 'high'
+}
+
+function classifyStorageRisk(scopes: string[], tableCount: number): PluginCapabilityRiskLevel {
+  if (scopes.includes('global') || tableCount > 0) return 'high'
+  if (scopes.includes('service')) return 'medium'
+  return 'low'
+}
+
+export function extractManifestCapabilityReviews(manifest: PayIncusPluginManifest): ManifestCapabilityReviewInput[] {
+  const capabilities = manifest.capabilities || {}
+  const reviews: ManifestCapabilityReviewInput[] = []
+
+  for (const action of capabilities.actions || []) {
+    reviews.push({
+      capabilityKey: `action:${action.name}`,
+      capabilityType: 'action',
+      title: `Action ${action.name}`,
+      description: `${action.method} ${action.path}`,
+      riskLevel: classifyActionRisk(action),
+      scopes: action.scopes || [],
+      hooks: []
+    })
+  }
+
+  for (const event of capabilities.events || []) {
+    reviews.push({
+      capabilityKey: `event:${event.event}:${event.handler}`,
+      capabilityType: 'event',
+      title: `Event ${event.event}`,
+      description: event.handler,
+      riskLevel: /paid|payment|billing|refund|deleted|failed/i.test(event.event) ? 'medium' : 'low',
+      scopes: [],
+      hooks: [event.event]
+    })
+  }
+
+  for (const template of capabilities.notificationTemplates || []) {
+    reviews.push({
+      capabilityKey: `notification-template:${template.id}`,
+      capabilityType: 'notification_template',
+      title: template.title || template.id,
+      description: template.message,
+      riskLevel: 'medium',
+      scopes: [],
+      hooks: []
+    })
+  }
+
+  for (const extension of capabilities.serviceExtensions || []) {
+    const hooks = Object.keys(extension.hooks || {}).filter(hook => typeof extension.hooks?.[hook as keyof typeof extension.hooks] === 'string')
+    reviews.push({
+      capabilityKey: `service-extension:${extension.key}`,
+      capabilityType: 'service_extension',
+      title: extension.name || extension.key,
+      description: extension.productId ? `Product ${extension.productId}` : null,
+      riskLevel: classifyServiceExtensionRisk(hooks),
+      scopes: [],
+      hooks
+    })
+  }
+
+  for (const extension of capabilities.gatewayExtensions || []) {
+    const hooks = Object.keys(extension.hooks || {}).filter(hook => typeof extension.hooks?.[hook as keyof typeof extension.hooks] === 'string')
+    reviews.push({
+      capabilityKey: `gateway-extension:${extension.key}`,
+      capabilityType: 'gateway_extension',
+      title: extension.name || extension.key,
+      description: extension.providerCode ? `Provider ${extension.providerCode}` : null,
+      riskLevel: classifyGatewayExtensionRisk(hooks),
+      scopes: [],
+      hooks
+    })
+  }
+
+  if (capabilities.storage) {
+    const scopes = capabilities.storage.scopes || ['user']
+    const tables = capabilities.storage.tables || []
+    const tableScopes = tables.flatMap(table => table.scopes || [])
+    reviews.push({
+      capabilityKey: 'storage:kv',
+      capabilityType: 'storage',
+      title: 'Extension storage',
+      description: tables.length ? `Tables: ${tables.map(table => table.name).join(', ')}` : 'Scoped KV storage',
+      riskLevel: highestRisk(classifyStorageRisk(scopes, tables.length), classifyStorageRisk(tableScopes, tables.length)),
+      scopes: Array.from(new Set([...scopes, ...tableScopes])),
+      hooks: tables.map(table => table.name)
+    })
+  }
+
+  const byKey = new Map<string, ManifestCapabilityReviewInput>()
+  for (const review of reviews) byKey.set(review.capabilityKey, review)
+  return Array.from(byKey.values())
+}
+
+export async function syncPluginCapabilityReviews(manifest: PayIncusPluginManifest): Promise<number> {
+  const desired = extractManifestCapabilityReviews(manifest)
+  const desiredKeys = desired.map(review => review.capabilityKey)
+  await prisma.$transaction(async tx => {
+    if (desiredKeys.length > 0) {
+      await tx.pluginCapabilityReview.deleteMany({
+        where: {
+          pluginId: manifest.id,
+          manifestVersion: manifest.version,
+          capabilityKey: { notIn: desiredKeys }
+        }
+      })
+    } else {
+      await tx.pluginCapabilityReview.deleteMany({
+        where: { pluginId: manifest.id, manifestVersion: manifest.version }
+      })
+    }
+
+    for (const review of desired) {
+      await tx.pluginCapabilityReview.upsert({
+        where: {
+          pluginId_manifestVersion_capabilityKey: {
+            pluginId: manifest.id,
+            manifestVersion: manifest.version,
+            capabilityKey: review.capabilityKey
+          }
+        },
+        create: {
+          pluginId: manifest.id,
+          manifestVersion: manifest.version,
+          capabilityKey: review.capabilityKey,
+          capabilityType: review.capabilityType,
+          title: review.title,
+          description: review.description || null,
+          riskLevel: review.riskLevel,
+          status: 'pending',
+          scopes: review.scopes as Prisma.InputJsonValue,
+          hooks: review.hooks as Prisma.InputJsonValue
+        },
+        update: {
+          capabilityType: review.capabilityType,
+          title: review.title,
+          description: review.description || null,
+          riskLevel: review.riskLevel,
+          scopes: review.scopes as Prisma.InputJsonValue,
+          hooks: review.hooks as Prisma.InputJsonValue
+        }
+      })
+    }
+  })
+  return desired.length
+}
+
+export async function listPluginCapabilityReviews(input: { pluginId?: string; status?: string } = {}) {
+  return await prisma.pluginCapabilityReview.findMany({
+    where: {
+      ...(input.pluginId ? { pluginId: input.pluginId } : {}),
+      ...(input.status ? { status: input.status } : {})
+    },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    include: {
+      plugin: { select: { name: true, status: true, enabled: true, currentVersion: true } }
+    }
+  })
+}
+
+export async function updatePluginCapabilityReview(input: {
+  id: number
+  status: PluginCapabilityReviewStatus
+  reviewNotes?: string | null
+  reviewedByUserId: number
+}) {
+  return await prisma.pluginCapabilityReview.update({
+    where: { id: input.id },
+    data: {
+      status: input.status,
+      reviewNotes: input.reviewNotes || null,
+      reviewedByUserId: input.reviewedByUserId,
+      reviewedAt: new Date()
+    },
+    include: {
+      plugin: { select: { name: true, status: true, enabled: true, currentVersion: true } }
+    }
+  })
+}
+
+export async function assertPluginCapabilitiesApprovedForEnable(pluginId: string): Promise<{
+  ok: true
+} | {
+  ok: false
+  reviews: SerializedPluginCapabilityReview[]
+}> {
+  const plugin = await prisma.plugin.findUnique({
+    where: { pluginId },
+    select: { currentVersion: true }
+  })
+  if (!plugin?.currentVersion) return { ok: true }
+
+  const blocking = await prisma.pluginCapabilityReview.findMany({
+    where: {
+      pluginId,
+      manifestVersion: plugin.currentVersion,
+      riskLevel: { in: ['high', 'critical'] },
+      status: { not: 'approved' }
+    },
+    include: {
+      plugin: { select: { name: true, status: true, enabled: true, currentVersion: true } }
+    },
+    orderBy: [{ riskLevel: 'desc' }, { capabilityType: 'asc' }, { id: 'asc' }]
+  })
+  if (blocking.length === 0) return { ok: true }
+  return { ok: false, reviews: blocking.map(serializePluginCapabilityReview) }
 }
 
 export function serializePluginTask(task: PluginInstallTask & { startedBy?: { username: string } | null }): SerializedPluginTask {
@@ -228,7 +535,8 @@ export async function listPlugins() {
     include: {
       installedBy: { select: { username: true } },
       enabledBy: { select: { username: true } },
-      versions: { orderBy: { installedAt: 'desc' }, take: 1 }
+      versions: { orderBy: { installedAt: 'desc' }, take: 1 },
+      capabilityReviews: { orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 20 }
     }
   })
 }
@@ -242,7 +550,8 @@ export async function getPlugin(pluginId: string) {
       versions: { orderBy: { installedAt: 'desc' } },
       configs: { orderBy: { key: 'asc' } },
       tasks: { orderBy: { createdAt: 'desc' }, take: 10 },
-      eventLogs: { orderBy: { createdAt: 'desc' }, take: 20 }
+      eventLogs: { orderBy: { createdAt: 'desc' }, take: 20 },
+      capabilityReviews: { orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }] }
     }
   })
 }
@@ -359,6 +668,9 @@ export async function installValidatedPlugin(input: {
       installPath: finalPath
     }
   })
+
+  const capabilityReviewCount = await syncPluginCapabilityReviews(input.manifest)
+  await appendPluginTaskLog(input.logPath, `Synced ${capabilityReviewCount} capability review record(s)`)
 
   await prisma.pluginInstallTask.update({
     where: { id: input.taskId },

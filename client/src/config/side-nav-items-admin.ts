@@ -8,6 +8,8 @@ export const navMenuItems: MenuItem[] = [
   { name: 'admin-hosting', path: '/admin/hosting', icon: 'coin', label: 'nav.hosting' },
   { name: 'admin-settings', path: '/admin/settings', icon: 'cog', label: 'nav.system' },
   { name: 'admin-plugins', path: '/admin/plugins', icon: 'package', label: 'nav.plugins' },
+  { name: 'admin-themes', path: '/admin/themes', icon: 'image', label: 'nav.themes' },
+  { name: 'admin-integrations', path: '/admin/integrations', icon: 'key', label: 'nav.integrations' },
   { divider: true, label: 'nav.operations' },
   { name: 'admin-system-update', path: '/admin/system-update', icon: 'sparkles', label: 'nav.systemUpdate' },
   { name: 'admin-delivery', path: '/admin/delivery', icon: 'pulse', label: 'nav.delivery' },

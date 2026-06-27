@@ -11,26 +11,59 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 - Current local branch: `master`
 - Target remote branch: `payincus/main`
 - Repository history: default branch was rebuilt as an independent PayIncus baseline on 2026-06-27; a local mirror backup was kept for private audit traceability.
-- Important ledger: `docs/production-audit.md`
-- Commercial operation task ledger: `docs/commercial-operation-task-goals.md`
+- Public documentation source: `docs-site/docs`
+- Note: the old private `docs/production-audit.md`, `docs/full-function-audit.md`, and `docs/commercial-operation-task-goals.md` files are not present in the current tracked checkout. Treat the current worktree, `HANDOFF.md`, generated version logs, tests, and production/live proof output as authoritative.
 
 ## Current Git State
 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-bf3d86e Update version log for v0.8.9
+430d0bc Document resource risk operations
 ```
 
-GitHub remote `payincus/main` was aligned after the handoff refresh commits.
+GitHub remote `payincus/main` is aligned at `430d0bc` before the current uncommitted `v0.9.0` candidate work.
 
-The tracked tree should be clean against `payincus/main` after pulling. The local audit ledger under `docs/production-audit.md` is ignored by git and may contain newer operational notes.
+The current local tree is intentionally dirty with a large unreleased feature bundle. Do not reset it. At the time of this refresh there are 63 changed/new files, including backend routes, Prisma migrations, admin UI, docs-site pages, README, package versions, and guard tests.
 
 Latest tracked repository commit at the time of this refresh:
 
 ```text
-bf3d86e Update version log for v0.8.9
+430d0bc Document resource risk operations
 ```
+
+## Current Local Unreleased Work
+
+Local version files currently report `0.9.0` in `package.json`, `client/package.json`, and `server/package.json`. This is a release candidate, not a production-proven OTA yet.
+
+The current uncommitted bundle includes:
+
+- Integration Center: admin entry, backend health-check routes, persisted health history, and docs coverage for SMTP, Lsky, Telegram, payment providers, global notifications, remote storage, Agent/Incus, OTA, extension market, and theme market.
+- Billing and payment operations: manual recharge provider flow, payment-provider secret handling guards, plugin gateway refund workbench, refund reconciliation cases, and safer payment detail redaction.
+- Delivery and plan-upgrade hardening: delivery-center guard updates, plan upgrade capacity guard updates, and plan-upgrade sync repair service.
+- Extension Center hardening: high-risk capability review records, enablement blocking for unapproved high-risk capabilities, capability review docs, market submission UI guard updates, and runtime capability guard updates.
+- Resource risk operations: pagination and source-scoped order restriction work from `v0.8.9` remain the production baseline; current docs and guard coverage continue to reflect that behavior.
+- Split deployment/docs: README and docs-site now emphasize split user/admin domains, empty `COOKIE_DOMAIN`, `/api` proxying, production proof refs, and `INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus`.
+
+Local validation already completed for this candidate:
+
+```text
+pnpm test                         passed
+pnpm build                        passed
+pnpm --dir docs-site --ignore-workspace build  passed
+RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0 ... pnpm verify:production  passed
+targeted guards for admin routes, split deploy config, ticket image security,
+OAuth/mail/payment secret handling, refresh token storage, plugin/runtime,
+resource risk, and integration health passed during the working session.
+```
+
+Remaining before calling this release complete:
+
+- Commit the local `0.9.0` candidate bundle with a clear public release subject.
+- Create/publish tag `v0.9.0` and GitHub Release/OTA artifacts.
+- Regenerate docs-site version logs after the release/tag commit.
+- Run production OTA from the admin system-update flow or equivalent release process.
+- Verify production with real `/opt/incudal/.env`, live domains, database checks, split-host checks, and final proof refs. The latest local `verify:production` run intentionally used `RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0`, so it proves static readiness only.
 
 ## Latest Production OTA Proof
 
@@ -1041,9 +1074,9 @@ git diff --check
 
 Only rerun the full suite when relevant production code changes occur. For docs-only changes, docs build plus link/format checks are usually enough.
 
-## Production Audit Status
+## Historical Production Audit Notes
 
-`docs/production-audit.md` currently says progress is about 99%.
+The old private production-audit ledger is not present in the current tracked checkout. The notes in this section are historical context only; use the top `Latest Production OTA Proof` and `Current Local Unreleased Work` sections for current release decisions.
 
 Completed:
 
@@ -1135,28 +1168,17 @@ Current known domains:
 - Documentation/root site: `https://payincus.com`
 - Telegram group: `https://t.me/Payincus`
 
-Note: a previous request excluded the old demo domain from production audit scope. Public README/docs and example configs now use the current production user/admin domains instead.
+Note: public README examples currently use `https://demo.payincus.com` and `https://demoadmin.payincus.com` as split-deployment example domains. Production proof should still use the real production domains above unless the operator explicitly scopes a demo check.
 
 ## Suggested Next Work
 
-1. Keep local Git synced with remote `payincus/main`; before this handoff refresh, the tracked baseline is `05b0517`.
-2. Continue commercial operation target 12 from `docs/commercial-operation-task-goals.md`; commercial operation is 12/12 categories with 100% local function coverage, and production proof is complete for the current operator-approved scope.
-3. Treat `v0.6.9` production deployment/readiness as the latest proven production deployment from the 2026-06-26 SSH and public HTTP proof: `/opt/incudal/current -> /opt/incudal/releases/v0.6.9-20260626053655`, version commit `369212f8e2a3`, deployed at `2026-06-26T05:37:16.617Z`, user/admin health passed, online plugin/theme market indexes returned HTTP 200, and OTA task `#75` completed successfully.
-4. Current latest-production boundary: `v0.6.9` is live and proven via task `#75`. Current proof-scope boundary remains `v0.6.6` task `#73`: Lsky cleanup is not proven because the configured production Lsky token only has `upload:write`, is missing `user:photo:read` and `user:photo:write`, returned HTTP 403 for the documented user-gallery list API, and the production DB/log known-ID search did not find a safe persisted proof image ID to delete. The operator explicitly waived this cleanup test from final scope, so do not claim confirmed deletion unless a future delete-capable proof is collected.
-5. Treat the core Incus lifecycle as proven on a dedicated test instance: #9 on host #2 completed stop/start/restart/recreate/delete cleanup, and existing proof already covers create, rebuild, terminal connect/disconnect, NAT port add, storage, Agent reports, and traffic. Only run suspend/unsuspend, IPv6, or host-migration smoke if these remain in final acceptance scope.
-6. Delivery proof: SMTP provider reference is proven by `smtp-provider-reference-2026-06-25T04:34:51.773Z`; Telegram delivery is proven by message `#339` to `@Payincus`; Lsky cleanup is waived for current final scope. If it is later required, it still needs a delete-capable token or provider-side cleanup before commit-mode proof. The target endpoint is `DELETE /api/v2/user/photos` with a JSON numeric ID array; do not use guessed IDs or invalid/empty delete probes as proof.
-7. Treat production DB backup/restore drill as proven: `scripts/production-db-restore-drill.sh` created a `601026` byte custom dump, restored it into temporary database `incudal_restore_drill_20260625023234_126219`, validated public table/migration/user/instance/update-task counts, removed the temp workdir, and `pg_database` returned `0` for the temp DB afterward.
-8. Treat the approved temporary Turnstile disable-and-restore smoke as proven unless final acceptance specifically requires a human-solved Cloudflare challenge UX.
-9. Latest proof-scope live acceptance is already recorded at `/tmp/incudal-proof/final-acceptance-v0.6.6.md` with real proof references and `LIVE_LSKY_CLEANUP_WAIVER_REF`. The later extension platform work is deployed in `v0.6.9` with online market proof. Only rerun `pnpm verify:final-acceptance` if final scope explicitly requires a fresh auth smoke or human-solved Turnstile challenge.
-10. If creating an additional ZFS pool still fails, fix or avoid ZFS on that Incus host; the existing `default` ZFS pool already lists through Incus.
-11. Decide whether to continue improving docs:
-   - Page-by-page admin field explanations.
-   - User workflow screenshots.
-   - API request/response/error reference.
-   - Payment provider setup guide.
-   - Agent install guide with real host commands.
-12. Complete remaining real production proof items from `docs/production-audit.md`.
-13. When a real production proof is completed, update `docs/production-audit.md` with exact date, command/evidence, and outcome.
+1. Treat the top sections of this file as authoritative. Older production proof notes below this point are historical evidence and may mention older versions.
+2. Finish the current local `0.9.0` candidate release boundary: review the 63 changed/new files, commit the bundle, create/publish `v0.9.0`, and regenerate version logs after the release commit/tag exists.
+3. Run the release/OTA process and verify that GitHub Release assets include linux amd64/arm64 tarballs, sha256 files, OTA manifest, extension/theme market assets, and Agent release metadata.
+4. Apply OTA to production and record the system-update task id, release symlink, backup path, logs, production `package.json` version, and `systemctl is-active incudal-backend`.
+5. Re-run production checks with the real `/opt/incudal/.env`: `pnpm verify:production`, `pnpm verify:split:host`, `pnpm verify:log-header`, and `pnpm verify:final-acceptance` with non-placeholder proof refs.
+6. Smoke the high-risk surfaces touched by `0.9.0`: Integration Center health checks, manual recharge, refund/reconciliation workbench, extension capability review blocking, delivery/plan-upgrade sync repair, and split user/admin login boundaries.
+7. Keep README, docs-site Chinese/English pages, generated version logs, and this handoff aligned with the final `v0.9.0` proof state.
 
 ## Release Documentation Rule
 
@@ -1217,7 +1239,7 @@ Acceptance rule:
 
 - A feature is not considered complete immediately after code changes.
 - It is complete only after automatic acceptance checks pass, relevant tests pass, the OTA version is published, the version logs are regenerated, and the docs site is updated for any changed behavior.
-- For auth, payment, permissions, OTA, Agent, resource delivery, and production deployment changes, include the relevant guard scripts and document any remaining live proof requirement in `docs/production-audit.md`.
+- For auth, payment, permissions, OTA, Agent, resource delivery, and production deployment changes, include the relevant guard scripts and document any remaining live proof requirement in `HANDOFF.md`, the production checklist, or the release notes that ship with the OTA.
 
 ## Safety Notes
 

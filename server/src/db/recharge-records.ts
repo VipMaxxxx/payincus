@@ -3,7 +3,7 @@
  */
 
 import { prisma } from './prisma.js'
-import { Prisma, type BalanceLog, type PaymentProvider, type RechargeRecord, type RechargeRefundRequest, type RechargeStatus, type User } from '@prisma/client'
+import { Prisma, type BalanceLog, type PaymentProvider, type RechargeRecord, type RechargeRefundRequest, type RechargeRefundStatus, type RechargeStatus, type User } from '@prisma/client'
 import { nanoid } from 'nanoid'
 import { getTodayRange } from '../lib/timezone.js'
 import { USER_BALANCE_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
@@ -60,6 +60,23 @@ export interface CreateRechargeRefundRequestInput {
   reason: string
 }
 
+export interface ListRechargeRefundRequestsInput {
+  page?: number
+  pageSize?: number
+  status?: string
+  userId?: number
+  providerId?: number
+  rechargeRecordId?: number
+  search?: string
+}
+
+export interface ListRechargeRefundRequestsResult {
+  requests: RechargeRefundRequestWithRelations[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface ClaimRechargeRefundResult {
   request: RechargeRefundRequestWithRelations
   balanceLog?: BalanceLog
@@ -79,6 +96,14 @@ const RECHARGE_STATUSES = new Set<RechargeStatus>([
   'failed',
   'cancelled',
   'refunded'
+])
+
+const RECHARGE_REFUND_STATUSES = new Set<RechargeRefundStatus>([
+  'pending',
+  'processing',
+  'completed',
+  'failed',
+  'cancelled'
 ])
 
 function toMoney(value: unknown): number {
@@ -600,6 +625,57 @@ export async function getRechargeRefundRequestById(id: number): Promise<Recharge
     where: { id },
     include: includeRechargeRefundRelations()
   }) as Promise<RechargeRefundRequestWithRelations | null>
+}
+
+export async function listRechargeRefundRequests(
+  input: ListRechargeRefundRequestsInput = {}
+): Promise<ListRechargeRefundRequestsResult> {
+  const { page, pageSize } = clampPagination(input.page, input.pageSize, 20, 100)
+  const where: Prisma.RechargeRefundRequestWhereInput = {}
+  const status = input.status && RECHARGE_REFUND_STATUSES.has(input.status as RechargeRefundStatus)
+    ? input.status as RechargeRefundStatus
+    : undefined
+  const search = input.search?.trim().slice(0, 80)
+
+  if (status) where.status = status
+  if (input.userId && Number.isSafeInteger(input.userId) && input.userId > 0) where.userId = input.userId
+  if (input.providerId && Number.isSafeInteger(input.providerId) && input.providerId > 0) where.providerId = input.providerId
+  if (input.rechargeRecordId && Number.isSafeInteger(input.rechargeRecordId) && input.rechargeRecordId > 0) {
+    where.rechargeRecordId = input.rechargeRecordId
+  }
+
+  if (search) {
+    const numericId = /^[1-9]\d*$/.test(search) ? Number(search) : null
+    where.OR = [
+      ...(numericId && Number.isSafeInteger(numericId)
+        ? [
+            { id: numericId },
+            { rechargeRecordId: numericId },
+            { userId: numericId },
+            { providerId: numericId }
+          ]
+        : []),
+      { rechargeRecord: { orderNo: { contains: search, mode: 'insensitive' } } },
+      { rechargeRecord: { tradeNo: { contains: search, mode: 'insensitive' } } },
+      { user: { username: { contains: search, mode: 'insensitive' } } },
+      { provider: { name: { contains: search, mode: 'insensitive' } } },
+      { providerRefundId: { contains: search, mode: 'insensitive' } },
+      { providerRequestId: { contains: search, mode: 'insensitive' } }
+    ]
+  }
+
+  const [requests, total] = await Promise.all([
+    prisma.rechargeRefundRequest.findMany({
+      where,
+      include: includeRechargeRefundRelations(),
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize
+    }) as Promise<RechargeRefundRequestWithRelations[]>,
+    prisma.rechargeRefundRequest.count({ where })
+  ])
+
+  return { requests, total, page, pageSize }
 }
 
 export async function createRechargeRefundRequest(

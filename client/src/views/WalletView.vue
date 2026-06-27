@@ -26,6 +26,14 @@ interface WalletMetric {
   tone: MetricTone
 }
 
+interface ManualPaymentInfo {
+  orderNo: string
+  payableAmount: number
+  actualAmount: number | null
+  providerName?: string | null
+  instructions: string
+}
+
 // 当前 TAB
 const activeTab = ref<WalletTab>('balance')
 const walletTabs = computed((): Array<{ key: WalletTab; label: string }> => [
@@ -72,6 +80,8 @@ const showTermsModal = ref(false)
 // 无退款确认
 const agreedToNoRefund = ref(false)
 const agreedToRechargeNotice = ref(false)
+const showManualPaymentModal = ref(false)
+const manualPaymentInfo = ref<ManualPaymentInfo | null>(null)
 
 // 充值记录
 const rechargeRecords = ref<any[]>([])
@@ -337,9 +347,19 @@ async function repayOrder(orderNo: string) {
     const res = await api.billing.repayRechargeOrder(orderNo)
     if (res.payUrl) {
       toast.success(t('wallet.redirecting'))
+      const payUrl = res.payUrl
       setTimeout(() => {
-        window.location.href = res.payUrl
+        window.location.href = payUrl
       }, 500)
+    } else if (res.manualPayment?.instructions) {
+      manualPaymentInfo.value = {
+        orderNo: res.order.orderNo,
+        payableAmount: res.order.payableAmount,
+        actualAmount: res.order.actualAmount,
+        providerName: null,
+        instructions: res.manualPayment.instructions
+      }
+      showManualPaymentModal.value = true
     } else {
       toast.error(t('wallet.noPayUrl'))
     }
@@ -422,6 +442,23 @@ async function createRechargeOrder() {
       setTimeout(() => {
         window.location.href = payUrl
       }, 500)
+      return
+    }
+
+    if (res.manualPayment?.instructions) {
+      manualPaymentInfo.value = {
+        orderNo: res.order.orderNo,
+        payableAmount: res.order.payableAmount,
+        actualAmount: res.order.actualAmount,
+        providerName: res.provider.name,
+        instructions: res.manualPayment.instructions
+      }
+      showRechargeModal.value = false
+      showManualPaymentModal.value = true
+      toast.success(t('wallet.manualPaymentCreated'))
+      if (activeTab.value === 'records') {
+        loadRecords()
+      }
       return
     }
     
@@ -2002,6 +2039,59 @@ function formatAmount() {
               </svg>
               {{ rechargeLoading ? $t('common.processing') : $t('wallet.pay') }}
             </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 人工充值付款说明 -->
+    <Teleport to="body">
+      <div v-if="showManualPaymentModal && manualPaymentInfo" class="modal-overlay" @click.self="showManualPaymentModal = false">
+        <div class="modal-content max-w-lg">
+          <div class="modal-header">
+            <div>
+              <h3 class="modal-title">{{ $t('wallet.manualPaymentTitle') }}</h3>
+              <p class="mt-1 text-sm text-themed-muted">{{ $t('wallet.manualPaymentDesc') }}</p>
+            </div>
+            <button class="btn btn-ghost btn-sm rounded-full" @click="showManualPaymentModal = false">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="modal-body space-y-4">
+            <div class="grid gap-3 rounded-lg border border-themed bg-themed-secondary p-4 text-sm sm:grid-cols-2">
+              <div>
+                <div class="text-themed-muted">{{ $t('wallet.orderNo') }}</div>
+                <div class="mt-1 break-all font-mono font-semibold text-themed">{{ manualPaymentInfo.orderNo }}</div>
+              </div>
+              <div>
+                <div class="text-themed-muted">{{ $t('wallet.payableAmount') }}</div>
+                <div class="mt-1 font-semibold text-themed">¥{{ manualPaymentInfo.payableAmount.toFixed(2) }}</div>
+              </div>
+              <div v-if="manualPaymentInfo.providerName">
+                <div class="text-themed-muted">{{ $t('wallet.paymentChannel') }}</div>
+                <div class="mt-1 font-semibold text-themed">{{ manualPaymentInfo.providerName }}</div>
+              </div>
+              <div>
+                <div class="text-themed-muted">{{ $t('wallet.actualAmount') }}</div>
+                <div class="mt-1 font-semibold text-themed">¥{{ (manualPaymentInfo.actualAmount ?? manualPaymentInfo.payableAmount).toFixed(2) }}</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="mb-2 text-sm font-medium text-themed">{{ $t('wallet.manualPaymentInstructions') }}</div>
+              <pre class="max-h-80 whitespace-pre-wrap break-words rounded-lg border border-themed bg-themed p-4 text-sm leading-6 text-themed">{{ manualPaymentInfo.instructions }}</pre>
+            </div>
+
+            <div class="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+              {{ $t('wallet.manualPaymentPendingHint') }}
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-primary" @click="showManualPaymentModal = false">{{ $t('common.confirm') }}</button>
           </div>
         </div>
       </div>

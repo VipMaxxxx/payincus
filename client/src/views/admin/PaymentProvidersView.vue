@@ -43,7 +43,7 @@ const formData = ref({
 
 const DEFAULT_YIPAY_METHODS = ['alipay', 'wxpay']
 const YIPAY_METHODS = ['alipay', 'wxpay', 'qqpay']
-const IMPLEMENTED_PROVIDER_TYPES = new Set(['yipay', 'heleket', 'plugin_gateway'])
+const IMPLEMENTED_PROVIDER_TYPES = new Set(['yipay', 'heleket', 'plugin_gateway', 'manual'])
 
 function getConfigMethodFees(config: Record<string, unknown>): Record<string, { feeRate?: number; feeFixed?: number }> {
   const raw = (config as any).methodFees

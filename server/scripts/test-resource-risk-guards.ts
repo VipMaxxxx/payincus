@@ -89,6 +89,7 @@ assert(
     riskRoute.includes("'/resource-risk/review-ticket'") &&
     riskRoute.includes("'/admin/resource-risk/policy'") &&
     riskRoute.includes("'/admin/resource-risk/instances'") &&
+    riskRoute.includes("'/admin/resource-risk/instances/:id/evidence'") &&
     riskRoute.includes("'/admin/resource-risk/instances/:id/manual-qos'") &&
     riskRoute.includes("'/admin/resource-risk/instances/:id/manual-suspend'") &&
     riskRoute.includes("'/admin/resource-risk/instances/:id/manual-unsuspend'") &&
@@ -100,6 +101,11 @@ assert(
     riskRoute.includes('sourceInstanceId: true') &&
     riskRoute.includes('restriction.sourceInstanceId === item.instanceId') &&
     riskRoute.includes('restrictionByUserId') &&
+    riskRoute.includes('instanceResourceSample.findMany') &&
+    riskRoute.includes('buildResourceTrend') &&
+    riskRoute.includes('hourly24h') &&
+    riskRoute.includes('daily7d') &&
+    riskRoute.includes("action: { startsWith: 'resource_risk.' }") &&
     app.includes("await fastify.register(resourceRiskRoutes, { prefix: '/api' })") &&
     app.includes('startResourceRiskScheduler()') &&
     riskService.includes('autoSuspendInstance') &&
@@ -116,6 +122,9 @@ assert(
     adminApi.includes('manualSuspend') &&
     adminApi.includes('manualUnsuspend') &&
     adminApi.includes('manualOrderRestrict') &&
+    adminApi.includes('ResourceRiskEvidenceDetail') &&
+    adminApi.includes('ResourceRiskTrendBucket') &&
+    adminApi.includes('evidence: (id: number): Promise<ResourceRiskEvidenceDetail>') &&
     clientApi.includes('createReviewTicket') &&
     adminRouter.includes("path: '/admin/resource-risk'") &&
     adminNav.includes("path: '/admin/resource-risk'") &&
@@ -126,6 +135,10 @@ assert(
     adminView.includes('policyForm.qosTiers') &&
     adminView.includes('addQosTier') &&
     adminView.includes('manualSuspend(item)') &&
+    adminView.includes('manualAction') &&
+    adminView.includes('submitManualAction') &&
+    adminView.includes('manualConfirmChecked') &&
+    adminView.includes('确认本次操作会写入资源风控事件和后台审计') &&
     adminView.includes('pageSize: 10') &&
     adminView.includes('changeInstancesPage') &&
     adminView.includes('changeEventsPage') &&
@@ -138,7 +151,26 @@ assert(
     adminView.includes('hasActiveOrderRestriction(item)') &&
     adminView.includes('hasOtherActiveOrderRestriction(item)') &&
     adminView.includes('releaseOrderRestrictionFromState(item)') &&
+    adminView.includes('openEvidence(item)') &&
+    adminView.includes('风险证据详情') &&
+    adminView.includes('当前证据快照') &&
+    adminView.includes('最近资源样本') &&
+    adminView.includes('24 小时趋势') &&
+    adminView.includes('7 天趋势') &&
+    adminView.includes('formatTrendBucket') &&
+    adminView.includes('风险事件时间线') &&
+    adminView.includes('处置审计') &&
+    adminView.includes('关联下单限制') &&
+    adminView.includes('stringifyEvidence') &&
+    adminView.includes('manualReasonTemplates') &&
+    adminView.includes('applyManualReasonTemplate') &&
+    adminView.includes('原因模板') &&
+    adminView.includes('exportEvidenceDetail') &&
+    adminView.includes('导出 JSON') &&
     !adminView.includes('qosTiersText') &&
+    !adminView.includes('window.prompt') &&
+    !adminView.includes('window.confirm') &&
+    !clientApi.includes('/admin/resource-risk/instances/${id}/evidence') &&
     createView.includes('orderRiskReviewAvailable') &&
     createView.includes('api.resourceRisk.createReviewTicket') &&
     zhLocale.includes('ORDER_RESTRICTED_BY_RISK') &&

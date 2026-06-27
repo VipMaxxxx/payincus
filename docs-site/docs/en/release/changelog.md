@@ -30,11 +30,15 @@ The OTA baseline starts from `v0.0.1` and has been proven through the atomic OTA
 - Rollback to the previous release.
 - Updating forward again after rollback.
 
-The detailed production audit record lives in:
+The current public repository uses three release-evidence entry points:
 
 ```text
-docs/production-audit.md
+HANDOFF.md
+docs-site/docs/deployment/production-checklist.md
+docs-site/docs/release/version-log.md
 ```
+
+`HANDOFF.md` records the latest proven production OTA, the current local release candidate, and remaining live-proof work. The production checklist documents required pre/post-deploy commands. The system version log is generated from Git tags and commits. The old private `docs/production-audit.md` file is no longer the current public documentation entry point.
 
 ## Git Changelog
 

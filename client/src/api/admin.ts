@@ -87,6 +87,8 @@ import type {
   SystemUpdateCheckResult,
   SystemUpdateTask,
   PluginRecord,
+  PluginCapabilityReview,
+  PluginCapabilityReviewStatus,
   PluginTask,
   PluginEventLog,
   PluginEventSummary,
@@ -122,6 +124,7 @@ import type {
   ReviewPluginMarketSubmissionRequest,
   ReviewThemeMarketSubmissionRequest,
   DeliveryAssuranceCase,
+  DeliveryCasesResponse,
   DeliveryOverview,
   DeliveryTasksResponse,
   SlaAlertEvent,
@@ -176,6 +179,7 @@ export type FinancialReconciliationItemType =
   | 'orphan_balance_log'
   | 'delivered_instance_missing_billing'
   | 'approved_adjustment_missing_balance_log'
+  | 'recharge_refund_lifecycle_issue'
 
 export interface FinancialReconciliationItem {
   id: number
@@ -214,6 +218,34 @@ export interface FinancialReconciliationRun {
   createdAt: string | null
   updatedAt: string | null
   items: FinancialReconciliationItem[]
+}
+
+export type RechargeRefundStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+
+export interface RechargeRefundRequest {
+  id: number
+  rechargeRecordId: number
+  orderNo: string
+  userId: number
+  user: { id: number; username: string } | null
+  providerId: number
+  provider: { id: number; name: string; type: string } | null
+  requestedBy: { id: number; username: string } | null
+  processedBy: { id: number; username: string } | null
+  amount: number
+  status: RechargeRefundStatus
+  reason: string
+  idempotencyKey: string
+  providerRequestId: string | null
+  providerRefundId: string | null
+  providerStatus: string | null
+  providerMessage: string | null
+  providerMetadata: Record<string, unknown> | null
+  failureReason: string | null
+  createdAt: string
+  updatedAt: string
+  processedAt: string | null
+  completedAt: string | null
 }
 
 export interface ResourceRiskPolicy {
@@ -316,6 +348,92 @@ export interface UserOrderRestrictionRecord {
   releaseReason: string | null
   user?: { id: number; username: string }
   sourceInstance?: { id: number; name: string; status: string } | null
+}
+
+export interface ResourceRiskEvidenceDetail {
+  state: ResourceRiskState
+  events: ResourceRiskEvent[]
+  samples: Array<{
+    id: number
+    sampledAt: string
+    rxBytesDelta: string
+    txBytesDelta: string
+    totalBytesDelta: string
+    totalPacketsDelta: string
+    rxMbps: number
+    txMbps: number
+    totalMbps: number
+    pps: number
+    cpuPercent: number | null
+    source: string
+  }>
+  trends: {
+    hourly24h: ResourceRiskTrendBucket[]
+    daily7d: ResourceRiskTrendBucket[]
+  }
+  restrictions: UserOrderRestrictionRecord[]
+  auditLogs: Array<{
+    id: number
+    action: string
+    content: string
+    result: string
+    createdAt: string
+    actor: { id: number; username: string } | null
+  }>
+}
+
+export interface ResourceRiskTrendBucket {
+  bucketStart: string
+  sampleCount: number
+  avgTotalMbps: number
+  maxTotalMbps: number
+  avgPps: number
+  maxPps: number
+  avgCpuPercent: number | null
+  maxCpuPercent: number | null
+  totalBytes: string
+}
+
+export type IntegrationHealthStatus = 'ok' | 'warning' | 'error' | 'skipped'
+
+export interface IntegrationHealthItem {
+  key: string
+  title: string
+  status: IntegrationHealthStatus
+  message: string
+  detail?: string
+  checkedAt: string
+  durationMs: number
+}
+
+export interface IntegrationHealthRecord extends IntegrationHealthItem {
+  id: number
+}
+
+export interface IntegrationHealthSummary {
+  key: string
+  title: string
+  total: number
+  ok: number
+  warning: number
+  error: number
+  skipped: number
+  successRate: number
+  lastStatus: IntegrationHealthStatus
+  lastMessage: string
+  lastCheckedAt: string
+}
+
+export interface IntegrationHealthHistoryResponse {
+  windowDays: number
+  summaries: IntegrationHealthSummary[]
+  recentFailures: IntegrationHealthRecord[]
+}
+
+export interface IntegrationHealthResponse {
+  checkedAt: string
+  items: IntegrationHealthItem[]
+  history: IntegrationHealthHistoryResponse
 }
 
 export interface VipLevelRule {
@@ -2278,6 +2396,14 @@ const api = {
   // 健康检查
   health: (): Promise<{ status: string; timestamp: string }> => http.get('/health'),
 
+  // 集成中心健康检查（管理员）
+  integrations: {
+    health: (): Promise<IntegrationHealthResponse> =>
+      http.post('/admin/integrations/health'),
+    history: (): Promise<IntegrationHealthHistoryResponse> =>
+      http.get('/admin/integrations/health/history')
+  },
+
   // 系统配置（管理员）
   systemConfig: {
     // 公开配置（无需登录）
@@ -2387,6 +2513,8 @@ const api = {
       page: number
       pageSize: number
     }> => http.get('/admin/resource-risk/events', { params }),
+    evidence: (id: number): Promise<ResourceRiskEvidenceDetail> =>
+      http.get(`/admin/resource-risk/instances/${id}/evidence`),
     listRestrictions: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
       items: UserOrderRestrictionRecord[]
       total: number
@@ -2454,6 +2582,15 @@ const api = {
       http.get('/admin/plugins/action-rate-limits'),
     updateActionRateLimits: (policies: PublicPluginActionRateLimitPolicyInput[]): Promise<{ defaults: PublicPluginActionRateLimitDefault[]; policies: PublicPluginActionRateLimitPolicy[] }> =>
       http.put('/admin/plugins/action-rate-limits', { policies }),
+    listCapabilityReviews: (params?: { pluginId?: string; status?: PluginCapabilityReviewStatus | 'all' }): Promise<{ reviews: PluginCapabilityReview[] }> =>
+      http.get('/admin/plugins/capability-reviews', {
+        params: {
+          pluginId: params?.pluginId,
+          status: params?.status && params.status !== 'all' ? params.status : undefined
+        }
+      }),
+    reviewCapability: (id: number, data: { status: PluginCapabilityReviewStatus; reviewNotes?: string | null }): Promise<{ review: PluginCapabilityReview }> =>
+      http.patch(`/admin/plugins/capability-reviews/${id}`, data),
     listTasks: (): Promise<{ tasks: PluginTask[] }> =>
       http.get('/admin/plugins/tasks'),
     getTaskLogs: (id: number): Promise<{ logs: string }> =>
@@ -2565,6 +2702,13 @@ const api = {
       search?: string
     } = {}): Promise<DeliveryTasksResponse> =>
       http.get('/admin/delivery/tasks', { params }),
+    cases: (params: {
+      page?: number
+      pageSize?: number
+      status?: string
+      search?: string
+    } = {}): Promise<DeliveryCasesResponse> =>
+      http.get('/admin/delivery/cases', { params }),
     takeover: (taskId: number, note?: string | null): Promise<{ case: DeliveryAssuranceCase }> =>
       http.post(`/admin/delivery/tasks/${taskId}/takeover`, { note }),
     retry: (taskId: number, note?: string | null): Promise<{ case: DeliveryAssuranceCase; retryTaskId: number }> =>
@@ -2572,7 +2716,11 @@ const api = {
     notifyUser: (taskId: number, mode: 'delayed' | 'recovered' | 'contact_support', note?: string | null): Promise<{ message: string; case: DeliveryAssuranceCase }> =>
       http.post(`/admin/delivery/tasks/${taskId}/notify`, { mode, note }),
     resolve: (taskId: number, status: 'recovered' | 'closed', note?: string | null): Promise<{ case: DeliveryAssuranceCase }> =>
-      http.post(`/admin/delivery/tasks/${taskId}/resolve`, { status, note })
+      http.post(`/admin/delivery/tasks/${taskId}/resolve`, { status, note }),
+    retrySyncCase: (caseId: number, note?: string | null): Promise<{ case: DeliveryAssuranceCase }> =>
+      http.post(`/admin/delivery/cases/${caseId}/retry-sync`, { note }, { timeout: TIMEOUT.LONG }),
+    resolveCase: (caseId: number, status: 'recovered' | 'closed', note?: string | null): Promise<{ case: DeliveryAssuranceCase }> =>
+      http.post(`/admin/delivery/cases/${caseId}/resolve`, { status, note })
   },
 
   slaAlerts: {
@@ -3774,6 +3922,38 @@ const api = {
       page: number
       pageSize: number
     }> => http.get('/admin/billing/recharge-records', { params }),
+
+    getRechargeRefundRequests: (params?: {
+      page?: number
+      pageSize?: number
+      status?: RechargeRefundStatus
+      userId?: number
+      providerId?: number
+      rechargeRecordId?: number
+      search?: string
+    }): Promise<{
+      refunds: RechargeRefundRequest[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/billing/recharge-refunds', { params }),
+
+    createRechargeRefund: (
+      rechargeRecordId: number,
+      data: { amount: number; reason: string }
+    ): Promise<{
+      success: boolean
+      status: RechargeRefundStatus
+      message: string
+      refundRequest: RechargeRefundRequest
+    }> => http.post(`/admin/billing/recharge-records/${rechargeRecordId}/refunds`, data),
+
+    retryRechargeRefund: (id: number): Promise<{
+      success: boolean
+      status: RechargeRefundStatus
+      message: string
+      refundRequest: RechargeRefundRequest
+    }> => http.post(`/admin/billing/recharge-refunds/${id}/retry`),
 
     // 同步充值订单状态
     syncRechargeRecord: (id: number): Promise<{

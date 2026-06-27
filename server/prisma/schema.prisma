@@ -160,6 +160,7 @@ enum DeliveryAssuranceIssueType {
   host_offline
   agent_offline
   resource_pressure
+  plan_upgrade_sync_failed
 }
 
 enum DeliveryAssuranceActionType {
@@ -557,6 +558,7 @@ enum FinancialReconciliationItemType {
   orphan_balance_log
   delivered_instance_missing_billing
   approved_adjustment_missing_balance_log
+  recharge_refund_lifecycle_issue
 }
 
 // AFF余额变动类型
@@ -1847,6 +1849,24 @@ model SystemConfig {
   @@map("system_configs")
 }
 
+model IntegrationHealthCheck {
+  id              Int      @id @default(autoincrement())
+  key             String
+  title           String
+  status          String
+  message         String   @db.Text
+  detail          String?  @db.Text
+  durationMs      Int      @map("duration_ms")
+  checkedAt       DateTime @map("checked_at")
+  checkedByUserId Int?     @map("checked_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([key, checkedAt])
+  @@index([status, checkedAt])
+  @@index([checkedAt])
+  @@map("integration_health_checks")
+}
+
 // ==================== 流量统计模型 ====================
 
 // 流量快照 (用于增量计算)
@@ -2184,12 +2204,40 @@ model Plugin {
   publicActionRateLimitBuckets PublicPluginActionRateLimitBucket[]
   eventDedupeLocks PluginEventDedupeLock[]
   storageBackupRemoteArchives PluginStorageBackupRemoteArchive[]
+  capabilityReviews PluginCapabilityReview[]
 
   @@index([status])
   @@index([enabled])
   @@index([sourceType])
   @@index([installedByUserId])
   @@map("plugins")
+}
+
+model PluginCapabilityReview {
+  id               Int      @id @default(autoincrement())
+  pluginId         String   @map("plugin_id")
+  manifestVersion  String   @map("manifest_version")
+  capabilityKey    String   @map("capability_key")
+  capabilityType   String   @map("capability_type")
+  title            String
+  description      String?  @db.Text
+  riskLevel        String   @default("medium") @map("risk_level")
+  status           String   @default("pending")
+  scopes           Json     @default("[]")
+  hooks            Json     @default("[]")
+  reviewNotes      String?  @map("review_notes") @db.Text
+  reviewedByUserId Int?     @map("reviewed_by_user_id")
+  reviewedAt       DateTime? @map("reviewed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [pluginId], onDelete: Cascade)
+
+  @@unique([pluginId, manifestVersion, capabilityKey])
+  @@index([pluginId, status])
+  @@index([status, riskLevel])
+  @@index([capabilityType])
+  @@map("plugin_capability_reviews")
 }
 
 model PluginVersion {

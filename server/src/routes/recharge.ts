@@ -17,6 +17,7 @@ import {
   getHeleketStatusDescription
 } from '../lib/heleket.js'
 import {
+  buildManualRechargePaymentDetails,
   buildHeleketInvoicePaymentDetails,
   extractRechargePaymentDisplayInfo,
   getRechargePayableAmount,
@@ -46,7 +47,8 @@ import type { PluginGatewayExtensionHook } from '../lib/plugin-manifest.js'
 // 金额一致性检查容差（分）
 const AMOUNT_TOLERANCE_CENTS = 1
 const PLUGIN_GATEWAY_PROVIDER_TYPE = 'plugin_gateway'
-const SUPPORTED_RECHARGE_PROVIDER_TYPES = new Set(['yipay', 'heleket', PLUGIN_GATEWAY_PROVIDER_TYPE])
+const MANUAL_PROVIDER_TYPE = 'manual'
+const SUPPORTED_RECHARGE_PROVIDER_TYPES = new Set(['yipay', 'heleket', PLUGIN_GATEWAY_PROVIDER_TYPE, MANUAL_PROVIDER_TYPE])
 const HELEKET_CALLBACK_IPS = ['31.133.220.8']
 const POSITIVE_ID_PATTERN = /^[1-9]\d*$/
 const RECHARGE_STATUSES = new Set(['pending', 'paid', 'completed', 'failed', 'cancelled', 'refunded'])
@@ -152,6 +154,18 @@ function isRechargeProviderTypeSupported(type: string): boolean {
 
 function getUnsupportedProviderError(type: string): string {
   return `支付渠道类型 ${type} 当前未实现安全的充值流程，暂不支持启用`
+}
+
+function normalizeManualRechargeInstructions(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, 2000) : null
+}
+
+function buildManualRechargeResponse(paymentDetails: unknown): { instructions: string } | null {
+  const details = readRechargePaymentDetails(paymentDetails)
+  const instructions = normalizeManualRechargeInstructions(details.manual?.instructions)
+  return instructions ? { instructions } : null
 }
 
 function buildPluginGatewayProviderConfig(config: Record<string, unknown>): {
@@ -942,6 +956,12 @@ function validateActiveRechargeProvider(
     return { valid, error }
   }
 
+  if (provider.type === MANUAL_PROVIDER_TYPE) {
+    return normalizeManualRechargeInstructions(provider.config.instructions)
+      ? { valid: true }
+      : { valid: false, error: '人工充值渠道必须填写付款说明' }
+  }
+
   return { valid: false, error: getUnsupportedProviderError(provider.type) }
 }
 
@@ -1018,6 +1038,14 @@ async function validatePaymentProviderAdminInput(
     normalizedConfig.pluginId = pluginConfig.pluginId
     normalizedConfig.gatewayExtensionKey = pluginConfig.gatewayExtensionKey
     normalizedConfig.providerCode = pluginConfig.providerCode
+  }
+
+  if (providerType === MANUAL_PROVIDER_TYPE) {
+    const instructions = normalizeManualRechargeInstructions(normalizedConfig.instructions)
+    if (!instructions) {
+      return { valid: false, error: '人工充值渠道必须填写付款说明', config: normalizedConfig }
+    }
+    normalizedConfig.instructions = instructions
   }
 
   if (status === 'active') {
@@ -1255,7 +1283,9 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         ? buildHeleketInvoicePaymentDetails(orderNo, payableAmount, buildHeleketConfig(providerConfig).heleketConfig)
         : provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE
           ? buildPluginGatewayPaymentDetails(providerConfig)
-          : { kind: provider.type }
+          : provider.type === MANUAL_PROVIDER_TYPE
+            ? buildManualRechargePaymentDetails(normalizeManualRechargeInstructions(providerConfig.instructions) || '')
+            : { kind: provider.type }
       const paymentDetails = mergeRechargeAmountDetails(providerPaymentDetails, {
         amount: normalizedAmount,
         payableAmount,
@@ -1345,7 +1375,10 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           type: provider.type,
           methods: provider.methods
         },
-        payUrl
+        payUrl,
+        manualPayment: provider.type === MANUAL_PROVIDER_TYPE
+          ? buildManualRechargeResponse(paymentDetails)
+          : null
       }
     } catch (error) {
       request.log.error(error, '创建充值订单失败')
@@ -1582,7 +1615,9 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
             )
           : provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE
             ? buildPluginGatewayPaymentDetails(effectiveProviderConfig)
-          : ((record as any).paymentDetails || { kind: provider.type })
+            : provider.type === MANUAL_PROVIDER_TYPE
+              ? buildManualRechargePaymentDetails(normalizeManualRechargeInstructions(effectiveProviderConfig.instructions) || '')
+              : ((record as any).paymentDetails || { kind: provider.type })
         paymentDetails = mergeRechargeAmountDetails(providerPaymentDetails, {
           amount: rechargeAmount,
           payableAmount,
@@ -1617,7 +1652,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         throw payError
       }
 
-      if (!payUrl) {
+      if (!payUrl && provider.type !== MANUAL_PROVIDER_TYPE) {
         return reply.status(400).send({ error: '不支持的支付渠道类型' })
       }
 
@@ -1644,7 +1679,10 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           status: record.status,
           expiredAt: record.expiredAt?.toISOString() || null
         },
-        payUrl
+        payUrl,
+        manualPayment: provider.type === MANUAL_PROVIDER_TYPE
+          ? buildManualRechargeResponse(paymentDetails)
+          : null
       }
     } catch (error) {
       request.log.error(error, '重新支付失败')

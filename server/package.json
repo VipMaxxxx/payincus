@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "0.8.9",
+  "version": "0.9.0",
   "description": "PayIncus backend service",
   "type": "module",
   "main": "dist/app.js",
@@ -64,6 +64,7 @@
     "test:geoip-guard": "node --import tsx scripts/test-geoip-guard.ts",
     "test:gift-card-guards": "node --import tsx scripts/test-gift-card-guards.ts",
     "test:gift-card-flow": "node --import tsx scripts/test-gift-card-flow.ts",
+    "test:integration-health-guards": "node --import tsx scripts/test-integration-health-guards.ts",
     "test:resource-risk-guards": "node --import tsx scripts/test-resource-risk-guards.ts",
     "test:hosting-balance-guards": "node --import tsx scripts/test-hosting-balance-guards.ts",
     "test:host-notification-email-task-guards": "node --import tsx scripts/test-host-notification-email-task-guards.ts",
@@ -141,6 +142,7 @@
     "test:frontend-i18n-keys": "node --import tsx scripts/test-frontend-i18n-keys.ts",
     "test:friend-route-guards": "node --import tsx scripts/test-friend-route-guards.ts",
     "test:payment-provider-secret-redaction": "node --import tsx scripts/test-payment-provider-secret-redaction.ts",
+    "test:manual-payment-provider-guards": "node --import tsx scripts/test-manual-payment-provider-guards.ts",
     "test:production-proof-snapshot-redaction": "node --import tsx scripts/test-production-proof-snapshot-redaction.ts",
     "test:payment-provider-outbound-guard": "node --import tsx scripts/test-payment-provider-outbound-guard.ts",
     "test:plan-bandwidth-limit-guards": "node --import tsx scripts/test-plan-bandwidth-limit-guards.ts",

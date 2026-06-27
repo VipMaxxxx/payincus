@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import api, {
+  type ResourceRiskEvidenceDetail,
   type ResourceRiskEvent,
   type ResourceRiskPolicy,
   type ResourceRiskState,
@@ -21,9 +22,43 @@ interface PageState {
   total: number
 }
 
+interface ManualRestrictionContext {
+  id: number
+  userId?: number
+  ticketId: number | null
+  sourceInstanceId: number | null
+  user?: { id: number; username: string }
+  sourceInstance?: { id: number; name: string; status: string } | null
+}
+
+type ManualActionType =
+  | 'qos'
+  | 'suspend'
+  | 'unsuspend'
+  | 'order-restrict'
+  | 'release-state-restriction'
+  | 'release-instance'
+  | 'release-restriction'
+
+interface ManualActionContext {
+  type: ManualActionType
+  title: string
+  description: string
+  confirmLabel: string
+  reasonPlaceholder: string
+  defaultReason: string
+  item?: ResourceRiskState
+  restriction?: ManualRestrictionContext
+  bandwidthMbps?: number
+  restrictOrders?: boolean
+  notifyUser?: boolean
+  danger?: boolean
+}
+
 const toast = useToast()
 const loading = ref(true)
 const saving = ref(false)
+const manualSubmitting = ref(false)
 const activeTab = ref<TabKey>('instances')
 const overview = ref<{ totalStates: number; highRisk: number; activeRestrictions: number } | null>(null)
 const instances = ref<ResourceRiskState[]>([])
@@ -52,6 +87,14 @@ const policyForm = ref({
     { level: 3, bandwidthMbps: 10, score: 80 }
   ] as QosTierForm[]
 })
+const manualAction = ref<ManualActionContext | null>(null)
+const evidenceDetail = ref<ResourceRiskEvidenceDetail | null>(null)
+const evidenceLoading = ref(false)
+const manualReason = ref('')
+const manualBandwidthMbps = ref<number | null>(null)
+const manualRestrictOrders = ref(true)
+const manualNotifyUser = ref(false)
+const manualConfirmChecked = ref(false)
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'instances', label: '实例风险' },
@@ -62,6 +105,67 @@ const tabs: Array<{ key: TabKey; label: string }> = [
 
 const highRiskCount = computed(() => overview.value?.highRisk || 0)
 const activeRestrictionCount = computed(() => overview.value?.activeRestrictions || 0)
+const manualActionTargetLabel = computed(() => {
+  const context = manualAction.value
+  if (!context) return '-'
+  if (context.item) {
+    const instance = context.item.instance?.name || `实例 #${context.item.instanceId}`
+    const user = context.item.user?.username || `用户 #${context.item.userId}`
+    return `${instance} / ${user}`
+  }
+  if (context.restriction) {
+    const user = context.restriction.user?.username || (context.restriction.userId ? `用户 #${context.restriction.userId}` : '未知用户')
+    const instance = context.restriction.sourceInstance?.name || (context.restriction.sourceInstanceId ? `实例 #${context.restriction.sourceInstanceId}` : '未知来源实例')
+    return `${user} / ${instance}`
+  }
+  return '-'
+})
+const canSubmitManualAction = computed(() => {
+  const context = manualAction.value
+  if (!context || manualSubmitting.value || !manualConfirmChecked.value || !manualReason.value.trim()) return false
+  if (context.type === 'qos') {
+    return Number.isFinite(Number(manualBandwidthMbps.value)) && Number(manualBandwidthMbps.value) > 0
+  }
+  return true
+})
+const manualReasonTemplates = computed(() => {
+  switch (manualAction.value?.type) {
+    case 'qos':
+      return [
+        '持续带宽占用超过当前策略阈值，先执行人工限速并继续观察。',
+        '短时间内 PPS 或小包比例异常，先限制带宽并要求用户说明用途。',
+        '节点资源压力较高，临时限速该实例以保护同节点其他实例。'
+      ]
+    case 'suspend':
+      return [
+        '疑似扫描或异常发包，先暂停实例并同步限制账号下单，等待工单审核。',
+        '长期 CPU 或带宽高占用且影响节点稳定，先暂停实例进行人工复核。',
+        '多次触发高风险风控事件，先封禁实例并通知用户提交用途说明。'
+      ]
+    case 'unsuspend':
+    case 'release-instance':
+      return [
+        '用户已通过工单说明用途，风险已排除，解除实例风控处置。',
+        '近期指标恢复正常，人工复核通过，恢复实例正常状态。',
+        '误判复核成立，解除限制并保留本次审计记录。'
+      ]
+    case 'order-restrict':
+      return [
+        '当前实例触发高风险资源风控，限制账号继续下单并要求工单审核。',
+        '同一账号实例存在异常发包风险，暂停新购实例直到人工复核完成。',
+        '疑似规避资源限制或安全风险，先限制下单并通知用户说明用途。'
+      ]
+    case 'release-state-restriction':
+    case 'release-restriction':
+      return [
+        '工单人工审核通过，当前来源实例风险已处理，解除下单限制。',
+        '用户已整改异常行为，观察期内未再次触发风险，解除下单限制。',
+        '限单来源确认误判，解除限制并保留复核记录。'
+      ]
+    default:
+      return []
+  }
+})
 
 function totalPages(pageState: PageState): number {
   return Math.max(1, Math.ceil(pageState.total / pageState.pageSize))
@@ -95,12 +199,73 @@ function formatDate(value: string | null | undefined): string {
   return new Date(value).toLocaleString()
 }
 
+function formatTrendBucket(value: string | null | undefined, granularity: 'hour' | 'day'): string {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  if (granularity === 'day') return date.toLocaleDateString()
+  return date.toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 function badgeClass(level: string): string {
   if (level === 'critical') return 'badge badge-error'
   if (level === 'high') return 'badge badge-warning'
   if (level === 'limited') return 'badge badge-info'
   if (level === 'watch') return 'badge badge-warning'
   return 'badge badge-success'
+}
+
+function formatMetric(value: number | null | undefined, unit = ''): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '-'
+  return `${Number(value).toFixed(2)}${unit}`
+}
+
+function formatBytes(value: string | number | null | undefined): string {
+  const numeric = Number(value || 0)
+  if (!Number.isFinite(numeric) || numeric <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let size = numeric
+  let index = 0
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024
+    index += 1
+  }
+  return `${size.toFixed(index === 0 ? 0 : 2)} ${units[index]}`
+}
+
+function stringifyEvidence(value: unknown): string {
+  if (!value || (typeof value === 'object' && Object.keys(value as Record<string, unknown>).length === 0)) return '-'
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function safeFileName(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'instance'
+}
+
+function applyManualReasonTemplate(template: string) {
+  manualReason.value = template
+}
+
+function exportEvidenceDetail() {
+  const detail = evidenceDetail.value
+  if (!detail) return
+
+  const instanceName = safeFileName(detail.state.instance?.name || `instance-${detail.state.instanceId}`)
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const blob = new Blob([JSON.stringify(detail, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `resource-risk-${instanceName}-${timestamp}.json`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+  toast.success('已导出风险证据 JSON')
 }
 
 function normalizeQosTiers(): QosTierForm[] | null {
@@ -306,91 +471,93 @@ async function savePolicy() {
   }
 }
 
-async function manualQos(item: ResourceRiskState) {
-  const bandwidthInput = window.prompt(`请输入 ${item.instance?.name || item.instanceId} 的人工限速 Mbps`, '30')
-  if (!bandwidthInput) return
-  const bandwidthMbps = Number(bandwidthInput)
-  if (!Number.isFinite(bandwidthMbps) || bandwidthMbps <= 0) {
-    toast.warning('限速 Mbps 必须大于 0')
-    return
-  }
-  const reason = window.prompt('请输入人工限速原因', item.reason || '资源占用过高，人工限速')
-  if (!reason?.trim()) return
-  const restrictOrders = window.confirm('是否同时限制该账号继续下单？')
-  try {
-    await api.resourceRisk.manualQos(item.instanceId, {
-      bandwidthMbps,
-      reason,
-      restrictOrders
-    })
-    toast.success('已人工限速')
-    await reloadOperationalLists()
-  } catch (error: any) {
-    toast.error(`人工限速失败：${error?.message || error}`)
-  }
+function openManualAction(context: ManualActionContext) {
+  manualAction.value = context
+  manualReason.value = context.defaultReason
+  manualBandwidthMbps.value = context.bandwidthMbps ?? null
+  manualRestrictOrders.value = context.restrictOrders ?? true
+  manualNotifyUser.value = context.notifyUser ?? false
+  manualConfirmChecked.value = false
 }
 
-async function manualSuspend(item: ResourceRiskState) {
-  const reason = window.prompt(`请输入封禁 ${item.instance?.name || item.instanceId} 的原因`, item.reason || '资源风控人工封禁')
-  if (!reason?.trim()) return
-  const restrictOrders = window.confirm('是否同时限制该账号继续下单？')
-  const notifyUser = window.confirm('是否通知用户？')
-  try {
-    await api.resourceRisk.manualSuspend(item.instanceId, {
-      reason,
-      restrictOrders,
-      notifyUser
-    })
-    toast.success('实例已人工封禁')
-    await reloadOperationalLists()
-  } catch (error: any) {
-    toast.error(`人工封禁失败：${error?.message || error}`)
-  }
+function closeManualAction(force = false) {
+  if (manualSubmitting.value && !force) return
+  manualAction.value = null
+  manualReason.value = ''
+  manualBandwidthMbps.value = null
+  manualRestrictOrders.value = true
+  manualNotifyUser.value = false
+  manualConfirmChecked.value = false
 }
 
-async function manualUnsuspend(item: ResourceRiskState) {
-  const reason = window.prompt(`请输入解除 ${item.instance?.name || item.instanceId} 封禁的原因`, '人工审核通过')
-  if (!reason?.trim()) return
-  const notifyUser = window.confirm('是否通知用户？')
-  try {
-    await api.resourceRisk.manualUnsuspend(item.instanceId, {
-      reason,
-      notifyUser
-    })
-    toast.success('实例已解除封禁')
-    await reloadOperationalLists()
-  } catch (error: any) {
-    toast.error(`解除封禁失败：${error?.message || error}`)
-  }
+function manualQos(item: ResourceRiskState) {
+  openManualAction({
+    type: 'qos',
+    title: '人工限速',
+    description: '将当前实例带宽降到指定 Mbps，可同时限制关联账号继续下单。',
+    confirmLabel: '确认限速',
+    reasonPlaceholder: '例如：持续占用带宽超过策略阈值，先人工限速观察',
+    defaultReason: item.reason || '资源占用过高，人工限速',
+    bandwidthMbps: Number(item.currentBandwidthLimit) > 0 ? Number(item.currentBandwidthLimit) : 30,
+    restrictOrders: true,
+    item
+  })
 }
 
-async function manualOrderRestrict(item: ResourceRiskState) {
-  const reason = window.prompt(`请输入限制用户 ${item.user?.username || item.userId} 下单的原因`, '实例触发人工资源风控审核')
-  if (!reason?.trim()) return
-  try {
-    await api.resourceRisk.manualOrderRestrict(item.instanceId, reason)
-    toast.success('已限制账号下单')
-    await reloadOperationalLists()
-  } catch (error: any) {
-    toast.error(`限制下单失败：${error?.message || error}`)
-  }
+function manualSuspend(item: ResourceRiskState) {
+  openManualAction({
+    type: 'suspend',
+    title: '人工封禁实例',
+    description: '暂停该实例并记录资源风控事件，可同时限制关联账号继续下单。',
+    confirmLabel: '确认封禁',
+    reasonPlaceholder: '例如：疑似扫描、发包异常或长期高占用，需工单审核',
+    defaultReason: item.reason || '资源风控人工封禁',
+    restrictOrders: true,
+    notifyUser: true,
+    danger: true,
+    item
+  })
 }
 
-async function releaseOrderRestrictionFromState(item: ResourceRiskState) {
+function manualUnsuspend(item: ResourceRiskState) {
+  openManualAction({
+    type: 'unsuspend',
+    title: '解除实例封禁',
+    description: '恢复该实例的人工封禁状态，并保留本次人工审核结论。',
+    confirmLabel: '确认解除',
+    reasonPlaceholder: '例如：用户已说明用途，风险已排除',
+    defaultReason: '人工审核通过',
+    notifyUser: true,
+    item
+  })
+}
+
+function manualOrderRestrict(item: ResourceRiskState) {
+  openManualAction({
+    type: 'order-restrict',
+    title: '限制账号下单',
+    description: '以当前实例作为来源限制关联账号继续购买新实例。',
+    confirmLabel: '确认限单',
+    reasonPlaceholder: '例如：该实例触发高风险资源风控，需工单人工审核',
+    defaultReason: '实例触发人工资源风控审核',
+    danger: true,
+    item
+  })
+}
+
+function releaseOrderRestrictionFromState(item: ResourceRiskState) {
   const restriction = item.activeOrderRestriction
   if (!restriction) return
-  const reason = window.prompt(`解除用户 ${item.user?.username || item.userId} 的下单限制原因`, '工单人工审核通过')
-  if (!reason?.trim()) return
-  try {
-    await api.resourceRisk.releaseRestriction(restriction.id, {
-      reason,
-      ticketId: restriction.ticketId
-    })
-    toast.success('下单限制已解除')
-    await reloadOperationalLists()
-  } catch (error: any) {
-    toast.error(`解除限单失败：${error?.message || error}`)
-  }
+  openManualAction({
+    type: 'release-state-restriction',
+    title: '解除当前实例限单',
+    description: '只释放当前来源实例创建的 active 限单；同账号其他实例触发的限单不会被释放。',
+    confirmLabel: '确认解除限单',
+    reasonPlaceholder: '例如：工单审核通过，当前来源实例风险已处理',
+    defaultReason: '工单人工审核通过',
+    item,
+    restriction
+  })
 }
 
 async function evaluateInstance(item: ResourceRiskState) {
@@ -403,30 +570,92 @@ async function evaluateInstance(item: ResourceRiskState) {
   }
 }
 
-async function releaseInstance(item: ResourceRiskState) {
-  const reason = window.prompt(`解除实例 ${item.instance?.name || item.instanceId} 的资源风控原因`, '人工审核通过')
-  if (!reason) return
+async function openEvidence(item: ResourceRiskState) {
+  evidenceLoading.value = true
+  evidenceDetail.value = null
   try {
-    await api.resourceRisk.releaseInstance(item.instanceId, reason)
-    toast.success('实例风控已解除')
-    await reloadOperationalLists()
+    evidenceDetail.value = await api.resourceRisk.evidence(item.instanceId)
   } catch (error: any) {
-    toast.error(`解除失败：${error?.message || error}`)
+    toast.error(`加载证据失败：${error?.message || error}`)
+  } finally {
+    evidenceLoading.value = false
   }
 }
 
-async function releaseRestriction(item: UserOrderRestrictionRecord) {
-  const reason = window.prompt(`解除用户 ${item.user?.username || item.userId} 的下单限制原因`, '工单人工审核通过')
-  if (!reason) return
+function closeEvidence() {
+  evidenceDetail.value = null
+}
+
+function releaseInstance(item: ResourceRiskState) {
+  openManualAction({
+    type: 'release-instance',
+    title: '解除实例风控',
+    description: '清理当前实例的风控处置状态，保留事件和审计记录。',
+    confirmLabel: '确认解除风控',
+    reasonPlaceholder: '例如：指标恢复正常，人工复核通过',
+    defaultReason: '人工审核通过',
+    item
+  })
+}
+
+function releaseRestriction(item: UserOrderRestrictionRecord) {
+  openManualAction({
+    type: 'release-restriction',
+    title: '解除下单限制',
+    description: '释放这条下单限制记录；如果同账号仍有其他 active 限制，账号仍不能下单。',
+    confirmLabel: '确认解除限单',
+    reasonPlaceholder: '例如：工单审核通过，来源实例风险已处理',
+    defaultReason: '工单人工审核通过',
+    restriction: item
+  })
+}
+
+async function submitManualAction() {
+  const context = manualAction.value
+  if (!context || !canSubmitManualAction.value) return
+
+  const reason = manualReason.value.trim()
+  manualSubmitting.value = true
   try {
-    await api.resourceRisk.releaseRestriction(item.id, {
-      reason,
-      ticketId: item.ticketId
-    })
-    toast.success('下单限制已解除')
+    if (context.type === 'qos' && context.item) {
+      await api.resourceRisk.manualQos(context.item.instanceId, {
+        bandwidthMbps: Math.round(Number(manualBandwidthMbps.value)),
+        reason,
+        restrictOrders: manualRestrictOrders.value
+      })
+      toast.success('已人工限速')
+    } else if (context.type === 'suspend' && context.item) {
+      await api.resourceRisk.manualSuspend(context.item.instanceId, {
+        reason,
+        restrictOrders: manualRestrictOrders.value,
+        notifyUser: manualNotifyUser.value
+      })
+      toast.success('实例已人工封禁')
+    } else if (context.type === 'unsuspend' && context.item) {
+      await api.resourceRisk.manualUnsuspend(context.item.instanceId, {
+        reason,
+        notifyUser: manualNotifyUser.value
+      })
+      toast.success('实例已解除封禁')
+    } else if (context.type === 'order-restrict' && context.item) {
+      await api.resourceRisk.manualOrderRestrict(context.item.instanceId, reason)
+      toast.success('已限制账号下单')
+    } else if (context.type === 'release-instance' && context.item) {
+      await api.resourceRisk.releaseInstance(context.item.instanceId, reason)
+      toast.success('实例风控已解除')
+    } else if ((context.type === 'release-state-restriction' || context.type === 'release-restriction') && context.restriction) {
+      await api.resourceRisk.releaseRestriction(context.restriction.id, {
+        reason,
+        ticketId: context.restriction.ticketId
+      })
+      toast.success('下单限制已解除')
+    }
     await reloadOperationalLists()
+    closeManualAction(true)
   } catch (error: any) {
-    toast.error(`解除失败：${error?.message || error}`)
+    toast.error(`操作失败：${error?.message || error}`)
+  } finally {
+    manualSubmitting.value = false
   }
 }
 
@@ -505,6 +734,7 @@ onMounted(() => {
                 <td class="max-w-sm truncate p-3 text-themed-muted">{{ item.reason || '-' }}</td>
                 <td class="p-3">
                   <div class="flex flex-wrap justify-end gap-2">
+                    <button class="btn-secondary px-3 py-1 text-xs" @click="openEvidence(item)">证据</button>
                     <button class="btn-secondary px-3 py-1 text-xs" @click="evaluateInstance(item)">评估</button>
                     <button
                       v-if="!isSuspendedRisk(item)"
@@ -792,5 +1022,320 @@ onMounted(() => {
         </div>
       </section>
     </template>
+
+    <div
+      v-if="manualAction"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      @click.self="() => closeManualAction()"
+    >
+      <form
+        class="w-full max-w-xl rounded-lg border border-themed bg-themed-surface shadow-xl"
+        @submit.prevent="submitManualAction"
+      >
+        <div class="border-b border-themed px-5 py-4">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-semibold text-themed">{{ manualAction.title }}</h2>
+              <p class="mt-1 text-sm text-themed-muted">{{ manualAction.description }}</p>
+            </div>
+            <button class="btn-secondary px-2 py-1 text-xs" type="button" :disabled="manualSubmitting" @click="() => closeManualAction()">
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-4 px-5 py-4">
+          <div class="rounded-lg border border-themed bg-themed-muted/30 p-3 text-sm">
+            <div class="text-xs text-themed-muted">处置对象</div>
+            <div class="mt-1 font-medium text-themed">{{ manualActionTargetLabel }}</div>
+          </div>
+
+          <label v-if="manualAction.type === 'qos'" class="block space-y-1">
+            <span class="label">人工限速 Mbps</span>
+            <input v-model.number="manualBandwidthMbps" class="input w-full" type="number" min="1" required />
+          </label>
+
+          <label
+            v-if="manualAction.type === 'qos' || manualAction.type === 'suspend'"
+            class="flex items-center gap-2 text-sm text-themed"
+          >
+            <input v-model="manualRestrictOrders" type="checkbox" />
+            同时限制该账号继续下单
+          </label>
+
+          <label
+            v-if="manualAction.type === 'suspend' || manualAction.type === 'unsuspend'"
+            class="flex items-center gap-2 text-sm text-themed"
+          >
+            <input v-model="manualNotifyUser" type="checkbox" />
+            同步通知用户
+          </label>
+
+          <label class="block space-y-1">
+            <span class="label">操作原因</span>
+            <textarea
+              v-model="manualReason"
+              class="input min-h-[96px] w-full"
+              :placeholder="manualAction.reasonPlaceholder"
+              required
+            />
+          </label>
+
+          <div v-if="manualReasonTemplates.length" class="space-y-2">
+            <div class="text-xs text-themed-muted">原因模板</div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="template in manualReasonTemplates"
+                :key="template"
+                class="btn-secondary px-3 py-1 text-xs"
+                type="button"
+                @click="applyManualReasonTemplate(template)"
+              >
+                {{ template }}
+              </button>
+            </div>
+          </div>
+
+          <label class="flex items-start gap-2 rounded-lg border border-themed bg-themed-muted/30 p-3 text-sm text-themed">
+            <input v-model="manualConfirmChecked" class="mt-1" type="checkbox" />
+            <span>确认本次操作会写入资源风控事件和后台审计，且已核对来源实例、账号和工单审核结论。</span>
+          </label>
+        </div>
+
+        <div class="flex justify-end gap-2 border-t border-themed px-5 py-4">
+          <button class="btn-secondary" type="button" :disabled="manualSubmitting" @click="() => closeManualAction()">取消</button>
+          <button
+            :class="manualAction.danger ? 'btn-danger' : 'btn-primary'"
+            type="submit"
+            :disabled="!canSubmitManualAction"
+          >
+            {{ manualSubmitting ? '处理中...' : manualAction.confirmLabel }}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div
+      v-if="evidenceLoading || evidenceDetail"
+      class="fixed inset-0 z-40 flex justify-end bg-black/40"
+      @click.self="closeEvidence"
+    >
+      <aside class="h-full w-full max-w-4xl overflow-y-auto border-l border-themed bg-themed-surface shadow-xl">
+        <div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-themed bg-themed-surface px-5 py-4">
+          <div>
+            <h2 class="text-lg font-semibold text-themed">风险证据详情</h2>
+            <p class="mt-1 text-sm text-themed-muted">
+              {{ evidenceDetail?.state.instance?.name || (evidenceLoading ? '加载中...' : '-') }}
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              v-if="evidenceDetail"
+              class="btn-secondary px-3 py-1 text-xs"
+              type="button"
+              @click="exportEvidenceDetail"
+            >
+              导出 JSON
+            </button>
+            <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="closeEvidence">关闭</button>
+          </div>
+        </div>
+
+        <div v-if="evidenceLoading" class="p-8 text-center text-themed-muted">加载证据中...</div>
+
+        <div v-else-if="evidenceDetail" class="space-y-5 p-5">
+          <section class="grid gap-3 md:grid-cols-4">
+            <div class="rounded-lg border border-themed p-3">
+              <div class="text-xs text-themed-muted">当前评分</div>
+              <div class="mt-1 text-2xl font-semibold text-themed">{{ evidenceDetail.state.score }}</div>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <div class="text-xs text-themed-muted">风险等级</div>
+              <div class="mt-2"><span :class="badgeClass(evidenceDetail.state.level)">{{ evidenceDetail.state.level }}</span></div>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <div class="text-xs text-themed-muted">当前状态</div>
+              <div class="mt-1 text-themed">{{ evidenceDetail.state.status }}</div>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <div class="text-xs text-themed-muted">限速</div>
+              <div class="mt-1 text-themed">{{ evidenceDetail.state.currentBandwidthLimit || '-' }}</div>
+            </div>
+          </section>
+
+          <section class="rounded-lg border border-themed">
+            <div class="border-b border-themed px-4 py-3">
+              <h3 class="font-semibold text-themed">当前证据快照</h3>
+            </div>
+            <pre class="max-h-72 overflow-auto whitespace-pre-wrap break-words p-4 text-xs text-themed-muted">{{ stringifyEvidence(evidenceDetail.state.evidence) }}</pre>
+          </section>
+
+          <section class="grid gap-4 xl:grid-cols-2">
+            <div class="rounded-lg border border-themed">
+              <div class="border-b border-themed px-4 py-3">
+                <h3 class="font-semibold text-themed">24 小时趋势</h3>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-themed-secondary text-themed-muted">
+                    <tr>
+                      <th class="p-3 text-left">时间</th>
+                      <th class="p-3 text-left">平均/峰值带宽</th>
+                      <th class="p-3 text-left">平均/峰值 PPS</th>
+                      <th class="p-3 text-left">平均/峰值 CPU</th>
+                      <th class="p-3 text-left">流量</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="bucket in evidenceDetail.trends.hourly24h.slice(-12)" :key="bucket.bucketStart" class="border-t border-themed">
+                      <td class="p-3 text-themed-muted">{{ formatTrendBucket(bucket.bucketStart, 'hour') }}</td>
+                      <td class="p-3 text-themed">{{ formatMetric(bucket.avgTotalMbps, ' Mbps') }} / {{ formatMetric(bucket.maxTotalMbps, ' Mbps') }}</td>
+                      <td class="p-3 text-themed">{{ formatMetric(bucket.avgPps) }} / {{ formatMetric(bucket.maxPps) }}</td>
+                      <td class="p-3 text-themed">{{ bucket.avgCpuPercent === null ? '-' : formatMetric(bucket.avgCpuPercent, '%') }} / {{ bucket.maxCpuPercent === null ? '-' : formatMetric(bucket.maxCpuPercent, '%') }}</td>
+                      <td class="p-3 text-themed-muted">{{ formatBytes(bucket.totalBytes) }}</td>
+                    </tr>
+                    <tr v-if="evidenceDetail.trends.hourly24h.length === 0">
+                      <td colspan="5" class="p-6 text-center text-themed-muted">暂无 24 小时趋势。</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-themed">
+              <div class="border-b border-themed px-4 py-3">
+                <h3 class="font-semibold text-themed">7 天趋势</h3>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-themed-secondary text-themed-muted">
+                    <tr>
+                      <th class="p-3 text-left">日期</th>
+                      <th class="p-3 text-left">平均/峰值带宽</th>
+                      <th class="p-3 text-left">平均/峰值 PPS</th>
+                      <th class="p-3 text-left">平均/峰值 CPU</th>
+                      <th class="p-3 text-left">流量</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="bucket in evidenceDetail.trends.daily7d" :key="bucket.bucketStart" class="border-t border-themed">
+                      <td class="p-3 text-themed-muted">{{ formatTrendBucket(bucket.bucketStart, 'day') }}</td>
+                      <td class="p-3 text-themed">{{ formatMetric(bucket.avgTotalMbps, ' Mbps') }} / {{ formatMetric(bucket.maxTotalMbps, ' Mbps') }}</td>
+                      <td class="p-3 text-themed">{{ formatMetric(bucket.avgPps) }} / {{ formatMetric(bucket.maxPps) }}</td>
+                      <td class="p-3 text-themed">{{ bucket.avgCpuPercent === null ? '-' : formatMetric(bucket.avgCpuPercent, '%') }} / {{ bucket.maxCpuPercent === null ? '-' : formatMetric(bucket.maxCpuPercent, '%') }}</td>
+                      <td class="p-3 text-themed-muted">{{ formatBytes(bucket.totalBytes) }}</td>
+                    </tr>
+                    <tr v-if="evidenceDetail.trends.daily7d.length === 0">
+                      <td colspan="5" class="p-6 text-center text-themed-muted">暂无 7 天趋势。</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-lg border border-themed">
+            <div class="border-b border-themed px-4 py-3">
+              <h3 class="font-semibold text-themed">最近资源样本</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead class="bg-themed-secondary text-themed-muted">
+                  <tr>
+                    <th class="p-3 text-left">采样时间</th>
+                    <th class="p-3 text-left">带宽</th>
+                    <th class="p-3 text-left">PPS</th>
+                    <th class="p-3 text-left">CPU</th>
+                    <th class="p-3 text-left">流量增量</th>
+                    <th class="p-3 text-left">来源</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="sample in evidenceDetail.samples.slice(0, 12)" :key="sample.id" class="border-t border-themed">
+                    <td class="p-3 text-themed-muted">{{ formatDate(sample.sampledAt) }}</td>
+                    <td class="p-3 text-themed">{{ formatMetric(sample.totalMbps, ' Mbps') }}</td>
+                    <td class="p-3 text-themed">{{ formatMetric(sample.pps) }}</td>
+                    <td class="p-3 text-themed">{{ sample.cpuPercent === null ? '-' : formatMetric(sample.cpuPercent, '%') }}</td>
+                    <td class="p-3 text-themed-muted">{{ formatBytes(sample.totalBytesDelta) }}</td>
+                    <td class="p-3 text-themed-muted">{{ sample.source }}</td>
+                  </tr>
+                  <tr v-if="evidenceDetail.samples.length === 0">
+                    <td colspan="6" class="p-6 text-center text-themed-muted">暂无资源样本。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="grid gap-4 lg:grid-cols-2">
+            <div class="rounded-lg border border-themed">
+              <div class="border-b border-themed px-4 py-3">
+                <h3 class="font-semibold text-themed">风险事件时间线</h3>
+              </div>
+              <div class="max-h-96 overflow-y-auto divide-y divide-themed">
+                <div v-for="event in evidenceDetail.events" :key="event.id" class="p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <span :class="badgeClass(event.severity)">{{ event.severity }}</span>
+                    <span class="text-xs text-themed-muted">{{ formatDate(event.createdAt) }}</span>
+                  </div>
+                  <div class="mt-2 text-sm font-medium text-themed">{{ event.type }} · {{ event.scoreAfter }} / {{ event.scoreDelta >= 0 ? '+' : '' }}{{ event.scoreDelta }}</div>
+                  <p class="mt-1 text-sm text-themed-muted">{{ event.message }}</p>
+                  <pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-themed-secondary p-2 text-xs text-themed-muted">{{ stringifyEvidence(event.evidence) }}</pre>
+                </div>
+                <div v-if="evidenceDetail.events.length === 0" class="p-6 text-center text-themed-muted">暂无事件。</div>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-themed">
+              <div class="border-b border-themed px-4 py-3">
+                <h3 class="font-semibold text-themed">处置审计</h3>
+              </div>
+              <div class="max-h-96 overflow-y-auto divide-y divide-themed">
+                <div v-for="log in evidenceDetail.auditLogs" :key="log.id" class="p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="font-mono text-xs text-themed">{{ log.action }}</span>
+                    <span class="text-xs text-themed-muted">{{ formatDate(log.createdAt) }}</span>
+                  </div>
+                  <div class="mt-1 text-xs text-themed-muted">操作人：{{ log.actor?.username || '-' }} · 结果：{{ log.result }}</div>
+                  <p class="mt-2 text-sm text-themed-muted">{{ log.content }}</p>
+                </div>
+                <div v-if="evidenceDetail.auditLogs.length === 0" class="p-6 text-center text-themed-muted">暂无风控审计日志。</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-lg border border-themed">
+            <div class="border-b border-themed px-4 py-3">
+              <h3 class="font-semibold text-themed">关联下单限制</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead class="bg-themed-secondary text-themed-muted">
+                  <tr>
+                    <th class="p-3 text-left">ID</th>
+                    <th class="p-3 text-left">状态</th>
+                    <th class="p-3 text-left">工单</th>
+                    <th class="p-3 text-left">原因</th>
+                    <th class="p-3 text-left">创建时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="restriction in evidenceDetail.restrictions" :key="restriction.id" class="border-t border-themed">
+                    <td class="p-3 text-themed">#{{ restriction.id }}</td>
+                    <td class="p-3"><span :class="restriction.status === 'active' ? 'badge badge-error' : 'badge badge-success'">{{ restriction.status }}</span></td>
+                    <td class="p-3 text-themed-muted">{{ restriction.ticketId ? `#${restriction.ticketId}` : '-' }}</td>
+                    <td class="max-w-lg p-3 text-themed-muted">{{ restriction.reason }}</td>
+                    <td class="p-3 text-themed-muted">{{ formatDate(restriction.createdAt) }}</td>
+                  </tr>
+                  <tr v-if="evidenceDetail.restrictions.length === 0">
+                    <td colspan="5" class="p-6 text-center text-themed-muted">暂无关联限单。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
   </div>
 </template>

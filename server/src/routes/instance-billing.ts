@@ -18,6 +18,7 @@ import {
   dispatchPluginServiceExtension,
   listEnabledServiceExtensionTargets
 } from '../lib/plugin-extension-dispatch.js'
+import { recordPlanUpgradeSyncFailure } from '../services/plan-upgrade-sync-repair.js'
 
 interface BatchRenewPreviewItem {
   id: number
@@ -995,6 +996,45 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       } catch (incusErr) {
         incusSyncError = incusErr instanceof Error ? incusErr.message : String(incusErr)
         console.error(`[ChangePlan] 实例 ${instance.name} Incus 配置同步失败:`, incusSyncError)
+        try {
+          await recordPlanUpgradeSyncFailure({
+            source: 'user',
+            actorUserId: user.id,
+            instance: {
+              id: instance.id,
+              name: instance.name,
+              userId: instance.userId,
+              hostId: instance.hostId,
+              incusId: instance.incusId
+            },
+            oldPlan: oldPlan ? {
+              id: oldPlan.id,
+              name: oldPlan.name,
+              price: oldPlan.price,
+              billingCycle: oldPlan.billingCycle
+            } : null,
+            newPlan: {
+              id: newPlan.id,
+              name: newPlan.name,
+              price: newPlan.price,
+              billingCycle: newPlan.billingCycle,
+              cpu: newPlan.cpu,
+              memory: newPlan.memory,
+              disk: newPlan.disk
+            },
+            target: {
+              cpu: newPlan.cpu,
+              memory: newPlan.memory,
+              disk: newPlan.disk,
+              ingress: result.bandwidthLimit,
+              egress: result.bandwidthLimit
+            },
+            priceDiff: result.priceDiff,
+            error: incusErr
+          })
+        } catch (repairErr) {
+          request.log.error(repairErr, '实例升级 Incus 同步失败后创建修复 case 失败')
+        }
       }
 
       // 发送升降级通知

@@ -6,22 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `3aad553`
+- Current HEAD / 当前 HEAD: `430d0bc`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Release v0.8.9
-- Latest tag / 最新 tag: `v0.8.8`
+- Commit subject / 提交说明: Document resource risk operations
+- Latest tag / 最新 tag: `v0.8.9`
 
 ## Unreleased Changes / 未发布变更
 
 ### Other Changes / 其他变更
 
-- Release v0.8.9 `3aad553`
+- Document resource risk operations `430d0bc`
 
 ### Improvements and Adjustments / 改进与调整
 
-- Update handoff after v0.8.8 OTA `78dfa5e`
+- Update handoff after v0.8.9 OTA `e40d30b`
 
 ## Historical Versions / 历史版本
+
+## v0.8.9
+
+- Release commit / 发布提交: `bf3d86e`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Update version log for v0.8.9
+
+Resource risk admin pagination and source-scoped manual order restriction controls.
 
 ## v0.8.8
 

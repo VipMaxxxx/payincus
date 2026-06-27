@@ -4,6 +4,7 @@ import { extname, join, resolve, sep } from 'path'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import {
   appendPluginTaskLog,
+  assertPluginCapabilitiesApprovedForEnable,
   createPluginTask,
   disablePlugin,
   enablePlugin,
@@ -11,15 +12,18 @@ import {
   getPluginConfigs,
   getPluginTask,
   installValidatedPlugin,
+  listPluginCapabilityReviews,
   listPluginTasks,
   listPlugins,
   markPluginTaskFinished,
   markPluginTaskRunning,
   serializePlugin,
+  serializePluginCapabilityReview,
   serializePluginEventLog,
   serializePluginConfig,
   serializePluginTask,
   uninstallPlugin,
+  updatePluginCapabilityReview,
   updatePluginConfigs
 } from '../db/plugins.js'
 import { prisma } from '../db/prisma.js'
@@ -49,6 +53,20 @@ interface PluginEventQuery {
   eventName?: string
   handler?: string
   limit?: string
+}
+
+interface CapabilityReviewQuery {
+  pluginId?: string
+  status?: string
+}
+
+interface CapabilityReviewParams {
+  id: string
+}
+
+interface CapabilityReviewBody {
+  status?: unknown
+  reviewNotes?: unknown
 }
 
 interface MarketInstallBody {
@@ -92,6 +110,7 @@ const PUBLIC_PLUGIN_ACTION_RATE_LIMIT_DEFAULTS = [
   { rateLimit: 'normal' as const, maxRequests: 30, windowSeconds: 60 },
   { rateLimit: 'strict' as const, maxRequests: 10, windowSeconds: 60 }
 ]
+const PLUGIN_CAPABILITY_REVIEW_STATUSES = new Set(['pending', 'approved', 'rejected', 'revoked'])
 const PLUGIN_CONFIG_FILE_MIME_EXTENSIONS = new Map([
   ['image/png', '.png'],
   ['image/jpeg', '.jpg'],
@@ -126,6 +145,22 @@ function normalizePluginEventHandler(value: string): string | null {
   const trimmed = value.trim()
   if (!trimmed) return null
   return trimmed.length <= 300 ? trimmed : null
+}
+
+function normalizeCapabilityReviewStatus(value: unknown): 'pending' | 'approved' | 'rejected' | 'revoked' | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return PLUGIN_CAPABILITY_REVIEW_STATUSES.has(trimmed)
+    ? trimmed as 'pending' | 'approved' | 'rejected' | 'revoked'
+    : null
+}
+
+function normalizeCapabilityReviewNotes(value: unknown): string | null {
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.slice(0, 2000)
 }
 
 function normalizePluginActionName(value: unknown): string | null {
@@ -822,6 +857,76 @@ export default async function adminPluginRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.get<{ Querystring: CapabilityReviewQuery }>('/capability-reviews', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request, reply) => {
+    if (!(await requirePluginManager(request, reply))) return
+    const pluginId = typeof request.query.pluginId === 'string' && request.query.pluginId.trim()
+      ? normalizePluginId(request.query.pluginId)
+      : undefined
+    if (request.query.pluginId && !pluginId) {
+      return reply.code(400).send({ error: 'Invalid plugin id', code: 'INVALID_PLUGIN_ID' })
+    }
+    const status = typeof request.query.status === 'string' && request.query.status.trim()
+      ? normalizeCapabilityReviewStatus(request.query.status)
+      : undefined
+    if (request.query.status && !status) {
+      return reply.code(400).send({ error: 'Invalid capability review status', code: 'INVALID_PLUGIN_CAPABILITY_REVIEW_STATUS' })
+    }
+    const reviews = await listPluginCapabilityReviews({
+      pluginId: pluginId || undefined,
+      status: status || undefined
+    })
+    return { reviews: reviews.map(serializePluginCapabilityReview) }
+  })
+
+  fastify.patch<{ Params: CapabilityReviewParams; Body: CapabilityReviewBody }>('/capability-reviews/:id', {
+    onRequest: [fastify.authenticateAdmin],
+    schema: {
+      body: {
+        type: 'object',
+        required: ['status'],
+        additionalProperties: false,
+        properties: {
+          status: { type: 'string', enum: ['pending', 'approved', 'rejected', 'revoked'] },
+          reviewNotes: { type: 'string', maxLength: 2000 }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    if (!(await requirePluginManager(request, reply))) return
+    const id = parsePositiveId(request.params.id)
+    if (!id) return reply.code(400).send({ error: 'Invalid capability review id', code: 'INVALID_PLUGIN_CAPABILITY_REVIEW_ID' })
+    const status = normalizeCapabilityReviewStatus(request.body?.status)
+    if (!status) return reply.code(400).send({ error: 'Invalid capability review status', code: 'INVALID_PLUGIN_CAPABILITY_REVIEW_STATUS' })
+    const reviewNotes = normalizeCapabilityReviewNotes(request.body?.reviewNotes)
+    if ((status === 'rejected' || status === 'revoked') && !reviewNotes) {
+      return reply.code(400).send({ error: 'Rejecting or revoking a capability requires review notes', code: 'PLUGIN_CAPABILITY_REVIEW_NOTES_REQUIRED' })
+    }
+    try {
+      const user = getRequestUser(request)
+      const review = await updatePluginCapabilityReview({
+        id,
+        status,
+        reviewNotes,
+        reviewedByUserId: user.id
+      })
+      await createLog(
+        user.id,
+        LogModule.PLUGIN,
+        'plugin.capability_review',
+        `Reviewed plugin capability ${review.pluginId}/${review.capabilityKey}: ${status}`,
+        LogResult.SUCCESS
+      )
+      await appendPluginTaskLog(join(getPluginLogDir(), `plugin-capability-review-${review.pluginId}.log`), `Reviewed ${review.capabilityKey}: ${status}`)
+        .catch(() => undefined)
+      return { review: serializePluginCapabilityReview(review) }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return reply.code(400).send({ error: message, code: 'PLUGIN_CAPABILITY_REVIEW_FAILED' })
+    }
+  })
+
   fastify.post<{ Params: PluginConfigFileParams }>('/:pluginId/config-files/:key', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request, reply) => {
@@ -891,6 +996,21 @@ export default async function adminPluginRoutes(fastify: FastifyInstance) {
     const pluginId = normalizePluginId(request.params.pluginId)
     if (!pluginId) return reply.code(400).send({ error: 'Invalid plugin id', code: 'INVALID_PLUGIN_ID' })
     const user = getRequestUser(request)
+    const capabilityGate = await assertPluginCapabilitiesApprovedForEnable(pluginId)
+    if (!capabilityGate.ok) {
+      await createLog(
+        user.id,
+        LogModule.PLUGIN,
+        'plugin.capability_review.required',
+        `Blocked plugin enable for ${pluginId}: ${capabilityGate.reviews.length} capability review(s) are not approved`,
+        LogResult.WARNING
+      )
+      return reply.code(409).send({
+        error: 'High-risk plugin capabilities must be approved before enabling this extension',
+        code: 'PLUGIN_CAPABILITY_REVIEW_REQUIRED',
+        reviews: capabilityGate.reviews
+      })
+    }
     const plugin = await enablePlugin(pluginId, user.id)
     await dispatchPluginLifecycleEvent({
       event: 'plugin.enabled',

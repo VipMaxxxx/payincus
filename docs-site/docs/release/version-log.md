@@ -6,22 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `3aad553`
+- 当前 HEAD / Current HEAD: `430d0bc`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Release v0.8.9
-- 最新 tag / Latest tag: `v0.8.8`
+- 提交说明 / Commit subject: Document resource risk operations
+- 最新 tag / Latest tag: `v0.8.9`
 
 ## 未发布变更 / Unreleased Changes
 
 ### 其他变更 / Other Changes
 
-- Release v0.8.9 `3aad553`
+- Document resource risk operations `430d0bc`
 
 ### 改进与调整 / Improvements and Adjustments
 
-- Update handoff after v0.8.8 OTA `78dfa5e`
+- Update handoff after v0.8.9 OTA `e40d30b`
 
 ## 历史版本 / Historical Versions
+
+## v0.8.9
+
+- 发布提交 / Release commit: `bf3d86e`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Update version log for v0.8.9
+
+Resource risk admin pagination and source-scoped manual order restriction controls.
 
 ## v0.8.8
 

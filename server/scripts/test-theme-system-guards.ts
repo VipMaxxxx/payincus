@@ -24,6 +24,8 @@ const themeRoutes = read('server/src/routes/themes.ts')
 const adminThemeRoutes = read('server/src/routes/admin-themes.ts')
 const themeMarketSubmissionRoutes = read('server/src/routes/theme-market-submissions.ts')
 const app = read('server/src/app.ts')
+const adminRouter = read('client/src/router/admin.ts')
+const adminSideNav = read('client/src/config/side-nav-items-admin.ts')
 const themeStore = read('client/src/stores/theme.ts')
 const themeTemplateSlot = read('client/src/components/theme/ThemeTemplateSlot.vue')
 const sideNav = read('client/src/components/layout/SideNav.vue')
@@ -56,6 +58,9 @@ const rootPackage = read('package.json')
 const developmentDocs = read('docs-site/docs/plugins/development.md')
 const enOverviewDocs = read('docs-site/docs/en/plugins/overview.md')
 const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
+const capabilityMatrixDocs = read('docs-site/docs/guide/capability-matrix.md')
+const enCapabilityMatrixDocs = read('docs-site/docs/en/guide/capability-matrix.md')
+const vitepressConfig = read('docs-site/docs/.vitepress/config.ts')
 const themeMarketIndex = read('docs-site/docs/public/theme-market/index.json')
 const parsedThemeMarketIndex = JSON.parse(themeMarketIndex) as {
   themes?: Array<{ id: string; latest: string; manifestUrl: string; downloadUrl: string; sha256: string; reviewStatus: string }>
@@ -330,7 +335,13 @@ assert(
     forgotPasswordView.includes('slot-name="public.auth.aside"') &&
     publicSiteFooter.includes('ThemeTemplateSlot') &&
     publicSiteFooter.includes('slot-name="shared.footer"') &&
-    pluginCenter.includes("'installed' | 'market' | 'submissions' | 'themes' | 'limits' | 'events' | 'tasks'") &&
+    adminRouter.includes("path: '/admin/themes'") &&
+    adminRouter.includes("redirect: { path: '/admin/plugins', query: { tab: 'themes' } }") &&
+    adminRouter.includes("titleKey: 'nav.themes'") &&
+    adminSideNav.includes("name: 'admin-themes'") &&
+    adminSideNav.includes("path: '/admin/themes'") &&
+    adminSideNav.includes("label: 'nav.themes'") &&
+    pluginCenter.includes("'installed' | 'market' | 'submissions' | 'themes' | 'capabilities' | 'limits' | 'events' | 'tasks'") &&
     pluginCenter.includes('ThemeTemplateSlot') &&
     pluginCenter.includes('slot-name="admin.extensions.header"') &&
     pluginCenter.includes('slot-name="admin.extensions.market.banner"') &&
@@ -488,6 +499,13 @@ assert(
     installPanel.includes('THEME_MARKET_PUBLISH_DIR') &&
     installPanel.includes('THEME_MARKET_PUBLIC_BASE_URL') &&
     readme.includes('payincus.theme.json') &&
+    readme.includes('后台主题中心') &&
+    capabilityMatrixDocs.includes('| 主题中心 | 已闭环 | `/admin/themes` | `/api/themes/active` |') &&
+    capabilityMatrixDocs.includes('主题只能改视觉，不能改认证、支付、权限、风控或资源交付逻辑') &&
+    enCapabilityMatrixDocs.includes('| Theme Center | Complete | `/admin/themes` | `/api/themes/active` |') &&
+    enCapabilityMatrixDocs.includes('themes can only change visual surfaces, not auth, payments, permissions, risk control, or delivery logic') &&
+    vitepressConfig.includes("{ text: '全站能力矩阵', link: '/guide/capability-matrix' }") &&
+    vitepressConfig.includes("{ text: 'Capability Matrix', link: '/en/guide/capability-matrix' }") &&
     readme.includes('/theme-market/index.json') &&
     readme.includes('受控配置表单') &&
     developmentDocs.includes('payincus.theme.json') &&

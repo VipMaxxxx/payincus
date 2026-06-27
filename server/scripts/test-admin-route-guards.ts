@@ -275,6 +275,21 @@ function isAllowedPublicOrTokenRoute(route: RouteInfo): boolean {
       || path === '/exchange-code'
   }
 
+  if (file === 'oauth-provider.ts') {
+    return [
+      '/scopes',
+      '/token',
+      '/revoke'
+    ].includes(path)
+  }
+
+  if (file === 'public-api.ts') {
+    return [
+      '/openapi.json',
+      '/openapi.yaml'
+    ].includes(path) || route.handler.includes('authenticatePublicApiRequest(request, reply,')
+  }
+
   if (file === 'system-config.ts') return path === '/public'
   if (file === 'packages.ts') return path === '/public' || path.startsWith('/public/')
   if (file === 'help.ts') return !path.startsWith('/admin')
@@ -301,6 +316,14 @@ function isAllowedPublicOrTokenRoute(route: RouteInfo): boolean {
   if (file === 'recharge.ts') return path.startsWith('/api/recharge/callback/')
   if (file === 'backups.ts') return path === '/:instanceId/backups/export/:taskId/download'
   if (file === 'terminal.ts') return path === '/:id/terminal'
+  if (file === 'plugin-market-submissions.ts') return path === '/uploads/plugins/:filename'
+  if (file === 'themes.ts') {
+    return [
+      '/active',
+      '/:themeId/config-files/:key/:filename',
+      '/preview/:themeId'
+    ].includes(path)
+  }
 
   return false
 }

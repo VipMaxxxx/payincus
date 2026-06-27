@@ -52,6 +52,7 @@ import {
   dispatchPluginGatewayExtension,
   listEnabledGatewayExtensionTargets
 } from '../lib/plugin-extension-dispatch.js'
+import { recordPlanUpgradeSyncFailure } from '../services/plan-upgrade-sync-repair.js'
 
 // 自定义 nanoid，只使用小写字母和数字
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
@@ -569,6 +570,51 @@ function serializeRechargeRefundRequest(request: db.RechargeRefundRequestWithRel
     updatedAt: request.updatedAt.toISOString(),
     processedAt: request.processedAt?.toISOString() || null,
     completedAt: request.completedAt?.toISOString() || null
+  }
+}
+
+async function assertRechargeRefundProviderSupported(recordId: number): Promise<void> {
+  const record = await prisma.rechargeRecord.findUnique({
+    where: { id: recordId },
+    select: {
+      id: true,
+      status: true,
+      providerId: true,
+      providerConfigSnapshot: true
+    }
+  })
+  if (!record) {
+    throw new Error('充值记录不存在')
+  }
+  if (record.status !== 'completed') {
+    throw new Error('仅已完成充值支持原路退款')
+  }
+
+  const provider = await db.getPaymentProviderById(record.providerId)
+  if (!provider) {
+    throw new Error('支付渠道不存在')
+  }
+  if (provider.type !== PLUGIN_GATEWAY_PROVIDER_TYPE) {
+    throw new Error('当前充值支付渠道不支持自动原路退款；请改用订单退款审批或人工调账')
+  }
+
+  const rawConfig = typeof provider.config === 'string'
+    ? JSON.parse(provider.config)
+    : (provider.config || {}) as Record<string, unknown>
+  const { config: effectiveConfig } = resolveRechargeProviderConfig(
+    provider.type,
+    rawConfig,
+    record.providerConfigSnapshot
+  )
+
+  const targetValidation = await validatePluginGatewayProviderTarget(effectiveConfig, 'refund')
+  if (!targetValidation.valid) {
+    throw new Error(targetValidation.error || '插件支付渠道退款扩展不可用')
+  }
+
+  const parsedPluginConfig = buildPluginGatewayProviderConfig(effectiveConfig)
+  if (!parsedPluginConfig.valid || !parsedPluginConfig.pluginConfig) {
+    throw new Error(parsedPluginConfig.error || '插件支付渠道配置不完整')
   }
 }
 
@@ -1484,6 +1530,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       if (!parsed) {
         return reply.code(400).send({ error: '对账日期格式必须是 YYYY-MM-DD' })
       }
+      const pendingRefundCutoff = new Date(Date.now() - 60 * 60 * 1000)
+      const processingRefundCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
       const run = await prisma.$transaction(async (tx) => {
         const [
@@ -1491,6 +1539,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           businessBalanceLogs,
           deliveredInstances,
           approvedAdjustments,
+          rechargeRefundRequests,
           rechargeSummary,
           balanceSummary,
           billingSummary,
@@ -1534,6 +1583,20 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
               ]
             },
             select: { id: true, userId: true, amount: true, requestType: true, orderNo: true, sourceType: true, sourceId: true, reviewedAt: true, updatedAt: true }
+          }),
+          tx.rechargeRefundRequest.findMany({
+            where: {
+              status: { in: ['pending', 'processing', 'failed'] },
+              OR: [
+                { createdAt: { gte: parsed.start, lt: parsed.end } },
+                { updatedAt: { gte: parsed.start, lt: parsed.end } },
+                { processedAt: { gte: parsed.start, lt: parsed.end } }
+              ]
+            },
+            include: {
+              rechargeRecord: { select: { id: true, orderNo: true } },
+              provider: { select: { id: true, name: true, type: true } }
+            }
           }),
           tx.rechargeRecord.aggregate({
             where: {
@@ -1585,6 +1648,28 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         const rechargeLogOrderNos = new Set(rechargeBalanceLogs.map(log => log.orderId).filter(Boolean))
 
         const candidates: ReconciliationCandidate[] = []
+        const failedRefundOrderNos = Array.from(new Set(
+          rechargeRefundRequests
+            .filter(refund => refund.status === 'failed' && refund.processedAt)
+            .map(refund => refund.rechargeRecord.orderNo)
+        ))
+        const failedRefundRestoreLogs = failedRefundOrderNos.length > 0
+          ? await tx.balanceLog.findMany({
+            where: {
+              type: 'admin_adjust',
+              orderId: { in: failedRefundOrderNos },
+              remark: { startsWith: '[原路退款失败返还预扣]' }
+            },
+            select: { orderId: true, amount: true, remark: true, createdAt: true }
+          })
+          : []
+        const hasFailedRefundRestoreLog = (orderNo: string, amount: unknown): boolean => {
+          const expectedAmount = Number(amount)
+          return failedRefundRestoreLogs.some(log =>
+            log.orderId === orderNo &&
+            Math.abs(Number(log.amount) - expectedAmount) < 0.01
+          )
+        }
 
         for (const record of completedRecharges) {
           if (!rechargeLogOrderNos.has(record.orderNo)) {
@@ -1660,6 +1745,77 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
               updatedAt: request.updatedAt.toISOString()
             }
           })
+        }
+
+        for (const refund of rechargeRefundRequests) {
+          if (refund.status === 'pending' && refund.createdAt < pendingRefundCutoff) {
+            candidates.push({
+              itemKey: `recharge-refund:${refund.id}:pending-stale`,
+              itemType: 'recharge_refund_lifecycle_issue',
+              sourceType: 'recharge_refund_request',
+              sourceId: refund.id,
+              userId: refund.userId,
+              amount: toDecimalMoney(refund.amount),
+              title: `原路退款申请长时间待处理：#${refund.id}`,
+              detail: {
+                issue: 'pending_stale',
+                orderNo: refund.rechargeRecord.orderNo,
+                providerId: refund.providerId,
+                providerType: refund.provider.type,
+                createdAt: refund.createdAt.toISOString(),
+                updatedAt: refund.updatedAt.toISOString()
+              }
+            })
+          }
+
+          if (refund.status === 'processing' && refund.updatedAt < processingRefundCutoff) {
+            candidates.push({
+              itemKey: `recharge-refund:${refund.id}:processing-stale`,
+              itemType: 'recharge_refund_lifecycle_issue',
+              sourceType: 'recharge_refund_request',
+              sourceId: refund.id,
+              userId: refund.userId,
+              amount: toDecimalMoney(refund.amount),
+              title: `原路退款申请长时间处理中：#${refund.id}`,
+              detail: {
+                issue: 'processing_stale',
+                orderNo: refund.rechargeRecord.orderNo,
+                providerId: refund.providerId,
+                providerType: refund.provider.type,
+                providerStatus: refund.providerStatus,
+                providerMessage: refund.providerMessage,
+                processedAt: refund.processedAt?.toISOString() ?? null,
+                updatedAt: refund.updatedAt.toISOString()
+              }
+            })
+          }
+
+          if (
+            refund.status === 'failed' &&
+            refund.processedAt &&
+            !hasFailedRefundRestoreLog(refund.rechargeRecord.orderNo, refund.amount)
+          ) {
+            candidates.push({
+              itemKey: `recharge-refund:${refund.id}:missing-failed-restore-log`,
+              itemType: 'recharge_refund_lifecycle_issue',
+              sourceType: 'recharge_refund_request',
+              sourceId: refund.id,
+              userId: refund.userId,
+              amount: toDecimalMoney(refund.amount),
+              title: `原路退款失败后未找到返还预扣流水：#${refund.id}`,
+              detail: {
+                issue: 'missing_failed_refund_restore_log',
+                orderNo: refund.rechargeRecord.orderNo,
+                providerId: refund.providerId,
+                providerType: refund.provider.type,
+                providerStatus: refund.providerStatus,
+                providerMessage: refund.providerMessage,
+                failureReason: refund.failureReason,
+                processedAt: refund.processedAt.toISOString(),
+                updatedAt: refund.updatedAt.toISOString()
+              }
+            })
+          }
         }
 
         const payableRechargeAmount = completedRecharges.reduce((sum, record) => {
@@ -3609,6 +3765,43 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
     }
   })
 
+  // GET /api/admin/billing/recharge-refunds - 原路退款请求工作台列表
+  app.get('/api/admin/billing/recharge-refunds', {
+    onRequest: [app.authenticate, app.requireAdmin]
+  }, async (request, reply) => {
+    try {
+      const { page, pageSize, status, userId, providerId, rechargeRecordId, search } = request.query as {
+        page?: string
+        pageSize?: string
+        status?: string
+        userId?: string
+        providerId?: string
+        rechargeRecordId?: string
+        search?: string
+      }
+
+      const result = await db.listRechargeRefundRequests({
+        page: parsePositiveInteger(page, 1),
+        pageSize: parsePositiveInteger(pageSize, 20, 100),
+        status,
+        userId: parseOptionalPositiveInteger(userId),
+        providerId: parseOptionalPositiveInteger(providerId),
+        rechargeRecordId: parseOptionalPositiveInteger(rechargeRecordId),
+        search
+      })
+
+      return {
+        refunds: result.requests.map(serializeRechargeRefundRequest),
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize
+      }
+    } catch (error) {
+      request.log.error(error, '获取原路退款请求列表失败')
+      return reply.status(500).send({ error: '获取原路退款请求列表失败' })
+    }
+  })
+
   // GET /api/admin/billing/recharge-records/:id/refunds - 查看充值原路退款请求
   app.get('/api/admin/billing/recharge-records/:id/refunds', {
     onRequest: [app.authenticate, app.requireAdmin]
@@ -3664,6 +3857,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
     }
 
     try {
+      await assertRechargeRefundProviderSupported(recordId)
+
       const refundRequest = await db.createRechargeRefundRequest({
         rechargeRecordId: recordId,
         requestedByUserId: admin.id,
@@ -5246,6 +5441,45 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         } catch (incusErr) {
           // Incus 同步失败不影响数据库更新，但记录日志
           request.log.error(incusErr, `Incus 资源同步失败: ${instance.name}`)
+          try {
+            await recordPlanUpgradeSyncFailure({
+              source: 'admin',
+              actorUserId: admin.id,
+              instance: {
+                id: instance.id,
+                name: instance.name,
+                userId: instance.userId,
+                hostId: instance.hostId,
+                incusId: instance.incusId
+              },
+              oldPlan: {
+                id: currentPlan.id,
+                name: currentPlan.name,
+                price: currentPlan.price,
+                billingCycle: currentPlan.billingCycle
+              },
+              newPlan: {
+                id: newPlan.id,
+                name: newPlan.name,
+                price: newPlan.price,
+                billingCycle: newPlan.billingCycle,
+                cpu: newPlan.cpu,
+                memory: newPlan.memory,
+                disk: newPlan.disk
+              },
+              target: {
+                cpu: newPlan.cpu,
+                memory: newPlan.memory,
+                disk: newPlan.disk,
+                ingress: normalizedPlanTrafficLimitSpeed,
+                egress: normalizedPlanTrafficLimitSpeed
+              },
+              priceDiff: priceDifference,
+              error: incusErr
+            })
+          } catch (repairErr) {
+            request.log.error(repairErr, '管理员升级 Incus 同步失败后创建修复 case 失败')
+          }
         }
       }
 

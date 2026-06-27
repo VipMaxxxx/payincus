@@ -42,6 +42,7 @@ const zhSidebar = [
       { text: '在线 Demo', link: '/demo' },
       { text: '系统架构', link: '/guide/architecture' },
       { text: '文档覆盖能力', link: '/guide/documentation-coverage' },
+      { text: '全站能力矩阵', link: '/guide/capability-matrix' },
       { text: '前后台分离', link: '/guide/split-deployment' },
       { text: '权限边界', link: '/guide/admin-user-boundary' },
       { text: '后台 OTA', link: '/guide/ota-update' }
@@ -231,6 +232,7 @@ const enSidebar = [
       { text: 'Online Demo', link: '/en/demo' },
       { text: 'Architecture', link: '/en/guide/architecture' },
       { text: 'Documentation Coverage', link: '/en/guide/documentation-coverage' },
+      { text: 'Capability Matrix', link: '/en/guide/capability-matrix' },
       { text: 'Split Deployment', link: '/en/guide/split-deployment' },
       { text: 'Access Boundaries', link: '/en/guide/admin-user-boundary' },
       { text: 'Admin OTA', link: '/en/guide/ota-update' }

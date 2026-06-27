@@ -3115,6 +3115,9 @@ const api = {
         methods: string[]
       }
       payUrl: string | null
+      manualPayment?: {
+        instructions: string
+      } | null
     }> => http.post('/recharge/orders', { providerId, amount, paymentMethod }),
 
     // 获取充值记录列表
@@ -3188,10 +3191,15 @@ const api = {
         amount: number
         payableAmount: number
         actualAmount: number | null
+        fee: number
+        paymentMethod: string | null
         status: string
         expiredAt: string | null
       }
-      payUrl: string
+      payUrl: string | null
+      manualPayment?: {
+        instructions: string
+      } | null
     }> => http.post(`/recharge/orders/${orderNo}/repay`, { paymentMethod }),
 
     // 获取用户充值统计

@@ -57,7 +57,7 @@ assert.ok(
 
 assert.ok(
   routerAdmin.includes("path: '/admin/plugins'") &&
-    adminPluginCenterView.includes("type PluginCenterTab = 'installed' | 'market' | 'submissions' | 'themes' | 'limits' | 'events' | 'tasks'") &&
+    adminPluginCenterView.includes("type PluginCenterTab = 'installed' | 'market' | 'submissions' | 'themes' | 'capabilities' | 'limits' | 'events' | 'tasks'") &&
     adminPluginCenterView.includes("label: '投稿审核'") &&
     adminPluginCenterView.includes('loadSubmissions') &&
     adminPluginCenterView.includes('reviewSubmission') &&

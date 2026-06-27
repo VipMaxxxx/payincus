@@ -4,15 +4,15 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '@/api/admin'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { useToast } from '@/stores/toast'
-import type { PayIncusThemeConfigField, PluginEventLog, PluginEventSummary, PluginMarketEntry, PluginMarketGovernance, PluginMarketSubmission, PluginMarketSubmissionReviewStatus, PluginRecord, PluginStorageBackupArchive, PluginStorageBackupRemoteArchive, PluginStorageUsage, PluginTask, PublicPluginActionRateLimitDefault, PublicPluginActionRateLimitPolicy, ThemeMarketEntry, ThemeMarketGovernance, ThemeMarketSubmission, ThemeMarketSubmissionReviewStatus, ThemePackageRecord } from '@/types/api'
+import type { PayIncusThemeConfigField, PluginCapabilityReview, PluginCapabilityReviewStatus, PluginEventLog, PluginEventSummary, PluginMarketEntry, PluginMarketGovernance, PluginMarketSubmission, PluginMarketSubmissionReviewStatus, PluginRecord, PluginStorageBackupArchive, PluginStorageBackupRemoteArchive, PluginStorageUsage, PluginTask, PublicPluginActionRateLimitDefault, PublicPluginActionRateLimitPolicy, ThemeMarketEntry, ThemeMarketGovernance, ThemeMarketSubmission, ThemeMarketSubmissionReviewStatus, ThemePackageRecord } from '@/types/api'
 
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 type ThemeConfigDraftValue = string | number | boolean | string[]
 type ThemeConfigFieldEntry = [string, PayIncusThemeConfigField]
-type PluginCenterTab = 'installed' | 'market' | 'submissions' | 'themes' | 'limits' | 'events' | 'tasks'
-const pluginCenterTabKeys: PluginCenterTab[] = ['installed', 'market', 'submissions', 'themes', 'limits', 'events', 'tasks']
+type PluginCenterTab = 'installed' | 'market' | 'submissions' | 'themes' | 'capabilities' | 'limits' | 'events' | 'tasks'
+const pluginCenterTabKeys: PluginCenterTab[] = ['installed', 'market', 'submissions', 'themes', 'capabilities', 'limits', 'events', 'tasks']
 
 function normalizePluginCenterTab(value: unknown): PluginCenterTab {
   return typeof value === 'string' && pluginCenterTabKeys.includes(value as PluginCenterTab)
@@ -54,6 +54,8 @@ const eventsLoading = ref(false)
 const retryingEvents = ref(false)
 const actionRateLimitsLoading = ref(false)
 const savingActionRateLimits = ref(false)
+const capabilityReviewsLoading = ref(false)
+const capabilityReviewActionId = ref<number | null>(null)
 const activeTab = ref<PluginCenterTab>(normalizePluginCenterTab(route.query.tab))
 const selectedPluginId = ref<string | null>(null)
 const pluginStorageUsage = ref<PluginStorageUsage | null>(null)
@@ -82,6 +84,8 @@ const pluginEventSummary = ref<PluginEventSummary | null>(null)
 const actionRateLimitDefaults = ref<PublicPluginActionRateLimitDefault[]>([])
 const actionRateLimitPolicies = ref<PublicPluginActionRateLimitPolicy[]>([])
 const actionRateLimitDrafts = ref<ActionRateLimitDraft[]>([])
+const capabilityReviews = ref<PluginCapabilityReview[]>([])
+const capabilityStatusFilter = ref<PluginCapabilityReviewStatus | 'all'>('pending')
 const eventResultFilter = ref<'retry_pending' | 'dead_letter' | 'duplicate_skipped' | 'success' | 'all'>('retry_pending')
 const eventPluginFilter = ref('all')
 const eventNameFilter = ref('all')
@@ -98,6 +102,7 @@ const tabs = [
   { key: 'market', label: '扩展市场', description: '从已配置的在线市场索引读取扩展并安装。' },
   { key: 'submissions', label: '投稿审核', description: '审核第三方提交的扩展包来源、SHA256、权限说明和兼容范围。' },
   { key: 'themes', label: '主题', description: '上传主题包、预览视觉效果、启用主题或回滚到默认主题。' },
+  { key: 'capabilities', label: '能力审核', description: '审核扩展声明的高风险 action、服务扩展、支付网关和存储能力；未批准不能启用。' },
   { key: 'limits', label: '限流策略', description: '配置公开扩展 action 的全局和按扩展覆盖配额。' },
   { key: 'events', label: '事件投递', description: '查看扩展事件投递、重试队列、死信和手动重放结果。' },
   { key: 'tasks', label: '安装任务', description: '查看上传安装、市场安装、启用、禁用和卸载任务日志。' }
@@ -276,6 +281,21 @@ const themeSubmissionRiskLabels: Record<ThemeMarketSubmission['riskLevel'], stri
   critical: '严重风险'
 }
 
+const capabilityReviewLabels: Record<PluginCapabilityReviewStatus | 'all', string> = {
+  all: '全部',
+  pending: '待审核',
+  approved: '已批准',
+  rejected: '已拒绝',
+  revoked: '已撤销'
+}
+
+const capabilityRiskLabels: Record<string, string> = {
+  low: '低风险',
+  medium: '中风险',
+  high: '高风险',
+  critical: '严重风险'
+}
+
 const submissionScanLabels: Record<PluginMarketSubmission['scanStatus'], string> = {
   pending: '未扫描',
   passed: '扫描通过',
@@ -379,6 +399,28 @@ function themeSubmissionScanClass(status: ThemeMarketSubmission['scanStatus']): 
   if (status === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700'
   if (status === 'failed') return 'border-red-200 bg-red-50 text-red-700'
   return 'border-gray-200 bg-gray-50 text-gray-700'
+}
+
+function capabilityRiskClass(riskLevel: string): string {
+  if (riskLevel === 'critical') return 'border-red-300 bg-red-50 text-red-800'
+  if (riskLevel === 'high') return 'border-orange-200 bg-orange-50 text-orange-700'
+  if (riskLevel === 'low') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  return 'border-gray-200 bg-gray-50 text-gray-700'
+}
+
+function capabilityStatusClass(status: string): string {
+  if (status === 'approved') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (status === 'rejected') return 'border-red-200 bg-red-50 text-red-700'
+  if (status === 'revoked') return 'border-amber-200 bg-amber-50 text-amber-700'
+  return 'border-blue-200 bg-blue-50 text-blue-700'
+}
+
+function capabilityStatusText(status: string): string {
+  return capabilityReviewLabels[status as PluginCapabilityReviewStatus] || status
+}
+
+function capabilityRiskText(riskLevel: string): string {
+  return capabilityRiskLabels[riskLevel] || riskLevel
 }
 
 function submissionScanFindings(submission: PluginMarketSubmission): Array<{ severity: string; code: string; message: string }> {
@@ -1138,6 +1180,44 @@ async function loadActionRateLimits() {
   }
 }
 
+async function loadCapabilityReviews(status: PluginCapabilityReviewStatus | 'all' = capabilityStatusFilter.value) {
+  activeTab.value = 'capabilities'
+  capabilityReviewsLoading.value = true
+  capabilityStatusFilter.value = status
+  try {
+    const response = await api.plugins.listCapabilityReviews({ status })
+    capabilityReviews.value = response.reviews
+  } catch (err: any) {
+    toast.error('加载能力审核失败：' + (err?.message || String(err)))
+  } finally {
+    capabilityReviewsLoading.value = false
+  }
+}
+
+async function reviewCapability(review: PluginCapabilityReview, status: PluginCapabilityReviewStatus) {
+  const defaultNote = review.reviewNotes || (status === 'approved' ? '已核对扩展能力声明、scope、限流和审计要求。' : '')
+  const reviewNotes = window.prompt(`将 ${review.pluginId} / ${review.capabilityKey} 标记为 ${capabilityStatusText(status)}，请输入审核备注：`, defaultNote)
+  if (reviewNotes === null) return
+  if ((status === 'rejected' || status === 'revoked') && !reviewNotes.trim()) {
+    toast.warning('拒绝或撤销能力必须填写审核备注')
+    return
+  }
+  capabilityReviewActionId.value = review.id
+  try {
+    const response = await api.plugins.reviewCapability(review.id, {
+      status,
+      reviewNotes: reviewNotes.trim() || null
+    })
+    capabilityReviews.value = capabilityReviews.value.map(item => item.id === review.id ? response.review : item)
+    toast.success('能力审核已保存')
+    await refreshAll()
+  } catch (err: any) {
+    toast.error('保存能力审核失败：' + (err?.message || String(err)))
+  } finally {
+    capabilityReviewActionId.value = null
+  }
+}
+
 function addActionRateLimitDraft() {
   actionRateLimitDrafts.value.push({
     pluginId: '*',
@@ -1489,6 +1569,13 @@ function openActionRateLimitsTab() {
   }
 }
 
+function openCapabilityReviewsTab() {
+  activateTab('capabilities')
+  if (capabilityReviews.value.length === 0 && !capabilityReviewsLoading.value) {
+    void loadCapabilityReviews()
+  }
+}
+
 function setActiveTab(tab: typeof activeTab.value) {
   if (tab === 'market') {
     openMarketTab()
@@ -1512,6 +1599,10 @@ function setActiveTab(tab: typeof activeTab.value) {
   }
   if (tab === 'limits') {
     openActionRateLimitsTab()
+    return
+  }
+  if (tab === 'capabilities') {
+    openCapabilityReviewsTab()
     return
   }
   activateTab(tab)
@@ -1609,6 +1700,14 @@ watch(() => route.query.tab, tab => {
           @click="loadActionRateLimits"
         >
           {{ actionRateLimitsLoading ? '加载中...' : '刷新策略' }}
+        </button>
+        <button
+          v-else-if="activeTab === 'capabilities'"
+          class="btn-primary"
+          :disabled="capabilityReviewsLoading"
+          @click="loadCapabilityReviews(capabilityStatusFilter)"
+        >
+          {{ capabilityReviewsLoading ? '加载中...' : '刷新审核' }}
         </button>
       </div>
     </div>
@@ -2506,6 +2605,120 @@ watch(() => route.query.tab, tab => {
                   </td>
                 </tr>
               </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section v-else-if="activeTab === 'capabilities'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+        <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-themed">扩展能力审核</h2>
+            <p class="mt-1 text-sm text-themed-muted">高风险和严重风险 capability 未批准时，扩展不能启用；已启用扩展不会被自动停用。</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="status in (['pending', 'approved', 'rejected', 'revoked', 'all'] as const)"
+              :key="status"
+              class="rounded border px-3 py-2 text-sm font-medium transition"
+              :class="capabilityStatusFilter === status ? 'border-gray-900 bg-gray-900 text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
+              @click="loadCapabilityReviews(status)"
+            >
+              {{ capabilityReviewLabels[status] }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="capabilityReviewsLoading" class="px-5 py-16 text-center text-themed-muted">加载中...</div>
+        <div v-else-if="capabilityReviews.length === 0" class="px-5 py-16 text-center text-sm text-themed-muted">
+          当前筛选下暂无扩展能力审核记录。安装声明 action、service extension、gateway extension 或 storage 的扩展后会自动生成。
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="border-b border-themed text-left text-themed-muted">
+              <tr>
+                <th class="px-5 py-3">扩展</th>
+                <th class="px-5 py-3">能力</th>
+                <th class="px-5 py-3">风险</th>
+                <th class="px-5 py-3">状态</th>
+                <th class="px-5 py-3">Scope / Hook</th>
+                <th class="px-5 py-3">审核</th>
+                <th class="px-5 py-3">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="review in capabilityReviews" :key="review.id" class="border-b border-themed last:border-b-0">
+                <td class="px-5 py-4 align-top">
+                  <div class="font-medium text-themed">{{ review.pluginName || review.pluginId }}</div>
+                  <div class="font-mono text-xs text-themed-muted">{{ review.pluginId }}</div>
+                  <div class="mt-1 text-xs text-themed-muted">manifest {{ review.manifestVersion }}</div>
+                </td>
+                <td class="px-5 py-4 align-top">
+                  <div class="font-medium text-themed">{{ review.title }}</div>
+                  <div class="font-mono text-xs text-themed-muted">{{ review.capabilityKey }}</div>
+                  <p v-if="review.description" class="mt-1 max-w-md text-xs leading-5 text-themed-muted">{{ review.description }}</p>
+                </td>
+                <td class="px-5 py-4 align-top">
+                  <span class="rounded border px-2 py-1 text-xs" :class="capabilityRiskClass(review.riskLevel)">
+                    {{ capabilityRiskText(review.riskLevel) }}
+                  </span>
+                  <div class="mt-2 font-mono text-xs text-themed-muted">{{ review.capabilityType }}</div>
+                </td>
+                <td class="px-5 py-4 align-top">
+                  <span class="rounded border px-2 py-1 text-xs" :class="capabilityStatusClass(review.status)">
+                    {{ capabilityStatusText(review.status) }}
+                  </span>
+                </td>
+                <td class="px-5 py-4 align-top">
+                  <div class="max-w-xs space-y-1">
+                    <div v-if="review.scopes.length" class="flex flex-wrap gap-1">
+                      <span v-for="scope in review.scopes" :key="scope" class="rounded bg-themed px-2 py-1 font-mono text-xs text-themed-muted">{{ scope }}</span>
+                    </div>
+                    <div v-if="review.hooks.length" class="flex flex-wrap gap-1">
+                      <span v-for="hook in review.hooks" :key="hook" class="rounded bg-themed px-2 py-1 font-mono text-xs text-themed-muted">{{ hook }}</span>
+                    </div>
+                    <span v-if="!review.scopes.length && !review.hooks.length" class="text-xs text-themed-muted">未声明 scope/hook</span>
+                  </div>
+                </td>
+                <td class="px-5 py-4 align-top">
+                  <div class="max-w-xs text-xs leading-5 text-themed-muted">
+                    <div>{{ review.reviewedAt ? formatDate(review.reviewedAt) : '尚未审核' }}</div>
+                    <div v-if="review.reviewNotes" class="mt-1 text-themed">{{ review.reviewNotes }}</div>
+                  </div>
+                </td>
+                <td class="px-5 py-4 align-top">
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      class="btn-secondary"
+                      :disabled="capabilityReviewActionId === review.id || review.status === 'approved'"
+                      @click="reviewCapability(review, 'approved')"
+                    >
+                      批准
+                    </button>
+                    <button
+                      class="btn-secondary"
+                      :disabled="capabilityReviewActionId === review.id || review.status === 'rejected'"
+                      @click="reviewCapability(review, 'rejected')"
+                    >
+                      拒绝
+                    </button>
+                    <button
+                      class="btn-secondary"
+                      :disabled="capabilityReviewActionId === review.id || review.status === 'revoked'"
+                      @click="reviewCapability(review, 'revoked')"
+                    >
+                      撤销
+                    </button>
+                    <button
+                      class="btn-secondary"
+                      :disabled="capabilityReviewActionId === review.id || review.status === 'pending'"
+                      @click="reviewCapability(review, 'pending')"
+                    >
+                      重置
+                    </button>
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>

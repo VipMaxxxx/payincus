@@ -57,7 +57,7 @@ COOKIE_SECURE=
 COOKIE_DOMAIN=
 ```
 
-`COOKIE_DOMAIN` 建议保持空值，避免用户端和管理端跨子域共享 refresh cookie。
+`COOKIE_DOMAIN` 必须保持空值，用户端和管理后台子域不能共享 refresh cookie。
 
 ## 安全密钥
 

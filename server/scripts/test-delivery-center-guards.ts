@@ -6,6 +6,7 @@ const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/admin-delive
 const appSource = readFileSync(resolve(process.cwd(), 'src/app.ts'), 'utf8')
 const schemaSource = readFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), 'utf8')
 const migrationSource = readFileSync(resolve(process.cwd(), 'prisma/migrations/20260624222000_add_delivery_assurance_cases/migration.sql'), 'utf8')
+const upgradeSyncMigrationSource = readFileSync(resolve(process.cwd(), 'prisma/migrations/20260627070000_add_plan_upgrade_sync_delivery_case/migration.sql'), 'utf8')
 const adminApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/admin.ts'), 'utf8')
 const adminRouterSource = readFileSync(resolve(process.cwd(), '../client/src/router/admin.ts'), 'utf8')
 const adminNavSource = readFileSync(resolve(process.cwd(), '../client/src/config/side-nav-items-admin.ts'), 'utf8')
@@ -28,7 +29,10 @@ assert.ok(
     routeSource.includes("fastify.post<{ Params: RouteIdParams; Body: CaseActionBody }>('/tasks/:id/retry'") &&
     routeSource.includes("fastify.post<{ Params: RouteIdParams; Body: CaseActionBody }>('/tasks/:id/notify'") &&
     routeSource.includes("fastify.post<{ Params: RouteIdParams; Body: CaseActionBody }>('/tasks/:id/resolve'") &&
-    routeSource.match(/onRequest:\s*\[fastify\.authenticateAdmin\]/g)?.length === 6,
+    routeSource.includes("fastify.get<{ Querystring: DeliveryQuery }>('/cases'") &&
+    routeSource.includes("fastify.post<{ Params: RouteIdParams; Body: CaseActionBody }>('/cases/:id/retry-sync'") &&
+    routeSource.includes("fastify.post<{ Params: RouteIdParams; Body: CaseActionBody }>('/cases/:id/resolve'") &&
+    routeSource.match(/onRequest:\s*\[fastify\.authenticateAdmin\]/g)?.length === 9,
   'delivery center APIs must expose overview/tasks/actions and require authenticateAdmin'
 )
 
@@ -36,9 +40,12 @@ assert.ok(
   schemaSource.includes('enum DeliveryAssuranceCaseStatus') &&
     schemaSource.includes('model DeliveryAssuranceCase') &&
     schemaSource.includes('model DeliveryAssuranceAction') &&
+    schemaSource.includes('plan_upgrade_sync_failed') &&
     migrationSource.includes('CREATE TYPE "DeliveryAssuranceCaseStatus"') &&
     migrationSource.includes('CREATE TABLE "delivery_assurance_cases"') &&
-    migrationSource.includes('CREATE UNIQUE INDEX "delivery_assurance_cases_task_id_key"'),
+    migrationSource.includes('CREATE UNIQUE INDEX "delivery_assurance_cases_task_id_key"') &&
+    upgradeSyncMigrationSource.includes('ALTER TYPE "DeliveryAssuranceIssueType" ADD VALUE IF NOT EXISTS') &&
+    upgradeSyncMigrationSource.includes('plan_upgrade_sync_failed'),
   'delivery assurance cases and action history must be persisted with migration coverage'
 )
 
@@ -75,10 +82,13 @@ assert.ok(
     adminApiSource.includes('delivery: {') &&
     adminApiSource.includes("http.get('/admin/delivery/overview')") &&
     adminApiSource.includes("http.get('/admin/delivery/tasks', { params })") &&
+    adminApiSource.includes("http.get('/admin/delivery/cases', { params })") &&
     adminApiSource.includes("http.post(`/admin/delivery/tasks/${taskId}/takeover`") &&
     adminApiSource.includes("http.post(`/admin/delivery/tasks/${taskId}/retry`") &&
     adminApiSource.includes("http.post(`/admin/delivery/tasks/${taskId}/notify`") &&
     adminApiSource.includes("http.post(`/admin/delivery/tasks/${taskId}/resolve`") &&
+    adminApiSource.includes("http.post(`/admin/delivery/cases/${caseId}/retry-sync`") &&
+    adminApiSource.includes("http.post(`/admin/delivery/cases/${caseId}/resolve`") &&
     !userApiSource.includes('/admin/delivery'),
   'admin API client must expose delivery center endpoints only in the admin client'
 )
@@ -102,6 +112,8 @@ assert.ok(
     deliveryViewSource.includes("runCaseAction('retry')") &&
     deliveryViewSource.includes("runCaseAction('notify')") &&
     deliveryViewSource.includes("runCaseAction('recovered')") &&
+    deliveryViewSource.includes('升级同步修复') &&
+    deliveryViewSource.includes("runRepairCaseAction(item, 'retry-sync')") &&
     deliveryViewSource.includes('formatAgent(selectedTask)') &&
     deliveryViewSource.includes('formatAmount(selectedTask.billing?.amount)') &&
     deliveryViewSource.includes('/admin/instances/${selectedTask.instanceId}'),

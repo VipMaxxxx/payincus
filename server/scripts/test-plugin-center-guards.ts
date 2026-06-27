@@ -14,6 +14,7 @@ const userRoute = read('server/src/routes/plugins.ts')
 const db = read('server/src/db/plugins.ts')
 const schema = read('server/prisma/schema.prisma')
 const migration = read('server/prisma/migrations/20260623143000_add_plugin_center/migration.sql')
+const capabilityReviewMigration = read('server/prisma/migrations/20260627100000_add_plugin_capability_reviews/migration.sql')
 const adminRouter = read('client/src/router/admin.ts')
 const adminNav = read('client/src/config/side-nav-items-admin.ts')
 const adminApi = read('client/src/api/admin.ts')
@@ -68,9 +69,15 @@ assert.ok(
     schema.includes('model PluginEventLog') &&
     schema.includes('model PluginUserData') &&
     schema.includes('model PublicPluginActionRateLimitPolicy') &&
+    schema.includes('model PluginCapabilityReview') &&
+    schema.includes('capabilityReviews PluginCapabilityReview[]') &&
+    schema.includes('@@unique([pluginId, manifestVersion, capabilityKey])') &&
+    schema.includes('@@map("plugin_capability_reviews")') &&
     schema.includes('@@map("public_plugin_action_rate_limit_policies")') &&
     migration.includes('CREATE TABLE "plugins"') &&
-    migration.includes('CREATE TABLE "plugin_install_tasks"'),
+    migration.includes('CREATE TABLE "plugin_install_tasks"') &&
+    capabilityReviewMigration.includes('CREATE TABLE "plugin_capability_reviews"') &&
+    capabilityReviewMigration.includes('"plugin_id", "manifest_version", "capability_key"'),
   'plugin center must have persisted models and migration'
 )
 
@@ -82,8 +89,25 @@ assert.ok(
     db.includes('installValidatedPlugin') &&
     db.includes('enablePlugin') &&
     db.includes('disablePlugin') &&
-    db.includes('uninstallPlugin'),
-  'plugin db layer must redact secret config and cover install/enable/disable/uninstall'
+    db.includes('uninstallPlugin') &&
+    db.includes('extractManifestCapabilityReviews') &&
+    db.includes('syncPluginCapabilityReviews') &&
+    db.includes('assertPluginCapabilitiesApprovedForEnable') &&
+    db.includes('pluginCapabilityReview.upsert') &&
+    db.includes("riskLevel: { in: ['high', 'critical'] }"),
+  'plugin db layer must redact secret config, cover lifecycle operations, and sync capability review records'
+)
+
+assert.ok(
+  adminRoute.includes("fastify.get<{ Querystring: CapabilityReviewQuery }>('/capability-reviews'") &&
+    adminRoute.includes("fastify.patch<{ Params: CapabilityReviewParams; Body: CapabilityReviewBody }>('/capability-reviews/:id'") &&
+    adminRoute.includes('PLUGIN_CAPABILITY_REVIEW_REQUIRED') &&
+    adminRoute.includes('PLUGIN_CAPABILITY_REVIEW_NOTES_REQUIRED') &&
+    adminRoute.includes('plugin.capability_review') &&
+    adminRoute.includes('plugin.capability_review.required') &&
+    adminRoute.includes('assertPluginCapabilitiesApprovedForEnable(pluginId)') &&
+    adminRoute.includes('High-risk plugin capabilities must be approved before enabling this extension'),
+  'plugin admin routes must expose capability review APIs and block enabling high-risk unapproved capabilities'
 )
 
 assert.ok(
@@ -116,6 +140,14 @@ assert.ok(
 assert.ok(
   pluginCenterView.includes('openPluginSettings') &&
     pluginCenterView.includes("'limits'") &&
+    pluginCenterView.includes("'capabilities'") &&
+    pluginCenterView.includes('能力审核') &&
+    pluginCenterView.includes('扩展能力审核') &&
+    pluginCenterView.includes('未批准不能启用') &&
+    pluginCenterView.includes('loadCapabilityReviews') &&
+    pluginCenterView.includes('api.plugins.listCapabilityReviews') &&
+    pluginCenterView.includes('reviewCapability') &&
+    pluginCenterView.includes('api.plugins.reviewCapability') &&
     pluginCenterView.includes('公开 action 限流策略') &&
     pluginCenterView.includes('saveActionRateLimits') &&
     pluginCenterView.includes('api.plugins.updateActionRateLimits') &&
@@ -132,6 +164,15 @@ assert.ok(
 )
 
 assert.ok(
+  adminApi.includes('listCapabilityReviews') &&
+    adminApi.includes('/admin/plugins/capability-reviews') &&
+    adminApi.includes('reviewCapability') &&
+    adminApi.includes('PluginCapabilityReview') &&
+    adminApi.includes('PluginCapabilityReviewStatus'),
+  'admin API client must expose extension capability review list and mutation helpers'
+)
+
+assert.ok(
   zhLocale.includes("plugins: '扩展中心'") &&
     enLocale.includes("plugins: 'Extension Center'") &&
     enLocale.includes('Set the endpoint and key in Extension Center first') &&
@@ -145,8 +186,10 @@ assert.ok(
     pluginSettingsView.includes("'扩展市场' : '上传安装'") &&
     pluginSettingsView.includes('请先在扩展中心启用扩展') &&
     pluginSettingsView.includes('返回扩展中心确认扩展是否已安装') &&
-    readme.includes('plugin-templates/       扩展开发模板') &&
-    readme.includes('扩展开发：`docs-site/docs/plugins/overview.md`') &&
+    readme.includes('plugin-templates/       官方扩展示例') &&
+    readme.includes('开发文档：') &&
+    readme.includes('- 扩展概览：<https://payincus.com/plugins/overview>') &&
+    readme.includes('高风险 capability 审核') &&
 	    docsIndex.includes('title: PayIncus') &&
 	    docsIndex.includes('扩展市场、主题系统和后台 OTA') &&
 	    docsIndex.includes('[扩展开发](/plugins/overview)：扩展中心') &&
@@ -154,8 +197,12 @@ assert.ok(
 	    enDocsIndex.includes('extension marketplace, themes, and admin OTA updates') &&
 	    enDocsIndex.includes('[Extension Development](/en/plugins/overview): Extension Center') &&
     adminOverviewDocs.includes('| 扩展中心 | `/admin/plugins` | 已安装扩展、扩展市场') &&
+    adminOverviewDocs.includes('能力审核') &&
+    adminOverviewDocs.includes('审核高风险 capability') &&
     enAdminOverviewDocs.includes('## Extension Center') &&
     enAdminOverviewDocs.includes('Extension Market') &&
+    enAdminOverviewDocs.includes('Capability Review') &&
+    enAdminOverviewDocs.includes('Unapproved high-risk capability records block extension enablement') &&
     enPluginOverviewDocs.includes('# Extension Center') &&
     enPluginOverviewDocs.includes('The PayIncus Extension Center installs') &&
     enPluginOverviewDocs.includes('Extensions do not modify PayIncus source code directly') &&
@@ -167,6 +214,13 @@ assert.ok(
     enPluginDevelopmentDocs.includes('After the extension is enabled') &&
     enPluginDevelopmentDocs.includes('"title": "My Extension"') &&
     enPluginDevelopmentDocs.includes('PayIncus renders them in the Extension Center') &&
+    developmentDocs.includes('## Capability 审核') &&
+    developmentDocs.includes('PLUGIN_CAPABILITY_REVIEW_REQUIRED') &&
+    developmentDocs.includes('plugin.capability_review.required') &&
+    developmentDocs.includes('未批准记录都会让启用请求返回') &&
+    enPluginDevelopmentDocs.includes('## Capability Review') &&
+    enPluginDevelopmentDocs.includes('PLUGIN_CAPABILITY_REVIEW_REQUIRED') &&
+    enPluginDevelopmentDocs.includes('blocked enable attempts write `plugin.capability_review.required`') &&
     enPluginTemplatesDocs.includes('# Extension Templates') &&
     enPluginTemplatesDocs.includes('admin Extension Center') &&
     !zhLocale.includes("plugins: '插件中心'") &&

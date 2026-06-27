@@ -44,7 +44,21 @@ The admin page at `/admin/resource-risk` supports manual intervention:
 - Restrict the linked account from new orders.
 - Release the active order restriction created by the current source instance.
 
-All manual actions require a reason and write audit records. High-risk actions must still pass internal instance state, permission and audit boundaries.
+All manual actions use a dedicated action dialog instead of native browser prompts. The dialog shows the target, bandwidth value, linked order restriction option, user notification option, reason field and second confirmation checkbox. High-risk actions must still pass internal instance state, permission and audit boundaries, and they write resource-risk events plus admin audit records. The action dialog includes reason templates for bandwidth limiting, suspension, unsuspension, order restriction, and release. Admins can still edit the template; the final submitted reason is what gets written to audit records.
+
+## Evidence Details and Review
+
+The risk instance list includes an evidence action. Admins can open the evidence drawer for an instance and review:
+
+- Current score, risk level, handling status, and current bandwidth limit.
+- Current evidence snapshot, including the metrics and handling result used by the latest score.
+- Hourly trend for the latest 24 hours and daily trend for the latest 7 days.
+- The latest 48 resource samples covering bandwidth, PPS, CPU, traffic delta, and collection source.
+- The latest 30 risk events with score changes, event messages, and event evidence.
+- The latest 30 resource-risk audit logs with actor, action, result, and audit content.
+- Order restrictions created by the current instance as the source.
+
+Trend data includes average/peak bandwidth, average/peak PPS, average/peak CPU, and traffic delta so operators can tell whether an anomaly is a short spike or sustained usage. Evidence details can be exported as JSON for offline review, false-positive analysis, or sustained-abuse investigation. The export uses the admin evidence API and does not add a user-facing API. Evidence details are admin-only. Regular users cannot read instance risk evidence, audit logs, other account restrictions, or backend policy through user APIs.
 
 ## Order Restriction Boundary
 
@@ -95,8 +109,9 @@ Resource risk affects instances and the linked account:
 ## Verification Checklist
 
 - The admin resource risk page paginates risk instances, events and order restrictions.
+- The admin resource risk page can open instance evidence details with the current evidence, 24-hour/7-day trends, recent samples, risk event timeline, handling audit, linked order restrictions, and JSON export.
 - When one account has multiple risky instances, only the source instance shows the release action; other rows show the account-restricted state.
-- Manual suspension, unsuspension, restriction and release require a reason and write audit records.
+- Manual bandwidth limits, suspension, unsuspension, restriction and release must go through the action dialog, support reason templates, require a reason, require second confirmation and write audit records.
 - Releasing a restriction refreshes the list to a valid page.
 - Regular users cannot read risk policy, manual notes or other account restrictions through user APIs.
 - A restricted account is blocked from creating new instances and can proceed through ticket review.

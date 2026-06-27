@@ -235,8 +235,20 @@ assert.ok(
     userRouterSource.includes('requiresUser: true') &&
     adminRouterSource.includes("path: '/admin/plugins'") &&
     adminRouterSource.includes('@/views/admin/PluginCenterView.vue') &&
+    adminRouterSource.includes("path: '/admin/themes'") &&
+    adminRouterSource.includes("redirect: { path: '/admin/plugins', query: { tab: 'themes' } }") &&
+    adminRouterSource.includes("titleKey: 'nav.themes'") &&
+    adminRouterSource.includes("path: '/admin/integrations'") &&
+    adminRouterSource.includes('@/views/admin/IntegrationsView.vue') &&
+    adminRouterSource.includes("titleKey: 'nav.integrations'") &&
+    sideNavAdminItemsSource.includes("name: 'admin-themes'") &&
+    sideNavAdminItemsSource.includes("path: '/admin/themes'") &&
+    sideNavAdminItemsSource.includes("label: 'nav.themes'") &&
+    sideNavAdminItemsSource.includes("name: 'admin-integrations'") &&
+    sideNavAdminItemsSource.includes("path: '/admin/integrations'") &&
+    sideNavAdminItemsSource.includes("label: 'nav.integrations'") &&
     !userRouterSource.includes('@/views/admin/PluginCenterView.vue'),
-  'plugin center must keep admin management under /admin/plugins while exposing only user plugin pages in the customer router'
+  'plugin center must keep admin management under /admin/plugins, expose formal admin theme/integration entries, and expose only user plugin pages in the customer router'
 )
 assert.deepEqual(
   userAuthenticatedRoutesWithoutUserGuard,

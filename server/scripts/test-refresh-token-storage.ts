@@ -2,10 +2,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { getRefreshTokenSessionId, getRefreshTokenStorageKey } from '../src/lib/security.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:5432/payincus_test'
+
+const { getRefreshTokenSessionId, getRefreshTokenStorageKey } = await import('../src/lib/security.js')
 
 const rawToken = 'rt_plain-refresh-token-for-storage-test'
 const storageKey = getRefreshTokenStorageKey(rawToken)

@@ -482,6 +482,33 @@ export interface PluginRecord {
   createdAt: string
   updatedAt: string
   latestVersion: PluginVersion | null
+  capabilityReviews?: PluginCapabilityReview[]
+}
+
+export type PluginCapabilityReviewStatus = 'pending' | 'approved' | 'rejected' | 'revoked'
+export type PluginCapabilityRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+export interface PluginCapabilityReview {
+  id: number
+  pluginId: string
+  pluginName: string | null
+  pluginStatus: PluginStatus | null
+  pluginEnabled: boolean | null
+  pluginCurrentVersion: string | null
+  manifestVersion: string
+  capabilityKey: string
+  capabilityType: string
+  title: string
+  description: string | null
+  riskLevel: PluginCapabilityRiskLevel | string
+  status: PluginCapabilityReviewStatus | string
+  scopes: string[]
+  hooks: string[]
+  reviewNotes: string | null
+  reviewedByUserId: number | null
+  reviewedAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface PublicPluginActionRateLimitDefault {
@@ -2579,7 +2606,7 @@ export interface InstanceTaskResponse {
 }
 
 export type DeliveryAssuranceCaseStatus = 'pending_manual' | 'auto_retryable' | 'in_progress' | 'recovered' | 'closed'
-export type DeliveryAssuranceIssueType = 'task_failed' | 'task_stale' | 'host_offline' | 'agent_offline' | 'resource_pressure'
+export type DeliveryAssuranceIssueType = 'task_failed' | 'task_stale' | 'host_offline' | 'agent_offline' | 'resource_pressure' | 'plan_upgrade_sync_failed'
 
 export interface DeliveryAssuranceCase {
   id: number
@@ -2657,6 +2684,46 @@ export interface DeliveryTaskContext {
   } | null
 }
 
+export interface DeliveryCaseContext {
+  id: number
+  instanceId: number
+  hostId: number
+  userId: number
+  instance: {
+    id: number
+    name: string
+    status: string
+    incusId: string
+    image: string
+    cpu: number
+    memory: number
+    disk: number
+    limitsIngress: string | null
+    limitsEgress: string | null
+  } | null
+  user: {
+    id: number
+    username: string
+    email: string | null
+    status: string
+  } | null
+  host: {
+    id: number
+    name: string
+    status: string
+    location: string | null
+    countryCode: string
+  } | null
+  assuranceCase: DeliveryAssuranceCase
+  billing: {
+    id: number
+    type: string
+    amount: number
+    createdAt: string
+    balanceLogId: number | null
+  } | null
+}
+
 export interface DeliveryOverview {
   summary: {
     pending: number
@@ -2682,6 +2749,14 @@ export interface DeliveryOverview {
 
 export interface DeliveryTasksResponse {
   tasks: DeliveryTaskContext[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface DeliveryCasesResponse {
+  cases: DeliveryCaseContext[]
   total: number
   page: number
   pageSize: number
