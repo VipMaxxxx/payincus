@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-b8c4119 Update version log for v0.9.5
+ba383fc Update version log for v0.9.6
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,37 +29,36 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-b8c4119 Update version log for v0.9.5
+ba383fc Update version log for v0.9.6
 ```
 
 ## Latest GitHub Release Work
 
-`v0.9.5` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
+`v0.9.6` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
 
 Release commits:
 
 ```text
-4fb5d03 Release v0.9.5
-b8c4119 Update version log for v0.9.5
+031d93c Release v0.9.6
+ba383fc Update version log for v0.9.6
 ```
 
 GitHub workflow proof:
 
 ```text
-Build & Release: run 28289824914 completed success
-CI: run 28289823365 completed success
-Docs Pages: run 28290037521 completed success for the v0.9.5 version-log push.
-Latest handoff-only CI: run 28290067013 completed success.
+Build & Release: run 28290822403 completed success
+CI: run 28290821016 completed success
+Docs Pages: run 28290821014 completed success for the v0.9.6 version-log push.
 ```
 
-Release assets verified for `v0.9.5`:
+Release assets verified for `v0.9.6`:
 
 ```text
-incudal-v0.9.5-linux-amd64.tar.gz
-incudal-v0.9.5-linux-amd64.tar.gz.sha256
-incudal-v0.9.5-linux-arm64.tar.gz
-incudal-v0.9.5-linux-arm64.tar.gz.sha256
-incudal-v0.9.5-ota-manifest.json
+incudal-v0.9.6-linux-amd64.tar.gz
+incudal-v0.9.6-linux-amd64.tar.gz.sha256
+incudal-v0.9.6-linux-arm64.tar.gz
+incudal-v0.9.6-linux-arm64.tar.gz.sha256
+incudal-v0.9.6-ota-manifest.json
 ota-manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.manifest.json
 payincus-plugin-ai-ticket-agent-0.1.1.tar.gz
@@ -67,13 +66,14 @@ payincus-plugin-ai-ticket-agent-0.1.1.tar.gz.sha256
 plugin-market-index.json
 ```
 
-The current `v0.9.5` bundle includes the `v0.9.0` commercial-operation baseline plus the follow-up OTA/smoke/UI hardening:
+The current `v0.9.6` bundle includes the `v0.9.0` commercial-operation baseline plus the follow-up OTA/smoke/UI/capacity hardening:
 
 - `v0.9.1`: split auth smoke now runs from production artifacts through `dist/scripts/smoke-split-auth.js`.
 - `v0.9.2`: split auth smoke is Turnstile-aware; without `SMOKE_TURNSTILE_TOKEN`, it treats enforced Turnstile as a protected login proof and skips the login-chain portion instead of failing the OTA.
 - `v0.9.3`: OTA update and rollback workers use atomic task-claim guards to avoid duplicate workers mutating the same task.
 - `v0.9.4`: duplicate OTA workers close the Prisma database connection before returning, so skipped duplicate oneshot services exit cleanly instead of hanging.
 - `v0.9.5`: global `bg-themed-surface` now has solid light/dark backgrounds, fixing transparent admin risk evidence drawers and other themed cards; generated version logs filter handoff/version-log sync commits from user-facing unreleased changes.
+- `v0.9.6`: public package sold-out checks now include disk capacity, keeping market availability aligned with backend instance creation checks; production readiness warnings and docs now describe CPU, memory, and disk capacity requirements.
 
 The `v0.9.0` commercial-operation baseline includes:
 
@@ -116,32 +116,39 @@ v0.9.5:
   pnpm --filter server test:frontend-dist-boundary-guards passed
   pnpm --filter server test:frontend-route-guards          passed
   pnpm --dir docs-site --ignore-workspace build            passed
+v0.9.6:
+  pnpm --filter server test:package-soldout-capacity-guards passed
+  pnpm --filter server type-check                            passed
+  pnpm build                                                 passed
+  pnpm --dir docs-site --ignore-workspace build              passed
 ```
 
 Remaining before calling the whole commercial-operation objective complete:
 
-- Current `v0.9.5` production OTA is complete and verified. `v0.9.4` final-acceptance proof remains the latest full live proof report; `v0.9.5` was a UI/docs patch and passed OTA production checks.
+- Current `v0.9.6` production OTA is complete and verified. `v0.9.4` final-acceptance proof remains the latest full live proof report; `v0.9.6` was a capacity availability/docs patch and passed OTA production checks.
 - Accepted production warnings remain: `PAYMENT_CALLBACK_IP_WHITELIST` is empty and public package `DEBGP` is active while current online bound hosts cannot satisfy its minimum CPU/memory/disk requirement.
-  Current read-only production capacity snapshot for this warning: package `DEBGP` (`id=3`) has one active unsold plan requiring `cpu=30`, `memory=256`, and disk capacity; bound online host `DE-01` (`id=6`) reports `cpuAllowanceMax=400`, non-deleted instance CPU usage `390`, free CPU `10`, `memoryMax=4096`, non-deleted instance memory usage `3328`, free memory `768`, `storageSize=60GB`, non-deleted instance disk usage `26624MB`, and free disk `34816MB`. It cannot create the minimum plan because CPU is already below the minimum requirement; increase capacity, migrate/clean instances, bind another host, or pause the package from public sale.
+  Current read-only production capacity snapshot for this warning: package `DEBGP` (`id=3`) has one active unsold plan requiring `cpu=30`, `memory=256`, and disk capacity; bound online host `DE-01` (`id=6`) reports `cpuAllowanceMax=400`, non-deleted instance CPU usage `390`, free CPU `10`, `memoryMax=4096`, non-deleted instance memory usage `3328`, free memory `768`, `storageSize=60GB`, non-deleted instance disk usage `26624MB`, and free disk `34816MB`. It cannot create the minimum plan because CPU is already below the minimum requirement. In `v0.9.6`, the public package API now reports `DEBGP soldOut=true`, so the market should block purchase while still surfacing the operational capacity warning.
 - With Turnstile enabled and no `SMOKE_TURNSTILE_TOKEN`, split auth smoke verifies Turnstile enforcement and skips the full login-chain smoke. Provide a valid Turnstile token if a full automated login-chain proof is required.
 - Keep watching the high-risk surfaces touched by `v0.9.0`: Integration Center health checks, manual recharge, refund/reconciliation workbench, extension capability review blocking, delivery/plan-upgrade sync repair, and split user/admin login boundaries.
 
 ## Latest Production OTA Proof
 
-- Production version: `v0.9.5`
-- Release tag commit: `4fb5d03`
-- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.9.5-20260627130056`
-- OTA task: `99`, status `success`; backup path `/opt/incudal/releases/v0.9.4-20260627123842`; log path `/opt/incudal/update-logs/system-update-99.log`.
-- GitHub Actions: `Build & Release` for `v0.9.5` succeeded and `CI` on `main` succeeded.
+- Production version: `v0.9.6`
+- Release tag commit: `031d93c`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v0.9.6-20260627134313`
+- OTA task: `100`, status `success`; backup path `/opt/incudal/releases/v0.9.5-20260627130056`; log path `/opt/incudal/update-logs/system-update-100.log`.
+- GitHub Actions: `Build & Release` for `v0.9.6` succeeded and `CI` on `main` succeeded.
 - Production checks passed during OTA: split host verification, `pnpm verify:production`, `pnpm verify:log-header`.
 - Independent checks after OTA:
   - `https://pay.payincus.com/api/health` returned HTTP 200.
   - `https://admin.payincus.com/api/health` returned HTTP 200.
-  - `systemctl is-active incudal-backend` returned `active`.
-  - `package.json` under `/opt/incudal/current` reports `0.9.5`.
+  - Local backend `http://127.0.0.1:3001/api/health` returned HTTP 200.
+  - `package.json` under `/opt/incudal/current` reports `0.9.6`.
   - OTA log shows `System update completed successfully`.
-  - Deployed admin CSS bundle contains `.bg-themed-surface`, `.dark .bg-themed-surface`, and `.light .bg-themed-surface`, proving the transparent evidence drawer fix is present in production assets.
-  - Task `99` database row is `success` with `errorMessage=null`.
+  - Task `100` database row is `success` with `errorMessage=null`.
+  - `pnpm verify:production` on production passes with accepted warnings for empty `PAYMENT_CALLBACK_IP_WHITELIST` and `DEBGP` capacity.
+  - `checkPackagesSoldOut([1, 3])` on production returns `HKCMI=false`, `DEBGP=true`.
+  - Public API `https://pay.payincus.com/api/packages/public` returns `DEBGP soldOut=true` and `HKCMI soldOut=false`.
 
 Historical note:
 
