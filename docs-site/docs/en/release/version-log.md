@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `e64ad2c`
+- Latest Release Commit / 最新发布提交: `8d722fe`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Release v0.9.9
-- Latest tag / 最新 tag: `v0.9.9`
+- Commit subject / 提交说明: Update handoff for DEBGP closure
+- Latest tag / 最新 tag: `v1.0.0`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.0.0
+
+- Release commit / 发布提交: `8d722fe`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Update handoff for DEBGP closure
+
+Add an explicit production policy for payment providers that do not publish stable callback source IPs.
+
+Operators can now set `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false` while keeping `PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false`. Production readiness records the empty callback IP allowlist as an accepted policy instead of an unresolved warning, and callbacks still require signature verification, trade-status validation, amount matching and `payment_callbacks` idempotency before balance credit.
+
+Update the Chinese and English deployment docs and environment examples to document the difference between an explicit no-whitelist policy and unsafe callback IP check bypassing.
+
+Harden the host Agent before the 1.0.0 release: default heartbeat interval is now 60 seconds with a 30-second minimum, Incus instance state collection is limited to running instances with lower concurrency and a 500-instance cap, heartbeat logs are throttled, and the generated `incudal-agent.service` now includes CPU, memory, task and journal rate limits. Update Agent installation docs and systemd docs so existing hosts know to rerun the Agent installer to refresh the service template.
 
 ## v0.9.9
 
