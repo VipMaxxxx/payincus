@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `51e2df0`
+- Current HEAD / 当前 HEAD: `20f9209`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Harden OTA Prisma client generation
-- Latest tag / 最新 tag: `v0.8.5`
+- Commit subject / 提交说明: Add manual resource risk controls
+- Latest tag / 最新 tag: `v0.8.6`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.8.6
+
+- Release commit / 发布提交: `20f9209`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Add manual resource risk controls
+
+### New Capabilities / 新增能力
+
+- Add manual resource risk controls `20f9209`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.8.5 OTA `a391ace`
+- Update version log for v0.8.5 `55a1280`
 
 ## v0.8.5
 

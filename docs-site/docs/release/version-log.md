@@ -6,16 +6,31 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `51e2df0`
+- 当前 HEAD / Current HEAD: `20f9209`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Harden OTA Prisma client generation
-- 最新 tag / Latest tag: `v0.8.5`
+- 提交说明 / Commit subject: Add manual resource risk controls
+- 最新 tag / Latest tag: `v0.8.6`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.8.6
+
+- 发布提交 / Release commit: `20f9209`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Add manual resource risk controls
+
+### 新增能力 / New Capabilities
+
+- Add manual resource risk controls `20f9209`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after v0.8.5 OTA `a391ace`
+- Update version log for v0.8.5 `55a1280`
 
 ## v0.8.5
 
