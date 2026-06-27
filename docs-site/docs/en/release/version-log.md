@@ -6,16 +6,32 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `aa087db`
+- Current HEAD / 当前 HEAD: `763baaf`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Release v0.9.0
-- Latest tag / 最新 tag: `v0.9.0`
+- Commit subject / 提交说明: Fix split auth smoke in production artifacts
+- Latest tag / 最新 tag: `v0.9.1`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.9.1
+
+- Release commit / 发布提交: `763baaf`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Fix split auth smoke in production artifacts
+
+### Fixes and Stability / 修复与稳定性
+
+- Fix split auth smoke in production artifacts `763baaf`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.9.0 OTA `6a95103`
+- Update handoff after v0.9.0 release `bb15e8a`
+- Update version log for v0.9.0 `776950a`
 
 ## v0.9.0
 

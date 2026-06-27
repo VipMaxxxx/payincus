@@ -6,16 +6,32 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `aa087db`
+- 当前 HEAD / Current HEAD: `763baaf`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Release v0.9.0
-- 最新 tag / Latest tag: `v0.9.0`
+- 提交说明 / Commit subject: Fix split auth smoke in production artifacts
+- 最新 tag / Latest tag: `v0.9.1`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.9.1
+
+- 发布提交 / Release commit: `763baaf`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Fix split auth smoke in production artifacts
+
+### 修复与稳定性 / Fixes and Stability
+
+- Fix split auth smoke in production artifacts `763baaf`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update handoff after v0.9.0 OTA `6a95103`
+- Update handoff after v0.9.0 release `bb15e8a`
+- Update version log for v0.9.0 `776950a`
 
 ## v0.9.0
 
