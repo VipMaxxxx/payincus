@@ -6,16 +6,31 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `4f5bb5e`
+- Current HEAD / 当前 HEAD: `1a82f05`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Add package traffic reset pricing
-- Latest tag / 最新 tag: `v0.8.2`
+- Commit subject / 提交说明: Fix instance bandwidth and billing nav display
+- Latest tag / 最新 tag: `v0.8.3`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.8.3
+
+- Release commit / 发布提交: `1a82f05`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Fix instance bandwidth and billing nav display
+
+### Fixes and Stability / 修复与稳定性
+
+- Fix instance bandwidth and billing nav display `1a82f05`
+
+### Improvements and Adjustments / 改进与调整
+
+- Update handoff after v0.8.2 OTA `81924bc`
+- Update version log for v0.8.2 `ef43193`
 
 ## v0.8.2
 
