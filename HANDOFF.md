@@ -160,12 +160,12 @@ Remaining before calling the whole commercial-operation objective complete:
 - With Turnstile enabled and no `SMOKE_TURNSTILE_TOKEN`, split auth smoke verifies Turnstile enforcement and skips the full login-chain smoke. Provide a valid Turnstile token if a full automated login-chain proof is required.
 - Keep watching the high-risk surfaces touched by `v0.9.0`: Integration Center health checks, manual recharge, refund/reconciliation workbench, extension capability review blocking, delivery/plan-upgrade sync repair, and split user/admin login boundaries.
 
-## v1.0.1 In Progress
+## v1.0.1 Release Summary
 
 - Target version: `v1.0.1`.
 - Scope: dedicated IPv4 and dedicated IPv4 + dedicated IPv6 delivery, host public IPv4 IPAM, package network mode cleanup, and consistent resource rollback.
 - IPv6 NAT is intentionally not a new target capability. `nat_ipv6_nat` and `ipv6_nat` remain only for legacy data compatibility.
-- Local validation completed so far:
+- Local validation completed:
   - `DATABASE_URL='postgresql://user:pass@127.0.0.1:5432/payincus' pnpm --filter server exec prisma generate` passed.
   - `pnpm --filter server type-check` passed.
   - `pnpm --filter client type-check` passed.
@@ -174,26 +174,29 @@ Remaining before calling the whole commercial-operation objective complete:
   - `pnpm --filter server test:package-input-guards` passed.
   - `pnpm build` passed.
   - `pnpm --dir docs-site --ignore-workspace build` passed.
+- GitHub checks completed:
+  - Build & Release run `28295943739` passed for tag `v1.0.1`.
+  - CI run `28295942451` passed for `main`.
+  - Pages run `28295942452` passed for `main`.
 
 ## Latest Production OTA Proof
 
-- Production version: `v1.0.0`
-- Release tag commit: `8d722fe`
-- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.0.0-20260627155441`
-- OTA task: `104`, status `success`; backup path `/opt/incudal/releases/v0.9.9-20260627150556`; log path `/opt/incudal/update-logs/system-update-104.log`.
-- GitHub Release assets for `v1.0.0` are available, including linux amd64/arm64 tarballs, sha256 files, and `ota-manifest.json`.
+- Production version: `v1.0.1`
+- Release tag commit: `eca273ce`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.0.1-20260627171035`
+- OTA task: `105`, status `success`; backup path `/opt/incudal/releases/v1.0.0-20260627155441`; log path `/opt/incudal/update-logs/system-update-105.log`.
+- GitHub Release assets for `v1.0.1` are available, including linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.1-ota-manifest.json`, `ota-manifest.json`, AI ticket extension assets, and plugin market index.
 - Production checks passed during and after OTA: split host verification, `pnpm verify:production`, health checks for user/admin/backend APIs, Agent manifest check, and Agent binary sha256 download check.
 - Independent checks after OTA:
   - `https://pay.payincus.com/api/health` returned HTTP 200.
   - `https://admin.payincus.com/api/health` returned HTTP 200.
   - Local backend `http://127.0.0.1:3001/api/health` returned HTTP 200.
-  - `package.json` under `/opt/incudal/current` reports `1.0.0`.
+  - `package.json` under `/opt/incudal/current` reports `1.0.1`.
   - OTA log shows `System update completed successfully`.
-  - Task `104` database row is `success` with `errorMessage=null`.
+  - Task `105` database row is `success` with `errorMessage=null`.
+  - Production DB contains `public_ipv4_pools` and `public_ipv4_addresses`.
   - `pnpm verify:production` on production passes and records the empty payment callback IP whitelist as an intentional policy because `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false` is set.
-  - Deployed Agent installer template contains systemd CPU, memory, task and journal rate-limit markers.
-  - `/api/agent/manifest.json` returns `v1.0.0`; `/api/agent/binary/incudal-agent-linux-amd64.gz?v=v1.0.0&sha256=<manifest sha>` downloads with the expected sha256.
-  - Online docs `https://payincus.com/release/version-log` contains `v1.0.0`.
+  - Online docs `https://payincus.com/release/version-log` and `https://payincus.com/en/release/version-log` contain `v1.0.1`.
   - Deployed admin bundle contains `resource-risk-evidence-panel` and generated CSS with `background-color:#fff;opacity:1`, plus dark-mode opaque surface/code backgrounds.
   - Public API `https://pay.payincus.com/api/packages/public` returns `HKCMI soldOut=false`; `DEBGP` is no longer returned after package `#3` was set `active=false`.
 
