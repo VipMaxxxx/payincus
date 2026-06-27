@@ -6,16 +6,30 @@
 
 ## 当前源码状态 / Current Source State
 
-- 当前 HEAD / Current HEAD: `763baaf`
+- 当前 HEAD / Current HEAD: `e67fc89`
 - 提交日期 / Commit date: 2026-06-27
-- 提交说明 / Commit subject: Fix split auth smoke in production artifacts
-- 最新 tag / Latest tag: `v0.9.1`
+- 提交说明 / Commit subject: Handle Turnstile in split auth smoke
+- 最新 tag / Latest tag: `v0.9.2`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v0.9.2
+
+- 发布提交 / Release commit: `e67fc89`
+- 提交日期 / Commit date: 2026-06-27
+- 提交说明 / Commit subject: Handle Turnstile in split auth smoke
+
+### 其他变更 / Other Changes
+
+- Handle Turnstile in split auth smoke `e67fc89`
+
+### 改进与调整 / Improvements and Adjustments
+
+- Update version log for v0.9.1 `3f4a8fb`
 
 ## v0.9.1
 
