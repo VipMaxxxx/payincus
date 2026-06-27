@@ -1,6 +1,6 @@
 {
   "name": "incudal",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Incudal 容器虚拟化管理平台",
   "type": "module",
   "private": true,

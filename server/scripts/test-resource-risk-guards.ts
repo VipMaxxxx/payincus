@@ -31,9 +31,15 @@ assert(
     schema.includes('model UserOrderRestriction') &&
     schema.includes('rxPacketsRaw') &&
     schema.includes('cpuUsageRaw') &&
+    schema.includes('orderRestrictScore') &&
+    schema.includes('autoSuspendScore') &&
+    schema.includes('autoSuspendEnabled') &&
     migration.includes('CREATE TABLE IF NOT EXISTS "instance_risk_states"') &&
     migration.includes('CREATE TABLE IF NOT EXISTS "instance_resource_samples"') &&
-    migration.includes('CREATE TABLE IF NOT EXISTS "user_order_restrictions"'),
+    migration.includes('CREATE TABLE IF NOT EXISTS "user_order_restrictions"') &&
+    migration.includes('"order_restrict_score"') &&
+    migration.includes('"auto_suspend_score"') &&
+    migration.includes('"auto_suspend_enabled"'),
   'resource risk schema and migration must persist policy, instance scores, samples, events, order restrictions, packets, and CPU snapshots'
 )
 
@@ -79,7 +85,10 @@ assert(
     riskRoute.includes("'/admin/resource-risk/instances'") &&
     riskRoute.includes("'/admin/resource-risk/order-restrictions/:id/release'") &&
     app.includes("await fastify.register(resourceRiskRoutes, { prefix: '/api' })") &&
-    app.includes('startResourceRiskScheduler()'),
+    app.includes('startResourceRiskScheduler()') &&
+    riskService.includes('autoSuspendInstance') &&
+    riskService.includes('policy.autoSuspendScore') &&
+    riskService.includes('policy.orderRestrictScore'),
   'resource risk user and admin APIs must be registered and scheduler must start with the app'
 )
 
