@@ -119,6 +119,28 @@ const INSTANCE_LIST_STATUSES = new Set<InstanceStatus>([
   'deleted'
 ])
 
+function formatInstanceNameTimestamp(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds())
+  ].join('')
+}
+
+function getInstanceNameRegionPrefix(countryCode: unknown): string {
+  const normalized = String(countryCode || 'incus').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6)
+  return normalized || 'incus'
+}
+
+function generateAutoInstanceName(userId: number, countryCode: unknown): string {
+  const uidTail = String(userId || 0).padStart(3, '0').slice(-3)
+  return `${getInstanceNameRegionPrefix(countryCode)}${uidTail}-${formatInstanceNameTimestamp()}-${nanoid().slice(0, 4)}`
+}
+
 function parsePositiveRouteId(value: string): number | null {
   if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
     return null
@@ -1132,9 +1154,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     schema: {
       body: {
         type: 'object',
-        required: ['name', 'packageId', 'image', 'hostId'],
+        required: ['packageId', 'image', 'hostId'],
         properties: {
-          name: { type: 'string', minLength: 2, maxLength: 64 },
+          name: { type: 'string', maxLength: 64 },
           packageId: { type: 'integer' },
           image: { type: 'string' },
           cpu: { type: 'integer', minimum: 15, maximum: 10000 },
@@ -1151,7 +1173,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{
     Body: {
-      name: string
+      name?: string
       packageId: number
       planId?: number  // 付费方案ID
       image: string
@@ -1166,17 +1188,12 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       promoCode?: string  // AFF 优惠码
     }
   }>, reply: FastifyReply) => {
-    const { name, packageId, planId, image, cpu, memory, disk, hostId, sshKeyId, customInitCommandIds, promoCode } = request.body
-    let { sshKey } = request.body
+    const { packageId, planId, image, cpu, memory, disk, hostId, sshKeyId, customInitCommandIds, promoCode } = request.body
+    let { name, sshKey } = request.body
     const { user } = request
 
     // ==================== 阶段一: 验证与校验 ====================
-
-    // 验证实例名称（防止危险字符注入）
-    const nameValidation = validateName(name, 'Instance name', 2, 64)
-    if (!nameValidation.valid) {
-      return reply.code(400).send({ error: nameValidation.message })
-    }
+    name = typeof name === 'string' ? name.trim() : ''
 
     // 0. 处理 SSH 密钥：支持 sshKeyId 或直接传 sshKey
     if (sshKeyId && !sshKey) {
@@ -1443,6 +1460,23 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         default:
           return reply.code(400).send(apiError(ErrorCode.INSTANCE_IMAGE_UNAVAILABLE))
       }
+    }
+
+    if (!name) {
+      const hostCountryCode = (preCheckHost as typeof preCheckHost & {
+        country_code?: string | null
+        countryCode?: string | null
+      }).country_code || (preCheckHost as typeof preCheckHost & {
+        country_code?: string | null
+        countryCode?: string | null
+      }).countryCode
+      name = generateAutoInstanceName(user.id, hostCountryCode)
+    }
+
+    // 验证实例名称（防止危险字符注入）；自动生成名称也走同一规则
+    const nameValidation = validateName(name, 'Instance name', 2, 64)
+    if (!nameValidation.valid) {
+      return reply.code(400).send({ error: nameValidation.message })
     }
 
     // 用户托管节点不允许使用优惠码（托管节点命名前四位固定为 peer）

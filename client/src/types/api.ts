@@ -1810,7 +1810,7 @@ export interface InstanceWithDetails extends Omit<Instance, 'host'> {
 }
 
 export interface CreateInstanceRequest {
-  name: string
+  name?: string
   packageId: number
   planId?: number  // 付费方案ID（付费套餐必填）
   image: string

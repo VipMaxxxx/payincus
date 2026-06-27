@@ -46,6 +46,14 @@ const footerTelegramLink = computed(() => {
   return link || null
 })
 
+function getNavLabel(item: MenuItem): string {
+  if (item.labelText) return item.labelText
+  if (!item.label) return ''
+  const translated = t(item.label)
+  if (translated && translated !== item.label) return translated
+  return item.label.split('.').pop() || item.label
+}
+
 const adminPluginMenuItems = ref<MenuItem[]>([])
 const hiddenExpandMenuNames = new Set(['my-hosts', 'my-packages', 'hosting-wallet'])
 const hiddenWhenTicketDisabledMenuNames = new Set(['tickets'])
@@ -286,12 +294,12 @@ onUnmounted(() => {
         <div v-if="item.divider" class="pt-3 pb-2">
           <button
             v-if="!collapsed || mobileOpen" 
-            class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-2xs font-medium uppercase tracking-wider transition-colors hover:bg-themed-hover"
+            class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-2xs font-medium transition-colors hover:bg-themed-hover"
             :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
             type="button"
             @click="toggleGroup(item.label)"
           >
-            <span>{{ item.labelText || t(item.label || '') }}</span>
+            <span>{{ getNavLabel(item) }}</span>
             <svg
               v-if="item.label && collapsibleGroupLabels.has(item.label)"
               class="h-3 w-3 transition-transform"
@@ -438,7 +446,7 @@ onUnmounted(() => {
               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
-          <span v-if="!collapsed || mobileOpen" class="truncate">{{ item.labelText || t(item.label || '') }}</span>
+          <span v-if="!collapsed || mobileOpen" class="truncate">{{ getNavLabel(item) }}</span>
         </RouterLink>
       </template>
       <PluginSlot v-if="isAdminEntry" slot-name="admin.sidebar.extra" surface="admin" :collapsed="collapsed && !mobileOpen" />

@@ -1043,6 +1043,8 @@ export default {
             description: 'Select a package and configure your container instance',
             instanceName: 'Instance Name',
             instanceNamePlaceholder: 'my-instance',
+            regenerateName: 'Regenerate',
+            autoNameHint: 'The system generates a name from region, user, and time. You can still edit it manually.',
             selectPackage: 'Please select a package',
             selectSshKey: 'Please select an SSH key',
             creating: 'Creating...',
@@ -1184,6 +1186,19 @@ export default {
             suspended: 'Instance is suspended and cannot be destroyed until it is unsuspended',
             destroyTrafficLimit: 'This instance cannot be destroyed because current monthly traffic usage has reached or exceeded 5G',
             destroyFailed: 'Failed to destroy instance',
+        },
+        card: {
+            region: 'Region',
+            network: 'Network',
+            bandwidth: 'Bandwidth',
+            traffic: 'Traffic',
+            perMonth: '/mo',
+            trafficReset: 'Traffic Reset',
+            price: 'Price',
+            autoRenew: 'Auto Renew',
+            manage: 'Manage',
+            push: 'PUSH',
+            renew: 'Renew',
         },
         // Mobile card
         mobileCard: {

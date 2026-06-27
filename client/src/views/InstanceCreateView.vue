@@ -113,6 +113,7 @@ const plansLoading = ref<boolean>(false)
 const loading = ref<boolean>(true)
 const submitting = ref<boolean>(false)
 const error = ref<string>('')
+const instanceNameEditedByUser = ref<boolean>(false)
 
 // 表单数据
 interface InstanceForm {
@@ -210,6 +211,8 @@ const selectedPackage = computed<Package | undefined>(() => packages.value.find(
 
 // 当前选中的方案
 const selectedPlan = computed<PackagePlan | undefined>(() => packagePlans.value.find(p => p.id === form.value.planId))
+
+const selectedHost = computed<AvailableHost | undefined>(() => availableHosts.value.find(host => host.id === form.value.hostId))
 
 const prerequisitePackageName = computed<string | null>(() => {
   if (!selectedPackage.value?.required_package_id) return null
@@ -359,8 +362,7 @@ const canSubmit = computed<boolean>(() => {
     return false
   }
   
-  const baseChecks = !!form.value.name &&
-         form.value.packageId !== null &&
+  const baseChecks = form.value.packageId !== null &&
          form.value.hostId !== null &&
          !!form.value.image &&
          availableImages.value.length > 0 &&
@@ -398,6 +400,50 @@ const packageCountLabelKey = computed(() => `${createPageTextPrefix.value}.packa
 
 function getCreatePageText(key: string): string {
   return t(`${createPageTextPrefix.value}.${key}`)
+}
+
+function formatInstanceNameTimestamp(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds())
+  ].join('')
+}
+
+function getRandomNameSuffix(length = 4): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = new Uint8Array(length)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256)
+    }
+  }
+  return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('')
+}
+
+function getInstanceNameRegionPrefix(): string {
+  const code = selectedHost.value?.countryCode || selectedRegion.value || 'incus'
+  return String(code).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6) || 'incus'
+}
+
+function generateInstanceName(): string {
+  const uidTail = String(authStore.user?.id || 0).padStart(3, '0').slice(-3)
+  return `${getInstanceNameRegionPrefix()}${uidTail}-${formatInstanceNameTimestamp()}-${getRandomNameSuffix()}`
+}
+
+function refreshGeneratedInstanceName(force = false): void {
+  if (!force && instanceNameEditedByUser.value) return
+  form.value.name = generateInstanceName()
+}
+
+function handleInstanceNameInput(): void {
+  instanceNameEditedByUser.value = true
 }
 
 function getPackageSourceLabel(source: 'official' | 'market'): string {
@@ -871,6 +917,7 @@ watch(() => form.value.hostId, (newHostId) => {
     return
   }
 
+  refreshGeneratedInstanceName()
   loadAvailableImages(
     selectedPackage.value.instance_type as 'container' | 'vm' | undefined,
     form.value.memory,
@@ -938,6 +985,10 @@ async function handleSubmit(): Promise<void> {
     if (form.value.hostId === null) throw new Error(getCreatePageText('selectHost'))
     if (form.value.sshKeyId === null) throw new Error(getCreatePageText('selectSshKey'))
     
+    if (!form.value.name.trim()) {
+      refreshGeneratedInstanceName(true)
+    }
+
     // 验证实例名称
     const nameValidation = validateInstanceName(form.value.name)
     if (!nameValidation.valid) {
@@ -945,7 +996,7 @@ async function handleSubmit(): Promise<void> {
     }
 
     await api.instances.create({
-      name: form.value.name,
+      name: form.value.name.trim(),
       packageId: form.value.packageId,
       planId: form.value.planId || undefined,
       hostId: form.value.hostId,
@@ -1237,7 +1288,24 @@ async function handleSubmit(): Promise<void> {
                 </svg>
                 <span>{{ $t('instance.createPage.destroyTrafficNotice') }}</span>
               </p>
-              <input v-model="form.name" type="text" class="input w-full" :placeholder="$t('instance.createPage.instanceNamePlaceholder')" required />
+              <div class="flex gap-2">
+                <input
+                  v-model="form.name"
+                  type="text"
+                  class="input min-w-0 flex-1"
+                  :placeholder="$t('instance.createPage.instanceNamePlaceholder')"
+                  @input="handleInstanceNameInput"
+                />
+                <button
+                  type="button"
+                  class="btn-secondary shrink-0 px-3 text-sm"
+                  :disabled="!form.hostId"
+                  @click="refreshGeneratedInstanceName(true)"
+                >
+                  {{ $t('instance.createPage.regenerateName') }}
+                </button>
+              </div>
+              <p class="mt-1.5 text-xs text-themed-muted">{{ $t('instance.createPage.autoNameHint') }}</p>
             </div>
             <div v-if="sshKeys.length === 0" class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-400 dark:border-yellow-500/30 rounded-lg">
               <p class="text-sm text-yellow-800 dark:text-yellow-300 font-medium mb-1">⚠️ {{ $t('instance.createPage.missingSshKey') }}</p>
