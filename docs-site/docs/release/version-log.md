@@ -13,7 +13,10 @@
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 其他变更 / Other Changes
+
+- Include disk capacity in package sold-out checks `00d64a8`
+- Document production readiness warnings `e5435c7`
 
 ## 历史版本 / Historical Versions
 
