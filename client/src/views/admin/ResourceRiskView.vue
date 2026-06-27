@@ -9,6 +9,11 @@ import api, {
 import { useToast } from '@/stores/toast'
 
 type TabKey = 'instances' | 'events' | 'restrictions' | 'policy'
+interface QosTierForm {
+  level: number
+  bandwidthMbps: number
+  score: number
+}
 
 const toast = useToast()
 const loading = ref(true)
@@ -32,7 +37,11 @@ const policyForm = ref({
   autoSuspendScore: 90,
   autoSuspendEnabled: false,
   accountOrderRestrictEnabled: true,
-  qosTiersText: '1,50,50\n2,30,65\n3,10,80'
+  qosTiers: [
+    { level: 1, bandwidthMbps: 50, score: 50 },
+    { level: 2, bandwidthMbps: 30, score: 65 },
+    { level: 3, bandwidthMbps: 10, score: 80 }
+  ] as QosTierForm[]
 })
 
 const tabs: Array<{ key: TabKey; label: string }> = [
@@ -58,16 +67,63 @@ function badgeClass(level: string): string {
   return 'badge badge-success'
 }
 
-function parseQosTiers() {
-  return policyForm.value.qosTiersText
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map(line => {
-      const [level, bandwidthMbps, score] = line.split(',').map(item => Number(item.trim()))
-      return { level, bandwidthMbps, score }
-    })
-    .filter(item => Number.isInteger(item.level) && item.level > 0 && item.bandwidthMbps > 0 && item.score > 0)
+function normalizeQosTiers(): QosTierForm[] | null {
+  const levels = new Set<number>()
+  const scores = new Set<number>()
+  const tiers: QosTierForm[] = []
+
+  for (const row of policyForm.value.qosTiers) {
+    const level = Number(row.level)
+    const bandwidthMbps = Number(row.bandwidthMbps)
+    const score = Number(row.score)
+    if (!Number.isInteger(level) || level <= 0) {
+      toast.warning('QoS 档位必须是正整数')
+      return null
+    }
+    if (!Number.isFinite(bandwidthMbps) || bandwidthMbps <= 0) {
+      toast.warning('QoS 限速 Mbps 必须大于 0')
+      return null
+    }
+    if (!Number.isInteger(score) || score < 1 || score > 100) {
+      toast.warning('QoS 触发分数必须在 1-100 之间')
+      return null
+    }
+    if (levels.has(level)) {
+      toast.warning(`QoS 档位 ${level} 重复`)
+      return null
+    }
+    if (scores.has(score)) {
+      toast.warning(`QoS 触发分数 ${score} 重复`)
+      return null
+    }
+    levels.add(level)
+    scores.add(score)
+    tiers.push({ level, bandwidthMbps: Math.round(bandwidthMbps), score })
+  }
+
+  if (tiers.length === 0) {
+    toast.warning('至少需要配置一个 QoS 档位')
+    return null
+  }
+
+  return tiers.sort((a, b) => a.score - b.score)
+}
+
+function addQosTier() {
+  const last = [...policyForm.value.qosTiers].sort((a, b) => a.level - b.level).at(-1)
+  policyForm.value.qosTiers.push({
+    level: (last?.level || 0) + 1,
+    bandwidthMbps: Math.max(1, Math.round((last?.bandwidthMbps || 50) / 2)),
+    score: Math.min(100, (last?.score || 50) + 10)
+  })
+}
+
+function removeQosTier(index: number) {
+  if (policyForm.value.qosTiers.length <= 1) {
+    toast.warning('至少保留一个 QoS 档位')
+    return
+  }
+  policyForm.value.qosTiers.splice(index, 1)
 }
 
 function syncPolicyForm(nextPolicy: ResourceRiskPolicy) {
@@ -85,9 +141,15 @@ function syncPolicyForm(nextPolicy: ResourceRiskPolicy) {
     autoSuspendScore: nextPolicy.autoSuspendScore,
     autoSuspendEnabled: nextPolicy.autoSuspendEnabled,
     accountOrderRestrictEnabled: nextPolicy.accountOrderRestrictEnabled,
-    qosTiersText: (nextPolicy.qosTiers || [])
-      .map(item => `${item.level},${item.bandwidthMbps},${item.score}`)
-      .join('\n') || '1,50,50\n2,30,65\n3,10,80'
+    qosTiers: (nextPolicy.qosTiers?.length ? nextPolicy.qosTiers : [
+      { level: 1, bandwidthMbps: 50, score: 50 },
+      { level: 2, bandwidthMbps: 30, score: 65 },
+      { level: 3, bandwidthMbps: 10, score: 80 }
+    ]).map(item => ({
+      level: item.level,
+      bandwidthMbps: item.bandwidthMbps,
+      score: item.score
+    }))
   }
 }
 
@@ -114,11 +176,8 @@ async function loadAll() {
 }
 
 async function savePolicy() {
-  const qosTiers = parseQosTiers()
-  if (qosTiers.length === 0) {
-    toast.warning('至少需要配置一个 QoS 档位')
-    return
-  }
+  const qosTiers = normalizeQosTiers()
+  if (!qosTiers) return
 
   saving.value = true
   try {
@@ -143,6 +202,76 @@ async function savePolicy() {
     toast.error(`保存失败：${error?.message || error}`)
   } finally {
     saving.value = false
+  }
+}
+
+async function manualQos(item: ResourceRiskState) {
+  const bandwidthInput = window.prompt(`请输入 ${item.instance?.name || item.instanceId} 的人工限速 Mbps`, '30')
+  if (!bandwidthInput) return
+  const bandwidthMbps = Number(bandwidthInput)
+  if (!Number.isFinite(bandwidthMbps) || bandwidthMbps <= 0) {
+    toast.warning('限速 Mbps 必须大于 0')
+    return
+  }
+  const reason = window.prompt('请输入人工限速原因', item.reason || '资源占用过高，人工限速')
+  if (!reason?.trim()) return
+  const restrictOrders = window.confirm('是否同时限制该账号继续下单？')
+  try {
+    await api.resourceRisk.manualQos(item.instanceId, {
+      bandwidthMbps,
+      reason,
+      restrictOrders
+    })
+    toast.success('已人工限速')
+    await loadAll()
+  } catch (error: any) {
+    toast.error(`人工限速失败：${error?.message || error}`)
+  }
+}
+
+async function manualSuspend(item: ResourceRiskState) {
+  const reason = window.prompt(`请输入封禁 ${item.instance?.name || item.instanceId} 的原因`, item.reason || '资源风控人工封禁')
+  if (!reason?.trim()) return
+  const restrictOrders = window.confirm('是否同时限制该账号继续下单？')
+  const notifyUser = window.confirm('是否通知用户？')
+  try {
+    await api.resourceRisk.manualSuspend(item.instanceId, {
+      reason,
+      restrictOrders,
+      notifyUser
+    })
+    toast.success('实例已人工封禁')
+    await loadAll()
+  } catch (error: any) {
+    toast.error(`人工封禁失败：${error?.message || error}`)
+  }
+}
+
+async function manualUnsuspend(item: ResourceRiskState) {
+  const reason = window.prompt(`请输入解除 ${item.instance?.name || item.instanceId} 封禁的原因`, '人工审核通过')
+  if (!reason?.trim()) return
+  const notifyUser = window.confirm('是否通知用户？')
+  try {
+    await api.resourceRisk.manualUnsuspend(item.instanceId, {
+      reason,
+      notifyUser
+    })
+    toast.success('实例已解除封禁')
+    await loadAll()
+  } catch (error: any) {
+    toast.error(`解除封禁失败：${error?.message || error}`)
+  }
+}
+
+async function manualOrderRestrict(item: ResourceRiskState) {
+  const reason = window.prompt(`请输入限制用户 ${item.user?.username || item.userId} 下单的原因`, '实例触发人工资源风控审核')
+  if (!reason?.trim()) return
+  try {
+    await api.resourceRisk.manualOrderRestrict(item.instanceId, reason)
+    toast.success('已限制账号下单')
+    await loadAll()
+  } catch (error: any) {
+    toast.error(`限制下单失败：${error?.message || error}`)
   }
 }
 
@@ -256,9 +385,15 @@ onMounted(() => {
                 <td class="p-3 text-themed-secondary">{{ item.status }}</td>
                 <td class="p-3 text-themed-secondary">{{ item.currentBandwidthLimit || '-' }}</td>
                 <td class="max-w-sm truncate p-3 text-themed-muted">{{ item.reason || '-' }}</td>
-                <td class="p-3 text-right">
-                  <button class="btn-secondary mr-2 px-3 py-1 text-xs" @click="evaluateInstance(item)">评估</button>
-                  <button class="btn-primary px-3 py-1 text-xs" @click="releaseInstance(item)">解除</button>
+                <td class="p-3">
+                  <div class="flex flex-wrap justify-end gap-2">
+                    <button class="btn-secondary px-3 py-1 text-xs" @click="evaluateInstance(item)">评估</button>
+                    <button class="btn-secondary px-3 py-1 text-xs" @click="manualQos(item)">限速</button>
+                    <button class="btn-danger px-3 py-1 text-xs" @click="manualSuspend(item)">封禁</button>
+                    <button class="btn-secondary px-3 py-1 text-xs" @click="manualUnsuspend(item)">解封</button>
+                    <button class="btn-secondary px-3 py-1 text-xs" @click="manualOrderRestrict(item)">限单</button>
+                    <button class="btn-primary px-3 py-1 text-xs" @click="releaseInstance(item)">解除风控</button>
+                  </div>
                 </td>
               </tr>
               <tr v-if="instances.length === 0">
@@ -388,10 +523,44 @@ onMounted(() => {
           </label>
         </div>
 
-        <label class="mt-4 block space-y-1">
-          <span class="label">QoS 档位（每行：档位,带宽Mbps,触发分数）</span>
-          <textarea v-model="policyForm.qosTiersText" class="input min-h-28 w-full font-mono text-sm" />
-        </label>
+        <div class="mt-5 space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="text-sm font-semibold text-themed">QoS 档位</h2>
+              <p class="mt-1 text-xs text-themed-muted">每一行都是独立档位，触发分数越高限制越严格。</p>
+            </div>
+            <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="addQosTier">新增档位</button>
+          </div>
+
+          <div class="overflow-x-auto rounded-lg border border-themed">
+            <table class="min-w-full text-sm">
+              <thead class="bg-themed-secondary text-themed-muted">
+                <tr>
+                  <th class="p-3 text-left">档位</th>
+                  <th class="p-3 text-left">限速 Mbps</th>
+                  <th class="p-3 text-left">触发分数</th>
+                  <th class="p-3 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(tier, index) in policyForm.qosTiers" :key="index" class="border-t border-themed">
+                  <td class="p-3">
+                    <input v-model.number="tier.level" class="input w-28" type="number" min="1" />
+                  </td>
+                  <td class="p-3">
+                    <input v-model.number="tier.bandwidthMbps" class="input w-36" type="number" min="1" />
+                  </td>
+                  <td class="p-3">
+                    <input v-model.number="tier.score" class="input w-32" type="number" min="1" max="100" />
+                  </td>
+                  <td class="p-3 text-right">
+                    <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="removeQosTier(index)">删除</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         <div class="mt-5 flex justify-end">
           <button class="btn-primary" :disabled="saving" @click="savePolicy">

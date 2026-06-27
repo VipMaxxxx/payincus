@@ -82,6 +82,11 @@ function severityForScore(score: number): RiskSeverity {
   return 'low'
 }
 
+function getManualReason(value: string, fallback: string): string {
+  const reason = value.trim()
+  return reason || fallback
+}
+
 async function getDefaultPolicy(): Promise<RiskPolicy> {
   const policy = await prisma.resourceRiskPolicy.findFirst({
     orderBy: { id: 'asc' }
@@ -406,7 +411,7 @@ export async function releaseInstanceRisk(input: {
   })
   if (!state) return null
 
-  if (state.qosLevel > 0 && state.instance.host.status === 'online' && state.instance.host.certPath && state.instance.host.keyPath) {
+  if ((state.qosLevel > 0 || state.currentBandwidthLimit) && state.instance.host.status === 'online' && state.instance.host.certPath && state.instance.host.keyPath) {
     const client = await getIncusClientFromPool({
       id: state.instance.host.id,
       url: state.instance.host.url,
@@ -454,6 +459,364 @@ export async function releaseInstanceRisk(input: {
 
   await createLog(input.actorUserId, 'instance', 'resource_risk.release', `Released resource risk for instance #${input.instanceId}`, 'success', { instanceId: input.instanceId })
   return released
+}
+
+export async function manualLimitInstanceRisk(input: {
+  instanceId: number
+  actorUserId: number
+  bandwidthMbps: number
+  reason: string
+  restrictOrders?: boolean
+}) {
+  const reason = getManualReason(input.reason, '管理员人工限速')
+  const instance = await prisma.instance.findUnique({
+    where: { id: input.instanceId },
+    include: {
+      host: {
+        select: { id: true, url: true, certPath: true, keyPath: true, status: true }
+      },
+      resourceRiskState: true
+    }
+  })
+  if (!instance || instance.status === 'deleted') return null
+  if (input.bandwidthMbps <= 0 || !Number.isFinite(input.bandwidthMbps)) {
+    throw new Error('Invalid bandwidth limit')
+  }
+
+  const limit = `${Math.round(input.bandwidthMbps)}Mbit`
+  if (instance.host.status === 'online' && instance.host.certPath && instance.host.keyPath) {
+    const client = await getIncusClientFromPool({
+      id: instance.host.id,
+      url: instance.host.url,
+      certPath: instance.host.certPath,
+      keyPath: instance.host.keyPath
+    })
+    await restoreBandwidth(client, instance.incusId, limit, limit)
+  }
+
+  await prisma.instance.update({
+    where: { id: instance.id },
+    data: {
+      limitsIngress: limit,
+      limitsEgress: limit
+    }
+  })
+
+  const previousScore = instance.resourceRiskState?.score ?? 0
+  const nextScore = clampScore(Math.max(previousScore, 50))
+  const evidence = {
+    actorUserId: input.actorUserId,
+    manualReason: reason,
+    previousIngress: instance.limitsIngress,
+    previousEgress: instance.limitsEgress,
+    newBandwidthLimit: limit,
+    restrictOrders: Boolean(input.restrictOrders)
+  }
+
+  const state = await prisma.instanceRiskState.upsert({
+    where: { instanceId: instance.id },
+    update: {
+      score: nextScore,
+      level: riskLevel(nextScore),
+      status: 'manual_qos_limited',
+      currentBandwidthLimit: limit,
+      originalIngress: instance.resourceRiskState?.originalIngress ?? instance.limitsIngress,
+      originalEgress: instance.resourceRiskState?.originalEgress ?? instance.limitsEgress,
+      lastTriggeredAt: new Date(),
+      reason,
+      evidence
+    },
+    create: {
+      instanceId: instance.id,
+      userId: instance.userId,
+      hostId: instance.hostId,
+      score: nextScore,
+      level: riskLevel(nextScore),
+      status: 'manual_qos_limited',
+      qosLevel: 0,
+      currentBandwidthLimit: limit,
+      originalIngress: instance.limitsIngress,
+      originalEgress: instance.limitsEgress,
+      lastTriggeredAt: new Date(),
+      reason,
+      evidence
+    }
+  })
+
+  const event = await prisma.instanceRiskEvent.create({
+    data: {
+      instanceId: instance.id,
+      userId: instance.userId,
+      hostId: instance.hostId,
+      type: 'manual_qos_limited',
+      severity: 'medium',
+      scoreDelta: nextScore - previousScore,
+      scoreAfter: nextScore,
+      actionTaken: 'manual_qos_limited',
+      message: `管理员人工限速到 ${limit}：${reason}`,
+      evidence
+    }
+  })
+
+  if (input.restrictOrders) {
+    await restrictUserOrdersForRisk({
+      userId: instance.userId,
+      sourceInstanceId: instance.id,
+      sourceRiskEventId: event.id,
+      reason: `实例 ${instance.name} 被人工资源风控限速，需工单人工审核后恢复下单`
+    })
+  }
+
+  await createLog(input.actorUserId, 'instance', 'resource_risk.manual_qos', `Manually limited resource risk for instance #${input.instanceId} to ${limit}`, 'success', { instanceId: input.instanceId })
+  return state
+}
+
+export async function manualSuspendInstanceRisk(input: {
+  instanceId: number
+  actorUserId: number
+  reason: string
+  restrictOrders?: boolean
+  notifyUser?: boolean
+}) {
+  const reason = getManualReason(input.reason, '管理员人工资源风控封禁')
+  const instance = await prisma.instance.findUnique({
+    where: { id: input.instanceId },
+    include: {
+      host: {
+        select: { id: true, name: true, url: true, certPath: true, keyPath: true, status: true }
+      },
+      resourceRiskState: true
+    }
+  })
+  if (!instance || instance.status === 'deleted') return null
+
+  const previousStatus = instance.status
+  if (instance.status === 'running' && instance.host.status === 'online' && instance.host.certPath && instance.host.keyPath) {
+    const client = await getIncusClientFromPool({
+      id: instance.host.id,
+      url: instance.host.url,
+      certPath: instance.host.certPath,
+      keyPath: instance.host.keyPath
+    })
+    await stopInstance(client, instance.incusId, true)
+  }
+
+  await prisma.instance.update({
+    where: { id: instance.id },
+    data: {
+      status: 'suspended',
+      suspendedAt: new Date(),
+      suspendedBy: input.actorUserId,
+      suspendReason: reason,
+      version: { increment: 1 }
+    }
+  })
+
+  const previousScore = instance.resourceRiskState?.score ?? 0
+  const nextScore = MAX_SCORE
+  const evidence = {
+    actorUserId: input.actorUserId,
+    manualReason: reason,
+    previousStatus,
+    notifyUser: input.notifyUser !== false,
+    restrictOrders: input.restrictOrders !== false
+  }
+
+  const state = await prisma.instanceRiskState.upsert({
+    where: { instanceId: instance.id },
+    update: {
+      score: nextScore,
+      level: 'critical',
+      status: 'manual_suspended',
+      lastTriggeredAt: new Date(),
+      reason,
+      evidence
+    },
+    create: {
+      instanceId: instance.id,
+      userId: instance.userId,
+      hostId: instance.hostId,
+      score: nextScore,
+      level: 'critical',
+      status: 'manual_suspended',
+      qosLevel: 0,
+      currentBandwidthLimit: instance.resourceRiskState?.currentBandwidthLimit ?? null,
+      originalIngress: instance.resourceRiskState?.originalIngress ?? instance.limitsIngress,
+      originalEgress: instance.resourceRiskState?.originalEgress ?? instance.limitsEgress,
+      lastTriggeredAt: new Date(),
+      reason,
+      evidence
+    }
+  })
+
+  const event = await prisma.instanceRiskEvent.create({
+    data: {
+      instanceId: instance.id,
+      userId: instance.userId,
+      hostId: instance.hostId,
+      type: 'manual_suspend',
+      severity: 'critical',
+      scoreDelta: nextScore - previousScore,
+      scoreAfter: nextScore,
+      actionTaken: 'manual_suspend',
+      message: `管理员人工封禁实例：${reason}`,
+      evidence
+    }
+  })
+
+  if (input.restrictOrders !== false) {
+    await restrictUserOrdersForRisk({
+      userId: instance.userId,
+      sourceInstanceId: instance.id,
+      sourceRiskEventId: event.id,
+      reason: `实例 ${instance.name} 被人工资源风控封禁，需工单人工审核后恢复下单`
+    })
+  }
+
+  if (input.notifyUser !== false) {
+    await sendNotification(instance.userId, 'instance_suspended', {
+      instanceName: instance.name,
+      hostName: instance.host.name,
+      suspendReason: reason
+    }).catch((error) => {
+      console.error('[ResourceRisk] Failed to send manual suspend notification:', error)
+    })
+  }
+
+  await createLog(input.actorUserId, 'instance', 'resource_risk.manual_suspend', `Manually suspended resource risk instance #${input.instanceId}`, 'success', { instanceId: input.instanceId })
+  return state
+}
+
+export async function manualUnsuspendInstanceRisk(input: {
+  instanceId: number
+  actorUserId: number
+  reason: string
+  notifyUser?: boolean
+}) {
+  const reason = getManualReason(input.reason, '管理员人工解除资源风控封禁')
+  const state = await prisma.instanceRiskState.findUnique({
+    where: { instanceId: input.instanceId },
+    include: {
+      instance: {
+        include: {
+          host: {
+            select: { id: true, name: true, url: true, certPath: true, keyPath: true, status: true }
+          }
+        }
+      }
+    }
+  })
+  if (!state) return null
+
+  const previousStatus = state.instance.status
+  if (state.qosLevel > 0 || state.currentBandwidthLimit) {
+    if (state.instance.host.status === 'online' && state.instance.host.certPath && state.instance.host.keyPath) {
+      const client = await getIncusClientFromPool({
+        id: state.instance.host.id,
+        url: state.instance.host.url,
+        certPath: state.instance.host.certPath,
+        keyPath: state.instance.host.keyPath
+      })
+      await restoreBandwidth(client, state.instance.incusId, state.originalIngress, state.originalEgress)
+    }
+  }
+
+  await prisma.instance.update({
+    where: { id: state.instanceId },
+    data: {
+      status: previousStatus === 'suspended' ? 'stopped' : previousStatus,
+      suspendedAt: null,
+      suspendedBy: null,
+      suspendReason: null,
+      limitsIngress: state.originalIngress,
+      limitsEgress: state.originalEgress,
+      version: { increment: 1 }
+    }
+  })
+
+  const released = await prisma.instanceRiskState.update({
+    where: { instanceId: input.instanceId },
+    data: {
+      score: 0,
+      level: 'normal',
+      status: 'normal',
+      qosLevel: 0,
+      currentBandwidthLimit: null,
+      lastRecoveredAt: new Date(),
+      reason,
+      evidence: {}
+    }
+  })
+
+  await prisma.instanceRiskEvent.create({
+    data: {
+      instanceId: state.instanceId,
+      userId: state.userId,
+      hostId: state.hostId,
+      type: 'manual_unsuspend',
+      severity: 'low',
+      scoreDelta: -state.score,
+      scoreAfter: 0,
+      actionTaken: 'manual_unsuspend',
+      message: `管理员人工解除资源风控封禁：${reason}`,
+      evidence: { actorUserId: input.actorUserId, previousStatus, notifyUser: input.notifyUser !== false }
+    }
+  })
+
+  if (input.notifyUser !== false) {
+    await sendNotification(state.userId, 'instance_unsuspended', {
+      instanceName: state.instance.name,
+      hostName: state.instance.host.name
+    }).catch((error) => {
+      console.error('[ResourceRisk] Failed to send manual unsuspend notification:', error)
+    })
+  }
+
+  await createLog(input.actorUserId, 'instance', 'resource_risk.manual_unsuspend', `Manually unsuspended resource risk instance #${input.instanceId}`, 'success', { instanceId: input.instanceId })
+  return released
+}
+
+export async function manualRestrictOrdersForInstanceRisk(input: {
+  instanceId: number
+  actorUserId: number
+  reason: string
+}) {
+  const reason = getManualReason(input.reason, '管理员人工限制账号下单')
+  const instance = await prisma.instance.findUnique({
+    where: { id: input.instanceId },
+    select: {
+      id: true,
+      name: true,
+      userId: true,
+      hostId: true
+    }
+  })
+  if (!instance) return null
+
+  const event = await prisma.instanceRiskEvent.create({
+    data: {
+      instanceId: instance.id,
+      userId: instance.userId,
+      hostId: instance.hostId,
+      type: 'manual_order_restrict',
+      severity: 'high',
+      scoreDelta: 0,
+      scoreAfter: 0,
+      actionTaken: 'manual_order_restrict',
+      message: `管理员人工限制账号下单：${reason}`,
+      evidence: { actorUserId: input.actorUserId, manualReason: reason }
+    }
+  })
+
+  const restriction = await restrictUserOrdersForRisk({
+    userId: instance.userId,
+    sourceInstanceId: instance.id,
+    sourceRiskEventId: event.id,
+    reason: `实例 ${instance.name} 被人工资源风控标记，需工单人工审核后恢复下单：${reason}`
+  })
+
+  await createLog(input.actorUserId, 'instance', 'resource_risk.manual_order_restrict', `Manually restricted orders from resource risk instance #${input.instanceId}`, 'success', { instanceId: input.instanceId })
+  return restriction
 }
 
 export async function runResourceRiskJob(): Promise<void> {
