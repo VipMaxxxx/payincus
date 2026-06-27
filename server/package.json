@@ -130,6 +130,7 @@
     "test:order-payment-operations-guards": "node --import tsx scripts/test-order-payment-operations-guards.ts",
     "test:financial-reconciliation-guards": "node --import tsx scripts/test-financial-reconciliation-guards.ts",
     "test:package-input-guards": "node --import tsx scripts/test-package-input-guards.ts",
+    "test:package-soldout-capacity-guards": "node --import tsx scripts/test-package-soldout-capacity-guards.ts",
     "test:package-host-type-guards": "node --import tsx scripts/test-package-host-type-guards.ts",
     "test:package-route-id-guards": "node --import tsx scripts/test-package-route-id-guards.ts",
     "test:package-plan-input-guards": "node --import tsx scripts/test-package-plan-input-guards.ts",

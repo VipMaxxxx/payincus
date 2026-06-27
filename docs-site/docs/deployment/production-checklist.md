@@ -36,7 +36,7 @@ pnpm verify:production-proof-snapshot
 `verify:production` 输出 `WARN` 时不一定代表程序不可用，但必须在验收记录里写清楚处理方式。
 
 - `PAYMENT_CALLBACK_IP_WHITELIST is empty`：表示没有配置统一支付回调 IP 白名单。若支付商有固定回调出口，建议在 `.env` 配置 `PAYMENT_CALLBACK_IP_WHITELIST`；若支付商没有固定出口，只能依赖签名验签、订单幂等和金额校验，并在验收报告中记录这个运营选择。
-- `Public package ... cannot satisfy its minimum CPU/memory requirement`：表示某个公开套餐仍在售，但绑定的在线宿主机扣除未删除实例占用后，已经无法满足该套餐最小可购买方案。闭环方式是增加宿主机可用 CPU/内存、迁移/清理实例、给套餐绑定有余量的宿主机，或暂停该套餐公开销售；不要把这个告警当成前端显示问题处理。
+- `Public package ... cannot satisfy its minimum CPU/memory/disk requirement`：表示某个公开套餐仍在售，但绑定的在线宿主机扣除未删除实例占用后，已经无法满足该套餐最小可购买方案。闭环方式是增加宿主机可用 CPU、内存或磁盘，迁移/清理实例，给套餐绑定有余量的宿主机，或暂停该套餐公开销售；不要把这个告警当成前端显示问题处理。
 
 ## 最终验收
 

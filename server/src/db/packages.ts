@@ -1278,8 +1278,8 @@ export async function increaseHostQuota(hostId: number, cpuAdd: number, memoryAd
 
 /**
  * 检查套餐是否售罄（所有绑定的宿主机都无法满足最低配置）
- * - 免费套餐：最低配置 15% CPU + 128MB 内存
- * - 付费套餐：最低配置为最低方案的 CPU/内存
+ * - 免费套餐：最低配置 15% CPU + 128MB 内存 + 512MB 磁盘
+ * - 付费套餐：最低配置为最低可售方案的 CPU/内存/磁盘
  */
 export async function checkPackageSoldOut(packageId: number): Promise<boolean> {
   // 1. 获取套餐绑定的宿主机以及其资源使用情况
@@ -1292,9 +1292,10 @@ export async function checkPackageSoldOut(packageId: number): Promise<boolean> {
           status: true,
           cpuAllowanceMax: true,
           memoryMax: true,
+          storageSize: true,
           instances: {
             where: { status: { not: 'deleted' } },
-            select: { cpu: true, memory: true }
+            select: { cpu: true, memory: true, disk: true }
           }
         }
       }
@@ -1309,13 +1310,14 @@ export async function checkPackageSoldOut(packageId: number): Promise<boolean> {
   // 2. 检查是否为付费套餐，并获取最低配置
   const plans = await prisma.packagePlan.findMany({
     where: { packageId, isActive: true },
-    select: { cpu: true, memory: true, isSoldOut: true },
+    select: { cpu: true, memory: true, disk: true, isSoldOut: true },
     orderBy: [{ cpu: 'asc' }, { memory: 'asc' }]
   })
   const availablePlans = plans.filter(plan => !plan.isSoldOut)
 
   let minCpu: number
   let minMemory: number
+  let minDisk: number
 
   if (plans.length > 0) {
     // 付费套餐：所有活跃方案都手动售罄时，套餐也视为售罄
@@ -1325,10 +1327,12 @@ export async function checkPackageSoldOut(packageId: number): Promise<boolean> {
     // 付费套餐：只按可售方案计算最低可开通资源
     minCpu = Math.min(...availablePlans.map(p => p.cpu))
     minMemory = Math.min(...availablePlans.map(p => p.memory))
+    minDisk = Math.min(...availablePlans.map(p => p.disk))
   } else {
-    // 免费套餐：最低 15% CPU + 128MB 内存
+    // 免费套餐：最低 15% CPU + 128MB 内存 + 512MB 磁盘
     minCpu = 15
     minMemory = 128
+    minDisk = 512
   }
 
   // 3. 检查是否有任何一个在线宿主机可以满足最低配置
@@ -1352,13 +1356,15 @@ export async function checkPackageSoldOut(packageId: number): Promise<boolean> {
     // 计算实际使用量
     const cpuUsed = host.instances.reduce((sum, inst) => sum + inst.cpu, 0)
     const memoryUsed = host.instances.reduce((sum, inst) => sum + inst.memory, 0)
+    const diskUsed = host.instances.reduce((sum, inst) => sum + inst.disk, 0)
 
     // 计算剩余资源
     const cpuAvailable = host.cpuAllowanceMax - cpuUsed
     const memoryAvailable = host.memoryMax - memoryUsed
+    const diskAvailable = (host.storageSize || 0) * 1024 - diskUsed
 
     // 如果能满足最低配置，则未售罄
-    if (cpuAvailable >= minCpu && memoryAvailable >= minMemory) {
+    if (cpuAvailable >= minCpu && memoryAvailable >= minMemory && diskAvailable >= minDisk) {
       return false
     }
   }
@@ -1386,9 +1392,10 @@ export async function checkPackagesSoldOut(packageIds: number[]): Promise<Map<nu
           status: true,
           cpuAllowanceMax: true,
           memoryMax: true,
+          storageSize: true,
           instances: {
             where: { status: { not: 'deleted' } },
-            select: { cpu: true, memory: true }
+            select: { cpu: true, memory: true, disk: true }
           }
         }
       }
@@ -1398,7 +1405,7 @@ export async function checkPackagesSoldOut(packageIds: number[]): Promise<Map<nu
   // 2. 一次性获取所有套餐的活跃方案
   const allPlans = await prisma.packagePlan.findMany({
     where: { packageId: { in: packageIds }, isActive: true },
-    select: { packageId: true, cpu: true, memory: true, isSoldOut: true }
+    select: { packageId: true, cpu: true, memory: true, disk: true, isSoldOut: true }
   })
 
   // 3. 按套餐分组数据
@@ -1433,6 +1440,7 @@ export async function checkPackagesSoldOut(packageIds: number[]): Promise<Map<nu
     // 确定最低配置
     let minCpu: number
     let minMemory: number
+    let minDisk: number
 
     if (plans.length > 0) {
       if (availablePlans.length === 0) {
@@ -1441,9 +1449,11 @@ export async function checkPackagesSoldOut(packageIds: number[]): Promise<Map<nu
       }
       minCpu = Math.min(...availablePlans.map(p => p.cpu))
       minMemory = Math.min(...availablePlans.map(p => p.memory))
+      minDisk = Math.min(...availablePlans.map(p => p.disk))
     } else {
       minCpu = 15
       minMemory = 128
+      minDisk = 512
     }
 
     // 检查是否有任何宿主机可用
@@ -1461,10 +1471,12 @@ export async function checkPackagesSoldOut(packageIds: number[]): Promise<Map<nu
 
       const cpuUsed = host.instances.reduce((sum, inst) => sum + inst.cpu, 0)
       const memoryUsed = host.instances.reduce((sum, inst) => sum + inst.memory, 0)
+      const diskUsed = host.instances.reduce((sum, inst) => sum + inst.disk, 0)
       const cpuAvailable = host.cpuAllowanceMax - cpuUsed
       const memoryAvailable = host.memoryMax - memoryUsed
+      const diskAvailable = (host.storageSize || 0) * 1024 - diskUsed
 
-      if (cpuAvailable >= minCpu && memoryAvailable >= minMemory) {
+      if (cpuAvailable >= minCpu && memoryAvailable >= minMemory && diskAvailable >= minDisk) {
         hasAvailableHost = true
         break
       }

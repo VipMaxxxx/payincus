@@ -227,9 +227,10 @@ async function checkResourceDeliveryConfig(): Promise<void> {
                 instanceType: true,
                 cpuAllowanceMax: true,
                 memoryMax: true,
+                storageSize: true,
                 instances: {
                   where: { status: { not: 'deleted' } },
-                  select: { cpu: true, memory: true }
+                  select: { cpu: true, memory: true, disk: true }
                 },
                 allowedImages: { select: { imageId: true } }
               }
@@ -238,7 +239,7 @@ async function checkResourceDeliveryConfig(): Promise<void> {
         },
         plans: {
           where: { isActive: true },
-          select: { cpu: true, memory: true, isSoldOut: true }
+          select: { cpu: true, memory: true, disk: true, isSoldOut: true }
         }
       }
     })
@@ -413,13 +414,18 @@ async function checkResourceDeliveryConfig(): Promise<void> {
 
     const minCpu = availablePlans.length > 0 ? Math.min(...availablePlans.map(plan => plan.cpu)) : 15
     const minMemory = availablePlans.length > 0 ? Math.min(...availablePlans.map(plan => plan.memory)) : 128
+    const minDisk = availablePlans.length > 0 ? Math.min(...availablePlans.map(plan => plan.disk)) : 512
     const hasCapacity = onlinePackageHosts.some(host => {
       const usedCpu = host.instances.reduce((sum, instance) => sum + instance.cpu, 0)
       const usedMemory = host.instances.reduce((sum, instance) => sum + instance.memory, 0)
-      return host.cpuAllowanceMax - usedCpu >= minCpu && host.memoryMax - usedMemory >= minMemory
+      const usedDisk = host.instances.reduce((sum, instance) => sum + instance.disk, 0)
+      const availableDisk = (host.storageSize || 0) * 1024 - usedDisk
+      return host.cpuAllowanceMax - usedCpu >= minCpu
+        && host.memoryMax - usedMemory >= minMemory
+        && availableDisk >= minDisk
     })
     if (!hasCapacity) {
-      warn(`${prefix} is active but online bound hosts cannot satisfy its minimum CPU/memory requirement`)
+      warn(`${prefix} is active but online bound hosts cannot satisfy its minimum CPU/memory/disk requirement`)
     }
   }
 }

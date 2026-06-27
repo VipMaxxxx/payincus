@@ -32,7 +32,7 @@ pnpm verify:production-proof-snapshot
 A `WARN` line from `verify:production` does not always mean the application is down, but the acceptance record must explain the decision.
 
 - `PAYMENT_CALLBACK_IP_WHITELIST is empty`: no global payment callback IP allowlist is configured. If the payment provider publishes fixed callback source IPs, configure `PAYMENT_CALLBACK_IP_WHITELIST` in `.env`. If the provider does not provide stable source IPs, rely on signature verification, order idempotency and amount checks, then record that operator decision in the acceptance report.
-- `Public package ... cannot satisfy its minimum CPU/memory requirement`: a public package is still for sale, but its online bound hosts cannot create the smallest available plan after subtracting non-deleted instance usage. Close this by increasing host CPU/memory, migrating or cleaning instances, binding the package to a host with spare capacity, or pausing the package from public sale. Do not treat this as a display-only frontend issue.
+- `Public package ... cannot satisfy its minimum CPU/memory/disk requirement`: a public package is still for sale, but its online bound hosts cannot create the smallest available plan after subtracting non-deleted instance usage. Close this by increasing host CPU, memory or disk capacity, migrating or cleaning instances, binding the package to a host with spare capacity, or pausing the package from public sale. Do not treat this as a display-only frontend issue.
 
 ## Must-pass Items
 
