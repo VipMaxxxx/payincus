@@ -6,16 +6,33 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Current Source State / 当前源码状态
 
-- Current HEAD / 当前 HEAD: `d60bf6d`
+- Current HEAD / 当前 HEAD: `4a131d7`
 - Commit date / 提交日期: 2026-06-27
-- Commit subject / 提交说明: Fix instance transfer path release guard
-- Latest tag / 最新 tag: `v0.6.19`
+- Commit subject / 提交说明: Harden storage readiness and traffic reset
+- Latest tag / 最新 tag: `v0.8.1`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v0.8.1
+
+- Release commit / 发布提交: `4a131d7`
+- Commit date / 提交日期: 2026-06-27
+- Commit subject / 提交说明: Harden storage readiness and traffic reset
+
+### Fixes and Stability / 修复与稳定性
+
+- Hosts without an `instance_data` system disk storage pool are no longer sellable or eligible for instance creation, preventing orders from failing during asynchronous provisioning.
+- New instance creation, admin provisioning, host-managed creation, migration, and recreate paths no longer silently fall back to an unregistered `default` storage pool.
+- ZFS/LVM/Btrfs storage pool creation now clears stale `source` values when Loop file mode is selected, and the backend rejects ambiguous `source` plus `size` payloads.
+
+### Improvements and Adjustments / 改进与调整
+
+- User instance lists now expose a self-service traffic reset action for instance owners while keeping admin and host-owner reset permissions intact.
+- OTA versioning moves to `v0.8.1` and continues under the carry-at-10 version rule.
 
 ## v0.6.19
 
