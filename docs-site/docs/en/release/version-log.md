@@ -6,7 +6,7 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `410dfef73`
+- Latest Release Commit / 最新发布提交: `eca273ce9`
 - Commit date / 提交日期: 2026-06-28
 - Commit subject / 提交说明: Release v1.0.1 network delivery
 - Latest tag / 最新 tag: `v1.0.1`
@@ -19,7 +19,7 @@ This page is generated from Git tags and commits to show system version history.
 
 ## v1.0.1
 
-- Release commit / 发布提交: `410dfef73`
+- Release commit / 发布提交: `eca273ce9`
 - Commit date / 提交日期: 2026-06-28
 - Commit subject / 提交说明: Release v1.0.1 network delivery
 

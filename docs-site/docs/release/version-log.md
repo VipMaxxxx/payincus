@@ -6,7 +6,7 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `410dfef73`
+- 最新发布提交 / Latest Release Commit: `eca273ce9`
 - 提交日期 / Commit date: 2026-06-28
 - 提交说明 / Commit subject: Release v1.0.1 network delivery
 - 最新 tag / Latest tag: `v1.0.1`
@@ -19,7 +19,7 @@
 
 ## v1.0.1
 
-- 发布提交 / Release commit: `410dfef73`
+- 发布提交 / Release commit: `eca273ce9`
 - 提交日期 / Commit date: 2026-06-28
 - 提交说明 / Commit subject: Release v1.0.1 network delivery
 
