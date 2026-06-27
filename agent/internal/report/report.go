@@ -52,9 +52,9 @@ func collectResources() map[string]any {
 func collectMetrics(heartbeatIntervalSeconds int) map[string]any {
 	switch {
 	case heartbeatIntervalSeconds <= 0:
+		heartbeatIntervalSeconds = 60
+	case heartbeatIntervalSeconds < 30:
 		heartbeatIntervalSeconds = 30
-	case heartbeatIntervalSeconds < 5:
-		heartbeatIntervalSeconds = 5
 	case heartbeatIntervalSeconds > 3600:
 		heartbeatIntervalSeconds = 3600
 	}

@@ -29,6 +29,10 @@ function isEnabled(value: string | null): boolean {
   return value === 'true'
 }
 
+function isDisabled(value: string | null | undefined): boolean {
+  return value === 'false'
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -65,13 +69,14 @@ async function checkPaymentProviders(): Promise<void> {
   const providers = await getAllPaymentProviders()
   const activeProviders = providers.filter(provider => provider.status === 'active')
   const hasGlobalCallbackIpWhitelist = !isBlank(process.env.PAYMENT_CALLBACK_IP_WHITELIST)
+  const callbackIpWhitelistRequired = !isDisabled(process.env.PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED)
 
   if (activeProviders.length === 0) {
     warn('No active payment providers are configured; recharge will be unavailable until one is enabled')
     return
   }
 
-  if (!hasGlobalCallbackIpWhitelist) {
+  if (!hasGlobalCallbackIpWhitelist && callbackIpWhitelistRequired) {
     const providersWithoutBuiltInCallbackIps = activeProviders
       .filter(provider => provider.type !== 'heleket')
       .map(provider => `#${provider.id} (${provider.name}, ${provider.type})`)
@@ -79,6 +84,8 @@ async function checkPaymentProviders(): Promise<void> {
     if (providersWithoutBuiltInCallbackIps.length > 0) {
       warn(`PAYMENT_CALLBACK_IP_WHITELIST is empty while active payment providers without built-in callback IP defaults exist: ${providersWithoutBuiltInCallbackIps.join(', ')}. Configure provider callback source IPs when available; signature, status, amount and idempotency checks still run before crediting balance.`)
     }
+  } else if (!hasGlobalCallbackIpWhitelist && !callbackIpWhitelistRequired) {
+    console.log('[production-db-readiness] PAYMENT_CALLBACK_IP_WHITELIST is intentionally empty; active providers must still pass signature, status, amount and idempotency checks before crediting balance')
   }
 
   for (const provider of activeProviders) {

@@ -100,8 +100,8 @@ func TestHeartbeatPayloadClampsHeartbeatInterval(t *testing.T) {
 		input    int
 		expected int
 	}{
-		{name: "zero falls back", input: 0, expected: 30},
-		{name: "too low clamps to min", input: 1, expected: 5},
+		{name: "zero falls back", input: 0, expected: 60},
+		{name: "too low clamps to min", input: 1, expected: 30},
 		{name: "too high clamps to max", input: 7200, expected: 3600},
 		{name: "valid stays unchanged", input: 60, expected: 60},
 	}
@@ -115,6 +115,28 @@ func TestHeartbeatPayloadClampsHeartbeatInterval(t *testing.T) {
 			}
 			if metrics["heartbeatIntervalSeconds"] != tt.expected {
 				t.Fatalf("heartbeat interval mismatch: got=%#v want=%d", metrics["heartbeatIntervalSeconds"], tt.expected)
+			}
+		})
+	}
+}
+
+func TestRunningIncusStatusDetection(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     string
+		statusCode int
+		expected   bool
+	}{
+		{name: "running string", status: "Running", statusCode: 0, expected: true},
+		{name: "running status code", status: "", statusCode: 103, expected: true},
+		{name: "stopped", status: "Stopped", statusCode: 102, expected: false},
+		{name: "empty", status: "", statusCode: 0, expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isRunningIncusStatus(tt.status, tt.statusCode); got != tt.expected {
+				t.Fatalf("running status mismatch: got=%t want=%t", got, tt.expected)
 			}
 		})
 	}

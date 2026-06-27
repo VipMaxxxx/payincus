@@ -75,10 +75,11 @@ Never enable `RESET_DATABASE` in production. Do not paste secrets into screensho
 
 ```dotenv
 PAYMENT_CALLBACK_IP_WHITELIST=
+PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=true
 PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false
 ```
 
-Configure payment-provider callback IP allowlists in production where the provider supports it. Only bypass IP checks when provider signatures are reliable and fixed source IPs are unavailable.
+Configure payment-provider callback IP allowlists in production where the provider supports it. If the provider does not publish stable callback source IPs and the operator explicitly accepts running without a source IP allowlist, set `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false` while keeping `PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false`. This does not bypass any provider or built-in allowlist that exists; it only accepts an empty global allowlist when no stable source IPs are available. Callbacks must still pass signature verification, trade-status validation, amount matching and `payment_callbacks` idempotency before balance credit.
 
 ## Admin OTA
 

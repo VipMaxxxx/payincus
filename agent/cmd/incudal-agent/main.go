@@ -42,9 +42,11 @@ func main() {
 	log.Printf("incudal-agent started: panel=%s interval=%s", cfg.PanelURL, cfg.HeartbeatInterval)
 	upgradeRunner := upgrade.DefaultRunner(cfg)
 	var upgradeInProgress atomic.Bool
+	heartbeatLogState := newHeartbeatLogState()
 	if result, err := sendHeartbeat(ctx, client, cfg.HeartbeatIntervalSeconds); err != nil {
-		log.Printf("heartbeat failed: %v", err)
+		heartbeatLogState.logFailure(err)
 	} else {
+		heartbeatLogState.logSuccess(result)
 		scheduleAgentUpgrade(ctx, upgradeRunner, result, &upgradeInProgress)
 	}
 
@@ -57,8 +59,9 @@ func main() {
 			return
 		case <-ticker.C:
 			if result, err := sendHeartbeat(ctx, client, cfg.HeartbeatIntervalSeconds); err != nil {
-				log.Printf("heartbeat failed: %v", err)
+				heartbeatLogState.logFailure(err)
 			} else {
+				heartbeatLogState.logSuccess(result)
 				scheduleAgentUpgrade(ctx, upgradeRunner, result, &upgradeInProgress)
 			}
 		}
@@ -70,9 +73,37 @@ func sendHeartbeat(ctx context.Context, client *panel.Client, heartbeatIntervalS
 	if err != nil {
 		return result, err
 	}
-	upgradeAvailable := result.Upgrade != nil && result.Upgrade.Available
-	log.Printf("heartbeat ok: status=%d latencyMs=%d upgrade=%t", result.StatusCode, result.LatencyMs, upgradeAvailable)
 	return result, nil
+}
+
+type heartbeatLogState struct {
+	successCount   int64
+	failureCount   int64
+	lastSuccessLog time.Time
+	lastFailureLog time.Time
+}
+
+func newHeartbeatLogState() *heartbeatLogState {
+	return &heartbeatLogState{}
+}
+
+func (state *heartbeatLogState) logSuccess(result panel.HeartbeatResult) {
+	state.successCount++
+	upgradeAvailable := result.Upgrade != nil && result.Upgrade.Available
+	now := time.Now()
+	if state.successCount == 1 || upgradeAvailable || now.Sub(state.lastSuccessLog) >= 10*time.Minute {
+		log.Printf("heartbeat ok: status=%d latencyMs=%d upgrade=%t count=%d", result.StatusCode, result.LatencyMs, upgradeAvailable, state.successCount)
+		state.lastSuccessLog = now
+	}
+}
+
+func (state *heartbeatLogState) logFailure(err error) {
+	state.failureCount++
+	now := time.Now()
+	if state.failureCount == 1 || now.Sub(state.lastFailureLog) >= time.Minute {
+		log.Printf("heartbeat failed: %v count=%d", err, state.failureCount)
+		state.lastFailureLog = now
+	}
 }
 
 func scheduleAgentUpgrade(ctx context.Context, runner *upgrade.Runner, result panel.HeartbeatResult, upgradeInProgress *atomic.Bool) {

@@ -7,7 +7,7 @@ CONFIG_FILE="${INCUDAL_CONFIG_FILE:-${CONFIG_DIR}/config.yaml}"
 INSTALL_DIR="${INCUDAL_INSTALL_DIR:-/usr/local/bin}"
 BIN_PATH="${INCUDAL_AGENT_BIN:-${INSTALL_DIR}/incudal-agent}"
 SERVICE_FILE="${INCUDAL_SERVICE_FILE:-/etc/systemd/system/${SERVICE_NAME}.service}"
-HEARTBEAT_INTERVAL="${INCUDAL_HEARTBEAT_INTERVAL_SECONDS:-30}"
+HEARTBEAT_INTERVAL="${INCUDAL_HEARTBEAT_INTERVAL_SECONDS:-60}"
 REQUEST_TIMEOUT="${INCUDAL_REQUEST_TIMEOUT_SECONDS:-10}"
 DRY_RUN="${INCUDAL_AGENT_DRY_RUN:-0}"
 INSTALL_CONFIG_PATH=""
@@ -15,6 +15,15 @@ INSTALL_CONFIG_PATH=""
 fail() {
   echo "error: $*" >&2
   exit 1
+}
+
+normalize_heartbeat_interval() {
+  local value="${1:-60}"
+  if [[ "${value}" =~ ^[0-9]+$ ]] && [ "${value}" -ge 30 ] && [ "${value}" -le 3600 ]; then
+    echo "${value}"
+  else
+    echo "60"
+  fi
 }
 
 need_env() {
@@ -255,6 +264,7 @@ fetch_agent_install_config() {
 }
 
 need_env INCUDAL_PANEL_URL
+HEARTBEAT_INTERVAL="$(normalize_heartbeat_interval "${HEARTBEAT_INTERVAL}")"
 
 PANEL_BASE_URL="${INCUDAL_PANEL_URL%/}"
 OS="$(detect_os)"
@@ -350,6 +360,15 @@ User=root
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
+CPUAccounting=true
+CPUQuota=20%
+MemoryAccounting=true
+MemoryMax=256M
+TasksMax=128
+StandardOutput=journal
+StandardError=journal
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=120
 
 [Install]
 WantedBy=multi-user.target

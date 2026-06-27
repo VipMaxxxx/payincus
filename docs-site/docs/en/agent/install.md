@@ -29,6 +29,20 @@ The Agent installer reads `https://<panel>/api/agent/manifest.json` and selects 
 
 If backend logs show the install token was consumed but the Agent remains offline, and the Nginx access log shows `/api/agent/binary/...gz?v=<timestamp>` returning HTTP 400, the old installer is using the backend-reserved `v` query parameter for binary cache busting. Update the panel to a version that includes the Agent binary download query fix, confirm the public `install.sh` uses `cache_bust` for binary URLs, then copy a fresh Agent install command from the admin console.
 
+## Resource And Log Limits
+
+The Agent reports every 60 seconds by default, with a 30-second minimum. Do not lower the interval to values such as 5 seconds. On hosts with many instances, each heartbeat reads host resources, running instance state and traffic counters, so high-frequency polling can increase Incus API and host CPU pressure.
+
+The current Agent includes these protections:
+
+- At most 500 instances are reported per heartbeat.
+- Incus instance state reads are limited to concurrency 3.
+- Non-running instances do not trigger extra `/state` requests.
+- Successful heartbeat logs are throttled to the first entry and about one entry every 10 minutes; failed heartbeat logs are throttled to the first entry and about one entry per minute.
+- The generated `incudal-agent.service` includes `CPUQuota=20%`, `MemoryMax=256M`, `TasksMax=128`, `LogRateLimitIntervalSec=30s` and `LogRateLimitBurst=120`.
+
+If a host was installed with an older Agent, update the panel, copy a fresh Agent install command from the admin console, and run it once on the host. Binary self-upgrade alone cannot rewrite an old systemd service; rerunning the installer refreshes the binary, config and systemd resource/log limits.
+
 ## Local Build
 
 ```bash

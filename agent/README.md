@@ -18,7 +18,7 @@
 panel_url: "https://idev.bitpd.com"
 agent_id: "agt_xxx"
 agent_secret: "ias_xxx"
-heartbeat_interval_seconds: 30
+heartbeat_interval_seconds: 60
 request_timeout_seconds: 10
 ```
 
@@ -57,6 +57,14 @@ go run ./cmd/incudal-agent -config /etc/incudal-agent/config.yaml
 - 读取心跳响应中的 `upgrade` 指令并自动升级自身
 
 当前不执行实例创建、销毁、启停等下发任务。
+
+## 资源与日志保护
+
+- 默认心跳间隔为 60 秒，最小允许 30 秒，避免高频扫描 Incus 状态。
+- 每次心跳最多上报 500 个实例，并发读取 Incus 实例状态限制为 3。
+- 非运行实例不会额外请求 `/state`，减少宿主机和 Incus API 压力。
+- systemd 安装模板会限制 `CPUQuota=20%`、`MemoryMax=256M`、`TasksMax=128`，并启用 journal 日志速率限制。
+- Agent 成功心跳日志会节流到首条和约每 10 分钟一条；失败日志默认首条和约每分钟一条，避免异常时持续刷满磁盘。
 
 ## 自动升级
 
