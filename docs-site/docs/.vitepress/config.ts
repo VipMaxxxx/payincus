@@ -67,6 +67,7 @@ const zhSidebar = [
       { text: '支付与账务', link: '/features/billing' },
       { text: '通知、工单与帮助', link: '/features/communication' },
       { text: '托管与资源池', link: '/features/resource-hosting' },
+      { text: '资源风控', link: '/features/resource-risk' },
       { text: 'Agent', link: '/agent/install' },
       { text: 'API 概览', link: '/api/overview' }
     ]
@@ -255,6 +256,7 @@ const enSidebar = [
       { text: 'Billing and Payments', link: '/en/features/billing' },
       { text: 'Communication', link: '/en/features/communication' },
       { text: 'Hosting and Resource Pools', link: '/en/features/resource-hosting' },
+      { text: 'Resource Risk Control', link: '/en/features/resource-risk' },
       { text: 'Agent', link: '/en/agent/install' },
       { text: 'API Overview', link: '/en/api/overview' }
     ]

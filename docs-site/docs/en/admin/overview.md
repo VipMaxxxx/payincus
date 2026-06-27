@@ -30,6 +30,7 @@ https://admin.example.com
 | Images | `/admin/images` | OS images, architecture and availability. |
 | Hosting | `/admin/hosting` | Hosted hosts, providers, revenue and review. |
 | Capacity & Cost | `/admin/capacity-cost` | Host sellable inventory, cost profiles, plan margin estimates, capacity alerts and 7/30-day trends. |
+| Resource Risk | `/admin/resource-risk` | Instance risk scores, bandwidth/CPU/packet anomalies, QoS policy, manual suspension and source-scoped order restriction handling. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
 | Gift Cards | `/admin/gift-cards` | Create single or batch balance gift cards, review stats and redacted lists, and enable, disable or delete unused cards. |
 | Logs and Audit | `/admin/logs` | Audit logs and system operation records with risk levels, approval or verification hints, and redacted CSV export. |
@@ -70,6 +71,17 @@ The operations overview is returned only by the admin statistics API and is not 
 - Host pressure alerts are synced into SLA alert events and deduplicated with stable fingerprints.
 - Daily Host capacity snapshots are stored for 7/30-day trends and later operations review.
 - User package, instance and purchase APIs do not return Host cost, margin or internal capacity fields.
+
+## Resource Risk Control
+
+`/admin/resource-risk` handles instance-level resource abuse and security risk:
+
+- The risk target is the instance. Scores, events, QoS downgrades and manual suspension are all instance-scoped.
+- The account is linked only for order restriction. When an instance reaches high risk, PayIncus can block the linked account from creating new instances until staff review it through a ticket.
+- Instance, event and order restriction tables show up to 10 rows per page, with pagination for older records.
+- Manual suspension, unsuspension, order restriction and release all require an admin reason and write audit records.
+- Releasing order restrictions is source-scoped. Only an active restriction created by the current instance shows the release action; if another instance under the same account caused the active restriction, the row shows an account-restricted state instead.
+- Resource risk data is not exposed to user APIs. User-facing responses do not include backend score policy, manual notes or restriction records belonging to other accounts.
 
 ## Order and Payment Operations
 
