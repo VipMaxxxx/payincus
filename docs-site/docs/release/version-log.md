@@ -13,7 +13,9 @@
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 修复与稳定性 / Fixes and Stability
+
+- Fix themed surface transparency `58446d0`
 
 ## 历史版本 / Historical Versions
 
