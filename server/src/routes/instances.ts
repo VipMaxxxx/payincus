@@ -1414,7 +1414,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       memory: requestedMemory,
       disk: requestedDisk,
       hostId: hostId,
-      ownerId: pkg.user_id!  // 套餐所有者ID，限制只能在其宿主机上创建实例
+      ownerId: pkg.user_id!,  // 套餐所有者ID，限制只能在其宿主机上创建实例
+      packageId
     })
 
     console.log(`Pre-check result: ${preCheckHost ? preCheckHost.name : 'No available host'}`)
@@ -1605,6 +1606,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           disk: requestedDisk,
           hostId: hostId,
           ownerId: pkg.user_id!,
+          packageId,
           portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(networkMode) ? (pkgWithExtras.port_limit || 0) : 0
         })
 
@@ -2049,8 +2051,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 选择存储池
     selectedStoragePool = await db.resolveStoragePoolForNewInstance(host.id, { packageId })
     if (!selectedStoragePool) {
-      console.error(`[Provisioning] 宿主机 ${host.name} 没有配置系统盘存储池，将使用默认存储池`)
-      selectedStoragePool = 'default'
+      throw new Error(`STORAGE_POOL_UNAVAILABLE: 宿主机 ${host.name} 未配置可用于实例系统盘的存储池`)
     }
     console.log(`[Provisioning] 选择存储池: ${selectedStoragePool}`)
 

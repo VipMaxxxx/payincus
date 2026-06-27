@@ -324,13 +324,14 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
             return reply.code(404).send({ error: 'Instance not found' })
         }
 
-        // 权限检查：管理员或宿主机所有者可以重置实例流量
+        // 权限检查：管理员、宿主机所有者或实例所有者可以重置实例流量
         const isAdmin = request.user.role === 'admin'
-        if (!isAdmin) {
+        const isInstanceOwner = instance.userId === request.user.id
+        if (!isAdmin && !isInstanceOwner) {
             if (instance.hostId) {
                 const host = await db.getHostById(instance.hostId)
                 if (!host || host.user_id !== request.user.id) {
-                    return reply.code(403).send({ error: 'Only admin or host owner can reset instance traffic' })
+                    return reply.code(403).send({ error: 'Only admin, host owner, or instance owner can reset instance traffic' })
                 }
             } else {
                 return reply.code(403).send({ error: 'Access denied' })
@@ -341,7 +342,7 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
         const { reconcileTrafficStateForInstanceIds } = await import('../services/traffic-scheduler.js')
         await reconcileTrafficStateForInstanceIds([instanceId])
 
-        return { success: true, message: 'Instance traffic reset completed' }
+        return { success: true, message: 'Instance traffic reset completed', price: 0 }
     })
 
     // ==================== 管理员操作 ======================================

@@ -1547,7 +1547,9 @@ async function executeRecreateTask(
 
   // 10. 选择存储池
   let storagePool = await db.resolveStoragePoolForExistingInstance(task.instanceId, host.id, { packageId: instance.package_id })
-  if (!storagePool) storagePool = 'default'
+  if (!storagePool) {
+    throw new Error('当前节点未配置可用于实例系统盘的存储池')
+  }
 
   // 11. 构建实例配置（使用新分配的 IPv4）
   const { buildInstanceConfig } = await import('../lib/incus/incus-instances.js')
@@ -1850,7 +1852,8 @@ async function executeChangeHostTask(
         disk: instance.disk,
         hostId: targetHostId,
         ownerId: pkg.user_id || targetHost.user_id,
-        portCount: 0
+        portCount: 0,
+        packageId: instance.package_id
       })
     }, {
       isolationLevel: 'Serializable',
@@ -1937,8 +1940,10 @@ async function executeChangeHostTask(
       configPayload = vmResult.configPayload
     }
 
-    let storagePool = await db.resolveStoragePoolForNewInstance(targetHostId, { packageId: instance.package_id })
-    if (!storagePool) storagePool = 'default'
+    const storagePool = await db.resolveStoragePoolForNewInstance(targetHostId, { packageId: instance.package_id })
+    if (!storagePool) {
+      throw new Error('目标节点未配置可用于实例系统盘的存储池')
+    }
 
     const { buildInstanceConfig } = await import('../lib/incus/incus-instances.js')
     const ioMode = (pkg as any)?.io_limit_mode || (pkg as any)?.ioLimitMode || 'throughput'

@@ -1235,6 +1235,7 @@ const api = {
       driver?: 'zfs' | 'lvm' | 'btrfs' | 'dir'  // 使用已有池时可不传
       source?: string
       size?: string
+      useLoop?: boolean
       zfsPoolName?: string
       lvmVgName?: string
       lvmUseThinpool?: boolean
@@ -2163,7 +2164,7 @@ const api = {
     }> => http.get(`/instances/${instanceId}/traffic/history`, { params: { days } }),
 
     // 重置实例月度流量（宿主机所有者）
-    resetInstanceTraffic: (instanceId: number): Promise<{ success: boolean; message: string }> =>
+    resetInstanceTraffic: (instanceId: number): Promise<{ success: boolean; message: string; price?: number }> =>
       http.post(`/instances/${instanceId}/traffic/reset`),
 
     // 获取节点流量统计（宿主机所有者）

@@ -3,9 +3,10 @@
  */
 
 import { prisma } from './prisma.js'
-import type { StoragePurpose } from '@prisma/client'
+import type { Prisma, StoragePurpose } from '@prisma/client'
 
 const DEFAULT_STORAGE_POOL_NAME = 'default'
+type StoragePoolQueryClient = typeof prisma | Prisma.TransactionClient
 
 export interface CreateStoragePoolData {
   hostId: number
@@ -58,8 +59,11 @@ export async function getStoragePoolsByHostId(hostId: number) {
  * 获取宿主机的系统盘存储池列表 (purpose = 'instance_data')
  * 用于创建实例时随机选择存储池
  */
-export async function getSystemDiskPoolsByHostId(hostId: number) {
-  return prisma.storagePool.findMany({
+export async function getSystemDiskPoolsByHostId(
+  hostId: number,
+  client: StoragePoolQueryClient = prisma
+) {
+  return client.storagePool.findMany({
     where: {
       hostId,
       purpose: 'instance_data'
@@ -72,8 +76,11 @@ export async function getSystemDiskPoolsByHostId(hostId: number) {
  * 随机选择一个系统盘存储池
  * 返回存储池名称，如果没有配置系统盘存储池则返回 null
  */
-export async function getRandomSystemDiskPool(hostId: number): Promise<string | null> {
-  const pools = await getSystemDiskPoolsByHostId(hostId)
+export async function getRandomSystemDiskPool(
+  hostId: number,
+  client: StoragePoolQueryClient = prisma
+): Promise<string | null> {
+  const pools = await getSystemDiskPoolsByHostId(hostId, client)
   if (pools.length === 0) {
     return null
   }
@@ -107,7 +114,17 @@ export async function hasStoragePool(hostId: number, poolName: string): Promise<
  */
 export async function isSystemDiskPool(hostId: number, poolName: string): Promise<boolean> {
   if (!poolName) return false
-  if (poolName === DEFAULT_STORAGE_POOL_NAME) return true
+  if (poolName === DEFAULT_STORAGE_POOL_NAME) {
+    const pool = await prisma.storagePool.findFirst({
+      where: {
+        hostId,
+        name: poolName,
+        purpose: 'instance_data'
+      },
+      select: { id: true }
+    })
+    return !!pool
+  }
 
   const pool = await prisma.storagePool.findFirst({
     where: {
@@ -124,8 +141,12 @@ export async function isSystemDiskPool(hostId: number, poolName: string): Promis
 /**
  * 获取套餐在指定宿主机上配置的默认系统盘池。
  */
-export async function getPackageHostStoragePool(packageId: number, hostId: number): Promise<string | null> {
-  const packageHost = await prisma.packageHost.findUnique({
+export async function getPackageHostStoragePool(
+  packageId: number,
+  hostId: number,
+  client: StoragePoolQueryClient = prisma
+): Promise<string | null> {
+  const packageHost = await client.packageHost.findUnique({
     where: {
       packageId_hostId: {
         packageId,
@@ -148,18 +169,48 @@ export async function resolveStoragePoolForNewInstance(
   hostId: number,
   options: {
     packageId?: number | null
+    client?: StoragePoolQueryClient
   } = {}
 ): Promise<string | null> {
-  const { packageId } = options
+  const { packageId, client = prisma } = options
 
   if (packageId) {
-    const configuredPool = await getPackageHostStoragePool(packageId, hostId)
-    if (configuredPool && await isSystemDiskPool(hostId, configuredPool)) {
+    const configuredPool = await getPackageHostStoragePool(packageId, hostId, client)
+    if (configuredPool && await isSystemDiskPoolForClient(hostId, configuredPool, client)) {
       return configuredPool
     }
   }
 
-  return getRandomSystemDiskPool(hostId)
+  return getRandomSystemDiskPool(hostId, client)
+}
+
+export async function isSystemDiskPoolForClient(
+  hostId: number,
+  poolName: string,
+  client: StoragePoolQueryClient = prisma
+): Promise<boolean> {
+  if (!poolName) return false
+
+  const pool = await client.storagePool.findFirst({
+    where: {
+      hostId,
+      name: poolName,
+      purpose: 'instance_data'
+    },
+    select: { id: true }
+  })
+
+  return !!pool
+}
+
+export async function hostHasSystemDiskPool(
+  hostId: number,
+  options: {
+    packageId?: number | null
+    client?: StoragePoolQueryClient
+  } = {}
+): Promise<boolean> {
+  return (await resolveStoragePoolForNewInstance(hostId, options)) !== null
 }
 
 /**

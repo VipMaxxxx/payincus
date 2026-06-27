@@ -7,6 +7,7 @@ import { prisma } from './prisma.js'
 import { Prisma, type InstanceStatus } from '@prisma/client'
 import type { Package } from '../types/database.js'
 import { normalizeTrafficMultiplier } from '../lib/traffic-multiplier.js'
+import { resolveStoragePoolForNewInstance } from './storage-pools.js'
 
 const NORMAL_PACKAGE_INSTANCE_STATUSES: InstanceStatus[] = ['running', 'stopped']
 const PACKAGE_PREREQUISITE_LOCK_NAMESPACE = 4201
@@ -1330,6 +1331,10 @@ export async function checkPackageSoldOut(packageId: number): Promise<boolean> {
       continue
     }
 
+    if (!await resolveStoragePoolForNewInstance(host.id, { packageId })) {
+      continue
+    }
+
     // 检查是否设置了配额
     if (!host.cpuAllowanceMax || !host.memoryMax) {
       continue
@@ -1438,6 +1443,10 @@ export async function checkPackagesSoldOut(packageIds: number[]): Promise<Map<nu
       const host = ph.host
       
       if (host.status !== 'online' || !host.cpuAllowanceMax || !host.memoryMax) {
+        continue
+      }
+
+      if (!await resolveStoragePoolForNewInstance(host.id, { packageId })) {
         continue
       }
 

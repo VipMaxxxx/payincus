@@ -96,6 +96,15 @@ watch(() => form.value.driver, () => {
   useLoop.value = false
 })
 
+watch(useLoop, (enabled) => {
+  if (enabled) {
+    form.value.source = ''
+  } else {
+    form.value.sizeValue = ''
+    form.value.sizeUnit = 'GiB'
+  }
+})
+
 // 切换创建模式时重置表单
 watch(createMode, () => {
   form.value.source = ''
@@ -214,8 +223,9 @@ async function createPool() {
     await api.hosts.createStoragePool(props.hostId, {
       name: form.value.name,
       driver: form.value.driver,
-      source: form.value.source || undefined,
+      source: supportsLoop && useLoop.value ? undefined : form.value.source || undefined,
       size: sizeStr,
+      useLoop: supportsLoop ? useLoop.value : undefined,
       zfsPoolName: form.value.driver === 'zfs' ? form.value.zfsPoolName || undefined : undefined,
       lvmVgName: form.value.driver === 'lvm' ? form.value.lvmVgName || undefined : undefined,
       lvmUseThinpool: form.value.driver === 'lvm' ? form.value.lvmUseThinpool : undefined,

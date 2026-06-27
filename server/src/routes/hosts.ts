@@ -3442,6 +3442,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       driver?: 'zfs' | 'lvm' | 'btrfs' | 'dir'
       source?: string
       size?: string
+      useLoop?: boolean
       zfsPoolName?: string
       lvmVgName?: string
       lvmThinpoolName?: string
@@ -3462,6 +3463,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
           driver: { type: 'string', enum: ['zfs', 'lvm', 'btrfs', 'dir'] },
           source: { type: 'string' },
           size: { type: 'string' },
+          useLoop: { type: 'boolean' },
           zfsPoolName: { type: 'string' },
           lvmVgName: { type: 'string' },
           lvmThinpoolName: { type: 'string' },
@@ -3476,7 +3478,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { user } = request
     const hostId = parsePositiveRouteId(request.params.id)
-    const { name, driver, source, size, zfsPoolName, lvmVgName, lvmThinpoolName, lvmUseThinpool, description, purpose, useExisting, existingSource } = request.body
+    const { name, driver, source, size, useLoop, zfsPoolName, lvmVgName, lvmThinpoolName, lvmUseThinpool, description, purpose, useExisting, existingSource } = request.body
 
     if (!hostId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
@@ -3613,15 +3615,25 @@ export default async function hostRoutes(fastify: FastifyInstance) {
         return reply.code(400).send({ error: '创建新存储池需要指定驱动类型' })
       }
 
+      const trimmedSource = typeof source === 'string' ? source.trim() : ''
+      const trimmedSize = typeof size === 'string' ? size.trim() : ''
+      const supportsLoop = driver ? ['zfs', 'lvm', 'btrfs'].includes(driver) : false
+      if (supportsLoop && trimmedSource && trimmedSize) {
+        return reply.code(400).send({ error: '不能同时指定 source 和 size，请明确选择物理路径或 Loop 文件模式' })
+      }
+      const loopMode = supportsLoop && (useLoop === true || (!trimmedSource && !!trimmedSize))
+      const storageSource = loopMode ? '' : trimmedSource
+      const storageSize = loopMode ? trimmedSize : ''
+
       // 根据驱动类型构建配置
       const config: Record<string, string> = {}
 
       switch (driver) {
         case 'zfs':
-          if (source) {
-            config['source'] = source
-          } else if (size) {
-            config['size'] = size
+          if (storageSource) {
+            config['source'] = storageSource
+          } else if (storageSize) {
+            config['size'] = storageSize
           } else {
             return reply.code(400).send({ error: 'ZFS 需要指定 source（物理盘）或 size（Loop 文件）' })
           }
@@ -3630,10 +3642,10 @@ export default async function hostRoutes(fastify: FastifyInstance) {
           break
 
         case 'lvm':
-          if (source) {
-            config['source'] = source
-          } else if (size) {
-            config['size'] = size
+          if (storageSource) {
+            config['source'] = storageSource
+          } else if (storageSize) {
+            config['size'] = storageSize
           } else {
             return reply.code(400).send({ error: 'LVM 需要指定 source（物理盘）或 size（Loop 文件）' })
           }
@@ -3643,20 +3655,20 @@ export default async function hostRoutes(fastify: FastifyInstance) {
           break
 
         case 'btrfs':
-          if (source) {
-            config['source'] = source
-          } else if (size) {
-            config['size'] = size
+          if (storageSource) {
+            config['source'] = storageSource
+          } else if (storageSize) {
+            config['size'] = storageSize
           } else {
             return reply.code(400).send({ error: 'Btrfs 需要指定 source（物理盘）或 size（Loop 文件）' })
           }
           break
 
         case 'dir':
-          if (!source) {
+          if (!storageSource) {
             return reply.code(400).send({ error: 'DIR 需要指定 source（目录路径）' })
           }
-          config['source'] = source
+          config['source'] = storageSource
           break
       }
 
@@ -5683,7 +5695,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
 
         // 10. 选择存储池
         let selectedStoragePool = await db.resolveStoragePoolForNewInstance(targetHostId, { packageId: targetPackage?.id ?? instance.packageId })
-        if (!selectedStoragePool) selectedStoragePool = 'default'
+        if (!selectedStoragePool) throw new Error(`STORAGE_POOL_UNAVAILABLE: 目标节点未配置可用于实例系统盘的存储池`)
 
         // 11. 获取套餐配置
         const pkgConfig = pkg as typeof pkg & {
@@ -6211,7 +6223,8 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       memory: requestedMemory,
       disk: requestedDisk,
       hostId,
-      ownerId: pkg.user_id!
+      ownerId: pkg.user_id!,
+      packageId
     })
 
     if (!preCheckHost) {
@@ -6282,6 +6295,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
           disk: requestedDisk,
           hostId,
           ownerId: pkg.user_id!,
+          packageId,
           portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(networkMode) ? (selectedPlan?.portLimit || pkgWithExtras.port_limit || 0) : 0
         })
 
@@ -6483,7 +6497,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
 
       let selectedStoragePool = await db.resolveStoragePoolForNewInstance(lockedHost.id, { packageId })
       if (!selectedStoragePool) {
-        selectedStoragePool = 'default'
+        throw new Error(`STORAGE_POOL_UNAVAILABLE: 宿主机  未配置可用于实例系统盘的存储池`)
       }
 
       await prisma.instance.update({

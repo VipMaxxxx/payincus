@@ -6,6 +6,7 @@
 import { prisma } from './prisma.js'
 import type { Prisma } from '@prisma/client'
 import type { Host } from '../types/database.js'
+import { resolveStoragePoolForNewInstance } from './storage-pools.js'
 
 type DbClient = Prisma.TransactionClient | typeof prisma
 
@@ -562,8 +563,9 @@ export async function selectAvailableHost(options: {
   disk: number
   hostId?: number | null
   ownerId?: number  // 套餐所有者ID，用于限制只能在该用户的宿主机上创建实例
+  packageId?: number | null
 }): Promise<(Host & { cpu_allowance_max?: number; memory_max?: number }) | null> {
-  const { packageHostIds, nodeSelectors = [], cpu, memory, disk, hostId, ownerId } = options
+  const { packageHostIds, nodeSelectors = [], cpu, memory, disk, hostId, ownerId, packageId } = options
 
   // 构建查询条件
   const where: {
@@ -671,7 +673,12 @@ export async function selectAvailableHost(options: {
       continue
     }
 
-    // 磁盘配额检查已移除：不再限制磁盘空�?
+    const storagePoolName = await resolveStoragePoolForNewInstance(host.id, { packageId })
+    if (!storagePoolName) {
+      console.log(`[selectAvailableHost] 宿主机 ${host.name} 未配置可用于实例系统盘的存储池`)
+      continue
+    }
+
 
     // NAT端口检查已移除：系统使用独立的端口映射表记录端口分配，不再限制NAT端口数量
     console.log(`[selectAvailableHost] 宿主�?${host.name} 通过所有检查，可以使用`)
@@ -732,9 +739,10 @@ export async function selectAndReserveHostWithLock(
     hostId?: number | null
     ownerId?: number
     portCount?: number
+    packageId?: number | null
   }
 ): Promise<(Host & { cpu_allowance_max?: number; memory_max?: number }) | null> {
-  const { packageHostIds, nodeSelectors = [], cpu, memory, disk, hostId, ownerId, portCount = 0 } = options
+  const { packageHostIds, nodeSelectors = [], cpu, memory, disk, hostId, ownerId, portCount = 0, packageId } = options
 
   // 构建候选宿主机查询条件
   const whereConditions: string[] = ["status = 'online'"]
@@ -860,6 +868,15 @@ export async function selectAndReserveHostWithLock(
     }
     if ((memoryUsedEffective + memory) > memoryMax) {
       console.log(`[selectAndReserveHostWithLock] 宿主�?${host.name} 内存配额不足: ${memoryUsedEffective} + ${memory} > ${memoryMax}`)
+      continue
+    }
+
+    const storagePoolName = await resolveStoragePoolForNewInstance(host.id, {
+      packageId,
+      client: tx
+    })
+    if (!storagePoolName) {
+      console.log(`[selectAndReserveHostWithLock] 宿主机 ${host.name} 未配置可用于实例系统盘的存储池`)
       continue
     }
 

@@ -4315,7 +4315,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         memory: requestedMemory,
         disk: requestedDisk,
         hostId: hostId,
-        ownerId: pkg.user_id!
+        ownerId: pkg.user_id!,
+        packageId
       })
 
       if (!preCheckHost) {
@@ -4413,6 +4414,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           disk: requestedDisk,
           hostId: hostId,
           ownerId: pkg.user_id!,
+          packageId,
           portCount: ['nat', 'nat_ipv6', 'nat_ipv6_nat', 'ipv6_nat', 'ipv6_only'].includes(networkMode) ? (selectedPlan?.portLimit || pkgWithExtras.port_limit || 0) : 0
         })
 
@@ -4694,7 +4696,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       // 17. 选择存储池
       let selectedStoragePool = await db.resolveStoragePoolForNewInstance(host.id, { packageId })
       if (!selectedStoragePool) {
-        selectedStoragePool = 'default'
+        throw new Error(`STORAGE_POOL_UNAVAILABLE: 宿主机 ${host.name} 未配置可用于实例系统盘的存储池`)
       }
 
       await prisma.instance.update({

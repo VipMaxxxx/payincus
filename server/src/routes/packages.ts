@@ -182,6 +182,63 @@ function incompatiblePackageHostsResponse(
   }
 }
 
+async function getHostsWithoutSystemDiskPool(
+  hostIds: number[],
+  options: {
+    packageId?: number | null
+    hostStoragePools?: Record<string, string | null>
+  } = {}
+): Promise<Array<{ id: number; name: string; reason: string }>> {
+  const uniqueHostIds = [...new Set(hostIds.filter(id => Number.isInteger(id) && id > 0))]
+  if (uniqueHostIds.length === 0) {
+    return []
+  }
+
+  const hosts = await prisma.host.findMany({
+    where: { id: { in: uniqueHostIds } },
+    select: { id: true, name: true }
+  })
+  const hostNameById = new Map(hosts.map(host => [host.id, host.name]))
+  const unavailable: Array<{ id: number; name: string; reason: string }> = []
+
+  for (const hostId of uniqueHostIds) {
+    const hostName = hostNameById.get(hostId) || `#${hostId}`
+    const explicitPool = options.hostStoragePools?.[String(hostId)]
+
+    if (explicitPool !== undefined) {
+      if (explicitPool) {
+        const ok = await db.isSystemDiskPool(hostId, explicitPool)
+        if (!ok) {
+          unavailable.push({ id: hostId, name: hostName, reason: `存储池 ${explicitPool} 不存在或不是系统盘池` })
+        }
+      } else {
+        const fallbackPool = await db.getRandomSystemDiskPool(hostId)
+        if (!fallbackPool) {
+          unavailable.push({ id: hostId, name: hostName, reason: '未配置系统盘存储池' })
+        }
+      }
+      continue
+    }
+
+    const resolvedPool = await db.resolveStoragePoolForNewInstance(hostId, {
+      packageId: options.packageId
+    })
+    if (!resolvedPool) {
+      unavailable.push({ id: hostId, name: hostName, reason: '未配置系统盘存储池' })
+    }
+  }
+
+  return unavailable
+}
+
+function storagePoolUnavailableResponse(hosts: Array<{ id: number; name: string; reason: string }>) {
+  return {
+    error: 'Selected hosts are missing instance data storage pools',
+    code: 'HOST_STORAGE_POOL_UNAVAILABLE',
+    hosts
+  }
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -1653,6 +1710,11 @@ export default async function packageRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(incompatiblePackageHostsResponse(incompatibleHosts, instanceType || 'container'))
     }
 
+    const storageUnavailableHosts = await getHostsWithoutSystemDiskPool(hostIds, { hostStoragePools })
+    if (storageUnavailableHosts.length > 0) {
+      return reply.code(400).send(storagePoolUnavailableResponse(storageUnavailableHosts))
+    }
+
     // 检查名称是否已存在（同一用户下）
     const existing = await db.getPackageByUserAndName(request.user.id, name!)
     if (existing) {
@@ -1883,6 +1945,14 @@ export default async function packageRoutes(fastify: FastifyInstance) {
     const incompatibleHosts = await getIncompatiblePackageHosts(nextHostIds, nextInstanceType)
     if (incompatibleHosts.length > 0) {
       return reply.code(400).send(incompatiblePackageHostsResponse(incompatibleHosts, nextInstanceType))
+    }
+
+    const storageUnavailableHosts = await getHostsWithoutSystemDiskPool(nextHostIds, {
+      packageId,
+      hostStoragePools
+    })
+    if (storageUnavailableHosts.length > 0) {
+      return reply.code(400).send(storagePoolUnavailableResponse(storageUnavailableHosts))
     }
 
     if (hostStoragePools !== undefined) updateData.hostStoragePools = hostStoragePools

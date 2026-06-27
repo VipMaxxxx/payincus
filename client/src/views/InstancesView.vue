@@ -136,6 +136,10 @@ const batchDestroyPreview = ref<Array<{
   }
 }>>([])
 
+const showResetTrafficModal = ref(false)
+const resetTrafficTarget = ref<Instance | null>(null)
+const resetTrafficSubmitting = ref(false)
+
 // 筛选条件（从 URL 获取）
 const filterUserId = ref<number | null>(null)
 const filterUserName = ref<string>('')
@@ -627,6 +631,45 @@ function getInstanceTrafficUsage(instance: Instance): string {
 function getInstanceResetTrafficPrice(instance: Instance): string {
   const value = Number((instance as any).trafficResetPrice ?? (instance as any).resetTrafficPrice ?? 0)
   return value > 0 ? formatCurrency(value) : '-'
+}
+
+function canResetInstanceTraffic(instance: Instance): boolean {
+  if (isAdminEntry) return false
+  if (instance.status?.toLowerCase() === 'deleted') return false
+  return Number((instance as any).monthlyTrafficUsed || 0) > 0
+}
+
+function openResetTrafficModal(instance: Instance): void {
+  resetTrafficTarget.value = instance
+  showResetTrafficModal.value = true
+}
+
+function closeResetTrafficModal(): void {
+  if (resetTrafficSubmitting.value) return
+  showResetTrafficModal.value = false
+  resetTrafficTarget.value = null
+}
+
+async function confirmResetTraffic(): Promise<void> {
+  const instance = resetTrafficTarget.value
+  if (!instance || resetTrafficSubmitting.value) return
+
+  resetTrafficSubmitting.value = true
+  actionLoading.value[instance.id] = 'resetTraffic'
+  try {
+    await api.traffic.resetInstanceTraffic(instance.id)
+    toast.success(t('admin.hosts.trafficResetSuccess'))
+    ;(instance as any).monthlyTrafficUsed = '0'
+    ;(instance as any).trafficStatus = 'NORMAL'
+    showResetTrafficModal.value = false
+    resetTrafficTarget.value = null
+    await loadInstances(true)
+  } catch (error: any) {
+    toast.error(t('admin.hosts.trafficResetFailed') + ': ' + translateError(error))
+  } finally {
+    resetTrafficSubmitting.value = false
+    delete actionLoading.value[instance.id]
+  }
 }
 
 function getInstanceMonthlyPrice(instance: Instance): string {
@@ -2044,6 +2087,14 @@ async function confirmBatchDestroy(): Promise<void> {
                 <span class="text-xs">{{ actionLoading[instance.id] === 'restart' ? '...' : $t('instance.actions.restart') }}</span>
               </button>
               <button
+                v-if="canResetInstanceTraffic(instance)"
+                :disabled="!!actionLoading[instance.id]"
+                class="btn-ghost btn-sm flex-1"
+                @click.stop="openResetTrafficModal(instance)"
+              >
+                <span class="text-xs">{{ actionLoading[instance.id] === 'resetTraffic' ? '...' : $t('admin.hosts.resetTraffic') }}</span>
+              </button>
+              <button
                 v-if="!instance.packagePlanId && (instance as any).allow_instance_deletion !== false"
                 :disabled="!!actionLoading[instance.id]"
                 class="btn-ghost btn-sm flex-1 text-red-500 hover:text-red-400"
@@ -2220,6 +2271,16 @@ async function confirmBatchDestroy(): Promise<void> {
                 >
                   {{ $t('instance.card.renew') }}
                 </button>
+                <button
+                  v-if="canResetInstanceTraffic(instance)"
+                  type="button"
+                  class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
+                  :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  :disabled="!!actionLoading[instance.id]"
+                  @click.stop="openResetTrafficModal(instance)"
+                >
+                  {{ actionLoading[instance.id] === 'resetTraffic' ? '...' : $t('admin.hosts.resetTraffic') }}
+                </button>
               </div>
             </div>
           </article>
@@ -2249,6 +2310,68 @@ async function confirmBatchDestroy(): Promise<void> {
     </div>
 
     <Teleport to="body">
+      <div
+        v-if="showResetTrafficModal && resetTrafficTarget"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        @click.self="closeResetTrafficModal()"
+      >
+        <div class="absolute inset-0 bg-black/60" @click="closeResetTrafficModal()"></div>
+        <div
+          class="relative w-full max-w-md rounded-2xl p-5 shadow-2xl"
+          :class="themeStore.isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h3 class="text-lg font-semibold" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+                {{ $t('admin.hosts.resetTrafficTitle') }}
+              </h3>
+              <p class="mt-1 text-sm text-themed-muted">
+                {{ $t('admin.hosts.resetTrafficDesc', { instance: resetTrafficTarget.name }) }}
+              </p>
+            </div>
+            <button class="p-1 rounded hover:bg-gray-500/20" :disabled="resetTrafficSubmitting" @click="closeResetTrafficModal()">
+              <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="mt-4 space-y-2 rounded-xl border p-4 text-sm" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-themed-muted">{{ $t('instance.trafficLabel') }}</span>
+              <span :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ getInstanceTrafficUsage(resetTrafficTarget) }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-themed-muted">{{ $t('instance.card.trafficReset') }}</span>
+              <span class="text-orange-500">{{ getInstanceResetTrafficPrice(resetTrafficTarget) }}</span>
+            </div>
+          </div>
+
+          <p class="mt-4 text-sm text-yellow-600 dark:text-yellow-400">
+            {{ $t('admin.hosts.resetTrafficWarning') }}
+          </p>
+
+          <div class="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              class="btn-ghost btn-sm"
+              :disabled="resetTrafficSubmitting"
+              @click="closeResetTrafficModal()"
+            >
+              {{ $t('common.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary btn-sm"
+              :disabled="resetTrafficSubmitting"
+              @click="confirmResetTraffic()"
+            >
+              {{ resetTrafficSubmitting ? '...' : $t('admin.hosts.resetTraffic') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div
         v-if="!isAdminEntry && showBatchRenewModal"
         class="fixed inset-0 z-50 flex items-center justify-center p-4"
