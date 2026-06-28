@@ -259,11 +259,41 @@ export interface ResourceRiskPolicy {
   cpuActiveMinutes: number
   cpuThresholdPercent: number
   ppsThreshold: number
-  qosTiers: Array<{ level: number; bandwidthMbps: number; score: number }>
+  qosTiers: Array<{
+    level: number
+    bandwidthMbps: number
+    score: number
+    recoverScore: number
+    minDurationMinutes: number
+    cooldownMinutes: number
+    allowFurtherDowngrade: boolean
+    notifyUser: boolean
+    restrictOrders: boolean
+  }>
   orderRestrictScore: number
   autoSuspendScore: number
   autoSuspendEnabled: boolean
   accountOrderRestrictEnabled: boolean
+}
+
+export interface ResourceRiskSimulationResult {
+  sampledInstances: number
+  wouldTrigger: number
+  wouldQosLimit: number
+  wouldRestrictOrders: number
+  wouldAutoSuspend: number
+  tierHits: Array<{ level: number; count: number; bandwidthMbps: number }>
+  topInstances: Array<{
+    instanceId: number
+    name: string
+    userId: number
+    hostId: number
+    previousScore: number
+    projectedScore: number
+    projectedLevel: string
+    triggerTypes: string[]
+    targetQosLevel: number | null
+  }>
 }
 
 export interface ResourceRiskManualQosInput {
@@ -2521,6 +2551,8 @@ const api = {
       http.get('/admin/resource-risk/policy'),
     updatePolicy: (data: Partial<ResourceRiskPolicy>): Promise<{ policy: ResourceRiskPolicy }> =>
       http.put('/admin/resource-risk/policy', data),
+    simulatePolicy: (data: Partial<ResourceRiskPolicy>): Promise<{ result: ResourceRiskSimulationResult }> =>
+      http.post('/admin/resource-risk/policy/simulate', data),
     listInstances: (params?: { page?: number; pageSize?: number; level?: string }): Promise<{
       items: ResourceRiskState[]
       total: number

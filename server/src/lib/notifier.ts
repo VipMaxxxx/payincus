@@ -77,6 +77,7 @@ type EventType =
   | '2fa_disabled'
   // 配额与资源类
   | 'quota_warning'
+  | 'resource_risk_qos_limited'
   // 工单类
   | 'ticket_created'
   | 'ticket_replied'
@@ -156,6 +157,8 @@ interface EventData {
   currentUsed?: number        // 当前已用
   maxLimit?: number           // 最大限制
   usagePercent?: number       // 使用百分比
+  bandwidthLimit?: string     // 带宽限速值
+  score?: number              // 风险评分
   // 工单相关
   username?: string           // 用户名（工单创建者）
   subject?: string            // 工单主题
@@ -612,6 +615,18 @@ const EVENT_TEMPLATES: Record<EventType, EventTemplate> = {
       msg += `\n使用: ${data.currentUsed} / ${data.maxLimit}`
       if (data.usagePercent) msg += ` (${data.usagePercent}%)`
       msg += `\n请前往个人设置添加配额`
+      return msg
+    }
+  },
+  resource_risk_qos_limited: {
+    title: '⚠️ 实例已触发资源风控',
+    message: (data) => {
+      let msg = `实例「${data.instanceName}」已触发资源风控限速`
+      if (data.hostName) msg += `\n节点: ${data.hostName}`
+      if (data.bandwidthLimit) msg += `\n当前限速: ${data.bandwidthLimit}`
+      if (typeof data.score === 'number') msg += `\n当前评分: ${data.score}`
+      if (data.reason) msg += `\n原因: ${data.reason}`
+      msg += `\n持续异常可能限制下单或暂停实例，如有疑问请发送工单`
       return msg
     }
   },

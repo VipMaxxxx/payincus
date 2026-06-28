@@ -4,6 +4,7 @@ import api, {
   type ResourceRiskEvidenceDetail,
   type ResourceRiskEvent,
   type ResourceRiskPolicy,
+  type ResourceRiskSimulationResult,
   type ResourceRiskState,
   type UserOrderRestrictionRecord
 } from '@/api/admin'
@@ -14,6 +15,12 @@ interface QosTierForm {
   level: number
   bandwidthMbps: number
   score: number
+  recoverScore: number
+  minDurationMinutes: number
+  cooldownMinutes: number
+  allowFurtherDowngrade: boolean
+  notifyUser: boolean
+  restrictOrders: boolean
 }
 
 interface PageState {
@@ -58,6 +65,7 @@ interface ManualActionContext {
 const toast = useToast()
 const loading = ref(true)
 const saving = ref(false)
+const simulating = ref(false)
 const manualSubmitting = ref(false)
 const activeTab = ref<TabKey>('instances')
 const overview = ref<{ totalStates: number; highRisk: number; activeRestrictions: number } | null>(null)
@@ -68,6 +76,12 @@ const instancesPage = ref<PageState>({ page: 1, pageSize: 10, total: 0 })
 const eventsPage = ref<PageState>({ page: 1, pageSize: 10, total: 0 })
 const restrictionsPage = ref<PageState>({ page: 1, pageSize: 10, total: 0 })
 const policy = ref<ResourceRiskPolicy | null>(null)
+const policySimulation = ref<ResourceRiskSimulationResult | null>(null)
+const defaultQosTiers: QosTierForm[] = [
+  { level: 1, bandwidthMbps: 50, score: 50, recoverScore: 35, minDurationMinutes: 60, cooldownMinutes: 30, allowFurtherDowngrade: true, notifyUser: false, restrictOrders: false },
+  { level: 2, bandwidthMbps: 30, score: 65, recoverScore: 50, minDurationMinutes: 90, cooldownMinutes: 45, allowFurtherDowngrade: true, notifyUser: false, restrictOrders: false },
+  { level: 3, bandwidthMbps: 10, score: 80, recoverScore: 65, minDurationMinutes: 120, cooldownMinutes: 60, allowFurtherDowngrade: false, notifyUser: true, restrictOrders: true }
+]
 const policyForm = ref({
   enabled: true,
   bandwidthWindowMinutes: 60,
@@ -81,11 +95,7 @@ const policyForm = ref({
   autoSuspendScore: 90,
   autoSuspendEnabled: false,
   accountOrderRestrictEnabled: true,
-  qosTiers: [
-    { level: 1, bandwidthMbps: 50, score: 50 },
-    { level: 2, bandwidthMbps: 30, score: 65 },
-    { level: 3, bandwidthMbps: 10, score: 80 }
-  ] as QosTierForm[]
+  qosTiers: defaultQosTiers.map(tier => ({ ...tier })) as QosTierForm[]
 })
 const manualAction = ref<ManualActionContext | null>(null)
 const evidenceDetail = ref<ResourceRiskEvidenceDetail | null>(null)
@@ -268,6 +278,21 @@ function exportEvidenceDetail() {
   toast.success('已导出风险证据 JSON')
 }
 
+function completeQosTier(row: Partial<QosTierForm>, fallback: QosTierForm): QosTierForm {
+  const score = Number(row.score ?? fallback.score)
+  return {
+    level: Number(row.level ?? fallback.level),
+    bandwidthMbps: Number(row.bandwidthMbps ?? fallback.bandwidthMbps),
+    score,
+    recoverScore: Number(row.recoverScore ?? Math.max(0, score - 15)),
+    minDurationMinutes: Number(row.minDurationMinutes ?? fallback.minDurationMinutes),
+    cooldownMinutes: Number(row.cooldownMinutes ?? fallback.cooldownMinutes),
+    allowFurtherDowngrade: row.allowFurtherDowngrade !== false,
+    notifyUser: row.notifyUser === true,
+    restrictOrders: row.restrictOrders === true
+  }
+}
+
 function normalizeQosTiers(): QosTierForm[] | null {
   const levels = new Set<number>()
   const scores = new Set<number>()
@@ -277,6 +302,9 @@ function normalizeQosTiers(): QosTierForm[] | null {
     const level = Number(row.level)
     const bandwidthMbps = Number(row.bandwidthMbps)
     const score = Number(row.score)
+    const recoverScore = Number(row.recoverScore)
+    const minDurationMinutes = Number(row.minDurationMinutes)
+    const cooldownMinutes = Number(row.cooldownMinutes)
     if (!Number.isInteger(level) || level <= 0) {
       toast.warning('QoS 档位必须是正整数')
       return null
@@ -289,6 +317,18 @@ function normalizeQosTiers(): QosTierForm[] | null {
       toast.warning('QoS 触发分数必须在 1-100 之间')
       return null
     }
+    if (!Number.isInteger(recoverScore) || recoverScore < 0 || recoverScore >= score) {
+      toast.warning(`QoS 档位 ${level} 的恢复分数必须小于触发分数`)
+      return null
+    }
+    if (!Number.isInteger(minDurationMinutes) || minDurationMinutes <= 0) {
+      toast.warning(`QoS 档位 ${level} 的最短限速时间必须大于 0`)
+      return null
+    }
+    if (!Number.isInteger(cooldownMinutes) || cooldownMinutes <= 0) {
+      toast.warning(`QoS 档位 ${level} 的降档冷却时间必须大于 0`)
+      return null
+    }
     if (levels.has(level)) {
       toast.warning(`QoS 档位 ${level} 重复`)
       return null
@@ -299,7 +339,17 @@ function normalizeQosTiers(): QosTierForm[] | null {
     }
     levels.add(level)
     scores.add(score)
-    tiers.push({ level, bandwidthMbps: Math.round(bandwidthMbps), score })
+    tiers.push({
+      level,
+      bandwidthMbps: Math.round(bandwidthMbps),
+      score,
+      recoverScore,
+      minDurationMinutes,
+      cooldownMinutes,
+      allowFurtherDowngrade: Boolean(row.allowFurtherDowngrade),
+      notifyUser: Boolean(row.notifyUser),
+      restrictOrders: Boolean(row.restrictOrders)
+    })
   }
 
   if (tiers.length === 0) {
@@ -312,10 +362,17 @@ function normalizeQosTiers(): QosTierForm[] | null {
 
 function addQosTier() {
   const last = [...policyForm.value.qosTiers].sort((a, b) => a.level - b.level).at(-1)
+  const nextScore = Math.min(100, (last?.score || 50) + 10)
   policyForm.value.qosTiers.push({
     level: (last?.level || 0) + 1,
     bandwidthMbps: Math.max(1, Math.round((last?.bandwidthMbps || 50) / 2)),
-    score: Math.min(100, (last?.score || 50) + 10)
+    score: nextScore,
+    recoverScore: Math.max(0, nextScore - 15),
+    minDurationMinutes: last?.minDurationMinutes || 60,
+    cooldownMinutes: last?.cooldownMinutes || 30,
+    allowFurtherDowngrade: true,
+    notifyUser: false,
+    restrictOrders: false
   })
 }
 
@@ -342,16 +399,10 @@ function syncPolicyForm(nextPolicy: ResourceRiskPolicy) {
     autoSuspendScore: nextPolicy.autoSuspendScore,
     autoSuspendEnabled: nextPolicy.autoSuspendEnabled,
     accountOrderRestrictEnabled: nextPolicy.accountOrderRestrictEnabled,
-    qosTiers: (nextPolicy.qosTiers?.length ? nextPolicy.qosTiers : [
-      { level: 1, bandwidthMbps: 50, score: 50 },
-      { level: 2, bandwidthMbps: 30, score: 65 },
-      { level: 3, bandwidthMbps: 10, score: 80 }
-    ]).map(item => ({
-      level: item.level,
-      bandwidthMbps: item.bandwidthMbps,
-      score: item.score
-    }))
+    qosTiers: (nextPolicy.qosTiers?.length ? nextPolicy.qosTiers : defaultQosTiers)
+      .map((item, index) => completeQosTier(item, defaultQosTiers[index] || defaultQosTiers[0]))
   }
+  policySimulation.value = null
 }
 
 async function loadAll() {
@@ -441,27 +492,47 @@ function setActiveTab(tab: TabKey) {
   activeTab.value = tab
 }
 
+function buildPolicyPayload(qosTiers: QosTierForm[]): Partial<ResourceRiskPolicy> {
+  return {
+    enabled: policyForm.value.enabled,
+    bandwidthWindowMinutes: policyForm.value.bandwidthWindowMinutes,
+    bandwidthActiveMinutes: policyForm.value.bandwidthActiveMinutes,
+    bandwidthThresholdMbps: policyForm.value.bandwidthThresholdMbps,
+    cpuWindowMinutes: policyForm.value.cpuWindowMinutes,
+    cpuActiveMinutes: policyForm.value.cpuActiveMinutes,
+    cpuThresholdPercent: policyForm.value.cpuThresholdPercent,
+    ppsThreshold: policyForm.value.ppsThreshold,
+    orderRestrictScore: policyForm.value.orderRestrictScore,
+    autoSuspendScore: policyForm.value.autoSuspendScore,
+    autoSuspendEnabled: policyForm.value.autoSuspendEnabled,
+    accountOrderRestrictEnabled: policyForm.value.accountOrderRestrictEnabled,
+    qosTiers
+  }
+}
+
+async function simulatePolicy() {
+  const qosTiers = normalizeQosTiers()
+  if (!qosTiers) return
+
+  simulating.value = true
+  try {
+    const res = await api.resourceRisk.simulatePolicy(buildPolicyPayload(qosTiers))
+    policySimulation.value = res.result
+    toast.success('策略试运行完成')
+  } catch (error: any) {
+    toast.error(`试运行失败：${error?.message || error}`)
+  } finally {
+    simulating.value = false
+  }
+}
+
 async function savePolicy() {
   const qosTiers = normalizeQosTiers()
   if (!qosTiers) return
 
   saving.value = true
   try {
-    const res = await api.resourceRisk.updatePolicy({
-      enabled: policyForm.value.enabled,
-      bandwidthWindowMinutes: policyForm.value.bandwidthWindowMinutes,
-      bandwidthActiveMinutes: policyForm.value.bandwidthActiveMinutes,
-      bandwidthThresholdMbps: policyForm.value.bandwidthThresholdMbps,
-      cpuWindowMinutes: policyForm.value.cpuWindowMinutes,
-      cpuActiveMinutes: policyForm.value.cpuActiveMinutes,
-      cpuThresholdPercent: policyForm.value.cpuThresholdPercent,
-      ppsThreshold: policyForm.value.ppsThreshold,
-      orderRestrictScore: policyForm.value.orderRestrictScore,
-      autoSuspendScore: policyForm.value.autoSuspendScore,
-      autoSuspendEnabled: policyForm.value.autoSuspendEnabled,
-      accountOrderRestrictEnabled: policyForm.value.accountOrderRestrictEnabled,
-      qosTiers
-    })
+    const res = await api.resourceRisk.updatePolicy(buildPolicyPayload(qosTiers))
     syncPolicyForm(res.policy)
     toast.success('资源风控策略已保存')
   } catch (error: any) {
@@ -980,31 +1051,55 @@ onMounted(() => {
           <div class="flex items-center justify-between gap-3">
             <div>
               <h2 class="text-sm font-semibold text-themed">QoS 档位</h2>
-              <p class="mt-1 text-xs text-themed-muted">每一行都是独立档位，触发分数越高限制越严格。</p>
+              <p class="mt-1 text-xs text-themed-muted">每行都是独立降档规则，触发分数越高限制越严格；恢复分数用于自动解除限速。</p>
             </div>
             <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="addQosTier">新增档位</button>
           </div>
 
           <div class="overflow-x-auto rounded-lg border border-themed">
-            <table class="min-w-full text-sm">
+            <table class="min-w-[1180px] w-full text-sm">
               <thead class="bg-themed-secondary text-themed-muted">
                 <tr>
                   <th class="p-3 text-left">档位</th>
                   <th class="p-3 text-left">限速 Mbps</th>
                   <th class="p-3 text-left">触发分数</th>
+                  <th class="p-3 text-left">恢复分数</th>
+                  <th class="p-3 text-left">最短限速</th>
+                  <th class="p-3 text-left">降档冷却</th>
+                  <th class="p-3 text-left">继续降档</th>
+                  <th class="p-3 text-left">通知</th>
+                  <th class="p-3 text-left">限单</th>
                   <th class="p-3 text-right">操作</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(tier, index) in policyForm.qosTiers" :key="index" class="border-t border-themed">
                   <td class="p-3">
-                    <input v-model.number="tier.level" class="input w-28" type="number" min="1" />
+                    <input v-model.number="tier.level" class="input w-20" type="number" min="1" />
                   </td>
                   <td class="p-3">
-                    <input v-model.number="tier.bandwidthMbps" class="input w-36" type="number" min="1" />
+                    <input v-model.number="tier.bandwidthMbps" class="input w-28" type="number" min="1" />
                   </td>
                   <td class="p-3">
-                    <input v-model.number="tier.score" class="input w-32" type="number" min="1" max="100" />
+                    <input v-model.number="tier.score" class="input w-24" type="number" min="1" max="100" />
+                  </td>
+                  <td class="p-3">
+                    <input v-model.number="tier.recoverScore" class="input w-24" type="number" min="0" max="99" />
+                  </td>
+                  <td class="p-3">
+                    <input v-model.number="tier.minDurationMinutes" class="input w-28" type="number" min="1" />
+                  </td>
+                  <td class="p-3">
+                    <input v-model.number="tier.cooldownMinutes" class="input w-28" type="number" min="1" />
+                  </td>
+                  <td class="p-3">
+                    <input v-model="tier.allowFurtherDowngrade" type="checkbox" />
+                  </td>
+                  <td class="p-3">
+                    <input v-model="tier.notifyUser" type="checkbox" />
+                  </td>
+                  <td class="p-3">
+                    <input v-model="tier.restrictOrders" type="checkbox" />
                   </td>
                   <td class="p-3 text-right">
                     <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="removeQosTier(index)">删除</button>
@@ -1015,7 +1110,67 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="mt-5 flex justify-end">
+        <section v-if="policySimulation" class="mt-5 rounded-lg border border-themed bg-themed-muted/30 p-4">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 class="text-sm font-semibold text-themed">策略试运行结果</h2>
+              <p class="mt-1 text-xs text-themed-muted">仅基于最近采样数据模拟，不会写入评分、限速、限单或暂停实例。</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
+              <div class="rounded border border-themed bg-themed-surface p-3">
+                <div class="text-xs text-themed-muted">样本实例</div>
+                <div class="mt-1 font-semibold text-themed">{{ policySimulation.sampledInstances }}</div>
+              </div>
+              <div class="rounded border border-themed bg-themed-surface p-3">
+                <div class="text-xs text-themed-muted">会触发</div>
+                <div class="mt-1 font-semibold text-amber-600">{{ policySimulation.wouldTrigger }}</div>
+              </div>
+              <div class="rounded border border-themed bg-themed-surface p-3">
+                <div class="text-xs text-themed-muted">会限速</div>
+                <div class="mt-1 font-semibold text-blue-600">{{ policySimulation.wouldQosLimit }}</div>
+              </div>
+              <div class="rounded border border-themed bg-themed-surface p-3">
+                <div class="text-xs text-themed-muted">会限单</div>
+                <div class="mt-1 font-semibold text-red-600">{{ policySimulation.wouldRestrictOrders }}</div>
+              </div>
+              <div class="rounded border border-themed bg-themed-surface p-3">
+                <div class="text-xs text-themed-muted">会暂停</div>
+                <div class="mt-1 font-semibold text-red-700">{{ policySimulation.wouldAutoSuspend }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-4 xl:grid-cols-2">
+            <div class="rounded border border-themed bg-themed-surface p-3">
+              <h3 class="text-xs font-semibold text-themed-muted">档位命中</h3>
+              <div v-if="policySimulation.tierHits.length" class="mt-2 flex flex-wrap gap-2">
+                <span v-for="tier in policySimulation.tierHits" :key="tier.level" class="badge badge-info">
+                  L{{ tier.level }} · {{ tier.bandwidthMbps }} Mbps · {{ tier.count }} 台
+                </span>
+              </div>
+              <div v-else class="mt-2 text-xs text-themed-muted">暂无档位命中。</div>
+            </div>
+
+            <div class="rounded border border-themed bg-themed-surface p-3">
+              <h3 class="text-xs font-semibold text-themed-muted">高分实例预览</h3>
+              <div class="mt-2 max-h-48 overflow-y-auto divide-y divide-themed text-xs">
+                <div v-for="item in policySimulation.topInstances.slice(0, 8)" :key="item.instanceId" class="flex items-center justify-between gap-3 py-2">
+                  <span class="truncate text-themed">{{ item.name }} · #{{ item.instanceId }}</span>
+                  <span class="shrink-0 text-themed-muted">
+                    {{ item.previousScore }} → {{ item.projectedScore }}
+                    <template v-if="item.targetQosLevel"> · L{{ item.targetQosLevel }}</template>
+                  </span>
+                </div>
+                <div v-if="policySimulation.topInstances.length === 0" class="py-3 text-themed-muted">暂无实例。</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="mt-5 flex justify-end gap-2">
+          <button class="btn-secondary" :disabled="simulating || saving" @click="simulatePolicy">
+            {{ simulating ? '试运行中...' : '试运行策略' }}
+          </button>
           <button class="btn-primary" :disabled="saving" @click="savePolicy">
             {{ saving ? '保存中...' : '保存策略' }}
           </button>

@@ -1,4 +1,5 @@
 import { schedule } from 'node-cron'
+import type { Prisma } from '@prisma/client'
 import pLimit from 'p-limit'
 import { prisma } from '../db/prisma.js'
 import { getIncusClientFromPool } from '../lib/incus/incus-pool.js'
@@ -19,9 +20,15 @@ interface QosTier {
   level: number
   bandwidthMbps: number
   score: number
+  recoverScore: number
+  minDurationMinutes: number
+  cooldownMinutes: number
+  allowFurtherDowngrade: boolean
+  notifyUser: boolean
+  restrictOrders: boolean
 }
 
-interface RiskPolicy {
+export interface RiskPolicy {
   id: number
   enabled: boolean
   bandwidthWindowMinutes: number
@@ -40,6 +47,45 @@ interface RiskPolicy {
   accountOrderRestrictEnabled: boolean
 }
 
+interface RiskTrigger {
+  type: string
+  message: string
+  delta: number
+  severity: RiskSeverity
+}
+
+export interface ResourceRiskSimulationResult {
+  sampledInstances: number
+  wouldTrigger: number
+  wouldQosLimit: number
+  wouldRestrictOrders: number
+  wouldAutoSuspend: number
+  tierHits: Array<{ level: number; count: number; bandwidthMbps: number }>
+  topInstances: Array<{
+    instanceId: number
+    name: string
+    userId: number
+    hostId: number
+    previousScore: number
+    projectedScore: number
+    projectedLevel: string
+    triggerTypes: string[]
+    targetQosLevel: number | null
+  }>
+}
+
+interface RiskProjection {
+  previousScore: number
+  nextScore: number
+  nextLevel: string
+  triggers: RiskTrigger[]
+  evidence: Record<string, unknown>
+  qosTiers: QosTier[]
+  targetTier: QosTier | null
+  shouldRestrictOrders: boolean
+  shouldAutoSuspend: boolean
+}
+
 function clampScore(value: number): number {
   return Math.max(0, Math.min(MAX_SCORE, Math.round(value)))
 }
@@ -47,6 +93,16 @@ function clampScore(value: number): number {
 function decimalToNumber(value: unknown): number {
   if (value === null || value === undefined) return 0
   return Number(value)
+}
+
+function positiveInt(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function boundedScore(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_SCORE ? parsed : fallback
 }
 
 function parseQosTiers(value: unknown): QosTier[] {
@@ -60,8 +116,18 @@ function parseQosTiers(value: unknown): QosTier[] {
       const score = Number(record.score)
       if (!Number.isInteger(level) || level <= 0) return null
       if (!Number.isFinite(bandwidthMbps) || bandwidthMbps <= 0) return null
-      if (!Number.isInteger(score) || score <= 0) return null
-      return { level, bandwidthMbps, score }
+      if (!Number.isInteger(score) || score <= 0 || score > MAX_SCORE) return null
+      return {
+        level,
+        bandwidthMbps: Math.round(bandwidthMbps),
+        score,
+        recoverScore: Math.min(score - 1, boundedScore(record.recoverScore, Math.max(0, score - 15))),
+        minDurationMinutes: positiveInt(record.minDurationMinutes, 60),
+        cooldownMinutes: positiveInt(record.cooldownMinutes, 30),
+        allowFurtherDowngrade: record.allowFurtherDowngrade !== false,
+        notifyUser: record.notifyUser === true,
+        restrictOrders: record.restrictOrders === true
+      }
     })
     .filter((item): item is QosTier => Boolean(item))
     .sort((a, b) => a.score - b.score)
@@ -101,6 +167,167 @@ async function getDefaultPolicy(): Promise<RiskPolicy> {
 
 function sampleThresholdCount(minutes: number): number {
   return Math.max(1, Math.ceil(minutes / DEFAULT_SAMPLE_INTERVAL_MINUTES))
+}
+
+function minutesSince(value: Date | null | undefined, now: Date): number | null {
+  if (!value) return null
+  return Math.max(0, (now.getTime() - value.getTime()) / 60_000)
+}
+
+function buildRiskTriggers(input: {
+  samples: Array<{
+    totalMbps: unknown
+    cpuPercent: unknown
+    pps: unknown
+    totalPacketsDelta: bigint | number | string | null
+    totalBytesDelta: bigint | number | string | null
+  }>
+  policy: RiskPolicy
+}): { triggers: RiskTrigger[]; evidence: Record<string, unknown> } {
+  const { samples, policy } = input
+  const bandwidthHits = samples.filter(sample => decimalToNumber(sample.totalMbps) >= policy.bandwidthThresholdMbps)
+  const cpuHits = samples.filter(sample => sample.cpuPercent !== null && decimalToNumber(sample.cpuPercent) >= policy.cpuThresholdPercent)
+  const ppsHits = samples.filter(sample => decimalToNumber(sample.pps) >= policy.ppsThreshold)
+  const smallPacketHits = samples.filter(sample => {
+    const packets = Number(sample.totalPacketsDelta)
+    if (packets <= 0) return false
+    const averageBytes = Number(sample.totalBytesDelta) / packets
+    return averageBytes > 0 && averageBytes <= 300 && decimalToNumber(sample.pps) >= policy.ppsThreshold * 0.5
+  })
+
+  const triggers: RiskTrigger[] = []
+  if (bandwidthHits.length >= sampleThresholdCount(policy.bandwidthActiveMinutes)) {
+    triggers.push({
+      type: 'bandwidth_sustained',
+      message: `实例持续带宽超过 ${policy.bandwidthThresholdMbps} Mbps`,
+      delta: 18,
+      severity: 'medium'
+    })
+  }
+  if (cpuHits.length >= sampleThresholdCount(policy.cpuActiveMinutes)) {
+    triggers.push({
+      type: 'cpu_sustained',
+      message: `实例 CPU 持续超过 ${policy.cpuThresholdPercent}%`,
+      delta: 15,
+      severity: 'medium'
+    })
+  }
+  if (ppsHits.length >= 3) {
+    triggers.push({
+      type: 'packet_anomaly',
+      message: `实例 PPS 超过 ${policy.ppsThreshold}`,
+      delta: 25,
+      severity: 'high'
+    })
+  }
+  if (smallPacketHits.length >= 3) {
+    triggers.push({
+      type: 'scan_suspected',
+      message: '实例存在小包高频发包特征，疑似扫描或异常发包',
+      delta: 25,
+      severity: 'high'
+    })
+  }
+
+  return {
+    triggers,
+    evidence: {
+      sampleCount: samples.length,
+      bandwidthHits: bandwidthHits.length,
+      cpuHits: cpuHits.length,
+      ppsHits: ppsHits.length,
+      smallPacketHits: smallPacketHits.length,
+      bandwidthThresholdMbps: policy.bandwidthThresholdMbps,
+      cpuThresholdPercent: policy.cpuThresholdPercent,
+      ppsThreshold: policy.ppsThreshold
+    }
+  }
+}
+
+function projectRisk(input: {
+  samples: Parameters<typeof buildRiskTriggers>[0]['samples']
+  policy: RiskPolicy
+  previousScore: number
+  lastEvaluatedAt: Date | null | undefined
+}): RiskProjection {
+  const now = new Date()
+  const { triggers, evidence } = buildRiskTriggers({ samples: input.samples, policy: input.policy })
+  const elapsedHours = input.lastEvaluatedAt ? Math.max(0, (now.getTime() - input.lastEvaluatedAt.getTime()) / 3_600_000) : 0
+  const decay = triggers.length === 0 ? Math.floor(elapsedHours * input.policy.scoreDecayPerHour) : 0
+  const scoreDelta = triggers.reduce((sum, trigger) => sum + trigger.delta, 0)
+  const nextScore = clampScore(input.previousScore + scoreDelta - decay)
+  const qosTiers = parseQosTiers(input.policy.qosTiers)
+  const targetTier = qosTiers.filter(tier => nextScore >= tier.score).at(-1) ?? null
+  const shouldRestrictOrders = Boolean(input.policy.accountOrderRestrictEnabled && (
+    nextScore >= input.policy.orderRestrictScore || targetTier?.restrictOrders
+  ))
+
+  return {
+    previousScore: input.previousScore,
+    nextScore,
+    nextLevel: riskLevel(nextScore),
+    triggers,
+    evidence: {
+      ...evidence,
+      scoreDelta,
+      decay
+    },
+    qosTiers,
+    targetTier,
+    shouldRestrictOrders,
+    shouldAutoSuspend: input.policy.autoSuspendEnabled && nextScore >= input.policy.autoSuspendScore
+  }
+}
+
+function qosTierEvidence(tier: QosTier | null): Record<string, unknown> | null {
+  if (!tier) return null
+  return {
+    level: tier.level,
+    bandwidthMbps: tier.bandwidthMbps,
+    score: tier.score,
+    recoverScore: tier.recoverScore,
+    minDurationMinutes: tier.minDurationMinutes,
+    cooldownMinutes: tier.cooldownMinutes,
+    allowFurtherDowngrade: tier.allowFurtherDowngrade,
+    notifyUser: tier.notifyUser,
+    restrictOrders: tier.restrictOrders
+  }
+}
+
+async function restoreQosLimit(input: {
+  instance: {
+    id: number
+    incusId: string
+    host: {
+      id: number
+      url: string
+      certPath: string | null
+      keyPath: string | null
+      status: string
+    }
+  }
+  state: {
+    originalIngress: string | null
+    originalEgress: string | null
+  }
+}): Promise<void> {
+  if (input.instance.host.status === 'online' && input.instance.host.certPath && input.instance.host.keyPath) {
+    const client = await getIncusClientFromPool({
+      id: input.instance.host.id,
+      url: input.instance.host.url,
+      certPath: input.instance.host.certPath,
+      keyPath: input.instance.host.keyPath
+    })
+    await restoreBandwidth(client, input.instance.incusId, input.state.originalIngress, input.state.originalEgress)
+  }
+
+  await prisma.instance.update({
+    where: { id: input.instance.id },
+    data: {
+      limitsIngress: input.state.originalIngress,
+      limitsEgress: input.state.originalEgress
+    }
+  })
 }
 
 async function applyQosLimit(input: {
@@ -231,117 +458,157 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
     take: 500
   })
 
-  const bandwidthHits = samples.filter(sample => decimalToNumber(sample.totalMbps) >= policy.bandwidthThresholdMbps)
-  const cpuHits = samples.filter(sample => sample.cpuPercent !== null && decimalToNumber(sample.cpuPercent) >= policy.cpuThresholdPercent)
-  const ppsHits = samples.filter(sample => decimalToNumber(sample.pps) >= policy.ppsThreshold)
-  const smallPacketHits = samples.filter(sample => {
-    const packets = Number(sample.totalPacketsDelta)
-    if (packets <= 0) return false
-    const averageBytes = Number(sample.totalBytesDelta) / packets
-    return averageBytes > 0 && averageBytes <= 300 && decimalToNumber(sample.pps) >= policy.ppsThreshold * 0.5
-  })
-
-  const triggers: Array<{ type: string; message: string; delta: number; severity: RiskSeverity }> = []
-  if (bandwidthHits.length >= sampleThresholdCount(policy.bandwidthActiveMinutes)) {
-    triggers.push({
-      type: 'bandwidth_sustained',
-      message: `实例持续带宽超过 ${policy.bandwidthThresholdMbps} Mbps`,
-      delta: 18,
-      severity: 'medium'
-    })
-  }
-  if (cpuHits.length >= sampleThresholdCount(policy.cpuActiveMinutes)) {
-    triggers.push({
-      type: 'cpu_sustained',
-      message: `实例 CPU 持续超过 ${policy.cpuThresholdPercent}%`,
-      delta: 15,
-      severity: 'medium'
-    })
-  }
-  if (ppsHits.length >= 3) {
-    triggers.push({
-      type: 'packet_anomaly',
-      message: `实例 PPS 超过 ${policy.ppsThreshold}`,
-      delta: 25,
-      severity: 'high'
-    })
-  }
-  if (smallPacketHits.length >= 3) {
-    triggers.push({
-      type: 'scan_suspected',
-      message: '实例存在小包高频发包特征，疑似扫描或异常发包',
-      delta: 25,
-      severity: 'high'
-    })
-  }
-
   const previousScore = instance.resourceRiskState?.score ?? 0
-  const lastEvaluatedAt = instance.resourceRiskState?.lastEvaluatedAt
-  const elapsedHours = lastEvaluatedAt ? Math.max(0, (now.getTime() - lastEvaluatedAt.getTime()) / 3_600_000) : 0
-  const decay = triggers.length === 0 ? Math.floor(elapsedHours * policy.scoreDecayPerHour) : 0
-  const scoreDelta = triggers.reduce((sum, trigger) => sum + trigger.delta, 0)
-  const nextScore = clampScore(previousScore + scoreDelta - decay)
-  const nextLevel = riskLevel(nextScore)
-  const qosTiers = parseQosTiers(policy.qosTiers)
-  const targetTier = qosTiers.filter(tier => nextScore >= tier.score).at(-1) ?? null
+  const projection = projectRisk({
+    samples,
+    policy,
+    previousScore,
+    lastEvaluatedAt: instance.resourceRiskState?.lastEvaluatedAt
+  })
+  const {
+    triggers,
+    nextScore,
+    nextLevel,
+    qosTiers,
+    targetTier,
+    shouldRestrictOrders,
+    shouldAutoSuspend
+  } = projection
 
-  let actionTaken: string | null = null
+  const currentStatus = instance.resourceRiskState?.status ?? 'normal'
+  const manualLocked = currentStatus === 'manual_suspended' || currentStatus === 'manual_qos_limited'
+  const currentQosLevel = instance.resourceRiskState?.qosLevel ?? 0
+  const currentTier = currentQosLevel > 0 ? (qosTiers.find(tier => tier.level === currentQosLevel) ?? null) : null
+  const lastActionMinutes = minutesSince(instance.resourceRiskState?.lastTriggeredAt, now)
+
+  let actionTaken: string | null = manualLocked ? 'manual_state_preserved' : null
   let bandwidthLimit: string | null = instance.resourceRiskState?.currentBandwidthLimit ?? null
+  let nextQosLevel = currentQosLevel
+  let nextStatus = shouldAutoSuspend && !manualLocked ? 'suspended' : (currentQosLevel > 0 ? 'qos_limited' : nextLevel)
+  let nextLastTriggeredAt: Date | undefined
+  let nextLastRecoveredAt: Date | undefined
+  let effectiveTargetTier = targetTier
 
-  if (targetTier && targetTier.level > (instance.resourceRiskState?.qosLevel ?? 0)) {
+  const canRecoverQos = !manualLocked &&
+    currentTier &&
+    triggers.length === 0 &&
+    nextScore <= currentTier.recoverScore &&
+    (lastActionMinutes === null || lastActionMinutes >= currentTier.minDurationMinutes)
+
+  if (canRecoverQos) {
+    try {
+      await restoreQosLimit({
+        instance,
+        state: {
+          originalIngress: instance.resourceRiskState?.originalIngress ?? null,
+          originalEgress: instance.resourceRiskState?.originalEgress ?? null
+        }
+      })
+      actionTaken = 'qos_recovered'
+      bandwidthLimit = null
+      nextQosLevel = 0
+      nextStatus = nextLevel
+      effectiveTargetTier = null
+      nextLastRecoveredAt = now
+    } catch (error) {
+      console.error(`[ResourceRisk] Failed to recover QoS for instance ${instance.id}:`, error)
+    }
+  }
+
+  const canEscalateQos = !manualLocked &&
+    effectiveTargetTier &&
+    effectiveTargetTier.level > nextQosLevel &&
+    (!currentTier || currentTier.allowFurtherDowngrade) &&
+    (lastActionMinutes === null || lastActionMinutes >= effectiveTargetTier.cooldownMinutes)
+
+  if (canEscalateQos && effectiveTargetTier) {
     try {
       bandwidthLimit = await applyQosLimit({
         instance,
-        tier: targetTier,
+        tier: effectiveTargetTier,
         state: instance.resourceRiskState
       })
       if (bandwidthLimit) {
-        actionTaken = `qos_level_${targetTier.level}`
+        nextQosLevel = effectiveTargetTier.level
+        nextStatus = 'qos_limited'
+        nextLastTriggeredAt = now
+        actionTaken = `qos_level_${effectiveTargetTier.level}`
+        if (effectiveTargetTier.notifyUser) {
+          await sendNotification(instance.userId, 'resource_risk_qos_limited', {
+            instanceName: instance.name,
+            hostName: instance.host.name,
+            bandwidthLimit,
+            score: nextScore,
+            reason: triggers.map(trigger => trigger.message).join('；') || '资源使用触发自动风控'
+          }).catch((error) => {
+            console.error('[ResourceRisk] Failed to send QoS notification:', error)
+          })
+        }
       }
     } catch (error) {
       console.error(`[ResourceRisk] Failed to apply QoS for instance ${instance.id}:`, error)
     }
   }
 
-  const shouldRestrictOrders = policy.accountOrderRestrictEnabled && nextScore >= policy.orderRestrictScore
-  const shouldAutoSuspend = policy.autoSuspendEnabled && nextScore >= policy.autoSuspendScore
-  if (shouldAutoSuspend) {
+  if (!manualLocked && effectiveTargetTier && effectiveTargetTier.level <= nextQosLevel) {
+    nextStatus = 'qos_limited'
+  }
+
+  if (manualLocked) {
+    nextStatus = currentStatus
+  }
+
+  if (shouldAutoSuspend && !manualLocked) {
     try {
       await autoSuspendInstance({
         instance,
         reason: 'resource_risk_auto_suspend'
       })
       actionTaken = actionTaken ? `${actionTaken},auto_suspend` : 'auto_suspend'
+      nextStatus = 'suspended'
     } catch (error) {
       console.error(`[ResourceRisk] Failed to auto suspend instance ${instance.id}:`, error)
     }
   }
 
-  const evidence = {
-    sampleCount: samples.length,
-    bandwidthHits: bandwidthHits.length,
-    cpuHits: cpuHits.length,
-    ppsHits: ppsHits.length,
-    smallPacketHits: smallPacketHits.length,
-    bandwidthThresholdMbps: policy.bandwidthThresholdMbps,
-    cpuThresholdPercent: policy.cpuThresholdPercent,
-    ppsThreshold: policy.ppsThreshold
+  const evidence: Record<string, unknown> = {
+    ...projection.evidence,
+    targetQosTier: qosTierEvidence(targetTier),
+    effectiveQosTier: qosTierEvidence(effectiveTargetTier),
+    currentQosTier: qosTierEvidence(currentTier),
+    manualStatePreserved: manualLocked,
+    lastActionMinutes,
+    recoveryBlocked: currentTier && triggers.length === 0 && !canRecoverQos
+      ? {
+          recoverScore: currentTier.recoverScore,
+          minDurationMinutes: currentTier.minDurationMinutes
+        }
+      : null,
+    escalationBlocked: effectiveTargetTier && effectiveTargetTier.level > nextQosLevel && !canEscalateQos
+      ? {
+          allowFurtherDowngrade: currentTier?.allowFurtherDowngrade ?? true,
+          cooldownMinutes: effectiveTargetTier.cooldownMinutes,
+          lastActionMinutes
+        }
+      : null
   }
+  const evidenceJson = evidence as Prisma.InputJsonObject
 
   const state = await prisma.instanceRiskState.upsert({
     where: { instanceId },
     update: {
       score: nextScore,
       level: nextLevel,
-      status: shouldAutoSuspend ? 'suspended' : (targetTier ? 'qos_limited' : nextLevel),
-      qosLevel: targetTier?.level ?? instance.resourceRiskState?.qosLevel ?? 0,
+      status: nextStatus,
+      qosLevel: nextQosLevel,
       currentBandwidthLimit: bandwidthLimit,
       originalIngress: instance.resourceRiskState?.originalIngress ?? instance.limitsIngress,
       originalEgress: instance.resourceRiskState?.originalEgress ?? instance.limitsEgress,
       lastEvaluatedAt: now,
-      lastTriggeredAt: triggers.length > 0 ? now : undefined,
+      lastTriggeredAt: nextLastTriggeredAt,
+      lastRecoveredAt: nextLastRecoveredAt,
       reason: triggers.at(-1)?.message ?? instance.resourceRiskState?.reason ?? null,
-      evidence
+      evidence: evidenceJson
     },
     create: {
       instanceId,
@@ -349,15 +616,16 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
       hostId: instance.hostId,
       score: nextScore,
       level: nextLevel,
-      status: shouldAutoSuspend ? 'suspended' : (targetTier ? 'qos_limited' : nextLevel),
-      qosLevel: targetTier?.level ?? 0,
+      status: nextStatus,
+      qosLevel: nextQosLevel,
       currentBandwidthLimit: bandwidthLimit,
       originalIngress: instance.limitsIngress,
       originalEgress: instance.limitsEgress,
       lastEvaluatedAt: now,
-      lastTriggeredAt: triggers.length > 0 ? now : null,
+      lastTriggeredAt: nextLastTriggeredAt ?? (triggers.length > 0 ? now : null),
+      lastRecoveredAt: nextLastRecoveredAt ?? null,
       reason: triggers.at(-1)?.message ?? null,
-      evidence
+      evidence: evidenceJson
     }
   })
 
@@ -374,13 +642,13 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
         scoreAfter: nextScore,
         actionTaken,
         message: triggers.map(trigger => trigger.message).join('；') || `实例风险分变更为 ${nextScore}`,
-        evidence
+        evidence: evidenceJson
       }
     })
     latestEventId = event.id
   }
 
-  if (shouldRestrictOrders) {
+  if (shouldRestrictOrders && !manualLocked) {
     await restrictUserOrdersForRisk({
       userId: instance.userId,
       sourceInstanceId: instance.id,
@@ -390,6 +658,113 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
   }
 
   return state
+}
+
+export async function simulateResourceRiskPolicy(policyInput?: RiskPolicy): Promise<ResourceRiskSimulationResult> {
+  const policy = policyInput ?? await getDefaultPolicy()
+  if (!policy.enabled) {
+    return {
+      sampledInstances: 0,
+      wouldTrigger: 0,
+      wouldQosLimit: 0,
+      wouldRestrictOrders: 0,
+      wouldAutoSuspend: 0,
+      tierHits: [],
+      topInstances: []
+    }
+  }
+
+  const now = new Date()
+  const windowMinutes = Math.max(policy.bandwidthWindowMinutes, policy.cpuWindowMinutes)
+  const instances = await prisma.instance.findMany({
+    where: {
+      status: { in: ['running', 'suspended'] }
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 500,
+    include: {
+      resourceRiskState: true
+    }
+  })
+  const instanceIds = instances.map(instance => instance.id)
+  const samples = instanceIds.length > 0
+    ? await prisma.instanceResourceSample.findMany({
+        where: {
+          instanceId: { in: instanceIds },
+          sampledAt: {
+            gte: new Date(now.getTime() - windowMinutes * 60 * 1000)
+          }
+        },
+        orderBy: { sampledAt: 'desc' },
+        take: 5000
+      })
+    : []
+
+  const samplesByInstanceId = new Map<number, typeof samples>()
+  for (const sample of samples) {
+    const items = samplesByInstanceId.get(sample.instanceId) ?? []
+    if (items.length < 500) {
+      items.push(sample)
+      samplesByInstanceId.set(sample.instanceId, items)
+    }
+  }
+
+  const tierHitMap = new Map<number, { level: number; count: number; bandwidthMbps: number }>()
+  const topInstances: ResourceRiskSimulationResult['topInstances'] = []
+  let wouldTrigger = 0
+  let wouldQosLimit = 0
+  let wouldRestrictOrders = 0
+  let wouldAutoSuspend = 0
+
+  for (const instance of instances) {
+    const projection = projectRisk({
+      samples: samplesByInstanceId.get(instance.id) ?? [],
+      policy,
+      previousScore: instance.resourceRiskState?.score ?? 0,
+      lastEvaluatedAt: instance.resourceRiskState?.lastEvaluatedAt
+    })
+    const manualLocked = instance.resourceRiskState?.status === 'manual_suspended' || instance.resourceRiskState?.status === 'manual_qos_limited'
+    const currentQosLevel = instance.resourceRiskState?.qosLevel ?? 0
+    const targetQosLevel = projection.targetTier?.level ?? null
+    const wouldApplyQos = Boolean(!manualLocked && projection.targetTier && projection.targetTier.level > currentQosLevel)
+
+    if (projection.triggers.length > 0) wouldTrigger += 1
+    if (wouldApplyQos) wouldQosLimit += 1
+    if (!manualLocked && projection.shouldRestrictOrders) wouldRestrictOrders += 1
+    if (!manualLocked && projection.shouldAutoSuspend) wouldAutoSuspend += 1
+    if (projection.targetTier) {
+      const existing = tierHitMap.get(projection.targetTier.level)
+      tierHitMap.set(projection.targetTier.level, {
+        level: projection.targetTier.level,
+        count: (existing?.count ?? 0) + 1,
+        bandwidthMbps: projection.targetTier.bandwidthMbps
+      })
+    }
+
+    topInstances.push({
+      instanceId: instance.id,
+      name: instance.name,
+      userId: instance.userId,
+      hostId: instance.hostId,
+      previousScore: projection.previousScore,
+      projectedScore: projection.nextScore,
+      projectedLevel: projection.nextLevel,
+      triggerTypes: projection.triggers.map(trigger => trigger.type),
+      targetQosLevel
+    })
+  }
+
+  return {
+    sampledInstances: instances.length,
+    wouldTrigger,
+    wouldQosLimit,
+    wouldRestrictOrders,
+    wouldAutoSuspend,
+    tierHits: Array.from(tierHitMap.values()).sort((a, b) => a.level - b.level),
+    topInstances: topInstances
+      .sort((a, b) => b.projectedScore - a.projectedScore)
+      .slice(0, 20)
+  }
 }
 
 export async function releaseInstanceRisk(input: {

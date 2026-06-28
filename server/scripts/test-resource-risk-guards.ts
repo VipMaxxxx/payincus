@@ -69,10 +69,18 @@ assert(
     riskService.includes('export async function manualSuspendInstanceRisk') &&
     riskService.includes('export async function manualUnsuspendInstanceRisk') &&
     riskService.includes('export async function manualRestrictOrdersForInstanceRisk') &&
+    riskService.includes('export async function simulateResourceRiskPolicy') &&
+    riskService.includes('recoverScore') &&
+    riskService.includes('minDurationMinutes') &&
+    riskService.includes('cooldownMinutes') &&
+    riskService.includes('allowFurtherDowngrade') &&
+    riskService.includes('manual_state_preserved') &&
+    riskService.includes('qos_recovered') &&
+    riskService.includes('resource_risk_qos_limited') &&
     riskService.includes("type: 'manual_suspend'") &&
     riskService.includes("type: 'manual_qos_limited'") &&
     riskService.includes('startResourceRiskScheduler'),
-  'resource risk service must evaluate bandwidth, CPU, packet anomaly, scan signals, apply QoS, support manual actions, restrict orders, and run on a scheduler'
+  'resource risk service must evaluate bandwidth, CPU, packet anomaly, scan signals, apply QoS, recover/cool down tiers, preserve manual actions, simulate policy impact, restrict orders, and run on a scheduler'
 )
 
 assert(
@@ -88,6 +96,7 @@ assert(
   riskRoute.includes("'/resource-risk/my-status'") &&
     riskRoute.includes("'/resource-risk/review-ticket'") &&
     riskRoute.includes("'/admin/resource-risk/policy'") &&
+    riskRoute.includes("'/admin/resource-risk/policy/simulate'") &&
     riskRoute.includes("'/admin/resource-risk/instances'") &&
     riskRoute.includes("'/admin/resource-risk/instances/:id/evidence'") &&
     riskRoute.includes("'/admin/resource-risk/instances/:id/manual-qos'") &&
@@ -96,6 +105,8 @@ assert(
     riskRoute.includes("'/admin/resource-risk/instances/:id/manual-order-restrict'") &&
     riskRoute.includes("'/admin/resource-risk/order-restrictions/:id/release'") &&
     riskRoute.includes('parseQosTiers(body.qosTiers)') &&
+    riskRoute.includes('recoverScore >= score') &&
+    riskRoute.includes('simulateResourceRiskPolicy') &&
     riskRoute.includes('activeOrderRestriction') &&
     riskRoute.includes('activeAccountOrderRestriction') &&
     riskRoute.includes('sourceInstanceId: true') &&
@@ -111,13 +122,15 @@ assert(
     riskService.includes('autoSuspendInstance') &&
     riskService.includes('policy.autoSuspendScore') &&
     riskService.includes('policy.orderRestrictScore'),
-  'resource risk user and admin APIs must be registered and scheduler must start with the app'
+  'resource risk user and admin APIs, policy simulation, and scheduler must be registered and start with the app'
 )
 
 assert(
     adminApi.includes('resourceRisk:') &&
     adminApi.includes("http.get('/admin/resource-risk/overview')") &&
     adminApi.includes("http.put('/admin/resource-risk/policy'") &&
+    adminApi.includes("http.post('/admin/resource-risk/policy/simulate'") &&
+    adminApi.includes('ResourceRiskSimulationResult') &&
     adminApi.includes('manualQos') &&
     adminApi.includes('manualSuspend') &&
     adminApi.includes('manualUnsuspend') &&
@@ -133,6 +146,15 @@ assert(
     adminView.includes('下单限制') &&
     adminView.includes('QoS 档位') &&
     adminView.includes('policyForm.qosTiers') &&
+    adminView.includes('recoverScore') &&
+    adminView.includes('minDurationMinutes') &&
+    adminView.includes('cooldownMinutes') &&
+    adminView.includes('allowFurtherDowngrade') &&
+    adminView.includes('notifyUser') &&
+    adminView.includes('restrictOrders') &&
+    adminView.includes('simulatePolicy') &&
+    adminView.includes('策略试运行结果') &&
+    adminView.includes('会限速') &&
     adminView.includes('addQosTier') &&
     adminView.includes('manualSuspend(item)') &&
     adminView.includes('manualAction') &&
@@ -176,6 +198,8 @@ assert(
     !adminView.includes('window.confirm') &&
     !clientApi.includes('/admin/resource-risk/instances/${id}/evidence') &&
     createView.includes('orderRiskReviewAvailable') &&
+    createView.includes('activeOrderRiskRestriction') &&
+    createView.includes('api.resourceRisk.getMyStatus()') &&
     createView.includes('api.resourceRisk.createReviewTicket') &&
     zhLocale.includes('ORDER_RESTRICTED_BY_RISK') &&
     enLocale.includes('ORDER_RESTRICTED_BY_RISK'),

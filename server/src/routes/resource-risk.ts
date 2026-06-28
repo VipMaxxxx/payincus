@@ -8,7 +8,9 @@ import {
   manualRestrictOrdersForInstanceRisk,
   manualSuspendInstanceRisk,
   manualUnsuspendInstanceRisk,
-  releaseInstanceRisk
+  releaseInstanceRisk,
+  simulateResourceRiskPolicy,
+  type RiskPolicy
 } from '../services/resource-risk.js'
 import { getActiveOrderRestriction, releaseOrderRestriction } from '../services/user-order-restrictions.js'
 
@@ -137,10 +139,34 @@ function parseScore(value: unknown, fallback: number): number {
   return parsed
 }
 
-function parseQosTiers(value: unknown): Array<{ level: number; bandwidthMbps: number; score: number }> | null {
+function parseBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function parseQosTiers(value: unknown): Array<{
+  level: number
+  bandwidthMbps: number
+  score: number
+  recoverScore: number
+  minDurationMinutes: number
+  cooldownMinutes: number
+  allowFurtherDowngrade: boolean
+  notifyUser: boolean
+  restrictOrders: boolean
+}> | null {
   if (!Array.isArray(value)) return null
 
-  const tiers: Array<{ level: number; bandwidthMbps: number; score: number }> = []
+  const tiers: Array<{
+    level: number
+    bandwidthMbps: number
+    score: number
+    recoverScore: number
+    minDurationMinutes: number
+    cooldownMinutes: number
+    allowFurtherDowngrade: boolean
+    notifyUser: boolean
+    restrictOrders: boolean
+  }> = []
   const levels = new Set<number>()
   const scores = new Set<number>()
 
@@ -150,17 +176,51 @@ function parseQosTiers(value: unknown): Array<{ level: number; bandwidthMbps: nu
     const level = Number(record.level)
     const bandwidthMbps = Number(record.bandwidthMbps)
     const score = Number(record.score)
+    const recoverScore = Number(record.recoverScore)
+    const minDurationMinutes = Number(record.minDurationMinutes)
+    const cooldownMinutes = Number(record.cooldownMinutes)
     if (!Number.isInteger(level) || level <= 0) return null
     if (!Number.isFinite(bandwidthMbps) || bandwidthMbps <= 0) return null
     if (!Number.isInteger(score) || score < 1 || score > 100) return null
+    if (!Number.isInteger(recoverScore) || recoverScore < 0 || recoverScore >= score) return null
+    if (!Number.isInteger(minDurationMinutes) || minDurationMinutes <= 0) return null
+    if (!Number.isInteger(cooldownMinutes) || cooldownMinutes <= 0) return null
     if (levels.has(level) || scores.has(score)) return null
     levels.add(level)
     scores.add(score)
-    tiers.push({ level, bandwidthMbps: Math.round(bandwidthMbps), score })
+    tiers.push({
+      level,
+      bandwidthMbps: Math.round(bandwidthMbps),
+      score,
+      recoverScore,
+      minDurationMinutes,
+      cooldownMinutes,
+      allowFurtherDowngrade: parseBoolean(record.allowFurtherDowngrade, true),
+      notifyUser: parseBoolean(record.notifyUser),
+      restrictOrders: parseBoolean(record.restrictOrders)
+    })
   }
 
   if (tiers.length === 0) return null
   return tiers.sort((a, b) => a.score - b.score)
+}
+
+function buildPolicyUpdate(body: Record<string, unknown>, policy: RiskPolicy, nextQosTiers: ReturnType<typeof parseQosTiers>) {
+  return {
+    enabled: typeof body.enabled === 'boolean' ? body.enabled : policy.enabled,
+    bandwidthWindowMinutes: parsePage(body.bandwidthWindowMinutes, policy.bandwidthWindowMinutes),
+    bandwidthActiveMinutes: parsePage(body.bandwidthActiveMinutes, policy.bandwidthActiveMinutes),
+    bandwidthThresholdMbps: parsePage(body.bandwidthThresholdMbps, policy.bandwidthThresholdMbps),
+    cpuWindowMinutes: parsePage(body.cpuWindowMinutes, policy.cpuWindowMinutes),
+    cpuActiveMinutes: parsePage(body.cpuActiveMinutes, policy.cpuActiveMinutes),
+    cpuThresholdPercent: parsePage(body.cpuThresholdPercent, policy.cpuThresholdPercent),
+    ppsThreshold: parsePage(body.ppsThreshold, policy.ppsThreshold),
+    orderRestrictScore: parseScore(body.orderRestrictScore, policy.orderRestrictScore),
+    autoSuspendScore: parseScore(body.autoSuspendScore, policy.autoSuspendScore),
+    autoSuspendEnabled: typeof body.autoSuspendEnabled === 'boolean' ? body.autoSuspendEnabled : policy.autoSuspendEnabled,
+    accountOrderRestrictEnabled: typeof body.accountOrderRestrictEnabled === 'boolean' ? body.accountOrderRestrictEnabled : policy.accountOrderRestrictEnabled,
+    qosTiers: nextQosTiers ?? (policy.qosTiers ?? [])
+  }
 }
 
 async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
@@ -289,21 +349,7 @@ export default async function resourceRiskRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_INPUT, 'QoS 档位配置无效'))
     }
 
-    const data = {
-      enabled: typeof body.enabled === 'boolean' ? body.enabled : policy.enabled,
-      bandwidthWindowMinutes: parsePage(body.bandwidthWindowMinutes, policy.bandwidthWindowMinutes),
-      bandwidthActiveMinutes: parsePage(body.bandwidthActiveMinutes, policy.bandwidthActiveMinutes),
-      bandwidthThresholdMbps: parsePage(body.bandwidthThresholdMbps, policy.bandwidthThresholdMbps),
-      cpuWindowMinutes: parsePage(body.cpuWindowMinutes, policy.cpuWindowMinutes),
-      cpuActiveMinutes: parsePage(body.cpuActiveMinutes, policy.cpuActiveMinutes),
-      cpuThresholdPercent: parsePage(body.cpuThresholdPercent, policy.cpuThresholdPercent),
-      ppsThreshold: parsePage(body.ppsThreshold, policy.ppsThreshold),
-      orderRestrictScore: parseScore(body.orderRestrictScore, policy.orderRestrictScore),
-      autoSuspendScore: parseScore(body.autoSuspendScore, policy.autoSuspendScore),
-      autoSuspendEnabled: typeof body.autoSuspendEnabled === 'boolean' ? body.autoSuspendEnabled : policy.autoSuspendEnabled,
-      accountOrderRestrictEnabled: typeof body.accountOrderRestrictEnabled === 'boolean' ? body.accountOrderRestrictEnabled : policy.accountOrderRestrictEnabled,
-      qosTiers: nextQosTiers ?? (policy.qosTiers ?? [])
-    }
+    const data = buildPolicyUpdate(body, policy, nextQosTiers)
 
     const updated = await prisma.resourceRiskPolicy.update({
       where: { id: policy.id },
@@ -311,6 +357,28 @@ export default async function resourceRiskRoutes(fastify: FastifyInstance) {
     })
 
     return { policy: updated }
+  })
+
+  fastify.post('/admin/resource-risk/policy/simulate', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request, reply) => {
+    const body = request.body as Record<string, unknown>
+    let policy = await prisma.resourceRiskPolicy.findFirst({ orderBy: { id: 'asc' } })
+    if (!policy) {
+      policy = await prisma.resourceRiskPolicy.create({ data: { name: '默认策略' } })
+    }
+    const nextQosTiers = parseQosTiers(body.qosTiers)
+    if (Array.isArray(body.qosTiers) && !nextQosTiers) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_INPUT, 'QoS 档位配置无效'))
+    }
+
+    const data = buildPolicyUpdate(body, policy, nextQosTiers)
+    const result = await simulateResourceRiskPolicy({
+      ...policy,
+      ...data
+    })
+
+    return { result }
   })
 
   fastify.get('/admin/resource-risk/instances', {

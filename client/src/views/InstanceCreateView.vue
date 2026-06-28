@@ -115,6 +115,7 @@ const submitting = ref<boolean>(false)
 const error = ref<string>('')
 const orderRiskReviewAvailable = ref(false)
 const creatingRiskReviewTicket = ref(false)
+const orderRiskStatus = ref<Awaited<ReturnType<typeof api.resourceRisk.getMyStatus>> | null>(null)
 const instanceNameEditedByUser = ref<boolean>(false)
 
 // 表单数据
@@ -230,6 +231,11 @@ const prerequisiteMessage = computed<string>(() => {
   return t('instance.createPage.packagePrerequisiteRequired', {
     package: prerequisitePackageName.value || ''
   })
+})
+
+const activeOrderRiskRestriction = computed<Record<string, any> | null>(() => {
+  if (!orderRiskStatus.value?.restricted || !orderRiskStatus.value.restriction) return null
+  return orderRiskStatus.value.restriction as Record<string, any>
 })
 
 // 流量格式化
@@ -512,12 +518,17 @@ onMounted(async (): Promise<void> => {
   const initialSource = normalizePackageSourceQuery(route.query.source, route.query.zoneId)
   
   try {
-    const [zonesRes, userRes, keysRes] = await Promise.all([
+    const [zonesRes, userRes, keysRes, riskStatusRes] = await Promise.all([
       configStore.hostingMarketEntryEnabled ? api.packages.getHostingZones() : Promise.resolve({ zones: [] as HostingZoneTab[] }),
       api.users.get(authStore.user!.id),
-      api.sshKeys.list()
+      api.sshKeys.list(),
+      api.resourceRisk.getMyStatus().catch(() => ({ restricted: false, restriction: null, riskStates: [] }))
     ])
     hostingZones.value = configStore.hostingMarketEntryEnabled ? (zonesRes.zones || []) : []
+    orderRiskStatus.value = riskStatusRes
+    if (riskStatusRes.restricted) {
+      orderRiskReviewAvailable.value = true
+    }
 
     const effectiveInitialSource = getSelectablePackageSource(initialSource)
     const initialSourceRequest = toPackageSourceRequest(effectiveInitialSource)
@@ -1342,6 +1353,24 @@ async function createRiskReviewTicket(): Promise<void> {
             </div>
             <div v-if="prerequisiteMissing" class="p-3 rounded-lg border" :class="themeStore.isDark ? 'bg-amber-900/20 border-amber-500/30' : 'bg-amber-50 border-amber-200'">
               <p class="text-sm font-medium" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-700'">{{ prerequisiteMessage }}</p>
+            </div>
+            <div
+              v-if="activeOrderRiskRestriction"
+              class="space-y-3 rounded-lg border p-3 text-sm"
+              :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30 text-red-300' : 'bg-red-50 border-red-200 text-red-700'"
+            >
+              <div>
+                <p class="font-medium">当前账号因实例资源风控限制下单</p>
+                <p class="mt-1 text-xs opacity-80">{{ activeOrderRiskRestriction.reason || '请提交工单进行人工审核。' }}</p>
+              </div>
+              <button
+                type="button"
+                class="btn-primary"
+                :disabled="creatingRiskReviewTicket"
+                @click="createRiskReviewTicket"
+              >
+                {{ creatingRiskReviewTicket ? '创建审核工单中...' : '提交人工审核工单' }}
+              </button>
             </div>
             <div v-if="error" class="space-y-3 rounded-lg border p-3 text-sm" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30 text-red-400' : 'bg-red-50 border-red-200 text-red-700'">
               <div>{{ error }}</div>
