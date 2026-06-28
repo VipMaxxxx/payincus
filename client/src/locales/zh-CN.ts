@@ -204,6 +204,8 @@ export default {
         wallet: '钱包',
         orders: '订单',
         giftCards: '礼品卡',
+        flashSales: '秒杀',
+        flashSaleManage: '秒杀管理',
         invites: '邀请',
         help: '帮助',
         admin: '管理',

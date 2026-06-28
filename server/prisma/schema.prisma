@@ -541,6 +541,37 @@ enum BillingRecordType {
   transfer_fee  // 转移手续费
 }
 
+enum FlashSaleCampaignStatus {
+  draft
+  scheduled
+  active
+  paused
+  ended
+  cancelled
+}
+
+enum FlashSaleReservationStatus {
+  paid
+  delivering
+  delivered
+  failed
+  refunded
+  cancelled
+}
+
+enum FlashSaleAuditAction {
+  create
+  update
+  start
+  pause
+  resume
+  finish
+  cancel
+  stock_adjust
+  reservation_refund
+  reservation_release
+}
+
 enum OrderOperationStatus {
   pending_review // 待核查
   confirmed      // 已确认
@@ -769,6 +800,9 @@ model User {
   lifecycleEvents UserLifecycleEvent[]
   lifecycleActionsTargeted UserLifecycleAction[] @relation("UserLifecycleActionTarget")
   lifecycleActionsCreated UserLifecycleAction[] @relation("UserLifecycleActionActor")
+  flashSaleCampaignsCreated FlashSaleCampaign[] @relation("FlashSaleCampaignCreator")
+  flashSaleReservations FlashSaleReservation[] @relation("FlashSaleReservationUser")
+  flashSaleAuditLogs FlashSaleAuditLog[] @relation("FlashSaleAuditActor")
 
   @@map("users")
 }
@@ -1386,6 +1420,7 @@ model Instance {
   checkinRecords   CheckinRecord[]
   redeemCodeUsages RedeemCodeUsage[]
   billingRecords   InstanceBillingRecord[]  // 计费记录
+  flashSaleReservations FlashSaleReservation[]
   affBinding       AffBinding?              // AFF优惠码绑定
   resourcePoolLogs ResourcePoolLog[]        // 资源池应用记录
   destroyRecords   UserDestroyRecord[]      // 销毁记录
@@ -3882,6 +3917,7 @@ model PackagePlan {
   package   Package    @relation(fields: [packageId], references: [id], onDelete: Cascade)
   instances Instance[]
   affCodes  AffCode[]  // AFF优惠码
+  flashSaleItems FlashSaleItem[]
 
   @@unique([packageId, name]) // 同一套餐下方案名称唯一
   @@index([packageId, isActive])
@@ -3913,6 +3949,112 @@ model InstanceBillingRecord {
   @@index([instanceId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@map("instance_billing_records")
+}
+
+model FlashSaleCampaign {
+  id                  Int                     @id @default(autoincrement())
+  name                String
+  description         String?
+  status              FlashSaleCampaignStatus @default(draft)
+  startAt             DateTime                @map("start_at")
+  endAt               DateTime                @map("end_at")
+  requireTurnstile    Boolean                 @default(true) @map("require_turnstile")
+  minAccountAgeHours  Int                     @default(0) @map("min_account_age_hours")
+  requireEmail        Boolean                 @default(false) @map("require_email")
+  blockRiskRestricted Boolean                 @default(true) @map("block_risk_restricted")
+  maxPerUser          Int                     @default(1) @map("max_per_user")
+  notes               String?
+  createdByUserId     Int                     @map("created_by_user_id")
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+
+  createdBy    User                   @relation("FlashSaleCampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items        FlashSaleItem[]
+  reservations FlashSaleReservation[]
+  auditLogs    FlashSaleAuditLog[]
+
+  @@index([status, startAt, endAt])
+  @@index([createdByUserId, createdAt(sort: Desc)])
+  @@map("flash_sale_campaigns")
+}
+
+model FlashSaleItem {
+  id                    Int      @id @default(autoincrement())
+  campaignId            Int      @map("campaign_id")
+  packagePlanId         Int      @map("package_plan_id")
+  flashPrice            Decimal  @map("flash_price") @db.Decimal(10, 2)
+  originalPriceSnapshot Decimal  @map("original_price_snapshot") @db.Decimal(10, 2)
+  totalStock            Int      @map("total_stock")
+  soldCount             Int      @default(0) @map("sold_count")
+  reservedCount         Int      @default(0) @map("reserved_count")
+  deliveredCount        Int      @default(0) @map("delivered_count")
+  failedCount           Int      @default(0) @map("failed_count")
+  perUserLimit          Int      @default(1) @map("per_user_limit")
+  allowCoupon           Boolean  @default(false) @map("allow_coupon")
+  allowAff              Boolean  @default(false) @map("allow_aff")
+  sortOrder             Int      @default(0) @map("sort_order")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  campaign     FlashSaleCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  packagePlan  PackagePlan            @relation(fields: [packagePlanId], references: [id], onDelete: Restrict)
+  reservations FlashSaleReservation[]
+
+  @@unique([campaignId, packagePlanId])
+  @@index([packagePlanId])
+  @@index([campaignId, sortOrder])
+  @@map("flash_sale_items")
+}
+
+model FlashSaleReservation {
+  id              Int                        @id @default(autoincrement())
+  campaignId      Int                        @map("campaign_id")
+  itemId          Int                        @map("item_id")
+  userId          Int                        @map("user_id")
+  instanceId      Int?                       @map("instance_id")
+  status          FlashSaleReservationStatus @default(paid)
+  amount          Decimal                    @db.Decimal(10, 2)
+  balanceLogId    Int?                       @map("balance_log_id")
+  billingRecordId Int?                       @map("billing_record_id")
+  idempotencyKey  String                     @map("idempotency_key")
+  failureReason   String?                    @map("failure_reason")
+  metadata        Json?                      @default("{}")
+  paidAt          DateTime?                  @map("paid_at")
+  deliveredAt     DateTime?                  @map("delivered_at")
+  refundedAt      DateTime?                  @map("refunded_at")
+  createdAt       DateTime                   @default(now()) @map("created_at")
+  updatedAt       DateTime                   @updatedAt @map("updated_at")
+
+  campaign FlashSaleCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  item     FlashSaleItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user     User              @relation("FlashSaleReservationUser", fields: [userId], references: [id], onDelete: Cascade)
+  instance Instance?         @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
+  @@unique([idempotencyKey])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([campaignId, status])
+  @@index([itemId, status])
+  @@index([instanceId])
+  @@map("flash_sale_reservations")
+}
+
+model FlashSaleAuditLog {
+  id          Int                  @id @default(autoincrement())
+  campaignId  Int                  @map("campaign_id")
+  itemId      Int?                 @map("item_id")
+  actorUserId Int                  @map("actor_user_id")
+  action      FlashSaleAuditAction
+  beforeData  Json?                @map("before_data")
+  afterData   Json?                @map("after_data")
+  reason      String?
+  createdAt   DateTime             @default(now()) @map("created_at")
+
+  campaign FlashSaleCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  actor    User              @relation("FlashSaleAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@map("flash_sale_audit_logs")
 }
 
 // ==================== AFF推荐计划模型 ====================

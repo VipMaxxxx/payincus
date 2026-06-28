@@ -204,6 +204,8 @@ export default {
         wallet: 'Wallet',
         orders: 'Orders',
         giftCards: 'Gift Cards',
+        flashSales: 'Flash Sales',
+        flashSaleManage: 'Flash Sale Management',
         invites: 'Invites',
         help: 'Help',
         admin: 'Admin',

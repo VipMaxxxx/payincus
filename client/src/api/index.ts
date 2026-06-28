@@ -20,6 +20,8 @@ import type {
   InstanceWithDetails,
   InstanceStats,
   CreateInstanceRequest,
+  FlashSaleCampaign,
+  FlashSaleReservation,
   UpdateInstanceRequest,
   ChangeHostOptionsResponse,
   PortMapping,
@@ -3328,6 +3330,17 @@ const api = {
     }> => http.post('/gift-cards/user/generate', { faceValue, remark, turnstileToken }),
     mine: (params?: { page?: number; pageSize?: number; status?: string }): Promise<GiftCardListResponse> =>
       http.get('/gift-cards/user/mine', { params })
+  },
+
+  flashSales: {
+    list: (): Promise<{ campaigns: FlashSaleCampaign[] }> =>
+      http.get('/flash-sales'),
+    myReservations: (params: { page?: number; pageSize?: number } = {}): Promise<{
+      reservations: FlashSaleReservation[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/flash-sales/my-reservations', { params })
   },
 
   // ==================== AFF 推荐计划 ====================

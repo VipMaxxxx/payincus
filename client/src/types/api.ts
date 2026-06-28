@@ -1852,6 +1852,99 @@ export interface CreateInstanceRequest {
   snapshotLimit?: number
   backupLimit?: number
   customInitCommandIds?: number[]  // 用户自定义初始化命令 ID 列表
+  promoCode?: string
+  flashSaleItemId?: number
+  idempotencyKey?: string
+  turnstileToken?: string
+}
+
+export type FlashSaleCampaignStatus = 'draft' | 'scheduled' | 'active' | 'paused' | 'ended' | 'cancelled'
+export type FlashSaleReservationStatus = 'paid' | 'delivering' | 'delivered' | 'failed' | 'refunded' | 'cancelled'
+
+export interface FlashSalePlanSummary {
+  id: number
+  name: string
+  description: string | null
+  cpu: number
+  memory: number
+  disk: number
+  trafficLimit: string
+  trafficLimitSpeed: string
+  price: number
+  billingCycle: number
+  isActive: boolean
+  isSoldOut: boolean
+  package: {
+    id: number
+    name: string
+    networkMode: string
+    instanceType: string
+    sourceType: 'official' | 'market'
+    monthlyTrafficLimit: string | null
+    hostCount: number
+  }
+}
+
+export interface FlashSaleItem {
+  id: number
+  campaignId: number
+  packagePlanId: number
+  flashPrice: number
+  originalPriceSnapshot: number
+  totalStock: number
+  soldCount: number
+  reservedCount: number
+  deliveredCount: number
+  failedCount: number
+  remainingStock: number
+  perUserLimit: number
+  allowCoupon: boolean
+  allowAff: boolean
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+  plan: FlashSalePlanSummary
+}
+
+export interface FlashSaleCampaign {
+  id: number
+  name: string
+  description: string | null
+  status: FlashSaleCampaignStatus
+  effectiveStatus: FlashSaleCampaignStatus
+  startAt: string
+  endAt: string
+  requireTurnstile: boolean
+  minAccountAgeHours: number
+  requireEmail: boolean
+  blockRiskRestricted: boolean
+  maxPerUser: number
+  notes: string | null
+  createdByUserId: number
+  createdAt: string
+  updatedAt: string
+  items: FlashSaleItem[]
+}
+
+export interface FlashSaleReservation {
+  id: number
+  campaignId: number
+  campaignName?: string
+  itemId: number
+  userId?: number
+  user?: { id: number; username: string; email?: string | null; avatarStyle?: string | null; avatarBadgeId?: string | null } | null
+  packageName: string
+  planName: string
+  instanceId?: number | null
+  instance?: { id: number; name: string; status: string } | null
+  status: FlashSaleReservationStatus
+  amount: number
+  failureReason: string | null
+  paidAt: string | null
+  deliveredAt: string | null
+  refundedAt: string | null
+  createdAt: string
+  updatedAt?: string
 }
 
 export interface UpdateInstanceRequest {

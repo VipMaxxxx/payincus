@@ -39,6 +39,7 @@ import { validateName as validateInstanceName } from '@/utils/validation'
 import { translateError } from '@/utils/errorHandler'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel } from '@/utils/freeSiteFun'
 import { getVipBadgeInlineStyle, normalizeVipBadgeStyle, type VipBadgeStyle } from '@/utils/vipBadge'
+import { getTurnstileToken } from '@/utils/turnstile'
 
 interface ImageOption {
   value: string
@@ -503,6 +504,12 @@ const selectedHostingZone = computed<HostingZoneTab | null>(() => {
   const zoneId = Number(String(packageSource.value).slice('zone:'.length))
   if (!Number.isInteger(zoneId) || zoneId <= 0) return null
   return hostingZones.value.find(zone => zone.id === zoneId) || null
+})
+
+const flashSaleItemId = computed<number | null>(() => {
+  const raw = Array.isArray(route.query.flashSaleItem) ? route.query.flashSaleItem[0] : route.query.flashSaleItem
+  const parsed = Number(raw)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 })
 
 onMounted(async (): Promise<void> => {
@@ -1009,7 +1016,9 @@ async function handleSubmit(): Promise<void> {
       throw new Error(nameValidation.message)
     }
 
-    await api.instances.create({
+    const flashSaleId = flashSaleItemId.value
+    const turnstileToken = flashSaleId ? await getTurnstileToken('flash_sale_create_instance') : undefined
+    const requestPayload: CreateInstanceRequest = {
       name: form.value.name.trim(),
       packageId: form.value.packageId,
       planId: form.value.planId || undefined,
@@ -1020,8 +1029,15 @@ async function handleSubmit(): Promise<void> {
       disk: form.value.disk,
       sshKeyId: form.value.sshKeyId,
       customInitCommandIds: form.value.customInitCommandIds.length > 0 ? form.value.customInitCommandIds : undefined,
-      promoCode: (isPaidPackage.value && promoCodeValid.value && form.value.promoCode.trim()) ? form.value.promoCode.trim() : undefined
-    } as CreateInstanceRequest & { promoCode?: string })
+      promoCode: (isPaidPackage.value && promoCodeValid.value && form.value.promoCode.trim()) ? form.value.promoCode.trim() : undefined,
+      flashSaleItemId: flashSaleId || undefined,
+      idempotencyKey: flashSaleId
+        ? (crypto.randomUUID?.() || `flash-sale-${flashSaleId}-${Date.now()}`)
+        : undefined,
+      turnstileToken
+    }
+
+    await api.instances.create(requestPayload)
     
     toast.success(t('instance.createPage.createSuccess'))
     router.push('/instances')
@@ -1148,6 +1164,12 @@ async function createRiskReviewTicket(): Promise<void> {
         <!-- RIGHT: 配置区（独立滚动）-->
         <div class="lg:flex-[2] lg:overflow-y-auto lg:pb-4 scrollbar-hide">
           <div ref="rightPanelScrollRef" class="space-y-4">
+            <div
+              v-if="flashSaleItemId"
+              class="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700"
+            >
+              当前通过秒杀活动开通。提交时会校验活动时间、库存、账号限购、人机验证和实时节点资源。
+            </div>
             <PlanSelector
               v-if="isPaidPackage"
               :plans="packagePlans"

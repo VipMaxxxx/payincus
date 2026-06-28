@@ -46,6 +46,13 @@ import {
   OrderRestrictedError,
   orderRestrictionApiError
 } from '../services/user-order-restrictions.js'
+import {
+  FlashSaleError,
+  assertFlashSaleCheckoutEligibility,
+  claimFlashSalePurchaseInTransaction,
+  markFlashSaleDelivered,
+  markFlashSaleFailed
+} from '../services/flash-sales.js'
 import { customAlphabet } from 'nanoid'
 
 // 自定义 nanoid，只使用小写字母和数字（Incus 不允许下划线）
@@ -1170,6 +1177,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       password?: string
       customInitCommandIds?: number[]  // 用户自定义初始化命令 ID 列表
       promoCode?: string  // AFF 优惠码
+      flashSaleItemId?: number
+      idempotencyKey?: string
+      turnstileToken?: string
     }
   }>('/', {
     onRequest: [fastify.authenticateUser],
@@ -1188,6 +1198,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           sshKeyId: { type: 'integer' },
           sshKey: { type: 'string' },
           password: { type: 'string' },
+          planId: { type: 'integer', minimum: 1 },
+          flashSaleItemId: { type: 'integer', minimum: 1 },
+          idempotencyKey: { type: 'string', maxLength: 128 },
+          turnstileToken: { type: 'string', maxLength: 2048 },
           customInitCommandIds: { type: 'array', items: { type: 'integer' }, maxItems: 20 },
           promoCode: { type: 'string', maxLength: 32 }
         }
@@ -1208,9 +1222,12 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       password?: string
       customInitCommandIds?: number[]
       promoCode?: string  // AFF 优惠码
+      flashSaleItemId?: number
+      idempotencyKey?: string
+      turnstileToken?: string
     }
   }>, reply: FastifyReply) => {
-    const { packageId, planId, image, cpu, memory, disk, hostId, sshKeyId, customInitCommandIds, promoCode } = request.body
+    const { packageId, planId, image, cpu, memory, disk, hostId, sshKeyId, customInitCommandIds, promoCode, flashSaleItemId, idempotencyKey, turnstileToken } = request.body
     let { name, sshKey } = request.body
     const { user } = request
 
@@ -1343,6 +1360,29 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.CANNOT_CREATE_OWN_PAID_PACKAGE, '不能使用自己的付费套餐创建实例'))
     }
 
+    let flashSaleCheckout: Awaited<ReturnType<typeof assertFlashSaleCheckoutEligibility>> | null = null
+    if (flashSaleItemId !== undefined) {
+      if (!selectedPlan) {
+        return reply.code(400).send(apiError(ErrorCode.PLAN_REQUIRED, '秒杀商品必须绑定付费方案'))
+      }
+      try {
+        flashSaleCheckout = await assertFlashSaleCheckoutEligibility({
+          itemId: flashSaleItemId,
+          userId: user.id,
+          packageId,
+          planId: selectedPlan.id,
+          promoCode,
+          turnstileToken,
+          remoteIp: request.ip
+        })
+      } catch (error) {
+        if (error instanceof FlashSaleError) {
+          return reply.code(error.httpStatus).send({ error: error.message, code: error.code })
+        }
+        throw error
+      }
+    }
+
     // 1.4 计算费用并验证余额（付费方案）
     let billing: ReturnType<typeof calculateCreateBilling> | null = null
     let validatedAffCode: { id: number; userId: number; discountRate: number } | null = null
@@ -1352,8 +1392,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
     if (selectedPlan) {
       billing = calculateCreateBilling(selectedPlan)
-      finalPrice = billing.totalPrice
-      actualPrice = billing.totalPrice
+      finalPrice = flashSaleCheckout ? Number((flashSaleCheckout.flashPrice / 100).toFixed(2)) : billing.totalPrice
+      actualPrice = finalPrice
 
       // 1.4.1 如果提供了优惠码，验证并计算折扣
       if (promoCode && promoCode.trim()) {
@@ -1367,8 +1407,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           discountRate: validation.discountRate!
         }
         // 计算折扣金额（折扣应用于方案价格）
-        discountAmount = calculateDiscountAmount(billing.price, validatedAffCode.discountRate)
-        finalPrice = Number((billing.totalPrice - discountAmount).toFixed(2))
+        const discountBasePrice = flashSaleCheckout ? Number((flashSaleCheckout.flashPrice / 100).toFixed(2)) : billing.price
+        discountAmount = calculateDiscountAmount(discountBasePrice, validatedAffCode.discountRate)
+        finalPrice = Number((discountBasePrice - discountAmount).toFixed(2))
         actualPrice = finalPrice
       }
 
@@ -1717,9 +1758,13 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           const balanceAfter = Number(updatedUserRecord.balance)
 
           // 记录余额日志
-          const remarkText = discountAmount > 0
-            ? `开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}，优惠码折扣 -¥${discountAmount.toFixed(2)}`
-            : `开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}`
+          const remarkText = flashSaleCheckout
+            ? (discountAmount > 0
+                ? `秒杀开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}，优惠码折扣 -¥${discountAmount.toFixed(2)}`
+                : `秒杀开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}`)
+            : (discountAmount > 0
+                ? `开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}，优惠码折扣 -¥${discountAmount.toFixed(2)}`
+                : `开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}`)
 
           const balanceLog = await tx.balanceLog.create({
             data: {
@@ -1810,7 +1855,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         // 如果是付费方案，创建计费记录
         if (selectedPlan && billing) {
           // 创建计费记录
-          await tx.instanceBillingRecord.create({
+          const billingRecord = await tx.instanceBillingRecord.create({
             data: {
               instanceId: instance.id,
               userId: user.id,
@@ -1820,22 +1865,52 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
               periodStart: new Date(),
               periodEnd: billing.expiresAt,
               balanceLogId,
-              remark: discountAmount > 0
-                ? `新开通 ${billing.billingCycle} 个月，优惠码折扣 -¥${discountAmount.toFixed(2)}`
-                : `新开通 ${billing.billingCycle} 个月`
+              remark: flashSaleCheckout
+                ? (discountAmount > 0
+                    ? `秒杀新开通 ${billing.billingCycle} 个月，优惠码折扣 -¥${discountAmount.toFixed(2)}`
+                    : `秒杀新开通 ${billing.billingCycle} 个月`)
+                : (discountAmount > 0
+                    ? `新开通 ${billing.billingCycle} 个月，优惠码折扣 -¥${discountAmount.toFixed(2)}`
+                    : `新开通 ${billing.billingCycle} 个月`)
             }
           })
+
+          if (flashSaleCheckout) {
+            await claimFlashSalePurchaseInTransaction(tx, {
+              itemId: flashSaleCheckout.itemId,
+              userId: user.id,
+              packageId,
+              planId: selectedPlan.id,
+              instanceId: instance.id,
+              amount: actualPrice,
+              balanceLogId,
+              billingRecordId: billingRecord.id,
+              idempotencyKey: idempotencyKey?.trim() || `flash-sale:${flashSaleCheckout.itemId}:${user.id}:${nanoid()}`,
+              metadata: {
+                packageName: flashSaleCheckout.packageName,
+                planName: flashSaleCheckout.planName,
+                campaignName: flashSaleCheckout.campaignName,
+                originalPriceCents: flashSaleCheckout.originalPriceSnapshot,
+                flashPriceCents: flashSaleCheckout.flashPrice,
+                discountAmount
+              }
+            })
+          }
 
           // 如果使用了优惠码，创建 AFF 绑定并处理返利
           if (validatedAffCode) {
             // 创建实例与优惠码的永久绑定
             await db.createAffBinding(instance.id, validatedAffCode.id, tx as any)
 
-            // 给优惠码创建者返利（基于原价，不是折扣后价格）
+            const affCommissionBasePrice = flashSaleCheckout
+              ? Number((flashSaleCheckout.flashPrice / 100).toFixed(2))
+              : billing.price
+
+            // 给优惠码创建者返利（基于可参与返利的下单价，不是优惠码折扣后价格）
             await db.processAffCommission(
               validatedAffCode.id,
               instance.id,
-              billing.price, // 原价
+              affCommissionBasePrice,
               'new_purchase',
               tx as any
             )
@@ -1912,6 +1987,14 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       }
     } catch (err: any) {
       const errorMessage = err?.message || String(err)
+
+      if (err instanceof FlashSaleError) {
+        return reply.code(err.httpStatus).send({ error: err.message, code: err.code })
+      }
+
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return reply.code(409).send({ error: '秒杀请求已提交，请勿重复操作', code: 'FLASH_SALE_DUPLICATE_REQUEST' })
+      }
 
       // 处理宿主机资源不足错误
       if (errorMessage.includes('HOST_RESOURCES_INSUFFICIENT')) {
@@ -6622,6 +6705,10 @@ async function createInstanceAsync(
       return
     }
 
+    await markFlashSaleDelivered(instanceId).catch((err) => {
+      console.error(`[Provisioning] 秒杀交付状态回写失败:`, err)
+    })
+
     // 创建 IP 地址记录 (新双网卡架构: eth0=IPv4, eth1=IPv6)
     if (ipv4) {
       try {
@@ -6813,6 +6900,9 @@ async function createInstanceAsync(
 
       try {
         const compensation = await db.compensateFailedInstancePurchase(instanceId, userId, host.id)
+        await markFlashSaleFailed(instanceId, errorMessage, compensation.refunded).catch((err) => {
+          console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
+        })
         if (compensation.refunded) {
           console.log(`[Provisioning] 实例 ${instanceId} 创建失败已自动退款 ¥${compensation.refundAmount.toFixed(2)}`)
         } else if (compensation.reason !== 'not_paid_purchase') {
@@ -6820,6 +6910,9 @@ async function createInstanceAsync(
         }
       } catch (compensationErr) {
         console.error(`[Provisioning] 实例 ${instanceId} 创建失败后的账务补偿失败:`, compensationErr)
+        await markFlashSaleFailed(instanceId, errorMessage, false).catch((err) => {
+          console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
+        })
       }
     } else if (updateResult.count === 0) {
       console.log(`[Provisioning] 实例 ${instanceId} 已被超时清理任务处理，跳过资源回滚`)

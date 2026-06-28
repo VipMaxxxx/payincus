@@ -28,10 +28,23 @@ assert.equal(
   'all destructured host route IDs must use strict positive route ID parsing'
 )
 
+const directHostIdReferences = source
+  .split('\n')
+  .filter((line) => line.includes('request.params.id'))
+const unsafeDirectHostIdReferences = directHostIdReferences.filter((line) => {
+  return !line.includes('parsePositiveRouteId(request.params.id)') &&
+    !line.includes('GET /hosts/${request.params.id}/storage-pools')
+})
+
 assert.equal(
   source.match(/parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
-  34,
+  directHostIdReferences.length - 1,
   'all direct request.params.id host routes must use strict positive route ID parsing'
+)
+assert.deepEqual(
+  unsafeDirectHostIdReferences,
+  [],
+  'host routes must not read request.params.id except through strict parsing or diagnostic logging'
 )
 
 assert.equal(

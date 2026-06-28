@@ -107,6 +107,12 @@ const routes: RouteRecordRaw[] = [
     meta: { titleKey: 'publicSite.market.title', title: '产品市场' }
   },
   {
+    path: '/flash-sales',
+    name: 'flash-sales',
+    component: () => import('@/views/FlashSalesView.vue'),
+    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.flashSales', title: '秒杀' }
+  },
+  {
     path: '/instances',
     name: 'instances',
     component: () => import('@/views/InstancesView.vue'),

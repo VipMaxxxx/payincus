@@ -104,6 +104,7 @@ import orderRoutes from './routes/orders.js'
 import userLifecycleRoutes from './routes/user-lifecycle.js'
 import giftCardsRoutes from './routes/gift-cards.js'
 import resourceRiskRoutes from './routes/resource-risk.js'
+import flashSaleRoutes from './routes/flash-sales.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -530,6 +531,7 @@ await fastify.register(orderRoutes)
 await fastify.register(userLifecycleRoutes)
 await fastify.register(giftCardsRoutes, { prefix: '/api/gift-cards' })
 await fastify.register(resourceRiskRoutes, { prefix: '/api' })
+await fastify.register(flashSaleRoutes, { prefix: '/api' })
 
 const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
 
