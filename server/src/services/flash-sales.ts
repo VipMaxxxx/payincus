@@ -550,6 +550,63 @@ export async function adjustFlashSaleItemStock(itemId: number, totalStock: numbe
   return updated
 }
 
+export async function updateFlashSaleItemConfig(itemId: number, input: {
+  flashPrice?: number
+  totalStock?: number
+  perUserLimit?: number
+  allowCoupon?: boolean
+  allowAff?: boolean
+  sortOrder?: number
+  actorUserId: number
+  reason?: string
+}) {
+  if (input.flashPrice !== undefined && (!Number.isInteger(input.flashPrice) || input.flashPrice < 0)) {
+    throw new FlashSaleError('FLASH_SALE_INVALID_PRICE', '秒杀价无效')
+  }
+  if (input.totalStock !== undefined && (!Number.isInteger(input.totalStock) || input.totalStock < 0)) {
+    throw new FlashSaleError('FLASH_SALE_INVALID_STOCK', '库存不能小于 0')
+  }
+  if (input.perUserLimit !== undefined && (!Number.isInteger(input.perUserLimit) || input.perUserLimit < 1)) {
+    throw new FlashSaleError('FLASH_SALE_INVALID_LIMIT', '每人限购必须大于 0')
+  }
+  if (input.sortOrder !== undefined && (!Number.isInteger(input.sortOrder) || input.sortOrder < 0)) {
+    throw new FlashSaleError('FLASH_SALE_INVALID_SORT', '排序值不能小于 0')
+  }
+
+  const item = await prisma.flashSaleItem.findUnique({ where: { id: itemId } })
+  if (!item) return null
+  if (input.totalStock !== undefined && input.totalStock < item.soldCount + item.reservedCount) {
+    throw new FlashSaleError('FLASH_SALE_STOCK_BELOW_SOLD', '库存不能小于已售和锁定数量')
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const next = await tx.flashSaleItem.update({
+      where: { id: itemId },
+      data: {
+        flashPrice: input.flashPrice,
+        totalStock: input.totalStock,
+        perUserLimit: input.perUserLimit,
+        allowCoupon: input.allowCoupon,
+        allowAff: input.allowAff,
+        sortOrder: input.sortOrder
+      }
+    })
+    await tx.flashSaleAuditLog.create({
+      data: {
+        campaignId: item.campaignId,
+        itemId,
+        actorUserId: input.actorUserId,
+        action: 'update',
+        beforeData: item as unknown as Prisma.InputJsonValue,
+        afterData: next as unknown as Prisma.InputJsonValue,
+        reason: input.reason
+      }
+    })
+    return next
+  })
+  return updated
+}
+
 export async function assertFlashSaleCheckoutEligibility(input: {
   itemId: number
   userId: number

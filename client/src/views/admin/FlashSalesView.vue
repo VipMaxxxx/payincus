@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import api from '@/api/admin'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import { useToast } from '@/stores/toast'
-import type { FlashSaleCampaign, FlashSaleCampaignStatus, FlashSaleReservation, Package } from '@/types/api'
+import type { FlashSaleCampaign, FlashSaleCampaignStatus, FlashSaleItem, FlashSaleReservation, Package } from '@/types/api'
 
 const toast = useToast()
 
@@ -24,6 +24,9 @@ const plans = ref<Array<{ id: number; name: string; price: number; cpu: number; 
 const selectedCampaignId = ref<number | null>(null)
 const reservations = ref<FlashSaleReservation[]>([])
 const reservationsLoading = ref(false)
+const editingCampaignId = ref<number | null>(null)
+const editingItemId = ref<number | null>(null)
+const editSaving = ref(false)
 
 const form = ref({
   name: '',
@@ -38,6 +41,25 @@ const form = ref({
   requireEmail: false,
   blockRiskRestricted: true,
   notes: ''
+})
+const timeForm = ref({
+  name: '',
+  description: '',
+  startAt: '',
+  endAt: '',
+  requireTurnstile: true,
+  minAccountAgeHours: 0,
+  requireEmail: false,
+  blockRiskRestricted: true,
+  maxPerUser: 1,
+  notes: ''
+})
+const itemForm = ref({
+  flashPrice: 0,
+  totalStock: 0,
+  perUserLimit: 1,
+  allowCoupon: false,
+  allowAff: false
 })
 
 const selectedCampaign = computed(() => campaigns.value.find(campaign => campaign.id === selectedCampaignId.value) || null)
@@ -222,20 +244,135 @@ async function changeStatus(campaign: FlashSaleCampaign, status: FlashSaleCampai
   }
 }
 
-async function adjustStock(itemId: number, currentStock: number): Promise<void> {
-  const input = prompt('请输入新的总库存', String(currentStock))
-  if (input === null) return
-  const next = Number(input)
-  if (!Number.isInteger(next) || next < 0) {
-    toast.warning('库存必须是非负整数')
+function beginEditCampaign(campaign: FlashSaleCampaign): void {
+  editingCampaignId.value = campaign.id
+  timeForm.value = {
+    name: campaign.name,
+    description: campaign.description || '',
+    startAt: toLocalInputValue(new Date(campaign.startAt)),
+    endAt: toLocalInputValue(new Date(campaign.endAt)),
+    requireTurnstile: campaign.requireTurnstile,
+    minAccountAgeHours: campaign.minAccountAgeHours,
+    requireEmail: campaign.requireEmail,
+    blockRiskRestricted: campaign.blockRiskRestricted,
+    maxPerUser: campaign.maxPerUser,
+    notes: campaign.notes || ''
+  }
+}
+
+function cancelEditCampaign(): void {
+  editingCampaignId.value = null
+  timeForm.value = {
+    name: '',
+    description: '',
+    startAt: '',
+    endAt: '',
+    requireTurnstile: true,
+    minAccountAgeHours: 0,
+    requireEmail: false,
+    blockRiskRestricted: true,
+    maxPerUser: 1,
+    notes: ''
+  }
+}
+
+async function saveCampaignContent(campaign: FlashSaleCampaign): Promise<void> {
+  if (!timeForm.value.name.trim() || !timeForm.value.startAt || !timeForm.value.endAt) {
+    toast.warning('请填写活动名称、开始时间和结束时间')
     return
   }
+  const startAt = new Date(timeForm.value.startAt)
+  const endAt = new Date(timeForm.value.endAt)
+  if (!Number.isFinite(startAt.getTime()) || !Number.isFinite(endAt.getTime())) {
+    toast.warning('活动时间格式无效')
+    return
+  }
+  if (endAt <= startAt) {
+    toast.warning('结束时间必须晚于开始时间')
+    return
+  }
+  if (!Number.isInteger(Number(timeForm.value.minAccountAgeHours)) || Number(timeForm.value.minAccountAgeHours) < 0) {
+    toast.warning('账号最小时长不能小于 0')
+    return
+  }
+  if (!Number.isInteger(Number(timeForm.value.maxPerUser)) || Number(timeForm.value.maxPerUser) < 1) {
+    toast.warning('活动总限购必须大于 0')
+    return
+  }
+
+  editSaving.value = true
   try {
-    await api.flashSales.adjustStock(itemId, next, '后台调整秒杀库存')
-    toast.success('库存已更新')
+    await api.flashSales.update(campaign.id, {
+      name: timeForm.value.name.trim(),
+      description: timeForm.value.description.trim() || null,
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
+      requireTurnstile: timeForm.value.requireTurnstile,
+      minAccountAgeHours: Number(timeForm.value.minAccountAgeHours),
+      requireEmail: timeForm.value.requireEmail,
+      blockRiskRestricted: timeForm.value.blockRiskRestricted,
+      maxPerUser: Number(timeForm.value.maxPerUser),
+      notes: timeForm.value.notes.trim() || null
+    })
+    toast.success('活动内容已更新')
+    cancelEditCampaign()
     await loadCampaigns()
   } catch (err: any) {
-    toast.error(err?.message || '调整库存失败')
+    toast.error(err?.message || '更新活动内容失败')
+  } finally {
+    editSaving.value = false
+  }
+}
+
+function beginEditItem(item: FlashSaleItem): void {
+  editingItemId.value = item.id
+  itemForm.value = {
+    flashPrice: Number((item.flashPrice / 100).toFixed(2)),
+    totalStock: item.totalStock,
+    perUserLimit: item.perUserLimit,
+    allowCoupon: item.allowCoupon,
+    allowAff: item.allowAff
+  }
+}
+
+function cancelEditItem(): void {
+  editingItemId.value = null
+  itemForm.value = {
+    flashPrice: 0,
+    totalStock: 0,
+    perUserLimit: 1,
+    allowCoupon: false,
+    allowAff: false
+  }
+}
+
+async function saveItemContent(item: FlashSaleItem): Promise<void> {
+  if (itemForm.value.flashPrice < 0 || !Number.isInteger(Number(itemForm.value.totalStock)) || itemForm.value.totalStock < 0 || !Number.isInteger(Number(itemForm.value.perUserLimit)) || itemForm.value.perUserLimit < 1) {
+    toast.warning('秒杀商品的价格、库存和限购配置无效')
+    return
+  }
+  if (itemForm.value.totalStock < item.soldCount + item.reservedCount) {
+    toast.warning('库存不能小于已售和锁定数量')
+    return
+  }
+
+  editSaving.value = true
+  try {
+    await api.flashSales.updateItem(item.id, {
+      flashPrice: Math.round(Number(itemForm.value.flashPrice) * 100),
+      totalStock: Number(itemForm.value.totalStock),
+      perUserLimit: Number(itemForm.value.perUserLimit),
+      allowCoupon: itemForm.value.allowCoupon,
+      allowAff: itemForm.value.allowAff,
+      reason: '后台编辑秒杀商品'
+    })
+    toast.success('秒杀商品已更新')
+    cancelEditItem()
+    await loadCampaigns()
+  } catch (err: any) {
+    toast.error(err?.message || '更新秒杀商品失败')
+  } finally {
+    editSaving.value = false
   }
 }
 
@@ -416,27 +553,106 @@ onMounted(async () => {
                 </div>
                 <p class="mt-1 text-sm text-themed-muted">{{ formatDate(campaign.startAt) }} - {{ formatDate(campaign.endAt) }}</p>
               </div>
-              <div class="flex flex-wrap gap-2">
-                <button class="btn-secondary" @click="changeStatus(campaign, 'active')">开始/恢复</button>
-                <button class="btn-secondary" @click="changeStatus(campaign, 'paused')">暂停</button>
-                <button class="btn-secondary" @click="changeStatus(campaign, 'ended')">结束</button>
-                <button class="btn-secondary" @click="loadReservations(campaign.id)">记录</button>
-              </div>
-            </div>
-            <div class="mt-4 grid gap-3 lg:grid-cols-2">
-              <div v-for="item in campaign.items" :key="item.id" class="rounded-lg border border-themed bg-themed p-4">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <div class="font-medium text-themed">{{ item.plan.package.name }} / {{ item.plan.name }}</div>
-                    <div class="mt-1 text-xs text-themed-muted">库存 {{ item.remainingStock }} / {{ item.totalStock }}，已售 {{ item.soldCount }}，失败 {{ item.failedCount }}</div>
-                  </div>
-                  <div class="text-right">
-                    <div class="font-semibold text-orange-500">{{ formatMoneyCents(item.flashPrice) }}</div>
-                    <button class="mt-2 text-xs text-blue-500" @click="adjustStock(item.id, item.totalStock)">调整库存</button>
-                  </div>
-                </div>
-              </div>
-            </div>
+	              <div class="flex flex-wrap gap-2">
+	                <button class="btn-secondary" @click="beginEditCampaign(campaign)">编辑内容</button>
+	                <button class="btn-secondary" @click="changeStatus(campaign, 'active')">开始/恢复</button>
+	                <button class="btn-secondary" @click="changeStatus(campaign, 'paused')">暂停</button>
+	                <button class="btn-secondary" @click="changeStatus(campaign, 'ended')">结束</button>
+	                <button class="btn-secondary" @click="loadReservations(campaign.id)">记录</button>
+	              </div>
+	            </div>
+	            <div v-if="editingCampaignId === campaign.id" class="mt-4 rounded-lg border border-themed bg-themed p-4">
+	              <div class="grid gap-4 lg:grid-cols-4">
+	                <label class="space-y-1">
+	                  <span class="text-sm text-themed-muted">活动名称</span>
+	                  <input v-model="timeForm.name" class="input" />
+	                </label>
+	                <label class="space-y-1">
+	                  <span class="text-sm text-themed-muted">开始时间</span>
+	                  <input v-model="timeForm.startAt" type="datetime-local" class="input" />
+	                </label>
+	                <label class="space-y-1">
+	                  <span class="text-sm text-themed-muted">结束时间</span>
+	                  <input v-model="timeForm.endAt" type="datetime-local" class="input" />
+	                </label>
+	                <label class="space-y-1">
+	                  <span class="text-sm text-themed-muted">活动总限购</span>
+	                  <input v-model.number="timeForm.maxPerUser" type="number" min="1" step="1" class="input" />
+	                </label>
+	                <label class="space-y-1">
+	                  <span class="text-sm text-themed-muted">账号最小时长（小时）</span>
+	                  <input v-model.number="timeForm.minAccountAgeHours" type="number" min="0" step="1" class="input" />
+	                </label>
+	                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
+	                  <input v-model="timeForm.requireTurnstile" type="checkbox" />
+	                  强制人机验证
+	                </label>
+	                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
+	                  <input v-model="timeForm.requireEmail" type="checkbox" />
+	                  必须绑定邮箱
+	                </label>
+	                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
+	                  <input v-model="timeForm.blockRiskRestricted" type="checkbox" />
+	                  拦截风控限单
+	                </label>
+	              </div>
+	              <textarea v-model="timeForm.description" class="input mt-4 min-h-20" placeholder="活动说明，可选" />
+	              <textarea v-model="timeForm.notes" class="input mt-3 min-h-16" placeholder="内部备注，可选" />
+	              <div class="mt-4 flex justify-end gap-2">
+	                <button class="btn-primary" :disabled="editSaving" @click="saveCampaignContent(campaign)">
+	                  {{ editSaving ? '保存中...' : '保存内容' }}
+	                </button>
+	                <button class="btn-secondary" :disabled="editSaving" @click="cancelEditCampaign">取消</button>
+	              </div>
+	              <p class="mt-2 text-xs text-themed-muted">已开始的活动可以修改内容和时间；已有订单记录不回改，后续购买按新配置执行。</p>
+	            </div>
+	            <div class="mt-4 grid gap-3 lg:grid-cols-2">
+	              <div v-for="item in campaign.items" :key="item.id" class="rounded-lg border border-themed bg-themed p-4">
+	                <div class="flex items-start justify-between gap-3">
+	                  <div>
+	                    <div class="font-medium text-themed">{{ item.plan.package.name }} / {{ item.plan.name }}</div>
+	                    <div class="mt-1 text-xs text-themed-muted">库存 {{ item.remainingStock }} / {{ item.totalStock }}，已售 {{ item.soldCount }}，失败 {{ item.failedCount }}，限购 {{ item.perUserLimit }}</div>
+	                  </div>
+	                  <div class="text-right">
+	                    <div class="font-semibold text-orange-500">{{ formatMoneyCents(item.flashPrice) }}</div>
+	                    <button class="mt-2 text-xs text-blue-500" @click="beginEditItem(item)">编辑商品</button>
+	                  </div>
+	                </div>
+	                <div v-if="editingItemId === item.id" class="mt-4 rounded-lg border border-themed bg-themed-surface p-3">
+	                  <div class="grid gap-3 md:grid-cols-3">
+	                    <label class="space-y-1">
+	                      <span class="text-xs text-themed-muted">秒杀价（元）</span>
+	                      <input v-model.number="itemForm.flashPrice" type="number" min="0" step="0.01" class="input" />
+	                    </label>
+	                    <label class="space-y-1">
+	                      <span class="text-xs text-themed-muted">总库存</span>
+	                      <input v-model.number="itemForm.totalStock" type="number" min="0" step="1" class="input" />
+	                    </label>
+	                    <label class="space-y-1">
+	                      <span class="text-xs text-themed-muted">每人限购</span>
+	                      <input v-model.number="itemForm.perUserLimit" type="number" min="1" step="1" class="input" />
+	                    </label>
+	                  </div>
+	                  <div class="mt-3 flex flex-wrap items-center gap-4 text-sm text-themed">
+	                    <label class="inline-flex items-center gap-2">
+	                      <input v-model="itemForm.allowCoupon" type="checkbox" />
+	                      允许优惠码
+	                    </label>
+	                    <label class="inline-flex items-center gap-2">
+	                      <input v-model="itemForm.allowAff" type="checkbox" />
+	                      允许 AFF
+	                    </label>
+	                  </div>
+	                  <div class="mt-3 flex justify-end gap-2">
+	                    <button class="btn-primary" :disabled="editSaving" @click="saveItemContent(item)">
+	                      {{ editSaving ? '保存中...' : '保存商品' }}
+	                    </button>
+	                    <button class="btn-secondary" :disabled="editSaving" @click="cancelEditItem">取消</button>
+	                  </div>
+	                  <p class="mt-2 text-xs text-themed-muted">库存不能低于已售和锁定数量；价格修改只影响后续购买。</p>
+	                </div>
+	              </div>
+	            </div>
           </article>
         </div>
       </section>

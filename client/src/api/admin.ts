@@ -4402,6 +4402,16 @@ const api = {
       http.post(`/admin/flash-sales/${id}/status`, { status, reason }),
     adjustStock: (itemId: number, totalStock: number, reason?: string): Promise<{ success: boolean }> =>
       http.post(`/admin/flash-sales/items/${itemId}/stock`, { totalStock, reason }),
+    updateItem: (itemId: number, data: Partial<{
+      flashPrice: number
+      totalStock: number
+      perUserLimit: number
+      allowCoupon: boolean
+      allowAff: boolean
+      sortOrder: number
+      reason: string
+    }>): Promise<{ success: boolean }> =>
+      http.patch(`/admin/flash-sales/items/${itemId}`, data),
     reservations: (campaignId: number, params: { page?: number; pageSize?: number } = {}): Promise<{
       reservations: FlashSaleReservation[]
       total: number

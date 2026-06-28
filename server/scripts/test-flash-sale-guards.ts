@@ -15,6 +15,7 @@ const appSource = read('server/src/app.ts')
 const routeSource = read('server/src/routes/flash-sales.ts')
 const serviceSource = read('server/src/services/flash-sales.ts')
 const instancesSource = read('server/src/routes/instances.ts')
+const adminApiSource = read('client/src/api/admin.ts')
 const adminViewSource = read('client/src/views/admin/FlashSalesView.vue')
 
 assert(
@@ -84,6 +85,21 @@ assert(
     adminViewSource.includes('allowAff') &&
     adminViewSource.includes('validItems.map((item, index)'),
   'Admin flash sale UI must support multiple items and per-item coupon/AFF settings'
+)
+
+assert(
+  routeSource.includes("fastify.patch<{") &&
+    routeSource.includes("'/admin/flash-sales/items/:itemId'") &&
+    routeSource.includes('updateFlashSaleItemConfig(itemId, input)') &&
+    serviceSource.includes('export async function updateFlashSaleItemConfig') &&
+    serviceSource.includes('FLASH_SALE_STOCK_BELOW_SOLD') &&
+    adminApiSource.includes('updateItem: (itemId: number') &&
+    adminViewSource.includes('beginEditCampaign') &&
+    adminViewSource.includes('saveCampaignContent') &&
+    adminViewSource.includes('beginEditItem') &&
+    adminViewSource.includes('saveItemContent') &&
+    adminViewSource.includes('已有订单记录不回改，后续购买按新配置执行'),
+  'Admin flash sale UI and API must allow editing generated campaign content and item settings'
 )
 
 console.log('flash sale guard checks passed')

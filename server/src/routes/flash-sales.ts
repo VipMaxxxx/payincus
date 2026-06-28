@@ -12,7 +12,8 @@ import {
   listAdminFlashSales,
   listPublicFlashSales,
   normalizeFlashSaleListParams,
-  updateFlashSaleCampaign
+  updateFlashSaleCampaign,
+  updateFlashSaleItemConfig
 } from '../services/flash-sales.js'
 
 const POSITIVE_ID_RE = /^[1-9]\d*$/
@@ -62,6 +63,21 @@ function parsePositiveInteger(value: unknown, fallback = 1): number | null {
 
 function parseMoneyCents(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
+}
+
+function parseOptionalMoneyCents(value: unknown): number | null | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  return parseMoneyCents(value)
+}
+
+function parseOptionalNonNegativeInteger(value: unknown): number | null | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
+}
+
+function parseOptionalPositiveInteger(value: unknown): number | null | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null
 }
 
 function sendRouteError(reply: FastifyReply, error: unknown) {
@@ -136,6 +152,33 @@ function parseItems(value: unknown) {
       sortOrder
     }
   })
+}
+
+function parseItemUpdateInput(body: Record<string, unknown>, actorUserId: number) {
+  const flashPrice = parseOptionalMoneyCents(body.flashPrice)
+  const totalStock = parseOptionalNonNegativeInteger(body.totalStock)
+  const perUserLimit = parseOptionalPositiveInteger(body.perUserLimit)
+  const sortOrder = parseOptionalNonNegativeInteger(body.sortOrder)
+  if (flashPrice === null || totalStock === null || perUserLimit === null || sortOrder === null) {
+    throw new FlashSaleError('FLASH_SALE_INVALID_ITEM', '秒杀商品配置无效')
+  }
+  if (body.allowCoupon !== undefined && typeof body.allowCoupon !== 'boolean') {
+    throw new FlashSaleError('FLASH_SALE_INVALID_ITEM', '优惠码开关无效')
+  }
+  if (body.allowAff !== undefined && typeof body.allowAff !== 'boolean') {
+    throw new FlashSaleError('FLASH_SALE_INVALID_ITEM', 'AFF 开关无效')
+  }
+
+  return {
+    ...(flashPrice !== undefined ? { flashPrice } : {}),
+    ...(totalStock !== undefined ? { totalStock } : {}),
+    ...(perUserLimit !== undefined ? { perUserLimit } : {}),
+    ...(typeof body.allowCoupon === 'boolean' ? { allowCoupon: body.allowCoupon } : {}),
+    ...(typeof body.allowAff === 'boolean' ? { allowAff: body.allowAff } : {}),
+    ...(sortOrder !== undefined ? { sortOrder } : {}),
+    actorUserId,
+    reason: normalizeText(body.reason, 500) ?? undefined
+  }
 }
 
 export default async function flashSaleRoutes(fastify: FastifyInstance): Promise<void> {
@@ -286,6 +329,25 @@ export default async function flashSaleRoutes(fastify: FastifyInstance): Promise
       const item = await adjustFlashSaleItemStock(itemId, Number(request.body.totalStock), request.user.id, request.body.reason)
       if (!item) return reply.code(404).send({ error: 'Flash sale item not found', code: 'FLASH_SALE_ITEM_NOT_FOUND' })
       await createLog(request.user.id, 'admin', 'flash-sale.stock', `Adjusted flash sale item #${itemId} stock to ${request.body.totalStock}`, 'success')
+      return { success: true, item }
+    } catch (error) {
+      return sendRouteError(reply, error)
+    }
+  })
+
+  fastify.patch<{
+    Params: { itemId: string }
+    Body: Record<string, unknown>
+  }>('/admin/flash-sales/items/:itemId', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async (request: FastifyRequest<{ Params: { itemId: string }; Body: Record<string, unknown> }>, reply: FastifyReply) => {
+    const itemId = parsePositiveId(request.params.itemId)
+    if (!itemId) return reply.code(400).send({ error: 'Invalid ID', code: 'INVALID_ID' })
+    try {
+      const input = parseItemUpdateInput(request.body, request.user.id)
+      const item = await updateFlashSaleItemConfig(itemId, input)
+      if (!item) return reply.code(404).send({ error: 'Flash sale item not found', code: 'FLASH_SALE_ITEM_NOT_FOUND' })
+      await createLog(request.user.id, 'admin', 'flash-sale.item.update', `Updated flash sale item #${itemId}`, 'success')
       return { success: true, item }
     } catch (error) {
       return sendRouteError(reply, error)
