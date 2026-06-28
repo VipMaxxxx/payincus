@@ -319,6 +319,23 @@ Remaining before calling the whole commercial-operation objective complete:
   - Online docs `https://payincus.com/release/version-log` and `https://payincus.com/en/release/version-log` contain `v1.0.5`.
 - Production OTA status: pending current production SSH or authenticated admin system-update access. Do not mark production as upgraded until a system-update task succeeds and `/opt/incudal/current` plus production health/version checks prove `v1.0.5`.
 
+## v1.0.6 Release Summary
+
+- Target version: `v1.0.6`.
+- Scope: flash-sale post-creation editing for generated campaigns and campaign items.
+- Admin flash-sale campaigns can now be edited after creation: name, description, start/end time, Turnstile requirement, email requirement, minimum account age, risk-restricted account blocking, max-per-user and internal notes.
+- Admin flash-sale items can now be edited after creation: flash price, total stock, per-user limit, coupon allowance and AFF allowance. Existing reservation/order records are not rewritten; edits only affect later purchases.
+- Backend adds `PATCH /api/admin/flash-sales/items/:itemId` with validation, audit logging and stock protection so stock cannot be reduced below sold plus reserved counts.
+- Local validation completed:
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+- GitHub checks / release proof:
+  - Build & Release run `28330666051` passed for tag `v1.0.6`.
+  - CI run `28330664384` passed for `main`.
+  - GitHub Release assets are available for linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.6-ota-manifest.json`, `ota-manifest.json`, the AI ticket agent plugin bundle, and plugin market index.
+  - Public `ota-manifest.json` reports version `v1.0.6`, commit `5c8d3b8e1493`, amd64 SHA256 `f3133918e57d8b3672c9ce0ca92971cce897958644b7153041cd68ae05185591`, and arm64 SHA256 `24cedfca6b08f59cab399ffc9a6611258f1fe4a6d5cdbe9ce707c05b2bbc8104`.
+- Production OTA status: release package is ready. Apply production OTA only after current production SSH or authenticated admin system-update access is available and record the resulting task id plus health/version proof.
+
 ## Latest Production OTA Proof
 
 - Production version: `v1.0.4`
