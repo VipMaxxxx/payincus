@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-378d1aa Update version log for v1.0.4
+cbc63b30 Update version log for v1.0.7
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,12 +29,12 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-378d1aa Update version log for v1.0.4
+cbc63b30 Update version log for v1.0.7
 ```
 
 ## Latest GitHub Release Work
 
-`v1.0.4` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
+`v1.0.7` is published on GitHub and has release artifacts. Latest production OTA proof remains `v1.0.4` until a current authenticated production update task is run and recorded.
 
 Release commits:
 
@@ -50,6 +50,8 @@ b701d32 Update version log for v1.0.2
 09670ad Release v1.0.3 package delivery hotfix
 2bd25ba Release v1.0.4 resource risk policy hardening
 378d1aa Update version log for v1.0.4
+82275d0 Release v1.0.7 instance verification
+cbc63b3 Update version log for v1.0.7
 ```
 
 GitHub workflow proof:
@@ -73,6 +75,7 @@ Docs Pages: run 28313256855 completed success for main.
 Build & Release: run 28328429131 completed success for v1.0.4.
 CI: run 28328427937 was still in progress when public API rate limit was reached; local full gates passed and release assets were verified directly.
 Docs Pages: run 28328427964 completed success for main.
+Build & Release: run 28331341360 completed success for v1.0.7.
 ```
 
 Core release assets verified for `v0.9.9`:
@@ -335,6 +338,28 @@ Remaining before calling the whole commercial-operation objective complete:
   - GitHub Release assets are available for linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.6-ota-manifest.json`, `ota-manifest.json`, the AI ticket agent plugin bundle, and plugin market index.
   - Public `ota-manifest.json` reports version `v1.0.6`, commit `5c8d3b8e1493`, amd64 SHA256 `f3133918e57d8b3672c9ce0ca92971cce897958644b7153041cd68ae05185591`, and arm64 SHA256 `24cedfca6b08f59cab399ffc9a6611258f1fe4a6d5cdbe9ce707c05b2bbc8104`.
 - Production OTA status: release package is ready. Apply production OTA only after current production SSH or authenticated admin system-update access is available and record the resulting task id plus health/version proof.
+
+## v1.0.7 Release Summary
+
+- Target version: `v1.0.7`.
+- Scope: normal instance creation Turnstile enforcement and compact user-side instance card layout.
+- User instance creation now requests a Turnstile token for normal package orders when global Turnstile is enabled, not only for flash-sale orders. The page also shows a visible verification-required hint before submit.
+- Backend `POST /api/instances` now applies the shared Turnstile verifier to normal instance creation before order/resource work. Flash-sale creation keeps its campaign-level eligibility and Turnstile validation so the same token is not consumed twice.
+- User instance cards now fit three columns on wide desktop screens while preserving list/card mode and existing instance actions.
+- Local validation completed:
+  - `pnpm --filter server test:instance-create-turnstile-guards` passed.
+  - `pnpm --filter client type-check` passed.
+  - `pnpm --filter server type-check` passed.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+  - `pnpm docs:changelog` passed.
+  - `pnpm docs:build` passed.
+- GitHub checks / release proof:
+  - Release commit `82275d08911b338734beee1aca7b194c4062a54f`.
+  - Build & Release run `28331341360` passed for tag `v1.0.7`.
+  - GitHub Release assets are available for linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.7-ota-manifest.json`, `ota-manifest.json`, the AI ticket agent plugin bundle, and plugin market index.
+  - Public `ota-manifest.json` reports version `v1.0.7`, commit `82275d08911b`, amd64 SHA256 `f542b59b6d6488051ffe1a1057f747ac8a527ebe95f47e7f584f4805fa542fc1`, and arm64 SHA256 `ecb8cfacf415cdc58a5c3c3aff991ad7c0ce044059832f353efdc1b67cf271bc`.
+- Production OTA status: release package is ready. Production is not yet marked upgraded to `v1.0.7`; apply via authenticated system-update access and record task id, `/opt/incudal/current`, production health, and deployed version proof.
 
 ## Latest Production OTA Proof
 
