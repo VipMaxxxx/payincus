@@ -6,16 +6,32 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `08362032d`
+- Latest Release Commit / 最新发布提交: `09670ad88`
 - Commit date / 提交日期: 2026-06-28
-- Commit subject / 提交说明: Release v1.0.2 welfare check-in
-- Latest tag / 最新 tag: `v1.0.2`
+- Commit subject / 提交说明: Release v1.0.3 package delivery hotfix
+- Latest tag / 最新 tag: `v1.0.3`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.0.3
+
+- Release commit / 发布提交: `09670ad88`
+- Commit date / 提交日期: 2026-06-28
+- Commit subject / 提交说明: Release v1.0.3 package delivery hotfix
+
+Fix hosted package delivery guards and Incus certificate path resilience.
+
+Packages can now be published or unpublished directly from the package list. The action only changes package visibility for new orders; existing instances and renewals keep their normal lifecycle.
+
+Harden package host storage-pool persistence. When a package is active, bound hosts must resolve to an `instance_data` storage pool. Empty storage-pool selections now fall back to the host's preferred system disk pool, prioritizing `default`, and activation is blocked if no usable pool exists.
+
+Fix stale Incus client certificate paths after OTA. If a host still references an old release directory and that certificate file no longer exists, Incus operations fall back to the stable panel certificate directory under `/opt/incudal/server/certs` or the configured panel certificate environment variables.
+
+Restore the Germany `DEBGP` production package configuration by binding it back to the `default` system disk pool and publishing it again after confirming `DE-01` can list Incus storage pools.
 
 ## v1.0.2
 

@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-b701d32 Update version log for v1.0.2
+09670ad Release v1.0.3 package delivery hotfix
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,12 +29,12 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-0836203 Release v1.0.2 welfare check-in
+09670ad Release v1.0.3 package delivery hotfix
 ```
 
 ## Latest GitHub Release Work
 
-`v1.0.2` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
+`v1.0.3` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
 
 Release commits:
 
@@ -47,6 +47,7 @@ e64ad2c Release v0.9.9
 105e980 Update version log for v0.9.9
 0836203 Release v1.0.2 welfare check-in
 b701d32 Update version log for v1.0.2
+09670ad Release v1.0.3 package delivery hotfix
 ```
 
 GitHub workflow proof:
@@ -64,6 +65,9 @@ Docs Pages: run 28292773057 completed success for e64ad2c.
 Build & Release: run 28312345559 completed success for v1.0.2.
 CI: run 28312344323 completed success for main.
 Docs Pages: run 28312344320 completed success for main.
+Build & Release: run 28313257102 completed success for v1.0.3.
+CI: run 28313256856 completed success for main.
+Docs Pages: run 28313256855 completed success for main.
 ```
 
 Core release assets verified for `v0.9.9`:
@@ -85,6 +89,17 @@ incudal-v1.0.2-linux-amd64.tar.gz.sha256
 incudal-v1.0.2-linux-arm64.tar.gz
 incudal-v1.0.2-linux-arm64.tar.gz.sha256
 incudal-v1.0.2-ota-manifest.json
+ota-manifest.json
+```
+
+Core release assets verified for `v1.0.3`:
+
+```text
+incudal-v1.0.3-linux-amd64.tar.gz
+incudal-v1.0.3-linux-amd64.tar.gz.sha256
+incudal-v1.0.3-linux-arm64.tar.gz
+incudal-v1.0.3-linux-arm64.tar.gz.sha256
+incudal-v1.0.3-ota-manifest.json
 ota-manifest.json
 ```
 
@@ -218,28 +233,54 @@ Remaining before calling the whole commercial-operation objective complete:
   - CI run `28312344323` passed for `main`.
   - Pages run `28312344320` passed for `main`.
 
+## v1.0.3 Release Summary
+
+- Target version: `v1.0.3`.
+- Scope: hosted package publish/unpublish controls, active package storage-pool binding hardening, Incus certificate path fallback after OTA, and Germany `DEBGP` production package recovery.
+- Active packages now resolve each bound host to an `instance_data` storage pool before save/activation. Empty per-host storage selections fall back to the host's preferred system disk pool, prioritizing `default`; activation is blocked if no usable pool exists.
+- Incus client and terminal proxy certificate reads now fall back from stale release-specific paths to the stable panel certificate directory under `/opt/incudal/server/certs` or configured panel certificate environment variables.
+- Local validation completed:
+  - `pnpm --filter server test:incus-certificate-paths` passed.
+  - `pnpm --filter server test:package-input-guards` passed.
+  - `pnpm --filter server test:package-host-type-guards` passed.
+  - `pnpm --filter server test:frontend-i18n-keys` passed.
+  - `pnpm --filter server type-check` passed.
+  - `pnpm --filter client type-check` passed.
+  - `pnpm --filter server build` passed.
+  - `pnpm --filter client build` passed.
+  - `pnpm docs:changelog` passed.
+  - `pnpm --dir docs-site --ignore-workspace build` passed.
+- GitHub checks completed:
+  - Build & Release run `28313257102` passed for tag `v1.0.3`.
+  - CI run `28313256856` passed for `main`.
+  - Pages run `28313256855` passed for `main`.
+
 ## Latest Production OTA Proof
 
-- Production version: `v1.0.2`
-- Release tag commit: `08362032`
-- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.0.2-20260628052356`
-- OTA task: `106`, status `success`; backup path `/opt/incudal/releases/v1.0.1-20260627171035`; log path `/opt/incudal/update-logs/system-update-106.log`.
-- GitHub Release assets for `v1.0.2` are available, including linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.2-ota-manifest.json`, `ota-manifest.json`, AI ticket extension assets, and plugin market index.
+- Production version: `v1.0.3`
+- Release tag commit: `09670ad88`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.0.3-20260628060652`
+- OTA task: `107`, status `success`; backup path `/opt/incudal/releases/v1.0.2-20260628052356`; log path `/opt/incudal/update-logs/system-update-107.log`.
+- GitHub Release assets for `v1.0.3` are available, including linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.3-ota-manifest.json`, `ota-manifest.json`, AI ticket extension assets, and plugin market index.
 - Production checks passed during and after OTA: split host verification, `pnpm verify:production`, health checks for user/admin/backend APIs, and Agent manifest check.
 - Independent checks after OTA:
   - `https://pay.payincus.com/api/health` returned HTTP 200.
   - `https://admin.payincus.com/api/health` returned HTTP 200.
   - Local backend `http://127.0.0.1:3001/api/health` returned HTTP 200.
-  - `package.json` under `/opt/incudal/current` reports `1.0.2`.
+  - `package.json` under `/opt/incudal/current` reports `1.0.3`.
   - OTA log shows `System update completed successfully`.
-  - Task `106` database row is `success` with `errorMessage=null`.
+  - Task `107` database row is `success` with `errorMessage=null`.
+  - Production DB has `DEBGP` active, bound to host `DE-01` with `storage_pool_name=default`.
+  - Production host certificate paths for `DE-01` point to `/opt/incudal/server/certs/client.crt` and `/opt/incudal/server/certs/client.key`.
+  - Direct Incus storage-pool check against `DE-01` returned `/1.0/storage-pools/default`.
+  - Public API `https://pay.payincus.com/api/packages/public?source=official` returns `DEBGP` with host id `6`.
   - Production DB contains `daily_checkins`.
   - Production system configs contain `checkin_enabled=true`, `checkin_min_points=1`, `checkin_max_points=500`, and `checkin_require_instance=false`.
   - Production DB contains `public_ipv4_pools` and `public_ipv4_addresses`.
   - `pnpm verify:production` on production passes and records the empty payment callback IP whitelist as an intentional policy because `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false` is set.
-  - Online docs `https://payincus.com/release/version-log` and `https://payincus.com/en/release/version-log` contain `v1.0.2`.
+  - Online docs `https://payincus.com/release/version-log` and `https://payincus.com/en/release/version-log` should contain `v1.0.3` after the follow-up version-log handoff commit is deployed by Pages.
   - Deployed admin bundle contains `resource-risk-evidence-panel` and generated CSS with `background-color:#fff;opacity:1`, plus dark-mode opaque surface/code backgrounds.
-  - Public API `https://pay.payincus.com/api/packages/public` returns `HKCMI soldOut=false`; `DEBGP` is no longer returned after package `#3` was set `active=false`.
+- Production readiness currently logs one WARN: public package `#3` (`DEBGP`) is active but online bound hosts cannot satisfy its minimum CPU/memory/disk requirement. Storage-pool visibility and Incus connectivity are fixed; add Germany capacity or lower/package-disable the plan before relying on new paid orders.
 
 Historical note:
 
