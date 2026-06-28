@@ -39,9 +39,9 @@ assert.ok(
 )
 
 assert.ok(
-  routeSource.includes('function parsePositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
-    routeSource.match(/page: parsePositiveIntegerQuery\(page, 1, 100000\)/g)?.length === 4 &&
-    routeSource.match(/pageSize: parsePositiveIntegerQuery\(pageSize, 20, 100\)/g)?.length === 4,
+    routeSource.includes('function parsePositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
+    routeSource.match(/page: parsePositiveIntegerQuery\(page, 1, 100000\)/g)?.length === 5 &&
+    routeSource.match(/pageSize: parsePositiveIntegerQuery\(pageSize, 20, 100\)/g)?.length === 5,
   'admin entertainment list routes must clamp pagination before DB access'
 )
 

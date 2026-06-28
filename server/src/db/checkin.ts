@@ -3,9 +3,15 @@
  * 使用 Prisma ORM
  */
 
+import { Prisma } from '@prisma/client'
 import { prisma } from './prisma.js'
 import type { RedeemCodeType } from '@prisma/client'
-import { USER_RESOURCE_POOL_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
+import { getSystemConfigBoolean, getSystemConfigNumber, updateSystemConfigs } from './system-config.js'
+import {
+  USER_POINTS_LOCK_NAMESPACE,
+  USER_RESOURCE_POOL_LOCK_NAMESPACE,
+  advisoryTransactionLock
+} from './advisory-locks.js'
 
 // 各类型可选数值
 const CODE_VALUES: Record<RedeemCodeType, number[]> = {
@@ -18,6 +24,45 @@ const CODE_VALUES: Record<RedeemCodeType, number[]> = {
 
 // 资源类型列表（积分通过固定奖励发放，不走随机）
 const CODE_TYPES: RedeemCodeType[] = ['c', 'r', 'd', 't']
+const CHECKIN_MIN_POINTS_DEFAULT = 1
+const CHECKIN_MAX_POINTS_DEFAULT = 500
+const CHECKIN_MAX_POINTS_LIMIT = 100_000
+
+export interface DailyCheckinSettings {
+  enabled: boolean
+  minPoints: number
+  maxPoints: number
+  requireInstance: boolean
+}
+
+export interface DailyCheckinMeta {
+  ipAddress?: string | null
+  userAgent?: string | null
+}
+
+function clampCheckinPoints(value: number, fallback: number): number {
+  if (!Number.isSafeInteger(value)) return fallback
+  return Math.min(Math.max(value, 1), CHECKIN_MAX_POINTS_LIMIT)
+}
+
+function normalizeCheckinSettings(settings: DailyCheckinSettings): DailyCheckinSettings {
+  const minPoints = clampCheckinPoints(settings.minPoints, CHECKIN_MIN_POINTS_DEFAULT)
+  const maxPoints = Math.max(
+    minPoints,
+    clampCheckinPoints(settings.maxPoints, CHECKIN_MAX_POINTS_DEFAULT)
+  )
+
+  return {
+    enabled: settings.enabled,
+    minPoints,
+    maxPoints,
+    requireInstance: settings.requireInstance
+  }
+}
+
+function randomizePoints(minPoints: number, maxPoints: number): number {
+  return Math.floor(Math.random() * (maxPoints - minPoints + 1)) + minPoints
+}
 
 /**
  * 随机选择资源类型和数值
@@ -61,10 +106,57 @@ function toBeijingMidnight(date: Date): Date {
   return new Date(`${beijingDateStr}T00:00:00+08:00`)
 }
 
+function getBeijingDateKey(date: Date = new Date()): string {
+  return date.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
+}
+
+function getYesterdayDateKey(dateKey: string): string {
+  const current = new Date(`${dateKey}T00:00:00+08:00`)
+  current.setUTCDate(current.getUTCDate() - 1)
+  return current.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
+}
+
+export async function getDailyCheckinSettings(): Promise<DailyCheckinSettings> {
+  const [enabled, minPoints, maxPoints, requireInstance] = await Promise.all([
+    getSystemConfigBoolean('checkin_enabled', true),
+    getSystemConfigNumber('checkin_min_points', CHECKIN_MIN_POINTS_DEFAULT),
+    getSystemConfigNumber('checkin_max_points', CHECKIN_MAX_POINTS_DEFAULT),
+    getSystemConfigBoolean('checkin_require_instance', false)
+  ])
+
+  return normalizeCheckinSettings({ enabled, minPoints, maxPoints, requireInstance })
+}
+
+export async function updateDailyCheckinSettings(input: Partial<DailyCheckinSettings>): Promise<DailyCheckinSettings> {
+  const current = await getDailyCheckinSettings()
+  const next = normalizeCheckinSettings({
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : current.enabled,
+    minPoints: typeof input.minPoints === 'number' ? Math.trunc(input.minPoints) : current.minPoints,
+    maxPoints: typeof input.maxPoints === 'number' ? Math.trunc(input.maxPoints) : current.maxPoints,
+    requireInstance: typeof input.requireInstance === 'boolean' ? input.requireInstance : current.requireInstance
+  })
+
+  await updateSystemConfigs([
+    { key: 'checkin_enabled', value: String(next.enabled) },
+    { key: 'checkin_min_points', value: String(next.minPoints) },
+    { key: 'checkin_max_points', value: String(next.maxPoints) },
+    { key: 'checkin_require_instance', value: String(next.requireInstance) }
+  ])
+
+  return next
+}
+
 /**
  * 检查用户今日是否已签到（使用北京时间 0 点刷新）
  */
 export async function hasCheckedInToday(userId: number): Promise<boolean> {
+  const dateKey = getBeijingDateKey()
+  const daily = await prisma.dailyCheckin.findUnique({
+    where: { userId_dateKey: { userId, dateKey } },
+    select: { id: true }
+  })
+  if (daily) return true
+
   const stats = await prisma.checkinStats.findUnique({
     where: { userId }
   })
@@ -189,6 +281,125 @@ export async function performCheckin(userId: number): Promise<{
   })
 
   return { codeType: type, codeValue: value }
+}
+
+export async function performDailyPointsCheckin(
+  userId: number,
+  meta: DailyCheckinMeta = {}
+): Promise<{
+  id: number
+  dateKey: string
+  points: number
+  streakDays: number
+  currentPoints: number
+}> {
+  const settings = await getDailyCheckinSettings()
+  if (!settings.enabled) {
+    throw new Error('CHECKIN_DISABLED')
+  }
+
+  const [user, hasInstances] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { status: true } }),
+    settings.requireInstance ? userHasInstances(userId) : Promise.resolve(true)
+  ])
+
+  if (!user || user.status !== 'active') {
+    throw new Error('CHECKIN_USER_BLOCKED')
+  }
+  if (settings.requireInstance && !hasInstances) {
+    throw new Error('CHECKIN_NO_INSTANCE')
+  }
+
+  const now = new Date()
+  const dateKey = getBeijingDateKey(now)
+  const yesterdayKey = getYesterdayDateKey(dateKey)
+  const points = randomizePoints(settings.minPoints, settings.maxPoints)
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)
+
+      const existing = await tx.dailyCheckin.findUnique({
+        where: { userId_dateKey: { userId, dateKey } },
+        select: { id: true }
+      })
+      if (existing) {
+        throw new Error('CHECKIN_ALREADY_TODAY')
+      }
+
+      const lastRecord = await tx.dailyCheckin.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { dateKey: true, streakDays: true }
+      })
+      const streakDays = lastRecord?.dateKey === yesterdayKey
+        ? lastRecord.streakDays + 1
+        : 1
+
+      const userPoints = await tx.userPoints.upsert({
+        where: { userId },
+        update: {},
+        create: { userId }
+      })
+      const currentPoints = userPoints.points + points
+      if (currentPoints > 2_147_483_647) {
+        throw new Error('CHECKIN_POINTS_LIMIT_EXCEEDED')
+      }
+
+      const record = await tx.dailyCheckin.create({
+        data: {
+          userId,
+          dateKey,
+          points,
+          streakDays,
+          ipAddress: meta.ipAddress?.slice(0, 255) || null,
+          userAgent: meta.userAgent?.slice(0, 500) || null
+        }
+      })
+
+      const updatedPoints = await tx.userPoints.update({
+        where: { userId },
+        data: {
+          points: { increment: points },
+          totalEarned: { increment: points }
+        }
+      })
+
+      await tx.pointsLog.create({
+        data: {
+          userId,
+          type: 'checkin',
+          amount: points,
+          pointsBefore: userPoints.points,
+          pointsAfter: updatedPoints.points,
+          relatedId: record.id,
+          remark: `每日签到奖励 ${points} 积分`
+        }
+      })
+
+      await tx.checkinStats.upsert({
+        where: { userId },
+        update: { lastCheckinDate: now },
+        create: {
+          userId,
+          lastCheckinDate: now
+        }
+      })
+
+      return {
+        id: record.id,
+        dateKey,
+        points,
+        streakDays,
+        currentPoints: updatedPoints.points
+      }
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new Error('CHECKIN_ALREADY_TODAY')
+    }
+    throw error
+  }
 }
 
 /**
@@ -455,15 +666,124 @@ export async function getRedeemRecords(
  * 获取今日签到状态
  */
 export async function getCheckinStatus(userId: number) {
-  const stats = await getCheckinStats(userId)
-  const hasCheckedIn = await hasCheckedInToday(userId)
-  const hasInstances = await userHasInstances(userId)
+  const now = new Date()
+  const dateKey = getBeijingDateKey(now)
+  const monthKey = dateKey.slice(0, 7)
+  const [settings, stats, today, hasInstances, points, totalCheckins, monthCheckins, recentRecords] = await Promise.all([
+    getDailyCheckinSettings(),
+    getCheckinStats(userId),
+    prisma.dailyCheckin.findUnique({
+      where: { userId_dateKey: { userId, dateKey } },
+      select: { id: true, dateKey: true, points: true, streakDays: true, createdAt: true }
+    }),
+    userHasInstances(userId),
+    prisma.userPoints.findUnique({
+      where: { userId },
+      select: { points: true, totalEarned: true, totalSpent: true }
+    }),
+    prisma.dailyCheckin.count({ where: { userId } }),
+    prisma.dailyCheckin.count({ where: { userId, dateKey: { startsWith: monthKey } } }),
+    prisma.dailyCheckin.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 7,
+      select: { id: true, dateKey: true, points: true, streakDays: true, createdAt: true }
+    })
+  ])
 
   return {
-    hasCheckedIn,
+    enabled: settings.enabled,
+    hasCheckedIn: Boolean(today),
     hasInstances,
+    requireInstance: settings.requireInstance,
+    minPoints: settings.minPoints,
+    maxPoints: settings.maxPoints,
+    currentPoints: points?.points ?? 0,
+    totalEarned: points?.totalEarned ?? 0,
+    totalSpent: points?.totalSpent ?? 0,
+    today: today ? {
+      id: today.id,
+      dateKey: today.dateKey,
+      points: today.points,
+      streakDays: today.streakDays,
+      createdAt: today.createdAt.toISOString()
+    } : null,
+    streakDays: today?.streakDays ?? recentRecords[0]?.streakDays ?? 0,
+    totalCheckins,
+    monthCheckins,
+    recentRecords: recentRecords.map(record => ({
+      id: record.id,
+      dateKey: record.dateKey,
+      points: record.points,
+      streakDays: record.streakDays,
+      createdAt: record.createdAt.toISOString()
+    })),
     selfOnlyMode: stats?.selfOnlyMode ?? false,
     consecutiveOthersUse: stats?.consecutiveOthersUse ?? 0
+  }
+}
+
+export async function getAdminDailyCheckinLogs(options: {
+  page?: number
+  pageSize?: number
+  search?: string
+  dateKey?: string
+} = {}) {
+  const page = Number.isSafeInteger(options.page) && options.page && options.page > 0 ? options.page : 1
+  const pageSize = Number.isSafeInteger(options.pageSize) && options.pageSize
+    ? Math.min(Math.max(options.pageSize, 1), 100)
+    : 20
+  const where: Prisma.DailyCheckinWhereInput = {}
+  const search = options.search?.trim()
+  const dateKey = options.dateKey?.trim()
+
+  if (dateKey) {
+    where.dateKey = dateKey
+  }
+  if (search) {
+    where.user = {
+      username: {
+        contains: search,
+        mode: 'insensitive'
+      }
+    }
+  }
+
+  const [records, total] = await Promise.all([
+    prisma.dailyCheckin.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            avatarStyle: true
+          }
+        }
+      }
+    }),
+    prisma.dailyCheckin.count({ where })
+  ])
+
+  return {
+    records: records.map(record => ({
+      id: record.id,
+      userId: record.userId,
+      username: record.user.username,
+      userAvatar: record.user.avatarStyle,
+      dateKey: record.dateKey,
+      points: record.points,
+      streakDays: record.streakDays,
+      ipAddress: record.ipAddress,
+      userAgent: record.userAgent,
+      createdAt: record.createdAt.toISOString()
+    })),
+    total,
+    page,
+    pageSize
   }
 }
 

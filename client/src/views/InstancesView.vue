@@ -601,6 +601,40 @@ function getInstanceConfigSummary(instance: Instance): string {
   return `${instance.cpu}${t('instance.mobileCard.cpuCore')} ${formatMemory(instance.memory)} ${formatDisk(instance.disk)}`
 }
 
+function getInstanceNetworkMode(instance: Instance): string {
+  return String((instance as any).networkMode || instance.network_mode || 'nat')
+}
+
+function getInstanceTypeBadgeClass(instance: Instance): string {
+  if ((instance as any).instanceType === 'vm') {
+    return themeStore.isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
+  }
+  return themeStore.isDark ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-600'
+}
+
+function getInstanceNetworkBadgeClass(instance: Instance): string {
+  switch (getInstanceNetworkMode(instance)) {
+    case 'nat_ipv6':
+      return themeStore.isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
+    case 'nat_ipv6_nat':
+      return themeStore.isDark ? 'bg-cyan-900/50 text-cyan-400' : 'bg-cyan-100 text-cyan-600'
+    case 'ipv6_only':
+      return themeStore.isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
+    case 'ipv6_nat':
+      return themeStore.isDark ? 'bg-teal-900/50 text-teal-400' : 'bg-teal-100 text-teal-600'
+    case 'public_ipv4':
+    case 'public_ipv4_ipv6':
+      return themeStore.isDark ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+    case 'nat':
+    default:
+      return themeStore.isDark ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-700'
+  }
+}
+
+function getInstanceQuotaSummary(instance: Instance): string {
+  return `${(instance as any).portLimit ?? '-'} ${t('instance.mobileCard.ports')} / ${(instance as any).snapshotLimit ?? '-'} ${t('instance.mobileCard.snapshots')} / ${(instance as any).siteLimit ?? '-'} ${t('instance.mobileCard.sites')}`
+}
+
 function formatNetworkRate(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null
   const raw = String(value)
@@ -1347,21 +1381,22 @@ async function confirmBatchDestroy(): Promise<void> {
                 : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300')"
               @click="setCountryFilter(null)"
             >
-              ALL
+              {{ $t('common.all') }}
             </button>
             <button
               v-for="code in countryFilterOptions"
               :key="`desktop-country-${code}`"
               type="button"
-              class="h-10 w-10 rounded-xl border flex items-center justify-center shrink-0 transition-all"
+              class="h-10 min-w-[92px] max-w-[150px] rounded-xl border flex items-center justify-center gap-2 px-3 text-xs font-semibold shrink-0 transition-all"
               :class="countryFilter === code
-                ? (themeStore.isDark ? 'border-blue-400 bg-blue-500/15 shadow-sm shadow-blue-500/10' : 'border-blue-500 bg-blue-50 shadow-sm shadow-blue-500/10')
-                : (themeStore.isDark ? 'border-gray-700 bg-gray-900 hover:border-gray-600' : 'border-gray-200 bg-white hover:border-gray-300')"
+                ? (themeStore.isDark ? 'border-blue-400 bg-blue-500/15 text-blue-300 shadow-sm shadow-blue-500/10' : 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm shadow-blue-500/10')
+                : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300')"
               :title="getCountryLabel(code)"
               :aria-label="getCountryLabel(code)"
               @click="setCountryFilter(code)"
             >
-              <FlagIcon :code="code" size="sm" />
+              <FlagIcon :code="code" size="sm" class="shrink-0" />
+              <span class="truncate">{{ getCountryLabel(code) }}</span>
             </button>
           </div>
         </div>
@@ -1467,21 +1502,22 @@ async function confirmBatchDestroy(): Promise<void> {
               : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300')"
             @click="setCountryFilter(null)"
           >
-            ALL
+            {{ $t('common.all') }}
           </button>
           <button
             v-for="code in countryFilterOptions"
             :key="`mobile-country-${code}`"
             type="button"
-            class="h-10 w-10 rounded-xl border flex items-center justify-center shrink-0 transition-all"
+            class="h-10 min-w-[92px] max-w-[140px] rounded-xl border flex items-center justify-center gap-2 px-3 text-xs font-semibold shrink-0 transition-all"
             :class="countryFilter === code
-              ? (themeStore.isDark ? 'border-blue-400 bg-blue-500/15 shadow-sm shadow-blue-500/10' : 'border-blue-500 bg-blue-50 shadow-sm shadow-blue-500/10')
-              : (themeStore.isDark ? 'border-gray-700 bg-gray-900 hover:border-gray-600' : 'border-gray-200 bg-white hover:border-gray-300')"
+              ? (themeStore.isDark ? 'border-blue-400 bg-blue-500/15 text-blue-300 shadow-sm shadow-blue-500/10' : 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm shadow-blue-500/10')
+              : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300')"
             :title="getCountryLabel(code)"
             :aria-label="getCountryLabel(code)"
             @click="setCountryFilter(code)"
           >
-            <FlagIcon :code="code" size="sm" />
+            <FlagIcon :code="code" size="sm" class="shrink-0" />
+            <span class="truncate">{{ getCountryLabel(code) }}</span>
           </button>
         </div>
       </div>
@@ -1747,23 +1783,15 @@ async function confirmBatchDestroy(): Promise<void> {
                 <div class="flex items-center gap-1.5">
                   <span
                     class="text-xs px-1.5 py-0.5 rounded"
-                    :class="(instance as any).instanceType === 'vm'
-                      ? (themeStore.isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600')
-                      : (themeStore.isDark ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-600')"
+                    :class="getInstanceTypeBadgeClass(instance)"
                   >
                     {{ (instance as any).instanceType === 'vm' ? $t('common.instanceType.vm') : $t('common.instanceType.container') }}
                   </span>
                   <span
                     class="text-xs px-1.5 py-0.5 rounded"
-                    :class="{
-                      [themeStore.isDark ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-700']: ((instance as any).networkMode || instance.network_mode) === 'nat',
-                      [themeStore.isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600']: ((instance as any).networkMode || instance.network_mode) === 'nat_ipv6',
-                      [themeStore.isDark ? 'bg-cyan-900/50 text-cyan-400' : 'bg-cyan-100 text-cyan-600']: ((instance as any).networkMode || instance.network_mode) === 'nat_ipv6_nat',
-                      [themeStore.isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600']: ((instance as any).networkMode || instance.network_mode) === 'ipv6_only',
-                      [themeStore.isDark ? 'bg-teal-900/50 text-teal-400' : 'bg-teal-100 text-teal-600']: ((instance as any).networkMode || instance.network_mode) === 'ipv6_nat'
-                    }"
+                    :class="getInstanceNetworkBadgeClass(instance)"
                   >
-                    {{ $t('common.networkMode.' + ((instance as any).networkMode || instance.network_mode || 'nat')) }}
+                    {{ $t('common.networkMode.' + getInstanceNetworkMode(instance)) }}
                   </span>
                 </div>
               </td>
@@ -1787,11 +1815,7 @@ async function confirmBatchDestroy(): Promise<void> {
               <td class="px-3 py-3">
                 <div class="space-y-0.5">
                   <div class="text-sm text-themed-muted whitespace-nowrap">
-                    {{ (instance as any).portLimit ?? '-' }} {{ $t('instance.mobileCard.ports') }}
-                    <span class="mx-0.5">/</span>
-                    {{ (instance as any).snapshotLimit ?? '-' }} {{ $t('instance.mobileCard.snapshots') }}
-                    <span class="mx-0.5">/</span>
-                    {{ (instance as any).siteLimit ?? '-' }} {{ $t('instance.mobileCard.sites') }}
+                    {{ getInstanceQuotaSummary(instance) }}
                   </div>
                   <div class="text-xs">
                     <span class="text-themed-muted">{{ $t('instance.expireAt') }}:</span>
@@ -1947,6 +1971,20 @@ async function confirmBatchDestroy(): Promise<void> {
                   >
                     {{ formatImageName(instance.image, (instance as any).imageName) }}
                   </div>
+                  <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span
+                      class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
+                      :class="getInstanceTypeBadgeClass(instance)"
+                    >
+                      {{ (instance as any).instanceType === 'vm' ? $t('common.instanceType.vm') : $t('common.instanceType.container') }}
+                    </span>
+                    <span
+                      class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
+                      :class="getInstanceNetworkBadgeClass(instance)"
+                    >
+                      {{ $t('common.networkMode.' + getInstanceNetworkMode(instance)) }}
+                    </span>
+                  </div>
                 </div>
                 <div
                   v-if="(instance as any).packageName"
@@ -1992,7 +2030,7 @@ async function confirmBatchDestroy(): Promise<void> {
                     class="text-xs"
                     :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
                   >
-                    {{ (instance as any).portLimit ?? '-' }} {{ $t('instance.mobileCard.ports') }} / {{ (instance as any).snapshotLimit ?? '-' }} {{ $t('instance.mobileCard.snapshots') }} / {{ (instance as any).siteLimit ?? '-' }} {{ $t('instance.mobileCard.sites') }}
+                    {{ getInstanceQuotaSummary(instance) }}
                   </span>
                 </div>
                 <div class="flex items-center justify-between">
@@ -2154,6 +2192,18 @@ async function confirmBatchDestroy(): Promise<void> {
                     </svg>
                     <span class="truncate font-mono">{{ getPrimaryIp(instance) }}</span>
                   </span>
+                  <span
+                    class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
+                    :class="getInstanceTypeBadgeClass(instance)"
+                  >
+                    {{ (instance as any).instanceType === 'vm' ? $t('common.instanceType.vm') : $t('common.instanceType.container') }}
+                  </span>
+                  <span
+                    class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
+                    :class="getInstanceNetworkBadgeClass(instance)"
+                  >
+                    {{ $t('common.networkMode.' + getInstanceNetworkMode(instance)) }}
+                  </span>
                 </div>
               </button>
 
@@ -2189,6 +2239,9 @@ async function confirmBatchDestroy(): Promise<void> {
 
               <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.config') }}</dt>
               <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceConfigSummary(instance) }}</dd>
+
+              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.quotaLabel') }}</dt>
+              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceQuotaSummary(instance) }}</dd>
 
               <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.network') }}</dt>
               <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'" :title="getInstanceNetworkSummary(instance)">

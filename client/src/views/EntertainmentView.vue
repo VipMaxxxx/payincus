@@ -22,7 +22,7 @@ type LotteryBadgeRewardModalState = {
   remainingPoints: number | null
 }
 
-const checkinFeatureEnabled = ref(false)
+const checkinFeatureEnabled = ref(true)
 
 // 主选项卡（福利功能分类）
 const mainTab = ref<'vip' | 'lottery' | 'badge' | 'checkin'>('vip')
@@ -97,8 +97,20 @@ const confettiParticles = ref<Array<{ id: number; x: number; delay: number; colo
 // 签到状态
 const checkinLoading = ref(false)
 const checkinStatus = ref<{
+  enabled: boolean
   hasCheckedIn: boolean
   hasInstances: boolean
+  requireInstance: boolean
+  minPoints: number
+  maxPoints: number
+  currentPoints: number
+  totalEarned: number
+  totalSpent: number
+  today: { id: number; dateKey: string; points: number; streakDays: number; createdAt: string } | null
+  streakDays: number
+  totalCheckins: number
+  monthCheckins: number
+  recentRecords: Array<{ id: number; dateKey: string; points: number; streakDays: number; createdAt: string }>
   selfOnlyMode: boolean
   consecutiveOthersUse: number
 } | null>(null)
@@ -178,22 +190,22 @@ watch(mainTab, (newTab) => {
 
 // 资源类型辅助函数
 const getResourceTypeName = (type: string) => {
-  const map: Record<string, string> = { c: t('checkin.cpu'), r: t('checkin.memory'), d: t('checkin.disk'), t: t('checkin.traffic') }
+  const map: Record<string, string> = { c: t('checkin.cpu'), r: t('checkin.memory'), d: t('checkin.disk'), t: t('checkin.traffic'), p: t('checkin.points') }
   return map[type] || type.toUpperCase()
 }
 
 const getResourceUnit = (type: string) => {
-  const map: Record<string, string> = { c: '%', r: 'MB', d: 'MB', t: 'GB' }
+  const map: Record<string, string> = { c: '%', r: 'MB', d: 'MB', t: 'GB', p: '' }
   return map[type] || ''
 }
 
 const getResourceColor = (type: string) => {
-  const map: Record<string, string> = { c: 'text-blue-500', r: 'text-purple-500', d: 'text-amber-500', t: 'text-emerald-500' }
+  const map: Record<string, string> = { c: 'text-blue-500', r: 'text-purple-500', d: 'text-amber-500', t: 'text-emerald-500', p: 'text-amber-500' }
   return map[type] || 'text-gray-500'
 }
 
 const getResourceBgColor = (type: string) => {
-  const map: Record<string, string> = { c: 'bg-blue-500/10', r: 'bg-purple-500/10', d: 'bg-amber-500/10', t: 'bg-emerald-500/10' }
+  const map: Record<string, string> = { c: 'bg-blue-500/10', r: 'bg-purple-500/10', d: 'bg-amber-500/10', t: 'bg-emerald-500/10', p: 'bg-amber-500/10' }
   return map[type] || 'bg-gray-500/10'
 }
 
@@ -282,7 +294,11 @@ async function loadPoolLogs() {
 
 // 执行签到
 async function doCheckin() {
-  if (checkinStatus.value?.hasCheckedIn || !checkinStatus.value?.hasInstances) return
+  if (
+    checkinStatus.value?.hasCheckedIn ||
+    checkinStatus.value?.enabled === false ||
+    (checkinStatus.value?.requireInstance && !checkinStatus.value?.hasInstances)
+  ) return
   try {
     checkinLoading.value = true
     checkinPhase.value = 'shaking'
@@ -291,7 +307,8 @@ async function doCheckin() {
     await new Promise(resolve => setTimeout(resolve, 600))
     const result = await api.checkin.checkin()
     checkinPhase.value = 'revealing'
-    checkinResult.value = { type: result.codeType, value: result.codeValue, bonusPoints: result.bonusPoints }
+    const rewardPoints = result.points ?? result.bonusPoints ?? result.codeValue
+    checkinResult.value = { type: 'p', value: rewardPoints, bonusPoints: rewardPoints }
     generateConfetti()
     await new Promise(resolve => setTimeout(resolve, 100))
     await nextTick()
@@ -1457,6 +1474,25 @@ function getWheelTextTransform(index: number, total: number): string {
 
       <!-- 签到子TAB: 签到 -->
       <div v-show="checkinTab === 'checkin'" class="card p-6">
+        <div v-if="checkinStatus" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div class="rounded-lg border border-themed p-3">
+            <div class="text-xs text-themed-muted">{{ $t('checkin.currentPoints') }}</div>
+            <div class="mt-1 text-xl font-semibold text-themed">{{ checkinStatus.currentPoints }}</div>
+          </div>
+          <div class="rounded-lg border border-themed p-3">
+            <div class="text-xs text-themed-muted">{{ $t('checkin.todayRange') }}</div>
+            <div class="mt-1 text-xl font-semibold text-amber-500">{{ checkinStatus.minPoints }}-{{ checkinStatus.maxPoints }}</div>
+          </div>
+          <div class="rounded-lg border border-themed p-3">
+            <div class="text-xs text-themed-muted">{{ $t('checkin.streakDays') }}</div>
+            <div class="mt-1 text-xl font-semibold text-emerald-500">{{ checkinStatus.streakDays }}</div>
+          </div>
+          <div class="rounded-lg border border-themed p-3">
+            <div class="text-xs text-themed-muted">{{ $t('checkin.monthCheckins') }}</div>
+            <div class="mt-1 text-xl font-semibold text-blue-500">{{ checkinStatus.monthCheckins }}</div>
+          </div>
+        </div>
+
         <div class="flex flex-col items-center">
           <!-- 签到礼盒动画 -->
           <div class="relative w-48 h-48 mb-6">
@@ -1483,8 +1519,12 @@ function getWheelTextTransform(index: number, total: number): string {
               <!-- 未签到状态：可点击的礼盒 -->
               <div 
                 v-if="checkinPhase === 'idle' || checkinPhase === 'shaking' || checkinPhase === 'opening'"
-                class="cursor-pointer"
-                @click="checkinStatus?.hasCheckedIn ? null : doCheckin()"
+                :class="[
+                  checkinStatus?.hasCheckedIn || checkinStatus?.enabled === false || (checkinStatus?.requireInstance && !checkinStatus?.hasInstances)
+                    ? 'cursor-not-allowed opacity-60'
+                    : 'cursor-pointer'
+                ]"
+                @click="checkinStatus?.hasCheckedIn || checkinStatus?.enabled === false || (checkinStatus?.requireInstance && !checkinStatus?.hasInstances) ? null : doCheckin()"
               >
                 <!-- 礼盒图标 - 只有这里应用shake动画 -->
                 <div 
@@ -1511,13 +1551,13 @@ function getWheelTextTransform(index: number, total: number): string {
                   </span>
                 </div>
                 <p class="text-lg font-semibold text-themed">{{ getResourceTypeName(checkinResult?.type || 'c') }}</p>
-                <p class="text-sm text-themed-muted mt-1">{{ $t('checkin.bonusPoints', { points: checkinResult?.bonusPoints }) }}</p>
+                <p class="text-sm text-themed-muted mt-1">{{ $t('checkin.pointsAdded', { points: checkinResult?.bonusPoints }) }}</p>
               </div>
             </div>
           </div>
 
           <!-- 签到提示文字 - 在动画容器外部，不受动画影响 -->
-          <p v-if="checkinPhase === 'idle' && !checkinStatus?.hasCheckedIn" class="text-sm text-themed-muted mb-4">
+          <p v-if="checkinPhase === 'idle' && !checkinStatus?.hasCheckedIn && checkinStatus?.enabled !== false && !(checkinStatus?.requireInstance && !checkinStatus?.hasInstances)" class="text-sm text-themed-muted mb-4">
             {{ $t('checkin.clickToCheckin') }}
           </p>
 
@@ -1530,7 +1570,10 @@ function getWheelTextTransform(index: number, total: number): string {
               </svg>
               <span>{{ $t('checkin.alreadyCheckedIn') }}</span>
             </div>
-            <div v-else-if="!checkinStatus.hasInstances && checkinPhase === 'idle'" class="text-amber-500 text-sm mb-4">
+            <div v-else-if="checkinStatus.enabled === false && checkinPhase === 'idle'" class="text-amber-500 text-sm mb-4">
+              {{ $t('checkin.disabled') }}
+            </div>
+            <div v-else-if="checkinStatus.requireInstance && !checkinStatus.hasInstances && checkinPhase === 'idle'" class="text-amber-500 text-sm mb-4">
               {{ $t('checkin.noInstances') }}
             </div>
           </div>

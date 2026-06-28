@@ -28,10 +28,6 @@ const CODE_TYPE_UNITS: Record<string, string> = {
   p: ''  // 积分无单位
 }
 
-function isDailyCheckinEnabled(): boolean {
-  return false
-}
-
 async function withSystemRedeemLocks<T>(
   redeemCodeId: number,
   userId: number,
@@ -81,60 +77,52 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { user } = request
 
-    if (!isDailyCheckinEnabled()) {
-      await createLog(
-        user.id,
-        'checkin',
-        'checkin.disabled',
-        'Daily check-in is temporarily disabled',
-        'failed'
-      )
-      return reply.code(403).send(apiError(ErrorCode.FEATURE_DISABLED, '签到功能暂时下线，后续改版后再开放'))
-    }
-
-    // 检查用户是否拥有实例
-    const hasInstances = await db.userHasInstances(user.id)
-    if (!hasInstances) {
-      return reply.code(400).send(apiError(ErrorCode.CHECKIN_NO_INSTANCE))
-    }
-
-    // 检查今日是否已签到
-    const hasCheckedIn = await db.hasCheckedInToday(user.id)
-    if (hasCheckedIn) {
-      return reply.code(400).send(apiError(ErrorCode.CHECKIN_ALREADY_TODAY))
-    }
-
     try {
-      // 执行签到，资源直接存入资源池
-      const result = await db.performCheckin(user.id)
-
-      // 发放签到积分奖励：有付费实例=500积分，无付费实例=100积分
-      const hasPaid = await db.userHasPaidInstance(user.id)
-      const bonusPoints = hasPaid ? 500 : 100
-      await db.addPoints(user.id, bonusPoints, 'checkin', undefined, '签到奖励')
+      const result = await db.performDailyPointsCheckin(user.id, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'] || null
+      })
 
       // 记录日志
-      const typeName = CODE_TYPE_NAMES[result.codeType]?.en || result.codeType
-      const unit = CODE_TYPE_UNITS[result.codeType] || ''
       await createLog(
         user.id,
         'checkin',
         'checkin.success',
-        `Daily check-in successful. ${typeName} +${result.codeValue}${unit} added to resource pool, bonus points: +${bonusPoints}`,
+        `Daily check-in successful. Points +${result.points}, streak: ${result.streakDays}`,
         'success'
       )
 
       return {
         message: 'Check-in successful',
-        codeType: result.codeType,
-        codeValue: result.codeValue,
-        toResourcePool: true,
-        bonusPoints
+        codeType: 'p',
+        codeValue: result.points,
+        toResourcePool: false,
+        points: result.points,
+        bonusPoints: result.points,
+        currentPoints: result.currentPoints,
+        dateKey: result.dateKey,
+        streakDays: result.streakDays
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage === 'CHECKIN_DISABLED') {
+        await createLog(
+          user.id,
+          'checkin',
+          'checkin.disabled',
+          'Daily check-in is disabled',
+          'failed'
+        )
+        return reply.code(403).send(apiError(ErrorCode.FEATURE_DISABLED, '签到功能暂未开放'))
+      }
       if (errorMessage === 'CHECKIN_ALREADY_TODAY') {
         return reply.code(400).send(apiError(ErrorCode.CHECKIN_ALREADY_TODAY))
+      }
+      if (errorMessage === 'CHECKIN_NO_INSTANCE') {
+        return reply.code(400).send(apiError(ErrorCode.CHECKIN_NO_INSTANCE))
+      }
+      if (errorMessage === 'CHECKIN_USER_BLOCKED') {
+        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '账号状态异常，无法签到'))
       }
       await createLog(
         user.id,

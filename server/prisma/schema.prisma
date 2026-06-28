@@ -673,6 +673,7 @@ model User {
   checkinRecords   CheckinRecord[] @relation("CheckinRecords")
   redeemRecords    CheckinRecord[] @relation("RedeemRecords")
   checkinStats     CheckinStats?
+  dailyCheckins    DailyCheckin[]
 
   // 系统兑换码
   redeemCodesCreated RedeemCode[]      @relation("RedeemCodesCreated")
@@ -3395,6 +3396,25 @@ model CheckinStats {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("checkin_stats")
+}
+
+// 每日积分签到记录
+model DailyCheckin {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  dateKey   String   @map("date_key")
+  points    Int
+  streakDays Int     @default(1) @map("streak_days")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateKey])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([dateKey, createdAt(sort: Desc)])
+  @@map("daily_checkins")
 }
 
 // ==================== 系统兑换码模型 ====================

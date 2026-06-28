@@ -1020,6 +1020,92 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     }
   })
 
+  // ==================== 每日签到管理 API ====================
+
+  fastify.get('/checkin/settings', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async () => db.getDailyCheckinSettings())
+
+  fastify.put<{
+    Body: {
+      enabled?: boolean
+      minPoints?: number
+      maxPoints?: number
+      requireInstance?: boolean
+    }
+  }>('/checkin/settings', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async (request: FastifyRequest<{
+    Body: {
+      enabled?: boolean
+      minPoints?: number
+      maxPoints?: number
+      requireInstance?: boolean
+    }
+  }>, reply: FastifyReply) => {
+    const { enabled, minPoints, maxPoints, requireInstance } = request.body
+
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'INVALID_ENABLED', message: 'enabled must be boolean' })
+    }
+    if (requireInstance !== undefined && typeof requireInstance !== 'boolean') {
+      return reply.code(400).send({ error: 'INVALID_REQUIRE_INSTANCE', message: 'requireInstance must be boolean' })
+    }
+    if (minPoints !== undefined && (!Number.isSafeInteger(minPoints) || minPoints < 1)) {
+      return reply.code(400).send({ error: 'INVALID_MIN_POINTS', message: 'minPoints must be a positive integer' })
+    }
+    if (maxPoints !== undefined && (!Number.isSafeInteger(maxPoints) || maxPoints < 1)) {
+      return reply.code(400).send({ error: 'INVALID_MAX_POINTS', message: 'maxPoints must be a positive integer' })
+    }
+    if (minPoints !== undefined && maxPoints !== undefined && maxPoints < minPoints) {
+      return reply.code(400).send({ error: 'INVALID_POINT_RANGE', message: 'maxPoints must be greater than or equal to minPoints' })
+    }
+
+    const settings = await db.updateDailyCheckinSettings({
+      enabled,
+      minPoints,
+      maxPoints,
+      requireInstance
+    })
+
+    await createLog(
+      request.user.id,
+      'admin',
+      'checkin.settings.update',
+      `Updated daily check-in settings: enabled=${settings.enabled}, points=${settings.minPoints}-${settings.maxPoints}, requireInstance=${settings.requireInstance}`,
+      'success'
+    )
+
+    return settings
+  })
+
+  fastify.get<{
+    Querystring: {
+      page?: string
+      pageSize?: string
+      search?: string
+      dateKey?: string
+    }
+  }>('/checkin/logs', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin]
+  }, async (request: FastifyRequest<{
+    Querystring: {
+      page?: string
+      pageSize?: string
+      search?: string
+      dateKey?: string
+    }
+  }>) => {
+    const { page = '1', pageSize = '20', search, dateKey } = request.query
+
+    return db.getAdminDailyCheckinLogs({
+      page: parsePositiveIntegerQuery(page, 1, 100000),
+      pageSize: parsePositiveIntegerQuery(pageSize, 20, 100),
+      search,
+      dateKey
+    })
+  })
+
   // ==================== 徽章目录管理 API ====================
 
   fastify.get('/badges/catalog', {
