@@ -32,6 +32,7 @@ const filterUserId = ref('')  // 用于筛选特定用户的托管套餐
 const packages = ref<Package[]>([])
 const hosts = ref<Host[]>([])
 const loading = ref<boolean>(true)
+const activeChangingId = ref<number | null>(null)
 
 // 搜索
 const searchQuery = ref('')
@@ -284,9 +285,12 @@ function getPackageTrafficMultiplierTitle(pkg: Package & { host_ids?: number[] }
 
 function isPackagePublic(pkg: Package): boolean {
   const globalShared = (pkg as { global_shared?: unknown }).global_shared
+  return isPackageActive(pkg) && (globalShared === true || globalShared === 1 || pkg.isGlobalShared === true)
+}
+
+function isPackageActive(pkg: Package): boolean {
   const active = (pkg as { active?: unknown }).active
-  const isActive = active === true || active === 1
-  return isActive && (globalShared === true || globalShared === 1 || pkg.isGlobalShared === true)
+  return active === true || active === 1
 }
 
 /**
@@ -327,6 +331,24 @@ async function deletePackage(pkg: Package): Promise<void> {
     toast.success(t('admin.packages.packageDeleted'))
   } catch (err: any) {
     toast.error(t('admin.packages.deleteFailed') + ': ' + translateError(err))
+  }
+}
+
+async function togglePackageActive(pkg: Package): Promise<void> {
+  const nextActive = !isPackageActive(pkg)
+  const confirmKey = nextActive ? 'admin.packages.confirmActivate' : 'admin.packages.confirmDeactivate'
+  if (!confirm(t(confirmKey, { name: pkg.name }))) return
+
+  activeChangingId.value = pkg.id
+  try {
+    await api.packages.update(pkg.id, { active: nextActive })
+    pkg.active = nextActive ? 1 : 0
+    toast.success(t(nextActive ? 'admin.packages.packageEnabled' : 'admin.packages.packageDisabled'))
+    await loadPackages()
+  } catch (err: any) {
+    toast.error(t('admin.packages.statusUpdateFailed') + ': ' + translateError(err))
+  } finally {
+    activeChangingId.value = null
   }
 }
 
@@ -903,6 +925,18 @@ function getBillingCycleLabel(months: number): string {
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs font-medium transition-colors rounded"
+                      :class="isPackageActive(pkg)
+                        ? (themeStore.isDark ? 'text-amber-300 hover:bg-amber-500/10' : 'text-amber-700 hover:bg-amber-50')
+                        : (themeStore.isDark ? 'text-emerald-300 hover:bg-emerald-500/10' : 'text-emerald-700 hover:bg-emerald-50')"
+                      :disabled="activeChangingId === pkg.id"
+                      :title="isPackageActive(pkg) ? t('admin.packages.deactivate') : t('admin.packages.activate')"
+                      @click="togglePackageActive(pkg)"
+                    >
+                      {{ activeChangingId === pkg.id ? t('common.loading') : (isPackageActive(pkg) ? t('admin.packages.deactivate') : t('admin.packages.activate')) }}
                     </button>
                     <button
                       class="p-1.5 transition-colors rounded"

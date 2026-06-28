@@ -10,6 +10,7 @@ import type {
   IncusApiResponse
 } from '../../types/incus.js'
 import { waitForOperation } from './incus-utils.js'
+import { resolveCertificatePair } from './certificate-paths.js'
 
 export class IncusClient {
   baseUrl: string
@@ -20,8 +21,9 @@ export class IncusClient {
 
   constructor(options: IncusClientOptions) {
     this.baseUrl = IncusClient.normalizeUrl(options.url)
-    this.certPath = options.certPath
-    this.keyPath = options.keyPath
+    const certificatePair = resolveCertificatePair(options.certPath, options.keyPath)
+    this.certPath = certificatePair.certPath
+    this.keyPath = certificatePair.keyPath
   }
 
   /**
@@ -214,4 +216,3 @@ export class IncusClient {
     }
   }
 }
-

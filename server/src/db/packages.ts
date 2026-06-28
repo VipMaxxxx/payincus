@@ -11,6 +11,7 @@ import { resolveStoragePoolForNewInstance } from './storage-pools.js'
 
 const NORMAL_PACKAGE_INSTANCE_STATUSES: InstanceStatus[] = ['running', 'stopped']
 const PACKAGE_PREREQUISITE_LOCK_NAMESPACE = 4201
+const DEFAULT_STORAGE_POOL_NAME = 'default'
 
 async function acquirePackagePrerequisiteLock(tx: Prisma.TransactionClient): Promise<void> {
   await tx.$queryRaw<Array<{ locked: boolean }>>(Prisma.sql`
@@ -116,6 +117,68 @@ async function validateHostStoragePools(
   if (invalidPool) {
     throw new Error(`Storage pool "${invalidPool.name}" is not available as a system disk pool on host ${invalidPool.hostId}`)
   }
+}
+
+async function getPreferredSystemDiskPoolsByHost(
+  hostIds: number[],
+  client: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<Map<number, string>> {
+  if (hostIds.length === 0) return new Map()
+
+  const pools = await client.storagePool.findMany({
+    where: {
+      hostId: { in: hostIds },
+      purpose: 'instance_data'
+    },
+    select: {
+      hostId: true,
+      name: true
+    },
+    orderBy: [
+      { hostId: 'asc' },
+      { createdAt: 'asc' }
+    ]
+  })
+
+  const preferred = new Map<number, string>()
+  for (const pool of pools) {
+    const existing = preferred.get(pool.hostId)
+    if (!existing || pool.name === DEFAULT_STORAGE_POOL_NAME) {
+      preferred.set(pool.hostId, pool.name)
+    }
+  }
+  return preferred
+}
+
+async function resolvePackageHostStoragePools(
+  hostIds: number[],
+  input: {
+    requested?: Record<number, string | null>
+    current?: Map<number, string | null>
+    active: boolean
+  },
+  client: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<Record<number, string | null>> {
+  const preferredPools = await getPreferredSystemDiskPoolsByHost(hostIds, client)
+  const resolved: Record<number, string | null> = {}
+
+  for (const hostId of hostIds) {
+    const requestedHasHost = input.requested && Object.prototype.hasOwnProperty.call(input.requested, hostId)
+    const requestedPool = requestedHasHost ? input.requested![hostId] : undefined
+    const currentPool = input.current?.get(hostId) ?? null
+    const poolName = requestedHasHost
+      ? (requestedPool || preferredPools.get(hostId) || null)
+      : (currentPool || preferredPools.get(hostId) || null)
+
+    if (input.active && !poolName) {
+      throw new Error(`Active package must bind a system disk storage pool on host ${hostId}`)
+    }
+
+    resolved[hostId] = poolName
+  }
+
+  await validateHostStoragePools(hostIds, resolved, client)
+  return resolved
 }
 
 function validateHostTrafficMultipliers(
@@ -584,7 +647,10 @@ async function createPackageUnchecked(data: {
 
   const normalizedHostStoragePools = normalizeHostStoragePools(data.hostStoragePools)
   const normalizedHostTrafficMultipliers = normalizeHostTrafficMultipliers(data.hostTrafficMultipliers)
-  await validateHostStoragePools(data.hostIds, normalizedHostStoragePools, client)
+  const resolvedHostStoragePools = await resolvePackageHostStoragePools(data.hostIds, {
+    requested: normalizedHostStoragePools,
+    active: data.active !== false
+  }, client)
   validateHostTrafficMultipliers(data.hostIds, normalizedHostTrafficMultipliers)
 
   const pkg = await client.package.create({
@@ -636,7 +702,7 @@ async function createPackageUnchecked(data: {
       packageHosts: {
         create: data.hostIds.map(hostId => ({
           hostId,
-          storagePoolName: hostId in normalizedHostStoragePools ? normalizedHostStoragePools[hostId] : null,
+          storagePoolName: resolvedHostStoragePools[hostId] ?? null,
           trafficMultiplier: hostId in normalizedHostTrafficMultipliers ? normalizedHostTrafficMultipliers[hostId] : 1
         }))
       }
@@ -854,12 +920,13 @@ async function updatePackageUnchecked(id: number, data: {
   if (data.requiredPackageId !== undefined) updateData.requiredPackageId = data.requiredPackageId
   if (data.allowInstanceDeletion !== undefined) updateData.allowInstanceDeletion = data.allowInstanceDeletion
 
-  const needsPackageHostUpdate = data.hostIds !== undefined || data.hostStoragePools !== undefined || data.hostTrafficMultipliers !== undefined
+  const needsPackageHostUpdate = data.hostIds !== undefined || data.hostStoragePools !== undefined || data.hostTrafficMultipliers !== undefined || data.active === true
   if (needsPackageHostUpdate) {
     const pkg = await client.package.findUnique({
       where: { id },
       select: {
         userId: true,
+        active: true,
         packageHosts: {
           select: {
             hostId: true,
@@ -895,7 +962,11 @@ async function updatePackageUnchecked(id: number, data: {
 
     const normalizedHostStoragePools = normalizeHostStoragePools(data.hostStoragePools)
     const normalizedHostTrafficMultipliers = normalizeHostTrafficMultipliers(data.hostTrafficMultipliers)
-    await validateHostStoragePools(effectiveHostIds, normalizedHostStoragePools, client)
+    const resolvedHostStoragePools = await resolvePackageHostStoragePools(effectiveHostIds, {
+      requested: normalizedHostStoragePools,
+      current: currentHostStoragePools,
+      active: data.active ?? pkg.active
+    }, client)
     validateHostTrafficMultipliers(effectiveHostIds, normalizedHostTrafficMultipliers)
 
     if (data.hostIds !== undefined) {
@@ -907,16 +978,16 @@ async function updatePackageUnchecked(id: number, data: {
         data: effectiveHostIds.map(hostId => ({
           packageId: id,
           hostId,
-          storagePoolName: hostId in normalizedHostStoragePools
-            ? normalizedHostStoragePools[hostId]
-            : (currentHostStoragePools.get(hostId) ?? null),
+          storagePoolName: resolvedHostStoragePools[hostId] ?? null,
           trafficMultiplier: hostId in normalizedHostTrafficMultipliers
             ? normalizedHostTrafficMultipliers[hostId]
             : (currentHostTrafficMultipliers.get(hostId) ?? 1)
         }))
       })
     } else {
-      for (const [hostIdKey, storagePoolName] of Object.entries(normalizedHostStoragePools)) {
+      const shouldUpdateStoragePools = data.hostStoragePools !== undefined || data.active === true
+      const storagePoolsToPersist = shouldUpdateStoragePools ? resolvedHostStoragePools : normalizedHostStoragePools
+      for (const [hostIdKey, storagePoolName] of Object.entries(storagePoolsToPersist)) {
         await client.packageHost.update({
           where: {
             packageId_hostId: {

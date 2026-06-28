@@ -8,6 +8,7 @@ import type { WebSocket as WsWebSocket } from 'ws'
 import { Agent, request } from 'undici'
 import { readFileSync } from 'fs'
 import type { Host } from '../types/database.js'
+import { resolveCertificatePair } from './incus/certificate-paths.js'
 
 // 证书缓存（避免每次连接都读取文件）
 interface CertCache {
@@ -22,7 +23,12 @@ const CERT_CACHE_TTL = 60 * 60 * 1000 // 1小时
  * 获取缓存的证书（避免重复 I/O 读取）
  */
 function getCachedCertificates(certPath: string, keyPath: string): { cert: Buffer; key: Buffer } {
-    const cacheKey = `${certPath}:${keyPath}`
+    const resolvedPair = resolveCertificatePair(certPath, keyPath)
+    if (!resolvedPair.certPath || !resolvedPair.keyPath) {
+        throw new Error('Failed to read certificate files: certificate or key path is missing')
+    }
+
+    const cacheKey = `${resolvedPair.certPath}:${resolvedPair.keyPath}`
     const cached = certCache.get(cacheKey)
     const now = Date.now()
 
@@ -33,8 +39,8 @@ function getCachedCertificates(certPath: string, keyPath: string): { cert: Buffe
 
     // 读取并缓存（添加异常保护）
     try {
-        const cert = readFileSync(certPath)
-        const key = readFileSync(keyPath)
+        const cert = readFileSync(resolvedPair.certPath)
+        const key = readFileSync(resolvedPair.keyPath)
         certCache.set(cacheKey, { cert, key, lastModified: now })
         return { cert, key }
     } catch (err) {
