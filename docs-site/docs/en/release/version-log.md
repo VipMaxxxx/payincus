@@ -6,16 +6,30 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `4d0dd50dd`
+- Latest Release Commit / 最新发布提交: `5c8d3b8e1`
 - Commit date / 提交日期: 2026-06-29
-- Commit subject / 提交说明: Release v1.0.5 flash sales
-- Latest tag / 最新 tag: `v1.0.5`
+- Commit subject / 提交说明: Release v1.0.6 flash sale editing
+- Latest tag / 最新 tag: `v1.0.6`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.0.6
+
+- Release commit / 发布提交: `5c8d3b8e1`
+- Commit date / 提交日期: 2026-06-29
+- Commit subject / 提交说明: Release v1.0.6 flash sale editing
+
+- Allow admins to edit generated flash sale campaign content and time windows.
+
+- Allow admins to edit flash sale item price, stock, per-user limit, coupon and AFF settings.
+
+- Preserve existing reservations while applying edits to future purchases only.
+
+- Add guard coverage for generated flash sale editing.
 
 ## v1.0.5
 

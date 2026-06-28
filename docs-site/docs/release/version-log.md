@@ -6,16 +6,30 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `4d0dd50dd`
+- 最新发布提交 / Latest Release Commit: `5c8d3b8e1`
 - 提交日期 / Commit date: 2026-06-29
-- 提交说明 / Commit subject: Release v1.0.5 flash sales
-- 最新 tag / Latest tag: `v1.0.5`
+- 提交说明 / Commit subject: Release v1.0.6 flash sale editing
+- 最新 tag / Latest tag: `v1.0.6`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v1.0.6
+
+- 发布提交 / Release commit: `5c8d3b8e1`
+- 提交日期 / Commit date: 2026-06-29
+- 提交说明 / Commit subject: Release v1.0.6 flash sale editing
+
+- Allow admins to edit generated flash sale campaign content and time windows.
+
+- Allow admins to edit flash sale item price, stock, per-user limit, coupon and AFF settings.
+
+- Preserve existing reservations while applying edits to future purchases only.
+
+- Add guard coverage for generated flash sale editing.
 
 ## v1.0.5
 
