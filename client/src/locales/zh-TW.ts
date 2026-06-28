@@ -212,6 +212,8 @@ export default {
         wallet: '錢包',
         orders: '訂單',
         giftCards: '禮品卡',
+        flashSales: '秒殺',
+        flashSaleManage: '秒殺管理',
         invites: '邀請',
         help: '說明',
         admin: '管理',

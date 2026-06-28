@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "PayIncus backend service",
   "type": "module",
   "main": "dist/app.js",
@@ -129,6 +129,7 @@
     "test:order-center-guards": "node --import tsx scripts/test-order-center-guards.ts",
     "test:order-payment-operations-guards": "node --import tsx scripts/test-order-payment-operations-guards.ts",
     "test:financial-reconciliation-guards": "node --import tsx scripts/test-financial-reconciliation-guards.ts",
+    "test:flash-sale-guards": "node --import tsx scripts/test-flash-sale-guards.ts",
     "test:package-input-guards": "node --import tsx scripts/test-package-input-guards.ts",
     "test:package-soldout-capacity-guards": "node --import tsx scripts/test-package-soldout-capacity-guards.ts",
     "test:package-host-type-guards": "node --import tsx scripts/test-package-host-type-guards.ts",

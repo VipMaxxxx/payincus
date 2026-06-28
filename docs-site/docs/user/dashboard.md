@@ -20,6 +20,7 @@ https://panel.example.com
 | 功能 | 路由 | 说明 |
 | --- | --- | --- |
 | 首页与产品市场 | `/`, `/market` | 展示产品、套餐和站点公开内容。 |
+| 秒杀 | `/flash-sales` | 查看限时活动、活动库存、秒杀价和自己的抢购记录，并跳转到实例创建链路完成扣费和交付。 |
 | 控制台 | `/dashboard` | 查看账号概览、实例概览、余额、通知和常用入口。 |
 | 实例列表 | `/instances` | 查看名下 LXC / KVM 实例、状态、资源和操作入口。 |
 | 创建实例 | `/instances/create` | 按套餐、镜像、节点、资源限制创建实例。 |
@@ -49,7 +50,7 @@ https://panel.example.com
 ## 关联后端能力
 
 - 实例交付：`instances`、`instance-billing`、`terminal`、`traffic`、`snapshots`。
-- 账务支付：`orders`、`balance`、`recharge`、`gift-cards`、`redeem-codes`、`aff`、`vip-levels`、`user-lifecycle`。
+- 账务支付：`orders`、`balance`、`recharge`、`gift-cards`、`redeem-codes`、`aff`、`flash-sales`、`vip-levels`、`user-lifecycle`。
 - 工单通知：`tickets`、`inbox`、`notifications`、`help`。
 - 邮箱服务：`mail`。
 - 托管资源：`hosting`、`resource-pool`、`packages`。

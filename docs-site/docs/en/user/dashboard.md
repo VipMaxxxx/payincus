@@ -19,6 +19,7 @@ https://panel.example.com
 | Feature | Route | Description |
 | --- | --- | --- |
 | Home and market | `/`, `/market` | Public content, products and plans. |
+| Flash Sales | `/flash-sales` | Shows limited-time campaigns, stock, flash prices and the current user's purchase records, then routes eligible purchases into the normal instance creation, billing and delivery chain. |
 | Dashboard | `/dashboard` | Account, instances, balance, notifications and shortcuts. |
 | Instances | `/instances` | Customer-owned LXC / KVM instances. |
 | Create instance | `/instances/create` | Create an instance by plan, image, host and limits. |

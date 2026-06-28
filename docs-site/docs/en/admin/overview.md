@@ -32,6 +32,7 @@ https://admin.example.com
 | Capacity & Cost | `/admin/capacity-cost` | Host sellable inventory, cost profiles, plan margin estimates, capacity alerts and 7/30-day trends. |
 | Resource Risk | `/admin/resource-risk` | Instance risk scores, bandwidth/CPU/packet anomalies, QoS policy, manual suspension, reason templates, source-scoped order restriction handling, evidence details, 24-hour/7-day trends, recent samples, event timelines, handling audit, and JSON export. |
 | Statistics | `/admin/statistics` | Operations overview, revenue, orders, resources, delivery, risk alerts and billing metrics. |
+| Flash Sales | `/admin/flash-sales` | Create and manage limited-time campaigns with schedule, flash price, stock, per-user limits, Turnstile, account-age checks, risk restriction blocking, coupon/AFF policy, purchase records and stock audit. |
 | Gift Cards | `/admin/gift-cards` | Create single or batch balance gift cards, review stats and redacted lists, and enable, disable or delete unused cards. |
 | Logs and Audit | `/admin/logs` | Audit logs and system operation records with risk levels, approval or verification hints, and redacted CSV export. |
 

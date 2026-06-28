@@ -23,6 +23,7 @@ export const navMenuItems: MenuItem[] = [
   { divider: true, label: 'nav.billing' },
   { name: 'admin-billing', path: '/admin/billing', icon: 'wallet', label: 'nav.billing' },
   { name: 'admin-gift-cards', path: '/admin/gift-cards', icon: 'gift', label: 'nav.giftCards' },
+  { name: 'admin-flash-sales', path: '/admin/flash-sales', icon: 'sparkles', label: 'nav.flashSaleManage' },
   { name: 'admin-orders', path: '/admin/orders', icon: 'card', label: 'nav.orders' },
   { divider: true, label: 'nav.resources' },
   { name: 'admin-my-hosts', path: '/admin/resources/hosts', icon: 'database', label: 'nav.hosts' },

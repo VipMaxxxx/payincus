@@ -16,6 +16,9 @@ import type {
   InstanceWithDetails,
   InstanceStats,
   CreateInstanceRequest,
+  FlashSaleCampaign,
+  FlashSaleReservation,
+  FlashSaleCampaignStatus,
   UpdateInstanceRequest,
   ChangeHostOptionsResponse,
   PortMapping,
@@ -4347,6 +4350,75 @@ const api = {
       http.post('/gift-cards/admin/batch-disable', { ids }),
     batchDelete: (ids: number[]): Promise<{ success: boolean; count: number }> =>
       http.post('/gift-cards/admin/batch-delete', { ids })
+  },
+
+  flashSales: {
+    list: (params: { page?: number; pageSize?: number; status?: FlashSaleCampaignStatus | '' } = {}): Promise<{
+      campaigns: FlashSaleCampaign[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/flash-sales', { params }),
+    get: (id: number): Promise<{ campaign: FlashSaleCampaign }> =>
+      http.get(`/admin/flash-sales/${id}`),
+    create: (data: {
+      name: string
+      description?: string | null
+      status?: FlashSaleCampaignStatus
+      startAt: string
+      endAt: string
+      requireTurnstile?: boolean
+      minAccountAgeHours?: number
+      requireEmail?: boolean
+      blockRiskRestricted?: boolean
+      maxPerUser?: number
+      notes?: string | null
+      items: Array<{
+        packagePlanId: number
+        flashPrice: number
+        totalStock: number
+        perUserLimit?: number
+        allowCoupon?: boolean
+        allowAff?: boolean
+        sortOrder?: number
+      }>
+    }): Promise<{ success: boolean; campaign: FlashSaleCampaign }> =>
+      http.post('/admin/flash-sales', data),
+    update: (id: number, data: Partial<{
+      name: string
+      description: string | null
+      status: FlashSaleCampaignStatus
+      startAt: string
+      endAt: string
+      requireTurnstile: boolean
+      minAccountAgeHours: number
+      requireEmail: boolean
+      blockRiskRestricted: boolean
+      maxPerUser: number
+      notes: string | null
+    }>): Promise<{ success: boolean; campaign: FlashSaleCampaign }> =>
+      http.patch(`/admin/flash-sales/${id}`, data),
+    setStatus: (id: number, status: FlashSaleCampaignStatus, reason?: string): Promise<{ success: boolean; campaign: FlashSaleCampaign }> =>
+      http.post(`/admin/flash-sales/${id}/status`, { status, reason }),
+    adjustStock: (itemId: number, totalStock: number, reason?: string): Promise<{ success: boolean }> =>
+      http.post(`/admin/flash-sales/items/${itemId}/stock`, { totalStock, reason }),
+    reservations: (campaignId: number, params: { page?: number; pageSize?: number } = {}): Promise<{
+      reservations: FlashSaleReservation[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get(`/admin/flash-sales/${campaignId}/reservations`, { params }),
+    auditLogs: (campaignId: number): Promise<{
+      logs: Array<{
+        id: number
+        campaignId: number
+        itemId: number | null
+        actor: { id: number; username: string }
+        action: string
+        reason: string | null
+        createdAt: string
+      }>
+    }> => http.get(`/admin/flash-sales/${campaignId}/audit-logs`)
   },
 
   // ==================== 娱乐系统 ====================
