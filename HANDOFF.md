@@ -294,6 +294,31 @@ Remaining before calling the whole commercial-operation objective complete:
   - Direct asset checks returned HTTP 200 for linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.4-ota-manifest.json`, and `ota-manifest.json`.
   - Public `ota-manifest.json` reports version `v1.0.4`, amd64 SHA256 prefix `d621c14b21f7`, and arm64 SHA256 prefix `76e62b2cec35`.
 
+## v1.0.5 Release Summary
+
+- Target version: `v1.0.5`.
+- Scope: flash-sale campaigns for instance packages, multi-item campaign management, user-side flash-sale listing/purchase entry, stock reservation audit trail, and guarded billing/provisioning integration.
+- Flash-sale purchases now flow through the normal instance creation path with Turnstile, resource-risk order restriction, user status, email/account-age checks, stock locking, per-user limits, balance accounting, delivery compensation, and AFF commission base fixed to the flash price.
+- Admin flash-sale management supports multiple campaign items per campaign, item-level price/stock/per-user/coupon/AFF settings, reservation listing, stock adjustment, and campaign/item audit logs.
+- Local validation completed:
+  - `DATABASE_URL='postgresql://user:pass@localhost:5432/incudal' pnpm --dir server exec prisma validate` passed.
+  - `DATABASE_URL='postgresql://user:pass@localhost:5432/incudal' pnpm --dir server exec prisma generate` passed.
+  - `pnpm --filter client type-check` passed.
+  - `pnpm --filter server type-check` passed.
+  - `pnpm --dir server run test:flash-sale-guards` passed.
+  - `pnpm --dir server run test:host-route-id-guards` passed after replacing the stale fixed route-ID count with a direct unsafe-reference scan.
+  - `pnpm test` passed.
+  - `pnpm build` passed.
+- GitHub checks / release proof:
+  - Build & Release run `28330146053` passed for tag `v1.0.5`.
+  - CI run `28330144321` passed for `main`.
+  - Docs Pages run `28330144309` passed for `main`.
+  - GitHub Release assets are available for linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.5-ota-manifest.json`, `ota-manifest.json`, the AI ticket agent plugin bundle, and plugin market index.
+  - Public `ota-manifest.json` reports version `v1.0.5`, commit `4d0dd50dda2b`, amd64 SHA256 `fe937b24769872c5a135a68f2488a1942d4fddfa2762cb2208972610ca577802`, and arm64 SHA256 `b3935ff868586053c136818518c6613c5f0c8a82b94e042028faf1a988b1ddda`.
+  - Public `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned HTTP 200 before production OTA.
+  - Online docs `https://payincus.com/release/version-log` and `https://payincus.com/en/release/version-log` contain `v1.0.5`.
+- Production OTA status: pending current production SSH or authenticated admin system-update access. Do not mark production as upgraded until a system-update task succeeds and `/opt/incudal/current` plus production health/version checks prove `v1.0.5`.
+
 ## Latest Production OTA Proof
 
 - Production version: `v1.0.4`
