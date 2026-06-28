@@ -11,7 +11,7 @@ const toast = useToast()
 const badgeStore = useBadgeStore()
 
 // 当前 TAB
-const activeTab = ref<'lotteries' | 'records' | 'users' | 'badges'>('lotteries')
+const activeTab = ref<'lotteries' | 'records' | 'users' | 'badges' | 'checkin'>('lotteries')
 
 // 抽奖列表
 const lotteries = ref<any[]>([])
@@ -35,6 +35,22 @@ const usersLoading = ref(false)
 const usersPage = ref(1)
 const usersPageSize = ref(100)
 const usersTotal = ref(0)
+
+const checkinSettings = ref({
+  enabled: true,
+  minPoints: 1,
+  maxPoints: 500,
+  requireInstance: false
+})
+const checkinSettingsLoading = ref(false)
+const savingCheckinSettings = ref(false)
+const checkinLogs = ref<any[]>([])
+const checkinLogsLoading = ref(false)
+const checkinLogsPage = ref(1)
+const checkinLogsPageSize = ref(20)
+const checkinLogsTotal = ref(0)
+const checkinLogsSearch = ref('')
+const checkinLogsDateKey = ref('')
 
 // 创建/编辑抽奖弹窗
 const showLotteryModal = ref(false)
@@ -181,7 +197,7 @@ async function loadUsers() {
   }
 }
 
-function switchTab(tab: 'lotteries' | 'records' | 'users' | 'badges') {
+function switchTab(tab: 'lotteries' | 'records' | 'users' | 'badges' | 'checkin') {
   activeTab.value = tab
   if (tab === 'records' && records.value.length === 0) {
     loadRecords()
@@ -189,7 +205,68 @@ function switchTab(tab: 'lotteries' | 'records' | 'users' | 'badges') {
     loadUsers()
   } else if (tab === 'badges' && badgeSeries.value.length === 0 && badges.value.length === 0) {
     loadBadgeCatalog()
+  } else if (tab === 'checkin' && checkinLogs.value.length === 0) {
+    loadCheckinAdminData()
   }
+}
+
+async function loadCheckinAdminData() {
+  await Promise.all([loadCheckinSettings(), loadCheckinLogs()])
+}
+
+async function loadCheckinSettings() {
+  checkinSettingsLoading.value = true
+  try {
+    checkinSettings.value = await api.entertainment.adminGetCheckinSettings()
+  } catch (err: any) {
+    toast.error(t('entertainment.admin.checkin.loadSettingsFailed') + ': ' + err.message)
+  } finally {
+    checkinSettingsLoading.value = false
+  }
+}
+
+async function saveCheckinSettings() {
+  if (checkinSettings.value.minPoints < 1 || checkinSettings.value.maxPoints < checkinSettings.value.minPoints) {
+    toast.warning(t('entertainment.admin.checkin.invalidRange'))
+    return
+  }
+  savingCheckinSettings.value = true
+  try {
+    checkinSettings.value = await api.entertainment.adminUpdateCheckinSettings({
+      enabled: checkinSettings.value.enabled,
+      minPoints: Number(checkinSettings.value.minPoints),
+      maxPoints: Number(checkinSettings.value.maxPoints),
+      requireInstance: checkinSettings.value.requireInstance
+    })
+    toast.success(t('entertainment.admin.checkin.saveSuccess'))
+  } catch (err: any) {
+    toast.error(t('entertainment.admin.checkin.saveFailed') + ': ' + err.message)
+  } finally {
+    savingCheckinSettings.value = false
+  }
+}
+
+async function loadCheckinLogs() {
+  checkinLogsLoading.value = true
+  try {
+    const res = await api.entertainment.adminGetCheckinLogs({
+      page: checkinLogsPage.value,
+      pageSize: checkinLogsPageSize.value,
+      search: checkinLogsSearch.value || undefined,
+      dateKey: checkinLogsDateKey.value || undefined
+    })
+    checkinLogs.value = res.records || []
+    checkinLogsTotal.value = res.total
+  } catch (err: any) {
+    toast.error(t('entertainment.admin.checkin.loadLogsFailed') + ': ' + err.message)
+  } finally {
+    checkinLogsLoading.value = false
+  }
+}
+
+function searchCheckinLogs() {
+  checkinLogsPage.value = 1
+  loadCheckinLogs()
 }
 
 // 打开创建抽奖弹窗
@@ -388,6 +465,7 @@ function getPrizeTypeName(type: string): string {
 const lotteriesTotalPages = computed(() => Math.ceil(lotteriesTotal.value / lotteriesPageSize.value))
 const recordsTotalPages = computed(() => Math.ceil(recordsTotal.value / recordsPageSize.value))
 const usersTotalPages = computed(() => Math.ceil(usersTotal.value / usersPageSize.value))
+const checkinLogsTotalPages = computed(() => Math.ceil(checkinLogsTotal.value / checkinLogsPageSize.value))
 
 // 打开通知配置弹窗
 function openNotificationModal(lottery: any) {
@@ -719,6 +797,111 @@ function getSeriesTitle(seriesId: string): string {
       >
         {{ $t('entertainment.admin.tabs.badges') }}
       </button>
+      <button
+        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
+        :class="activeTab === 'checkin'
+          ? 'border-blue-500 text-blue-500'
+          : 'border-transparent text-themed-muted hover:text-themed'"
+        @click="switchTab('checkin')"
+      >
+        {{ $t('entertainment.admin.tabs.checkin') }}
+      </button>
+    </div>
+
+    <div v-show="activeTab === 'checkin'" class="space-y-6">
+      <div class="card p-4">
+        <div class="flex flex-col lg:flex-row lg:items-end gap-4">
+          <label class="flex items-center gap-2 min-w-36">
+            <input v-model="checkinSettings.enabled" type="checkbox" class="checkbox" />
+            <span class="text-sm text-themed">{{ $t('entertainment.admin.checkin.enabled') }}</span>
+          </label>
+          <label class="flex-1 min-w-40">
+            <span class="block text-sm text-themed-muted mb-1">{{ $t('entertainment.admin.checkin.minPoints') }}</span>
+            <input v-model.number="checkinSettings.minPoints" type="number" min="1" class="input w-full" />
+          </label>
+          <label class="flex-1 min-w-40">
+            <span class="block text-sm text-themed-muted mb-1">{{ $t('entertainment.admin.checkin.maxPoints') }}</span>
+            <input v-model.number="checkinSettings.maxPoints" type="number" min="1" class="input w-full" />
+          </label>
+          <label class="flex items-center gap-2 min-w-44">
+            <input v-model="checkinSettings.requireInstance" type="checkbox" class="checkbox" />
+            <span class="text-sm text-themed">{{ $t('entertainment.admin.checkin.requireInstance') }}</span>
+          </label>
+          <button
+            class="btn btn-primary"
+            :disabled="savingCheckinSettings || checkinSettingsLoading"
+            @click="saveCheckinSettings"
+          >
+            {{ savingCheckinSettings ? $t('common.saving') : $t('common.save') }}
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="p-4 border-b border-themed flex flex-wrap gap-3 items-center">
+          <input
+            v-model="checkinLogsSearch"
+            type="text"
+            class="input"
+            :placeholder="$t('entertainment.admin.searchUser')"
+            @keyup.enter="searchCheckinLogs"
+          />
+          <input
+            v-model="checkinLogsDateKey"
+            type="date"
+            class="input"
+            @change="searchCheckinLogs"
+          />
+          <button class="btn btn-ghost" @click="searchCheckinLogs">{{ $t('common.search') }}</button>
+        </div>
+        <div v-if="checkinLogsLoading" class="p-8 text-center text-themed-muted">
+          {{ $t('common.loading') }}...
+        </div>
+        <div v-else-if="checkinLogs.length === 0" class="p-8 text-center text-themed-muted">
+          {{ $t('entertainment.admin.checkin.noLogs') }}
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
+                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.date') }}</th>
+                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.points') }}</th>
+                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.streakDays') }}</th>
+                <th class="px-4 py-3 font-medium">IP</th>
+                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.time') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-themed">
+              <tr v-for="record in checkinLogs" :key="record.id" class="hover:bg-themed-hover">
+                <td class="px-4 py-3 text-sm text-themed">{{ record.username }} #{{ record.userId }}</td>
+                <td class="px-4 py-3 text-sm text-themed">{{ record.dateKey }}</td>
+                <td class="px-4 py-3 text-sm font-medium text-amber-500">+{{ record.points }}</td>
+                <td class="px-4 py-3 text-sm text-themed">{{ record.streakDays }}</td>
+                <td class="px-4 py-3 text-sm text-themed-muted">{{ record.ipAddress || '-' }}</td>
+                <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(record.createdAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="checkinLogsTotalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-themed">
+            <button
+              class="btn btn-sm btn-ghost"
+              :disabled="checkinLogsPage <= 1"
+              @click="checkinLogsPage--; loadCheckinLogs()"
+            >
+              {{ $t('common.prevPage') }}
+            </button>
+            <span class="text-sm text-themed-muted">{{ checkinLogsPage }} / {{ checkinLogsTotalPages }}</span>
+            <button
+              class="btn btn-sm btn-ghost"
+              :disabled="checkinLogsPage >= checkinLogsTotalPages"
+              @click="checkinLogsPage++; loadCheckinLogs()"
+            >
+              {{ $t('common.nextPage') }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 抽奖活动 TAB -->

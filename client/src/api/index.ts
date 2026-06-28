@@ -2641,19 +2641,47 @@ const api = {
   checkin: {
     // 获取签到状态
     getStatus: (): Promise<{
+      enabled: boolean
       hasCheckedIn: boolean
       hasInstances: boolean
+      requireInstance: boolean
+      minPoints: number
+      maxPoints: number
+      currentPoints: number
+      totalEarned: number
+      totalSpent: number
+      today: {
+        id: number
+        dateKey: string
+        points: number
+        streakDays: number
+        createdAt: string
+      } | null
+      streakDays: number
+      totalCheckins: number
+      monthCheckins: number
+      recentRecords: Array<{
+        id: number
+        dateKey: string
+        points: number
+        streakDays: number
+        createdAt: string
+      }>
       selfOnlyMode: boolean
       consecutiveOthersUse: number
     }> => http.get('/checkin/status'),
 
-    // 执行签到（资源直接存入资源池）
+    // 执行每日积分签到
     checkin: (): Promise<{
       message: string
       codeType: string
       codeValue: number
       toResourcePool: boolean
+      points: number
       bonusPoints: number
+      currentPoints: number
+      dateKey: string
+      streakDays: number
     }> => http.post('/checkin/checkin'),
 
     // 兑换系统兑换码

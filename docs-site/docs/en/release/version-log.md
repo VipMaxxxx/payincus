@@ -6,16 +6,34 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `eca273ce9`
+- Latest Release Commit / 最新发布提交: `dfe536b10`
 - Commit date / 提交日期: 2026-06-28
-- Commit subject / 提交说明: Release v1.0.1 network delivery
-- Latest tag / 最新 tag: `v1.0.1`
+- Commit subject / 提交说明: Release v1.0.2 welfare check-in
+- Latest tag / 最新 tag: `v1.0.2`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.0.2
+
+- Release commit / 发布提交: `dfe536b10`
+- Commit date / 提交日期: 2026-06-28
+- Commit subject / 提交说明: Release v1.0.2 welfare check-in
+
+Add daily points check-in to the Welfare center.
+
+Users can now open the Check-in tab, claim one random points reward per Beijing calendar day, and see current points, reward range, streak, monthly count and recent records. The default reward range is 1-500 points.
+
+Add admin controls for daily check-in. Operators can enable or disable check-in, set the random points range, optionally require users to own an instance before claiming, and review paginated check-in logs with username, date, points, streak, IP and timestamp.
+
+Harden check-in accounting with a dedicated `daily_checkins` table, a unique `(user_id, date_key)` constraint, points ledger entries, and a per-user advisory lock so concurrent requests cannot double-claim the daily reward.
+
+Keep the existing system redeem code and resource pool flows intact. The daily check-in reward itself now grants points instead of random resource-pool credits.
+
+Update the customer instance cards with clearer LXC/KVM, IPv4 NAT/dedicated network and quota markers so the instance list matches the newer network delivery model.
 
 ## v1.0.1
 

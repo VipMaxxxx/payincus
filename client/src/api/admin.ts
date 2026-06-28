@@ -4611,7 +4611,49 @@ const api = {
       total: number
       page: number
       pageSize: number
-    }> => http.get(`/admin/entertainment/user-points/${userId}/logs`, { params })
+    }> => http.get(`/admin/entertainment/user-points/${userId}/logs`, { params }),
+
+    adminGetCheckinSettings: (): Promise<{
+      enabled: boolean
+      minPoints: number
+      maxPoints: number
+      requireInstance: boolean
+    }> => http.get(['/admin/entertainment', 'checkin', 'settings'].join('/')),
+
+    adminUpdateCheckinSettings: (data: {
+      enabled: boolean
+      minPoints: number
+      maxPoints: number
+      requireInstance: boolean
+    }): Promise<{
+      enabled: boolean
+      minPoints: number
+      maxPoints: number
+      requireInstance: boolean
+    }> => http.put(['/admin/entertainment', 'checkin', 'settings'].join('/'), data),
+
+    adminGetCheckinLogs: (params?: {
+      page?: number
+      pageSize?: number
+      search?: string
+      dateKey?: string
+    }): Promise<{
+      records: Array<{
+        id: number
+        userId: number
+        username: string
+        userAvatar: string
+        dateKey: string
+        points: number
+        streakDays: number
+        ipAddress: string | null
+        userAgent: string | null
+        createdAt: string
+      }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get(['/admin/entertainment', 'checkin', 'logs'].join('/'), { params })
   },
 
   // 域名邮箱
