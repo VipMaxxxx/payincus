@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-06-28 CST
+Last updated: 2026-06-29 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-09670ad Release v1.0.3 package delivery hotfix
+378d1aa Update version log for v1.0.4
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,12 +29,12 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-09670ad Release v1.0.3 package delivery hotfix
+378d1aa Update version log for v1.0.4
 ```
 
 ## Latest GitHub Release Work
 
-`v1.0.3` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
+`v1.0.4` is published on GitHub, has release artifacts, and has been applied to production through the online update flow.
 
 Release commits:
 
@@ -48,6 +48,8 @@ e64ad2c Release v0.9.9
 0836203 Release v1.0.2 welfare check-in
 b701d32 Update version log for v1.0.2
 09670ad Release v1.0.3 package delivery hotfix
+2bd25ba Release v1.0.4 resource risk policy hardening
+378d1aa Update version log for v1.0.4
 ```
 
 GitHub workflow proof:
@@ -68,6 +70,9 @@ Docs Pages: run 28312344320 completed success for main.
 Build & Release: run 28313257102 completed success for v1.0.3.
 CI: run 28313256856 completed success for main.
 Docs Pages: run 28313256855 completed success for main.
+Build & Release: run 28328429131 completed success for v1.0.4.
+CI: run 28328427937 was still in progress when public API rate limit was reached; local full gates passed and release assets were verified directly.
+Docs Pages: run 28328427964 completed success for main.
 ```
 
 Core release assets verified for `v0.9.9`:
@@ -100,6 +105,17 @@ incudal-v1.0.3-linux-amd64.tar.gz.sha256
 incudal-v1.0.3-linux-arm64.tar.gz
 incudal-v1.0.3-linux-arm64.tar.gz.sha256
 incudal-v1.0.3-ota-manifest.json
+ota-manifest.json
+```
+
+Core release assets verified for `v1.0.4`:
+
+```text
+incudal-v1.0.4-linux-amd64.tar.gz
+incudal-v1.0.4-linux-amd64.tar.gz.sha256
+incudal-v1.0.4-linux-arm64.tar.gz
+incudal-v1.0.4-linux-arm64.tar.gz.sha256
+incudal-v1.0.4-ota-manifest.json
 ota-manifest.json
 ```
 
@@ -255,21 +271,44 @@ Remaining before calling the whole commercial-operation objective complete:
   - CI run `28313256856` passed for `main`.
   - Pages run `28313256855` passed for `main`.
 
+## v1.0.4 Release Summary
+
+- Target version: `v1.0.4`.
+- Scope: resource-risk policy hardening, complete QoS tier controls, read-only strategy simulation, manual-state preservation, automatic QoS recovery, and user-side order-restriction warning.
+- Resource-risk QoS tiers now carry trigger score, recover score, minimum limited duration, downgrade cooldown, continue-downgrade switch, user notification switch, and per-tier order restriction switch. Old three-field tier JSON is still parsed with safe defaults.
+- Admin Resource Risk policy page now exposes the complete tier table and a read-only simulation panel showing sampled instances, would-trigger count, would-limit count, would-restrict count, would-suspend count, tier hits, and top projected-risk instances before saving the policy.
+- Automatic evaluation now preserves `manual_qos_limited` and `manual_suspended` states until an operator releases them, restores original bandwidth after recovery thresholds and minimum duration, and avoids marking QoS active when the Incus host is offline and no bandwidth limit was actually applied.
+- A dedicated `resource_risk_qos_limited` notification template was added. The instance creation page now checks the user's resource-risk status on load and shows an upfront review-ticket action when the account has an active resource-risk order restriction.
+- Local validation completed:
+  - `pnpm --filter server type-check` passed.
+  - `pnpm --filter client type-check` passed.
+  - `pnpm --filter server test:resource-risk-guards` passed.
+  - `pnpm --filter server build` passed.
+  - `pnpm --filter client build` passed.
+  - `pnpm build` passed.
+  - `pnpm --dir docs-site --ignore-workspace build` passed.
+- GitHub checks / release proof:
+  - Build & Release run `28328429131` passed for tag `v1.0.4`.
+  - Docs Pages run `28328427964` passed for `main`.
+  - Public GitHub API rate limit was reached before CI run `28328427937` could be rechecked to completion; local full gates passed and the Release assets/manifest were verified by direct asset URLs.
+  - Direct asset checks returned HTTP 200 for linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.4-ota-manifest.json`, and `ota-manifest.json`.
+  - Public `ota-manifest.json` reports version `v1.0.4`, amd64 SHA256 prefix `d621c14b21f7`, and arm64 SHA256 prefix `76e62b2cec35`.
+
 ## Latest Production OTA Proof
 
-- Production version: `v1.0.3`
-- Release tag commit: `09670ad88`
-- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.0.3-20260628060652`
-- OTA task: `107`, status `success`; backup path `/opt/incudal/releases/v1.0.2-20260628052356`; log path `/opt/incudal/update-logs/system-update-107.log`.
-- GitHub Release assets for `v1.0.3` are available, including linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.3-ota-manifest.json`, `ota-manifest.json`, AI ticket extension assets, and plugin market index.
+- Production version: `v1.0.4`
+- Release tag commit: `2bd25ba5a`
+- Current production symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.0.4-20260628162711`
+- OTA task: `108`, status `success`; from version `v1.0.3`; log path `/opt/incudal/update-logs/system-update-108.log`.
+- GitHub Release assets for `v1.0.4` are available, including linux amd64/arm64 tarballs, sha256 files, `incudal-v1.0.4-ota-manifest.json`, and `ota-manifest.json`.
 - Production checks passed during and after OTA: split host verification, `pnpm verify:production`, health checks for user/admin/backend APIs, and Agent manifest check.
 - Independent checks after OTA:
   - `https://pay.payincus.com/api/health` returned HTTP 200.
   - `https://admin.payincus.com/api/health` returned HTTP 200.
   - Local backend `http://127.0.0.1:3001/api/health` returned HTTP 200.
-  - `package.json` under `/opt/incudal/current` reports `1.0.3`.
+  - `package.json` under `/opt/incudal/current` reports `1.0.4`.
   - OTA log shows `System update completed successfully`.
-  - Task `107` database row is `success` with `errorMessage=null`.
+  - Task `108` database row printed as `success` with `errorMessage=null`; the ad-hoc Prisma query command timed out on process exit after printing, so use the OTA log as the primary proof if rechecking.
   - Production DB has `DEBGP` active, bound to host `DE-01` with `storage_pool_name=default`.
   - Production host certificate paths for `DE-01` point to `/opt/incudal/server/certs/client.crt` and `/opt/incudal/server/certs/client.key`.
   - Direct Incus storage-pool check against `DE-01` returned `/1.0/storage-pools/default`.
@@ -278,7 +317,7 @@ Remaining before calling the whole commercial-operation objective complete:
   - Production system configs contain `checkin_enabled=true`, `checkin_min_points=1`, `checkin_max_points=500`, and `checkin_require_instance=false`.
   - Production DB contains `public_ipv4_pools` and `public_ipv4_addresses`.
   - `pnpm verify:production` on production passes and records the empty payment callback IP whitelist as an intentional policy because `PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false` is set.
-  - Online docs `https://payincus.com/release/version-log` and `https://payincus.com/en/release/version-log` should contain `v1.0.3` after the follow-up version-log handoff commit is deployed by Pages.
+  - Online docs `https://payincus.com/release/version-log` and `https://payincus.com/en/release/version-log` contain `v1.0.4`.
   - Deployed admin bundle contains `resource-risk-evidence-panel` and generated CSS with `background-color:#fff;opacity:1`, plus dark-mode opaque surface/code backgrounds.
 - Production readiness currently logs one WARN: public package `#3` (`DEBGP`) is active but online bound hosts cannot satisfy its minimum CPU/memory/disk requirement. Storage-pool visibility and Incus connectivity are fixed; add Germany capacity or lower/package-disable the plan before relying on new paid orders.
 
