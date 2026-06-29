@@ -6,10 +6,10 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `07a39d299`
+- 最新发布提交 / Latest Release Commit: `c626bf3e2`
 - 提交日期 / Commit date: 2026-06-29
-- 提交说明 / Commit subject: Release v1.1.3 exchange anonymity hardening
-- 最新 tag / Latest tag: `v1.1.3`
+- 提交说明 / Commit subject: Release v1.1.4 exchange auto snapshot lock
+- 最新 tag / Latest tag: `v1.1.4`
 
 ## 未发布变更 / Unreleased Changes
 
@@ -17,9 +17,29 @@
 
 ## 历史版本 / Historical Versions
 
+## v1.1.4
+
+- 发布提交 / Release commit: `c626bf3e2`
+- 提交日期 / Commit date: 2026-06-29
+- 提交说明 / Commit subject: Release v1.1.4 exchange auto snapshot lock
+
+# v1.1.4
+
+## 修复
+
+- 加固交易所挂牌/交割锁：自动快照调度器在真正创建或轮换快照前，会再次检查实例是否已上架交易所或存在未结交易订单。
+- 修复已有自动快照策略在实例挂牌后仍可能被后台定时任务执行的问题，避免挂牌期间生成新快照或轮换旧快照。
+- 扩展自动快照调度器守卫和交易所全局守卫，确保后续修改不会绕过交易所实例锁。
+
+## 验证
+
+- `pnpm --filter server test:auto-policy-scheduler-guards`
+- `pnpm --filter server test:exchange-marketplace-guards`
+- `pnpm --filter server type-check`
+
 ## v1.1.3
 
-- 发布提交 / Release commit: `07a39d299`
+- 发布提交 / Release commit: `56d3f245d`
 - 提交日期 / Commit date: 2026-06-29
 - 提交说明 / Commit subject: Release v1.1.3 exchange anonymity hardening
 

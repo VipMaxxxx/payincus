@@ -32,6 +32,10 @@ assert.ok(
   'auto snapshot scheduler must import the distributed lock helpers'
 )
 assert.ok(
+  schedulerSource.includes("import { getExchangeOperationLock } from './exchange-operation-lock.js'"),
+  'auto snapshot scheduler must import exchange operation lock checks'
+)
+assert.ok(
   schedulerSource.includes('const AUTO_POLICY_LOCK_EXPIRE_MS = 30 * 60 * 1000') &&
     schedulerSource.includes('const AUTO_POLICY_LOCK_WAIT_MS = 100'),
   'auto snapshot scheduler must use explicit lock expiry and short wait constants'
@@ -46,6 +50,8 @@ const acquireIndex = lockedSnapshotSection.indexOf('const lockResult = await acq
 const latestPolicyIndex = lockedSnapshotSection.indexOf('const policy = await prisma.snapshotPolicy.findUnique')
 const nextRunGuardIndex = lockedSnapshotSection.indexOf('policy.nextRunAt !== null && policy.nextRunAt > now')
 const eligibilityGuardIndex = lockedSnapshotSection.indexOf("!['running', 'stopped'].includes(policy.instance.status)")
+const exchangeLockIndex = lockedSnapshotSection.indexOf('const exchangeLock = await getExchangeOperationLock(candidate.instanceId)')
+const exchangeLockGuardIndex = lockedSnapshotSection.indexOf('if (exchangeLock.locked)')
 const executeIndex = lockedSnapshotSection.indexOf('await executeAutoSnapshot({')
 const releaseIndex = lockedSnapshotSection.indexOf('await releaseLock(lockKey, lockResult.ownerId)')
 
@@ -53,17 +59,27 @@ assert.notEqual(acquireIndex, -1, 'auto snapshot scheduler must acquire a per-in
 assert.notEqual(latestPolicyIndex, -1, 'auto snapshot scheduler must re-read the policy after acquiring the lock')
 assert.notEqual(nextRunGuardIndex, -1, 'auto snapshot scheduler must re-check nextRunAt after acquiring the lock')
 assert.notEqual(eligibilityGuardIndex, -1, 'auto snapshot scheduler must re-check instance and host eligibility after acquiring the lock')
+assert.notEqual(exchangeLockIndex, -1, 'auto snapshot scheduler must check exchange operation locks after acquiring the lock')
+assert.notEqual(exchangeLockGuardIndex, -1, 'auto snapshot scheduler must skip exchange-listed or exchange-ordered instances')
 assert.notEqual(executeIndex, -1, 'auto snapshot scheduler must call the snapshot side effect only after locked checks')
 assert.notEqual(releaseIndex, -1, 'auto snapshot scheduler must release the per-instance lock')
 assert.ok(acquireIndex < latestPolicyIndex, 'policy re-read must happen after acquiring the lock')
 assert.ok(latestPolicyIndex < nextRunGuardIndex, 'latest policy must be loaded before checking nextRunAt')
 assert.ok(nextRunGuardIndex < executeIndex, 'nextRunAt must be rechecked before snapshot side effects')
 assert.ok(eligibilityGuardIndex < executeIndex, 'instance and host eligibility must be rechecked before snapshot side effects')
+assert.ok(eligibilityGuardIndex < exchangeLockIndex, 'exchange lock check must happen after current eligibility is confirmed')
+assert.ok(exchangeLockIndex < exchangeLockGuardIndex, 'exchange lock must be loaded before checking locked state')
+assert.ok(exchangeLockGuardIndex < executeIndex, 'exchange lock check must run before snapshot side effects')
 assert.ok(executeIndex < releaseIndex, 'lock release must happen after snapshot side effects finish')
 assert.ok(
   lockedSnapshotSection.includes('if (!lockResult.success || !lockResult.ownerId)') &&
     lockedSnapshotSection.includes('lock already held'),
   'auto snapshot scheduler must skip when another worker owns the lock'
+)
+assert.ok(
+  lockedSnapshotSection.includes('exchange locked') &&
+    lockedSnapshotSection.includes('return'),
+  'auto snapshot scheduler must return without snapshot side effects when exchange locked'
 )
 
 assert.ok(

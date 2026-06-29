@@ -27,6 +27,7 @@ const batchConfigRouteSource = readFileSync(new URL('../src/routes/batch-config.
 const billingRecordsSource = readFileSync(new URL('../src/db/billing-records.ts', import.meta.url), 'utf8')
 const billingOperationsSource = readFileSync(new URL('../src/db/billing-operations.ts', import.meta.url), 'utf8')
 const billingSchedulerSource = readFileSync(new URL('../src/services/billing-scheduler.ts', import.meta.url), 'utf8')
+const autoPolicySchedulerSource = readFileSync(new URL('../src/services/auto-policy-scheduler.ts', import.meta.url), 'utf8')
 const publicApiRouteSource = readFileSync(new URL('../src/routes/public-api.ts', import.meta.url), 'utf8')
 const exchangeOperationLockSource = readFileSync(new URL('../src/services/exchange-operation-lock.ts', import.meta.url), 'utf8')
 const balanceDbSource = readFileSync(new URL('../src/db/balance.ts', import.meta.url), 'utf8')
@@ -1278,11 +1279,12 @@ assert(
     batchConfigRouteSource.includes('getExchangeOperationLock') &&
     billingOperationsSource.includes('getExchangeOperationLock') &&
     billingSchedulerSource.includes('getExchangeOperationLock') &&
+    autoPolicySchedulerSource.includes('getExchangeOperationLock') &&
     publicApiRouteSource.includes('getExchangeOperationLock') &&
     transferRouteSource.includes('getExchangeOperationLock') &&
     hostRouteSource.includes('getExchangeOperationLock') &&
     adminBillingRouteSource.includes('getExchangeOperationLock'),
-  'instance, host ops, transfer, admin billing, billing, batch config, public API, scheduler, backup, snapshot, proxy site, and traffic reset paths must use exchange operation locks'
+  'instance, host ops, transfer, admin billing, billing, batch config, public API, schedulers, backup, snapshot, proxy site, and traffic reset paths must use exchange operation locks'
 )
 
 assert(
@@ -1368,6 +1370,16 @@ assert(
   snapshotRouteSource.includes('交易所挂牌/交割期间禁止修改自动快照策略') &&
     countOccurrences(snapshotRouteSource, 'await checkTransferLock(instanceIdNum, reply)') >= 4,
   'snapshot create/delete/restore and auto snapshot policy changes must be blocked while an instance is exchange-listed or exchange-ordered'
+)
+
+assert(
+  autoPolicySchedulerSource.includes("import { getExchangeOperationLock } from './exchange-operation-lock.js'") &&
+    autoPolicySchedulerSource.includes('const exchangeLock = await getExchangeOperationLock(candidate.instanceId)') &&
+    autoPolicySchedulerSource.includes('if (exchangeLock.locked)') &&
+    autoPolicySchedulerSource.includes('exchange locked') &&
+    autoPolicySchedulerSource.indexOf('const exchangeLock = await getExchangeOperationLock(candidate.instanceId)') <
+      autoPolicySchedulerSource.indexOf('await executeAutoSnapshot({'),
+  'auto snapshot scheduler must skip exchange-listed or exchange-ordered instances before creating or rotating snapshots'
 )
 
 assert(

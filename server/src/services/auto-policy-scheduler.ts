@@ -12,6 +12,7 @@ import { acquireLock, releaseLock } from '../lib/distributed-lock.js'
 import * as db from '../db/index.js'
 import { sendNotification } from '../lib/notifier.js'
 import { createLog } from '../db/logs.js'
+import { getExchangeOperationLock } from './exchange-operation-lock.js'
 
 // 并发限制：同时最多处理 5 个任务
 const limit = pLimit(5)
@@ -261,6 +262,12 @@ async function executeLockedAutoSnapshot(candidate: { instanceId: number }): Pro
             policy.instance.host.status !== 'online'
         ) {
             console.log(`[AutoPolicy] Skip auto snapshot for instance ${candidate.instanceId}: instance or host no longer eligible`)
+            return
+        }
+
+        const exchangeLock = await getExchangeOperationLock(candidate.instanceId)
+        if (exchangeLock.locked) {
+            console.log(`[AutoPolicy] Skip auto snapshot for instance ${candidate.instanceId}: exchange locked (${exchangeLock.code})`)
             return
         }
 
