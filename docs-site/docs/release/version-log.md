@@ -13,7 +13,11 @@
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 其他变更 / Other Changes
+
+- Show exchange market delivery method `929383933`
+- Show exchange delivery escrow details `3277a2793`
+- Clarify exchange listing eligibility sections `90cb29104`
 
 ## 历史版本 / Historical Versions
 

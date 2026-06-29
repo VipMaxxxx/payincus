@@ -13,7 +13,11 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Other Changes / 其他变更
+
+- Show exchange market delivery method `929383933`
+- Show exchange delivery escrow details `3277a2793`
+- Clarify exchange listing eligibility sections `90cb29104`
 
 ## Historical Versions / 历史版本
 
