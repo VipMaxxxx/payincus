@@ -36,6 +36,172 @@ cbc63b30 Update version log for v1.0.7
 
 `v1.0.7` is published on GitHub and has release artifacts. Latest production OTA proof remains `v1.0.4` until a current authenticated production update task is run and recorded.
 
+## Active Exchange Marketplace Work
+
+The current worktree contains an in-progress full Exchange Marketplace implementation. It is intentionally not marked production-complete yet.
+
+Implemented local scope:
+
+- User Exchange entry and pages: market, detail, sell/listing workflow, my listings, buys, sales, wallet, withdrawals, records, disputes.
+- Admin Exchange Management: overview, listings, orders, delivery tasks, wallets, withdrawals, disputes, risk records, config, audit logs.
+- Market/listing UI now explicitly shows remaining validity, forced reinstall delivery, anonymous trading, escrow, bandwidth/traffic/IP summary, and order/delivery started-finished timestamps for proof review.
+- Instance detail mutation UI now carries the Exchange lock into config/change-host/swap/boost controls, in addition to backend locks, so listed or delivering instances do not present ordinary mutation actions.
+- Database models and migration for `exchange_listings`, `exchange_orders`, `exchange_delivery_tasks`, `exchange_wallets`, `exchange_wallet_logs`, `exchange_withdrawals`, `exchange_disputes`, `exchange_audit_logs`, and `exchange_policy_configs`.
+- Paused-only listing checks, anonymous public/user serialization, listing/dispute contact-info rejection, sensitive operation verification, idempotency, escrow wallet logs, manual withdrawal review, dispute paths, and operation locks across instance, billing, snapshot, backup, proxy-site, traffic-reset, transfer, host, public API, and admin billing surfaces.
+- Delivery worker chain: rechecks seller ownership and stopped status, cleans old access/bindings/snapshots/risk samples, queues buyer-owned forced rebuild, waits for rebuild completion, anonymizes Incus/display identity, transfers owner, rebuilds buyer billing relation, resets traffic baseline, returns real delivery started/finished timestamps, enters confirmation period, and supports retry/refund/manual takeover/manual completion.
+- Admin Production Proof now includes an operator-status `交易所真实交割闭环` item and a live E2E record template, so the admin UI does not present the Exchange Marketplace as production-complete until real proof is captured.
+
+Latest local proof:
+
+```text
+pnpm --filter server test:exchange-marketplace-guards passed
+pnpm --filter server test:admin-route-guards passed
+pnpm --filter server type-check passed
+pnpm --filter client type-check passed
+pnpm --filter server test:exchange-marketplace-guards passed after adding delivery task startedAt/finishedAt serialization coverage
+pnpm --filter server type-check passed after delivery timestamp serialization update
+pnpm --filter client type-check passed after delivery timestamp serialization update
+pnpm --filter server test:exchange-marketplace-guards passed after market remaining-validity and delivery timestamp UI coverage
+pnpm --filter client type-check passed after market remaining-validity and delivery timestamp UI update
+pnpm --filter server type-check passed after market remaining-validity and delivery timestamp UI update
+pnpm --filter server test:exchange-marketplace-guards passed after enforcing anonymous dispute text server-side
+pnpm --filter server type-check passed after enforcing anonymous dispute text server-side
+pnpm --filter server test:exchange-marketplace-guards passed after adding config/change-host/swap/boost Exchange lock UI coverage
+pnpm --filter client type-check passed after adding config/change-host/swap/boost Exchange lock UI coverage
+pnpm --filter server type-check passed after adding config/change-host/swap/boost Exchange lock UI coverage
+pnpm build passed after the Exchange Marketplace UI/backend changes were included in the full user/admin/server build
+pnpm test passed after the Exchange Marketplace guard was included in the full repository guard suite
+DATABASE_URL='postgresql://user:pass@localhost:5432/incudal' pnpm --filter server exec prisma validate passed
+pnpm build passed
+pnpm test passed
+pnpm --filter server test:production-proof-center-guards passed after adding the Exchange live E2E proof item
+git diff --check passed
+NODE_ENV=production PORT=3001 SERVE_STATIC_CLIENT=false VITE_API_BASE_URL=/api TRUST_PROXY=true FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com SITE_URL=https://pay.payincus.com PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0 pnpm verify:production passed
+pnpm --filter server test:instance-create-turnstile-guards passed after replacing the create-instance hidden/implicit Turnstile path with a visible TurnstileWidget and front-end token requirement
+pnpm --filter client type-check passed after the create-instance Turnstile UI fix
+pnpm --filter server test:exchange-marketplace-guards passed after the create-instance Turnstile UI fix
+DATABASE_URL='postgresql://user:pass@localhost:5432/incudal' pnpm --filter server exec prisma validate passed after the create-instance Turnstile UI fix
+git diff --check passed for the create-instance Turnstile UI fix
+pnpm build passed after the create-instance Turnstile UI fix
+pnpm test passed after the create-instance Turnstile UI fix
+pnpm --filter server test:exchange-marketplace-guards passed after adding exchange delivery step persistence and purchase-time eligibility rechecks
+pnpm --filter server type-check passed after adding exchange delivery step persistence and purchase-time eligibility rechecks
+git diff --check passed for server/src/services/exchange.ts server/src/workers/exchangeDeliveryWorker.ts server/scripts/test-exchange-marketplace-guards.ts
+pnpm build passed after adding exchange delivery step persistence and purchase-time eligibility rechecks
+pnpm test passed after adding exchange delivery step persistence and purchase-time eligibility rechecks
+pnpm --filter server test:exchange-marketplace-guards passed after aligning exchange delivery progress steps, allowing listing partial updates, and normalizing admin policy allowlists
+pnpm --filter server type-check passed after aligning exchange delivery progress steps, allowing listing partial updates, and normalizing admin policy allowlists
+pnpm --filter client type-check passed after aligning exchange delivery progress steps, allowing listing partial updates, and normalizing admin policy allowlists
+pnpm build passed after aligning exchange delivery progress steps, allowing listing partial updates, and normalizing admin policy allowlists
+git diff --check passed for the exchange progress/listing-update/policy-allowlist hardening
+pnpm test passed after the exchange progress/listing-update/policy-allowlist hardening
+pnpm --filter server test:exchange-marketplace-guards passed after synchronous auto-delist expiry filtering/rejection was added to exchange market/detail/create/update/purchase paths
+pnpm --filter server type-check passed after synchronous auto-delist expiry filtering/rejection was added
+pnpm --filter client type-check passed after create-instance Turnstile submit-token fallback and localized Turnstile error handling
+pnpm build passed after synchronous exchange auto-delist and create-instance Turnstile hardening
+git diff --check passed after synchronous exchange auto-delist and create-instance Turnstile hardening
+pnpm test passed after synchronous exchange auto-delist and create-instance Turnstile hardening
+pnpm --filter server test:exchange-marketplace-guards passed after excluding exchange-locked instances from user batch renew/auto-renew actions
+pnpm --filter client type-check passed after excluding exchange-locked instances from user batch renew/auto-renew actions
+git diff --check passed after excluding exchange-locked instances from user batch renew/auto-renew actions
+pnpm build passed after excluding exchange-locked instances from user batch renew/auto-renew actions
+pnpm --filter server test:instance-create-turnstile-guards passed after localizing raw Turnstile backend messages
+pnpm --filter client type-check passed after localizing raw Turnstile backend messages
+pnpm --filter server test:exchange-marketplace-guards passed after adding stop-for-listing lock enforcement and public Exchange policy config
+pnpm --filter server type-check passed after adding stop-for-listing lock enforcement and public Exchange policy config
+pnpm --filter client type-check passed after adding public Exchange policy config to the user purchase UI
+git diff --check passed after adding stop-for-listing lock enforcement and public Exchange policy config
+pnpm --filter server test:exchange-marketplace-guards passed after adding wallet transfer/withdrawal policy visibility to the user Exchange UI
+pnpm --filter client type-check passed after adding wallet transfer/withdrawal policy visibility to the user Exchange UI
+git diff --check passed after adding wallet transfer/withdrawal policy visibility to the user Exchange UI
+pnpm --filter server test:exchange-marketplace-guards passed after enforcing dispute reason required at the Exchange service boundary
+pnpm --filter server type-check passed after enforcing dispute reason required at the Exchange service boundary
+git diff --check passed after enforcing dispute reason required at the Exchange service boundary
+pnpm --filter server test:instance-create-turnstile-guards passed during latest create-instance Turnstile regression check
+pnpm --filter server test:exchange-marketplace-guards passed during latest Exchange regression check
+pnpm --filter client type-check passed during latest frontend regression check
+pnpm --filter server type-check passed during latest backend regression check
+git diff --check passed during latest whitespace/conflict check
+pnpm build passed during latest full user/admin/server build check
+curl https://pay.payincus.com/ returned HTTP 200 during latest public reachability check
+curl https://admin.payincus.com/ returned HTTP 200 during latest public reachability check
+curl https://pay.payincus.com/api/health returned HTTP 200 during latest public backend health check
+pnpm --filter server test:exchange-marketplace-guards passed after adding paused listing state to Exchange operation, instance task, and destroy locks
+pnpm --filter server test:instance-delete-incus-order passed after adding paused/delivery-failed/failed-order Exchange destroy lock coverage
+pnpm --filter server type-check passed after adding paused listing state to Exchange locks
+git diff --check passed after adding paused listing state to Exchange locks
+pnpm --filter server test:exchange-marketplace-guards passed after aligning user listing-state and instance UI with paused Exchange listings
+pnpm --filter client type-check passed after aligning user listing-state and instance UI with paused Exchange listings
+pnpm --filter server type-check passed after aligning user listing-state and instance UI with paused Exchange listings
+git diff --check passed after aligning user listing-state and instance UI with paused Exchange listings
+pnpm --filter server test:instance-create-turnstile-guards passed after making create-instance submit require the visible Turnstile widget token
+pnpm --filter client type-check passed after making create-instance submit require the visible Turnstile widget token
+pnpm --filter server type-check passed after making create-instance submit require the visible Turnstile widget token
+git diff --check passed after making create-instance submit require the visible Turnstile widget token
+pnpm build passed after making create-instance submit require the visible Turnstile widget token
+pnpm --filter server test:exchange-marketplace-guards passed after allowing sellers to delist paused Exchange listings and rechecking withdrawal payout eligibility at admin approve/complete time
+pnpm --filter server type-check passed after adding admin withdrawal payout rechecks
+pnpm --filter client type-check passed after adding paused listing user actions
+git diff --check passed after paused listing delist and withdrawal payout recheck hardening
+pnpm --filter server test:instance-create-turnstile-guards passed after changing create-instance submit to handle Turnstile token retrieval at submit time instead of disabling the button solely on missing token
+pnpm --filter client type-check passed after changing create-instance Turnstile submit-button behavior
+pnpm --filter server test:exchange-marketplace-guards passed after keeping exchange delivery task step within the public delivery progress steps during reinstall
+pnpm --filter server type-check passed after keeping exchange delivery task step within the public delivery progress steps during reinstall
+pnpm --filter client type-check passed after keeping exchange delivery task step within the public delivery progress steps during reinstall
+pnpm --filter server test:exchange-marketplace-guards passed after adding Exchange password/terminal sensitive access locks and public config route guard coverage
+pnpm --filter server test:instance-create-turnstile-guards passed during v1.0.8 create-instance Turnstile regression
+pnpm --filter server test:admin-route-guards passed after explicitly whitelisting the public non-sensitive Exchange config endpoint
+pnpm build passed for v1.0.8
+pnpm docs:build passed for v1.0.8
+pnpm test passed for v1.0.8
+DATABASE_URL='postgresql://user:pass@localhost:5432/incudal' pnpm --filter server exec prisma validate passed for v1.0.8
+git diff --check passed for v1.0.8
+NODE_ENV=production PORT=3001 SERVE_STATIC_CLIENT=false VITE_API_BASE_URL=/api TRUST_PROXY=true FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com SITE_URL=https://pay.payincus.com PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0 pnpm verify:production passed for v1.0.8
+curl https://pay.payincus.com/ returned HTTP 200 during v1.0.8 public reachability check
+curl https://admin.payincus.com/ returned HTTP 200 during v1.0.8 public reachability check
+curl https://pay.payincus.com/api/health returned HTTP 200 during v1.0.8 public backend health check
+NODE_ENV=production PORT=3001 SERVE_STATIC_CLIENT=false VITE_API_BASE_URL=/api TRUST_PROXY=true FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com SITE_URL=https://pay.payincus.com BACKEND_URL=https://pay.payincus.com PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus RUN_PRODUCTION_PREFLIGHT=1 RUN_AGENT_RELEASE_SMOKE=1 RUN_SPLIT_AUTH_SMOKE=0 RUN_LOG_HEADER_CHECK=0 PRINT_MANUAL_CHECKLIST=0 RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0 pnpm verify:live-acceptance passed for v1.0.8 non-destructive checks
+```
+
+Latest create-instance Turnstile fix:
+
+- User create-instance page now renders a visible `TurnstileWidget` whenever public config has `turnstileEnabled` and `turnstileSiteKey`.
+- Submit now reads the visible widget token, the widget model value, and the Cloudflare hidden response input before sending the order request; if no token is available, it blocks locally with localized Chinese/English/TW copy and scrolls/focuses the verification area instead of sending an empty-token request to the backend.
+- The create button is no longer disabled solely because Turnstile has not produced a token yet, so users can click it to trigger the local verification prompt and the hidden-input fallback can run.
+- Turnstile backend error codes `TURNSTILE_TOKEN_MISSING` and `TURNSTILE_VERIFICATION_FAILED` now have localized Chinese/English/TW copy, and Turnstile codes take precedence over raw backend `details` in the frontend error translator.
+- Raw backend/Cloudflare Turnstile messages such as `Turnstile verification required`, `Turnstile verification failed`, `missing-input-response`, and `invalid-input-response` are now mapped to localized frontend copy as a fallback.
+- Flash-sale and normal create flows keep separate Turnstile action names through the widget action prop.
+
+Latest Exchange Marketplace hardening:
+
+- Public market listing, public detail, listing create/update, and purchase now synchronously reject expired `autoDelistAt` windows, so an expired listing cannot remain browsable or purchasable while waiting for the background auto-delist worker tick.
+- The `stop-for-listing` route now explicitly checks the Exchange operation lock before queuing a stop task, so an already listed, locked, or ordered instance cannot be sent through the pre-listing pause shortcut.
+- User Exchange UI now loads a non-sensitive public policy summary from `/exchange/config`; the purchase modal only exposes buyer reinstall image selection when the current Exchange policy allows it, and otherwise submits without `imageAlias`.
+- User Exchange wallet UI now reflects the public policy: balance transfer is disabled with a clear reason when the policy disallows it, withdrawal inputs enforce/display the configured minimum amount, and both flows explain risk checks, second verification, and manual withdrawal review before submission.
+- Exchange dispute creation now rejects empty reasons at the service boundary, not only in the user route/UI, while keeping the existing contact-info and identity-disclosure filters.
+- User instance batch renew and batch auto-renew actions now exclude exchange-locked paid instances in the UI and in the submitted ID list; the backend exchange operation lock still remains the authoritative enforcement layer.
+- `paused` Exchange listings are now treated as locked/blocking everywhere the Exchange status can protect an instance: generic operation lock, listing eligibility, internal instance task creation, and destroy routes. Delivery-failed listings and failed Exchange orders are also covered by the destroy lock, so manually paused or failed Exchange states cannot bypass deletion or ordinary instance tasks.
+- User instance list and instance detail listing-state now also include `paused` Exchange listings, showing `交易所暂停中` and keeping action buttons locked instead of falling back to a misleading `可上架` or `待检测` state.
+- Buyer purchase now rechecks listing eligibility immediately before escrow and balance charge, covering seller status, stopped instance state, policy allowlist, overdue/expiring state, risk state, package/plan/host availability, traffic limits, seller order restriction, storage pool availability, and duplicate active orders.
+- Delivery worker now persists each forced-reinstall handoff cleanup step to `exchange_delivery_tasks.progress`, including seller freeze, terminal/session cleanup, network binding cleanup, snapshot/backup cleanup, SSH key cleanup, and console token cleanup before the rebuild is queued.
+- Delivery progress steps are now aligned so initial purchase uses `escrow_paid` and admin retry resumes at `lock_instance` instead of storing out-of-band `lock_order` or `retry_queued` steps that the UI progress list does not understand.
+- User listing update now supports the intended partial edit contract: price, description, and auto-delist time can be changed without resubmitting `instanceId`; if a caller supplies `instanceId`, the service still rejects attempts to switch the listed asset.
+- Admin policy allowlists for packages and hosts are normalized server-side into positive unique integer IDs, so direct API calls cannot persist string or malformed allowlist entries.
+- Sellers can now delist both `active` and `paused` listings from the user Exchange page; `paused` is displayed as `暂停挂牌中`, while locked delivery/failure states remain protected.
+- Admin withdrawal approve and complete actions now recheck that the seller account is active and has no active order restriction, open Exchange disputes, or unsettled sales/confirmation-period orders before approving or paying out.
+- Exchange delivery task `step` now stays within the documented progress steps during reinstall; lower-level instance task progress is preserved under `progress.instanceTaskProgress`, avoiding raw or unknown steps such as `reinstall_queued` in user/admin delivery progress.
+- Exchange-sensitive password viewing and terminal access now use a separate lock: active/paused/locked/delivery-failed listings and escrowed/delivering/manual-review/failed orders block non-admin access; after forced rebuild reaches delivered/confirming/disputed, only the buyer who owns the rebuilt instance can access it.
+- The public non-sensitive Exchange config endpoint is explicitly treated as public in route guards, matching the user purchase UI that needs policy flags before login-sensitive actions.
+
+Remaining proof before claiming 100%:
+
+- No `.env`, `.env.production`, `server/.env`, or `server/.env.production` existed in this checkout during the latest v1.0.8 audit; production checks were run with explicit environment variables.
+- `pnpm --filter server verify:production-db` still requires a real `DATABASE_URL`; the placeholder Prisma schema validation passed, but this is not a production DB migration proof.
+- Latest `pnpm verify:production` and non-destructive `pnpm verify:live-acceptance` passed for static/readiness checks with live DB checks disabled; split auth, recharge callback, agent heartbeat, and log/header live checks were intentionally skipped because they require current production credentials or temporary live data.
+- Latest public reachability check only covered unauthenticated user/admin shell pages and `/api/health`; it is not a login, order, delivery, Exchange, or OTA proof.
+- Full live Exchange E2E is still missing: stopped instance listing, buyer balance purchase, escrow hold, delivery worker forced rebuild, anonymous handoff, confirmation/settlement, withdrawal review, and dispute/refund/manual retry path proof.
+- Do not mark the Exchange Marketplace complete until current production credentials/env or authenticated admin update access is available and the live proof is recorded. Do not reuse old server credentials from earlier conversations without the operator explicitly providing current access again.
+
 Release commits:
 
 ```text

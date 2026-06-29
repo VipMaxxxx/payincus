@@ -12,6 +12,7 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 import { createCaddyClient } from '../lib/caddy-client.js'
 import { getDnsRecordType } from '../lib/network-address.js'
 import { requireInstanceViewPermission } from '../lib/permission.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 import {
   createProxySite,
   getProxySitesByInstanceId,
@@ -38,6 +39,18 @@ function parsePositiveRouteId(value: string): number | null {
 
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+async function checkExchangeLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
+  const exchangeLock = await getExchangeOperationLock(instanceId)
+  if (!exchangeLock.locked) return false
+  reply.code(409).send({
+    error: exchangeLock.message,
+    code: exchangeLock.code,
+    listingId: exchangeLock.listingId,
+    orderId: exchangeLock.orderId
+  })
+  return true
 }
 
 export default async function proxySitesRoutes(fastify: FastifyInstance) {
@@ -174,6 +187,8 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
+    if (await checkExchangeLock(instanceId, reply)) return
+
     const host = await db.getHostById(instance.host_id)
     if (!host) {
       return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
@@ -290,6 +305,8 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
+    if (await checkExchangeLock(instanceId, reply)) return
+
     // 从 Caddy 删除
     try {
       if (site.host.caddyEnabled && site.host.caddyUsername && site.host.caddyPassword) {
@@ -362,6 +379,8 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     if (site.instance.userId !== user.id) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
+
+    if (await checkExchangeLock(instanceId, reply)) return
 
     // 获取宿主机公网 IP
     const expectedIp = site.host.natPublicIp || site.host.ipAddress
@@ -526,6 +545,8 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
+    if (await checkExchangeLock(instanceId, reply)) return
+
     // 重新尝试配置
     try {
       // 禁用的站点不允许刷新
@@ -653,6 +674,8 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     if (site.instance.userId !== user.id) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
+
+    if (await checkExchangeLock(instanceId, reply)) return
 
     // 检查站点是否启用
     if (!site.enabled) {
@@ -809,6 +832,8 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
     if (site.instance.userId !== user.id) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
+
+    if (await checkExchangeLock(instanceId, reply)) return
 
     // 检查 Caddy 是否启用
     if (!site.host.caddyEnabled || !site.host.caddyUsername || !site.host.caddyPassword) {

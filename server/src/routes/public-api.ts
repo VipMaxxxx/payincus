@@ -15,6 +15,7 @@ import { executePluginAction } from '../lib/plugin-runtime.js'
 import type { PayIncusPluginManifest, PluginActionManifest, PluginNotificationTemplateManifest } from '../lib/plugin-manifest.js'
 import { emitServiceTaskPluginEvent, emitUserPluginEvent } from '../lib/plugin-business-events.js'
 import { cancelInstanceTask, createInstanceTask, getTaskQueuePosition, InstanceTaskConflictError } from '../db/instance-tasks.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 import {
   cleanupUploadedTicketImages,
   isHandledTicketPayloadError,
@@ -756,6 +757,20 @@ async function assertPublicServiceRenewAllowed(
 ): Promise<{ ok: true } | { ok: false; status: number; code: string; message: string; details?: Record<string, unknown> }> {
   if (!service.packagePlanId) {
     return { ok: false, status: 400, code: 'FREE_SERVICE', message: 'Free services do not need renewal' }
+  }
+
+  const exchangeLock = await getExchangeOperationLock(service.id)
+  if (exchangeLock.locked) {
+    return {
+      ok: false,
+      status: 409,
+      code: exchangeLock.code || 'EXCHANGE_INSTANCE_LOCKED',
+      message: exchangeLock.message || 'Service is listed on the exchange or has an unsettled exchange order',
+      details: {
+        listingId: exchangeLock.listingId,
+        orderId: exchangeLock.orderId
+      }
+    }
   }
 
   const host = await prisma.host.findUnique({

@@ -1072,16 +1072,17 @@ async function executeRebuildTask(
   await updateInstanceTaskProgress(task.id, 'rebuilding')
 
   // 获取 SSH 密钥：优先使用任务指定的 sshKeyId，否则取用户第一个密钥
+  const targetUserId = task.userId || instance.user_id
   let sshKey: string | undefined
   if (task.sshKeyId) {
     const keyRecord = await db.getSSHKeyById(task.sshKeyId)
-    if (keyRecord && keyRecord.user_id === instance.user_id) {
+    if (keyRecord && keyRecord.user_id === targetUserId) {
       sshKey = keyRecord.public_key
     }
   }
   if (!sshKey) {
     // 回退：取用户第一个密钥
-    const userSshKeys = await db.getSSHKeysByUserId(instance.user_id)
+    const userSshKeys = await db.getSSHKeysByUserId(targetUserId)
     sshKey = userSshKeys && userSshKeys.length > 0 ? userSshKeys[0].public_key : undefined
   }
 
@@ -1099,7 +1100,7 @@ async function executeRebuildTask(
         const commands = await getCommandsByIds(commandIds)
         // 二次验证：过滤掉不属于实例用户或已禁用的命令（防止任务排队期间命令被删除/禁用）
         const validCmds = commands.filter(cmd =>
-          cmd.userId === instance.user_id && cmd.enabled
+          cmd.userId === targetUserId && cmd.enabled
         )
         // 筛选适配当前发行版的命令
         const imageDistro = getImageDistroFromAlias(imageAlias)

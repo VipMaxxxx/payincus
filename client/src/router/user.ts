@@ -113,6 +113,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.flashSales', title: '秒杀' }
   },
   {
+    path: '/exchange',
+    name: 'exchange',
+    component: () => import('@/views/ExchangeView.vue'),
+    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.exchange', title: '交易所' }
+  },
+  {
     path: '/instances',
     name: 'instances',
     component: () => import('@/views/InstancesView.vue'),

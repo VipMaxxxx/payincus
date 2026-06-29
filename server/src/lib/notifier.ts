@@ -38,6 +38,9 @@ type EventType =
   | 'instance_host_changed'
   | 'instance_task_failed'
   | 'delivery_assurance_update'
+  | 'exchange_delivery_completed'
+  | 'exchange_delivery_failed'
+  | 'exchange_sale_confirming'
   | 'instance_unexpected_stop'
   | 'instance_deleted'
   | 'instance_deleted_by_host_owner'
@@ -433,6 +436,36 @@ const EVENT_TEMPLATES: Record<EventType, EventTemplate> = {
       if (data.hostName) msg += `\n节点: ${data.hostName}`
       if (data.deliveryMessage) msg += `\n说明: ${data.deliveryMessage}`
       if (data.status === 'contact_support') msg += `\n请通过工单或客服继续跟进。`
+      return msg
+    }
+  },
+  exchange_delivery_completed: {
+    title: '✅ 交易所交割完成',
+    message: (data) => {
+      let msg = `交易所订单「${data.orderNo}」已完成强制重装交割`
+      if (data.instanceName) msg += `\n实例: ${data.instanceName}`
+      msg += `\n你获得的是重装后的新实例，不包含卖家原系统或原数据。`
+      if (data.confirmationDueAt) msg += `\n确认期截止: ${data.confirmationDueAt}`
+      return msg
+    }
+  },
+  exchange_delivery_failed: {
+    title: '⚠️ 交易所交割异常',
+    message: (data) => {
+      let msg = `交易所订单「${data.orderNo}」交割异常，已进入平台人工处理`
+      if (data.instanceName) msg += `\n实例: ${data.instanceName}`
+      if (data.error) msg += `\n原因: ${data.error}`
+      msg += `\n平台可执行重试交割、退款或人工接管处理。`
+      return msg
+    }
+  },
+  exchange_sale_confirming: {
+    title: '⏳ 交易所订单进入确认期',
+    message: (data) => {
+      let msg = `交易所订单「${data.orderNo}」已完成交割，正在等待确认期结束后结算`
+      if (data.instanceName) msg += `\n实例: ${data.instanceName}`
+      if (data.confirmationDueAt) msg += `\n确认期截止: ${data.confirmationDueAt}`
+      msg += `\n确认期内无未完结争议时，托管款扣除手续费后会进入你的交易所余额。`
       return msg
     }
   },

@@ -124,6 +124,11 @@ import type {
   ThemeMarketSubmissionReviewStatus,
   ThemeMarketSubmissionScanResult,
   ThemePackageRecord,
+  ExchangeDispute,
+  ExchangeListing,
+  ExchangeOrder,
+  ExchangeWallet,
+  ExchangeWithdrawal,
   ReviewPluginMarketSubmissionRequest,
   ReviewThemeMarketSubmissionRequest,
   DeliveryAssuranceCase,
@@ -2590,6 +2595,106 @@ const api = {
       http.post(`/admin/resource-risk/instances/${id}/manual-order-restrict`, { reason }),
     releaseRestriction: (id: number, data: { reason: string; ticketId?: number | null }): Promise<{ restriction: UserOrderRestrictionRecord }> =>
       http.post(`/admin/resource-risk/order-restrictions/${id}/release`, data)
+  },
+
+  exchange: {
+    overview: (): Promise<{
+      counters: {
+        activeListings: number
+        lockedListings: number
+        deliveringOrders: number
+        disputedOrders: number
+        pendingWithdrawals: number
+        openDisputes: number
+        pendingDeliveryTasks: number
+      }
+    }> => http.get('/admin/exchange/overview'),
+    getConfig: (): Promise<{ policy: Record<string, any> }> =>
+      http.get('/admin/exchange/config'),
+    updateConfig: (data: Record<string, any>): Promise<{ policy: Record<string, any> }> =>
+      http.put('/admin/exchange/config', data),
+    listListings: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
+      items: Array<ExchangeListing & { seller?: Pick<User, 'id' | 'username' | 'email' | 'status'>; instance?: any }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/exchange/listings', { params }),
+    forceDelist: (id: number, reason: string): Promise<{ listing: ExchangeListing }> =>
+      http.post(`/admin/exchange/listings/${id}/force-delist`, { reason }),
+    listOrders: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
+      items: Array<ExchangeOrder & { buyer?: Pick<User, 'id' | 'username' | 'email' | 'status'>; seller?: Pick<User, 'id' | 'username' | 'email' | 'status'>; instance?: any; deliveryTasks?: any[] }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/exchange/orders', { params }),
+    refundOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
+      http.post(`/admin/exchange/orders/${id}/refund`, { reason }),
+    freezeOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
+      http.post(`/admin/exchange/orders/${id}/freeze`, { reason }),
+    cancelOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
+      http.post(`/admin/exchange/orders/${id}/cancel`, { reason }),
+	    listDeliveryTasks: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
+	      items: any[]
+	      total: number
+	      page: number
+	      pageSize: number
+	    }> => http.get('/admin/exchange/delivery-tasks', { params }),
+	    retryDeliveryTask: (id: number): Promise<{ task: any }> =>
+	      http.post(`/admin/exchange/delivery-tasks/${id}/retry`),
+	    manualTakeoverDeliveryTask: (id: number, reason: string): Promise<{ task: any }> =>
+	      http.post(`/admin/exchange/delivery-tasks/${id}/manual-takeover`, { reason }),
+	    rollbackDeliveryTask: (id: number, reason: string): Promise<{ task: any }> =>
+	      http.post(`/admin/exchange/delivery-tasks/${id}/rollback`, { reason }),
+	    completeDeliveryTask: (id: number, reason: string): Promise<{ task: any }> =>
+	      http.post(`/admin/exchange/delivery-tasks/${id}/complete`, { reason }),
+	    listWithdrawals: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
+      items: Array<ExchangeWithdrawal & { user?: Pick<User, 'id' | 'username' | 'email' | 'status'> }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/exchange/withdrawals', { params }),
+    approveWithdrawal: (id: number, remark?: string): Promise<{ withdrawal: ExchangeWithdrawal }> =>
+      http.post(`/admin/exchange/withdrawals/${id}/approve`, { remark }),
+    completeWithdrawal: (id: number, data: { proofUrl?: string; remark?: string }): Promise<{ withdrawal: ExchangeWithdrawal }> =>
+      http.post(`/admin/exchange/withdrawals/${id}/complete`, data),
+    rejectWithdrawal: (id: number, reason: string): Promise<{ withdrawal: ExchangeWithdrawal }> =>
+      http.post(`/admin/exchange/withdrawals/${id}/reject`, { reason }),
+    listWallets: (params?: { page?: number; pageSize?: number; userId?: number }): Promise<{
+      items: Array<ExchangeWallet & { user?: Pick<User, 'id' | 'username' | 'email' | 'status'> }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/exchange/wallets', { params }),
+    freezeWallet: (userId: number, data: { amount: number; remark?: string }): Promise<{ wallet: ExchangeWallet }> =>
+      http.post(`/admin/exchange/wallets/${userId}/freeze`, data),
+    unfreezeWallet: (userId: number, data: { amount: number; remark?: string }): Promise<{ wallet: ExchangeWallet }> =>
+      http.post(`/admin/exchange/wallets/${userId}/unfreeze`, data),
+    adjustWallet: (userId: number, data: { amount: number; remark?: string }): Promise<{ wallet: ExchangeWallet }> =>
+      http.post(`/admin/exchange/wallets/${userId}/adjust`, data),
+    listRiskRecords: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
+      items: ResourceRiskState[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/exchange/risk-records', { params }),
+    listDisputes: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
+      items: Array<ExchangeDispute & { creator?: Pick<User, 'id' | 'username' | 'email'>; order?: any }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/exchange/disputes', { params }),
+    rejectDispute: (id: number, resolution: string): Promise<{ dispute: ExchangeDispute }> =>
+      http.post(`/admin/exchange/disputes/${id}/reject`, { resolution }),
+    refundDispute: (id: number, resolution: string): Promise<{ dispute: ExchangeDispute }> =>
+      http.post(`/admin/exchange/disputes/${id}/refund`, { resolution }),
+    releaseDispute: (id: number, resolution: string): Promise<{ dispute: ExchangeDispute }> =>
+      http.post(`/admin/exchange/disputes/${id}/release`, { resolution }),
+    listAuditLogs: (params?: { page?: number; pageSize?: number }): Promise<{
+      items: Array<{ id: number; actorUserId: number | null; action: string; targetType: string; targetId: number | null; detail: unknown; createdAt: string; actor?: Pick<User, 'id' | 'username'> | null }>
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/exchange/audit-logs', { params })
   },
 
   plugins: {

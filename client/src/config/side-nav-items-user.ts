@@ -20,6 +20,7 @@ export const navMenuItems: MenuItem[] = [
   { name: 'orders', path: '/orders', icon: 'card', label: 'nav.orders' },
   { name: 'gift-cards', path: '/gift-cards', icon: 'gift', label: 'nav.giftCards' },
   { name: 'flash-sales', path: '/flash-sales', icon: 'sparkles', label: 'nav.flashSales' },
+  { name: 'exchange', path: '/exchange', icon: 'coin', label: 'nav.exchange' },
   { name: 'invites', path: '/invites', icon: 'key', label: 'nav.invites' },
   { name: 'transfers', path: '/transfers', icon: 'transfer', label: 'nav.transfers' },
   { divider: true, label: 'nav.support' },

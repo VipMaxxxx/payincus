@@ -21,6 +21,7 @@ import {
 import type { WebSocket } from 'ws'
 import { consumeTerminalAccessTicket, generateTerminalAccessTicket } from '../lib/action-ticket.js'
 import { isAccessTokenInvalidated } from '../lib/security.js'
+import { getExchangeSensitiveAccessLock } from '../services/exchange-operation-lock.js'
 
 // 终端专用连接限制
 const TERMINAL_LIMITS = {
@@ -118,6 +119,20 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
         )
         if (!hasPermission) {
             return reply.code(403).send({ error: 'Forbidden', code: 'FORBIDDEN' })
+        }
+
+        const exchangeLock = await getExchangeSensitiveAccessLock(
+            instanceId,
+            { id: dbUser.id, role: dbUser.role },
+            instance.user_id
+        )
+        if (exchangeLock.locked) {
+            return reply.code(409).send({
+                error: exchangeLock.message || '实例处于交易所锁定中，不能连接终端',
+                code: exchangeLock.code || 'EXCHANGE_INSTANCE_LOCKED',
+                listingId: exchangeLock.listingId,
+                orderId: exchangeLock.orderId
+            })
         }
 
         if (instance.status !== 'running') {
@@ -287,6 +302,21 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
                 message: 'You do not have permission to access this terminal'
             }))
             socket.close(4003, 'Forbidden')
+            return
+        }
+
+        const exchangeLock = await getExchangeSensitiveAccessLock(
+            instanceId,
+            { id: user.id, role: user.role },
+            instance.user_id
+        )
+        if (exchangeLock.locked) {
+            safeSend(socket, JSON.stringify({
+                type: 'error',
+                code: exchangeLock.code || 'EXCHANGE_INSTANCE_LOCKED',
+                message: exchangeLock.message || 'Instance is locked by an exchange order'
+            }))
+            socket.close(4003, 'Exchange locked')
             return
         }
 

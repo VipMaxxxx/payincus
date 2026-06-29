@@ -104,7 +104,15 @@ import type {
   PluginMarketSubmissionUploadResult,
   CreatePluginMarketSubmissionRequest,
   UpdatePluginEventAlertPreferenceRequest,
-  ThemePackageRecord
+  ThemePackageRecord,
+  ExchangeDispute,
+  ExchangeEligibilityResult,
+  ExchangeListing,
+  ExchangeOrder,
+  ExchangePublicConfig,
+  ExchangeWallet,
+  ExchangeWalletLog,
+  ExchangeWithdrawal
 } from '@/types/api.js'
 
 export type VipRuleType = 'user' | 'hosting'
@@ -3341,6 +3349,111 @@ const api = {
       page: number
       pageSize: number
     }> => http.get('/flash-sales/my-reservations', { params })
+  },
+
+  exchange: {
+    getConfig: (): Promise<ExchangePublicConfig> =>
+      http.get('/exchange/config'),
+    listMarket: (params: { page?: number; pageSize?: number } = {}): Promise<{
+      items: ExchangeListing[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/exchange/market', { params }),
+    getListing: (listingId: number): Promise<ExchangeListing> =>
+      http.get(`/exchange/market/${listingId}`),
+    checkEligibility: (instanceId: number): Promise<ExchangeEligibilityResult> =>
+      http.get(`/exchange/instances/${instanceId}/eligibility`),
+    getInstanceListing: (instanceId: number): Promise<{ listing: ExchangeListing | null }> =>
+      http.get(`/exchange/instances/${instanceId}/listing-state`),
+    stopForListing: (instanceId: number): Promise<{
+      message: string
+      taskId?: number
+      status: string
+      nextAction?: string
+      eligibility?: ExchangeEligibilityResult
+    }> => http.post(`/exchange/instances/${instanceId}/stop-for-listing`),
+    createListing: (data: {
+      instanceId: number
+      price: number
+      description?: string | null
+      autoDelistAt?: string | null
+      idempotencyKey?: string | null
+    }): Promise<ExchangeListing> => http.post('/exchange/listings', data),
+    updateListing: (listingId: number, data: {
+      instanceId?: number
+      price: number
+      description?: string | null
+      autoDelistAt?: string | null
+    }): Promise<ExchangeListing> => http.patch(`/exchange/listings/${listingId}`, data),
+    delistListing: (listingId: number): Promise<{ success: boolean }> =>
+      http.delete(`/exchange/listings/${listingId}`),
+    myListings: (params: { page?: number; pageSize?: number } = {}): Promise<{
+      items: ExchangeListing[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/exchange/my/listings', { params }),
+    purchase: (listingId: number, data: {
+      idempotencyKey?: string | null
+      imageAlias?: string | null
+      sshKeyId?: number | null
+    } = {}): Promise<ExchangeOrder> =>
+      http.post(`/exchange/market/${listingId}/purchase`, data),
+    myBuys: (params: { page?: number; pageSize?: number } = {}): Promise<{
+      items: ExchangeOrder[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/exchange/my/buys', { params }),
+    mySales: (params: { page?: number; pageSize?: number } = {}): Promise<{
+      items: ExchangeOrder[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/exchange/my/sales', { params }),
+    orderDetail: (orderId: number): Promise<{ order: ExchangeOrder }> =>
+      http.get(`/exchange/orders/${orderId}`),
+    wallet: (): Promise<ExchangeWallet> => http.get('/exchange/wallet'),
+    walletLogs: (params: { page?: number; pageSize?: number } = {}): Promise<{
+      items: ExchangeWalletLog[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/exchange/wallet/logs', { params }),
+    transferToBalance: (amount: number, idempotencyKey?: string | null): Promise<{
+      wallet: ExchangeWallet
+      walletLogId: number
+      balanceLogId: number
+      transferredAmount: number
+    }> => http.post('/exchange/wallet/transfer', { amount, idempotencyKey }),
+    createWithdrawal: (data: {
+      amount: number
+      method?: string | null
+      accountSnapshot?: Record<string, unknown>
+      applicantRemark?: string | null
+      idempotencyKey?: string | null
+    }): Promise<ExchangeWithdrawal> => http.post('/exchange/withdrawals', data),
+    withdrawals: (params: { page?: number; pageSize?: number } = {}): Promise<{
+      items: ExchangeWithdrawal[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/exchange/withdrawals', { params }),
+    createDispute: (orderId: number, data: { reason: string; detail?: string | null; idempotencyKey?: string | null }): Promise<{
+      id: number
+      orderId: number
+      status: string
+      reason: string
+      detail: string | null
+      createdAt: string
+    }> => http.post(`/exchange/orders/${orderId}/disputes`, data),
+    disputes: (params: { page?: number; pageSize?: number } = {}): Promise<{
+      items: ExchangeDispute[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/exchange/disputes', { params })
   },
 
   // ==================== AFF 推荐计划 ====================

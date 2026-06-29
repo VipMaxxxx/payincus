@@ -2,7 +2,7 @@
  * 管理员计费相关路由
  */
 
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply } from 'fastify'
 import { Prisma, type FinancialReconciliationItemType, type FinancialReconciliationStatus, type InstanceStatus } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import * as db from '../db/index.js'
@@ -61,6 +61,7 @@ import {
   networkModeNeedsRoutedIpv6,
   normalizeNetworkMode
 } from '../lib/network-modes.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 
 // 自定义 nanoid，只使用小写字母和数字
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
@@ -75,6 +76,8 @@ const PLUGIN_GATEWAY_PROVIDER_TYPE = 'plugin_gateway'
 const PLUGIN_GATEWAY_PROVIDER_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,120}$/
 const PLUGIN_GATEWAY_EXTENSION_KEY_PATTERN = /^[a-z][a-z0-9_-]{1,79}$/
 const PLUGIN_GATEWAY_PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9-]*){2,}$/
+const EXCHANGE_ADMIN_DELETE_LOCK_REASON = '实例已上架交易所或处于交易锁定中，请先在交易所管理中处理订单、退款或下架'
+const EXCHANGE_ADMIN_BILLING_LOCK_REASON = '实例已上架交易所或处于交易锁定中，不能执行普通计费/状态变更；请先在交易所管理中处理'
 
 interface PluginGatewayProviderConfig {
   pluginId: string
@@ -858,6 +861,18 @@ class BatchPriceUpdateError extends Error {
   }
 }
 
+async function rejectAdminBillingExchangeLock(reply: FastifyReply, instanceId: number): Promise<boolean> {
+  const exchangeLock = await getExchangeOperationLock(instanceId)
+  if (!exchangeLock.locked) return false
+  reply.status(409).send({
+    error: exchangeLock.message || EXCHANGE_ADMIN_BILLING_LOCK_REASON,
+    code: exchangeLock.code,
+    listingId: exchangeLock.listingId,
+    orderId: exchangeLock.orderId
+  })
+  return true
+}
+
 function roundMoney(value: number): number {
   return Number(value.toFixed(2))
 }
@@ -1101,6 +1116,24 @@ async function buildBatchPriceUpdatePreview(
         discountRate: 0,
         status: 'failed',
         error: '免费实例不支持修改价格'
+      })
+      continue
+    }
+
+    const exchangeLock = await getExchangeOperationLock(instance.id)
+    if (exchangeLock.locked) {
+      items.push({
+        id: instance.id,
+        name: instance.name,
+        user,
+        oldPrice,
+        newPrice,
+        billingCycle: instance.billingCycle,
+        remainingDays: 0,
+        priceDiff: 0,
+        discountRate: 0,
+        status: 'failed',
+        error: exchangeLock.message || EXCHANGE_ADMIN_BILLING_LOCK_REASON
       })
       continue
     }
@@ -2212,6 +2245,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已被封停' })
       }
 
+      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
+
       // 如果正在运行，先停止
       if (instance.status === 'running') {
         try {
@@ -2278,6 +2313,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例未被封停' })
       }
 
+      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
+
       // 解除封停
       await db.unsuspendInstance(instanceId)
 
@@ -2335,6 +2372,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       if (instance.status === 'deleted') {
         return reply.status(400).send({ error: '实例已删除' })
       }
+
+      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       // 只有付费实例可以延期
       if (!instance.packagePlanId || !instance.billingPrice) {
@@ -2678,6 +2717,16 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已删除' })
       }
 
+      const exchangeLock = await getExchangeOperationLock(instanceId)
+      if (exchangeLock.locked) {
+        return reply.status(409).send({
+          error: exchangeLock.message || EXCHANGE_ADMIN_DELETE_LOCK_REASON,
+          code: exchangeLock.code,
+          listingId: exchangeLock.listingId,
+          orderId: exchangeLock.orderId
+        })
+      }
+
       // 3. 计算可退款金额（仅用于全额退款模式）
       const { maxRefundable } = await getMaxRefundable(instanceId)
 
@@ -2931,6 +2980,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已删除' })
       }
 
+      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
+
       if (!instance.packagePlanId) {
         return reply.status(400).send({ error: '免费实例不支持应用优惠码' })
       }
@@ -3043,6 +3094,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       if (instance.status === 'deleted') {
         return reply.status(400).send({ error: '实例已删除' })
       }
+
+      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       if (!instance.packagePlanId) {
         return reply.status(400).send({ error: '免费实例不支持修改价格' })
@@ -3274,6 +3327,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       if (instance.status === 'deleted') {
         return reply.status(400).send({ error: '实例已删除' })
       }
+
+      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       if (!instance.packagePlanId) {
         return reply.status(400).send({ error: '免费实例不支持修改价格' })
@@ -5299,6 +5354,8 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       if (instance.status === 'deleted') {
         return reply.status(400).send({ error: '实例已删除' })
       }
+
+      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       // 2. 获取新方案信息
       const newPlan = await prisma.packagePlan.findUnique({

@@ -97,6 +97,14 @@ const proofItems: ProofItem[] = [
     safeNote: '记录任务编号、from/to 版本、结果和健康检查，不记录服务器凭据。'
   },
   {
+    key: 'exchange',
+    title: '交易所真实交割闭环',
+    status: 'operator',
+    risk: 'high',
+    evidence: '本地构建、全站守卫和交易所专项守卫已通过；生产仍需实际跑通暂停实例挂牌、余额购买、托管、强制重装、匿名交割、确认期结算、提现审核和争议/退款路径。',
+    safeNote: '只记录测试实例、订单/任务/流水编号、脱敏状态截图或日志引用；不得记录买卖双方身份、实例原数据、root 密码、SSH 私钥或完整回调内容。'
+  },
+  {
     key: 'backup',
     title: '备份恢复演练',
     status: 'verified',
@@ -129,6 +137,22 @@ const commands: CommandItem[] = [
     command: [
       'cd /opt/incudal/current',
       'ENV_FILE=/opt/incudal/.env NODE_ENV=production node server/dist/scripts/lsky-production-proof.js'
+    ].join('\n')
+  },
+  {
+    title: '交易所 live E2E 记录模板',
+    description: '在维护窗口用测试账号和测试实例执行。先完成生产预检和数据库检查，再记录交易所真实交割闭环的脱敏 proof。',
+    command: [
+      'cd /opt/incudal/current',
+      'ENV_FILE=/opt/incudal/.env pnpm verify:production',
+      'ENV_FILE=/opt/incudal/.env pnpm --filter server verify:production-db',
+      '# 记录以下脱敏 proof：',
+      '# 1. 卖家测试实例已暂停并通过交易所检测',
+      '# 2. 挂牌创建成功，实例显示交易所挂牌中且启动/重装/删除/续费/快照/网络变更被锁定',
+      '# 3. 买家余额购买成功，买家扣款和托管流水存在',
+      '# 4. 交割任务完成强制重装、匿名重命名、owner 转移、买家账单重建、流量基线重置',
+      '# 5. 确认期结束后托管款扣费放款到卖家交易所余额',
+      '# 6. 提现进入人工审核；争议、退款、重试或人工接管路径至少完成一条测试 proof'
     ].join('\n')
   },
   {
@@ -273,7 +297,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
         </div>
         <div class="p-5">
           <div class="text-sm font-semibold text-themed">3. 高风险业务 proof</div>
-          <p class="mt-2 text-sm text-themed-muted">支付、Incus 生命周期和终端已有测试证据；回滚复核只在维护窗口执行。</p>
+          <p class="mt-2 text-sm text-themed-muted">支付、Incus 生命周期和终端已有测试证据；交易所真实交割和回滚复核只在维护窗口执行。</p>
         </div>
       </div>
     </section>

@@ -293,6 +293,13 @@ function isAllowedPublicOrTokenRoute(route: RouteInfo): boolean {
   if (file === 'system-config.ts') return path === '/public'
   if (file === 'packages.ts') return path === '/public' || path.startsWith('/public/')
   if (file === 'help.ts') return !path.startsWith('/admin')
+  if (file === 'exchange.ts') {
+    return [
+      '/config',
+      '/market',
+      '/market/:listingId'
+    ].includes(path)
+  }
 
   if (file === 'agent.ts') {
     return [

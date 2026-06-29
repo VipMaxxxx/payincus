@@ -28,6 +28,7 @@ const DESTROY_RULES = {
 }
 
 const DESTROY_TRAFFIC_LIMIT_REASON = '当前月流量周期无法销毁，已用流量达到或超过 5G'
+const EXCHANGE_DESTROY_LOCK_REASON = '实例已上架交易所或处于交易交割中，不能销毁'
 
 interface BatchDestroyPreviewItem {
   id: number
@@ -82,6 +83,32 @@ function canUserDestroyExpiredSuspendedPaidInstance(instance: {
     && instance.suspendReason === 'expired'
     && !!instance.packagePlanId
     && isExpiredAt(instance.expiresAt)
+}
+
+async function getExchangeDestroyLock(instanceId: number, client: any = prisma): Promise<{ reason: string; code: string } | null> {
+  const listing = await client.exchangeListing.findFirst({
+    where: {
+      instanceId,
+      status: { in: ['active', 'paused', 'locked', 'delivery_failed'] }
+    },
+    select: { id: true, status: true }
+  })
+  if (listing) {
+    return { reason: EXCHANGE_DESTROY_LOCK_REASON, code: 'EXCHANGE_INSTANCE_LOCKED' }
+  }
+
+  const order = await client.exchangeOrder.findFirst({
+    where: {
+      instanceId,
+      status: { in: ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed'] }
+    },
+    select: { id: true, status: true }
+  })
+  if (order) {
+    return { reason: EXCHANGE_DESTROY_LOCK_REASON, code: 'EXCHANGE_ORDER_ACTIVE' }
+  }
+
+  return null
 }
 
 /**
@@ -153,6 +180,9 @@ async function claimInstanceForUserDestroy(
 
     const blockingTask = await getDestroyBlockingTask(instanceId, tx)
     if (blockingTask) return false
+
+    const exchangeLock = await getExchangeDestroyLock(instanceId, tx)
+    if (exchangeLock) return false
 
     const result = await tx.instance.updateMany({
       where: {
@@ -561,6 +591,11 @@ async function executeDestroyForUser(
     return { id: instance.id, name: instance.name, success: false, skipped: true, reason: blockingTask.reason }
   }
 
+  const exchangeLock = await getExchangeDestroyLock(instanceId)
+  if (exchangeLock) {
+    return { id: instance.id, name: instance.name, success: false, skipped: true, reason: exchangeLock.reason }
+  }
+
   const isFreeInstance = !instance.packagePlanId
   const destroyRecords = await prisma.userDestroyRecord.findMany({
     where: { userId: user.id },
@@ -891,6 +926,15 @@ export default async function instanceDestroyRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '实例已被封停，无法销毁，请先联系管理员解封', canDestroy: false })
     }
 
+    const exchangeLock = await getExchangeDestroyLock(instanceId)
+    if (exchangeLock) {
+      return reply.code(409).send({
+        error: exchangeLock.reason,
+        canDestroy: false,
+        code: exchangeLock.code
+      })
+    }
+
     // 异常实例免手续费
     const isErrorState = instance.status === 'error'
     const feeWaiver = request.query.feeWaiver === 'error' && isErrorState
@@ -1035,6 +1079,14 @@ export default async function instanceDestroyRoutes(fastify: FastifyInstance) {
       return reply.code(409).send({
         error: blockingTask.reason,
         code: blockingTask.code
+      })
+    }
+
+    const exchangeLock = await getExchangeDestroyLock(instanceId)
+    if (exchangeLock) {
+      return reply.code(409).send({
+        error: exchangeLock.reason,
+        code: exchangeLock.code
       })
     }
 

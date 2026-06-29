@@ -205,6 +205,7 @@ export async function getInstanceBillingRecords(
     page?: number
     pageSize?: number
     type?: BillingRecordType
+    userId?: number
   } = {}
 ): Promise<{
   records: InstanceBillingRecord[]
@@ -219,6 +220,7 @@ export async function getInstanceBillingRecords(
 
   const where: Prisma.InstanceBillingRecordWhereInput = {
     instanceId: { in: billingLineageInstanceIds },
+    ...(Number.isSafeInteger(options.userId) && options.userId && options.userId > 0 ? { userId: options.userId } : {}),
     ...(type ? { type } : {})
   }
 

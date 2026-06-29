@@ -31,6 +31,7 @@ import { deleteInstance as deleteIncusInstance, getIncusClient } from '../lib/in
 import { rollbackResources } from '../db/index.js'
 import { sendReleaseNotification } from '../lib/release-notifier.js'
 import { acquireLock, releaseLock } from '../lib/distributed-lock.js'
+import { getExchangeOperationLock } from './exchange-operation-lock.js'
 
 // 并发限制
 const limit = pLimit(5)
@@ -138,6 +139,12 @@ async function processAutoRenew(instance: any): Promise<void> {
   instance = latestInstance
   const attempts = (instance.autoRenewAttempts || 0) + 1
   const attemptGuard = buildAutoRenewAttemptGuard(instance, now, expiryThreshold)
+
+  const exchangeLock = await getExchangeOperationLock(instance.id)
+  if (exchangeLock.locked) {
+    console.log(`[Billing] Skip auto-renew for instance ${instance.id}: exchange locked (${exchangeLock.code})`)
+    return
+  }
 
   // 检查是否超过最大尝试次数
   if (attempts > AUTO_RENEW_MAX_ATTEMPTS) {

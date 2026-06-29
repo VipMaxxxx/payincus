@@ -19,6 +19,7 @@ import {
   listEnabledServiceExtensionTargets
 } from '../lib/plugin-extension-dispatch.js'
 import { recordPlanUpgradeSyncFailure } from '../services/plan-upgrade-sync-repair.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 
 interface BatchRenewPreviewItem {
   id: number
@@ -99,6 +100,18 @@ function formatUpgradeCapacityMessage(reason?: string | null): string {
     default:
       return '实例所在节点资源不足'
   }
+}
+
+async function checkExchangeBillingLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
+  const exchangeLock = await getExchangeOperationLock(instanceId)
+  if (!exchangeLock.locked) return false
+  reply.code(409).send({
+    error: exchangeLock.message,
+    code: exchangeLock.code,
+    listingId: exchangeLock.listingId,
+    orderId: exchangeLock.orderId
+  })
+  return true
 }
 
 async function dispatchInstanceUpgradeServiceExtensions(input: {
@@ -197,6 +210,20 @@ async function buildBatchRenewPreviewItem(userId: number, instanceId: number): P
       canRenew: false,
       autoRenew: false,
       reason: '免费实例无需续费',
+      isHostedInstance: false,
+      daysUntilExpire: null,
+      options: []
+    }
+  }
+
+  const exchangeLock = await getExchangeOperationLock(instance.id)
+  if (exchangeLock.locked) {
+    return {
+      id: instance.id,
+      name: instance.name,
+      canRenew: false,
+      autoRenew: false,
+      reason: exchangeLock.message || '实例已上架交易所或处于交易锁定中',
       isHostedInstance: false,
       daysUntilExpire: null,
       options: []
@@ -483,6 +510,8 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
     }
 
+    if (await checkExchangeBillingLock(instanceId, reply)) return
+
     // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
     const isHostedInstance = instance.host?.user.role === 'user'
       || instance.host?.name.toLowerCase().startsWith('peer')
@@ -575,6 +604,8 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     if (!instance.packagePlanId) {
       return reply.code(400).send({ error: '免费实例无需续费', code: 'FREE_INSTANCE' })
     }
+
+    if (await checkExchangeBillingLock(instanceId, reply)) return
 
     // 检查是否为用户托管节点的续费限制
     const host = await prisma.host.findUnique({
@@ -797,6 +828,8 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '免费实例不支持升降级', code: 'FREE_INSTANCE' })
     }
 
+    if (await checkExchangeBillingLock(instanceId, reply)) return
+
     // 获取新方案
     const newPlan = await db.getPlanById(newPlanId)
     if (!newPlan) {
@@ -926,6 +959,8 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     if (!instance.packagePlanId) {
       return reply.code(400).send({ error: '免费实例不支持升降级', code: 'FREE_INSTANCE' })
     }
+
+    if (await checkExchangeBillingLock(instanceId, reply)) return
 
     // 获取新方案
     const newPlan = await db.getPlanById(newPlanId)
@@ -1161,6 +1196,8 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '免费实例不支持自动续费', code: 'FREE_INSTANCE' })
     }
 
+    if (await checkExchangeBillingLock(instanceId, reply)) return
+
     await db.updateAutoRenew(instanceId, autoRenew)
 
     await createLog(
@@ -1231,6 +1268,18 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
 
       if (!instance.packagePlanId) {
         results.push({ id: instance.id, name: instance.name, success: false, skipped: true, reason: '免费实例不支持自动续费' })
+        continue
+      }
+
+      const exchangeLock = await getExchangeOperationLock(instance.id)
+      if (exchangeLock.locked) {
+        results.push({
+          id: instance.id,
+          name: instance.name,
+          success: false,
+          skipped: true,
+          reason: exchangeLock.message || '实例已上架交易所或处于交易锁定中'
+        })
         continue
       }
 
@@ -1306,7 +1355,8 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     const result = await db.getInstanceBillingRecords(instanceId, {
       page: parsePositiveIntegerQuery(page, 1),
       pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100),
-      type: normalizeBillingRecordType(type)
+      type: normalizeBillingRecordType(type),
+      userId: isOwner ? user.id : undefined
     })
 
     return {

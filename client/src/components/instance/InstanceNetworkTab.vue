@@ -33,6 +33,8 @@ interface Props {
   reassignIpv6Loading?: boolean  // 重新分配 IPv6 加载状态
   lastIpv6ReassignAt?: string | null  // 上次重新分配 IPv6 时间
   deletePortsLoading?: boolean  // 批量删除加载状态
+  exchangeLocked?: boolean
+  exchangeLockReason?: string
 }
 
 interface Emits {
@@ -71,9 +73,9 @@ const hostPublicIpv6 = computed<string | null>(() => {
     ?? null
   if (hostIpv6 && isIpv6Address(hostIpv6)) return hostIpv6
   // 回退：从 host_ip_address 获取（如果宿主机使用 IPv6 连接）
-  const hostIp = (props.instance as any).host_ip_address 
-    ?? (props.instance as any).hostIpAddress 
-    ?? (props.instance as any).host?.ip_address 
+  const hostIp = (props.instance as any).host_ip_address
+    ?? (props.instance as any).hostIpAddress
+    ?? (props.instance as any).host?.ip_address
     ?? null
   if (isIpv6Address(hostIp)) return hostIp
   return null
@@ -104,8 +106,10 @@ const portQuotaRemaining = computed<number>(() => {
   return Math.max(0, portLimit.value - portQuotaUsed.value)
 })
 const isPortQuotaFull = computed<boolean>(() => portLimit.value !== null && portQuotaRemaining.value <= 0)
+const exchangeLockText = computed<string>(() => props.exchangeLockReason || '实例已上架交易所或处于交割中，网络配置已锁定')
+const canMutateNetwork = computed<boolean>(() => props.canManagePorts !== false && props.exchangeLocked !== true)
 const canAddPorts = computed<boolean>(() => {
-  if (props.canManagePorts === false) return false
+  if (!canMutateNetwork.value) return false
   if (isIpv6OnlyInstance.value) return false
   return true
 })
@@ -163,6 +167,7 @@ watch(portPage, () => {
 
 // 切换全选
 function toggleSelectAll() {
+  if (!canMutateNetwork.value) return
   if (isSelectAll.value) {
     // 取消当前页的选中
     paginatedPorts.value.forEach(m => selectedPorts.value.delete(m.id))
@@ -174,6 +179,7 @@ function toggleSelectAll() {
 
 // 切换单个选中
 function toggleSelect(id: number) {
+  if (!canMutateNetwork.value) return
   if (selectedPorts.value.has(id)) {
     selectedPorts.value.delete(id)
   } else {
@@ -183,6 +189,7 @@ function toggleSelect(id: number) {
 
 // 批量删除
 function handleBatchDelete() {
+  if (!canMutateNetwork.value) return
   if (selectedPorts.value.size === 0) return
   emit('delete-ports', Array.from(selectedPorts.value))
 }
@@ -230,6 +237,7 @@ const ipv6ReassignCooldown = computed(() => {
 
 // 是否可以重新分配 IPv6
 const canReassignIpv6 = computed(() => {
+  if (props.exchangeLocked) return false
   return props.instance.status === 'stopped' && !ipv6ReassignCooldown.value.inCooldown
 })
 
@@ -239,7 +247,7 @@ const canReassignIpv6 = computed(() => {
   <div class="space-y-4">
     <!-- Network Addresses -->
     <div class="card p-5">
-      <h2 
+      <h2
         class="text-sm font-medium mb-4"
         :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
       >
@@ -252,12 +260,12 @@ const canReassignIpv6 = computed(() => {
           <div class="flex justify-between items-center">
             <dt class="text-gray-500">{{ t('instance.detail.network.privateIpv4') }}</dt>
             <dd v-if="instance.ipv4" class="flex items-center gap-2">
-              <code 
+              <code
                 class="font-mono px-2 py-0.5 rounded"
                 :class="themeStore.isDark ? 'text-gray-300 bg-gray-800' : 'text-gray-700 bg-gray-100'"
               >{{ instance.ipv4 }}</code>
-              <button 
-                class="text-gray-500 hover:text-gray-400" 
+              <button
+                class="text-gray-500 hover:text-gray-400"
                 :title="t('common.copy')"
                 @click="emit('copy', instance.ipv4, 'ipv4')"
               >
@@ -275,12 +283,12 @@ const canReassignIpv6 = computed(() => {
           <div v-if="publicIpv4Address" class="flex justify-between items-center mt-3">
             <dt class="text-gray-500">{{ t('instance.detail.network.publicIpv4') }}</dt>
             <dd class="flex items-center gap-2">
-              <code 
+              <code
                 class="font-mono px-2 py-0.5 rounded"
                 :class="themeStore.isDark ? 'text-gray-300 bg-gray-800' : 'text-gray-700 bg-gray-100'"
               >{{ publicIpv4Address }}</code>
-              <button 
-                class="text-gray-500 hover:text-gray-400" 
+              <button
+                class="text-gray-500 hover:text-gray-400"
                 :title="t('common.copy')"
                 @click="emit('copy', publicIpv4Address, 'nat_public_ip')"
               >
@@ -302,20 +310,22 @@ const canReassignIpv6 = computed(() => {
                 v-if="props.isInstanceOwner !== false && instance.network_mode === 'nat_ipv6'"
                 class="text-xs px-2 py-0.5 rounded transition-colors flex-shrink-0"
                 :class="[
-                  canReassignIpv6 
-                    ? (themeStore.isDark 
-                      ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' 
+                  canReassignIpv6
+                    ? (themeStore.isDark
+                      ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
                       : 'bg-blue-100 text-blue-600 hover:bg-blue-200')
-                    : (themeStore.isDark 
-                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+                    : (themeStore.isDark
+                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                       : 'bg-gray-100 text-gray-400 cursor-not-allowed')
                 ]"
                 :disabled="!canReassignIpv6 || props.reassignIpv6Loading"
-                :title="ipv6ReassignCooldown.inCooldown 
-                  ? t('instance.detail.network.reassignIpv6Cooldown', { hours: ipv6ReassignCooldown.remainingHours })
-                  : (instance.status !== 'stopped' 
-                    ? t('instance.detail.network.reassignIpv6StopRequired') 
-                    : t('instance.detail.network.reassignIpv6'))"
+	                :title="props.exchangeLocked
+	                  ? exchangeLockText
+	                  : (ipv6ReassignCooldown.inCooldown
+	                    ? t('instance.detail.network.reassignIpv6Cooldown', { hours: ipv6ReassignCooldown.remainingHours })
+	                    : (instance.status !== 'stopped'
+	                      ? t('instance.detail.network.reassignIpv6StopRequired')
+	                      : t('instance.detail.network.reassignIpv6')))"
                 @click="emit('reassign-ipv6')"
               >
                 <span v-if="props.reassignIpv6Loading" class="flex items-center gap-1">
@@ -327,13 +337,13 @@ const canReassignIpv6 = computed(() => {
                 <span v-else-if="ipv6ReassignCooldown.inCooldown">{{ t('instance.detail.network.reassignIpv6CooldownShort', { hours: ipv6ReassignCooldown.remainingHours }) }}</span>
                 <span v-else>{{ t('instance.detail.network.reassignIpv6') }}</span>
               </button>
-              <code 
+              <code
                 class="font-mono text-xs px-2 py-0.5 rounded truncate max-w-[200px] sm:max-w-[300px]"
                 :class="themeStore.isDark ? 'text-gray-400 bg-gray-800/50' : 'text-gray-600 bg-gray-100'"
                 :title="displayIpv6 || undefined"
               >{{ displayIpv6 }}</code>
-              <button 
-                class="text-gray-500 hover:text-gray-400 flex-shrink-0" 
+              <button
+                class="text-gray-500 hover:text-gray-400 flex-shrink-0"
                 :title="t('common.copy')"
                 @click="emit('copy', displayIpv6 || '', 'ipv6')"
               >
@@ -353,12 +363,12 @@ const canReassignIpv6 = computed(() => {
           <div class="flex justify-between items-center">
             <dt class="text-gray-500">{{ t('instance.detail.network.publicIpv4') }}</dt>
             <dd v-if="instance.ipv4" class="flex items-center gap-2">
-              <code 
+              <code
                 class="font-mono px-2 py-0.5 rounded"
                 :class="themeStore.isDark ? 'text-gray-300 bg-gray-800' : 'text-gray-700 bg-gray-100'"
               >{{ instance.ipv4 }}</code>
-              <button 
-                class="text-gray-500 hover:text-gray-400" 
+              <button
+                class="text-gray-500 hover:text-gray-400"
                 :title="t('common.copy')"
                 @click="emit('copy', instance.ipv4, 'ipv4')"
               >
@@ -375,13 +385,13 @@ const canReassignIpv6 = computed(() => {
           <div v-if="instance.ipv6" class="flex justify-between items-center mt-3">
             <dt class="text-gray-500">{{ t('instance.detail.network.publicIpv6') }}</dt>
             <dd class="flex items-center gap-2">
-              <code 
+              <code
                 class="font-mono text-xs px-2 py-0.5 rounded truncate max-w-[300px]"
                 :class="themeStore.isDark ? 'text-gray-400 bg-gray-800/50' : 'text-gray-600 bg-gray-100'"
                 :title="instance.ipv6"
               >{{ instance.ipv6 }}</code>
-              <button 
-                class="text-gray-500 hover:text-gray-400 flex-shrink-0" 
+              <button
+                class="text-gray-500 hover:text-gray-400 flex-shrink-0"
                 :title="t('common.copy')"
                 @click="emit('copy', instance.ipv6, 'ipv6')"
               >
@@ -403,24 +413,24 @@ const canReassignIpv6 = computed(() => {
       <div class="flex items-center justify-between gap-3 mb-4">
         <div>
           <div class="flex items-center gap-2">
-            <h2 
+            <h2
               class="text-sm font-medium"
               :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
             >
               {{ t('instance.detail.network.portMappings') }}
             </h2>
-            <span 
-              v-if="!isIpv6OnlyInstance && hasPortQuota && portLimit !== null" 
+            <span
+              v-if="!isIpv6OnlyInstance && hasPortQuota && portLimit !== null"
               class="text-xs px-2 py-0.5 rounded border font-mono font-medium transition-colors"
-              :class="isPortQuotaFull 
+              :class="isPortQuotaFull
                 ? (themeStore.isDark ? 'bg-red-900/30 text-red-500 border-red-800' : 'bg-red-50 text-red-600 border-red-200')
                 : (themeStore.isDark ? 'bg-gray-800 text-gray-400 border-gray-700' : 'bg-gray-100 text-gray-500 border-gray-200')"
             >
               {{ portQuotaUsed }} / {{ portLimit }}
             </span>
           </div>
-          <p 
-            v-if="publicIpv4Address" 
+          <p
+            v-if="publicIpv4Address"
             class="text-xs mt-0.5"
             :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
           >
@@ -469,16 +479,24 @@ const canReassignIpv6 = computed(() => {
         </div>
       </div>
 
+      <div
+        v-if="props.exchangeLocked"
+        class="mb-3 rounded-lg border px-3 py-2 text-xs"
+        :class="themeStore.isDark ? 'border-amber-900/60 bg-amber-950/30 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
+      >
+        {{ exchangeLockText }}
+      </div>
+
       <!-- 批量操作栏 -->
-      <div 
-        v-if="hasSelection && props.canManagePorts !== false" 
+      <div
+        v-if="hasSelection && canMutateNetwork"
         class="mb-3 flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center sm:justify-between"
         :class="themeStore.isDark ? 'bg-gray-800/50' : 'bg-gray-100'"
       >
         <span class="text-sm" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
           {{ t('instance.detail.network.selectedCount', { count: selectedPorts.size }) }}
         </span>
-        <button 
+        <button
           class="btn-sm flex items-center gap-1 text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
           :disabled="props.deletePortsLoading"
           @click="handleBatchDelete"
@@ -513,8 +531,8 @@ const canReassignIpv6 = computed(() => {
       </div>
       <div v-else-if="filteredPortMappings.length" class="space-y-2">
         <!-- 全选行 -->
-        <div 
-          v-if="props.canManagePorts !== false && paginatedPorts.length > 0"
+        <div
+	          v-if="canMutateNetwork && paginatedPorts.length > 0"
           class="flex items-center justify-between gap-3 pb-2 border-b"
           :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
         >
@@ -553,13 +571,13 @@ const canReassignIpv6 = computed(() => {
           </button>
         </div>
 
-        <div 
-          v-for="m in paginatedPorts" 
-          :key="m.id" 
+        <div
+          v-for="m in paginatedPorts"
+          :key="m.id"
           class="group flex items-center justify-between text-sm p-3 border rounded-lg transition-colors"
           :class="[
-            themeStore.isDark 
-              ? 'bg-gray-900/50 border-gray-800 hover:border-gray-700' 
+            themeStore.isDark
+              ? 'bg-gray-900/50 border-gray-800 hover:border-gray-700'
               : 'bg-gray-50 border-gray-200 hover:border-gray-300',
             selectedPorts.has(m.id) && (themeStore.isDark ? 'border-blue-800 bg-blue-900/20' : 'border-blue-300 bg-blue-50')
           ]"
@@ -567,7 +585,7 @@ const canReassignIpv6 = computed(() => {
           <div class="flex items-center gap-3 flex-1 min-w-0">
             <!-- 多选框 -->
             <button
-              v-if="props.canManagePorts !== false"
+              v-if="canMutateNetwork"
               class="w-5 h-5 rounded border flex items-center justify-center transition-colors flex-shrink-0"
               :class="[
                 selectedPorts.has(m.id)
@@ -580,16 +598,16 @@ const canReassignIpv6 = computed(() => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
               </svg>
             </button>
-            <span 
+            <span
               class="text-xs font-medium px-1.5 py-0.5 rounded flex-shrink-0"
               :class="themeStore.isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-200 text-gray-600'"
             >{{ m.protocol.toUpperCase() }}</span>
             <div class="flex items-center gap-2 min-w-0">
-              <code 
+              <code
                 class="font-mono text-xs"
                 :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
               >{{ getPublicPort(m) }}</code>
-              <button 
+              <button
                 class="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                 :class="themeStore.isDark ? 'text-gray-600 hover:text-gray-400' : 'text-gray-400 hover:text-gray-600'"
                 :title="t('common.copy')"
@@ -604,17 +622,17 @@ const canReassignIpv6 = computed(() => {
               </button>
               <span class="text-gray-500 flex-shrink-0">→</span>
               <span class="font-mono text-xs text-gray-500">{{ getPrivatePort(m) }}</span>
-              <span 
-                v-if="m.remark" 
+              <span
+                v-if="m.remark"
                 class="text-xs px-1.5 py-0.5 rounded truncate max-w-[120px]"
                 :class="themeStore.isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'"
                 :title="m.remark"
               >{{ m.remark }}</span>
             </div>
           </div>
-          <button 
-            v-if="props.canManagePorts !== false"
-            class="text-xs text-gray-500 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 ml-2 flex-shrink-0" 
+          <button
+            v-if="canMutateNetwork"
+            class="text-xs text-gray-500 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 ml-2 flex-shrink-0"
             @click="emit('delete-port', m.id)"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -627,7 +645,7 @@ const canReassignIpv6 = computed(() => {
         <div class="flex flex-col gap-3 pt-3 border-t sm:flex-row sm:items-center sm:justify-between" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
           <div class="flex items-center gap-2">
             <span class="text-xs" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">{{ t('instance.detail.network.perPage') }}</span>
-            <select 
+            <select
               v-model.number="portPageSize"
               class="text-xs px-2 py-1 rounded border"
               :class="themeStore.isDark ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'"
@@ -636,7 +654,7 @@ const canReassignIpv6 = computed(() => {
             </select>
           </div>
           <div class="flex items-center justify-between gap-2 sm:justify-start">
-            <button 
+            <button
               :disabled="portPage === 1"
               class="btn-ghost btn-sm"
               @click="portPage = Math.max(1, portPage - 1)"
@@ -644,7 +662,7 @@ const canReassignIpv6 = computed(() => {
               {{ t('instance.detail.network.prevPage') }}
             </button>
             <span class="text-sm text-gray-500">{{ portPage }} / {{ portTotalPages }}</span>
-            <button 
+            <button
               :disabled="portPage === portTotalPages"
               class="btn-ghost btn-sm"
               @click="portPage = Math.min(portTotalPages, portPage + 1)"
@@ -693,4 +711,3 @@ const canReassignIpv6 = computed(() => {
     </div>
   </div>
 </template>
-

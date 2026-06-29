@@ -40,7 +40,7 @@ import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { getStatusInfo } from '@/utils/formatters'
 import { translateError } from '@/utils/errorHandler'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel, getFreeSiteBillingCycleShort } from '@/utils/freeSiteFun'
-import type { Instance, InstanceWithDetails, Snapshot, UserQuota, UpdateInstanceRequest, Package, CloudInitState, CloudInitStatusResponse } from '@/types/api'
+import type { Instance, InstanceWithDetails, Snapshot, UserQuota, UpdateInstanceRequest, Package, CloudInitState, CloudInitStatusResponse, ExchangeEligibilityResult, ExchangeListing } from '@/types/api'
 
 // 格式化镜像名称：优先使用 imageName，否则去掉 images: 前缀
 function formatImageName(image: string, imageName?: string | null): string {
@@ -51,13 +51,13 @@ function formatImageName(image: string, imageName?: string | null): string {
 // 获取付费实例的图标类型
 function getInstanceIconType(inst: { instanceType?: string; host?: { name?: string } } | null): 'pro' | 'prime' | 'peer' {
   if (!inst) return 'pro'
-  
+
   // 如果节点名称以 PEER 开头（不区分大小写），则是托管实例，显示 peer 图标
   const hostName = inst.host?.name || ''
   if (/^PEER\d/i.test(hostName)) {
     return 'peer'
   }
-  
+
   // 根据实例类型判断：虚拟机显示 prime，容器显示 pro
   return inst.instanceType === 'vm' ? 'prime' : 'pro'
 }
@@ -281,24 +281,31 @@ const showRedeemModal = ref<boolean>(false)
 const redeemCodeInput = ref<string>('')
 const redeemLoading = ref<boolean>(false)
 
+const exchangeEligibility = ref<ExchangeEligibilityResult | null>(null)
+const exchangeEligibilityLoading = ref<boolean>(false)
+const exchangeStopLoading = ref<boolean>(false)
+const showExchangeStopConfirm = ref<boolean>(false)
+const instanceExchangeListing = ref<ExchangeListing | null>(null)
+const exchangeListingLoading = ref<boolean>(false)
+
 // 检查是否可以删除实例（根据套餐设置和付费状态）
 // 注意：宿主机拥有者不受套餐限制，可以删除其宿主机上的所有实例
 const canDeleteInstance = computed<boolean>(() => {
   if (!instance.value) return false
-  
+
   // 宿主机拥有者不受套餐限制
   const inst = instance.value as { isHostOwner?: boolean } | null
   if (inst?.isHostOwner === true) return true
-  
+
   // 付费实例禁止删除（无论套餐是否允许）
   if (instance.value.packagePlanId) return false
-  
+
   // 没有套餐时允许删除
   if (!instance.value.package_id) return true
-  
+
   // 套餐信息未加载时不允许（避免误删）
   if (!instancePackage.value) return false
-  
+
   // 只有明确设置为true时才允许删除
   return (instancePackage.value as any).allow_instance_deletion === true
 })
@@ -494,9 +501,9 @@ const isHostOwnerOnly = computed<boolean>(() => {
 })
 
 // 节点所有者禁止的操作：转移、重建、端口映射
-const canTransfer = computed<boolean>(() => !isHostOwnerOnly.value)
-const canRebuild = computed<boolean>(() => !isHostOwnerOnly.value)
-const hasCloudInitManualPermission = computed<boolean>(() => !isHostOwnerOnly.value)
+const canTransfer = computed<boolean>(() => !isHostOwnerOnly.value && !isExchangeLocked.value)
+const canRebuild = computed<boolean>(() => !isHostOwnerOnly.value && !isExchangeLocked.value)
+const hasCloudInitManualPermission = computed<boolean>(() => !isHostOwnerOnly.value && !isExchangeLocked.value)
 // 复制功能仅限宿主机所有者
 const canClone = computed<boolean>(() => {
   const inst = instance.value as { isHostOwner?: boolean } | null
@@ -511,7 +518,7 @@ const canSyncStatus = computed<boolean>(() => {
   const inst = instance.value
   return !!inst && (inst.isHostOwner === true || inst.isInstanceOwner === true)
 })
-const canManagePorts = computed<boolean>(() => !isHostOwnerOnly.value)
+const canManagePorts = computed<boolean>(() => !isHostOwnerOnly.value && !isExchangeLocked.value)
 
 const instanceHostName = computed<string>(() => {
   const host = (instance.value as any)?.host
@@ -551,7 +558,7 @@ watch(() => route.params.id, async (newId, oldId) => {
         cloudInitRetryTimer = null
       }
       cloudInitRetryCount = 0
-      
+
       // 重置所有状态
       loading.value = true
       activeTab.value = 'info'
@@ -569,25 +576,31 @@ watch(() => route.params.id, async (newId, oldId) => {
       snapshots.value = []
       hasPendingTransfer.value = false
       destroyInfo.value = null
-      
+      exchangeEligibility.value = null
+      instanceExchangeListing.value = null
+      exchangeEligibilityLoading.value = false
+      exchangeStopLoading.value = false
+      showExchangeStopConfirm.value = false
+      exchangeListingLoading.value = false
+
       // 重置配额相关状态
       instanceQuotaForm.value = { portLimit: null, snapshotLimit: null }
       quotaError.value = ''
       userQuota.value = null
       remainingQuota.value = { port: 0, snapshot: 0 }
       instancePackage.value = null
-      
+
       // 重置 cloud-init 状态
       cloudInitReady.value = true
       cloudInitState.value = null
       cloudInitChecking.value = false
       cloudInitManualCompleting.value = false
-      
+
       // 重置终端状态
       terminalConnected.value = false
       terminalSessionActive.value = false
       terminalTabCount.value = 0
-      
+
       // 关闭所有弹窗
       showAddPortModal.value = false
       showRenameModal.value = false
@@ -603,10 +616,10 @@ watch(() => route.params.id, async (newId, oldId) => {
       showSuspendModal.value = false
       showTerminalModal.value = false
       showConfigEditModal.value = false
-      
+
       // 加载新实例数据
       await loadInstance()
-      
+
       // 重新启动定时刷新
       if (isComponentMounted.value) {
         refreshInterval = setInterval(loadInstance, 5000)
@@ -620,7 +633,7 @@ watch(() => route.params.id, async (newId, oldId) => {
 watch(isRunning, (running: boolean) => {
   // 如果组件已卸载，不执行任何操作
   if (!isComponentMounted.value) return
-  
+
   if (running) {
     // 实例启动时，启动统计信息定时刷新
     if (!statsInterval && instance.value?.id) {
@@ -657,7 +670,7 @@ watch(isRunning, (running: boolean) => {
 async function checkCloudInitStatus(): Promise<void> {
   if (!instance.value?.id || !isComponentMounted.value) return
   if (cloudInitChecking.value) return
-  
+
   cloudInitChecking.value = true
   try {
     const result = await api.instances.checkCloudInitStatus(instance.value.id) as CloudInitStatusResponse
@@ -840,9 +853,9 @@ async function loadInstance(): Promise<void> {
   if (!isComponentMounted.value) {
     return
   }
-  
+
   if (actionLoading.value) return
-  
+
   try {
     // 检查当前路由是否仍然是实例详情页面
     if (!route.params.id || !isInstanceDetailRouteName(route.name)) {
@@ -853,9 +866,9 @@ async function loadInstance(): Promise<void> {
       }
       return
     }
-    
+
     const instanceId = parseInt(route.params.id as string)
-    
+
     // 验证 ID 是否为有效数字
     if (isNaN(instanceId) || instanceId <= 0) {
       // 如果组件仍然挂载，才显示错误并跳转
@@ -870,7 +883,7 @@ async function loadInstance(): Promise<void> {
       }
       return
     }
-    
+
     const response = await api.instances.get(instanceId)
     instance.value = (response as { instance?: Instance }).instance || null
     if (instance.value) {
@@ -899,6 +912,7 @@ async function loadInstance(): Promise<void> {
         // 并行执行独立的检查请求，加快首次加载速度
         await Promise.all([
           isAdminEntry ? Promise.resolve() : checkPendingTransfer(),
+          isAdminEntry ? Promise.resolve() : loadInstanceExchangeListing(),
           checkActiveTask()
         ])
         // 实例加载成功后，并行加载统计信息和流量数据
@@ -909,7 +923,7 @@ async function loadInstance(): Promise<void> {
           }
           loadPromises.push(loadTrafficData())
           await Promise.all(loadPromises)
-          
+
           // 启动统计信息定时刷新（只有运行时）
           if (!statsInterval && isRunning.value && isComponentMounted.value) {
             statsInterval = setInterval(loadStats, 3000)
@@ -944,33 +958,33 @@ async function loadStats(): Promise<void> {
   if (!isComponentMounted.value) {
     return
   }
-  
+
   if (!instance.value || statsLoading.value) return
-  
+
   // 只有在实例正在运行时才加载统计信息
   // 停止、重启、创建、启动、停止中等状态都不需要监控
   const status = instance.value.status?.toLowerCase()
   if (status !== 'running') {
     return  // 只有 running 状态才监控统计信息
   }
-  
+
   // 使用实例对象的 ID，而不是从路由参数获取（更可靠）
   const instanceId = instance.value.id
   if (!instanceId || instanceId <= 0) {
     return
   }
-  
+
   // 只在首次加载时显示 loading 状态，后续静默刷新避免闪烁
   const isInitialLoad = stats.value.memory.limit === 0 && stats.value.disk.limit === 0
   if (isInitialLoad) {
     statsLoading.value = true
   }
-  
+
   try {
     const response = await api.instances.getStats(instanceId)
     const newStats = (response as { stats?: ResourceStats; status?: string }).stats
     const newStatus = (response as { stats?: ResourceStats; status?: string }).status
-    
+
     if (newStats) {
       // 确保完整更新stats对象，保持响应式
       stats.value = {
@@ -990,7 +1004,7 @@ async function loadStats(): Promise<void> {
         }
       }
     }
-    
+
     // 检查实例状态是否变化（被动同步更新）
     if (newStatus && instance.value) {
       const normalizedStatus = newStatus.toLowerCase()
@@ -998,7 +1012,7 @@ async function loadStats(): Promise<void> {
       if (normalizedStatus !== currentStatus) {
         // 状态变化，立即更新实例状态
         instance.value.status = normalizedStatus as 'creating' | 'running' | 'stopped' | 'error' | 'deleted'
-        
+
         // 如果实例不再运行，停止统计信息轮询
         if (normalizedStatus !== 'running' && statsInterval) {
           clearInterval(statsInterval)
@@ -1018,18 +1032,18 @@ async function loadStats(): Promise<void> {
 
 async function loadTrafficData(): Promise<void> {
   if (!instance.value || trafficLoading.value) return
-  
+
   const instanceId = instance.value.id
   if (!instanceId || instanceId <= 0) {
     return
   }
-  
+
   // 只在首次加载时显示 loading 状态，后续静默刷新避免闪烁
   const isInitialLoad = !trafficData.value
   if (isInitialLoad) {
     trafficLoading.value = true
   }
-  
+
   try {
     const data = await api.traffic.getInstanceTraffic(instanceId)
     trafficData.value = data
@@ -1072,10 +1086,10 @@ async function loadAvailableImages(): Promise<void> {
     const imageType: 'container' | 'vm' = instanceType === 'vm' ? 'vm' : 'container'
     // 传递实例内存，128MB 只返回 Alpine/Debian
     const memory = instance.value?.memory
-    
+
     const res = await api.images.getSystemImages(imageType, memory, hostId)
     const images = res.images || []
-    
+
     availableImages.value = images.map((img: any) => ({
       incusAlias: img.remoteAlias,
       name: img.name,
@@ -1098,7 +1112,7 @@ function openRenameModal(): void {
 
 async function doRename(): Promise<void> {
   if (!instance.value || !newInstanceName.value.trim()) return
-  
+
   renameLoading.value = true
   try {
     await api.instances.rename(instance.value.id, newInstanceName.value.trim())
@@ -1115,7 +1129,7 @@ async function doRename(): Promise<void> {
 // 复制实例
 async function doClone(): Promise<void> {
   if (!instance.value) return
-  
+
   cloneLoading.value = true
   try {
     await api.instances.clone(instance.value.id)
@@ -1133,7 +1147,7 @@ async function doClone(): Promise<void> {
 // 配置编辑
 async function openConfigEditModal(): Promise<void> {
   if (!instance.value) return
-  
+
   // 加载套餐信息（如果实例绑定了套餐）
   if (instance.value.package_id && instance.value.package_id > 0) {
     try {
@@ -1148,16 +1162,16 @@ async function openConfigEditModal(): Promise<void> {
     // 如果没有绑定套餐，设置为 null
     instancePackage.value = null
   }
-  
+
   // 加载用户配额
   await loadUserQuota()
-  
+
   showConfigEditModal.value = true
 }
 
 async function handleConfigEdit(data: { cpu?: number; memory?: number; disk?: number; monthlyTrafficLimit?: string | null }): Promise<void> {
   if (!instance.value) return
-  
+
   configEditLoading.value = true
   try {
     await api.instances.updateConfig(instance.value.id, data)
@@ -1187,7 +1201,7 @@ async function handleRedeem(): Promise<void> {
     toast.warning(t('checkin.enterCode'))
     return
   }
-  
+
   redeemLoading.value = true
   try {
     const result = await customerSelfServiceApi.checkin.redeem(code, instance.value.id)
@@ -1197,7 +1211,7 @@ async function handleRedeem(): Promise<void> {
     const typeName = typeMap[result.codeType] || result.codeType
     const unit = unitMap[result.codeType] || ''
     toast.success(t('checkin.redeemToInstanceSuccess', { type: typeName, value: result.actualAdded, unit, instance: instance.value.name }))
-    
+
     showRedeemModal.value = false
     redeemCodeInput.value = ''
     // 刷新实例信息
@@ -1207,6 +1221,148 @@ async function handleRedeem(): Promise<void> {
   } finally {
     redeemLoading.value = false
   }
+}
+
+const exchangeListingBlockingStatuses = ['active', 'paused', 'locked', 'delivery_failed'] as const
+
+const isExchangeLocked = computed<boolean>(() =>
+  !!instanceExchangeListing.value && exchangeListingBlockingStatuses.includes(instanceExchangeListing.value.status as any)
+)
+
+function warnExchangeLockedOperation(): boolean {
+  if (!isExchangeLocked.value) return false
+  toast.warning('实例已上架交易所或处于交割中，不能执行实例操作；如需操作请先下架或等待交割处理完成')
+  return true
+}
+
+const exchangeStatusBadge = computed<{ label: string; hint: string; className: string }>(() => {
+  const listing = instanceExchangeListing.value
+  if (listing?.status === 'active') {
+    return {
+      label: '交易所挂牌中',
+      hint: `实例已暂停并锁定，挂牌价 ¥${Number(listing.price || 0).toFixed(2)}`,
+      className: themeStore.isDark ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-700'
+    }
+  }
+  if (listing?.status === 'paused') {
+    return {
+      label: '交易所暂停中',
+      hint: '挂牌已暂停，实例仍保持交易锁定',
+      className: themeStore.isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
+    }
+  }
+  if (listing?.status === 'locked') {
+    return {
+      label: '交易锁定中',
+      hint: '订单交割中，实例操作已锁定',
+      className: themeStore.isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-700'
+    }
+  }
+  if (listing?.status === 'delivery_failed') {
+    return {
+      label: '交割异常',
+      hint: '等待平台重试、退款、回滚或人工接管',
+      className: themeStore.isDark ? 'bg-red-900/50 text-red-300' : 'bg-red-100 text-red-700'
+    }
+  }
+  if (exchangeEligibility.value?.status === 'can_list') {
+    return {
+      label: '可上架',
+      hint: '实例已暂停并通过检测，可前往交易所填写售价',
+      className: themeStore.isDark ? 'bg-emerald-900/50 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
+    }
+  }
+  if (exchangeEligibility.value?.status === 'must_stop_first' || isRunning.value) {
+    return {
+      label: '需先暂停',
+      hint: '上架交易所前必须先暂停实例',
+      className: themeStore.isDark ? 'bg-yellow-900/40 text-yellow-300' : 'bg-yellow-100 text-yellow-700'
+    }
+  }
+  if (exchangeEligibility.value?.status === 'cannot_list') {
+    return {
+      label: '不可上架',
+      hint: exchangeEligibility.value.reasons[0] || '实例未通过交易所检测',
+      className: themeStore.isDark ? 'bg-red-900/40 text-red-300' : 'bg-red-100 text-red-700'
+    }
+  }
+  if (isStopped.value) {
+    return {
+      label: '待检测',
+      hint: '已暂停，检测通过后可上架交易所',
+      className: themeStore.isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
+    }
+  }
+  return {
+    label: '不可直接上架',
+    hint: '只有暂停且通过检测的实例可以挂牌',
+    className: themeStore.isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'
+  }
+})
+
+function canGoToExchangeListing(): boolean {
+  return exchangeEligibility.value?.status === 'can_list' && !isExchangeLocked.value
+}
+
+function showExchangeStopAction(): boolean {
+  return !isExchangeLocked.value && (isRunning.value || exchangeEligibility.value?.status === 'must_stop_first')
+}
+
+async function loadInstanceExchangeListing(): Promise<void> {
+  if (isAdminEntry || !instance.value?.id || exchangeListingLoading.value) return
+  exchangeListingLoading.value = true
+  try {
+    const res = await api.exchange.getInstanceListing(instance.value.id)
+    instanceExchangeListing.value = res.listing || null
+  } catch (err) {
+    console.error('Failed to load exchange listing state:', err)
+  } finally {
+    exchangeListingLoading.value = false
+  }
+}
+
+async function checkExchangeEligibility(): Promise<void> {
+  if (isAdminEntry || !instance.value?.id || exchangeEligibilityLoading.value) return
+  exchangeEligibilityLoading.value = true
+  try {
+    exchangeEligibility.value = await api.exchange.checkEligibility(instance.value.id)
+    await loadInstanceExchangeListing()
+    if (exchangeEligibility.value.status === 'can_list') {
+      toast.success('实例已通过交易所检测，可以前往上架')
+    } else if (exchangeEligibility.value.status === 'must_stop_first') {
+      toast.warning('上架交易所前必须先暂停实例')
+    } else {
+      toast.warning(exchangeEligibility.value.reasons[0] || '实例暂时不能上架交易所')
+    }
+  } catch (err: any) {
+    toast.error(err?.message || '检测交易所资格失败')
+  } finally {
+    exchangeEligibilityLoading.value = false
+  }
+}
+
+async function stopInstanceForExchangeListing(): Promise<void> {
+  if (isAdminEntry || !instance.value?.id || exchangeStopLoading.value) return
+  exchangeStopLoading.value = true
+  try {
+    const result = await api.exchange.stopForListing(instance.value.id)
+    toast.success(result.message || '暂停任务已提交，完成后请重新检测并挂牌')
+    showExchangeStopConfirm.value = false
+    if (result.taskId) {
+      startTaskPolling(result.taskId)
+    }
+    await loadInstance()
+    exchangeEligibility.value = result.eligibility || null
+  } catch (err: any) {
+    toast.error(err?.message || '暂停实例失败')
+  } finally {
+    exchangeStopLoading.value = false
+  }
+}
+
+function openInstanceExchangeListing(): void {
+  if (!instance.value?.id) return
+  void router.push({ path: '/exchange', query: { instanceId: String(instance.value.id) } })
 }
 
 // 续费成功处理
@@ -1230,11 +1386,12 @@ async function handleChangePlanSuccess(): Promise<void> {
 // 设置自动续费
 async function handleSetAutoRenew(autoRenew: boolean): Promise<void> {
   if (isAdminEntry || !instance.value) return
+  if (warnExchangeLockedOperation()) return
   autoRenewLoading.value = true
   try {
     await customerSelfServiceApi.billing.setAutoRenew(instance.value.id, autoRenew)
-    toast.success(autoRenew 
-      ? t('instance.subscription.autoRenewEnabled') 
+    toast.success(autoRenew
+      ? t('instance.subscription.autoRenewEnabled')
       : t('instance.subscription.autoRenewDisabled')
     )
     await loadInstance()
@@ -1249,6 +1406,10 @@ async function handleSetAutoRenew(autoRenew: boolean): Promise<void> {
 // 加载销毁信息
 async function loadDestroyInfo(): Promise<void> {
   if (isAdminEntry || !instance.value) return
+  if (warnExchangeLockedOperation()) {
+    showDestroyModal.value = false
+    return
+  }
   destroyInfo.value = null
   try {
     destroyInfo.value = await customerSelfServiceApi.billing.getDestroyInfo(instance.value.id) as any
@@ -1261,6 +1422,7 @@ async function loadDestroyInfo(): Promise<void> {
 // 执行销毁
 async function handleDestroy(): Promise<void> {
   if (isAdminEntry || !instance.value || !destroyInfo.value?.canDestroy) return
+  if (warnExchangeLockedOperation()) return
   destroyLoading.value = true
   try {
     const result = await customerSelfServiceApi.billing.destroyInstance(instance.value.id)
@@ -1333,7 +1495,7 @@ const isOperationDisabled = computed<boolean>(() => {
   if (isSuspended.value && !isHostOwner) {
     return true
   }
-  return !!actionLoading.value || !!activeTask.value || hasPendingTransfer.value
+  return !!actionLoading.value || !!activeTask.value || hasPendingTransfer.value || isExchangeLocked.value
 })
 
 // 操作
@@ -1346,17 +1508,17 @@ function startTaskPolling(_taskId: number): void {
   if (taskPollingInterval) {
     clearInterval(taskPollingInterval)
   }
-  
+
   const pollTask = async (): Promise<void> => {
     if (!instance.value || !isComponentMounted.value) {
       stopTaskPolling()
       return
     }
-    
+
     try {
       const response = await api.instances.getActiveTask(instance.value.id)
       activeTask.value = response.task
-      
+
       // 如果任务已完成或失败，停止轮询并刷新实例
       if (!response.task || response.task.status === 'COMPLETED' || response.task.status === 'FAILED') {
         stopTaskPolling()
@@ -1371,7 +1533,7 @@ function startTaskPolling(_taskId: number): void {
       stopTaskPolling()
     }
   }
-  
+
   // 立即执行一次
   pollTask()
   // 每2秒轮询一次
@@ -1388,6 +1550,7 @@ function stopTaskPolling(): void {
 
 async function handleAction(action: InstanceAction): Promise<void> {
   if (!instance.value) return
+  if (warnExchangeLockedOperation()) return
   actionLoading.value = action
   try {
     if (action === 'start') {
@@ -1411,7 +1574,7 @@ async function handleAction(action: InstanceAction): Promise<void> {
         actionLoading.value = ''
         return
       }
-      
+
       await api.instances.delete(instance.value.id)
       toast.success(t('instance.detail.actions.deleted'))
       router.push(getReturnPath())
@@ -1442,6 +1605,7 @@ async function handleAction(action: InstanceAction): Promise<void> {
 // 重建系统
 // 点击重建按钮时的处理：运行中提示需要先关机
 function handleRebuildClick(): void {
+  if (warnExchangeLockedOperation()) return
   if (isRunning.value) {
     toast.warning(t('instance.detail.actions.stopRequired'))
     return
@@ -1450,6 +1614,7 @@ function handleRebuildClick(): void {
 }
 
 async function openRebuildModal(): Promise<void> {
+  if (warnExchangeLockedOperation()) return
   await Promise.all([loadAvailableImages(), loadSshKeys()])
   showRebuildModal.value = true
 }
@@ -1470,7 +1635,8 @@ async function doRebuild(data: { image: string; sshKeyId: number; customInitComm
     toast.error(t('instance.detail.actions.selectImageAndKey'))
     return
   }
-  
+  if (warnExchangeLockedOperation()) return
+
   rebuildLoading.value = true
   try {
     const response = await api.instances.rebuild(instance.value.id, {
@@ -1493,7 +1659,8 @@ async function doRecreate(data: { image: string; sshKeyId: number; customInitCom
     toast.error(t('instance.detail.actions.selectImageAndKey'))
     return
   }
-  
+  if (warnExchangeLockedOperation()) return
+
   recreateLoading.value = true
   try {
     const response = await api.instances.recreate(instance.value.id, {
@@ -1515,7 +1682,8 @@ async function doRecreate(data: { image: string; sshKeyId: number; customInitCom
 
 async function deletePort(portId: number): Promise<void> {
   if (!instance.value || !confirm(t('instance.detail.port.confirmDelete'))) return
-  
+  if (warnExchangeLockedOperation()) return
+
   try {
     await api.instances.deletePort(instance.value.id, portId)
     // 立即从本地数据移除，提供即时反馈
@@ -1537,12 +1705,13 @@ const deletePortsLoading = ref<boolean>(false)
 
 async function deletePorts(portIds: number[]): Promise<void> {
   if (!instance.value || portIds.length === 0) return
+  if (warnExchangeLockedOperation()) return
   if (!confirm(t('instance.detail.port.confirmBatchDelete', { count: portIds.length }))) return
-  
+
   deletePortsLoading.value = true
   let successCount = 0
   let failCount = 0
-  
+
   try {
     for (const portId of portIds) {
       try {
@@ -1558,7 +1727,7 @@ async function deletePorts(portIds: number[]): Promise<void> {
         failCount++
       }
     }
-    
+
     if (failCount === 0) {
       toast.success(t('instance.detail.port.batchDeleted', { count: successCount }))
     } else {
@@ -1582,7 +1751,7 @@ function handleSuspend(): void {
 
 async function confirmSuspend(): Promise<void> {
   if (!instance.value || !canSuspend.value) return
-  
+
   suspendLoading.value = true
   try {
     await api.instances.suspend(instance.value.id, suspendReason.value.trim() || undefined)
@@ -1599,11 +1768,11 @@ async function confirmSuspend(): Promise<void> {
 
 async function handleUnsuspend(): Promise<void> {
   if (!instance.value || !canSuspend.value) return
-  
+
   if (!confirm(t('instance.detail.actions.confirmUnsuspend', { name: instance.value.name }))) {
     return
   }
-  
+
   suspendLoading.value = true
   try {
     await api.instances.unsuspend(instance.value.id)
@@ -1619,7 +1788,7 @@ async function handleUnsuspend(): Promise<void> {
 // 同步实例状态
 async function handleSyncStatus(): Promise<void> {
   if (!instance.value) return
-  
+
   syncStatusLoading.value = true
   try {
     const result = await api.instances.syncStatus(instance.value.id)
@@ -1663,24 +1832,24 @@ async function handleSyncStatus(): Promise<void> {
 // 重新分配 IPv6
 async function handleReassignIpv6(): Promise<void> {
   if (!instance.value) return
-  
+
   // 检查网络模式
   if (instance.value.network_mode !== 'nat_ipv6') {
     toast.error(t('instance.detail.network.reassignIpv6NotSupported'))
     return
   }
-  
+
   // 检查实例状态
   if (instance.value.status !== 'stopped') {
     toast.warning(t('instance.detail.network.reassignIpv6StopRequired'))
     return
   }
-  
+
   // 确认操作
   if (!confirm(t('instance.detail.network.reassignIpv6Confirm') + '\n\n' + t('instance.detail.network.reassignIpv6ConfirmHint'))) {
     return
   }
-  
+
   reassignIpv6Loading.value = true
   try {
     const result = await api.instances.reassignIpv6(instance.value.id)
@@ -1699,15 +1868,15 @@ async function handleReassignIpv6(): Promise<void> {
 // 加载用户配额
 async function loadUserQuota(): Promise<void> {
   if (!instance.value) return
-  
+
   try {
     // 先尝试获取当前用户信息
     const meResponse = await api.auth.me()
     const currentUser = (meResponse as { user?: { id: number; role: string; quota?: UserQuota } }).user
-    
+
     // 获取实例的用户ID（可能是userId或user_id）
     const instanceUserId = (instance.value as any).userId || instance.value.user_id
-    
+
     // 如果是管理员或者是自己的实例，可以获取配额
     if (currentUser && (currentUser.role === 'admin' || currentUser.id === instanceUserId)) {
       if (currentUser.id === instanceUserId) {
@@ -1718,7 +1887,7 @@ async function loadUserQuota(): Promise<void> {
         const userResponse = await api.users.get(instanceUserId)
         userQuota.value = ((userResponse as { user?: { quota?: UserQuota } }).user?.quota) || null
       }
-      
+
       if (userQuota.value) {
         await calculateRemainingQuota()
       }
@@ -1737,16 +1906,16 @@ async function checkPendingTransfer(): Promise<void> {
     return
   }
   if (!instance.value) return
-  
+
   try {
     // 检查发送的转移
     const sentResponse = await customerSelfServiceApi.transfers.list('sent', { status: 'pending', pageSize: 100 })
     const hasSentPending = sentResponse.transfers.some(t => t.instanceId === instance.value?.id)
-    
+
     // 检查接收的转移
     const receivedResponse = await customerSelfServiceApi.transfers.list('received', { status: 'pending', pageSize: 100 })
     const hasReceivedPending = receivedResponse.transfers.some(t => t.instanceId === instance.value?.id)
-    
+
     hasPendingTransfer.value = hasSentPending || hasReceivedPending
   } catch (err) {
     console.error('Failed to check pending transfer:', err)
@@ -1757,7 +1926,7 @@ async function checkPendingTransfer(): Promise<void> {
 // 检查是否有活跃的实例操作任务
 async function checkActiveTask(): Promise<void> {
   if (!instance.value) return
-  
+
   try {
     const response = await api.instances.getActiveTask(instance.value.id)
     if (response.task && (response.task.status === 'PENDING' || response.task.status === 'PROCESSING')) {
@@ -1793,7 +1962,7 @@ async function handleTransferClick(): Promise<void> {
 // 计算剩余额度
 async function calculateRemainingQuota(): Promise<void> {
   if (!instance.value) return
-  
+
   try {
     // 优先使用后端返回的实时剩余额度
     if ((instance.value as any).remainingQuota) {
@@ -1803,17 +1972,17 @@ async function calculateRemainingQuota(): Promise<void> {
       }
       return
     }
-    
+
     // 新配额系统：端口/快照配额是实例级别的（从套餐包继承）
     // 直接从实例数据获取配额和使用量
     const portLimit = (instance.value as any).portLimit || 0
     const portMappings = (instance.value as any).port_mappings || []
     const portUsed = portMappings.length
-    
+
     const snapshotLimit = (instance.value as any).snapshotLimit || 0
     const snapshots = (instance.value as any).snapshots || []
     const snapshotUsed = snapshots.length
-    
+
     remainingQuota.value = {
       port: Math.max(0, portLimit - portUsed),
       snapshot: Math.max(0, snapshotLimit - snapshotUsed)
@@ -1826,54 +1995,55 @@ async function calculateRemainingQuota(): Promise<void> {
 // 实例配额
 async function saveInstanceQuota(): Promise<void> {
   if (!instance.value) return
+  if (warnExchangeLockedOperation()) return
   quotaSaving.value = true
   quotaError.value = ''
-  
+
   try {
     // 处理输入值：null、undefined、NaN都转为null
-    const portLimit = (instanceQuotaForm.value.portLimit === null || 
+    const portLimit = (instanceQuotaForm.value.portLimit === null ||
                        instanceQuotaForm.value.portLimit === undefined ||
                        isNaN(Number(instanceQuotaForm.value.portLimit)))
-                      ? null 
+                      ? null
                       : Number(instanceQuotaForm.value.portLimit)
-    
-    const snapshotLimit = (instanceQuotaForm.value.snapshotLimit === null || 
+
+    const snapshotLimit = (instanceQuotaForm.value.snapshotLimit === null ||
                            instanceQuotaForm.value.snapshotLimit === undefined ||
                            isNaN(Number(instanceQuotaForm.value.snapshotLimit)))
-                          ? null 
+                          ? null
                           : Number(instanceQuotaForm.value.snapshotLimit)
-    
+
     // 验证：不能小于当前已使用量
     if (portLimit !== null && portLimit < portMappingsCount.value) {
       quotaError.value = t('instance.detail.quota.portExceedUsed', { used: portMappingsCount.value, input: portLimit })
       quotaSaving.value = false
       return
     }
-    
+
     if (snapshotLimit !== null && snapshotLimit < snapshots.value.length) {
       quotaError.value = t('instance.detail.quota.snapshotExceedUsed', { used: snapshots.value.length, input: snapshotLimit })
       quotaSaving.value = false
       return
     }
-    
+
     // 验证：端口数、快照数必须在 1-1000 范围内（null 表示不限制）
     if (portLimit !== null && (portLimit < 1 || portLimit > 1000)) {
       quotaError.value = t('instance.detail.quota.portOutOfRange')
       quotaSaving.value = false
       return
     }
-    
+
     if (snapshotLimit !== null && (snapshotLimit < 1 || snapshotLimit > 1000)) {
       quotaError.value = t('instance.detail.quota.snapshotOutOfRange')
       quotaSaving.value = false
       return
     }
-    
+
     const payload: UpdateInstanceRequest = {
       portLimit: portLimit ?? undefined,
       snapshotLimit: snapshotLimit ?? undefined
     }
-    
+
     // 使用实例对象的 ID，而不是从路由参数获取（更可靠）
     if (!instance.value || !instance.value.id) {
       quotaError.value = t('instance.detail.invalidId')
@@ -1883,10 +2053,10 @@ async function saveInstanceQuota(): Promise<void> {
     const instanceId = instance.value.id
     await api.instances.updateQuota(instanceId, payload)
     toast.success(t('instance.detail.quota.saved'))
-    
+
     // 清除错误信息
     quotaError.value = ''
-    
+
     // 并行重新加载所有相关数据
     await Promise.all([
       loadInstance(),
@@ -1916,7 +2086,7 @@ async function copyToClipboard(text: string, key?: string): Promise<void> {
   }
 }
 
-async function handleAddPort(form: { 
+async function handleAddPort(form: {
   protocol: 'tcp' | 'udp' | 'both'
   privatePort: string
   publicPort: string
@@ -1931,10 +2101,11 @@ async function handleAddPort(form: {
     portError.value = t('instance.detail.port.fillPrivatePort')
     return
   }
-  
+  if (warnExchangeLockedOperation()) return
+
   portLoading.value = true
   portError.value = ''
-  
+
   try {
     // 判断是否为范围输入
     if (form.isRange && form.privatePortStart !== undefined && form.privatePortEnd !== undefined) {
@@ -1951,18 +2122,18 @@ async function handleAddPort(form: {
         privatePortStart: form.privatePortStart,
         privatePortEnd: form.privatePortEnd
       }
-      
+
       if (form.publicPortStart !== undefined && form.publicPortEnd !== undefined) {
         batchData.publicPortStart = form.publicPortStart
         batchData.publicPortEnd = form.publicPortEnd
       }
-      
+
       if (form.remark?.trim()) {
         batchData.remark = form.remark.trim()
       }
-      
+
       const response = await api.instances.addPortBatch(instance.value.id, batchData)
-      
+
       // 检查是否有冲突
       if ('conflicts' in response && response.conflicts) {
         // 保存原始数据用于重新提交
@@ -1972,7 +2143,7 @@ async function handleAddPort(form: {
         showAddPortModal.value = false
         return
       }
-      
+
       // 成功
       if ('mappings' in response && response.mappings) {
         showAddPortModal.value = false
@@ -1984,7 +2155,7 @@ async function handleAddPort(form: {
       // 单个端口映射（原有逻辑）
       if (form.protocol === 'both') {
         let sharedPublicPort: number | undefined = form.publicPort ? parseInt(form.publicPort) : undefined
-        
+
         // 先创建 TCP 映射
         const tcpPayload: { protocol: 'tcp' | 'udp'; privatePort: number; publicPort?: number; remark?: string } = {
           protocol: 'tcp',
@@ -1996,7 +2167,7 @@ async function handleAddPort(form: {
         if (form.remark?.trim()) {
           tcpPayload.remark = form.remark.trim()
         }
-        
+
         const tcpResponse = await api.instances.addPort(instance.value!.id, tcpPayload)
         // @ts-ignore - API response structure
         const tcpMapping = tcpResponse.mapping
@@ -2016,7 +2187,7 @@ async function handleAddPort(form: {
             sharedPublicPort = tcpMapping.publicPort
           }
         }
-        
+
         // 再创建 UDP 映射，使用相同的公网端口
         const udpPayload: { protocol: 'tcp' | 'udp'; privatePort: number; publicPort?: number; remark?: string } = {
           protocol: 'udp',
@@ -2026,7 +2197,7 @@ async function handleAddPort(form: {
         if (form.remark?.trim()) {
           udpPayload.remark = form.remark.trim()
         }
-        
+
         const udpResponse = await api.instances.addPort(instance.value!.id, udpPayload)
         // @ts-ignore - API response structure
         const udpMapping = udpResponse.mapping
@@ -2039,7 +2210,7 @@ async function handleAddPort(form: {
             remark: udpMapping.remark
           })
         }
-        
+
         showAddPortModal.value = false
         toast.success(t('instance.detail.port.addedBoth'))
       } else {
@@ -2048,15 +2219,15 @@ async function handleAddPort(form: {
           protocol: form.protocol,
           privatePort: parseInt(form.privatePort)
         }
-        
+
         if (form.publicPort) {
           payload.publicPort = parseInt(form.publicPort)
         }
-        
+
         if (form.remark?.trim()) {
           payload.remark = form.remark.trim()
         }
-        
+
         const response = await api.instances.addPort(instance.value.id, payload)
         // @ts-ignore - API response structure
         const newMapping = response.mapping
@@ -2106,16 +2277,17 @@ async function handleAddPort(form: {
 // 端口冲突解决后重新提交
 async function handlePortConflictConfirm(resolvedPorts: Array<{ original: number; resolved: number }>): Promise<void> {
   if (!instance.value || !pendingBatchPortData.value) return
-  
+  if (warnExchangeLockedOperation()) return
+
   portLoading.value = true
-  
+
   try {
     const data = pendingBatchPortData.value
     const privatePortCount = data.privatePortEnd - data.privatePortStart + 1
-    
+
     // 构建新的端口映射列表
     const portMappings: Array<{ privatePort: number; publicPort: number }> = []
-    
+
     // 获取原始的公网端口列表
     const originalPublicPorts: number[] = []
     if (data.publicPortStart !== undefined && data.publicPortEnd !== undefined) {
@@ -2123,21 +2295,21 @@ async function handlePortConflictConfirm(resolvedPorts: Array<{ original: number
         originalPublicPorts.push(data.publicPortStart + i)
       }
     }
-    
+
     // 替换冲突的端口
     const resolvedMap = new Map(resolvedPorts.map(r => [r.original, r.resolved]))
-    
+
     for (let i = 0; i < privatePortCount; i++) {
       const privatePort = data.privatePortStart + i
       const originalPublic = originalPublicPorts[i]
       const resolvedPublic = resolvedMap.get(originalPublic) ?? originalPublic
-      
+
       portMappings.push({
         privatePort,
         publicPort: resolvedPublic
       })
     }
-    
+
     // 重新提交，带上修改后的端口映射
     const response = await api.instances.addPortBatch(instance.value.id, {
       protocol: data.protocol,
@@ -2146,7 +2318,7 @@ async function handlePortConflictConfirm(resolvedPorts: Array<{ original: number
       remark: data.remark,
       portMappings
     })
-    
+
     if ('mappings' in response && response.mappings) {
       showPortConflictModal.value = false
       pendingBatchPortData.value = null
@@ -2171,9 +2343,19 @@ function handlePortConflictCancel(): void {
   portConflicts.value = []
 }
 
+function requestAddPort(): void {
+  if (warnExchangeLockedOperation()) return
+  showAddPortModal.value = true
+}
+
+function requestReassignIpv6(): void {
+  if (warnExchangeLockedOperation()) return
+  void handleReassignIpv6()
+}
+
 async function togglePasswordVisibility(instanceId: number): Promise<void> {
   const isCurrentlyVisible = showPassword.value[instanceId]
-  
+
   if (!isCurrentlyVisible && !instancePassword.value[instanceId]) {
     // 如果密码未加载，先加载密码
     try {
@@ -2184,7 +2366,7 @@ async function togglePasswordVisibility(instanceId: number): Promise<void> {
       return
     }
   }
-  
+
   showPassword.value[instanceId] = !showPassword.value[instanceId]
 }
 
@@ -2343,11 +2525,11 @@ function formatShortDate(dateStr: string | null | undefined): string {
       <!-- Header -->
       <div class="page-header flex-col lg:flex-row gap-4 lg:gap-0">
         <div class="flex items-center gap-3 sm:gap-4 min-w-0">
-          <RouterLink 
-            :to="getReturnPath()" 
+          <RouterLink
+            :to="getReturnPath()"
             class="flex h-11 w-11 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-2xl border transition-all duration-200"
-            :class="themeStore.isDark 
-              ? 'border-gray-800 bg-gray-950 text-gray-500 hover:border-gray-700 hover:bg-gray-900 hover:text-gray-200' 
+            :class="themeStore.isDark
+              ? 'border-gray-800 bg-gray-950 text-gray-500 hover:border-gray-700 hover:bg-gray-900 hover:text-gray-200'
               : 'border-gray-200 bg-white text-gray-400 shadow-sm hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700'"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2413,10 +2595,10 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <p class="page-description mt-0.5">{{ formatImageName(instance.image, (instance as any).imageName) }} · <span class="uppercase">{{ (instance as any).host?.name || (instance as any).host || '-' }}</span></p>
           </div>
         </div>
-        
+
         <div class="flex items-center gap-2 flex-wrap">
           <!-- Active Task Indicator -->
-          <div 
+          <div
             v-if="activeTask"
             class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm"
             :class="themeStore.isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'"
@@ -2428,7 +2610,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline">{{ $t(`instance.detail.task.${activeTask.taskType}`) }}</span>
           </div>
           <!-- Transfer Lock Warning -->
-          <div 
+          <div
             v-if="!isAdminEntry && hasPendingTransfer"
             class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm"
             :class="themeStore.isDark ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-700'"
@@ -2439,7 +2621,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline">{{ $t('transfer.messages.instanceLocked') }}</span>
           </div>
           <!-- Suspended Warning -->
-          <div 
+          <div
             v-if="isSuspended"
             class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm"
             :class="themeStore.isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'"
@@ -2496,9 +2678,9 @@ function formatShortDate(dateStr: string | null | undefined): string {
             </button>
           </div>
           <!-- Rename Button -->
-          <button 
-            :disabled="isOperationDisabled" 
-            class="btn-ghost btn-sm sm:btn inline-flex" 
+          <button
+            :disabled="isOperationDisabled"
+            class="btn-ghost btn-sm sm:btn inline-flex"
             :title="$t('instance.actions.rename')"
             @click="openRenameModal"
           >
@@ -2508,8 +2690,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline">{{ $t('instance.actions.rename') }}</span>
           </button>
           <!-- Terminal Button -->
-          <button 
-            v-if="isRunning" 
+          <button
+            v-if="isRunning"
             class="btn-sm sm:btn inline-flex rounded-lg"
             :class="themeStore.isDark ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white'"
             :title="$t('terminal.title')"
@@ -2521,8 +2703,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline ml-1">{{ $t('terminal.title') }}</span>
           </button>
           <!-- Terminal Button (Disabled when not running) -->
-          <button 
-            v-if="isStopped" 
+          <button
+            v-if="isStopped"
             disabled
             class="btn-sm sm:btn inline-flex rounded-lg opacity-50 cursor-not-allowed"
             :class="themeStore.isDark ? 'bg-green-600/50 text-white' : 'bg-green-500/50 text-white'"
@@ -2555,9 +2737,9 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span v-else>{{ $t('instance.actions.restart') }}</span>
           </button>
           <!-- 复制按钮（特殊颜色标记，只在停机时可用） -->
-          <button 
-            v-if="isStopped && canClone" 
-            :disabled="isOperationDisabled" 
+          <button
+            v-if="isStopped && canClone"
+            :disabled="isOperationDisabled"
             class="btn-sm sm:btn inline-flex rounded-lg"
             :class="themeStore.isDark ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-purple-500 hover:bg-purple-600 text-white'"
             :title="actionLoading === 'clone' ? '' : $t('instance.actions.clone')"
@@ -2573,8 +2755,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span v-if="actionLoading !== 'clone'" class="hidden sm:inline ml-1">{{ $t('instance.actions.clone') }}</span>
           </button>
           <!-- 复制按钮（运行时显示但禁用，hover 提示） -->
-          <button 
-            v-if="isRunning && canClone" 
+          <button
+            v-if="isRunning && canClone"
             disabled
             class="btn-sm sm:btn inline-flex rounded-lg opacity-50 cursor-not-allowed"
             :class="themeStore.isDark ? 'bg-purple-600/50 text-white' : 'bg-purple-500/50 text-white'"
@@ -2586,8 +2768,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline ml-1">{{ $t('instance.actions.clone') }}</span>
           </button>
           <!-- 重建按钮（始终可点击，运行时提示需要先关机） -->
-          <button 
-            v-if="canRebuild" 
+          <button
+            v-if="canRebuild"
             :disabled="isOperationDisabled"
             class="btn-secondary btn-sm sm:btn inline-flex"
             :title="$t('instance.detail.rebuild.title')"
@@ -2622,7 +2804,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline">{{ $t('transfer.actions.transfer') }}</span>
           </button>
           <!-- 帮助按钮 -->
-          <RouterLink 
+          <RouterLink
             :to="helpPath()"
             class="btn-secondary btn-sm sm:btn inline-flex items-center"
             :title="$t('instance.detail.actions.help')"
@@ -2633,9 +2815,9 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline ml-1">{{ $t('instance.detail.actions.help') }}</span>
           </RouterLink>
           <!-- 封停按钮（仅宿主机所有者可见，实例未封停时） -->
-          <button 
-            v-if="canSuspend && !isSuspended" 
-            :disabled="suspendLoading" 
+          <button
+            v-if="canSuspend && !isSuspended"
+            :disabled="suspendLoading"
             class="btn-sm sm:btn inline-flex rounded-lg"
             :class="themeStore.isDark ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white'"
             :title="$t('instance.detail.actions.suspend')"
@@ -2651,9 +2833,9 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <span class="hidden sm:inline ml-1">{{ $t('instance.actions.suspend') }}</span>
           </button>
           <!-- 解封按钮（仅宿主机所有者可见，实例已封停时） -->
-          <button 
-            v-if="canSuspend && isSuspended" 
-            :disabled="suspendLoading" 
+          <button
+            v-if="canSuspend && isSuspended"
+            :disabled="suspendLoading"
             class="btn-sm sm:btn inline-flex rounded-lg"
             :class="themeStore.isDark ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white'"
             :title="$t('instance.detail.actions.unsuspend')"
@@ -2679,16 +2861,16 @@ function formatShortDate(dateStr: string | null | undefined): string {
       </div>
 
       <!-- Tab Navigation -->
-      <div 
+      <div
         class="flex gap-1 p-1 rounded-lg w-full sm:w-fit overflow-x-auto"
         :class="themeStore.isDark ? 'bg-gray-900' : 'bg-gray-100'"
       >
-        <button 
+        <button
           v-for="tab in visibleTabs"
           :key="tab.key"
           :class="[
             'flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap',
-            activeTab === tab.key 
+            activeTab === tab.key
               ? (themeStore.isDark ? 'bg-gray-800 text-white' : 'bg-white text-gray-900 shadow-sm')
               : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900')
           ]"
@@ -2702,31 +2884,31 @@ function formatShortDate(dateStr: string | null | undefined): string {
       </div>
 
       <!-- Error State Banner -->
-      <div 
+      <div
         v-if="instance && isError"
         class="rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4"
-        :class="themeStore.isDark 
-          ? 'bg-red-500/10 border border-red-500/30' 
+        :class="themeStore.isDark
+          ? 'bg-red-500/10 border border-red-500/30'
           : 'bg-red-50 border border-red-200'"
       >
         <div class="flex items-start gap-3 flex-1 min-w-0">
-          <svg 
+          <svg
             class="w-5 h-5 flex-shrink-0 mt-0.5"
             :class="themeStore.isDark ? 'text-red-400' : 'text-red-600'"
-            fill="none" 
-            stroke="currentColor" 
+            fill="none"
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
           </svg>
           <div class="min-w-0">
-            <p 
+            <p
               class="text-sm font-medium"
               :class="themeStore.isDark ? 'text-red-400' : 'text-red-700'"
             >
               {{ $t('instance.errorBanner.title') }}
             </p>
-            <p 
+            <p
               class="text-xs mt-0.5"
               :class="themeStore.isDark ? 'text-red-300/70' : 'text-red-600'"
             >
@@ -2736,8 +2918,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
         </div>
         <button
           class="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg transition-colors w-full sm:w-auto text-center"
-          :class="themeStore.isDark 
-            ? 'bg-red-600 hover:bg-red-700 text-white' 
+          :class="themeStore.isDark
+            ? 'bg-red-600 hover:bg-red-700 text-white'
             : 'bg-red-600 hover:bg-red-700 text-white'"
           :disabled="errorDestroyLoading"
           @click="handleErrorDestroy"
@@ -2759,7 +2941,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
           <!-- Info Tab -->
           <div v-if="activeTab === 'info' && instance" class="space-y-4">
             <!-- Host Announcement Banner -->
-            <div 
+            <div
               v-if="(instance as any).hostAnnouncement"
               class="relative overflow-hidden rounded-[1.4rem] border px-4 py-3.5 sm:px-5 sm:py-4"
               :class="themeStore.isDark
@@ -2863,8 +3045,81 @@ function formatShortDate(dateStr: string | null | undefined): string {
               container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface"
             />
 
+            <div
+              v-if="!isAdminEntry && !isHostOwnerOnly"
+              class="card p-4 sm:p-5"
+            >
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="text-base font-semibold text-themed">交易所上架</h3>
+                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="exchangeStatusBadge.className">
+                      {{ exchangeStatusBadge.label }}
+                    </span>
+                  </div>
+                  <p class="mt-1 text-sm text-themed-muted">{{ exchangeStatusBadge.hint }}</p>
+                  <p class="mt-2 text-xs text-themed-muted">
+                    实例必须处于暂停状态才能挂牌。成交后平台会强制重装交割给买家，并清理 SSH key、控制台 token、端口映射、代理站点、快照、备份策略和流量基线。
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap gap-2 lg:justify-end">
+                  <button
+                    class="btn-secondary btn-sm"
+                    type="button"
+                    :disabled="exchangeEligibilityLoading || isExchangeLocked"
+                    @click="checkExchangeEligibility"
+                  >
+                    {{ exchangeEligibilityLoading ? '检测中...' : '检测资格' }}
+                  </button>
+                  <button
+                    v-if="showExchangeStopAction()"
+                    class="btn-secondary btn-sm"
+                    type="button"
+                    :disabled="exchangeStopLoading || isOperationDisabled"
+                    @click="showExchangeStopConfirm = true"
+                  >
+                    {{ exchangeStopLoading ? '提交中...' : '先暂停实例' }}
+                  </button>
+                  <button
+                    v-if="isExchangeLocked"
+                    class="btn-secondary btn-sm"
+                    type="button"
+                    @click="openInstanceExchangeListing"
+                  >
+                    查看交易所
+                  </button>
+                  <button
+                    v-else
+                    class="btn-primary btn-sm"
+                    type="button"
+                    :disabled="!canGoToExchangeListing()"
+                    @click="openInstanceExchangeListing"
+                  >
+                    上架交易所
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="exchangeEligibility"
+                class="mt-4 grid gap-2 md:grid-cols-2"
+              >
+                <div
+                  v-for="check in exchangeEligibility.checks"
+                  :key="check.key"
+                  class="rounded border px-3 py-2 text-xs"
+                  :class="check.passed
+                    ? (themeStore.isDark ? 'border-emerald-800 bg-emerald-950/30 text-emerald-200' : 'border-emerald-200 bg-emerald-50 text-emerald-700')
+                    : (themeStore.isDark ? 'border-red-800 bg-red-950/30 text-red-200' : 'border-red-200 bg-red-50 text-red-700')"
+                >
+                  <span class="font-medium">{{ check.label }}</span>：{{ check.message }}
+                </div>
+              </div>
+            </div>
+
             <!-- Paid Subscription Card (only for paid instances) -->
-            <div 
+            <div
               v-if="showPaidSubscriptionCard"
               class="card p-4 sm:p-5"
             >
@@ -3025,27 +3280,36 @@ function formatShortDate(dateStr: string | null | undefined): string {
                 >
                   <div class="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
                     <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                      <button
-                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
-                        @click="showRenewModal = true"
-                      >
-                        {{ $t('instance.subscription.renew') }}
-                      </button>
+	                      <button
+	                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
+	                        :disabled="isOperationDisabled"
+	                        :class="isOperationDisabled ? 'opacity-50 cursor-not-allowed' : ''"
+	                        :title="isExchangeLocked ? '交易所挂牌或交割期间不能续费，请先下架或等待交割完成' : undefined"
+	                        @click="showRenewModal = true"
+	                      >
+	                        {{ $t('instance.subscription.renew') }}
+	                      </button>
 
-                      <button
-                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
-                        @click="showAutoRenewModal = true"
-                      >
-                        {{ $t('instance.subscription.autoRenew') }}
-                      </button>
+	                      <button
+	                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
+	                        :disabled="isOperationDisabled"
+	                        :class="isOperationDisabled ? 'opacity-50 cursor-not-allowed' : ''"
+	                        :title="isExchangeLocked ? '交易所挂牌或交割期间不能修改自动续费策略' : undefined"
+	                        @click="showAutoRenewModal = true"
+	                      >
+	                        {{ $t('instance.subscription.autoRenew') }}
+	                      </button>
 
-                      <button
-                        v-if="instance.package_id && (instance as any).planId"
-                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
-                        @click="showChangePlanModal = true"
-                      >
-                        {{ $t('billing.changePlan') }}
-                      </button>
+	                      <button
+	                        v-if="instance.package_id && (instance as any).planId"
+	                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
+	                        :disabled="isOperationDisabled"
+	                        :class="isOperationDisabled ? 'opacity-50 cursor-not-allowed' : ''"
+	                        :title="isExchangeLocked ? '交易所挂牌或交割期间不能升级配置' : undefined"
+	                        @click="showChangePlanModal = true"
+	                      >
+	                        {{ $t('billing.changePlan') }}
+	                      </button>
 
                       <button
                         v-if="!isAdminEntry && canTransfer"
@@ -3057,12 +3321,13 @@ function formatShortDate(dateStr: string | null | undefined): string {
                       </button>
                     </div>
 
-                    <button
-                      :disabled="destroyButtonDisabled"
-                      class="btn-danger btn-sm w-full lg:w-auto lg:min-w-[110px]"
-                      :class="destroyButtonDisabled ? 'opacity-50 cursor-not-allowed' : ''"
-                      @click="showDestroyModal = true"
-                    >
+	                    <button
+	                      :disabled="destroyButtonDisabled || isOperationDisabled"
+	                      class="btn-danger btn-sm w-full lg:w-auto lg:min-w-[110px]"
+	                      :class="(destroyButtonDisabled || isOperationDisabled) ? 'opacity-50 cursor-not-allowed' : ''"
+	                      :title="isExchangeLocked ? '交易所挂牌或交割期间不能销毁实例' : undefined"
+	                      @click="showDestroyModal = true"
+	                    >
                       {{ $t('instance.destroy.button') }}
                     </button>
                   </div>
@@ -3097,19 +3362,23 @@ function formatShortDate(dateStr: string | null | undefined): string {
             :is-instance-owner="!isHostOwnerOnly"
             :reassign-ipv6-loading="reassignIpv6Loading"
             :last-ipv6-reassign-at="(instance as any).last_ipv6_reassign_at"
-            :delete-ports-loading="deletePortsLoading"
-            @copy="copyToClipboard"
-            @add-port="showAddPortModal = true"
-            @delete-port="deletePort"
-            @delete-ports="deletePorts"
-            @reassign-ipv6="handleReassignIpv6"
-          />
+	            :delete-ports-loading="deletePortsLoading"
+	            :exchange-locked="isExchangeLocked"
+	            exchange-lock-reason="实例已上架交易所或处于交割中，端口和网络配置已锁定"
+	            @copy="copyToClipboard"
+	            @add-port="requestAddPort"
+	            @delete-port="deletePort"
+	            @delete-ports="deletePorts"
+	            @reassign-ipv6="requestReassignIpv6"
+	          />
 
           <!-- Sites Tab -->
-          <InstanceSitesTab
-            v-if="activeTab === 'sites' && instance"
-            :instance-id="instance.id"
-          />
+	          <InstanceSitesTab
+	            v-if="activeTab === 'sites' && instance"
+	            :instance-id="instance.id"
+	            :exchange-locked="isExchangeLocked"
+	            exchange-lock-reason="实例已上架交易所或处于交割中，代理站点配置已锁定"
+	          />
 
           <!-- Traffic Tab -->
           <TrafficStats
@@ -3121,10 +3390,12 @@ function formatShortDate(dateStr: string | null | undefined): string {
           <SnapshotManager
             v-if="activeTab === 'snapshots' && instance"
             :instance-id="instance.id"
-            :instance-name="instance.name"
-            :instance-status="instance.status"
-            :snapshot-limit="(instance as any).snapshot_limit"
-          />
+	            :instance-name="instance.name"
+	            :instance-status="instance.status"
+	            :snapshot-limit="(instance as any).snapshot_limit"
+	            :exchange-locked="isExchangeLocked"
+	            exchange-lock-reason="实例已上架交易所或处于交割中，快照和自动策略已锁定"
+	          />
 
           <!-- Quota Tab -->
           <InstanceQuotaTab
@@ -3149,6 +3420,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
             :instance-type="(instance as any).instanceType || 'container'"
             :instance-status="instance.status"
             :is-instance-owner="(instance as any).isInstanceOwner === true || authStore.isAdmin"
+            :exchange-locked="isExchangeLocked"
             @change-host-task="startTaskPolling"
           />
 
@@ -3260,7 +3532,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
             </div>
             <div class="modal-footer">
               <button class="btn" @click="showRedeemModal = false">{{ $t('common.cancel') }}</button>
-              <button 
+              <button
                 class="btn btn-primary"
                 :disabled="redeemLoading || !redeemCodeInput.trim()"
                 @click="handleRedeem"
@@ -3336,10 +3608,10 @@ function formatShortDate(dateStr: string | null | undefined): string {
             </div>
             <div class="modal-body">
               <label class="block text-sm text-themed-secondary mb-1.5">{{ $t('instance.renameModal.name') }}</label>
-              <input 
-                v-model="newInstanceName" 
-                type="text" 
-                class="input" 
+              <input
+                v-model="newInstanceName"
+                type="text"
+                class="input"
                 :placeholder="$t('instance.renameModal.namePlaceholder')"
                 @keyup.enter="doRename"
               />
@@ -3363,8 +3635,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
           <div class="modal-content max-w-md">
             <div class="modal-header">
               <h3 class="modal-title">{{ $t('instance.detail.actions.clone') }}</h3>
-              <button 
-                class="text-themed-muted hover:text-themed" 
+              <button
+                class="text-themed-muted hover:text-themed"
                 :disabled="cloneLoading"
                 @click="showCloneModal = false"
               >
@@ -3389,15 +3661,15 @@ function formatShortDate(dateStr: string | null | undefined): string {
               </div>
             </div>
             <div class="modal-footer">
-              <button 
-                class="btn-secondary" 
+              <button
+                class="btn-secondary"
                 :disabled="cloneLoading"
                 @click="showCloneModal = false"
               >
                 {{ $t('common.cancel') }}
               </button>
-              <button 
-                :disabled="cloneLoading" 
+              <button
+                :disabled="cloneLoading"
                 class="btn-primary"
                 :class="themeStore.isDark ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-500 hover:bg-purple-600'"
                 @click="doClone"
@@ -3418,8 +3690,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
           <div class="modal-content max-w-md">
             <div class="modal-header">
               <h3 class="modal-title text-orange-500">{{ $t('instance.detail.actions.suspend') }}</h3>
-              <button 
-                class="text-themed-muted hover:text-themed" 
+              <button
+                class="text-themed-muted hover:text-themed"
                 :disabled="suspendLoading"
                 @click="showSuspendModal = false"
               >
@@ -3448,15 +3720,15 @@ function formatShortDate(dateStr: string | null | undefined): string {
               </div>
             </div>
             <div class="modal-footer">
-              <button 
-                class="btn-secondary" 
+              <button
+                class="btn-secondary"
                 :disabled="suspendLoading"
                 @click="showSuspendModal = false"
               >
                 {{ $t('common.cancel') }}
               </button>
-              <button 
-                :disabled="suspendLoading" 
+              <button
+                :disabled="suspendLoading"
                 class="text-white"
                 :class="themeStore.isDark ? 'bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded-lg' : 'bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg'"
                 @click="confirmSuspend"
@@ -3492,8 +3764,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
         v-if="terminalSessionActive && !showTerminalModal && isRunning"
         class="fixed right-4 z-40 flex items-center gap-1 rounded-xl shadow-xl select-none"
         :class="[
-          themeStore.isDark 
-            ? 'bg-neutral-900/95 border border-neutral-700 backdrop-blur-sm' 
+          themeStore.isDark
+            ? 'bg-neutral-900/95 border border-neutral-700 backdrop-blur-sm'
             : 'bg-white/95 border border-gray-200 backdrop-blur-sm shadow-lg',
           isDragging ? 'cursor-grabbing' : ''
         ]"
@@ -3515,20 +3787,20 @@ function formatShortDate(dateStr: string | null | undefined): string {
         <!-- 恢复按钮 -->
         <button
           class="flex items-center gap-2.5 px-3 py-2.5 transition-colors"
-          :class="themeStore.isDark 
-            ? 'hover:bg-neutral-800 text-white' 
+          :class="themeStore.isDark
+            ? 'hover:bg-neutral-800 text-white'
             : 'hover:bg-gray-50 text-gray-900'"
           :title="$t('terminal.restore')"
           @click="showTerminalModal = true"
         >
           <!-- 连接状态指示器：绿色闪烁=连接中，灰色=断开 -->
           <span class="relative flex h-2 w-2">
-            <span 
-              v-if="terminalConnected" 
+            <span
+              v-if="terminalConnected"
               class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
             ></span>
-            <span 
-              class="relative inline-flex rounded-full h-2 w-2" 
+            <span
+              class="relative inline-flex rounded-full h-2 w-2"
               :class="terminalConnected ? 'bg-emerald-500' : 'bg-neutral-400'"
             ></span>
           </span>
@@ -3537,8 +3809,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
           </svg>
           <span class="text-sm font-medium">{{ $t('terminal.title') }}</span>
           <!-- 标签数量徽章 -->
-          <span 
-            v-if="terminalTabCount > 1" 
+          <span
+            v-if="terminalTabCount > 1"
             class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-medium rounded-full"
             :class="themeStore.isDark ? 'bg-neutral-700 text-neutral-300' : 'bg-gray-200 text-gray-600'"
           >
@@ -3550,8 +3822,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
         <!-- 断开连接按钮 -->
         <button
           class="p-2.5 rounded-r-xl transition-colors"
-          :class="themeStore.isDark 
-            ? 'text-neutral-400 hover:text-red-400 hover:bg-neutral-800' 
+          :class="themeStore.isDark
+            ? 'text-neutral-400 hover:text-red-400 hover:bg-neutral-800'
             : 'text-gray-400 hover:text-red-500 hover:bg-gray-50'"
           :title="$t('terminal.disconnect')"
           @click="terminalForceDisconnect = true; terminalSessionActive = false; terminalTabCount = 0"
@@ -3571,21 +3843,21 @@ function formatShortDate(dateStr: string | null | undefined): string {
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
           <!-- 背景遮罩 -->
-          <div 
-            class="absolute inset-0 bg-black/50" 
+          <div
+            class="absolute inset-0 bg-black/50"
             @click="showAutoRenewModal = false"
           />
           <!-- 弹窗内容 -->
-          <div 
+          <div
             class="relative w-full max-w-md rounded-xl shadow-xl overflow-hidden"
             :class="themeStore.isDark ? 'bg-neutral-800' : 'bg-white'"
           >
             <!-- 标题 -->
-            <div 
+            <div
               class="px-6 py-4 border-b"
               :class="themeStore.isDark ? 'border-neutral-700' : 'border-gray-100'"
             >
-              <h3 
+              <h3
                 class="text-lg font-semibold"
                 :class="themeStore.isDark ? 'text-white' : 'text-gray-900'"
               >
@@ -3595,36 +3867,36 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <!-- 内容 -->
             <div class="px-6 py-5">
               <!-- 当前状态 -->
-              <div 
+              <div
                 class="flex items-center justify-between p-4 rounded-lg mb-4"
                 :class="themeStore.isDark ? 'bg-neutral-700/50' : 'bg-gray-50'"
               >
                 <span :class="themeStore.isDark ? 'text-slate-300' : 'text-gray-600'">
                   {{ $t('instance.subscription.currentStatus') }}
                 </span>
-                <span 
+                <span
                   class="font-medium"
-                  :class="(instance as any).autoRenew 
+                  :class="(instance as any).autoRenew
                     ? (themeStore.isDark ? 'text-emerald-400' : 'text-emerald-600')
                     : (themeStore.isDark ? 'text-slate-400' : 'text-gray-500')"
                 >
-                  {{ (instance as any).autoRenew 
-                    ? $t('instance.subscription.autoRenewEnabled') 
+                  {{ (instance as any).autoRenew
+                    ? $t('instance.subscription.autoRenewEnabled')
                     : $t('instance.subscription.autoRenewDisabled') }}
                 </span>
               </div>
               <!-- 说明 -->
-              <p 
+              <p
                 class="text-sm mb-4"
                 :class="themeStore.isDark ? 'text-slate-400' : 'text-gray-500'"
               >
-                {{ $t('instance.subscription.autoRenewDesc', { 
+                {{ $t('instance.subscription.autoRenewDesc', {
                   cycle: getBillingCycleText((instance as any).billingCycle),
                   price: getRenewPrice(instance).toFixed(2)
                 }) }}
               </p>
               <!-- 提示 -->
-              <div 
+              <div
                 class="flex items-start gap-2 p-3 rounded-lg text-sm"
                 :class="themeStore.isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'"
               >
@@ -3635,14 +3907,14 @@ function formatShortDate(dateStr: string | null | undefined): string {
               </div>
             </div>
             <!-- 操作按钮 -->
-            <div 
+            <div
               class="px-6 py-4 border-t flex gap-3"
               :class="themeStore.isDark ? 'border-neutral-700' : 'border-gray-100'"
             >
               <button
                 class="flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                :class="themeStore.isDark 
-                  ? 'bg-neutral-700 text-white hover:bg-neutral-600' 
+                :class="themeStore.isDark
+                  ? 'bg-neutral-700 text-white hover:bg-neutral-600'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
                 @click="showAutoRenewModal = false"
               >
@@ -3651,8 +3923,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
               <button
                 v-if="(instance as any).autoRenew"
                 class="flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                :class="themeStore.isDark 
-                  ? 'bg-red-600 hover:bg-red-700 text-white' 
+                :class="themeStore.isDark
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
                   : 'bg-red-500 hover:bg-red-600 text-white'"
                 :disabled="autoRenewLoading"
                 @click="handleSetAutoRenew(false)"
@@ -3669,8 +3941,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
               <button
                 v-else
                 class="flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                :class="themeStore.isDark 
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                :class="themeStore.isDark
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                   : 'bg-emerald-500 hover:bg-emerald-600 text-white'"
                 :disabled="autoRenewLoading"
                 @click="handleSetAutoRenew(true)"
@@ -3689,6 +3961,36 @@ function formatShortDate(dateStr: string | null | undefined): string {
         </div>
       </Transition>
     </Teleport>
+
+    <div
+      v-if="showExchangeStopConfirm && instance"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+      @click.self="!exchangeStopLoading && (showExchangeStopConfirm = false)"
+    >
+      <section
+        class="w-full max-w-lg rounded-lg border p-5 shadow-xl"
+        :class="themeStore.isDark ? 'border-neutral-800 bg-neutral-900' : 'border-gray-200 bg-white'"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-semibold text-themed">先暂停实例</h2>
+            <p class="mt-1 text-sm text-themed-muted">
+              {{ instance.name }} 需要先暂停后才能上架交易所。
+            </p>
+          </div>
+          <button class="btn-secondary btn-sm" type="button" :disabled="exchangeStopLoading" @click="showExchangeStopConfirm = false">取消</button>
+        </div>
+        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+          上架交易所前必须先暂停实例。暂停后实例将停止运行，挂牌期间保持暂停/交易锁定；成交后系统会强制重装并交割给买家，原系统和数据不可恢复。
+        </div>
+        <div class="mt-5 flex justify-end gap-2">
+          <button class="btn-secondary" type="button" :disabled="exchangeStopLoading" @click="showExchangeStopConfirm = false">取消</button>
+          <button class="btn-primary" type="button" :disabled="exchangeStopLoading" @click="stopInstanceForExchangeListing">
+            {{ exchangeStopLoading ? '提交中...' : '先暂停实例' }}
+          </button>
+        </div>
+      </section>
+    </div>
 
     <InstanceBadgeModal
       v-if="!isAdminEntry && instance"

@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "PayIncus backend service",
   "type": "module",
   "main": "dist/app.js",
@@ -204,6 +204,7 @@
     "test:traffic-reset-locks": "node --import tsx scripts/test-traffic-reset-locks.ts",
     "test:instance-create-failure-compensation": "node --import tsx scripts/test-instance-create-failure-compensation.ts",
     "test:instance-create-turnstile-guards": "node --import tsx scripts/test-instance-create-turnstile-guards.ts",
+    "test:exchange-marketplace-guards": "node --import tsx scripts/test-exchange-marketplace-guards.ts",
     "test:websocket-origin-guard": "node --import tsx scripts/test-websocket-origin-guard.ts"
   },
   "dependencies": {

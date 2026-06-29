@@ -47,12 +47,23 @@ import { checkInstancePermission } from '../lib/permission.js'
 import {
   claimOperationVerificationRequirement
 } from '../lib/operation-verification.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 
-// 检查实例是否被转移锁定
+// 检查实例是否被转移/交易所锁定
 async function checkTransferLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
   const hasPending = await db.hasPendingTransfer(instanceId)
   if (hasPending) {
     reply.code(400).send(apiError(ErrorCode.TRANSFER_INSTANCE_LOCKED))
+    return true
+  }
+  const exchangeLock = await getExchangeOperationLock(instanceId)
+  if (exchangeLock.locked) {
+    reply.code(409).send({
+      error: exchangeLock.message,
+      code: exchangeLock.code,
+      listingId: exchangeLock.listingId,
+      orderId: exchangeLock.orderId
+    })
     return true
   }
   return false
@@ -407,6 +418,8 @@ export default async function backupRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
+    if (await checkTransferLock(instanceIdNum, reply)) return
+
     // 如果启用自动备份，检查配额
     if (enabled) {
       // 检查实例配额
@@ -460,6 +473,8 @@ export default async function backupRoutes(fastify: FastifyInstance) {
       if (instance.user_id !== request.user.id) {
         return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
       }
+
+      if (await checkTransferLock(instanceIdNum, reply)) return
 
       // 获取备份信息
       const backup = await db.getBackupById(backupIdNum)
@@ -537,6 +552,8 @@ export default async function backupRoutes(fastify: FastifyInstance) {
         return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
       }
 
+      if (await checkTransferLock(instanceIdNum, reply)) return
+
       // 检查是否过期
       if (Date.now() > task.expiresAt) {
         await deleteExportTask(taskId)
@@ -589,6 +606,8 @@ export default async function backupRoutes(fastify: FastifyInstance) {
       if (task.userId !== request.user.id) {
         return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
       }
+
+      if (await checkTransferLock(instanceIdNum, reply)) return
 
       // 检查是否过期
       if (Date.now() > task.expiresAt) {
@@ -684,6 +703,8 @@ export default async function backupRoutes(fastify: FastifyInstance) {
       if (task.userId !== tokenUserId) {
         return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
       }
+
+      if (await checkTransferLock(instanceIdNum, reply)) return
 
       // 检查是否过期
       if (Date.now() > task.expiresAt) {
@@ -1187,6 +1208,8 @@ export default async function backupRoutes(fastify: FastifyInstance) {
       if (backup.status !== 'ready') {
         return reply.code(400).send(apiError(ErrorCode.BACKUP_NOT_READY))
       }
+
+      if (await checkTransferLock(instanceIdNum, reply)) return
 
       // 获取存储配置
       let storageConfig

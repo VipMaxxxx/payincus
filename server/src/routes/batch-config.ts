@@ -13,6 +13,7 @@ import { getIncusClient } from '../lib/incus/incus-pool.js'
 import { patchInstanceResources, getInstance, updateInstance } from '../lib/incus/incus-instances.js'
 import { resolveEffectiveSwapSize, resolveIncusSwapValue } from '../lib/instance-swap.js'
 import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 import pLimit from 'p-limit'
 
 // 每宿主机并发限制
@@ -376,6 +377,11 @@ async function updateSingleInstance(
   client: Awaited<ReturnType<typeof getIncusClient>> | null
 ): Promise<ResultItem> {
   try {
+    const exchangeLock = await getExchangeOperationLock(instance.id)
+    if (exchangeLock.locked) {
+      throw new Error(exchangeLock.message || '实例已上架交易所或处于交易锁定中，不能批量修改配置')
+    }
+
     const activeTask = await getActiveTaskForInstance(instance.id)
     if (activeTask) {
       throw new Error(`实例存在进行中的任务: ${activeTask.taskType}`)
