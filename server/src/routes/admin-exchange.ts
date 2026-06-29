@@ -1910,25 +1910,15 @@ export default async function adminExchangeRoutes(fastify: FastifyInstance) {
         actorUserId: user.id,
         action: 'dispute.release',
         remark: `交易所争议 ${id} 人工放款：${resolution}`,
-        allowedStatuses: ['confirming', 'delivered', 'disputed', 'manual_review']
+        allowedStatuses: ['confirming', 'delivered', 'disputed', 'manual_review'],
+        resolveDispute: {
+          disputeId: id,
+          resolution,
+          releaseRemark: `交易所争议 ${id} 人工放款，争议冻结标记解除：${resolution}`
+        }
       })
       orderActionCompleted = true
-      const updated = await prisma.$transaction(async tx => {
-        const resolved = await tx.exchangeDispute.updateMany({
-          where: { id, status: 'processing', handledByUserId: user.id },
-          data: {
-            status: 'released',
-            resolution,
-            resolvedAt: new Date()
-          }
-        })
-        if (resolved.count !== 1) {
-          throw new Error('争议状态已变化，请刷新后重试')
-        }
-        const disputeReleaseLog = await recordExchangeDisputeWalletReleaseInTransaction(tx, dispute.orderId, `交易所争议 ${id} 人工放款，争议冻结标记解除：${resolution}`)
-        await auditInTransaction(tx, user.id, 'dispute.release', 'exchange_dispute', id, { resolution, orderId: dispute.orderId, walletLogId: disputeReleaseLog.id })
-        return tx.exchangeDispute.findUniqueOrThrow({ where: { id } })
-      })
+      const updated = await prisma.exchangeDispute.findUniqueOrThrow({ where: { id } })
       return { dispute: updated }
     } catch (error: any) {
       if (!orderActionCompleted) {

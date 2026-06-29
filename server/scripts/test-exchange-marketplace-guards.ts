@@ -625,8 +625,13 @@ assert(
     exchangeServiceSource.includes("type: 'escrow_release'") &&
     exchangeServiceSource.includes("type: 'fee_charge'") &&
     exchangeServiceSource.includes("status: 'completed'") &&
-    exchangeServiceSource.includes('walletLogId: walletLog.id'),
-  'exchange service must release escrow only through the confirmation/administrator settlement path'
+    exchangeServiceSource.includes('walletLogId: walletLog.id') &&
+    exchangeServiceSource.includes('resolveDispute?:') &&
+    exchangeServiceSource.includes('EXCHANGE_DISPUTE_STATE_CHANGED') &&
+    exchangeServiceSource.includes("targetType: 'exchange_dispute'") &&
+    exchangeServiceSource.includes('disputeReleaseWalletLogId: disputeReleaseLog?.id ?? null') &&
+    exchangeServiceSource.includes('alreadyReleased: true'),
+  'exchange service must release escrow only through the confirmation/administrator settlement path and close resolving disputes atomically in the release transaction'
 )
 
 assert(
@@ -882,6 +887,9 @@ assert(
 	    adminExchangeRouteSource.includes('freezeExchangeOrder') &&
     adminExchangeRouteSource.includes('/risk-records') &&
     adminExchangeRouteSource.includes('releaseExchangeOrderEscrow') &&
+    adminExchangeRouteSource.includes('resolveDispute: {') &&
+    adminExchangeRouteSource.includes('releaseRemark: `交易所争议 ${id} 人工放款，争议冻结标记解除：${resolution}`') &&
+    !adminExchangeRouteSource.includes("action: 'dispute.release', 'exchange_dispute'") &&
     adminExchangeRouteSource.includes("!['active', 'paused', 'delivery_failed'].includes(listing.status)"),
 	  'admin exchange routes must support refunds, order freeze/cancel, dispute release, wallet freeze/unfreeze/adjust, risk records, and must not force-delist locked orders'
 )

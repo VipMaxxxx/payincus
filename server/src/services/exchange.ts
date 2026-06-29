@@ -1604,6 +1604,11 @@ export async function releaseExchangeOrderEscrow(
     action?: string
     remark?: string
     allowedStatuses?: ExchangeOrderStatus[]
+    resolveDispute?: {
+      disputeId: number
+      resolution: string
+      releaseRemark?: string
+    }
   } = {}
 ) {
   const allowedStatuses = options.allowedStatuses || ['confirming']
@@ -1613,6 +1618,45 @@ export async function releaseExchangeOrderEscrow(
       throw new ExchangeError('EXCHANGE_ORDER_NOT_FOUND', '交易订单不存在', 404)
     }
     if (order.status === 'completed' && order.walletLogId) {
+      if (options.resolveDispute) {
+        const resolved = await tx.exchangeDispute.updateMany({
+          where: {
+            id: options.resolveDispute.disputeId,
+            orderId: order.id,
+            status: 'processing',
+            handledByUserId: options.actorUserId ?? null
+          },
+          data: {
+            status: 'released',
+            resolution: options.resolveDispute.resolution,
+            resolvedAt: new Date()
+          }
+        })
+        if (resolved.count !== 1) {
+          throw new ExchangeError('EXCHANGE_DISPUTE_STATE_CHANGED', '争议状态已变化，请刷新后重试')
+        }
+        const disputeReleaseLog = await createDisputeWalletLog(
+          tx,
+          order,
+          'dispute_release',
+          options.resolveDispute.releaseRemark || `交易所争议 ${options.resolveDispute.disputeId} 人工放款，争议冻结标记解除`
+        )
+        await tx.exchangeAuditLog.create({
+          data: {
+            actorUserId: options.actorUserId ?? null,
+            action: 'dispute.release',
+            targetType: 'exchange_dispute',
+            targetId: options.resolveDispute.disputeId,
+            detail: {
+              resolution: options.resolveDispute.resolution,
+              orderId: order.id,
+              walletLogId: disputeReleaseLog.id,
+              escrowWalletLogId: order.walletLogId,
+              alreadyReleased: true
+            }
+          }
+        })
+      }
       return order
     }
     if (!allowedStatuses.includes(order.status)) {
@@ -1686,6 +1730,46 @@ export async function releaseExchangeOrderEscrow(
       throw new ExchangeError('EXCHANGE_ORDER_RELEASE_RACE', '订单放款状态已变化，请刷新后重试')
     }
 
+    let disputeReleaseLog: Awaited<ReturnType<typeof createDisputeWalletLog>> | null = null
+    if (options.resolveDispute) {
+      const resolved = await tx.exchangeDispute.updateMany({
+        where: {
+          id: options.resolveDispute.disputeId,
+          orderId: order.id,
+          status: 'processing',
+          handledByUserId: options.actorUserId ?? null
+        },
+        data: {
+          status: 'released',
+          resolution: options.resolveDispute.resolution,
+          resolvedAt: new Date()
+        }
+      })
+      if (resolved.count !== 1) {
+        throw new ExchangeError('EXCHANGE_DISPUTE_STATE_CHANGED', '争议状态已变化，请刷新后重试')
+      }
+      disputeReleaseLog = await createDisputeWalletLog(
+        tx,
+        order,
+        'dispute_release',
+        options.resolveDispute.releaseRemark || `交易所争议 ${options.resolveDispute.disputeId} 人工放款，争议冻结标记解除`
+      )
+      await tx.exchangeAuditLog.create({
+        data: {
+          actorUserId: options.actorUserId ?? null,
+          action: 'dispute.release',
+          targetType: 'exchange_dispute',
+          targetId: options.resolveDispute.disputeId,
+          detail: {
+            resolution: options.resolveDispute.resolution,
+            orderId: order.id,
+            walletLogId: disputeReleaseLog.id,
+            escrowWalletLogId: walletLog.id
+          }
+        }
+      })
+    }
+
     await tx.exchangeAuditLog.create({
       data: {
         actorUserId: options.actorUserId ?? null,
@@ -1697,6 +1781,7 @@ export async function releaseExchangeOrderEscrow(
           sellerReceivesAmount,
           feeWalletLogId: feeLog?.id ?? null,
           walletLogId: walletLog.id,
+          disputeReleaseWalletLogId: disputeReleaseLog?.id ?? null,
           previousStatus: order.status
         }
       }

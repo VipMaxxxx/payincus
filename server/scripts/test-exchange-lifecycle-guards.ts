@@ -179,8 +179,11 @@ assert(
     releaseSection.includes('order.walletLogId') &&
     releaseSection.includes('EXCHANGE_ORDER_NOT_RELEASABLE') &&
     releaseSection.includes('walletLogId: walletLog.id') &&
-    releaseSection.includes('completedAt: new Date()'),
-  'exchange escrow release must be idempotent and must refuse unreleasable order states'
+    releaseSection.includes('completedAt: new Date()') &&
+    releaseSection.includes('resolveDispute?:') &&
+    releaseSection.includes('EXCHANGE_DISPUTE_STATE_CHANGED') &&
+    releaseSection.includes("targetType: 'exchange_dispute'"),
+  'exchange escrow release must be idempotent, refuse unreleasable order states, and atomically close a resolving dispute when requested'
 )
 
 assertSourceOrder(
