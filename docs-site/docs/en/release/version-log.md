@@ -13,7 +13,19 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Unreleased Changes / 未发布变更
 
-- This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
+### Fixes and Stability / 修复与稳定性
+
+- Fix exchange listing status lookup on instances `44a692ae7`
+- Repair refunded exchange dispute instance return `344b79440`
+- Harden exchange delivery cleanup tolerance `ccdcb564e`
+
+### Other Changes / 其他变更
+
+- Clarify exchange traffic preservation for buyers `8e6f893d2`
+
+### New Capabilities / 新增能力
+
+- Allow inactive package exchange listings `67d06242f`
 
 ## Historical Versions / 历史版本
 

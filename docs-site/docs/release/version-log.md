@@ -13,7 +13,19 @@
 
 ## 未发布变更 / Unreleased Changes
 
-- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
+### 修复与稳定性 / Fixes and Stability
+
+- Fix exchange listing status lookup on instances `44a692ae7`
+- Repair refunded exchange dispute instance return `344b79440`
+- Harden exchange delivery cleanup tolerance `ccdcb564e`
+
+### 其他变更 / Other Changes
+
+- Clarify exchange traffic preservation for buyers `8e6f893d2`
+
+### 新增能力 / New Capabilities
+
+- Allow inactive package exchange listings `67d06242f`
 
 ## 历史版本 / Historical Versions
 
