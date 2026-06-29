@@ -894,7 +894,7 @@ async function completeDeliveryTaskManually(taskId: number, actorUserId: number,
             anonymousIncusIdVerified: true,
             anonymousDisplayNameVerified: true,
             linkedRebuildTaskCompleted: task.instanceTask ? true : null,
-            trafficBaselineReset: true,
+            trafficUsagePreserved: true,
             autoRenewDisabled: true,
             buyerBillingRecordId: buyerBillingRecord.id
           }
