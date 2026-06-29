@@ -465,8 +465,56 @@ async function refundExchangeOrder(
   orderId: number,
   actorUserId: number,
   reason: string,
-  targetStatus: 'refunded' | 'cancelled' = 'refunded'
+  targetStatus: 'refunded' | 'cancelled' = 'refunded',
+  resolveDispute?: {
+    disputeId: number
+    resolution: string
+    releaseRemark?: string
+  }
 ) {
+  if (resolveDispute) {
+    const existingOrder = await prisma.exchangeOrder.findUnique({
+      where: { id: orderId },
+      select: { id: true, status: true, refundBalanceLogId: true }
+    })
+    if (existingOrder?.status === targetStatus && existingOrder.refundBalanceLogId) {
+      return prisma.$transaction(async tx => {
+        const orderLocked = await tryAdvisoryTransactionLock(tx, EXCHANGE_ORDER_LOCK_NAMESPACE, orderId)
+        if (!orderLocked) throw new Error('交易订单正在处理，请稍后重试')
+
+        const resolved = await tx.exchangeDispute.updateMany({
+          where: {
+            id: resolveDispute.disputeId,
+            orderId,
+            status: 'processing',
+            handledByUserId: actorUserId
+          },
+          data: {
+            status: 'refunded',
+            resolution: resolveDispute.resolution,
+            resolvedAt: new Date()
+          }
+        })
+        if (resolved.count !== 1) {
+          throw new Error('争议状态已变化，请刷新后重试')
+        }
+        const disputeReleaseLog = await recordExchangeDisputeWalletReleaseInTransaction(
+          tx,
+          orderId,
+          resolveDispute.releaseRemark || `交易所争议 ${resolveDispute.disputeId} 已退款，争议冻结标记解除：${resolveDispute.resolution}`
+        )
+        await auditInTransaction(tx, actorUserId, 'dispute.refund', 'exchange_dispute', resolveDispute.disputeId, {
+          resolution: resolveDispute.resolution,
+          orderId,
+          walletLogId: disputeReleaseLog.id,
+          refundBalanceLogId: existingOrder.refundBalanceLogId,
+          alreadyRefunded: true
+        })
+        return tx.exchangeOrder.findUniqueOrThrow({ where: { id: orderId } })
+      })
+    }
+  }
+
   const instanceReturn = await returnDeliveredExchangeInstanceForRefund(orderId, actorUserId, reason)
   return prisma.$transaction(async tx => {
     const orderLocked = await tryAdvisoryTransactionLock(tx, EXCHANGE_ORDER_LOCK_NAMESPACE, orderId)
@@ -610,6 +658,36 @@ async function refundExchangeOrder(
         failureReason: reason
       }
     })
+    let disputeReleaseLog: Awaited<ReturnType<typeof recordExchangeDisputeWalletReleaseInTransaction>> | null = null
+    if (resolveDispute) {
+      const resolved = await tx.exchangeDispute.updateMany({
+        where: {
+          id: resolveDispute.disputeId,
+          orderId: order.id,
+          status: 'processing',
+          handledByUserId: actorUserId
+        },
+        data: {
+          status: 'refunded',
+          resolution: resolveDispute.resolution,
+          resolvedAt: new Date()
+        }
+      })
+      if (resolved.count !== 1) {
+        throw new Error('争议状态已变化，请刷新后重试')
+      }
+      disputeReleaseLog = await recordExchangeDisputeWalletReleaseInTransaction(
+        tx,
+        order.id,
+        resolveDispute.releaseRemark || `交易所争议 ${resolveDispute.disputeId} 已退款，争议冻结标记解除：${resolveDispute.resolution}`
+      )
+      await auditInTransaction(tx, actorUserId, 'dispute.refund', 'exchange_dispute', resolveDispute.disputeId, {
+        resolution: resolveDispute.resolution,
+        orderId: order.id,
+        walletLogId: disputeReleaseLog.id,
+        refundBalanceLogId: balanceLog.id
+      })
+    }
     await tx.exchangeAuditLog.create({
       data: {
         actorUserId,
@@ -625,6 +703,7 @@ async function refundExchangeOrder(
             deliveredBuyerInstanceSuspended,
             deliveredBuyerInstanceReturned: instanceReturn.returned,
             instanceReturn,
+            disputeReleaseWalletLogId: disputeReleaseLog?.id ?? null,
             targetStatus
           }
 	      }
@@ -1867,24 +1946,13 @@ export default async function adminExchangeRoutes(fastify: FastifyInstance) {
     let orderActionCompleted = false
     try {
       const dispute = await claimExchangeDisputeForProcessing(id, user.id, resolution)
-      await refundExchangeOrder(dispute.orderId, user.id, resolution)
-      orderActionCompleted = true
-      const updated = await prisma.$transaction(async tx => {
-        const resolved = await tx.exchangeDispute.updateMany({
-          where: { id, status: 'processing', handledByUserId: user.id },
-          data: {
-            status: 'refunded',
-            resolution,
-            resolvedAt: new Date()
-          }
-        })
-        if (resolved.count !== 1) {
-          throw new Error('争议状态已变化，请刷新后重试')
-        }
-        const disputeReleaseLog = await recordExchangeDisputeWalletReleaseInTransaction(tx, dispute.orderId, `交易所争议 ${id} 已退款，争议冻结标记解除：${resolution}`)
-        await auditInTransaction(tx, user.id, 'dispute.refund', 'exchange_dispute', id, { resolution, orderId: dispute.orderId, walletLogId: disputeReleaseLog.id })
-        return tx.exchangeDispute.findUniqueOrThrow({ where: { id } })
+      await refundExchangeOrder(dispute.orderId, user.id, resolution, 'refunded', {
+        disputeId: id,
+        resolution,
+        releaseRemark: `交易所争议 ${id} 已退款，争议冻结标记解除：${resolution}`
       })
+      orderActionCompleted = true
+      const updated = await prisma.exchangeDispute.findUniqueOrThrow({ where: { id } })
       return { dispute: updated }
     } catch (error: any) {
       if (!orderActionCompleted) {
