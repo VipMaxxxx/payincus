@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-6fb05d81 Update version log for v1.0.8
+9f589937 Update version log for v1.0.9
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,16 +29,16 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-6fb05d81 Update version log for v1.0.8
+9f589937 Update version log for v1.0.9
 ```
 
 ## Latest GitHub Release Work
 
-`v1.0.8` is published on GitHub and has release artifacts. Production OTA task `#112` updated production from `v1.0.7` to `v1.0.8` and ended with status `success`.
+`v1.0.9` is published on GitHub and has release artifacts. Production OTA task `#113` updated production from `v1.0.8` to `v1.0.9` and ended with status `success`.
 
 ## Active Exchange Marketplace Work
 
-The current worktree contains the `v1.0.8` Exchange Marketplace implementation. The code, release, OTA, and non-destructive production checks are complete; the remaining proof gap is a real buyer/seller Exchange delivery run with live accounts and a sacrificial instance.
+The current worktree contains the `v1.0.9` Exchange Marketplace implementation. The code, release, OTA, and non-destructive production checks are complete; the remaining proof gap is a real buyer/seller Exchange delivery run with live accounts and a sacrificial instance.
 
 Implemented local scope:
 
@@ -173,6 +173,28 @@ Production systemctl is-active incudal-backend returned active
 Production local http://127.0.0.1:3001/api/health returned status ok
 Production public https://pay.payincus.com/api/health returned HTTP 200 status ok after OTA
 Production public https://admin.payincus.com/api/health returned HTTP 200 status ok after OTA
+pnpm --filter server test:operation-verification-route-guards passed for v1.0.9
+pnpm --filter server test:exchange-marketplace-guards passed for v1.0.9
+pnpm --filter server test:exchange-lifecycle-guards passed for v1.0.9
+pnpm --filter server test:frontend-route-guards passed for v1.0.9
+pnpm --filter client type-check passed for v1.0.9
+pnpm --filter server type-check passed for v1.0.9
+pnpm test passed for v1.0.9
+pnpm build passed for v1.0.9
+pnpm --dir docs-site --ignore-workspace exec vitepress build docs passed for v1.0.9
+DATABASE_URL='postgresql://user:pass@localhost:5432/incudal' pnpm --filter server exec prisma validate passed for v1.0.9
+git diff --check passed for v1.0.9
+GitHub Build & Release run 28356009956 completed success for v1.0.9 release commit 1b3079211d
+GitHub CI run 28356007611 completed success for version-log commit 9f58993766
+GitHub Pages run 28356007597 completed success for version-log commit 9f58993766
+Production OTA task #113 status success, fromVersion v1.0.8, targetVersion v1.0.9, finishedAt 2026-06-29T07:39:47.176Z by OTA log
+Production current symlink resolves to /opt/incudal/releases/v1.0.9-20260629073807
+Production root/server package versions both report 1.0.9
+Production OTA log /opt/incudal/update-logs/system-update-113.log shows split-host verification, production readiness, DB readiness, Agent manifest, log/header checks, and "System update completed successfully"
+Production public https://pay.payincus.com/api/health returned HTTP 200 status ok after v1.0.9 OTA
+Production public https://admin.payincus.com/api/health returned HTTP 200 status ok after v1.0.9 OTA
+Production public Exchange market API returned package categories and first listing snapshot with host.name, package.name, packagePlan.name, billingPrice, limitsEgress, and limitsIngress visible without exposing original instance id/name
+SMOKE_API_BASE_URL=https://pay.payincus.com pnpm smoke:exchange-marketplace passed in read-only mode after v1.0.9 OTA
 ```
 
 Latest create-instance Turnstile fix:
@@ -184,8 +206,18 @@ Latest create-instance Turnstile fix:
 - Raw backend/Cloudflare Turnstile messages such as `Turnstile verification required`, `Turnstile verification failed`, `missing-input-response`, and `invalid-input-response` are now mapped to localized frontend copy as a fallback.
 - Flash-sale and normal create flows keep separate Turnstile action names through the widget action prop.
 
+Latest registration Turnstile fix:
+
+- Registration now resets the Cloudflare Turnstile challenge token after verification-code or registration failures such as an incorrect invite code.
+- The reset only clears the consumed Turnstile token/widget state and keeps the already-filled registration form values intact, so the user can correct the invite code and submit again without refreshing the whole page.
+- The existing visible Turnstile widget remains the only source of a fresh token; the backend still validates Turnstile normally before account creation.
+
 Latest Exchange Marketplace hardening:
 
+- Exchange purchase secondary verification now treats `exchange_purchase` as an account operation with listing-ID scoping, so the verification modal can send and verify codes without `Resource ID is not allowed for this operation`.
+- Anonymous public Exchange snapshots now keep safe nested host/package/package-plan display data and renewal billing price while still hiding the original instance ID/name and user identity fields.
+- Exchange market API and UI now expose/filter by package categories from visible listing snapshots, and cards/details show node, package, plan and renewal price with safer fallbacks.
+- Existing stopped instances whose package/plan is now inactive or sold out remain tradeable as remaining-use-right assets; purchase-time checks still block risk, overdue, expiring, task-running, storage, traffic-limit and ownership problems.
 - Public market listing, public detail, listing create/update, and purchase now synchronously reject expired `autoDelistAt` windows, so an expired listing cannot remain browsable or purchasable while waiting for the background auto-delist worker tick.
 - The `stop-for-listing` route now explicitly checks the Exchange operation lock before queuing a stop task, so an already listed, locked, or ordered instance cannot be sent through the pre-listing pause shortcut.
 - User Exchange UI now loads a non-sensitive public policy summary from `/exchange/config`; the purchase modal only exposes buyer reinstall image selection when the current Exchange policy allows it, and otherwise submits without `imageAlias`.
@@ -207,8 +239,8 @@ Latest Exchange Marketplace hardening:
 
 Remaining proof before claiming 100%:
 
-- No `.env`, `.env.production`, `server/.env`, or `server/.env.production` existed in this checkout during the latest v1.0.8 local audit; local production checks were run with explicit environment variables.
-- Production OTA task `#112` ran migration, split-host, production-readiness, DB-readiness, Agent manifest, and log/header secret checks successfully on the production release artifact.
+- No `.env`, `.env.production`, `server/.env`, or `server/.env.production` existed in this checkout during the latest v1.0.9 local audit; local production checks were run with explicit environment variables.
+- Production OTA task `#113` ran migration, split-host, production-readiness, DB-readiness, Agent manifest, and log/header secret checks successfully on the production release artifact.
 - Latest production OTA proof covers artifact install, migrations, service restart, split-host, production readiness, log-header checks, and public health. It is not a login, order, delivery, or full Exchange buyer/seller proof.
 - Full live Exchange E2E is still missing: stopped instance listing, buyer balance purchase, escrow hold, delivery worker forced rebuild, anonymous handoff, confirmation/settlement, withdrawal review, and dispute/refund/manual retry path proof.
 - Do not mark the Exchange Marketplace real-delivery proof complete until the live buyer/seller Exchange run is recorded. Do not reuse old server credentials from earlier conversations without the operator explicitly providing current access again.
