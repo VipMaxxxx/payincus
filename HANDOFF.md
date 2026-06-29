@@ -19,7 +19,8 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-a34afc734 Release v1.2.3 exchange marketplace polish
+aee882fa Update version log for v1.2.4
+7fd01ea Release v1.2.4 exchange lock polish
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,10 +30,31 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-a34afc734 Release v1.2.3 exchange marketplace polish
+7fd01ea Release v1.2.4 exchange lock polish
 ```
 
 ## Latest GitHub Release Work
+
+`v1.2.4` is published on GitHub and has release artifacts. Production OTA has not yet been applied because the admin system-update API requires an authenticated administrator session and the Chrome extension was unavailable for reusing the current browser login. The latest proven production OTA remains task `#126` for `v1.2.3`.
+
+`v1.2.4` batches the latest Exchange Marketplace lock polish: instance detail auto-renew controls are disabled with an explicit Exchange lock warning while an instance is listed or delivering, and guard coverage now prevents reintroducing traffic-baseline reset wording or monthly traffic clearing in Exchange delivery.
+
+Release proof for `v1.2.4`:
+
+```text
+OTA manifest v1.2.4 commit 7fd01ea2b356
+amd64 sha256 7d591c9e84c2d671787a4923964bd35280f3a944e6fbc08fddc5e4669437da86
+arm64 sha256 f728c4ed5b9bcd7c0876e14332fc791b062145d4457382a47c34548fac9b0d49
+GitHub Build & Release run 28373665002 -> success
+GitHub CI run 28373661774 -> success
+GitHub Pages run 28373661722 -> success
+Version-log commit aee882fa generated docs/release/version-log.md and docs/en/release/version-log.md for v1.2.4
+GitHub CI run 28373722161 -> success for version-log commit
+GitHub Pages run 28373722158 -> success for version-log commit
+Production public https://pay.payincus.com/api/health -> HTTP 200 status ok before OTA
+Production public https://admin.payincus.com/api/health -> HTTP 200 status ok before OTA
+Admin system-update API without auth -> 401 Unauthorized; OTA pending authenticated admin session or current SSH credentials
+```
 
 `v1.2.3` is published on GitHub and has release artifacts. Production OTA task `#126` deployed `v1.2.3` successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v1.2.3-20260629123045`.
 
