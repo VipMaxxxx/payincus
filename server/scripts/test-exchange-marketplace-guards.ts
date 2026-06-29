@@ -73,6 +73,15 @@ function sourceBetween(source: string, start: string, end: string): string {
   return source.slice(startIndex, endIndex)
 }
 
+function interfaceSection(source: string, name: string): string {
+  const start = `export interface ${name} {`
+  const startIndex = source.indexOf(start)
+  assert(startIndex >= 0, `client API types must include ${name}`)
+  const nextIndex = source.indexOf('\nexport interface ', startIndex + start.length)
+  assert(nextIndex > startIndex, `client API type ${name} must end before the next exported interface`)
+  return source.slice(startIndex, nextIndex)
+}
+
 function assertSourceOrder(source: string, markers: string[], message: string): void {
   let previousIndex = -1
   for (const marker of markers) {
@@ -808,6 +817,48 @@ for (const forbiddenIdentityField of [
   assert(!publicListingReturnSection.includes(forbiddenIdentityField), `public listing response must not expose ${forbiddenIdentityField}`)
   assert(!orderReturnSection.includes(forbiddenIdentityField), `user exchange order response must not expose ${forbiddenIdentityField}`)
   assert(!disputeReturnSection.includes(forbiddenIdentityField), `user exchange dispute response must not expose ${forbiddenIdentityField}`)
+}
+
+const anonymousUserExchangeTypeSections = [
+  interfaceSection(clientTypesSource, 'ExchangeListing'),
+  interfaceSection(clientTypesSource, 'ExchangeOrder'),
+  interfaceSection(clientTypesSource, 'ExchangeDeliveryTask'),
+  interfaceSection(clientTypesSource, 'ExchangeWalletLog'),
+  interfaceSection(clientTypesSource, 'ExchangeWithdrawal'),
+  interfaceSection(clientTypesSource, 'ExchangeDispute')
+]
+for (const forbiddenUserTypeIdentityField of [
+  'buyerUserId',
+  'sellerUserId',
+  'creatorUserId',
+  'userId',
+  'user_id',
+  'ownerId',
+  'owner_id',
+  'fromUserId',
+  'toUserId',
+  'buyer:',
+  'seller:',
+  'user:',
+  'fromUser:',
+  'toUser:',
+  'username',
+  'userName',
+  'nickname',
+  'email',
+  'emailMasked',
+  'contact',
+  'contactEmail',
+  'phone',
+  'mobile',
+  'telegram',
+  'wechat',
+  'avatar',
+  'registeredAt'
+]) {
+  for (const section of anonymousUserExchangeTypeSections) {
+    assert(!section.includes(forbiddenUserTypeIdentityField), `user exchange API types must not expose ${forbiddenUserTypeIdentityField}`)
+  }
 }
 
 assert(
