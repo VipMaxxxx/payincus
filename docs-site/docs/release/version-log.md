@@ -6,28 +6,39 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `6b371bc07`
+- 最新发布提交 / Latest Release Commit: `377f7f449`
 - 提交日期 / Commit date: 2026-06-29
-- 提交说明 / Commit subject: Release v1.1.9 exchange dispute refund atomicity
-- 最新 tag / Latest tag: `v1.1.9`
+- 提交说明 / Commit subject: Release v1.2.0 exchange hardening
+- 最新 tag / Latest tag: `v1.2.0`
 
 ## 未发布变更 / Unreleased Changes
 
-### 修复与稳定性 / Fixes and Stability
-
-- Fix exchange listing status lookup on instances `44a692ae7`
-- Repair refunded exchange dispute instance return `344b79440`
-- Harden exchange delivery cleanup tolerance `ccdcb564e`
-
-### 其他变更 / Other Changes
-
-- Clarify exchange traffic preservation for buyers `8e6f893d2`
-
-### 新增能力 / New Capabilities
-
-- Allow inactive package exchange listings `67d06242f`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v1.2.0
+
+- 发布提交 / Release commit: `377f7f449`
+- 提交日期 / Commit date: 2026-06-29
+- 提交说明 / Commit subject: Release v1.2.0 exchange hardening
+
+# v1.2.0
+
+## 修复
+
+- 交易所允许已停用或售罄套餐的存量实例继续交易，挂牌和购买校验不再因为原方案不可新购而拒绝存量使用权交易。
+- 强化交割前旧访问清理的容错能力：端口映射设备和代理站点远端清理失败会写入交割审计告警，不再直接中断强制重装交割链路。
+- 修复历史半完成争议退款场景：如果订单已经退款但已交割实例仍在买家名下，管理员重试退款会把实例停机并原路退回卖家，不会二次退款。
+- 明确交易所交割不会重置流量：买家详情、确认购买和交易说明都提示当前已用流量与剩余额度会按挂牌状态原样交割。
+- 修复实例列表交易状态可能漏显示的问题：实例页现在按当前可见实例读取挂牌锁定状态，不再依赖“我的挂牌”第一页前 100 条数据。
+
+## 验证
+
+- `pnpm --filter client type-check`
+- `pnpm --filter server type-check`
+- `pnpm --filter server test:exchange-marketplace-guards`
+- `pnpm --filter server test:exchange-lifecycle-guards`
 
 ## v1.1.9
 
