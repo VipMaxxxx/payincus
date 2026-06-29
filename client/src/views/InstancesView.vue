@@ -706,7 +706,7 @@ function isInstanceExchangeLocked(instance: Instance): boolean {
   return !!listing && ['active', 'paused', 'locked', 'delivery_failed'].includes(listing.status)
 }
 
-function getInstanceExchangeState(instance: Instance): { label: string; hint: string; className: string } {
+function getInstanceExchangeState(instance: Instance): { label: string; hint: string; className: string } | null {
   const listing = getInstanceExchangeListing(instance)
   if (listing?.status === 'active') {
     return {
@@ -736,25 +736,7 @@ function getInstanceExchangeState(instance: Instance): { label: string; hint: st
       className: themeStore.isDark ? 'bg-red-900/50 text-red-300' : 'bg-red-100 text-red-700'
     }
   }
-  if (instance.status?.toLowerCase() === 'stopped') {
-    return {
-      label: '可上架',
-      hint: '已暂停，可进入交易所检测',
-      className: themeStore.isDark ? 'bg-emerald-900/50 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
-    }
-  }
-  if (instance.status?.toLowerCase() === 'running') {
-    return {
-      label: '需先暂停',
-      hint: '上架前必须先暂停实例',
-      className: themeStore.isDark ? 'bg-yellow-900/40 text-yellow-300' : 'bg-yellow-100 text-yellow-700'
-    }
-  }
-  return {
-    label: '不可上架',
-    hint: '仅暂停且通过检测的实例可挂牌',
-    className: themeStore.isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'
-  }
+  return null
 }
 
 function openInstanceExchange(instance: Instance): void {
@@ -1865,18 +1847,19 @@ async function confirmBatchDestroy(): Promise<void> {
                     </div>
                     <div v-if="!isAdminEntry" class="mt-1 flex flex-wrap items-center gap-1.5">
                       <span
+                        v-if="getInstanceExchangeState(instance)"
                         class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
-                        :class="getInstanceExchangeState(instance).className"
-                        :title="getInstanceExchangeState(instance).hint"
+                        :class="getInstanceExchangeState(instance)?.className"
+                        :title="getInstanceExchangeState(instance)?.hint"
                       >
-                        {{ getInstanceExchangeState(instance).label }}
+                        {{ getInstanceExchangeState(instance)?.label }}
                       </span>
                       <span
                         v-if="isInstanceExchangeLocked(instance)"
                         class="text-[10px]"
                         :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-400'"
                       >
-                        {{ getInstanceExchangeState(instance).hint }}
+                        {{ getInstanceExchangeState(instance)?.hint }}
                       </span>
                     </div>
 	                  </div>
@@ -2333,12 +2316,12 @@ async function confirmBatchDestroy(): Promise<void> {
                     {{ $t('common.networkMode.' + getInstanceNetworkMode(instance)) }}
                   </span>
 	                  <span
-	                    v-if="!isAdminEntry"
+	                    v-if="!isAdminEntry && getInstanceExchangeState(instance)"
 	                    class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
-	                    :class="getInstanceExchangeState(instance).className"
-	                    :title="getInstanceExchangeState(instance).hint"
+	                    :class="getInstanceExchangeState(instance)?.className"
+	                    :title="getInstanceExchangeState(instance)?.hint"
 	                  >
-	                    {{ getInstanceExchangeState(instance).label }}
+	                    {{ getInstanceExchangeState(instance)?.label }}
 	                  </span>
                 </div>
               </button>

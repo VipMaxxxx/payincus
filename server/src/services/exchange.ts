@@ -32,7 +32,7 @@ const exchangeDeliveryProgressSteps = [
   'reinstall',
   'transfer_owner',
   'rebuild_billing',
-  'reset_traffic_baseline',
+  'preserve_traffic_usage',
   'complete'
 ] as const
 

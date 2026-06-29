@@ -3059,7 +3059,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
                   </div>
                   <p class="mt-1 text-sm text-themed-muted">{{ exchangeStatusBadge.hint }}</p>
                   <p class="mt-2 text-xs text-themed-muted">
-                    实例必须处于暂停状态才能挂牌。成交后平台会强制重装交割给买家，并清理 SSH key、控制台 token、端口映射、代理站点、快照、备份策略和流量基线。
+                    实例必须处于暂停状态才能挂牌。成交后平台会强制重装交割给买家，并清理 SSH key、控制台 token、端口映射、代理站点、快照和备份策略；流量用量和剩余额度按挂牌实例当前状态交割。
                   </p>
                 </div>
 

@@ -29,7 +29,7 @@ const DELIVERY_PROGRESS_STEPS = [
   'reinstall',
   'transfer_owner',
   'rebuild_billing',
-  'reset_traffic_baseline',
+  'preserve_traffic_usage',
   'complete'
 ] as const
 
@@ -40,8 +40,6 @@ interface DeliveryCleanupSummary extends Record<string, number> {
   snapshotsRemoved: number
   snapshotPoliciesRemoved: number
   backupPoliciesRemoved: number
-  trafficSnapshotsRemoved: number
-  dailyTrafficRowsRemoved: number
   resourceRiskStateRemoved: number
   resourceRiskEventsRemoved: number
   resourceRiskSamplesRemoved: number
@@ -135,8 +133,6 @@ async function cleanupLegacyAccess(instanceId: number): Promise<DeliveryCleanupS
     snapshotsRemoved,
     snapshotPoliciesRemoved,
     backupPoliciesRemoved,
-    trafficSnapshotsRemoved,
-    dailyTrafficRowsRemoved,
     resourceRiskStateRemoved,
     resourceRiskEventsRemoved,
     resourceRiskSamplesRemoved
@@ -144,8 +140,6 @@ async function cleanupLegacyAccess(instanceId: number): Promise<DeliveryCleanupS
     prisma.snapshot.deleteMany({ where: { instanceId } }),
     prisma.snapshotPolicy.deleteMany({ where: { instanceId } }),
     prisma.backupPolicy.deleteMany({ where: { instanceId } }),
-    prisma.trafficSnapshot.deleteMany({ where: { instanceId } }),
-    prisma.dailyTraffic.deleteMany({ where: { instanceId } }),
     prisma.instanceRiskState.deleteMany({ where: { instanceId } }),
     prisma.instanceRiskEvent.deleteMany({ where: { instanceId } }),
     prisma.instanceResourceSample.deleteMany({ where: { instanceId } })
@@ -158,8 +152,6 @@ async function cleanupLegacyAccess(instanceId: number): Promise<DeliveryCleanupS
     snapshotsRemoved: snapshotsRemoved.count,
     snapshotPoliciesRemoved: snapshotPoliciesRemoved.count,
     backupPoliciesRemoved: backupPoliciesRemoved.count,
-    trafficSnapshotsRemoved: trafficSnapshotsRemoved.count,
-    dailyTrafficRowsRemoved: dailyTrafficRowsRemoved.count,
     resourceRiskStateRemoved: resourceRiskStateRemoved.count,
     resourceRiskEventsRemoved: resourceRiskEventsRemoved.count,
     resourceRiskSamplesRemoved: resourceRiskSamplesRemoved.count
@@ -285,14 +277,13 @@ async function enqueueReinstall(taskId: number): Promise<void> {
         closedTerminalSessions: cleanupSummary.terminalSessionsClosed,
         removedPortMappings: cleanupSummary.portMappingsRemoved,
         removedProxySites: cleanupSummary.proxySitesRemoved,
-        removedSnapshots: cleanupSummary.snapshotsRemoved,
-        removedSnapshotPolicies: cleanupSummary.snapshotPoliciesRemoved,
-        removedBackupPolicies: cleanupSummary.backupPoliciesRemoved,
-	        removedTrafficSnapshots: cleanupSummary.trafficSnapshotsRemoved,
-	        removedDailyTrafficRows: cleanupSummary.dailyTrafficRowsRemoved,
+	        removedSnapshots: cleanupSummary.snapshotsRemoved,
+	        removedSnapshotPolicies: cleanupSummary.snapshotPoliciesRemoved,
+	        removedBackupPolicies: cleanupSummary.backupPoliciesRemoved,
 	        removedResourceRiskState: cleanupSummary.resourceRiskStateRemoved,
 	        removedResourceRiskEvents: cleanupSummary.resourceRiskEventsRemoved,
 	        removedResourceRiskSamples: cleanupSummary.resourceRiskSamplesRemoved,
+	        trafficUsagePreserved: true,
 	        sellerAccessFrozen: true,
 	        sshAuthorizedKeysClearedByForcedReinstall: true,
 	        consoleCloudInitTokensClearedByForcedReinstall: true,
@@ -388,8 +379,6 @@ async function finalizeDelivery(taskId: number): Promise<void> {
         snapshotsRemoved,
         snapshotPoliciesRemoved,
         backupPoliciesRemoved,
-        trafficSnapshotsRemoved,
-        dailyTrafficRowsRemoved,
         resourceRiskStateRemoved,
         resourceRiskEventsRemoved,
         resourceRiskSamplesRemoved,
@@ -401,8 +390,6 @@ async function finalizeDelivery(taskId: number): Promise<void> {
         tx.snapshot.deleteMany({ where: { instanceId: task.instanceId } }),
         tx.snapshotPolicy.deleteMany({ where: { instanceId: task.instanceId } }),
         tx.backupPolicy.deleteMany({ where: { instanceId: task.instanceId } }),
-        tx.trafficSnapshot.deleteMany({ where: { instanceId: task.instanceId } }),
-        tx.dailyTraffic.deleteMany({ where: { instanceId: task.instanceId } }),
         tx.instanceRiskState.deleteMany({ where: { instanceId: task.instanceId } }),
         tx.instanceRiskEvent.deleteMany({ where: { instanceId: task.instanceId } }),
         tx.instanceResourceSample.deleteMany({ where: { instanceId: task.instanceId } }),
@@ -422,8 +409,6 @@ async function finalizeDelivery(taskId: number): Promise<void> {
           name: newDisplayName,
           status: 'stopped',
           displayOrder: 0,
-          monthlyTrafficUsed: 0,
-          trafficStatus: 'NORMAL',
           restoredFrom: Prisma.JsonNull,
           autoRenew: false,
           autoRenewAttempts: 0,
@@ -477,14 +462,13 @@ async function finalizeDelivery(taskId: number): Promise<void> {
               snapshotsRemoved: snapshotsRemoved.count,
               snapshotPoliciesRemoved: snapshotPoliciesRemoved.count,
               backupPoliciesRemoved: backupPoliciesRemoved.count,
-              trafficSnapshotsRemoved: trafficSnapshotsRemoved.count,
-              dailyTrafficRowsRemoved: dailyTrafficRowsRemoved.count,
               resourceRiskStateRemoved: resourceRiskStateRemoved.count,
               resourceRiskEventsRemoved: resourceRiskEventsRemoved.count,
               resourceRiskSamplesRemoved: resourceRiskSamplesRemoved.count,
               affBindingsRemoved: affBindingsRemoved.count,
               cancelledTransfers: cancelledTransfers.count
-            }
+            },
+            trafficUsagePreserved: true
           }
         }
       })
@@ -498,8 +482,8 @@ async function finalizeDelivery(taskId: number): Promise<void> {
       await tx.exchangeDeliveryTask.update({
         where: { id: taskId },
         data: {
-          step: 'reset_traffic_baseline',
-          progress: taskProgress('reset_traffic_baseline', { instanceTaskId: task.instanceTaskId })
+          step: 'preserve_traffic_usage',
+          progress: taskProgress('preserve_traffic_usage', { instanceTaskId: task.instanceTaskId })
         }
       })
       const policy = await tx.exchangePolicyConfig.findFirst({ orderBy: { id: 'asc' } })
@@ -549,6 +533,7 @@ async function finalizeDelivery(taskId: number): Promise<void> {
             cloudInitStateResetForBuyer: true,
             oldBillingRecordsKeptWithSeller: true,
             renewalOwnershipRebuiltForBuyer: true,
+            trafficUsagePreserved: true,
             buyerBillingRecordId: buyerBillingRecord.id,
             confirmationDueAt,
             confirmationHours

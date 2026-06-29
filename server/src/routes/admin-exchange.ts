@@ -1,13 +1,19 @@
 import type { FastifyInstance } from 'fastify'
 import { Prisma } from '@prisma/client'
+import { customAlphabet } from 'nanoid'
 import { prisma } from '../db/prisma.js'
 import { EXCHANGE_ORDER_LOCK_NAMESPACE, USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
 import { recordExchangeDisputeWalletReleaseInTransaction, releaseExchangeOrderEscrow } from '../services/exchange.js'
 import { createLog } from '../db/logs.js'
 import { sendNotification } from '../lib/notifier.js'
+import { getHostById } from '../db/hosts.js'
+import { getIncusClient } from '../lib/incus/index.js'
+import { stopInstance } from '../lib/incus/incus-instances.js'
+import { instanceExists, renameInstance as renameIncusInstance } from '../lib/incus/incus-restore.js'
 
 const MAX_PAGE_SIZE = 100
 const POSITIVE_ID_RE = /^[1-9]\d*$/
+const exchangeReturnSuffix = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
 const exchangeDeliveryProgressSteps = [
   'escrow_paid',
   'lock_instance',
@@ -20,7 +26,7 @@ const exchangeDeliveryProgressSteps = [
   'reinstall',
   'transfer_owner',
   'rebuild_billing',
-  'reset_traffic_baseline',
+  'preserve_traffic_usage',
   'complete'
 ] as const
 
@@ -219,12 +225,248 @@ async function auditInTransaction(
   })
 }
 
+type ExchangeRefundInstanceReturnResult = {
+  returned: boolean
+  reason: string
+  instanceId?: number
+  previousOwnerUserId?: number
+  restoredOwnerUserId?: number
+  oldIncusId?: string
+  restoredIncusId?: string
+  restoredDisplayName?: string
+  auditLogId?: number
+}
+
+function jsonObject(value: Prisma.JsonValue | null | undefined): Prisma.JsonObject | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Prisma.JsonObject : null
+}
+
+function jsonString(value: Prisma.JsonValue | null | undefined, key: string): string | null {
+  const object = jsonObject(value)
+  const item = object?.[key]
+  return typeof item === 'string' && item.trim() ? item.trim() : null
+}
+
+function buildSellerReturnIncusId(sellerUserId: number): string {
+  return `u${sellerUserId}-${exchangeReturnSuffix()}`
+}
+
+function resolveReturnDisplayName(orderNo: string, orderSnapshot: Prisma.JsonValue, listingSnapshot: Prisma.JsonValue): string {
+  const snapshotName = jsonString(orderSnapshot, 'name') || jsonString(listingSnapshot, 'name')
+  if (snapshotName) return snapshotName.slice(0, 64)
+  return `exchange-return-${orderNo.toLowerCase()}`.slice(0, 64)
+}
+
+function resolveOriginalSellerIncusId(auditLogs: Array<{ detail: Prisma.JsonValue }>, sellerUserId: number): string | null {
+  for (const log of auditLogs) {
+    const oldIncusId = jsonString(log.detail, 'oldIncusId')
+    if (oldIncusId?.startsWith(`u${sellerUserId}-`)) return oldIncusId
+  }
+  return null
+}
+
+async function resolveAvailableReturnIncusId(
+  client: Awaited<ReturnType<typeof getIncusClient>>,
+  preferredIncusId: string | null,
+  sellerUserId: number,
+  currentIncusId: string
+): Promise<string> {
+  if (preferredIncusId && preferredIncusId !== currentIncusId && !await instanceExists(client, preferredIncusId)) {
+    return preferredIncusId
+  }
+  let nextIncusId = buildSellerReturnIncusId(sellerUserId)
+  while (await instanceExists(client, nextIncusId)) {
+    nextIncusId = buildSellerReturnIncusId(sellerUserId)
+  }
+  return nextIncusId
+}
+
+async function returnDeliveredExchangeInstanceForRefund(
+  orderId: number,
+  actorUserId: number,
+  reason: string
+): Promise<ExchangeRefundInstanceReturnResult> {
+  const context = await prisma.$transaction(async tx => {
+    const orderLocked = await tryAdvisoryTransactionLock(tx, EXCHANGE_ORDER_LOCK_NAMESPACE, orderId)
+    if (!orderLocked) throw new Error('交易订单正在处理，请稍后重试')
+
+    const order = await tx.exchangeOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        listing: { select: { snapshot: true } },
+        instance: {
+          select: {
+            id: true,
+            userId: true,
+            status: true,
+            incusId: true,
+            name: true,
+            hostId: true
+          }
+        }
+      }
+    })
+    if (!order) throw new Error('交易订单不存在')
+    if (['completed', 'refunded', 'cancelled'].includes(order.status)) {
+      throw new Error('当前订单状态不能退款')
+    }
+    if (order.instance.status === 'deleted') {
+      return { returned: false as const, reason: 'instance_deleted' }
+    }
+    if (order.instance.userId !== order.buyerUserId) {
+      return { returned: false as const, reason: 'not_delivered_to_buyer' }
+    }
+
+    const claimed = await tx.exchangeOrder.updateMany({
+      where: {
+        id: order.id,
+        status: { notIn: ['completed', 'refunded', 'cancelled'] },
+        refundBalanceLogId: null
+      },
+      data: {
+        status: 'manual_review',
+        failureReason: `退款退机处理中：${reason}`
+      }
+    })
+    if (claimed.count !== 1) {
+      throw new Error('订单退款状态已变化，请刷新后重试')
+    }
+
+    const deliveryAudits = await tx.exchangeAuditLog.findMany({
+      where: {
+        action: 'delivery.completed',
+        targetType: 'exchange_order',
+        targetId: order.id
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: { detail: true }
+    })
+
+    return {
+      returned: true as const,
+      orderNo: order.orderNo,
+      instanceId: order.instanceId,
+      buyerUserId: order.buyerUserId,
+      sellerUserId: order.sellerUserId,
+      hostId: order.instance.hostId,
+      currentIncusId: order.instance.incusId,
+      currentDisplayName: order.instance.name,
+      preferredIncusId: resolveOriginalSellerIncusId(deliveryAudits, order.sellerUserId),
+      restoredDisplayName: resolveReturnDisplayName(order.orderNo, order.snapshot, order.listing.snapshot)
+    }
+  })
+
+  if (!context.returned) return context
+
+  const host = await getHostById(context.hostId)
+  if (!host) throw new Error('交割节点不存在，无法退回实例')
+  const client = await getIncusClient(host)
+  const restoredIncusId = await resolveAvailableReturnIncusId(
+    client,
+    context.preferredIncusId,
+    context.sellerUserId,
+    context.currentIncusId
+  )
+
+  await stopInstance(client, context.currentIncusId, true)
+  await renameIncusInstance(client, context.currentIncusId, restoredIncusId)
+
+  try {
+    return await prisma.$transaction(async tx => {
+      const orderLocked = await tryAdvisoryTransactionLock(tx, EXCHANGE_ORDER_LOCK_NAMESPACE, orderId)
+      if (!orderLocked) throw new Error('交易订单正在处理，请稍后重试')
+
+      const updatedInstance = await tx.instance.updateMany({
+        where: {
+          id: context.instanceId,
+          userId: context.buyerUserId,
+          incusId: context.currentIncusId,
+          status: { not: 'deleted' }
+        },
+        data: {
+          userId: context.sellerUserId,
+          incusId: restoredIncusId,
+          name: context.restoredDisplayName,
+          status: 'stopped',
+          suspendedAt: null,
+          suspendedBy: null,
+          suspendReason: null,
+          autoRenew: false,
+          autoRenewAttempts: 0,
+          lastAutoRenewAttemptAt: null,
+          expiryNotifiedAt: null,
+          displayOrder: 0,
+          cloudInitState: null,
+          cloudInitSource: null,
+          cloudInitLastCheckedAt: null,
+          cloudInitCompletedAt: null,
+          cloudInitManualCompletedAt: null,
+          cloudInitManualCompletedBy: null
+        }
+      })
+      if (updatedInstance.count !== 1) {
+        throw new Error('实例归属已变化，不能自动退回；请人工核对')
+      }
+
+      const auditLog = await tx.exchangeAuditLog.create({
+        data: {
+          actorUserId,
+          action: 'order.refund_instance_return',
+          targetType: 'exchange_order',
+          targetId: orderId,
+          detail: {
+            reason,
+            instanceId: context.instanceId,
+            buyerUserId: context.buyerUserId,
+            sellerUserId: context.sellerUserId,
+            oldIncusId: context.currentIncusId,
+            restoredIncusId,
+            preferredIncusId: context.preferredIncusId,
+            restoredDisplayName: context.restoredDisplayName,
+            previousDisplayName: context.currentDisplayName,
+            stoppedBeforeReturn: true,
+            trafficUsagePreserved: true,
+            note: 'Dispute/order refund returned the delivered instance ownership to the original seller before refunding buyer funds'
+          }
+        }
+      })
+
+      return {
+        returned: true,
+        reason: 'returned_to_seller',
+        instanceId: context.instanceId,
+        previousOwnerUserId: context.buyerUserId,
+        restoredOwnerUserId: context.sellerUserId,
+        oldIncusId: context.currentIncusId,
+        restoredIncusId,
+        restoredDisplayName: context.restoredDisplayName,
+        auditLogId: auditLog.id
+      }
+    })
+  } catch (error) {
+    try {
+      await renameIncusInstance(client, restoredIncusId, context.currentIncusId)
+    } catch (rollbackError) {
+      console.error('[AdminExchange] CRITICAL: failed to rollback exchange refund instance return:', {
+        orderId,
+        instanceId: context.instanceId,
+        oldIncusId: context.currentIncusId,
+        restoredIncusId,
+        error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+      })
+    }
+    throw error
+  }
+}
+
 async function refundExchangeOrder(
   orderId: number,
   actorUserId: number,
   reason: string,
   targetStatus: 'refunded' | 'cancelled' = 'refunded'
 ) {
+  const instanceReturn = await returnDeliveredExchangeInstanceForRefund(orderId, actorUserId, reason)
   return prisma.$transaction(async tx => {
     const orderLocked = await tryAdvisoryTransactionLock(tx, EXCHANGE_ORDER_LOCK_NAMESPACE, orderId)
     if (!orderLocked) throw new Error('交易订单正在处理，请稍后重试')
@@ -380,6 +622,8 @@ async function refundExchangeOrder(
             refundWalletLogId: refundWalletLog.id,
             buyerRefundBillingRecordId: buyerRefundBillingRecord.id,
             deliveredBuyerInstanceSuspended,
+            deliveredBuyerInstanceReturned: instanceReturn.returned,
+            instanceReturn,
             targetStatus
           }
 	      }
@@ -546,8 +790,6 @@ async function completeDeliveryTaskManually(taskId: number, actorUserId: number,
     await tx.instance.update({
       where: { id: task.instanceId },
       data: {
-        monthlyTrafficUsed: 0,
-        trafficStatus: 'NORMAL',
         restoredFrom: Prisma.JsonNull,
         autoRenew: false,
         autoRenewAttempts: 0,

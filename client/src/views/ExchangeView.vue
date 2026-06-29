@@ -190,7 +190,7 @@ const deliverySteps = [
   'reinstall',
   'transfer_owner',
   'rebuild_billing',
-  'reset_traffic_baseline',
+  'preserve_traffic_usage',
   'complete'
 ] as const
 const deliveryStepLabels: Record<string, string> = {
@@ -207,7 +207,8 @@ const deliveryStepLabels: Record<string, string> = {
   reinstall_queued: '重装系统',
   transfer_owner: '转移实例归属',
   rebuild_billing: '重建账单和续费归属',
-  reset_traffic_baseline: '重置流量基线',
+  preserve_traffic_usage: '保留流量用量',
+  reset_traffic_baseline: '保留流量用量',
   complete: '交割完成',
   manual_review: '人工审核'
 }
@@ -1340,7 +1341,7 @@ onMounted(async () => {
             </div>
 
             <div v-if="eligibilityMap[instance.id]" class="mt-3 rounded bg-themed-secondary p-3 text-xs text-themed-muted">
-              交割时平台会清理 SSH key、终端会话、控制台 token、端口映射、代理站点、旧快照和备份策略，并重置流量基线。
+              交割时平台会清理 SSH key、终端会话、控制台 token、端口映射、代理站点、旧快照和备份策略；流量用量和剩余额度按挂牌实例当前状态交割。
             </div>
           </article>
         </div>
@@ -1940,7 +1941,7 @@ onMounted(async () => {
         </div>
         <label class="mt-4 block text-sm">
           <span class="text-themed">争议原因</span>
-          <textarea v-model="disputeDraft.reason" class="input mt-1 w-full" rows="5" placeholder="例如：交割后无法登录、配置与挂牌不一致、流量基线异常等"></textarea>
+          <textarea v-model="disputeDraft.reason" class="input mt-1 w-full" rows="5" placeholder="例如：交割后无法登录、配置与挂牌不一致、流量用量异常等"></textarea>
         </label>
         <div class="mt-5 flex justify-end gap-2">
           <button class="btn btn-secondary" type="button" :disabled="disputeSubmitting" @click="cancelCreateDispute">取消</button>

@@ -6,16 +6,31 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `1b3079211`
+- 最新发布提交 / Latest Release Commit: `0c1eaa0be`
 - 提交日期 / Commit date: 2026-06-29
-- 提交说明 / Commit subject: Release v1.0.9 exchange marketplace fixes
-- 最新 tag / Latest tag: `v1.0.9`
+- 提交说明 / Commit subject: Release v1.1.0 exchange delivery fix
+- 最新 tag / Latest tag: `v1.1.0`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v1.1.0
+
+- 发布提交 / Release commit: `0c1eaa0be`
+- 提交日期 / Commit date: 2026-06-29
+- 提交说明 / Commit subject: Release v1.1.0 exchange delivery fix
+
+## v1.1.0
+
+Fix Exchange Marketplace forced-reinstall delivery after live testing found Incus rejects renaming a running instance.
+
+- Stop the rebuilt instance before the Exchange delivery worker renames it and transfers ownership, then persist the delivered instance as stopped.
+- Keep the delivery model aligned with the product rule: buyers receive a freshly rebuilt instance, not the seller's original running environment.
+- Expand the public Exchange policy summary used by the user UI: fee rule, confirmation rule, withdrawal limits, listing/purchase limits, expiry threshold, markup cap, public IP policy, image-selection policy and dispute timeout.
+- Add guard coverage so future changes cannot remove the pre-rename stop or the user-facing Exchange policy summary.
 
 ## v1.0.9
 

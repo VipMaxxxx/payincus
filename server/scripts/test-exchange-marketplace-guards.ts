@@ -438,7 +438,7 @@ assert(
     exchangeDeliveryWorkerSource.includes("action: 'delivery.transfer_owner'") &&
     exchangeDeliveryWorkerSource.includes('removeDevice') &&
     exchangeDeliveryWorkerSource.includes('createCaddyClient') &&
-    exchangeDeliveryWorkerSource.includes("step: 'reset_traffic_baseline'") &&
+    exchangeDeliveryWorkerSource.includes("step: 'preserve_traffic_usage'") &&
     exchangeDeliveryWorkerSource.includes("progress: taskProgress('transfer_owner'") &&
     exchangeDeliveryWorkerSource.includes("setDeliveryProgress(taskId, 'freeze_seller_access')") &&
     exchangeDeliveryWorkerSource.includes("setDeliveryProgress(taskId, 'cleanup_ssh_keys'") &&
@@ -469,6 +469,15 @@ assert(
 	    exchangeDeliveryWorkerSource.includes('balanceLogId: task.order.buyerBalanceLogId') &&
 	    exchangeDeliveryWorkerSource.includes('buyerBillingRecordId: buyerBillingRecord.id') &&
 	    exchangeDeliveryWorkerSource.includes('restoredFrom: Prisma.JsonNull') &&
+	    exchangeDeliveryWorkerSource.includes('trafficUsagePreserved: true') &&
+	    !exchangeDeliveryWorkerSource.includes('monthlyTrafficUsed: 0') &&
+	    !exchangeDeliveryWorkerSource.includes("trafficStatus: 'NORMAL'") &&
+	    !exchangeDeliveryWorkerSource.includes('trafficSnapshotsRemoved') &&
+	    !exchangeDeliveryWorkerSource.includes('dailyTrafficRowsRemoved') &&
+	    instanceTaskWorkerSource.includes('const exchangeDeliveryTask = await prisma.exchangeDeliveryTask.findUnique') &&
+	    instanceTaskWorkerSource.includes('where: { instanceTaskId: task.id }') &&
+	    instanceTaskWorkerSource.includes('if (!exchangeDeliveryTask)') &&
+	    instanceTaskWorkerSource.includes('await prisma.trafficSnapshot.deleteMany({ where: { instanceId: task.instanceId } })') &&
 	    exchangeDeliveryWorkerSource.includes('instanceRiskState.deleteMany') &&
 	    exchangeDeliveryWorkerSource.includes('instanceRiskEvent.deleteMany') &&
 	    exchangeDeliveryWorkerSource.includes('instanceResourceSample.deleteMany') &&
@@ -498,7 +507,7 @@ assert(
 		    exchangeDeliveryWorkerSource.includes('settleDueConfirmingOrders') &&
 		    exchangeDeliveryWorkerSource.includes('releaseExchangeOrderEscrow') &&
 		    exchangeDeliveryWorkerSource.includes("status: 'manual_review'"),
-  'exchange delivery worker must clean old access/billing bindings with audit evidence, queue forced rebuild for the buyer, rename Incus/display identity for anonymous buyer delivery, track transfer/reset progress, notify both parties without post-commit rollback, enter confirmation period, auto-settle escrow, and fail into manual review'
+  'exchange delivery worker must clean old access/billing bindings with audit evidence, queue forced rebuild for the buyer, rename Incus/display identity for anonymous buyer delivery, preserve traded traffic usage, notify both parties without post-commit rollback, enter confirmation period, auto-settle escrow, and fail into manual review'
 )
 
 const enqueueReinstallSection = sourceBetween(exchangeDeliveryWorkerSource, 'async function enqueueReinstall', 'async function finalizeDelivery')
@@ -544,11 +553,11 @@ assertSourceOrder(
     'name: newDisplayName',
     "status: 'stopped'",
     "type: 'newPurchase'",
-    "step: 'reset_traffic_baseline'",
+    "step: 'preserve_traffic_usage'",
     "status: 'confirming'",
     "status: 'COMPLETED'"
   ],
-  'exchange delivery must wait for rebuild completion before anonymous Incus rename, owner transfer, billing rebuild, traffic reset, and confirmation state'
+  'exchange delivery must wait for rebuild completion before anonymous Incus rename, owner transfer, billing rebuild, preserving traffic usage, and confirmation state'
 )
 assert(
   finalizeDeliverySection.includes('await renameIncusInstance(client, newIncusId, oldIncusId)') &&
@@ -753,7 +762,7 @@ assert(
 			adminExchangeRouteSource.includes('anonymousDisplayNameVerified: true') &&
 			adminExchangeRouteSource.includes('buyerBillingRecordId: buyerBillingRecord.id') &&
 			adminExchangeRouteSource.includes("remark: `交易所购买 ${task.order.orderNo}`") &&
-			adminExchangeRouteSource.includes("trafficStatus: 'NORMAL'") &&
+			adminExchangeRouteSource.includes('trafficUsagePreserved: true') &&
 			adminExchangeRouteSource.includes("status: 'confirming'") &&
 			adminExchangeRouteSource.includes("status: 'sold'") &&
 			adminExchangeRouteSource.includes("status: 'COMPLETED'") &&
@@ -798,10 +807,27 @@ assert(
 )
 
 const refundOrderSection = sourceBetween(adminExchangeRouteSource, 'async function refundExchangeOrder', 'async function freezeExchangeOrder')
+const refundReturnSection = sourceBetween(adminExchangeRouteSource, 'async function returnDeliveredExchangeInstanceForRefund', 'async function refundExchangeOrder')
 const manualCompleteSection = sourceBetween(adminExchangeRouteSource, 'async function completeDeliveryTaskManually', 'async function claimExchangeDisputeForProcessing')
+assertSourceOrder(
+  refundReturnSection,
+  [
+    'const orderLocked = await tryAdvisoryTransactionLock',
+    "status: 'manual_review'",
+    'await stopInstance(client, context.currentIncusId, true)',
+    'await renameIncusInstance(client, context.currentIncusId, restoredIncusId)',
+    'userId: context.sellerUserId',
+    'incusId: restoredIncusId',
+    "status: 'stopped'",
+    "action: 'order.refund_instance_return'",
+    'trafficUsagePreserved: true'
+  ],
+  'admin exchange dispute/order refund must return already-delivered instances to the original seller before refunding buyer funds while preserving traffic usage'
+)
 assertSourceOrder(
   refundOrderSection,
   [
+    'const instanceReturn = await returnDeliveredExchangeInstanceForRefund',
     'const orderLocked = await tryAdvisoryTransactionLock',
     "status: 'manual_review'",
     "type: 'exchange_refund'",
@@ -809,9 +835,10 @@ assertSourceOrder(
     "status: 'suspended'",
     "type: 'escrow_refund'",
     "status: targetStatus",
-    "action: targetStatus === 'cancelled' ? 'order.cancel' : 'order.refund'"
+    "action: targetStatus === 'cancelled' ? 'order.cancel' : 'order.refund'",
+    'deliveredBuyerInstanceReturned: instanceReturn.returned'
   ],
-  'admin exchange refund must lock the order, refund buyer balance, write billing/wallet/audit logs, and suspend any already-delivered buyer instance'
+  'admin exchange refund must return delivered instances first, lock the order, refund buyer balance, write billing/wallet/audit logs, and keep the old suspend fallback for non-returned delivered state'
 )
 assertSourceOrder(
   manualCompleteSection,
@@ -851,7 +878,8 @@ assert(
     userExchangeViewSource.includes('openListingDetail') &&
     userExchangeViewSource.includes('买家获得重装后的新实例，不包含卖家原数据') &&
     userExchangeViewSource.includes('实例锁定') &&
-    userExchangeViewSource.includes('重置流量基线') &&
+    userExchangeViewSource.includes('保留流量用量') &&
+    userExchangeViewSource.includes('流量用量和剩余额度按挂牌实例当前状态交割') &&
     userExchangeViewSource.includes('requestEditListing') &&
     userExchangeViewSource.includes('listingEditDraft') &&
     userExchangeViewSource.includes('修改挂牌信息') &&
@@ -996,6 +1024,9 @@ assert(
     instancesViewSource.includes("['active', 'paused', 'locked', 'delivery_failed'].includes(listing.status)") &&
     instancesViewSource.includes('交易所挂牌中') &&
     instancesViewSource.includes('交易所暂停中') &&
+    !instancesViewSource.includes("label: '可上架'") &&
+    !instancesViewSource.includes("label: '需先暂停'") &&
+    !instancesViewSource.includes("label: '不可上架'") &&
     instancesViewSource.includes('挂牌已暂停，实例仍保持交易锁定') &&
     instancesViewSource.includes('暂停锁定 · 挂牌价') &&
     instancesViewSource.includes('等待平台重试、退款或人工接管') &&
