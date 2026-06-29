@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-90f00cd3b Update version log for v1.2.2
+a34afc734 Release v1.2.3 exchange marketplace polish
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,42 +29,40 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-c9ed099fc Release v1.2.2 exchange listing hardening
+a34afc734 Release v1.2.3 exchange marketplace polish
 ```
 
 ## Latest GitHub Release Work
 
-`v1.2.2` is published on GitHub and has release artifacts. Production OTA task `#125` deployed `v1.2.2` successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v1.2.2-20260629120104`.
+`v1.2.3` is published on GitHub and has release artifacts. Production OTA task `#126` deployed `v1.2.3` successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v1.2.3-20260629123045`.
 
-`v1.2.2` batches the Exchange Marketplace follow-up fixes after the `v1.2.1` rollout: running-but-eligible instances now open the stop-first listing flow instead of a dead entry, eligibility checks show distinct pass messages instead of green failure text, and the admin policy save path now force-writes paused-only listing as a fixed rule in both the UI payload and backend route.
+`v1.2.3` batches the Exchange Marketplace follow-up fixes after the `v1.2.2` rollout: listing eligibility checks are grouped into instance admission and delivery cleanup policy sections, market listing cards explicitly show the delivery method as paused-lock forced reinstall, and admin delivery tasks now show order amount, platform fee, and seller escrow net amount for manual review.
 
-Production proof for task `#125`:
+Production proof for task `#126`:
 
 ```text
-OTA manifest v1.2.2 commit c9ed099fc50c
-amd64 sha256 f81d9bef94f714e0b4505794b8b1d08d4b390d4cca8591d9f77ee3b4d5dc73c7
-arm64 sha256 983d70ce1aa2329f2c5831b3210b6e6d05c87114b18a1e8208c0caa90a08f96e
-/opt/incudal/current -> /opt/incudal/releases/v1.2.2-20260629120104
-/opt/incudal/current/package.json version 1.2.2
-/opt/incudal/current/server/package.json version 1.2.2
+OTA manifest v1.2.3 commit a34afc734b42
+amd64 sha256 2a33af176d385a32dccda5d1ebfcf6a5244d3fad36ba3162e66d16309a980ebf
+arm64 sha256 1874adc9e714f461cbad222cab07d27153dafc5053dc1ba7cb43f3f8d7d74db0
+/opt/incudal/current -> /opt/incudal/releases/v1.2.3-20260629123045
+/opt/incudal/current/package.json version 1.2.3
+/opt/incudal/current/server/package.json version 1.2.3
 systemctl is-active incudal-backend -> active
 local http://127.0.0.1:3001/api/health -> status ok
 public https://pay.payincus.com/api/health -> HTTP 200 status ok
 public https://admin.payincus.com/api/health -> HTTP 200 status ok
-system-update-125.log -> System update completed successfully
-system_update_tasks #125 -> status success, fromVersion v1.2.1, targetVersion v1.2.2, backupPath /opt/incudal/releases/v1.2.1-20260629113553, finishedAt 2026-06-29T12:02:37.414Z
-current-release pnpm verify:production -> passed
-current-release pnpm verify:log-header -> passed
-docs version-log source contains v1.2.2 and Release v1.2.2 exchange listing hardening
-GitHub Build & Release run 28370223920 -> success
-GitHub CI run 28370221221 -> success
-GitHub docs version-log CI run 28370284370 -> success
-GitHub Pages run 28370284389 -> success
+system-update-126.log -> System update completed successfully
+system_update_tasks #126 -> status success, fromVersion v1.2.2, targetVersion v1.2.3, backupPath /opt/incudal/releases/v1.2.2-20260629120104, finishedAt 2026-06-29T12:32:16.322Z
+current-release verify:production -> passed during OTA
+current-release verify:log-header -> passed during OTA
+GitHub Build & Release run 28371826353 -> success
+GitHub CI run 28371822836 -> success
+GitHub Pages run 28371822840 -> success
 ```
 
 ## Active Exchange Marketplace Work
 
-The current worktree contains the `v1.2.2` Exchange Marketplace implementation. Code, release, OTA, non-destructive production checks, and at least one real production Exchange delivery path have been proven. Remaining proof is narrower: keep capturing real dispute refund/release, seller settlement, withdrawal review, and rollback/retry evidence as those paths are exercised.
+The current worktree contains the `v1.2.3` Exchange Marketplace implementation. Code, release, OTA, non-destructive production checks, and at least one real production Exchange delivery path have been proven. Remaining proof is narrower: keep capturing real dispute refund/release, seller settlement, withdrawal review, and rollback/retry evidence as those paths are exercised.
 
 Implemented local scope:
 
@@ -80,6 +78,14 @@ Implemented local scope:
 Latest local proof:
 
 ```text
+pnpm --filter server test:exchange-marketplace-guards passed for v1.2.3 exchange marketplace polish
+pnpm --filter server test:exchange-lifecycle-guards passed for v1.2.3 exchange marketplace polish
+pnpm --filter server type-check passed for v1.2.3 exchange marketplace polish
+pnpm --filter client type-check passed for v1.2.3 exchange marketplace polish
+pnpm --prefix docs-site build passed for v1.2.3 release notes
+pnpm build passed for v1.2.3
+pnpm test passed for v1.2.3
+git diff --check passed for v1.2.3
 pnpm --filter server test:exchange-marketplace-guards passed for v1.2.2 exchange listing hardening
 pnpm --filter server type-check passed for v1.2.2 exchange listing hardening
 pnpm --filter client type-check passed for v1.2.2 exchange listing hardening
