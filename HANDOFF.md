@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-0c1eaa0be Release v1.1.0 exchange delivery fix
+6b371bc07 Release v1.1.9 exchange dispute refund atomicity
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,16 +29,34 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-0c1eaa0be Release v1.1.0 exchange delivery fix
+6b371bc07 Release v1.1.9 exchange dispute refund atomicity
 ```
 
 ## Latest GitHub Release Work
 
-`v1.1.0` is published on GitHub and has release artifacts. Production OTA task `#115` updated production from `v1.0.9` to `v1.1.0` and ended with status `success`.
+`v1.1.9` is published on GitHub and has release artifacts. Production OTA task `#122` deployed `v1.1.9` successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v1.1.9-20260629104412`.
+
+`v1.1.9` fixes Exchange dispute refund atomicity: buyer refund, escrow refund wallet log, order status, dispute status, dispute release marker and audit log now complete in one database transaction. If an older version already left an order refunded while the dispute is still `processing`, retrying the admin dispute refund closes the dispute without issuing a second buyer refund.
+
+Production proof for task `#122`:
+
+```text
+OTA manifest v1.1.9 commit 6b371bc07da1
+amd64 sha256 ba8a6b54a05426131ad2cd8fa3fc37fa4bfd91817dcd438ba12b216c08b6e5a2
+arm64 sha256 c5b442502f8a13db96f56a8b4813b00859ca3d9e4b294bba53ba363ace30938b
+/opt/incudal/current -> /opt/incudal/releases/v1.1.9-20260629104412
+/opt/incudal/current/package.json version 1.1.9
+/opt/incudal/current/server/package.json version 1.1.9
+systemctl is-active incudal-backend -> active
+local http://127.0.0.1:3001/api/health -> status ok
+public https://pay.payincus.com/api/health -> HTTP 200 status ok
+public https://admin.payincus.com/api/health -> HTTP 200 status ok
+system-update-122.log -> System update completed successfully
+```
 
 ## Active Exchange Marketplace Work
 
-The current worktree contains the `v1.1.0` Exchange Marketplace implementation. The code, release, OTA, and non-destructive production checks are complete; the remaining proof gap is a fresh real buyer/seller Exchange delivery run with live accounts and a sacrificial instance, because the failed live orders from the v1.0.9 run were manually cancelled after rollback.
+The current worktree contains the `v1.1.9` Exchange Marketplace implementation. Code, release, OTA, non-destructive production checks, and at least one real production Exchange delivery path have been proven. Remaining proof is narrower: keep capturing real dispute refund/release, seller settlement, withdrawal review, and rollback/retry evidence as those paths are exercised.
 
 Implemented local scope:
 
@@ -48,7 +66,7 @@ Implemented local scope:
 - Instance detail mutation UI now carries the Exchange lock into config/change-host/swap/boost controls, in addition to backend locks, so listed or delivering instances do not present ordinary mutation actions.
 - Database models and migration for `exchange_listings`, `exchange_orders`, `exchange_delivery_tasks`, `exchange_wallets`, `exchange_wallet_logs`, `exchange_withdrawals`, `exchange_disputes`, `exchange_audit_logs`, and `exchange_policy_configs`.
 - Paused-only listing checks, anonymous public/user serialization, listing/dispute contact-info rejection, sensitive operation verification, idempotency, escrow wallet logs, manual withdrawal review, dispute paths, and operation locks across instance, billing, snapshot, backup, proxy-site, traffic-reset, transfer, host, public API, and admin billing surfaces.
-- Delivery worker chain: rechecks seller ownership and stopped status, cleans old access/bindings/snapshots/risk samples, queues buyer-owned forced rebuild, waits for rebuild completion, anonymizes Incus/display identity, transfers owner, rebuilds buyer billing relation, resets traffic baseline, returns real delivery started/finished timestamps, enters confirmation period, and supports retry/refund/manual takeover/manual completion.
+- Delivery worker chain: rechecks seller ownership and stopped status, cleans old access/bindings/snapshots/risk samples, queues buyer-owned forced rebuild, waits for rebuild completion, anonymizes Incus/display identity, transfers owner, rebuilds buyer billing relation, preserves the listing instance's current traffic usage and remaining quota, returns real delivery started/finished timestamps, enters confirmation period, and supports retry/refund/manual takeover/manual completion.
 - Admin Production Proof now includes an operator-status `交易所真实交割闭环` item and a live E2E record template, so the admin UI does not present the Exchange Marketplace as production-complete until real proof is captured.
 
 Latest local proof:
@@ -261,11 +279,11 @@ Latest Exchange Marketplace hardening:
 
 Remaining proof before claiming 100%:
 
-- No `.env`, `.env.production`, `server/.env`, or `server/.env.production` existed in this checkout during the latest v1.0.9 local audit; local production checks were run with explicit environment variables.
-- Production OTA task `#113` ran migration, split-host, production-readiness, DB-readiness, Agent manifest, and log/header secret checks successfully on the production release artifact.
-- Latest production OTA proof covers artifact install, migrations, service restart, split-host, production readiness, log-header checks, and public health. It is not a login, order, delivery, or full Exchange buyer/seller proof.
-- Full live Exchange E2E is still missing: stopped instance listing, buyer balance purchase, escrow hold, delivery worker forced rebuild, anonymous handoff, confirmation/settlement, withdrawal review, and dispute/refund/manual retry path proof.
-- Do not mark the Exchange Marketplace real-delivery proof complete until the live buyer/seller Exchange run is recorded. Do not reuse old server credentials from earlier conversations without the operator explicitly providing current access again.
+- No `.env`, `.env.production`, `server/.env`, or `server/.env.production` existed in this checkout during the latest local audit; local production checks were run with explicit environment variables.
+- Production OTA task `#122` ran artifact download, SHA verification, migration check, service restart, split-host, production-readiness, and log/header secret checks successfully on the production release artifact.
+- Latest production OTA proof covers artifact install, migrations, service restart, split-host, production readiness, log-header checks, public health, and deployed package version.
+- Real production Exchange delivery has been observed after the v1.1.x fixes: buyer balance purchase, escrow hold, forced rebuild, anonymous handoff, transfer owner, rebuilt billing relation, and confirmation-period entry. Continue to capture live proof for seller settlement, withdrawal review, dispute refund/release, retry/manual takeover, and rollback paths.
+- Do not reuse old server credentials from earlier conversations without the operator explicitly providing current access again.
 
 Release commits:
 
@@ -285,6 +303,11 @@ b701d32 Update version log for v1.0.2
 cbc63b3 Update version log for v1.0.7
 5f45543 Release v1.0.8 exchange marketplace
 6fb05d Update version log for v1.0.8
+0c1eaa0 Release v1.1.0 exchange delivery fix
+9c5425c Release v1.1.7 exchange seller settlement privacy
+aaaca03 Release v1.1.8 exchange dispute release atomicity
+6b371bc Release v1.1.9 exchange dispute refund atomicity
+0fd711a Update version log for v1.1.9
 ```
 
 GitHub workflow proof:
