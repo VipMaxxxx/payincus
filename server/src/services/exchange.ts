@@ -362,9 +362,10 @@ function addCheck(
   label: string,
   passed: boolean,
   message: string,
-  reasons: string[]
+  reasons: string[],
+  successMessage?: string
 ) {
-  checks.push({ key, label, passed, message })
+  checks.push({ key, label, passed, message: passed ? (successMessage || message) : message })
   if (!passed) reasons.push(message)
 }
 
@@ -736,13 +737,13 @@ export async function checkExchangeListingEligibility(userId: number, instanceId
   const checks: ExchangeEligibilityResult['checks'] = []
   const reasons: string[] = []
 
-  addCheck(checks, 'exchange_enabled', '交易所已启用', policy.enabled, '交易所当前未启用', reasons)
+  addCheck(checks, 'exchange_enabled', '交易所已启用', policy.enabled, '交易所当前未启用', reasons, '交易所当前已启用')
   const sellerAccount = await prisma.user.findUnique({
     where: { id: userId },
     select: { status: true }
   })
-  addCheck(checks, 'account_active', '账号状态正常', sellerAccount?.status === 'active', '账号状态异常，不能挂牌', reasons)
-  addCheck(checks, 'must_be_stopped', '实例必须暂停', instance.status === 'stopped', '上架交易所前必须先暂停实例', reasons)
+  addCheck(checks, 'account_active', '账号状态正常', sellerAccount?.status === 'active', '账号状态异常，不能挂牌', reasons, '账号状态正常，可以继续检测')
+  addCheck(checks, 'must_be_stopped', '实例必须暂停', instance.status === 'stopped', '上架交易所前必须先暂停实例', reasons, '实例已暂停，满足交易所上架状态要求')
 
   const now = Date.now()
   const minRemainingMs = policy.minRemainingDays * 24 * 60 * 60 * 1000
@@ -750,9 +751,11 @@ export async function checkExchangeListingEligibility(userId: number, instanceId
   const remainingMs = instance.expiresAt === null ? null : instance.expiresAt.getTime() - now
   const hasMinimumRemaining = remainingMs === null || remainingMs >= minRemainingMs
   const notExpiringSoon = remainingMs === null || remainingMs >= expiringSoonMs
-  addCheck(checks, 'minimum_remaining', '最低剩余有效期满足要求', hasMinimumRemaining, `实例剩余有效期不足 ${policy.minRemainingDays} 天，不能挂牌`, reasons)
-  addCheck(checks, 'not_expiring_soon', '未进入即将到期阈值', notExpiringSoon, `实例将在 ${policy.expiringSoonDays} 天内到期，不能挂牌`, reasons)
-  addCheck(checks, 'not_overdue', '实例未欠费/逾期', instance.expiresAt === null || instance.expiresAt.getTime() > now, '实例已欠费或逾期，不能挂牌', reasons)
+  const remainingDaysText = remainingMs === null ? '无到期时间' : `剩余约 ${Math.floor(Math.max(0, remainingMs) / (24 * 60 * 60 * 1000))} 天`
+  const expiresAtText = instance.expiresAt === null ? '实例无到期时间' : `到期时间 ${instance.expiresAt.toISOString()}，${remainingDaysText}`
+  addCheck(checks, 'minimum_remaining', '最低剩余有效期满足要求', hasMinimumRemaining, `实例剩余有效期不足 ${policy.minRemainingDays} 天，不能挂牌`, reasons, `${expiresAtText}，满足最低剩余有效期要求`)
+  addCheck(checks, 'not_expiring_soon', '未进入即将到期阈值', notExpiringSoon, `实例将在 ${policy.expiringSoonDays} 天内到期，不能挂牌`, reasons, `${expiresAtText}，未进入即将到期阈值`)
+  addCheck(checks, 'not_overdue', '实例未欠费/逾期', instance.expiresAt === null || instance.expiresAt.getTime() > now, '实例已欠费或逾期，不能挂牌', reasons, '实例未欠费或逾期')
 
   const [activeTask, activeRestoreTask, activeUploadTask] = await Promise.all([
     prisma.instanceTask.findFirst({
@@ -768,27 +771,27 @@ export async function checkExchangeListingEligibility(userId: number, instanceId
       select: { id: true, status: true }
     })
   ])
-  addCheck(checks, 'no_active_task', '没有执行中任务', !activeTask && !activeRestoreTask && !activeUploadTask, '实例存在执行中任务，不能挂牌', reasons)
+  addCheck(checks, 'no_active_task', '没有执行中任务', !activeTask && !activeRestoreTask && !activeUploadTask, '实例存在执行中任务，不能挂牌', reasons, '未发现创建、重启、重装、迁移、恢复或上传中的任务')
 
   const activeListing = await prisma.exchangeListing.findFirst({
     where: { instanceId, status: { in: listingBlockingStatuses } },
     select: { id: true, status: true }
   })
-  addCheck(checks, 'not_listed', '未挂牌/未锁定交易', !activeListing, '实例已在交易所挂牌或锁定交易中', reasons)
+  addCheck(checks, 'not_listed', '未挂牌/未锁定交易', !activeListing, '实例已在交易所挂牌或锁定交易中', reasons, '实例当前未挂牌，也未被交易锁定')
 
   const activeOrder = await prisma.exchangeOrder.findFirst({
     where: { instanceId, status: { in: orderBlockingStatuses } },
     select: { id: true, status: true }
   })
-  addCheck(checks, 'no_active_order', '没有未完成交易', !activeOrder, '实例存在未完成交易订单', reasons)
+  addCheck(checks, 'no_active_order', '没有未完成交易', !activeOrder, '实例存在未完成交易订单', reasons, '实例没有交割中、争议中或未结算交易')
   const pendingTransfer = await hasPendingTransfer(instanceId)
-  addCheck(checks, 'no_pending_transfer', '没有待处理普通转移', !pendingTransfer, '实例存在待处理普通转移，不能挂牌交易所', reasons)
+  addCheck(checks, 'no_pending_transfer', '没有待处理普通转移', !pendingTransfer, '实例存在待处理普通转移，不能挂牌交易所', reasons, '实例没有待处理普通转移')
 
   const activeRestriction = await prisma.userOrderRestriction.findFirst({
     where: { userId, status: 'active' },
     select: { id: true }
   })
-  addCheck(checks, 'account_not_restricted', '账号未被限制下单', !activeRestriction, '账号存在风控下单限制，不能挂牌', reasons)
+  addCheck(checks, 'account_not_restricted', '账号未被限制下单', !activeRestriction, '账号存在风控下单限制，不能挂牌', reasons, '账号没有 active 下单限制')
   const accountTrafficQuota = await prisma.userQuota.findUnique({
     where: { userId },
     select: {
@@ -802,7 +805,7 @@ export async function checkExchangeListingEligibility(userId: number, instanceId
 
   const riskState = instance.resourceRiskState
   const riskOk = !riskState || (riskState.status === 'normal' && riskState.level === 'normal' && riskState.score < 70)
-  addCheck(checks, 'risk_normal', '实例风控正常', riskOk, '实例处于风控状态，不能挂牌', reasons)
+  addCheck(checks, 'risk_normal', '实例风控正常', riskOk, '实例处于风控状态，不能挂牌', reasons, '实例未命中封禁、限速或高风险状态')
 
   addCheck(checks, 'package_snapshot_available', '套餐快照可展示', true, instance.package && !instance.package.active
     ? '实例套餐已停用，但存量实例剩余使用权允许交易'
@@ -810,7 +813,7 @@ export async function checkExchangeListingEligibility(userId: number, instanceId
   addCheck(checks, 'plan_snapshot_available', '方案快照可展示', true, instance.packagePlan && (!instance.packagePlan.isActive || instance.packagePlan.isSoldOut)
     ? '实例方案已停用或售罄，但存量实例剩余使用权允许交易'
     : '实例方案可展示', reasons)
-  addCheck(checks, 'host_available', '节点正常', instance.host.status === 'online', '实例所在节点不可用，不能挂牌', reasons)
+  addCheck(checks, 'host_available', '节点正常', instance.host.status === 'online', '实例所在节点不可用，不能挂牌', reasons, `节点 ${instance.host.name} 当前在线`)
   const trafficWithinLimit = isInstanceTrafficWithinLimit(instance)
   addCheck(checks, 'traffic_not_over_limit', '实例流量未超限', trafficWithinLimit, instanceTrafficLimitMessage(instance), reasons)
   const storagePoolCheck = await validateListingStoragePools(prisma, instance)
@@ -822,7 +825,10 @@ export async function checkExchangeListingEligibility(userId: number, instanceId
     storagePoolCheck.instancePoolName
       ? `实例当前存储池 ${storagePoolCheck.instancePoolName} 不存在或不是系统盘池，不能挂牌`
       : '实例未记录存储池且节点没有可用系统盘池，不能挂牌',
-    reasons
+    reasons,
+    storagePoolCheck.instancePoolName
+      ? `实例当前存储池 ${storagePoolCheck.instancePoolName} 可用`
+      : '实例未记录存储池，节点存在可用系统盘池'
   )
   addCheck(
     checks,
@@ -832,13 +838,16 @@ export async function checkExchangeListingEligibility(userId: number, instanceId
     storagePoolCheck.packagePoolName
       ? `套餐绑定存储池 ${storagePoolCheck.packagePoolName} 不存在或不是系统盘池，不能挂牌`
       : '套餐未绑定存储池且节点没有可用系统盘池，不能挂牌',
-    reasons
+    reasons,
+    storagePoolCheck.packagePoolName
+      ? `套餐绑定存储池 ${storagePoolCheck.packagePoolName} 可用`
+      : '套餐未绑定存储池，节点存在可用系统盘池'
   )
   const packageAllowlist = jsonNumberList(policy.packageAllowlist)
-  addCheck(checks, 'package_allowed', '套餐允许交易', packageAllowlist.length === 0 || (!!instance.packageId && packageAllowlist.includes(instance.packageId)), '当前套餐不允许进入交易所', reasons)
+  addCheck(checks, 'package_allowed', '套餐允许交易', packageAllowlist.length === 0 || (!!instance.packageId && packageAllowlist.includes(instance.packageId)), '当前套餐不允许进入交易所', reasons, packageAllowlist.length === 0 ? '未限制交易套餐，当前套餐允许交易' : '当前套餐在交易所允许列表内')
   const hostAllowlist = jsonNumberList(policy.hostAllowlist)
-  addCheck(checks, 'host_allowed', '节点允许交易', hostAllowlist.length === 0 || hostAllowlist.includes(instance.hostId), '当前节点不允许进入交易所', reasons)
-  addCheck(checks, 'public_ip_transfer_allowed', '独立 IP 跟随策略', policy.allowPublicIpTransfer || !isDedicatedIpNetworkMode(instance.networkMode), '当前交易所配置不允许独立 IP 跟随转让，该网络类型不能挂牌', reasons)
+  addCheck(checks, 'host_allowed', '节点允许交易', hostAllowlist.length === 0 || hostAllowlist.includes(instance.hostId), '当前节点不允许进入交易所', reasons, hostAllowlist.length === 0 ? '未限制交易节点，当前节点允许交易' : '当前节点在交易所允许列表内')
+  addCheck(checks, 'public_ip_transfer_allowed', '独立 IP 跟随策略', policy.allowPublicIpTransfer || !isDedicatedIpNetworkMode(instance.networkMode), '当前交易所配置不允许独立 IP 跟随转让，该网络类型不能挂牌', reasons, isDedicatedIpNetworkMode(instance.networkMode) ? '交易所允许独立 IP 随实例剩余使用权转让' : '当前网络类型不需要独立 IP 跟随策略')
 
   const [portMappingCount, proxySiteCount, snapshotCount, backupPolicyCount] = await Promise.all([
     prisma.portMapping.count({ where: { instanceId } }),

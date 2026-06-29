@@ -253,6 +253,22 @@ assert(
 )
 
 assert(
+  exchangeServiceSource.includes('successMessage?: string') &&
+    exchangeServiceSource.includes('passed ? (successMessage || message) : message') &&
+    exchangeServiceSource.includes('交易所当前已启用') &&
+    exchangeServiceSource.includes('实例已暂停，满足交易所上架状态要求') &&
+    exchangeServiceSource.includes('到期时间 ${instance.expiresAt.toISOString()}') &&
+    exchangeServiceSource.includes('未发现创建、重启、重装、迁移、恢复或上传中的任务') &&
+    exchangeServiceSource.includes('实例当前未挂牌，也未被交易锁定') &&
+    exchangeServiceSource.includes('实例没有交割中、争议中或未结算交易') &&
+    exchangeServiceSource.includes('实例未命中封禁、限速或高风险状态') &&
+    exchangeServiceSource.includes('当前套餐在交易所允许列表内') &&
+    exchangeServiceSource.includes('当前节点在交易所允许列表内') &&
+    exchangeServiceSource.includes('交易所允许独立 IP 随实例剩余使用权转让'),
+  'exchange eligibility checks must return explicit success messages instead of showing failure text on passed checks'
+)
+
+assert(
   exchangeServiceSource.includes('hasPendingTransfer') &&
     exchangeServiceSource.includes('no_pending_transfer') &&
     exchangeServiceSource.includes('没有待处理普通转移') &&
