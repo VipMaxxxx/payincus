@@ -6,16 +6,37 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `30e81c439`
+- 最新发布提交 / Latest Release Commit: `ebf963345`
 - 提交日期 / Commit date: 2026-06-29
-- 提交说明 / Commit subject: Release v1.2.5 exchange manual settlement
-- 最新 tag / Latest tag: `v1.2.5`
+- 提交说明 / Commit subject: Release v1.2.6 exchange wallet audit atomicity
+- 最新 tag / Latest tag: `v1.2.6`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v1.2.6
+
+- 发布提交 / Release commit: `ebf963345`
+- 提交日期 / Commit date: 2026-06-29
+- 提交说明 / Commit subject: Release v1.2.6 exchange wallet audit atomicity
+
+# v1.2.6
+
+## 修复
+
+- 修复交易所后台余额冻结、解冻、人工调整的原子性问题：余额变更、交易所钱包流水和交易所审计日志现在会在同一个数据库事务内提交。
+- 如果审计日志写入失败，本次后台余额操作会整体回滚，避免出现“资金已变化但接口返回失败，管理员重试后重复冻结或重复调整”的风险。
+- 补强交易所后台资金操作守卫，确保后续不会把钱包资金变更和审计日志重新拆成两段事务。
+
+## 验证
+
+- `pnpm --filter server test:exchange-marketplace-guards`
+- `pnpm --filter server type-check`
+- `pnpm build`
+- `git diff --check`
 
 ## v1.2.5
 
