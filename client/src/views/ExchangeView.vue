@@ -1740,6 +1740,7 @@ onMounted(async () => {
 
           <div class="mt-5 space-y-2 rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
             <p>购买后获得的是实例剩余使用权，不包含卖家原系统、原数据、账号信息或历史订单。</p>
+            <p>实例当前已用流量和剩余额度会按挂牌时状态交割，不会因交易重置。</p>
             <p>付款后资金进入平台托管，实例会先清理访问权限、端口、代理站点、快照和凭据，再强制重装并转移给买家。</p>
             <p>买卖双方前台互不可见；如交割异常，可提交争议等待平台人工处理。</p>
           </div>
@@ -1840,7 +1841,7 @@ onMounted(async () => {
           <button class="btn btn-secondary btn-sm" type="button" :disabled="purchaseSubmitting" @click="cancelPurchaseListing">取消</button>
         </div>
         <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
-          该实例成交后会由平台强制重装交割。你购买的是剩余使用权，不包含卖家原数据或原系统环境；买卖双方互不可见。
+          该实例成交后会由平台强制重装交割。你购买的是剩余使用权，不包含卖家原数据或原系统环境；当前已用流量和剩余额度会原样交割，不会重置；买卖双方互不可见。
         </div>
         <div class="mt-4 grid gap-2 text-sm text-themed-muted">
           <div>{{ purchaseConfirmImageText() }}</div>

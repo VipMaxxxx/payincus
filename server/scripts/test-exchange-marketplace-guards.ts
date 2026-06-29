@@ -1139,6 +1139,8 @@ assert(
 					!userExchangeViewSource.includes('卖家预计到账 {{ money(selectedListing.sellerReceivesAmount) }}') &&
 					userExchangeViewSource.includes('购买后获得的是实例剩余使用权') &&
 					userExchangeViewSource.includes('不包含卖家原系统、原数据、账号信息或历史订单') &&
+					userExchangeViewSource.includes('实例当前已用流量和剩余额度会按挂牌时状态交割，不会因交易重置') &&
+					userExchangeViewSource.includes('当前已用流量和剩余额度会原样交割，不会重置') &&
 					userExchangeViewSource.includes('买卖双方前台互不可见') &&
 					userExchangeViewSource.includes('成交前实例保持暂停锁定') &&
 					userExchangeViewSource.includes('交易状态') &&
