@@ -6,16 +6,34 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `82275d089`
+- Latest Release Commit / 最新发布提交: `5f45543e0`
 - Commit date / 提交日期: 2026-06-29
-- Commit subject / 提交说明: Release v1.0.7 instance verification
-- Latest tag / 最新 tag: `v1.0.7`
+- Commit subject / 提交说明: Release v1.0.8 exchange marketplace
+- Latest tag / 最新 tag: `v1.0.8`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.0.8
+
+- Release commit / 发布提交: `5f45543e0`
+- Commit date / 提交日期: 2026-06-29
+- Commit subject / 提交说明: Release v1.0.8 exchange marketplace
+
+## v1.0.8
+
+Release the first complete Exchange Marketplace implementation and close the latest create-instance verification issue.
+
+- Add the Exchange Marketplace for idle instance resale: anonymous public market, seller listing flow, buyer purchase flow, escrow wallet, withdrawal requests, wallet transfer to account balance, order records, delivery records, disputes, and admin management.
+- Enforce the required delivery model: instances must be stopped before listing, risk/overdue/expiring/task-running instances cannot list, buyer delivery always uses a forced reinstall, and seller/buyer identity is hidden from public and counterpart views.
+- Add Exchange operation locks across ordinary instance mutation paths, billing operations, snapshots, backups, proxy sites, traffic reset, transfers, public API operations, admin billing actions, instance tasks, and destroy paths.
+- Harden Exchange-sensitive access: listed or pre-delivery instances now block non-admin password viewing and terminal access, while the delivered buyer can use the rebuilt instance during confirmation or dispute handling.
+- Add admin Exchange controls for policy, listings, orders, delivery retries/manual takeover, wallets, withdrawals, disputes, risk records, and audit logs, including payout rechecks before approval or completion.
+- Fix create-instance Turnstile submission: the page now uses the visible verification widget token, falls back to Cloudflare's hidden response field, blocks locally when verification is missing, and localizes raw Turnstile backend errors.
+- Include Exchange guards in the full repository test suite and explicitly whitelist the public, non-sensitive Exchange config endpoint used by the front-end purchase UI.
 
 ## v1.0.7
 
