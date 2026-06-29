@@ -6,10 +6,10 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `f2fc3bc32`
+- 最新发布提交 / Latest Release Commit: `07a39d299`
 - 提交日期 / Commit date: 2026-06-29
-- 提交说明 / Commit subject: Release v1.1.2 exchange traffic wording
-- 最新 tag / Latest tag: `v1.1.2`
+- 提交说明 / Commit subject: Release v1.1.3 exchange anonymity hardening
+- 最新 tag / Latest tag: `v1.1.3`
 
 ## 未发布变更 / Unreleased Changes
 
@@ -17,9 +17,30 @@
 
 ## 历史版本 / Historical Versions
 
+## v1.1.3
+
+- 发布提交 / Release commit: `07a39d299`
+- 提交日期 / Commit date: 2026-06-29
+- 提交说明 / Commit subject: Release v1.1.3 exchange anonymity hardening
+
+# v1.1.3
+
+## 修复
+
+- 加固交易所市场、详情和用户订单接口的匿名快照脱敏规则，新增拦截 `owner/fromUser/toUser/buyer/seller/avatar/telegram/wechat/qq` 等常见身份字段。
+- 保持后台内部处理所需的买卖双方 ID 不变，但用户侧和市场侧继续只返回匿名交易标识和脱敏实例资产信息。
+- 扩展交易所守卫测试，防止后续 snapshot 结构扩展时误把用户名、邮箱、头像、联系方式或双方身份对象返回给市场和交易参与方接口。
+
+## 验证
+
+- `pnpm --filter server test:exchange-marketplace-guards`
+- `pnpm --filter server type-check`
+- `pnpm --filter client type-check`
+- `pnpm build`
+
 ## v1.1.2
 
-- 发布提交 / Release commit: `f2fc3bc32`
+- 发布提交 / Release commit: `616d836fa`
 - 提交日期 / Commit date: 2026-06-29
 - 提交说明 / Commit subject: Release v1.1.2 exchange traffic wording
 

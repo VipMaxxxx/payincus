@@ -659,7 +659,51 @@ for (const strippedRootSnapshotField of ['instanceId', 'name']) {
     `public and participant exchange snapshots must strip root ${strippedRootSnapshotField}`
   )
 }
-for (const strippedSnapshotField of ['userId', 'user_id', 'sellerUserId', 'buyerUserId', 'creatorUserId', 'username', 'nickname', 'email', 'contact', 'phone', 'registeredAt', 'createdBy', 'user']) {
+for (const strippedSnapshotField of [
+  'userId',
+  'user_id',
+  'ownerId',
+  'owner_id',
+  'fromUserId',
+  'from_user_id',
+  'toUserId',
+  'to_user_id',
+  'sellerUserId',
+  'buyerUserId',
+  'creatorUserId',
+  'createdById',
+  'updatedById',
+  'operatorUserId',
+  'username',
+  'userName',
+  'nickname',
+  'displayName',
+  'email',
+  'emailMasked',
+  'contact',
+  'contactEmail',
+  'phone',
+  'mobile',
+  'telegram',
+  'telegramId',
+  'telegramUsername',
+  'wechat',
+  'weixin',
+  'qq',
+  'avatar',
+  'avatarStyle',
+  'avatarBadgeId',
+  'registeredAt',
+  'createdBy',
+  'updatedBy',
+  'operator',
+  'owner',
+  'fromUser',
+  'toUser',
+  'buyer',
+  'seller',
+  'user'
+]) {
   assert(
     exchangeServiceSource.includes(`'${strippedSnapshotField}'`) && exchangeServiceSource.includes('publicSnapshotForbiddenFields.has(key)'),
     `public and participant exchange snapshots must strip ${strippedSnapshotField}`
@@ -668,7 +712,35 @@ for (const strippedSnapshotField of ['userId', 'user_id', 'sellerUserId', 'buyer
 for (const allowedPublicSnapshotField of ['host:', 'package:', 'packagePlan:']) {
   assert(exchangeServiceSource.includes(allowedPublicSnapshotField), `public exchange snapshots must keep sale metadata ${allowedPublicSnapshotField}`)
 }
-for (const forbiddenIdentityField of ['buyerUserId', 'sellerUserId', 'creatorUserId', 'userId', 'user_id', 'username', 'nickname', 'email', 'contact', 'phone', 'registeredAt', 'createdBy']) {
+for (const forbiddenIdentityField of [
+  'buyerUserId',
+  'sellerUserId',
+  'creatorUserId',
+  'userId',
+  'user_id',
+  'ownerId',
+  'owner_id',
+  'fromUserId',
+  'toUserId',
+  'username',
+  'userName',
+  'nickname',
+  'email',
+  'emailMasked',
+  'contact',
+  'contactEmail',
+  'phone',
+  'mobile',
+  'telegram',
+  'wechat',
+  'avatar',
+  'registeredAt',
+  'createdBy',
+  'updatedBy',
+  'owner',
+  'fromUser',
+  'toUser'
+]) {
   assert(!publicListingReturnSection.includes(forbiddenIdentityField), `public listing response must not expose ${forbiddenIdentityField}`)
   assert(!orderReturnSection.includes(forbiddenIdentityField), `user exchange order response must not expose ${forbiddenIdentityField}`)
   assert(!disputeReturnSection.includes(forbiddenIdentityField), `user exchange dispute response must not expose ${forbiddenIdentityField}`)
