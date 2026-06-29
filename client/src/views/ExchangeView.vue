@@ -466,8 +466,26 @@ function instanceNeedsStopBeforeListing(instance: InstanceWithDetails): boolean 
   return eligibility?.status === 'must_stop_first' || (!eligibility && instance.status?.toLowerCase() === 'running')
 }
 
-function canSelectListingInstance(instance: InstanceWithDetails): boolean {
-  return eligibilityMap.value[instance.id]?.status === 'can_list'
+function canOpenListingEntry(instance: InstanceWithDetails): boolean {
+  const eligibility = eligibilityMap.value[instance.id]
+  return eligibility?.status === 'can_list' || eligibility?.status === 'must_stop_first' || (!eligibility && instance.status?.toLowerCase() === 'running')
+}
+
+function requestListingEntry(instance: InstanceWithDetails): void {
+  const eligibility = eligibilityMap.value[instance.id]
+  if (eligibility?.status === 'can_list') {
+    listingForm.value.instanceId = instance.id
+    return
+  }
+  if (eligibility?.status === 'must_stop_first' || (!eligibility && instance.status?.toLowerCase() === 'running')) {
+    requestStopBeforeListing(instance)
+    return
+  }
+  if (!eligibility) {
+    toast.warning('请先检测实例是否可上架')
+    return
+  }
+  toast.warning(eligibility.reasons[0] || '实例未通过交易所检测，不能挂牌')
 }
 
 function createIdempotencyKey(scope: string): string {
@@ -1314,8 +1332,8 @@ onMounted(async () => {
                 <button
                   class="btn btn-primary"
                   type="button"
-                  :disabled="!canSelectListingInstance(instance)"
-                  @click="listingForm.instanceId = instance.id"
+                  :disabled="!canOpenListingEntry(instance)"
+                  @click="requestListingEntry(instance)"
                 >
                   上架交易所
                 </button>

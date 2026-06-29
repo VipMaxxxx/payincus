@@ -1028,6 +1028,10 @@ assert(
 assert(
   userExchangeViewSource.includes('上架前必须先暂停实例') &&
     userExchangeViewSource.includes('function instanceStatusLabel') &&
+    userExchangeViewSource.includes('function canOpenListingEntry') &&
+    userExchangeViewSource.includes('function requestListingEntry') &&
+    userExchangeViewSource.includes("eligibility?.status === 'must_stop_first'") &&
+    userExchangeViewSource.includes('@click="requestListingEntry(instance)"') &&
     userExchangeViewSource.includes('只有已暂停并通过检测的实例可以提交挂牌') &&
     userExchangeViewSource.includes('先暂停实例') &&
     userExchangeViewSource.includes('function ipSummary') &&
