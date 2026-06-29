@@ -19,7 +19,7 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Use `git log --oneline --decorate -5` as the authoritative current HEAD because this handoff may receive handoff-only commits after product releases. The latest product/docs release baseline at the time of this refresh was:
 
 ```text
-6b371bc07 Release v1.1.9 exchange dispute refund atomicity
+e831c5505 Update version log for v1.2.0
 ```
 
 GitHub remote `payincus/main` should be aligned with the current local HEAD after each handoff-only refresh. Use `git status --short --branch` and `git ls-remote payincus refs/heads/main` as the source of truth instead of copying this note forward.
@@ -29,34 +29,38 @@ The current local tree should be clean after pulling `payincus/main`. Do not res
 Latest product/docs release boundary at the time of this refresh:
 
 ```text
-6b371bc07 Release v1.1.9 exchange dispute refund atomicity
+377f7f449 Release v1.2.0 exchange hardening
 ```
 
 ## Latest GitHub Release Work
 
-`v1.1.9` is published on GitHub and has release artifacts. Production OTA task `#122` deployed `v1.1.9` successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v1.1.9-20260629104412`.
+`v1.2.0` is published on GitHub and has release artifacts. Production OTA task `#123` deployed `v1.2.0` successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v1.2.0-20260629111508`.
 
-`v1.1.9` fixes Exchange dispute refund atomicity: buyer refund, escrow refund wallet log, order status, dispute status, dispute release marker and audit log now complete in one database transaction. If an older version already left an order refunded while the dispute is still `processing`, retrying the admin dispute refund closes the dispute without issuing a second buyer refund.
+`v1.2.0` consolidates the post-`v1.1.9` Exchange Marketplace hardening into one OTA: inactive or sold-out package snapshots can still trade as existing instance rights, delivery cleanup tolerates remote port/proxy cleanup failures while auditing warnings, already-refunded dispute repair returns delivered instances to the original seller, buyer-facing copy states traffic is not reset during trading, and the customer instance list now reads listing state per visible instance instead of the first 100 seller listings.
 
-Production proof for task `#122`:
+Production proof for task `#123`:
 
 ```text
-OTA manifest v1.1.9 commit 6b371bc07da1
-amd64 sha256 ba8a6b54a05426131ad2cd8fa3fc37fa4bfd91817dcd438ba12b216c08b6e5a2
-arm64 sha256 c5b442502f8a13db96f56a8b4813b00859ca3d9e4b294bba53ba363ace30938b
-/opt/incudal/current -> /opt/incudal/releases/v1.1.9-20260629104412
-/opt/incudal/current/package.json version 1.1.9
-/opt/incudal/current/server/package.json version 1.1.9
+OTA manifest v1.2.0 commit 377f7f4491db
+amd64 sha256 2c9e35a9732b38fd5cad9253a473c2db12149727e685b094b5cab83b1ccf3945
+arm64 sha256 63c94e550e2bc3db53f24088952a8fe71659168854874da2f0d9e366fe20b466
+/opt/incudal/current -> /opt/incudal/releases/v1.2.0-20260629111508
+/opt/incudal/current/package.json version 1.2.0
+/opt/incudal/current/server/package.json version 1.2.0
 systemctl is-active incudal-backend -> active
 local http://127.0.0.1:3001/api/health -> status ok
 public https://pay.payincus.com/api/health -> HTTP 200 status ok
 public https://admin.payincus.com/api/health -> HTTP 200 status ok
-system-update-122.log -> System update completed successfully
+system-update-123.log -> System update completed successfully
+system_update_tasks #123 -> status success, fromVersion v1.1.9, targetVersion v1.2.0, backupPath /opt/incudal/releases/v1.1.9-20260629104412, finishedAt 2026-06-29T11:16:43.212Z
+current-release pnpm verify:production -> passed
+current-release pnpm verify:log-header -> passed
+docs https://payincus.com/release/version-log.html contains v1.2.0 and Release v1.2.0 exchange hardening
 ```
 
 ## Active Exchange Marketplace Work
 
-The current worktree contains the `v1.1.9` Exchange Marketplace implementation. Code, release, OTA, non-destructive production checks, and at least one real production Exchange delivery path have been proven. Remaining proof is narrower: keep capturing real dispute refund/release, seller settlement, withdrawal review, and rollback/retry evidence as those paths are exercised.
+The current worktree contains the `v1.2.0` Exchange Marketplace implementation. Code, release, OTA, non-destructive production checks, and at least one real production Exchange delivery path have been proven. Remaining proof is narrower: keep capturing real dispute refund/release, seller settlement, withdrawal review, and rollback/retry evidence as those paths are exercised.
 
 Implemented local scope:
 
