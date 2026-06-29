@@ -1289,6 +1289,12 @@ assert(
 	adminExchangeViewSource.includes('adminActionDialog') &&
 	adminExchangeViewSource.includes('submitAdminAction') &&
 	adminExchangeViewSource.includes('该操作会写入交易所审计日志') &&
+	adminExchangeViewSource.includes("title: '放款结案'") &&
+	adminExchangeViewSource.includes("confirmText: '确认放款结案'") &&
+	adminExchangeViewSource.includes("toast.success('争议已放款结案')") &&
+	adminExchangeViewSource.includes(">放款结案</button>") &&
+	!adminExchangeViewSource.includes("toast.success('争议已关闭')") &&
+	!adminExchangeViewSource.includes("title: '关闭并维持放款'") &&
 	!adminExchangeViewSource.includes('window.prompt') &&
 	!adminExchangeViewSource.includes('window.confirm') &&
 	adminExchangeViewSource.includes('loadRiskRecords') &&

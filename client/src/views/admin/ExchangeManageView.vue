@@ -556,9 +556,9 @@ function runDisputeAction(item: any, action: 'reject' | 'refund' | 'release'): v
     },
     release: {
       kind: 'releaseDispute' as const,
-      title: '关闭并维持放款',
-      message: '争议会关闭，订单继续按原确认/放款路径处理。',
-      confirmText: '确认关闭'
+      title: '放款结案',
+      message: '争议会以卖家胜诉/维持交易结果处理；订单继续按确认期或人工放款路径结算给卖家交易所余额。请确认实例交割、证据和资金状态无误。',
+      confirmText: '确认放款结案'
     }
   }
   openAdminAction({
@@ -718,7 +718,7 @@ async function submitAdminAction(): Promise<void> {
         break
       case 'releaseDispute':
         await api.exchange.releaseDispute(target.id, reason)
-        toast.success('争议已关闭')
+        toast.success('争议已放款结案')
         break
       case 'approveWithdrawal':
         await api.exchange.approveWithdrawal(target.id, reason)
@@ -1038,7 +1038,7 @@ onMounted(loadActive)
             <td class="p-3 text-right space-x-2">
               <button v-if="activeDisputeStatuses.includes(item.status)" class="btn btn-secondary btn-sm" type="button" @click="runDisputeAction(item, 'reject')">拒绝</button>
               <button v-if="activeDisputeStatuses.includes(item.status)" class="btn btn-danger btn-sm" type="button" @click="runDisputeAction(item, 'refund')">退款</button>
-              <button v-if="activeDisputeStatuses.includes(item.status)" class="btn btn-secondary btn-sm" type="button" @click="runDisputeAction(item, 'release')">关闭</button>
+              <button v-if="activeDisputeStatuses.includes(item.status)" class="btn btn-secondary btn-sm" type="button" @click="runDisputeAction(item, 'release')">放款结案</button>
             </td>
           </tr>
           <tr v-if="disputes.length === 0"><td class="p-6 text-center text-themed-muted" colspan="7">暂无争议。</td></tr>
