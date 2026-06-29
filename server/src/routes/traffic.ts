@@ -20,6 +20,7 @@ import {
 } from '../services/traffic-utils.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 
 /**
  * BigInt 序列化为字符串
@@ -357,6 +358,16 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
             } else {
                 return reply.code(403).send({ error: 'Access denied' })
             }
+        }
+
+        const exchangeLock = await getExchangeOperationLock(instanceId)
+        if (exchangeLock.locked) {
+            return reply.code(409).send({
+                error: exchangeLock.message,
+                code: exchangeLock.code,
+                listingId: exchangeLock.listingId,
+                orderId: exchangeLock.orderId
+            })
         }
 
         let price = 0

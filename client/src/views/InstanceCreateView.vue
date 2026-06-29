@@ -32,6 +32,7 @@ import HostSelector from '@/components/instance/HostSelector.vue'
 import ImageSelector from '@/components/instance/ImageSelector.vue'
 import SSHKeySelector from '@/components/instance/SSHKeySelector.vue'
 import InitCommandSelector from '@/components/extensions/InitCommandSelector.vue'
+import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import type { Package, UserQuota, SshKey, AvailableHost, CreateInstanceRequest } from '@/types/api'
 import { normalizePackageSourceQuery, toPackageSourceRequest, type PackageSource } from '@/utils/publicCatalog'
@@ -39,7 +40,6 @@ import { validateName as validateInstanceName } from '@/utils/validation'
 import { translateError } from '@/utils/errorHandler'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel } from '@/utils/freeSiteFun'
 import { getVipBadgeInlineStyle, normalizeVipBadgeStyle, type VipBadgeStyle } from '@/utils/vipBadge'
-import { getTurnstileToken } from '@/utils/turnstile'
 
 interface ImageOption {
   value: string
@@ -118,6 +118,11 @@ const orderRiskReviewAvailable = ref(false)
 const creatingRiskReviewTicket = ref(false)
 const orderRiskStatus = ref<Awaited<ReturnType<typeof api.resourceRisk.getMyStatus>> | null>(null)
 const instanceNameEditedByUser = ref<boolean>(false)
+const turnstileToken = ref('')
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+const turnstileSectionRef = ref<HTMLElement | null>(null)
+const isCreateTurnstileRequired = computed(() => configStore.turnstileEnabled && Boolean(configStore.turnstileSiteKey))
+const createTurnstileSiteKey = computed(() => configStore.turnstileSiteKey || '')
 
 // 表单数据
 interface InstanceForm {
@@ -390,6 +395,10 @@ const canSubmit = computed<boolean>(() => {
   return baseChecks
 })
 
+const submitDisabledReason = computed<string>(() => {
+  return ''
+})
+
 // 检测资源不足的情况
 const hostsInsufficient = computed<boolean>(() => {
   // 付费套餐未选方案时，不显示资源不足警告（因为还没加载宿主机）
@@ -455,6 +464,60 @@ function handleInstanceNameInput(): void {
   instanceNameEditedByUser.value = true
 }
 
+function focusCreateTurnstile(): void {
+  const section = turnstileSectionRef.value
+  if (!section) return
+
+  section.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  window.setTimeout(() => {
+    section.focus({ preventScroll: true })
+  }, 250)
+}
+
+async function getCreateTurnstileToken(): Promise<string | undefined | null> {
+  if (!isCreateTurnstileRequired.value) return undefined
+
+  const widgetToken = turnstileRef.value?.getToken?.()
+  if (widgetToken) {
+    turnstileToken.value = widgetToken
+    return widgetToken
+  }
+
+  if (turnstileToken.value) return turnstileToken.value
+
+  const domToken = document
+    .querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')
+    ?.value
+    ?.trim()
+  if (domToken) {
+    turnstileToken.value = domToken
+    return domToken
+  }
+
+  focusCreateTurnstile()
+  error.value = t('instance.createPage.turnstileRequired')
+  toast.warning(t('instance.createPage.turnstileRequired'))
+  return null
+}
+
+function resetCreateTurnstile(): void {
+  turnstileToken.value = ''
+  turnstileRef.value?.reset?.()
+}
+
+function onTurnstileExpire(): void {
+  turnstileToken.value = ''
+}
+
+function onTurnstileVerify(token: string): void {
+  turnstileToken.value = token
+}
+
+function onTurnstileError(): void {
+  turnstileToken.value = ''
+  toast.error(t('instance.createPage.turnstileFailed'))
+}
+
 function getPackageSourceLabel(source: 'official' | 'market'): string {
   if (configStore.freeSiteMode) {
     return t(`instance.createPage.source.${source}`)
@@ -511,6 +574,8 @@ const flashSaleItemId = computed<number | null>(() => {
   const parsed = Number(raw)
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 })
+
+const turnstileAction = computed(() => flashSaleItemId.value ? 'flash_sale_create_instance' : 'create_instance')
 
 onMounted(async (): Promise<void> => {
   await configStore.loadPublicConfig(true)
@@ -1017,7 +1082,8 @@ async function handleSubmit(): Promise<void> {
     }
 
     const flashSaleId = flashSaleItemId.value
-    const turnstileToken = await getTurnstileToken(flashSaleId ? 'flash_sale_create_instance' : 'create_instance')
+    const verificationToken = await getCreateTurnstileToken()
+    if (verificationToken === null) return
     const requestPayload: CreateInstanceRequest = {
       name: form.value.name.trim(),
       packageId: form.value.packageId,
@@ -1034,7 +1100,7 @@ async function handleSubmit(): Promise<void> {
       idempotencyKey: flashSaleId
         ? (crypto.randomUUID?.() || `flash-sale-${flashSaleId}-${Date.now()}`)
         : undefined,
-      turnstileToken
+      turnstileToken: verificationToken
     }
 
     await api.instances.create(requestPayload)
@@ -1045,6 +1111,7 @@ async function handleSubmit(): Promise<void> {
     error.value = translateError(err)
     orderRiskReviewAvailable.value = err?.code === 'ORDER_RESTRICTED_BY_RISK'
   } finally {
+    resetCreateTurnstile()
     submitting.value = false
   }
 }
@@ -1377,12 +1444,26 @@ async function createRiskReviewTicket(): Promise<void> {
               <p class="text-sm font-medium" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-700'">{{ prerequisiteMessage }}</p>
             </div>
             <div
-              v-if="configStore.turnstileEnabled && configStore.turnstileSiteKey"
-              class="p-3 rounded-lg border text-sm"
+              v-if="isCreateTurnstileRequired"
+              ref="turnstileSectionRef"
+              tabindex="-1"
+              class="space-y-3 p-3 rounded-lg border text-sm"
               :class="themeStore.isDark ? 'bg-blue-900/20 border-blue-500/30 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'"
             >
-              <p class="font-medium">{{ $t('instance.createPage.turnstileRequiredTitle') }}</p>
-              <p class="mt-1 text-xs opacity-80">{{ $t('instance.createPage.turnstileRequiredDesc') }}</p>
+              <div>
+                <p class="font-medium">{{ $t('instance.createPage.turnstileRequiredTitle') }}</p>
+                <p class="mt-1 text-xs opacity-80">{{ $t('instance.createPage.turnstileRequiredDesc') }}</p>
+              </div>
+              <TurnstileWidget
+                ref="turnstileRef"
+                v-model="turnstileToken"
+                :site-key="createTurnstileSiteKey"
+                :theme="themeStore.isDark ? 'dark' : 'light'"
+                :action="turnstileAction"
+                @verify="onTurnstileVerify"
+                @expire="onTurnstileExpire"
+                @error="onTurnstileError"
+              />
             </div>
             <div
               v-if="activeOrderRiskRestriction"
@@ -1414,7 +1495,14 @@ async function createRiskReviewTicket(): Promise<void> {
                 {{ creatingRiskReviewTicket ? '创建审核工单中...' : '提交人工审核工单' }}
               </button>
             </div>
-            <button type="submit" :disabled="!canSubmit" class="btn-primary w-full">{{ submitting ? $t('instance.createPage.creating') : $t('instance.create') }}</button>
+            <button
+              type="submit"
+              :disabled="!canSubmit"
+              :title="submitDisabledReason"
+              class="btn-primary w-full"
+            >
+              {{ submitting ? $t('instance.createPage.creating') : $t('instance.create') }}
+            </button>
           </div>
         </div><!-- end right col -->
       </div><!-- end grid -->

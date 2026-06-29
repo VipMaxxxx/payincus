@@ -14,12 +14,16 @@ interface Props {
   instanceName?: string
   instanceStatus?: string
   snapshotLimit?: number | null
+  exchangeLocked?: boolean
+  exchangeLockReason?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   instanceName: '',
   instanceStatus: '',
-  snapshotLimit: null
+  snapshotLimit: null,
+  exchangeLocked: false,
+  exchangeLockReason: '实例已上架交易所或处于交割中，快照和自动策略已锁定'
 })
 
 // 配额状态
@@ -53,9 +57,13 @@ const policyLoading = ref<boolean>(false)
 
 
 const canRestore = computed<boolean>(() => {
+  if (props.exchangeLocked) return false
   const s = props.instanceStatus?.toLowerCase()
   return s === 'stopped'
 })
+
+const mutationLocked = computed<boolean>(() => props.exchangeLocked === true)
+const exchangeLockText = computed<string>(() => props.exchangeLockReason || '实例已上架交易所或处于交割中，快照和自动策略已锁定')
 
 onMounted(async () => {
   await Promise.all([loadSnapshots(), loadPolicy()])
@@ -91,8 +99,12 @@ async function loadPolicy(): Promise<void> {
 }
 
 async function createSnapshot(): Promise<void> {
+  if (mutationLocked.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   if (!createForm.value.name) return
-  
+
   createLoading.value = true
   try {
     const payload: CreateSnapshotRequest = {
@@ -112,8 +124,12 @@ async function createSnapshot(): Promise<void> {
 }
 
 async function deleteSnapshot(snapshot: Snapshot): Promise<void> {
+  if (mutationLocked.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   if (!confirm(t('snapshot.messages.deleteConfirm', { name: snapshot.name }))) return
-  
+
   try {
     await api.instances.deleteSnapshot(instanceIdNum.value, snapshot.id)
     snapshots.value = snapshots.value.filter(s => s.id !== snapshot.id)
@@ -126,13 +142,17 @@ async function deleteSnapshot(snapshot: Snapshot): Promise<void> {
 
 
 async function restoreSnapshot(snapshot: Snapshot): Promise<void> {
+  if (mutationLocked.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   if (!canRestore.value) {
     toast.warning(t('snapshot.messages.stopInstanceFirst'))
     return
   }
-  
+
   if (!confirm(t('snapshot.messages.restoreConfirm', { name: snapshot.name }))) return
-  
+
   try {
     await api.instances.restoreSnapshot(instanceIdNum.value, snapshot.id)
     toast.success(t('snapshot.messages.restoreSuccess'))
@@ -142,6 +162,10 @@ async function restoreSnapshot(snapshot: Snapshot): Promise<void> {
 }
 
 async function savePolicy(): Promise<void> {
+  if (mutationLocked.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   policyLoading.value = true
   try {
     await api.instances.updateSnapshotPolicy(instanceIdNum.value, policyForm.value)
@@ -157,6 +181,10 @@ async function savePolicy(): Promise<void> {
 
 // 取消自动快照策略
 async function disableAutoPolicy(): Promise<void> {
+  if (mutationLocked.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   policyLoading.value = true
   try {
     await api.instances.updateSnapshotPolicy(instanceIdNum.value, { enabled: false, intervalMinutes: policyForm.value.intervalMinutes })
@@ -183,18 +211,18 @@ function getIntervalLabel(minutes: number): string {
 
 <template>
   <div class="card">
-    <div 
+    <div
       class="flex items-center justify-between p-4 border-b"
       :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
     >
       <div>
-        <h2 
+        <h2
           class="text-sm font-medium"
           :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
         >
           {{ t('snapshot.title') }}
         </h2>
-        <p 
+        <p
           class="text-xs mt-0.5"
           :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
         >
@@ -205,15 +233,21 @@ function getIntervalLabel(minutes: number): string {
         <span v-if="hasQuota" class="text-xs text-themed-muted">
           {{ quotaUsed }}/{{ snapshotLimit }}
         </span>
-        <button class="btn-ghost btn-sm" :title="t('snapshot.autoSettings')" @click="showPolicyModal = true">
+        <button
+          class="btn-ghost btn-sm"
+          :disabled="mutationLocked"
+          :class="mutationLocked && 'opacity-50 cursor-not-allowed'"
+          :title="mutationLocked ? exchangeLockText : t('snapshot.autoSettings')"
+          @click="showPolicyModal = true"
+        >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </button>
-        <button 
-          :disabled="!hasQuota || isQuotaFull" 
-          :class="['btn-ghost btn-sm', (!hasQuota || isQuotaFull) && 'opacity-50 cursor-not-allowed']"
-          :title="!hasQuota ? t('snapshot.noQuota') : isQuotaFull ? t('snapshot.quotaFull') : t('snapshot.createSnapshot')"
+        <button
+          :disabled="mutationLocked || !hasQuota || isQuotaFull"
+          :class="['btn-ghost btn-sm', (mutationLocked || !hasQuota || isQuotaFull) && 'opacity-50 cursor-not-allowed']"
+          :title="mutationLocked ? exchangeLockText : !hasQuota ? t('snapshot.noQuota') : isQuotaFull ? t('snapshot.quotaFull') : t('snapshot.createSnapshot')"
           @click="showCreateModal = true"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -224,14 +258,22 @@ function getIntervalLabel(minutes: number): string {
       </div>
     </div>
 
+    <div
+      v-if="mutationLocked"
+      class="mx-4 mt-4 rounded-lg border px-3 py-2 text-xs"
+      :class="themeStore.isDark ? 'border-amber-900/60 bg-amber-950/30 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
+    >
+      {{ exchangeLockText }}
+    </div>
+
     <!-- 自动快照策略提醒横幅 -->
-    <div 
-      v-if="policy?.enabled" 
+    <div
+      v-if="policy?.enabled"
       class="mx-4 mt-4 p-3 rounded-lg flex items-center justify-between gap-3"
       :class="themeStore.isDark ? 'bg-green-500/10 border border-green-500/20' : 'bg-green-50 border border-green-200'"
     >
       <div class="flex items-center gap-3">
-        <div 
+        <div
           class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
           :class="themeStore.isDark ? 'bg-green-500/20' : 'bg-green-100'"
         >
@@ -248,10 +290,10 @@ function getIntervalLabel(minutes: number): string {
           </p>
         </div>
       </div>
-      <button 
+      <button
         class="btn-ghost btn-sm flex-shrink-0"
         :class="themeStore.isDark ? 'text-green-400 hover:bg-green-500/20' : 'text-green-600 hover:bg-green-100'"
-        :disabled="policyLoading"
+        :disabled="mutationLocked || policyLoading"
         @click="disableAutoPolicy"
       >
         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -263,16 +305,16 @@ function getIntervalLabel(minutes: number): string {
 
     <div v-if="loading" class="p-4 animate-pulse">
       <div v-for="i in 2" :key="i" class="flex items-center gap-3 py-3">
-        <div 
+        <div
           class="w-8 h-8 rounded"
           :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"
         ></div>
         <div class="flex-1 space-y-2">
-          <div 
+          <div
             class="h-3 rounded w-1/3"
             :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"
           ></div>
-          <div 
+          <div
             class="h-2 rounded w-1/4"
             :class="themeStore.isDark ? 'bg-gray-800/50' : 'bg-gray-200/50'"
           ></div>
@@ -280,13 +322,13 @@ function getIntervalLabel(minutes: number): string {
       </div>
     </div>
 
-    <div 
-      v-else-if="snapshots.length === 0" 
+    <div
+      v-else-if="snapshots.length === 0"
       class="p-8 text-center text-sm"
       :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
     >
-      <svg 
-        class="w-10 h-10 mx-auto mb-2 opacity-50" 
+      <svg
+        class="w-10 h-10 mx-auto mb-2 opacity-50"
         fill="none" stroke="currentColor" viewBox="0 0 24 24"
       >
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -300,19 +342,19 @@ function getIntervalLabel(minutes: number): string {
       </template>
     </div>
 
-    <div 
-      v-else 
+    <div
+      v-else
       class="divide-y"
       :class="themeStore.isDark ? 'divide-gray-800' : 'divide-gray-100'"
     >
-      <div 
-        v-for="snapshot in snapshots" 
+      <div
+        v-for="snapshot in snapshots"
         :key="snapshot.id"
         class="flex items-center justify-between p-4 transition-colors"
         :class="themeStore.isDark ? 'hover:bg-gray-900/50' : 'hover:bg-gray-50'"
       >
         <div class="flex items-center gap-3">
-          <div 
+          <div
             class="w-8 h-8 rounded-lg flex items-center justify-center"
             :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
           >
@@ -321,13 +363,13 @@ function getIntervalLabel(minutes: number): string {
             </svg>
           </div>
           <div>
-            <div 
+            <div
               class="text-sm"
               :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
             >
               {{ snapshot.name }}
             </div>
-            <div 
+            <div
               class="text-xs"
               :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
             >
@@ -337,15 +379,21 @@ function getIntervalLabel(minutes: number): string {
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button 
-            :disabled="!canRestore" 
+          <button
+            :disabled="!canRestore"
             :class="['btn-ghost btn-sm', !canRestore && 'opacity-50 cursor-not-allowed']"
-            :title="canRestore ? t('snapshot.restore') : t('snapshot.stopInstanceFirst')"
+            :title="mutationLocked ? exchangeLockText : canRestore ? t('snapshot.restore') : t('snapshot.stopInstanceFirst')"
             @click="restoreSnapshot(snapshot)"
           >
             {{ t('snapshot.restore') }}
           </button>
-          <button class="btn-ghost btn-sm text-error" @click="deleteSnapshot(snapshot)">
+          <button
+            class="btn-ghost btn-sm text-error"
+            :disabled="mutationLocked"
+            :class="mutationLocked && 'opacity-50 cursor-not-allowed'"
+            :title="mutationLocked ? exchangeLockText : t('snapshot.delete')"
+            @click="deleteSnapshot(snapshot)"
+          >
             {{ t('snapshot.delete') }}
           </button>
         </div>
@@ -378,7 +426,7 @@ function getIntervalLabel(minutes: number): string {
             </form>
             <div class="modal-footer">
               <button class="btn-secondary" @click="showCreateModal = false">{{ t('snapshot.createModal.cancel') }}</button>
-              <button :disabled="createLoading || !createForm.name" class="btn-primary" @click="createSnapshot">
+	              <button :disabled="mutationLocked || createLoading || !createForm.name" class="btn-primary" @click="createSnapshot">
                 {{ createLoading ? t('snapshot.createModal.creating') : t('snapshot.createModal.create') }}
               </button>
             </div>
@@ -403,19 +451,20 @@ function getIntervalLabel(minutes: number): string {
             </div>
             <form class="modal-body" @submit.prevent="savePolicy">
               <label class="flex items-center gap-2 cursor-pointer">
-                <input 
-                  v-model="policyForm.enabled" 
-                  type="checkbox" 
-                  class="w-4 h-4 rounded"
-                  :class="themeStore.isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'"
+	                <input
+	                  v-model="policyForm.enabled"
+	                  type="checkbox"
+	                  class="w-4 h-4 rounded"
+	                  :disabled="mutationLocked"
+	                  :class="themeStore.isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'"
                 />
                 <span class="text-sm text-themed">{{ t('snapshot.policyModal.enable') }}</span>
               </label>
-            
+
               <div v-if="policyForm.enabled" class="space-y-4 pt-2">
                 <div>
                   <label class="block text-xs text-themed-muted mb-1.5">{{ t('snapshot.policyModal.interval') }}</label>
-                  <select v-model="policyForm.intervalMinutes" class="input">
+	                  <select v-model="policyForm.intervalMinutes" class="input" :disabled="mutationLocked">
                     <option :value="10">{{ t('snapshot.policyModal.intervalOptions.min10') }}</option>
                     <option :value="60">{{ t('snapshot.policyModal.intervalOptions.hour1') }}</option>
                     <option :value="360">{{ t('snapshot.policyModal.intervalOptions.hour6') }}</option>
@@ -429,7 +478,7 @@ function getIntervalLabel(minutes: number): string {
             </form>
             <div class="modal-footer">
               <button class="btn-secondary" @click="showPolicyModal = false">{{ t('snapshot.policyModal.cancel') }}</button>
-              <button :disabled="policyLoading" class="btn-primary" @click="savePolicy">
+	              <button :disabled="mutationLocked || policyLoading" class="btn-primary" @click="savePolicy">
                 {{ policyLoading ? t('snapshot.policyModal.saving') : t('snapshot.policyModal.save') }}
               </button>
             </div>
@@ -439,4 +488,3 @@ function getIntervalLabel(minutes: number): string {
     </Teleport>
   </div>
 </template>
-

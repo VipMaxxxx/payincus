@@ -11,7 +11,7 @@ import { useToast } from '@/stores/toast'
 import { getLocalizedCountryName } from '@/utils/countryDisplay'
 import { formatMemory, formatDisk, formatBytes, getStatusInfo } from '@/utils/formatters'
 import { translateError } from '@/utils/errorHandler'
-import type { Instance, UserBalance } from '@/types/api'
+import type { ExchangeListing, Instance, UserBalance } from '@/types/api'
 import FlagIcon from '@/components/FlagIcon.vue'
 import DistroIcon from '@/components/icons/DistroIcon.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
@@ -68,6 +68,7 @@ const actionLoading = ref<Record<number, string>>({})
 const orderLoading = ref<boolean>(false)
 const recentlyOrderedInstanceId = ref<number | null>(null)
 const batchActionLoading = ref<string>('')
+const exchangeListingsByInstanceId = ref<Record<number, ExchangeListing>>({})
 
 // 搜索和分页
 const search = ref<string>('')
@@ -150,7 +151,11 @@ const selectedCount = computed(() => selectedIds.value.size)
 const selectedInstances = computed(() => instances.value.filter(instance => selectedIds.value.has(instance.id)))
 const selectedRunningCount = computed(() => selectedInstances.value.filter(instance => instance.status?.toLowerCase() === 'running').length)
 const selectedStoppedCount = computed(() => selectedInstances.value.filter(instance => instance.status?.toLowerCase() === 'stopped').length)
-const selectedPaidCount = computed(() => selectedInstances.value.filter(instance => !!instance.packagePlanId).length)
+const selectedBillingActionIds = computed(() =>
+  selectedInstances.value
+    .filter(instance => !!instance.packagePlanId && !isInstanceExchangeLocked(instance))
+    .map(instance => instance.id)
+)
 const hasSelectedInstances = computed(() => selectedCount.value > 0)
 const isViewingAnotherUsersInstances = computed(() => (
   isAdmin.value &&
@@ -416,10 +421,28 @@ async function loadInstances(force = false): Promise<void> {
 
     const visibleIds = new Set(nextInstances.map(instance => instance.id))
     selectedIds.value = new Set([...selectedIds.value].filter(id => visibleIds.has(id)))
+    if (!isAdminEntry) {
+      await loadExchangeListingStates()
+    }
   } catch (error) {
     console.error('Failed to load instances:', error)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadExchangeListingStates(): Promise<void> {
+  try {
+    const response = await api.exchange.myListings({ page: 1, pageSize: 100 })
+    const activeListings = (response.items || []).filter(item => ['active', 'paused', 'locked', 'delivery_failed'].includes(item.status))
+    exchangeListingsByInstanceId.value = activeListings.reduce<Record<number, ExchangeListing>>((acc, listing) => {
+      if (listing.instanceId) {
+        acc[listing.instanceId] = listing
+      }
+      return acc
+    }, {})
+  } catch {
+    exchangeListingsByInstanceId.value = {}
   }
 }
 
@@ -674,8 +697,73 @@ function getInstanceResetTrafficPrice(instance: Instance): string {
   return value > 0 ? formatCurrency(value) : '-'
 }
 
+function getInstanceExchangeListing(instance: Instance): ExchangeListing | null {
+  return exchangeListingsByInstanceId.value[instance.id] || null
+}
+
+function isInstanceExchangeLocked(instance: Instance): boolean {
+  const listing = getInstanceExchangeListing(instance)
+  return !!listing && ['active', 'paused', 'locked', 'delivery_failed'].includes(listing.status)
+}
+
+function getInstanceExchangeState(instance: Instance): { label: string; hint: string; className: string } {
+  const listing = getInstanceExchangeListing(instance)
+  if (listing?.status === 'active') {
+    return {
+      label: '交易所挂牌中',
+      hint: `暂停锁定 · 挂牌价 ${formatCurrency(listing.price)}`,
+      className: themeStore.isDark ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-700'
+    }
+  }
+  if (listing?.status === 'paused') {
+    return {
+      label: '交易所暂停中',
+      hint: '挂牌已暂停，实例仍保持交易锁定',
+      className: themeStore.isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
+    }
+  }
+  if (listing?.status === 'locked') {
+    return {
+      label: '交易锁定中',
+      hint: '订单交割中，禁止实例操作',
+      className: themeStore.isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-700'
+    }
+  }
+  if (listing?.status === 'delivery_failed') {
+    return {
+      label: '交割异常',
+      hint: '等待平台重试、退款或人工接管',
+      className: themeStore.isDark ? 'bg-red-900/50 text-red-300' : 'bg-red-100 text-red-700'
+    }
+  }
+  if (instance.status?.toLowerCase() === 'stopped') {
+    return {
+      label: '可上架',
+      hint: '已暂停，可进入交易所检测',
+      className: themeStore.isDark ? 'bg-emerald-900/50 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
+    }
+  }
+  if (instance.status?.toLowerCase() === 'running') {
+    return {
+      label: '需先暂停',
+      hint: '上架前必须先暂停实例',
+      className: themeStore.isDark ? 'bg-yellow-900/40 text-yellow-300' : 'bg-yellow-100 text-yellow-700'
+    }
+  }
+  return {
+    label: '不可上架',
+    hint: '仅暂停且通过检测的实例可挂牌',
+    className: themeStore.isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'
+  }
+}
+
+function openInstanceExchange(instance: Instance): void {
+  void router.push({ path: '/exchange', query: { instanceId: String(instance.id) } })
+}
+
 function canResetInstanceTraffic(instance: Instance): boolean {
   if (isAdminEntry) return false
+  if (isInstanceExchangeLocked(instance)) return false
   if (instance.status?.toLowerCase() === 'deleted') return false
   return Number((instance as any).monthlyTrafficUsed || 0) > 0
 }
@@ -720,7 +808,19 @@ function getInstanceMonthlyPrice(instance: Instance): string {
 }
 
 function canUseInstanceBillingAction(instance: Instance): boolean {
-  return canUseCustomerBillingActions.value && !!instance.packagePlanId
+  return canUseCustomerBillingActions.value && !!instance.packagePlanId && !isInstanceExchangeLocked(instance)
+}
+
+function canStartInstance(instance: Instance): boolean {
+  return instance.status?.toLowerCase() === 'stopped' && !isInstanceExchangeLocked(instance)
+}
+
+function canDeleteInstance(instance: Instance): boolean {
+  return !isInstanceExchangeLocked(instance) && !instance.packagePlanId && (instance as any).allow_instance_deletion !== false
+}
+
+function canTransferInstance(instance: Instance): boolean {
+  return !isInstanceExchangeLocked(instance)
 }
 
 function getInstanceStatusTextClass(instance: Instance): string {
@@ -960,6 +1060,10 @@ async function reorderInstance(instance: Instance, action: InstanceOrderAction):
 }
 
 async function handleAction(instance: Instance, action: InstanceAction): Promise<void> {
+  if (isInstanceExchangeLocked(instance) && ['start', 'restart', 'delete'].includes(action)) {
+    toast.warning('实例已上架交易所或处于交割中，不能执行该操作')
+    return
+  }
   actionLoading.value[instance.id] = action
   
   try {
@@ -1151,11 +1255,12 @@ async function handleBatchSimpleAction(action: BatchSimpleAction): Promise<void>
 }
 
 async function handleBatchAutoRenew(autoRenew: boolean): Promise<void> {
-  if (selectedCount.value === 0 || !canUseCustomerBillingActions.value) return
+  const instanceIds = selectedBillingActionIds.value
+  if (instanceIds.length === 0 || !canUseCustomerBillingActions.value) return
 
   batchActionLoading.value = autoRenew ? 'autoRenewOn' : 'autoRenewOff'
   try {
-    const result = await customerBillingApi.billing.setAutoRenewBatch(Array.from(selectedIds.value), autoRenew)
+    const result = await customerBillingApi.billing.setAutoRenewBatch(instanceIds, autoRenew)
     if (result.failedCount > 0) {
       toast.warning(t('instance.batch.partialResult', {
         success: result.successCount,
@@ -1210,11 +1315,16 @@ async function openSingleRenewModal(instance: Instance): Promise<void> {
 }
 
 function openInstanceTransfer(instance: Instance): void {
+  if (!canTransferInstance(instance)) {
+    toast.warning('实例已上架交易所或处于交割中，不能 PUSH')
+    return
+  }
   void router.push({ path: transfersPath(), query: { instanceId: String(instance.id) } })
 }
 
 async function openBatchRenewModal(): Promise<void> {
-  if (selectedCount.value === 0 || !canUseCustomerBillingActions.value) return
+  const instanceIds = selectedBillingActionIds.value
+  if (instanceIds.length === 0 || !canUseCustomerBillingActions.value) return
 
   showBatchRenewModal.value = true
   batchRenewLoading.value = true
@@ -1223,7 +1333,7 @@ async function openBatchRenewModal(): Promise<void> {
 
   try {
     const [previewRes, balanceRes] = await Promise.all([
-      customerBillingApi.billing.previewBatchRenew(Array.from(selectedIds.value)),
+      customerBillingApi.billing.previewBatchRenew(instanceIds),
       customerBillingApi.billing.getUserBalance()
     ])
     batchRenewPreview.value = previewRes.items
@@ -1248,10 +1358,12 @@ function closeBatchRenewModal(force = false): void {
 
 async function confirmBatchRenew(): Promise<void> {
   if (!batchRenewCanSubmit.value || !canUseCustomerBillingActions.value) return
+  const instanceIds = selectedBillingActionIds.value
+  if (instanceIds.length === 0) return
 
   batchRenewSubmitting.value = true
   try {
-    const result = await customerBillingApi.billing.renewInstancesBatch(Array.from(selectedIds.value), batchRenewMonths.value)
+    const result = await customerBillingApi.billing.renewInstancesBatch(instanceIds, batchRenewMonths.value)
     if (result.failedCount > 0) {
       toast.warning(t('instance.batch.partialResult', {
         success: result.successCount,
@@ -1591,7 +1703,7 @@ async function confirmBatchDestroy(): Promise<void> {
           <button
             v-if="!isAdminEntry"
             class="btn-ghost btn-sm"
-            :disabled="selectedPaidCount === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
+            :disabled="selectedBillingActionIds.length === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
             @click="handleBatchAutoRenew(true)"
           >
             <svg v-if="batchActionLoading === 'autoRenewOn'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -1603,7 +1715,7 @@ async function confirmBatchDestroy(): Promise<void> {
           <button
             v-if="!isAdminEntry"
             class="btn-ghost btn-sm"
-            :disabled="selectedPaidCount === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
+            :disabled="selectedBillingActionIds.length === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
             @click="handleBatchAutoRenew(false)"
           >
             <svg v-if="batchActionLoading === 'autoRenewOff'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -1615,7 +1727,7 @@ async function confirmBatchDestroy(): Promise<void> {
           <button
             v-if="!isAdminEntry"
             class="btn-secondary btn-sm"
-            :disabled="selectedPaidCount === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
+            :disabled="selectedBillingActionIds.length === 0 || isViewingAnotherUsersInstances || !!batchActionLoading || batchRenewSubmitting || batchDestroySubmitting"
             @click="openBatchRenewModal"
           >
             {{ configStore.freeSiteMode ? freeSiteCopy.instanceBatchRenewAction : $t('instance.batch.renew') }}
@@ -1751,9 +1863,25 @@ async function confirmBatchDestroy(): Promise<void> {
                     >
                       {{ formatImageName(instance.image, (instance as any).imageName) }}
                     </div>
-                  </div>
-                </div>
-              </td>
+                    <div v-if="!isAdminEntry" class="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span
+                        class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+                        :class="getInstanceExchangeState(instance).className"
+                        :title="getInstanceExchangeState(instance).hint"
+                      >
+                        {{ getInstanceExchangeState(instance).label }}
+                      </span>
+                      <span
+                        v-if="isInstanceExchangeLocked(instance)"
+                        class="text-[10px]"
+                        :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-400'"
+                      >
+                        {{ getInstanceExchangeState(instance).hint }}
+                      </span>
+                    </div>
+	                  </div>
+	                </div>
+	              </td>
               <td class="px-3 py-3">
                 <span :class="['badge inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs', getStatusInfo(instance.status, t).class]">
                   <span :class="['w-1.5 h-1.5 rounded-full', getStatusInfo(instance.status, t).dot]"></span>
@@ -1852,7 +1980,7 @@ async function confirmBatchDestroy(): Promise<void> {
                     @reorder="reorderInstance(instance, $event)"
                   />
                   <button
-                    v-if="instance.status?.toLowerCase() === 'stopped'"
+                    v-if="canStartInstance(instance)"
                     :disabled="!!actionLoading[instance.id]"
                     class="p-1.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 transition-colors disabled:opacity-50"
                     :title="$t('instance.actions.start')"
@@ -2097,7 +2225,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 @reorder="reorderInstance(instance, $event)"
               />
               <button
-                v-if="instance.status?.toLowerCase() === 'stopped'"
+                v-if="canStartInstance(instance)"
                 :disabled="!!actionLoading[instance.id]"
                 class="btn-ghost btn-sm flex-1"
                 @click.stop="handleAction(instance, 'start')"
@@ -2140,7 +2268,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <span class="text-xs">{{ actionLoading[instance.id] === 'resetTraffic' ? '...' : $t('admin.hosts.resetTraffic') }}</span>
               </button>
               <button
-                v-if="!instance.packagePlanId && (instance as any).allow_instance_deletion !== false"
+                v-if="canDeleteInstance(instance)"
                 :disabled="!!actionLoading[instance.id]"
                 class="btn-ghost btn-sm flex-1 text-red-500 hover:text-red-400"
                 @click.stop="handleAction(instance, 'delete')"
@@ -2204,6 +2332,14 @@ async function confirmBatchDestroy(): Promise<void> {
                   >
                     {{ $t('common.networkMode.' + getInstanceNetworkMode(instance)) }}
                   </span>
+	                  <span
+	                    v-if="!isAdminEntry"
+	                    class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
+	                    :class="getInstanceExchangeState(instance).className"
+	                    :title="getInstanceExchangeState(instance).hint"
+	                  >
+	                    {{ getInstanceExchangeState(instance).label }}
+	                  </span>
                 </div>
               </button>
 
@@ -2308,6 +2444,15 @@ async function confirmBatchDestroy(): Promise<void> {
                   @reorder="reorderInstance(instance, $event)"
                 />
                 <button
+                  v-if="!isAdminEntry"
+                  type="button"
+                  class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
+                  :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  @click.stop="openInstanceExchange(instance)"
+                >
+                  交易所
+                </button>
+                <button
                   type="button"
                   class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
                   :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
@@ -2319,6 +2464,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   type="button"
                   class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
                   :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  :disabled="!canTransferInstance(instance)"
                   @click.stop="openInstanceTransfer(instance)"
                 >
                   {{ $t('instance.card.push') }}

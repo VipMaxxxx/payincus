@@ -23,6 +23,8 @@ interface ProxySite {
 
 interface Props {
   instanceId: number
+  exchangeLocked?: boolean
+  exchangeLockReason?: string
 }
 
 const props = defineProps<Props>()
@@ -42,6 +44,8 @@ const dnsRecordType = ref<string | null>(null)
 const dnsRecordValue = ref<string | null>(null)
 const siteQuota = ref<{ used: number; limit: number } | null>(null)
 const canManageSites = ref(true)
+const exchangeLockText = computed<string>(() => props.exchangeLockReason || '实例已上架交易所或处于交割中，代理站点配置已锁定')
+const canMutateSites = computed<boolean>(() => canManageSites.value && props.exchangeLocked !== true)
 
 // 添加表单
 const showAddModal = ref(false)
@@ -112,11 +116,19 @@ async function loadSites() {
 }
 
 function openAddModal() {
+  if (!canMutateSites.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   form.value = { domain: '', targetPort: 80, httpsEnabled: true, remark: '' }
   showAddModal.value = true
 }
 
 async function addSite() {
+  if (!canMutateSites.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   if (!form.value.domain) {
     toast.error(t('instance.sites.domainRequired'))
     return
@@ -136,16 +148,16 @@ async function addSite() {
       httpsEnabled: form.value.httpsEnabled,
       remark: form.value.remark.trim() || undefined
     })
-    
+
     showAddModal.value = false
     await loadSites()
-    
+
     // 显示 DNS 解析提示
     if (res.dnsHint) {
       dnsHint.value = res.dnsHint
       showDnsHint.value = true
     }
-    
+
     toast.success(t('instance.sites.addSuccess'))
   } catch (err: unknown) {
     const error = err as { response?: { data?: { error?: string } }, message?: string }
@@ -156,6 +168,10 @@ async function addSite() {
 }
 
 async function deleteSite(siteId: number, domain: string) {
+  if (!canMutateSites.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   if (!confirm(t('instance.sites.deleteConfirm', { domain }))) {
     return
   }
@@ -174,6 +190,10 @@ async function deleteSite(siteId: number, domain: string) {
 }
 
 async function refreshSite(siteId: number) {
+  if (!canMutateSites.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   refreshing.value = siteId
   try {
     await api.instances.refreshSite(props.instanceId, siteId)
@@ -188,6 +208,10 @@ async function refreshSite(siteId: number) {
 }
 
 async function toggleSite(siteId: number) {
+  if (!canMutateSites.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   toggling.value = siteId
   try {
     const res = await api.instances.toggleSite(props.instanceId, siteId)
@@ -202,6 +226,10 @@ async function toggleSite(siteId: number) {
 }
 
 function openEditModal(site: ProxySite) {
+  if (!canMutateSites.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   editForm.value = {
     id: site.id,
     domain: site.domain,
@@ -213,6 +241,10 @@ function openEditModal(site: ProxySite) {
 }
 
 async function updateSite() {
+  if (!canMutateSites.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   editing.value = true
   try {
     const res = await api.instances.updateSite(props.instanceId, editForm.value.id, {
@@ -249,6 +281,10 @@ async function checkCertificate(site: ProxySite) {
 }
 
 async function checkDns(siteId: number) {
+  if (!canMutateSites.value) {
+    toast.warning(exchangeLockText.value)
+    return
+  }
   checkingDns.value = siteId
   try {
     const res = await api.instances.checkDns(props.instanceId, siteId)
@@ -366,8 +402,8 @@ const quotaLimitDisplay = computed(() => {
     </div>
 
     <!-- Caddy 未启用提示 -->
-    <div 
-      v-else-if="!caddyEnabled" 
+    <div
+      v-else-if="!caddyEnabled"
       class="card p-6 text-center"
     >
       <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -396,31 +432,40 @@ const quotaLimitDisplay = computed(() => {
             </span>
           </p>
         </div>
-        <button 
-          v-if="canManageSites"
-          class="btn-primary w-full sm:w-auto" 
-          :disabled="isQuotaFull"
-          @click="openAddModal"
-        >
+	        <button
+	          v-if="canManageSites"
+	          class="btn-primary w-full sm:w-auto"
+	          :disabled="props.exchangeLocked || isQuotaFull"
+	          :title="props.exchangeLocked ? exchangeLockText : undefined"
+	          @click="openAddModal"
+	        >
           <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          {{ t('instance.sites.addSite') }}
-        </button>
-      </div>
+	          {{ t('instance.sites.addSite') }}
+	        </button>
+	      </div>
 
-      <!-- 站点列表 -->
+	      <div
+	        v-if="props.exchangeLocked"
+	        class="rounded-lg border px-3 py-2 text-xs"
+	        :class="themeStore.isDark ? 'border-amber-900/60 bg-amber-950/30 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
+	      >
+	        {{ exchangeLockText }}
+	      </div>
+
+	      <!-- 站点列表 -->
       <div v-if="hasSites" class="space-y-3">
-        <div 
-          v-for="site in sites" 
+        <div
+          v-for="site in sites"
           :key="site.id"
           class="card p-4"
         >
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-3 flex-wrap">
-                <a 
-                  :href="`${site.httpsEnabled ? 'https' : 'http'}://${site.domain}`" 
+                <a
+                  :href="`${site.httpsEnabled ? 'https' : 'http'}://${site.domain}`"
                   target="_blank"
                   class="font-mono text-sm font-medium hover:text-blue-500 transition-colors break-all"
                   :class="themeStore.isDark ? 'text-white' : 'text-gray-900'"
@@ -428,8 +473,8 @@ const quotaLimitDisplay = computed(() => {
                   {{ site.domain }}
                 </a>
                 <!-- HTTPS 标记 + 证书检查 -->
-                <button 
-                  v-if="site.httpsEnabled" 
+                <button
+                  v-if="site.httpsEnabled"
                   class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 whitespace-nowrap hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
                   :title="t('instance.sites.checkCert')"
                   :disabled="checkingCert === site.id"
@@ -444,8 +489,8 @@ const quotaLimitDisplay = computed(() => {
                   </svg>
                   HTTPS
                 </button>
-                <span 
-                  v-else 
+                <span
+                  v-else
                   class="px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 whitespace-nowrap"
                   :title="t('instance.sites.httpOnly')"
                 >
@@ -454,8 +499,8 @@ const quotaLimitDisplay = computed(() => {
                 <span :class="['px-2 py-0.5 text-xs rounded-full whitespace-nowrap', getStatusColor(site.status)]">
                   {{ getStatusText(site.status) }}
                 </span>
-                <span 
-                  v-if="!site.enabled" 
+                <span
+                  v-if="!site.enabled"
                   class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 whitespace-nowrap"
                 >
                   {{ t('instance.sites.disabled') }}
@@ -470,22 +515,22 @@ const quotaLimitDisplay = computed(() => {
               </div>
             </div>
 
-            <div v-if="canManageSites" class="flex items-center gap-2 self-end sm:self-auto">
+	            <div v-if="canMutateSites" class="flex items-center gap-2 self-end sm:self-auto">
               <!-- 启用/禁用切换 -->
               <button
                 :disabled="toggling === site.id"
                 class="p-2 rounded transition-colors"
-                :class="site.enabled 
-                  ? 'text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20' 
+                :class="site.enabled
+                  ? 'text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
                   : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'"
                 :title="site.enabled ? t('instance.sites.disableSite') : t('instance.sites.enableSite')"
                 @click="toggleSite(site.id)"
               >
-                <svg 
-                  v-if="toggling !== site.id" 
-                  class="w-4 h-4" 
-                  fill="none" 
-                  stroke="currentColor" 
+                <svg
+                  v-if="toggling !== site.id"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   <path v-if="site.enabled" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -518,11 +563,11 @@ const quotaLimitDisplay = computed(() => {
                 :title="t('instance.sites.refresh')"
                 @click="refreshSite(site.id)"
               >
-                <svg 
-                  class="w-4 h-4" 
+                <svg
+                  class="w-4 h-4"
                   :class="[refreshing === site.id ? 'animate-spin' : '', themeStore.isDark ? 'text-gray-400' : 'text-gray-600']"
-                  fill="none" 
-                  stroke="currentColor" 
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -537,11 +582,11 @@ const quotaLimitDisplay = computed(() => {
                 :title="t('instance.sites.checkDns')"
                 @click="checkDns(site.id)"
               >
-                <svg 
+                <svg
                   v-if="checkingDns !== site.id"
-                  class="w-4 h-4" 
-                  fill="none" 
-                  stroke="currentColor" 
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
@@ -559,11 +604,11 @@ const quotaLimitDisplay = computed(() => {
                 :title="t('common.delete')"
                 @click="deleteSite(site.id, site.domain)"
               >
-                <svg 
-                  v-if="deleting !== site.id" 
-                  class="w-4 h-4" 
-                  fill="none" 
-                  stroke="currentColor" 
+                <svg
+                  v-if="deleting !== site.id"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -579,7 +624,7 @@ const quotaLimitDisplay = computed(() => {
       </div>
 
       <!-- 空状态 -->
-      <div 
+      <div
         v-else
         class="border-2 border-dashed rounded-lg p-8 text-center"
         :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-300'"
@@ -590,24 +635,33 @@ const quotaLimitDisplay = computed(() => {
         <p class="text-sm mb-4" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'">
           {{ t('instance.sites.empty') }}
         </p>
-        <button 
-          v-if="canManageSites"
-          class="btn-primary" 
-          :disabled="isQuotaFull"
-          @click="openAddModal"
-        >
+	        <button
+	          v-if="props.exchangeLocked"
+	          type="button"
+	          class="rounded-lg border px-3 py-2 text-left text-xs"
+	          :class="themeStore.isDark ? 'border-amber-900/60 bg-amber-950/30 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
+	        >
+	          {{ exchangeLockText }}
+	        </button>
+	        <button
+	          v-if="canManageSites"
+	          class="btn-primary"
+	          :disabled="props.exchangeLocked || isQuotaFull"
+	          :title="props.exchangeLocked ? exchangeLockText : undefined"
+	          @click="openAddModal"
+	        >
           {{ t('instance.sites.addFirstSite') }}
         </button>
       </div>
 
       <!-- 添加站点模态框 -->
       <Teleport to="body">
-        <div 
-          v-if="showAddModal" 
+        <div
+          v-if="showAddModal"
           class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           @click.self="showAddModal = false"
         >
-          <div 
+          <div
             class="w-full max-w-md rounded-lg shadow-xl"
             :class="themeStore.isDark ? 'bg-gray-900' : 'bg-white'"
           >
@@ -662,9 +716,9 @@ const quotaLimitDisplay = computed(() => {
                       </p>
                     </div>
                     <div class="relative">
-                      <input 
-                        v-model="form.httpsEnabled" 
-                        type="checkbox" 
+                      <input
+                        v-model="form.httpsEnabled"
+                        type="checkbox"
                         class="sr-only peer"
                       />
                       <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
@@ -691,7 +745,7 @@ const quotaLimitDisplay = computed(() => {
                 <button class="btn-ghost" @click="showAddModal = false">
                   {{ t('common.cancel') }}
                 </button>
-                <button :disabled="adding" class="btn-primary" @click="addSite">
+	                <button :disabled="props.exchangeLocked || adding" class="btn-primary" @click="addSite">
                   <span v-if="adding" class="flex items-center gap-2">
                     <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -709,12 +763,12 @@ const quotaLimitDisplay = computed(() => {
 
       <!-- 编辑站点模态框 -->
       <Teleport to="body">
-        <div 
-          v-if="showEditModal" 
+        <div
+          v-if="showEditModal"
           class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           @click.self="showEditModal = false"
         >
-          <div 
+          <div
             class="w-full max-w-md rounded-lg shadow-xl"
             :class="themeStore.isDark ? 'bg-gray-900' : 'bg-white'"
           >
@@ -766,9 +820,9 @@ const quotaLimitDisplay = computed(() => {
                       </p>
                     </div>
                     <div class="relative">
-                      <input 
-                        v-model="editForm.httpsEnabled" 
-                        type="checkbox" 
+                      <input
+                        v-model="editForm.httpsEnabled"
+                        type="checkbox"
                         class="sr-only peer"
                       />
                       <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
@@ -795,7 +849,7 @@ const quotaLimitDisplay = computed(() => {
                 <button class="btn-ghost" @click="showEditModal = false">
                   {{ t('common.cancel') }}
                 </button>
-                <button :disabled="editing" class="btn-primary" @click="updateSite">
+	                <button :disabled="props.exchangeLocked || editing" class="btn-primary" @click="updateSite">
                   <span v-if="editing" class="flex items-center gap-2">
                     <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -813,12 +867,12 @@ const quotaLimitDisplay = computed(() => {
 
       <!-- DNS 解析提示模态框 -->
       <Teleport to="body">
-        <div 
-          v-if="showDnsHint" 
+        <div
+          v-if="showDnsHint"
           class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           @click.self="showDnsHint = false"
         >
-          <div 
+          <div
             class="w-full max-w-md rounded-lg shadow-xl"
             :class="themeStore.isDark ? 'bg-gray-900' : 'bg-white'"
           >
@@ -839,7 +893,7 @@ const quotaLimitDisplay = computed(() => {
               </p>
 
               <!-- DNS 记录 -->
-              <div 
+              <div
                 class="p-4 rounded-lg font-mono text-sm space-y-2"
                 :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
               >
@@ -877,26 +931,26 @@ const quotaLimitDisplay = computed(() => {
 
       <!-- 证书状态弹窗 -->
       <Teleport to="body">
-        <div 
-          v-if="showCertModal && certStatus" 
+        <div
+          v-if="showCertModal && certStatus"
           class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           @click.self="showCertModal = false"
         >
-          <div 
+          <div
             class="w-full max-w-md rounded-lg shadow-xl"
             :class="themeStore.isDark ? 'bg-gray-900' : 'bg-white'"
           >
             <div class="p-6">
               <div class="flex items-center gap-3 mb-4">
-                <div 
+                <div
                   class="w-10 h-10 rounded-full flex items-center justify-center"
                   :class="certStatus.status === 'valid' ? 'bg-green-100 dark:bg-green-900/30' : certStatus.status === 'disabled' ? 'bg-gray-100 dark:bg-gray-800' : 'bg-red-100 dark:bg-red-900/30'"
                 >
-                  <svg 
-                    class="w-5 h-5" 
+                  <svg
+                    class="w-5 h-5"
                     :class="getCertStatusColor(certStatus.status)"
-                    fill="none" 
-                    stroke="currentColor" 
+                    fill="none"
+                    stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
                     <path v-if="certStatus.status === 'valid'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -916,7 +970,7 @@ const quotaLimitDisplay = computed(() => {
 
               <!-- 状态 -->
               <div class="mb-4">
-                <span 
+                <span
                   class="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium"
                   :class="certStatus.status === 'valid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : certStatus.status === 'disabled' ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'"
                 >
@@ -925,7 +979,7 @@ const quotaLimitDisplay = computed(() => {
               </div>
 
               <!-- 证书详情 -->
-              <div 
+              <div
                 v-if="certStatus.certificate"
                 class="p-4 rounded-lg space-y-2 text-sm"
                 :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
@@ -944,7 +998,7 @@ const quotaLimitDisplay = computed(() => {
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-500">{{ t('instance.sites.cert.daysRemaining') }}</span>
-                  <span 
+                  <span
                     :class="certStatus.certificate.daysRemaining > 30 ? 'text-green-600 dark:text-green-400' : certStatus.certificate.daysRemaining > 7 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'"
                   >
                     {{ certStatus.certificate.daysRemaining }} {{ t('instance.sites.cert.days') }}
@@ -953,7 +1007,7 @@ const quotaLimitDisplay = computed(() => {
               </div>
 
               <!-- 错误信息 -->
-              <div 
+              <div
                 v-if="certStatus.error || certStatus.hint"
                 class="p-4 rounded-lg space-y-2 text-sm"
                 :class="themeStore.isDark ? 'bg-red-900/20' : 'bg-red-50'"
@@ -967,7 +1021,7 @@ const quotaLimitDisplay = computed(() => {
               </div>
 
               <!-- 未启用提示 -->
-              <p 
+              <p
                 v-if="certStatus.status === 'disabled'"
                 class="text-sm"
                 :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"

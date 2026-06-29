@@ -1858,6 +1858,171 @@ export interface CreateInstanceRequest {
   turnstileToken?: string
 }
 
+export type ExchangeListingStatus = 'active' | 'paused' | 'delisted' | 'locked' | 'sold' | 'delivery_failed' | 'force_delisted'
+export type ExchangeOrderStatus = 'escrowed' | 'delivering' | 'delivered' | 'confirming' | 'completed' | 'cancelled' | 'refunded' | 'disputed' | 'manual_review' | 'failed'
+export type ExchangeDeliveryTaskStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+export type ExchangeWithdrawalStatus = 'pending' | 'approved' | 'paying' | 'completed' | 'rejected' | 'cancelled' | 'failed_returned'
+export type ExchangeDisputeStatus = 'open' | 'processing' | 'rejected' | 'refunded' | 'redelivering' | 'released' | 'closed'
+
+export interface ExchangePublicConfig {
+  enabled: boolean
+  minPrice: number
+  maxPrice: number | null
+  feePercent: number
+  minFee: number
+  maxFee: number | null
+  confirmationHours: number
+  allowBuyerImageSelection: boolean
+  allowBalanceTransfer: boolean
+  withdrawalMinAmount: number
+}
+
+export interface ExchangeInstanceSnapshot {
+  instanceId?: number
+  name?: string
+  status: string
+  cpu: number
+  memory: number
+  disk: number
+  networkMode: string
+  portLimit: number | null
+  snapshotLimit: number | null
+  backupLimit: number | null
+  siteLimit: number | null
+  limitsIngress: string | null
+  limitsEgress: string | null
+  monthlyTrafficLimit: string | null
+  monthlyTrafficUsed: string | null
+  expiresAt: string | null
+  billingPrice: number | null
+  billingCycle: number | null
+  ipv4: string | null
+  ipv6: string | null
+  package: { id: number; name: string } | null
+  packagePlan: { id: number; name: string } | null
+  host: { id: number; name: string; location: string | null; countryCode: string | null }
+  deliveryMode: 'reinstall_required'
+  privacyMode: 'anonymous'
+}
+
+export interface ExchangeEligibilityResult {
+  eligible: boolean
+  status: 'can_list' | 'must_stop_first' | 'cannot_list'
+  reasons: string[]
+  checks: Array<{ key: string; label: string; passed: boolean; message: string }>
+  instance?: ExchangeInstanceSnapshot
+}
+
+export interface ExchangeListing {
+  id: number
+  publicCode: string
+  instanceId?: number
+  status: ExchangeListingStatus
+  price: number
+  feeAmount: number
+  sellerReceivesAmount: number
+  description: string | null
+  autoDelistAt: string | null
+  listedAt: string
+  delistedAt: string | null
+  soldAt: string | null
+  instance: ExchangeInstanceSnapshot
+  snapshot?: ExchangeInstanceSnapshot
+  deliveryMode: 'reinstall_required'
+  privacyMode: 'anonymous'
+}
+
+export interface ExchangeDeliveryTask {
+  id: number
+  status: ExchangeDeliveryTaskStatus
+  step: string
+  progress: unknown
+  imageAlias?: string | null
+  sshKeyId?: number | null
+  error: string | null
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+export interface ExchangeOrder {
+  id: number
+  orderNo: string
+  listingId: number
+  instanceId: number
+  status: ExchangeOrderStatus
+  price: number
+  feeAmount: number
+  sellerReceivesAmount: number
+  escrowAmount: number
+  createdAt: string
+  paidAt?: string | null
+  deliveredAt?: string | null
+  confirmedAt?: string | null
+  confirmationDueAt?: string | null
+  completedAt: string | null
+  cancelledAt?: string | null
+  failureReason?: string | null
+  deliveryTask: ExchangeDeliveryTask | null
+  instance: ExchangeInstanceSnapshot
+  snapshot?: ExchangeInstanceSnapshot
+  deliveryMode: 'reinstall_required'
+  privacyMode: 'anonymous'
+}
+
+export interface ExchangeWallet {
+  id: number
+  availableAmount: number
+  frozenAmount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ExchangeWalletLog {
+  id: number
+  type: string
+  amount: number
+  availableBefore: number
+  availableAfter: number
+  frozenBefore: number
+  frozenAfter: number
+  orderId: number | null
+  withdrawalId: number | null
+  balanceLogId: number | null
+  remark: string | null
+  createdAt: string
+}
+
+export interface ExchangeWithdrawal {
+  id: number
+  withdrawalNo: string
+  amount: number
+  status: ExchangeWithdrawalStatus
+  method: string | null
+  applicantRemark: string | null
+  reviewRemark?: string | null
+  rejectReason: string | null
+  proofUrl?: string | null
+  createdAt: string
+  updatedAt?: string
+  reviewedAt: string | null
+  completedAt: string | null
+}
+
+export interface ExchangeDispute {
+  id: number
+  orderId: number
+  orderNo: string
+  orderStatus: ExchangeOrderStatus
+  orderPrice: number
+  status: ExchangeDisputeStatus
+  reason: string
+  detail: string | null
+  resolution: string | null
+  createdAt: string
+  resolvedAt: string | null
+}
+
 export type FlashSaleCampaignStatus = 'draft' | 'scheduled' | 'active' | 'paused' | 'ended' | 'cancelled'
 export type FlashSaleReservationStatus = 'paid' | 'delivering' | 'delivered' | 'failed' | 'refunded' | 'cancelled'
 

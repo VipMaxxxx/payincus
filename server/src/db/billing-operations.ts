@@ -21,6 +21,7 @@ import { shouldSyncInstanceSwapSizeWithPlan } from '../lib/instance-swap.js'
 import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
 import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
 import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 import { reservePlanUpgradeCapacityWithLock, type PlanUpgradeCapacityCheck } from './hosts.js'
 import {
   HOSTING_BALANCE_LOG_LOCK_NAMESPACE,
@@ -523,6 +524,13 @@ export function previewRenewPrices(
 
 // ==================== 业务操作函数 ====================
 
+async function assertInstanceNotExchangeLocked(instanceId: number): Promise<void> {
+  const exchangeLock = await getExchangeOperationLock(instanceId)
+  if (exchangeLock.locked) {
+    throw new Error(exchangeLock.message || '实例已上架交易所或存在未完成交易，不能执行该操作')
+  }
+}
+
 /**
  * 执行续费操作（带乐观锁并发控制）
  * 支持 AFF 优惠码折扣和返利
@@ -546,6 +554,8 @@ export async function performRenewal(
   if (instance.status === 'suspended' && instance.suspendReason !== 'expired') {
     throw new Error('实例已被手动封停，请联系宿主机所有者解封后再续费')
   }
+
+  await assertInstanceNotExchangeLocked(instance.id)
 
   const { amount: originalAmount, newExpiresAt } = calculateRenewBilling(instance, months)
 
@@ -754,6 +764,8 @@ export async function performPlanChange(
     throw new Error('不能切换到相同方案')
   }
 
+  await assertInstanceNotExchangeLocked(instance.id)
+
   // 计算升级差价
   const changeResult = await calculatePlanChange(instance, newPlan)
   const normalizedPlanTrafficLimitSpeed = normalizePlanTrafficLimitSpeed(newPlan.trafficLimitSpeed)
@@ -961,6 +973,8 @@ export async function updateAutoRenew(
   instanceId: number,
   autoRenew: boolean
 ): Promise<void> {
+  await assertInstanceNotExchangeLocked(instanceId)
+
   await prisma.instance.update({
     where: { id: instanceId },
     data: { autoRenew }

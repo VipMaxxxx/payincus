@@ -58,22 +58,29 @@ assert.ok(
     view.includes('不会执行支付、资源删除、Turnstile 变更或 OTA 回滚') &&
     view.includes('备份恢复演练') &&
     view.includes('不能覆盖生产数据') &&
-    view.includes('const completedProofItems = 13') &&
-    view.includes('const totalProofItems = 13') &&
-    view.includes('const remainingProofItems = 0') &&
-    view.includes('completedProofItems / totalProofItems') &&
-    view.includes('项验收口径已收口') &&
-    view.includes('当前无最终 Go blocker') &&
+    view.includes('const proofStats = computed') &&
+    view.includes('const closedProofItems = computed') &&
+    view.includes('const attentionProofItems = computed') &&
+    view.includes('closedProofItems.value / proofStats.value.total') &&
     view.includes("status: 'waived'") &&
+    view.includes("key: 'exchange'") &&
+    view.includes('交易所真实交割闭环') &&
+    view.includes("status: 'operator'") &&
+    view.includes('暂停实例挂牌、余额购买、托管、强制重装、匿名交割、确认期结算、提现审核和争议/退款路径') &&
+    view.includes('不得记录买卖双方身份、实例原数据、root 密码、SSH 私钥或完整回调内容') &&
     view.includes('Lsky 删除清理 proof 已按运营方决定排除出最终阻塞项。') &&
     view.includes('不要记录为已删除') &&
     view.includes('ENV_FILE=/opt/incudal/.env NODE_ENV=production node server/dist/scripts/lsky-production-proof.js') &&
+    view.includes('交易所 live E2E 记录模板') &&
+    view.includes('ENV_FILE=/opt/incudal/.env pnpm --filter server verify:production-db') &&
+    view.includes('卖家测试实例已暂停并通过交易所检测') &&
+    view.includes('交割任务完成强制重装、匿名重命名、owner 转移、买家账单重建、流量基线重置') &&
     view.includes('LIVE_LSKY_CLEANUP_WAIVER_REF="operator waiver ref"') &&
     view.includes('BACKEND_URL="$PRODUCTION_BACKEND_LOOPBACK_URL"') &&
     view.includes('ENV_FILE=/opt/incudal/.env PROOF_SINCE_HOURS=24 pnpm verify:production-proof-snapshot') &&
     view.includes('REQUIRE_LIVE_PROOF_REFS=1 pnpm verify:live-acceptance') &&
     view.includes('禁止写入审计记录的内容'),
-  'production proof workspace must explain read-only behavior, backup/restore boundaries, current proof progress, proof commands, final refs, and redaction rules'
+  'production proof workspace must explain read-only behavior, backup/restore boundaries, current proof progress, exchange live E2E operator proof, proof commands, final refs, and redaction rules'
 )
 
 const forbiddenExecutionMarkers = [

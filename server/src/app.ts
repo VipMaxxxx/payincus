@@ -105,6 +105,8 @@ import userLifecycleRoutes from './routes/user-lifecycle.js'
 import giftCardsRoutes from './routes/gift-cards.js'
 import resourceRiskRoutes from './routes/resource-risk.js'
 import flashSaleRoutes from './routes/flash-sales.js'
+import exchangeRoutes from './routes/exchange.js'
+import adminExchangeRoutes from './routes/admin-exchange.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -532,6 +534,8 @@ await fastify.register(userLifecycleRoutes)
 await fastify.register(giftCardsRoutes, { prefix: '/api/gift-cards' })
 await fastify.register(resourceRiskRoutes, { prefix: '/api' })
 await fastify.register(flashSaleRoutes, { prefix: '/api' })
+await fastify.register(exchangeRoutes, { prefix: '/api/exchange' })
+await fastify.register(adminExchangeRoutes, { prefix: '/api/admin/exchange' })
 
 const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
 
@@ -755,6 +759,11 @@ const start = async (): Promise<void> => {
     startInstanceTaskWorker()
     console.log('⚙️ 实例操作任务调度器已启动')
 
+    // 启动交易所交割 Worker
+    const { startExchangeDeliveryWorker, stopExchangeDeliveryWorker } = await import('./workers/exchangeDeliveryWorker.js')
+    startExchangeDeliveryWorker()
+    console.log('🏦 交易所交割队列已启动')
+
     // 启动备份恢复和远程上传队列 Worker
     const {
       cleanupStaleTasks: cleanupStaleRestoreTasks,
@@ -799,6 +808,7 @@ const start = async (): Promise<void> => {
       stopHostNotificationEmailWorker()
       stopRestoreWorker()
       stopBackupUploadWorker()
+      stopExchangeDeliveryWorker()
       
       // 清理所有活跃终端会话
       const { closeAllSessions } = await import('./lib/terminal-proxy.js')

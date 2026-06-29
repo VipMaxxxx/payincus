@@ -240,6 +240,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.resourceRisk', title: '资源风控' }
   },
   {
+    path: '/admin/exchange',
+    name: 'admin-exchange',
+    component: () => import('@/views/admin/ExchangeManageView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.exchangeManage', title: '交易所管理' }
+  },
+  {
     path: '/admin/production-proof',
     name: 'admin-production-proof',
     component: () => import('@/views/admin/ProductionProofView.vue'),
