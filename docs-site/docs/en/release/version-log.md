@@ -6,16 +6,36 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `9c5425c60`
+- Latest Release Commit / 最新发布提交: `aaaca037b`
 - Commit date / 提交日期: 2026-06-29
-- Commit subject / 提交说明: Release v1.1.7 exchange seller settlement privacy
-- Latest tag / 最新 tag: `v1.1.7`
+- Commit subject / 提交说明: Release v1.1.8 exchange dispute release atomicity
+- Latest tag / 最新 tag: `v1.1.8`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.1.8
+
+- Release commit / 发布提交: `aaaca037b`
+- Commit date / 提交日期: 2026-06-29
+- Commit subject / 提交说明: Release v1.1.8 exchange dispute release atomicity
+
+# v1.1.8
+
+## 修复
+
+- 修复交易所后台“争议人工放款”存在两段事务的问题：现在订单放款、卖家交易所余额入账、争议状态关闭、争议冻结解除流水和审计日志会在同一个事务内完成。
+- 如果历史上已经出现订单已放款但争议仍停留在 processing 的半完成状态，管理员再次处理时会只关闭争议并记录补救审计，不会重复给卖家放款。
+- 扩展交易所守卫，防止后续把争议放款重新拆回非原子流程。
+
+## 验证
+
+- `pnpm --filter server test:exchange-marketplace-guards`
+- `pnpm --filter server test:exchange-lifecycle-guards`
+- `pnpm --filter server type-check`
 
 ## v1.1.7
 
