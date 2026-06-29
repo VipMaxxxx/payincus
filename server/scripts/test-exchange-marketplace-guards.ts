@@ -1353,6 +1353,10 @@ assert(
 		adminExchangeViewSource.includes('不可交易原因') &&
 		adminExchangeViewSource.includes('金额/托管') &&
 		adminExchangeViewSource.includes('订单资金') &&
+		adminExchangeViewSource.includes('orderEscrowText(item.order)') &&
+		adminExchangeViewSource.includes('订单金额：{{ money(item.order.price) }} / 手续费 {{ money(item.order.feeAmount) }}') &&
+		adminExchangeRouteSource.includes('order: { select: { id: true, orderNo: true, status: true, price: true, escrowAmount: true, feeAmount: true } }') &&
+		adminExchangeRouteSource.includes('escrowAmount: toNumber(item.order.escrowAmount)') &&
 		adminExchangeViewSource.includes('重试 {{ item.retryCount || 0 }} 次') &&
 		adminExchangeViewSource.includes('开始 {{ formatDate(item.startedAt) }} / 完成 {{ formatDate(item.finishedAt) }}') &&
 			adminExchangeRouteSource.includes('const exchangeDeliveryProgressSteps') &&

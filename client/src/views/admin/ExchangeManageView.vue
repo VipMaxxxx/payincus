@@ -960,7 +960,8 @@ onMounted(loadActive)
             </td>
             <td class="p-3">
               <div>{{ statusLabel(item.status) }}</div>
-              <div class="mt-1 text-xs text-themed-muted">订单资金：{{ item.order?.status ? statusLabel(item.order.status) : '-' }}</div>
+              <div class="mt-1 text-xs text-themed-muted">订单资金：{{ item.order ? orderEscrowText(item.order) : '-' }}</div>
+              <div v-if="item.order" class="mt-1 text-xs text-themed-muted">订单金额：{{ money(item.order.price) }} / 手续费 {{ money(item.order.feeAmount) }}</div>
               <div v-if="item.error" class="mt-1 max-w-xs text-xs text-red-600">{{ item.error }}</div>
             </td>
             <td class="p-3 text-right">

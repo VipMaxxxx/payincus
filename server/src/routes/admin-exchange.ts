@@ -1348,13 +1348,21 @@ export default async function adminExchangeRoutes(fastify: FastifyInstance) {
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
-          order: { select: { id: true, orderNo: true, status: true } },
+          order: { select: { id: true, orderNo: true, status: true, price: true, escrowAmount: true, feeAmount: true } },
           instance: { select: { id: true, name: true, status: true } }
         }
       }),
       prisma.exchangeDeliveryTask.count({ where })
     ])
-    return pageResult(items, total, page, pageSize)
+    return pageResult(items.map(item => ({
+      ...item,
+      order: item.order ? {
+        ...item.order,
+        price: toNumber(item.order.price),
+        escrowAmount: toNumber(item.order.escrowAmount),
+        feeAmount: toNumber(item.order.feeAmount)
+      } : null
+    })), total, page, pageSize)
   })
 
   fastify.post('/delivery-tasks/:id/retry', {
