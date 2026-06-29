@@ -35,7 +35,7 @@ Latest product/docs release boundary at the time of this refresh:
 
 ## Latest GitHub Release Work
 
-`v1.2.4` is published on GitHub and has release artifacts. Production OTA has not yet been applied because the admin system-update API requires an authenticated administrator session and the Chrome extension was unavailable for reusing the current browser login. The latest proven production OTA remains task `#126` for `v1.2.3`.
+`v1.2.4` is published on GitHub and has release artifacts. Production OTA task `#127` deployed `v1.2.4` successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v1.2.4-20260629133409`.
 
 `v1.2.4` batches the latest Exchange Marketplace lock polish: instance detail auto-renew controls are disabled with an explicit Exchange lock warning while an instance is listed or delivering, and guard coverage now prevents reintroducing traffic-baseline reset wording or monthly traffic clearing in Exchange delivery.
 
@@ -51,9 +51,19 @@ GitHub Pages run 28373661722 -> success
 Version-log commit aee882fa generated docs/release/version-log.md and docs/en/release/version-log.md for v1.2.4
 GitHub CI run 28373722161 -> success for version-log commit
 GitHub Pages run 28373722158 -> success for version-log commit
-Production public https://pay.payincus.com/api/health -> HTTP 200 status ok before OTA
-Production public https://admin.payincus.com/api/health -> HTTP 200 status ok before OTA
-Admin system-update API without auth -> 401 Unauthorized; OTA pending authenticated admin session or current SSH credentials
+/opt/incudal/current -> /opt/incudal/releases/v1.2.4-20260629133409
+/opt/incudal/current/package.json version 1.2.4
+/opt/incudal/current/server/package.json version 1.2.4
+/opt/incudal/current/version.json -> version/tag v1.2.4, commit 7fd01ea2b356, deployedAt 2026-06-29T13:34:36.269Z
+systemctl is-active incudal-backend -> active
+local http://127.0.0.1:3001/api/health -> status ok
+public https://pay.payincus.com/api/health -> HTTP 200 status ok
+public https://admin.payincus.com/api/health -> HTTP 200 status ok
+system-update-127.log -> System update completed successfully
+system_update_tasks #127 -> status success, fromVersion v1.2.3, targetVersion v1.2.4, backupPath /opt/incudal/releases/v1.2.3-20260629123045, finishedAt 2026-06-29T13:35:46.671Z
+current-release verify-split-host -> passed during OTA
+current-release verify:production -> passed during OTA
+current-release verify:log-header -> passed during OTA
 ```
 
 `v1.2.3` is published on GitHub and has release artifacts. Production OTA task `#126` deployed `v1.2.3` successfully and switched `/opt/incudal/current` to `/opt/incudal/releases/v1.2.3-20260629123045`.
@@ -84,7 +94,22 @@ GitHub Pages run 28371822840 -> success
 
 ## Active Exchange Marketplace Work
 
-The current worktree contains the `v1.2.3` Exchange Marketplace implementation. Code, release, OTA, non-destructive production checks, and at least one real production Exchange delivery path have been proven. Remaining proof is narrower: keep capturing real dispute refund/release, seller settlement, withdrawal review, and rollback/retry evidence as those paths are exercised.
+The current production release contains the `v1.2.4` Exchange Marketplace implementation. Code, release, OTA, non-destructive production checks, and real production Exchange delivery/dispute/refund/rollback evidence have been proven. Remaining proof is narrower: keep capturing seller settlement after confirmation/administrator release and withdrawal review evidence as those paths are exercised.
+
+Latest production Exchange data snapshot after `v1.2.4` OTA:
+
+```text
+exchange_listings count 5; statuses: sold 1, delisted 1, force_delisted 3
+exchange_orders count 4; statuses: confirming 1, refunded 1, cancelled 2
+exchange_delivery_tasks count 4; statuses: COMPLETED 2, CANCELLED 2
+exchange_wallet_logs count 13; types: escrow_hold 4, escrow_refund 3, dispute_freeze 3, dispute_release 3
+exchange_disputes count 3; statuses: refunded 1, rejected 2
+exchange_audit_logs count 39; includes order.purchase, delivery.cleanup_access, delivery.reinstall_queued, delivery.transfer_owner, delivery.completed, delivery.failed, delivery.rollback, delivery.retry, dispute.freeze, dispute.reject, dispute.refund, order.cancel, order.refund
+latest completed delivery order EX8JBR93V1NP4O7E0MDI -> status confirming, delivery task COMPLETED step complete, buyer balance log present, escrow_hold wallet log present, confirmationDueAt 2026-06-30T12:46:01.370Z
+latest refunded dispute order EX4W0NCQR8DKSUVE607B -> status refunded, refundBalanceLogId present, escrow_refund wallet log present, dispute status refunded with dispute_release log
+withdrawals count 0; withdrawal manual-review path still needs real production evidence after a seller balance is available
+seller settlement walletLogId still null for confirming order until confirmation due time or administrator release
+```
 
 Implemented local scope:
 
