@@ -6,16 +6,34 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `5f45543e0`
+- Latest Release Commit / 最新发布提交: `1b3079211`
 - Commit date / 提交日期: 2026-06-29
-- Commit subject / 提交说明: Release v1.0.8 exchange marketplace
-- Latest tag / 最新 tag: `v1.0.8`
+- Commit subject / 提交说明: Release v1.0.9 exchange marketplace fixes
+- Latest tag / 最新 tag: `v1.0.9`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.0.9
+
+- Release commit / 发布提交: `1b3079211`
+- Commit date / 提交日期: 2026-06-29
+- Commit subject / 提交说明: Release v1.0.9 exchange marketplace fixes
+
+## v1.0.9
+
+Harden Exchange Marketplace purchase/display behavior and fix registration Turnstile retry UX.
+
+- Fix Exchange purchase secondary verification: `exchange_purchase` now accepts the listing ID as a scoped resource, so the sensitive verification modal can send and verify codes without the `Resource ID is not allowed for this operation` error.
+- Fix anonymous Exchange listing snapshots: the public market still hides the original instance ID/name and user identity fields, but keeps sale metadata such as node name, package name, and plan name for buyer inspection.
+- Add Exchange market package categories and package filtering. Market pagination now counts against the selected package category, while the category list is built from currently visible public listings.
+- Show renewal price on Exchange market cards and listing details, using the instance billing price and billing cycle snapshot.
+- Allow existing instances whose plan is inactive or sold out to be listed and purchased on the Exchange, because the trade is for remaining-use rights, not new stock.
+- Add a protected Exchange Marketplace smoke command. It defaults to read-only checks and requires explicit environment flags before any destructive listing, purchase, or delivery polling path can run.
+- Fix registration retry after Turnstile-protected failures such as an incorrect invite code: the page now resets only the Cloudflare challenge token and keeps the filled registration form intact.
 
 ## v1.0.8
 
