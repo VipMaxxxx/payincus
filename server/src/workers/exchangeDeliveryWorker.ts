@@ -5,7 +5,7 @@ import { createInstanceTask } from '../db/instance-tasks.js'
 import { createLog } from '../db/logs.js'
 import { getHostById } from '../db/hosts.js'
 import { getIncusClient } from '../lib/incus/index.js'
-import { removeDevice } from '../lib/incus/incus-instances.js'
+import { removeDevice, stopInstance } from '../lib/incus/incus-instances.js'
 import { renameInstance as renameIncusInstance } from '../lib/incus/incus-restore.js'
 import { createCaddyClient } from '../lib/caddy-client.js'
 import { closeInstanceSessions } from '../lib/terminal-proxy.js'
@@ -360,189 +360,191 @@ async function finalizeDelivery(taskId: number): Promise<void> {
   const host = await getHostById(renameContext.instance.hostId)
   if (!host) throw new Error('交割节点不存在，无法重命名实例')
   const client = await getIncusClient(host)
+  await stopInstance(client, oldIncusId, true)
   await renameIncusInstance(client, oldIncusId, newIncusId)
 
   try {
     await prisma.$transaction(async tx => {
-    const task = await tx.exchangeDeliveryTask.findUnique({
-      where: { id: taskId },
-      include: {
-        order: true,
-        instanceTask: true,
-        instance: { select: { expiresAt: true } }
-      }
-    })
-    if (!task) return
-    if (task.status !== 'PROCESSING') return
-    if (!task.instanceTask || task.instanceTask.status !== 'COMPLETED') {
-      throw new Error('实例重装任务尚未完成')
-    }
-    if (!['delivering', 'manual_review'].includes(task.order.status)) {
-      throw new Error(`订单状态不能完成交割：${task.order.status}`)
-    }
-
-    const [
-      portMappingsRemoved,
-      proxySitesRemoved,
-      snapshotsRemoved,
-      snapshotPoliciesRemoved,
-      backupPoliciesRemoved,
-      trafficSnapshotsRemoved,
-      dailyTrafficRowsRemoved,
-      resourceRiskStateRemoved,
-      resourceRiskEventsRemoved,
-      resourceRiskSamplesRemoved,
-      affBindingsRemoved,
-      cancelledTransfers
-    ] = await Promise.all([
-      tx.portMapping.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.proxySite.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.snapshot.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.snapshotPolicy.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.backupPolicy.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.trafficSnapshot.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.dailyTraffic.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.instanceRiskState.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.instanceRiskEvent.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.instanceResourceSample.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.affBinding.deleteMany({ where: { instanceId: task.instanceId } }),
-      tx.instanceTransfer.updateMany({
-      where: { instanceId: task.instanceId, status: { in: ['pending', 'processing'] } },
-      data: { status: 'cancelled', cancelledAt: new Date() }
+      const task = await tx.exchangeDeliveryTask.findUnique({
+        where: { id: taskId },
+        include: {
+          order: true,
+          instanceTask: true,
+          instance: { select: { expiresAt: true } }
+        }
       })
-    ])
+      if (!task) return
+      if (task.status !== 'PROCESSING') return
+      if (!task.instanceTask || task.instanceTask.status !== 'COMPLETED') {
+        throw new Error('实例重装任务尚未完成')
+      }
+      if (!['delivering', 'manual_review'].includes(task.order.status)) {
+        throw new Error(`订单状态不能完成交割：${task.order.status}`)
+      }
 
-    const deliveredAt = new Date()
-    await tx.instance.update({
-      where: { id: task.instanceId },
-      data: {
-	        userId: task.buyerUserId,
+      const [
+        portMappingsRemoved,
+        proxySitesRemoved,
+        snapshotsRemoved,
+        snapshotPoliciesRemoved,
+        backupPoliciesRemoved,
+        trafficSnapshotsRemoved,
+        dailyTrafficRowsRemoved,
+        resourceRiskStateRemoved,
+        resourceRiskEventsRemoved,
+        resourceRiskSamplesRemoved,
+        affBindingsRemoved,
+        cancelledTransfers
+      ] = await Promise.all([
+        tx.portMapping.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.proxySite.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.snapshot.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.snapshotPolicy.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.backupPolicy.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.trafficSnapshot.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.dailyTraffic.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.instanceRiskState.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.instanceRiskEvent.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.instanceResourceSample.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.affBinding.deleteMany({ where: { instanceId: task.instanceId } }),
+        tx.instanceTransfer.updateMany({
+          where: { instanceId: task.instanceId, status: { in: ['pending', 'processing'] } },
+          data: { status: 'cancelled', cancelledAt: new Date() }
+        })
+      ])
+
+      const deliveredAt = new Date()
+      await tx.instance.update({
+        where: { id: task.instanceId },
+        data: {
+          userId: task.buyerUserId,
           incusId: newIncusId,
           name: newDisplayName,
+          status: 'stopped',
           displayOrder: 0,
-	        monthlyTrafficUsed: 0,
-	        trafficStatus: 'NORMAL',
-	        restoredFrom: Prisma.JsonNull,
-	        autoRenew: false,
-	        autoRenewAttempts: 0,
-	        lastAutoRenewAttemptAt: null,
-	        expiryNotifiedAt: null,
-	        cloudInitState: null,
-	        cloudInitSource: null,
-	        cloudInitLastCheckedAt: null,
-	        cloudInitCompletedAt: null,
-	        cloudInitManualCompletedAt: null,
-	        cloudInitManualCompletedBy: null
-      }
-	    })
-    const buyerBillingRecord = await tx.instanceBillingRecord.create({
-      data: {
-        instanceId: task.instanceId,
-        userId: task.buyerUserId,
-        type: 'newPurchase',
-        amount: task.order.price,
-        months: 0,
-        periodStart: deliveredAt,
-        periodEnd: task.instance.expiresAt && task.instance.expiresAt > deliveredAt ? task.instance.expiresAt : deliveredAt,
-        balanceLogId: task.order.buyerBalanceLogId,
-        remark: `交易所购买 ${task.order.orderNo}`
-      }
-    })
-	    await tx.exchangeDeliveryTask.update({
-	      where: { id: taskId },
-	      data: {
-	        step: 'transfer_owner',
-	        progress: taskProgress('transfer_owner', { instanceTaskId: task.instanceTaskId })
-	      }
-	    })
-	    await tx.exchangeAuditLog.create({
-      data: {
-        actorUserId: null,
-        action: 'delivery.transfer_owner',
-        targetType: 'exchange_delivery_task',
-        targetId: taskId,
-        detail: {
-	          orderId: task.orderId,
-	          instanceId: task.instanceId,
-	          buyerUserId: task.buyerUserId,
-	          sellerUserId: task.sellerUserId,
-            oldIncusId,
-            newIncusId,
-            newDisplayName,
-	          cleanupAfterReinstall: {
-            portMappingsRemoved: portMappingsRemoved.count,
-            proxySitesRemoved: proxySitesRemoved.count,
-            snapshotsRemoved: snapshotsRemoved.count,
-            snapshotPoliciesRemoved: snapshotPoliciesRemoved.count,
-            backupPoliciesRemoved: backupPoliciesRemoved.count,
-            trafficSnapshotsRemoved: trafficSnapshotsRemoved.count,
-            dailyTrafficRowsRemoved: dailyTrafficRowsRemoved.count,
-            resourceRiskStateRemoved: resourceRiskStateRemoved.count,
-            resourceRiskEventsRemoved: resourceRiskEventsRemoved.count,
-            resourceRiskSamplesRemoved: resourceRiskSamplesRemoved.count,
-            affBindingsRemoved: affBindingsRemoved.count,
-            cancelledTransfers: cancelledTransfers.count
-          }
-	        }
-	      }
-	    })
-	    await tx.exchangeDeliveryTask.update({
-	      where: { id: taskId },
-	      data: {
-	        step: 'rebuild_billing',
-	        progress: taskProgress('rebuild_billing', { instanceTaskId: task.instanceTaskId })
-	      }
-	    })
-	    await tx.exchangeDeliveryTask.update({
-	      where: { id: taskId },
-	      data: {
-        step: 'reset_traffic_baseline',
-        progress: taskProgress('reset_traffic_baseline', { instanceTaskId: task.instanceTaskId })
-      }
-    })
-    const policy = await tx.exchangePolicyConfig.findFirst({ orderBy: { id: 'asc' } })
-    const confirmationHours = Math.max(0, policy?.confirmationHours ?? 24)
-    const confirmationDueAt = new Date(Date.now() + confirmationHours * 60 * 60 * 1000)
-    await tx.exchangeOrder.update({
-      where: { id: task.orderId },
-      data: {
-        status: 'confirming',
-        confirmationDueAt,
-        failureReason: null
-      }
-    })
-    await tx.exchangeListing.update({
-      where: { id: task.order.listingId },
-      data: { status: 'sold' }
-    })
-    await tx.exchangeDeliveryTask.update({
-      where: { id: taskId },
-      data: {
-        status: 'COMPLETED',
-        step: 'complete',
-        progress: taskProgress('complete', { instanceTaskId: task.instanceTaskId }),
-        error: null,
-        finishedAt: new Date()
-      }
-    })
-    await tx.exchangeAuditLog.create({
-      data: {
-        actorUserId: null,
-        action: 'delivery.completed',
-        targetType: 'exchange_order',
-        targetId: task.orderId,
-        detail: {
-          deliveryTaskId: task.id,
-	          instanceTaskId: task.instanceTaskId,
+          monthlyTrafficUsed: 0,
+          trafficStatus: 'NORMAL',
+          restoredFrom: Prisma.JsonNull,
+          autoRenew: false,
+          autoRenewAttempts: 0,
+          lastAutoRenewAttemptAt: null,
+          expiryNotifiedAt: null,
+          cloudInitState: null,
+          cloudInitSource: null,
+          cloudInitLastCheckedAt: null,
+          cloudInitCompletedAt: null,
+          cloudInitManualCompletedAt: null,
+          cloudInitManualCompletedBy: null
+        }
+      })
+      const buyerBillingRecord = await tx.instanceBillingRecord.create({
+        data: {
+          instanceId: task.instanceId,
+          userId: task.buyerUserId,
+          type: 'newPurchase',
+          amount: task.order.price,
+          months: 0,
+          periodStart: deliveredAt,
+          periodEnd: task.instance.expiresAt && task.instance.expiresAt > deliveredAt ? task.instance.expiresAt : deliveredAt,
+          balanceLogId: task.order.buyerBalanceLogId,
+          remark: `交易所购买 ${task.order.orderNo}`
+        }
+      })
+      await tx.exchangeDeliveryTask.update({
+        where: { id: taskId },
+        data: {
+          step: 'transfer_owner',
+          progress: taskProgress('transfer_owner', { instanceTaskId: task.instanceTaskId })
+        }
+      })
+      await tx.exchangeAuditLog.create({
+        data: {
+          actorUserId: null,
+          action: 'delivery.transfer_owner',
+          targetType: 'exchange_delivery_task',
+          targetId: taskId,
+          detail: {
+            orderId: task.orderId,
             instanceId: task.instanceId,
             buyerUserId: task.buyerUserId,
-	            sellerUserId: task.sellerUserId,
+            sellerUserId: task.sellerUserId,
             oldIncusId,
             newIncusId,
             newDisplayName,
-		            rootPasswordRotatedByReinstall: true,
-	            buyerSshKeyInjected: !!task.sshKeyId,
-	            buyerSshKeyId: task.sshKeyId || null,
+            cleanupAfterReinstall: {
+              portMappingsRemoved: portMappingsRemoved.count,
+              proxySitesRemoved: proxySitesRemoved.count,
+              snapshotsRemoved: snapshotsRemoved.count,
+              snapshotPoliciesRemoved: snapshotPoliciesRemoved.count,
+              backupPoliciesRemoved: backupPoliciesRemoved.count,
+              trafficSnapshotsRemoved: trafficSnapshotsRemoved.count,
+              dailyTrafficRowsRemoved: dailyTrafficRowsRemoved.count,
+              resourceRiskStateRemoved: resourceRiskStateRemoved.count,
+              resourceRiskEventsRemoved: resourceRiskEventsRemoved.count,
+              resourceRiskSamplesRemoved: resourceRiskSamplesRemoved.count,
+              affBindingsRemoved: affBindingsRemoved.count,
+              cancelledTransfers: cancelledTransfers.count
+            }
+          }
+        }
+      })
+      await tx.exchangeDeliveryTask.update({
+        where: { id: taskId },
+        data: {
+          step: 'rebuild_billing',
+          progress: taskProgress('rebuild_billing', { instanceTaskId: task.instanceTaskId })
+        }
+      })
+      await tx.exchangeDeliveryTask.update({
+        where: { id: taskId },
+        data: {
+          step: 'reset_traffic_baseline',
+          progress: taskProgress('reset_traffic_baseline', { instanceTaskId: task.instanceTaskId })
+        }
+      })
+      const policy = await tx.exchangePolicyConfig.findFirst({ orderBy: { id: 'asc' } })
+      const confirmationHours = Math.max(0, policy?.confirmationHours ?? 24)
+      const confirmationDueAt = new Date(Date.now() + confirmationHours * 60 * 60 * 1000)
+      await tx.exchangeOrder.update({
+        where: { id: task.orderId },
+        data: {
+          status: 'confirming',
+          confirmationDueAt,
+          failureReason: null
+        }
+      })
+      await tx.exchangeListing.update({
+        where: { id: task.order.listingId },
+        data: { status: 'sold' }
+      })
+      await tx.exchangeDeliveryTask.update({
+        where: { id: taskId },
+        data: {
+          status: 'COMPLETED',
+          step: 'complete',
+          progress: taskProgress('complete', { instanceTaskId: task.instanceTaskId }),
+          error: null,
+          finishedAt: new Date()
+        }
+      })
+      await tx.exchangeAuditLog.create({
+        data: {
+          actorUserId: null,
+          action: 'delivery.completed',
+          targetType: 'exchange_order',
+          targetId: task.orderId,
+          detail: {
+            deliveryTaskId: task.id,
+            instanceTaskId: task.instanceTaskId,
+            instanceId: task.instanceId,
+            buyerUserId: task.buyerUserId,
+            sellerUserId: task.sellerUserId,
+            oldIncusId,
+            newIncusId,
+            newDisplayName,
+            rootPasswordRotatedByReinstall: true,
+            buyerSshKeyInjected: !!task.sshKeyId,
+            buyerSshKeyId: task.sshKeyId || null,
             generatedRootPasswordForBuyer: true,
             cloudInitStateResetForBuyer: true,
             oldBillingRecordsKeptWithSeller: true,

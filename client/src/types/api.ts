@@ -1866,15 +1866,25 @@ export type ExchangeDisputeStatus = 'open' | 'processing' | 'rejected' | 'refund
 
 export interface ExchangePublicConfig {
   enabled: boolean
+  minRemainingDays: number
+  expiringSoonDays: number
   minPrice: number
   maxPrice: number | null
+  maxMarkupPercent: number
   feePercent: number
   minFee: number
   maxFee: number | null
   confirmationHours: number
+  autoConfirmEnabled: boolean
   allowBuyerImageSelection: boolean
   allowBalanceTransfer: boolean
+  allowPublicIpTransfer: boolean
   withdrawalMinAmount: number
+  dailyWithdrawalLimit: number | null
+  dailyWithdrawalCountLimit: number
+  maxActiveListingsPerUser: number
+  maxPurchasesPerUserPerDay: number
+  disputeTimeoutHours: number
 }
 
 export interface ExchangeInstanceSnapshot {

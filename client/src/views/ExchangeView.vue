@@ -76,15 +76,25 @@ const availableImages = ref<SystemImage[]>([])
 const sshKeys = ref<SshKey[]>([])
 const exchangeConfig = ref<ExchangePublicConfig>({
   enabled: false,
+  minRemainingDays: 7,
+  expiringSoonDays: 7,
   minPrice: 0,
   maxPrice: null,
+  maxMarkupPercent: 150,
   feePercent: 0,
   minFee: 0,
   maxFee: null,
   confirmationHours: 24,
+  autoConfirmEnabled: true,
   allowBuyerImageSelection: false,
   allowBalanceTransfer: true,
-  withdrawalMinAmount: 0
+  allowPublicIpTransfer: true,
+  withdrawalMinAmount: 0,
+  dailyWithdrawalLimit: null,
+  dailyWithdrawalCountLimit: 3,
+  maxActiveListingsPerUser: 5,
+  maxPurchasesPerUserPerDay: 5,
+  disputeTimeoutHours: 72
 })
 const purchaseForm = ref({
   imageAlias: '',
@@ -468,6 +478,18 @@ function createIdempotencyKey(scope: string): string {
 
 function needsExchangeVerification(err: any): boolean {
   return err?.code === 'EXCHANGE_OPERATION_VERIFICATION_REQUIRED'
+}
+
+function policyFeeSummary(): string {
+  const maxFee = exchangeConfig.value.maxFee === null ? '不封顶' : `最高 ${money(exchangeConfig.value.maxFee)}`
+  return `${exchangeConfig.value.feePercent}% 手续费，最低 ${money(exchangeConfig.value.minFee)}，${maxFee}`
+}
+
+function policyWithdrawalSummary(): string {
+  const dailyLimit = exchangeConfig.value.dailyWithdrawalLimit === null
+    ? '每日金额不限'
+    : `每日金额上限 ${money(exchangeConfig.value.dailyWithdrawalLimit)}`
+  return `最低 ${money(exchangeConfig.value.withdrawalMinAmount)}，每日最多 ${exchangeConfig.value.dailyWithdrawalCountLimit} 次，${dailyLimit}`
 }
 
 function openSensitiveVerification(action: PendingSensitiveAction): void {
@@ -1129,6 +1151,35 @@ onMounted(async () => {
     <div class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
       上架前必须先暂停实例；成交后原系统和数据不可恢复。买卖双方互不可见，提现进入人工审核。
     </div>
+
+    <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+        <div class="font-medium text-themed">交易费率</div>
+        <p class="mt-1 text-themed-muted">{{ policyFeeSummary() }}</p>
+      </div>
+      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+        <div class="font-medium text-themed">交割确认</div>
+        <p class="mt-1 text-themed-muted">
+          确认期 {{ exchangeConfig.confirmationHours }} 小时，{{ exchangeConfig.autoConfirmEnabled ? '到期无争议自动放款' : '需平台人工确认放款' }}
+        </p>
+      </div>
+      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+        <div class="font-medium text-themed">提现规则</div>
+        <p class="mt-1 text-themed-muted">{{ policyWithdrawalSummary() }}</p>
+      </div>
+      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+        <div class="font-medium text-themed">交易限制</div>
+        <p class="mt-1 text-themed-muted">
+          每用户最多 {{ exchangeConfig.maxActiveListingsPerUser }} 个挂牌，每日最多购买 {{ exchangeConfig.maxPurchasesPerUserPerDay }} 次
+        </p>
+      </div>
+      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm md:col-span-2 xl:col-span-4">
+        <div class="font-medium text-themed">准入和交割策略</div>
+        <p class="mt-1 text-themed-muted">
+          最低剩余 {{ exchangeConfig.minRemainingDays }} 天，{{ exchangeConfig.expiringSoonDays }} 天内到期不可挂牌；最高溢价 {{ exchangeConfig.maxMarkupPercent }}%；独立 IP {{ exchangeConfig.allowPublicIpTransfer ? '允许随实例转让' : '不允许随实例转让' }}；买家自选镜像 {{ exchangeConfig.allowBuyerImageSelection ? '已开放' : '未开放' }}；争议超时 {{ exchangeConfig.disputeTimeoutHours }} 小时。
+        </p>
+      </div>
+    </section>
 
     <div class="flex flex-wrap gap-2">
       <button

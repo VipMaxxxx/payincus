@@ -495,15 +495,25 @@ export async function getPublicExchangePolicy() {
   const policy = await getPolicy()
   return {
     enabled: policy.enabled,
+    minRemainingDays: policy.minRemainingDays,
+    expiringSoonDays: policy.expiringSoonDays,
     minPrice: toNumber(policy.minPrice),
     maxPrice: policy.maxPrice === null ? null : toNumber(policy.maxPrice),
+    maxMarkupPercent: policy.maxMarkupPercent,
     feePercent: toNumber(policy.feePercent),
     minFee: toNumber(policy.minFee),
     maxFee: policy.maxFee === null ? null : toNumber(policy.maxFee),
     confirmationHours: policy.confirmationHours,
+    autoConfirmEnabled: policy.autoConfirmEnabled,
     allowBuyerImageSelection: policy.allowBuyerImageSelection,
     allowBalanceTransfer: policy.allowBalanceTransfer,
-    withdrawalMinAmount: toNumber(policy.minWithdrawalAmount)
+    allowPublicIpTransfer: policy.allowPublicIpTransfer,
+    withdrawalMinAmount: toNumber(policy.minWithdrawalAmount),
+    dailyWithdrawalLimit: policy.dailyWithdrawalLimit === null ? null : toNumber(policy.dailyWithdrawalLimit),
+    dailyWithdrawalCountLimit: policy.dailyWithdrawalCountLimit,
+    maxActiveListingsPerUser: policy.maxActiveListingsPerUser,
+    maxPurchasesPerUserPerDay: policy.maxPurchasesPerUserPerDay,
+    disputeTimeoutHours: policy.disputeTimeoutHours
   }
 }
 

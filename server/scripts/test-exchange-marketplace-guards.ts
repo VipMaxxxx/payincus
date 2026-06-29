@@ -536,11 +536,13 @@ assertSourceOrder(
     "if (!renameContext.instanceTask || renameContext.instanceTask.status !== 'COMPLETED')",
     'const oldIncusId = renameContext.instance.incusId',
     'const newIncusId = buildBuyerIncusId(renameContext.buyerUserId)',
+    'await stopInstance(client, oldIncusId, true)',
     'await renameIncusInstance(client, oldIncusId, newIncusId)',
     'await prisma.$transaction',
     'userId: task.buyerUserId',
     'incusId: newIncusId',
     'name: newDisplayName',
+    "status: 'stopped'",
     "type: 'newPurchase'",
     "step: 'reset_traffic_baseline'",
     "status: 'confirming'",
@@ -671,9 +673,15 @@ assert(
 
 assert(
   exchangeServiceSource.includes('export async function getPublicExchangePolicy') &&
+    exchangeServiceSource.includes('minRemainingDays: policy.minRemainingDays') &&
+    exchangeServiceSource.includes('expiringSoonDays: policy.expiringSoonDays') &&
+    exchangeServiceSource.includes('maxMarkupPercent: policy.maxMarkupPercent') &&
     exchangeServiceSource.includes('allowBuyerImageSelection: policy.allowBuyerImageSelection') &&
     exchangeServiceSource.includes('allowBalanceTransfer: policy.allowBalanceTransfer') &&
-    exchangeServiceSource.includes('withdrawalMinAmount: toNumber(policy.minWithdrawalAmount)'),
+    exchangeServiceSource.includes('allowPublicIpTransfer: policy.allowPublicIpTransfer') &&
+    exchangeServiceSource.includes('withdrawalMinAmount: toNumber(policy.minWithdrawalAmount)') &&
+    exchangeServiceSource.includes('dailyWithdrawalCountLimit: policy.dailyWithdrawalCountLimit') &&
+    exchangeServiceSource.includes('maxPurchasesPerUserPerDay: policy.maxPurchasesPerUserPerDay'),
   'exchange service must expose a non-sensitive public policy summary for user purchase and wallet UI'
 )
 
@@ -920,6 +928,12 @@ assert(
 			!userExchangeViewSource.includes('window.confirm') &&
 			userExchangeViewSource.includes('交割已完成，确认期截止') &&
 			userExchangeViewSource.includes('确认期结束后托管款扣除手续费进入卖家交易所余额') &&
+			userExchangeViewSource.includes('policyFeeSummary') &&
+			userExchangeViewSource.includes('policyWithdrawalSummary') &&
+			userExchangeViewSource.includes('交易费率') &&
+			userExchangeViewSource.includes('交割确认') &&
+			userExchangeViewSource.includes('交易限制') &&
+			userExchangeViewSource.includes('准入和交割策略') &&
 			userExchangeViewSource.includes('匿名交易') &&
 			userExchangeViewSource.includes('强制重装交割') &&
 			userExchangeViewSource.includes('资金托管') &&
