@@ -48,6 +48,12 @@ const enLocaleSource = readFileSync(new URL('../../client/src/locales/en.ts', im
 const zhTwLocaleSource = readFileSync(new URL('../../client/src/locales/zh-TW.ts', import.meta.url), 'utf8')
 const adminRouteGuardSource = readFileSync(new URL('./test-admin-route-guards.ts', import.meta.url), 'utf8')
 
+const instancesExchangeStateLoaderSource = sourceBetween(
+  instancesViewSource,
+  'async function loadExchangeListingStates(): Promise<void> {',
+  'function toggleSelectAll(): void {'
+)
+
 function assert(condition: unknown, message: string): void {
   if (!condition) {
     console.error(message)
@@ -1168,10 +1174,12 @@ assert(
     instancesViewSource.includes('!!instance.packagePlanId && !isInstanceExchangeLocked(instance)') &&
     countOccurrences(instancesViewSource, 'selectedBillingActionIds.value') >= 3 &&
     countOccurrences(instancesViewSource, 'selectedBillingActionIds.length === 0') >= 3 &&
+    instancesExchangeStateLoaderSource.includes('instances.value.map(instance => instance.id)') &&
+    instancesExchangeStateLoaderSource.includes('api.exchange.getInstanceListing(instanceId)') &&
+    !instancesExchangeStateLoaderSource.includes('api.exchange.myListings') &&
     instancesViewSource.includes('canStartInstance') &&
     instancesViewSource.includes('canDeleteInstance') &&
     instancesViewSource.includes('canTransferInstance') &&
-    instancesViewSource.includes("['active', 'paused', 'locked', 'delivery_failed'].includes(item.status)") &&
     instancesViewSource.includes("['active', 'paused', 'locked', 'delivery_failed'].includes(listing.status)") &&
     instancesViewSource.includes('交易所挂牌中') &&
     instancesViewSource.includes('交易所暂停中') &&

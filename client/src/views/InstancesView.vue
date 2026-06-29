@@ -432,12 +432,29 @@ async function loadInstances(force = false): Promise<void> {
 }
 
 async function loadExchangeListingStates(): Promise<void> {
+  const visibleInstanceIds = instances.value.map(instance => instance.id).filter(id => Number.isFinite(id))
+  if (visibleInstanceIds.length === 0) {
+    exchangeListingsByInstanceId.value = {}
+    return
+  }
+
   try {
-    const response = await api.exchange.myListings({ page: 1, pageSize: 100 })
-    const activeListings = (response.items || []).filter(item => ['active', 'paused', 'locked', 'delivery_failed'].includes(item.status))
-    exchangeListingsByInstanceId.value = activeListings.reduce<Record<number, ExchangeListing>>((acc, listing) => {
-      if (listing.instanceId) {
-        acc[listing.instanceId] = listing
+    const entries = await Promise.all(visibleInstanceIds.map(async instanceId => {
+      try {
+        const response = await api.exchange.getInstanceListing(instanceId)
+        const listing = response.listing
+        if (listing && ['active', 'paused', 'locked', 'delivery_failed'].includes(listing.status)) {
+          return [instanceId, listing] as const
+        }
+      } catch {
+        // 单个实例状态读取失败时不影响其他可见实例的交易锁定标识。
+      }
+      return null
+    }))
+
+    exchangeListingsByInstanceId.value = entries.reduce<Record<number, ExchangeListing>>((acc, entry) => {
+      if (entry) {
+        acc[entry[0]] = entry[1]
       }
       return acc
     }, {})
