@@ -897,6 +897,7 @@ assert(
 const refundOrderSection = sourceBetween(adminExchangeRouteSource, 'async function refundExchangeOrder', 'async function freezeExchangeOrder')
 const refundReturnSection = sourceBetween(adminExchangeRouteSource, 'async function returnDeliveredExchangeInstanceForRefund', 'async function refundExchangeOrder')
 const manualCompleteSection = sourceBetween(adminExchangeRouteSource, 'async function completeDeliveryTaskManually', 'async function claimExchangeDisputeForProcessing')
+const adminDisputeRefundRoute = routeBlock(adminExchangeRouteSource, "'/disputes/:id/refund'")
 assertSourceOrder(
   refundReturnSection,
   [
@@ -915,6 +916,19 @@ assertSourceOrder(
 assertSourceOrder(
   refundOrderSection,
   [
+    'resolveDispute?: {',
+    'existingOrder?.status === targetStatus',
+    'alreadyRefunded: true',
+    'const instanceReturn = await returnDeliveredExchangeInstanceForRefund',
+    'const resolved = await tx.exchangeDispute.updateMany',
+    "status: 'refunded'",
+    'disputeReleaseWalletLogId: disputeReleaseLog?.id ?? null'
+  ],
+  'admin exchange dispute refund must close the dispute inside the refund transaction and repair already-refunded half-complete states without double refunding'
+)
+assertSourceOrder(
+  refundOrderSection,
+  [
     'const instanceReturn = await returnDeliveredExchangeInstanceForRefund',
     'const orderLocked = await tryAdvisoryTransactionLock',
     "status: 'manual_review'",
@@ -927,6 +941,13 @@ assertSourceOrder(
     'deliveredBuyerInstanceReturned: instanceReturn.returned'
   ],
   'admin exchange refund must return delivered instances first, lock the order, refund buyer balance, write billing/wallet/audit logs, and keep the old suspend fallback for non-returned delivered state'
+)
+assert(
+  adminDisputeRefundRoute.includes("await refundExchangeOrder(dispute.orderId, user.id, resolution, 'refunded', {") &&
+    adminDisputeRefundRoute.includes('disputeId: id') &&
+    !adminDisputeRefundRoute.includes('recordExchangeDisputeWalletReleaseInTransaction(tx') &&
+    adminDisputeRefundRoute.includes('prisma.exchangeDispute.findUniqueOrThrow'),
+  'admin dispute refund route must delegate dispute closure to refundExchangeOrder instead of running a second post-refund transaction'
 )
 assertSourceOrder(
   manualCompleteSection,
