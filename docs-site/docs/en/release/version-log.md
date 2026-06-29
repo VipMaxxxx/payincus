@@ -6,16 +6,40 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `7fd01ea2b`
+- Latest Release Commit / 最新发布提交: `30e81c439`
 - Commit date / 提交日期: 2026-06-29
-- Commit subject / 提交说明: Release v1.2.4 exchange lock polish
-- Latest tag / 最新 tag: `v1.2.4`
+- Commit subject / 提交说明: Release v1.2.5 exchange manual settlement
+- Latest tag / 最新 tag: `v1.2.5`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.2.5
+
+- Release commit / 发布提交: `30e81c439`
+- Commit date / 提交日期: 2026-06-29
+- Commit subject / 提交说明: Release v1.2.5 exchange manual settlement
+
+# v1.2.5
+
+## 修复
+
+- 交易所后台订单管理新增普通订单“人工放款”入口，管理员可以在确认期、已交割或人工复核状态下主动结算托管款到卖家交易所余额。
+- 人工放款会复用交易所托管结算链路，写入订单审计、卖家交易所余额流水和卖家侧操作日志，避免人工处理绕过资金流水。
+- 如果订单存在未完结争议，普通人工放款会被拒绝，必须进入争议管理按争议放款或退款流程处理，避免绕开争议冻结。
+- 补强交易所生命周期守卫，覆盖自动确认结算、普通人工放款、提现审核完成凭证和提现拒绝退回等资金路径。
+
+## 验证
+
+- `pnpm --filter server test:exchange-lifecycle-guards`
+- `pnpm --filter server test:exchange-marketplace-guards`
+- `pnpm --filter server type-check`
+- `pnpm --filter client type-check`
+- `pnpm build`
+- `git diff --check`
 
 ## v1.2.4
 
