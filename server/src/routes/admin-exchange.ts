@@ -788,6 +788,25 @@ async function freezeExchangeOrder(orderId: number, actorUserId: number, reason:
   })
 }
 
+async function releaseExchangeOrderManually(orderId: number, actorUserId: number, reason: string) {
+  const activeDispute = await prisma.exchangeDispute.findFirst({
+    where: {
+      orderId,
+      status: { in: [...activeDisputeStatuses] }
+    },
+    select: { id: true }
+  })
+  if (activeDispute) {
+    throw new Error('订单存在未完结争议，请在争议管理中放款结案')
+  }
+  return releaseExchangeOrderEscrow(orderId, {
+    actorUserId,
+    action: 'order.manual_release',
+    remark: `管理员人工放款：${reason}`,
+    allowedStatuses: ['confirming', 'delivered', 'manual_review']
+  })
+}
+
 async function markDeliveryTaskManual(
   taskId: number,
   actorUserId: number,
@@ -1306,6 +1325,32 @@ export default async function adminExchangeRoutes(fastify: FastifyInstance) {
       }
     } catch (error: any) {
       return reply.code(400).send({ error: error?.message || '冻结订单失败' })
+    }
+  })
+
+  fastify.post('/orders/:id/release', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request, reply) => {
+    const id = parsePositiveId((request.params as { id?: string }).id)
+    if (!id) return reply.code(400).send({ error: '订单 ID 无效' })
+    const user = request.user as { id: number }
+    const body = request.body as { reason?: string } | undefined
+    const reason = normalizeText(body?.reason, '')
+    if (!reason) return reply.code(400).send({ error: '人工放款原因不能为空' })
+    try {
+      const order = await releaseExchangeOrderManually(id, user.id, reason)
+      await createLog(order.sellerUserId, 'exchange', 'exchange.order.completed', `交易所订单 ${order.orderNo} 已由管理员人工放款`, 'success', { instanceId: order.instanceId })
+      return {
+        order: {
+          ...order,
+          price: toNumber(order.price),
+          feeAmount: toNumber(order.feeAmount),
+          sellerReceivesAmount: toNumber(order.sellerReceivesAmount),
+          escrowAmount: toNumber(order.escrowAmount)
+        }
+      }
+    } catch (error: any) {
+      return reply.code(400).send({ error: error?.message || '人工放款失败' })
     }
   })
 

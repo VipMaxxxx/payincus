@@ -72,6 +72,21 @@ const finalizeDeliverySection = sourceBetween(
   'async function finalizeDelivery',
   'async function settleDueConfirmingOrders'
 )
+const settlementWorkerSection = sourceBetween(
+  exchangeDeliveryWorkerSource,
+  'async function settleDueConfirmingOrders',
+  'async function autoDelistExpiredListings'
+)
+const adminWithdrawalSection = sourceBetween(
+  adminExchangeRouteSource,
+  "fastify.get('/withdrawals'",
+  "fastify.get('/wallets'"
+)
+const adminOrderSection = sourceBetween(
+  adminExchangeRouteSource,
+  "fastify.get('/orders'",
+  "fastify.get('/delivery-tasks'"
+)
 
 for (const model of [
   'ExchangeListing',
@@ -187,6 +202,42 @@ assert(
 )
 
 assertSourceOrder(
+  settlementWorkerSection,
+  [
+    'if (policy && !policy.autoConfirmEnabled)',
+    "status: 'confirming'",
+    'walletLogId: null',
+    'confirmationDueAt: { lte: new Date() }',
+    'await releaseExchangeOrderEscrow(order.id',
+    "action: 'order.auto_confirm'",
+    "remark: `交易所订单 ${order.orderNo} 确认期结束，自动放款`",
+    "createLog(order.sellerUserId, 'exchange', 'exchange.order.completed'"
+  ],
+  'exchange settlement worker must honor auto-confirm policy, only release due confirming orders once, and leave seller-facing completion evidence'
+)
+
+assert(
+  settlementWorkerSection.includes('take: DELIVERY_BATCH_SIZE') &&
+    settlementWorkerSection.includes('orderBy: [') &&
+    settlementWorkerSection.includes("{ confirmationDueAt: 'asc' }") &&
+    settlementWorkerSection.includes("{ id: 'asc' }") &&
+    exchangeDeliveryWorkerSource.includes('await settleDueConfirmingOrders()'),
+  'exchange settlement worker must process due confirmations in deterministic batches from the active worker loop'
+)
+
+assert(
+  adminOrderSection.includes("fastify.post('/orders/:id/release'") &&
+    adminOrderSection.includes('releaseExchangeOrderManually') &&
+    adminExchangeRouteSource.includes('async function releaseExchangeOrderManually') &&
+    adminExchangeRouteSource.includes('订单存在未完结争议，请在争议管理中放款结案') &&
+    adminExchangeRouteSource.includes("action: 'order.manual_release'") &&
+    adminExchangeRouteSource.includes("allowedStatuses: ['confirming', 'delivered', 'manual_review']") &&
+    adminExchangeRouteSource.includes('管理员人工放款：${reason}') &&
+    adminExchangeRouteSource.includes("createLog(order.sellerUserId, 'exchange', 'exchange.order.completed'"),
+  'admin exchange orders must support audited manual escrow release for non-disputed delivered/confirming/manual-review orders'
+)
+
+assertSourceOrder(
   withdrawalSection,
   [
     'const method = normalizeOptionalText(input.method, 64)',
@@ -217,6 +268,19 @@ assert(
     adminExchangeRouteSource.includes("type: 'withdrawal_complete'") &&
     adminExchangeRouteSource.includes("type: 'withdrawal_reject'"),
   'user withdrawal must only create a pending manual-review request; approve/complete/reject must stay in admin routes with payout rechecks'
+)
+
+assert(
+  countOccurrences(adminWithdrawalSection, 'await assertWithdrawalStillPayable(tx, current.userId)') >= 2 &&
+    adminWithdrawalSection.includes("if (current.status !== 'pending')") &&
+    adminWithdrawalSection.includes("status: 'approved'") &&
+    adminWithdrawalSection.includes("if (!proofUrl)") &&
+    adminWithdrawalSection.includes("status: 'paying'") &&
+    adminWithdrawalSection.includes("type: 'withdrawal_complete'") &&
+    adminWithdrawalSection.includes("type: 'withdrawal_reject'") &&
+    adminWithdrawalSection.includes('frozenAmount: { decrement: amount }') &&
+    adminWithdrawalSection.includes('availableAmount: { increment: amount }'),
+  'admin withdrawal review must recheck payout eligibility at approve/complete time, require proof for completion, burn frozen funds on payout, and return frozen funds on rejection'
 )
 
 assertSourceOrder(

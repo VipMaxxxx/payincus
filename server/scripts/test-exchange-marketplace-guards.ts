@@ -996,10 +996,14 @@ assert(
 	    adminExchangeRouteSource.includes('auditInTransaction(tx') &&
 	    adminExchangeRouteSource.includes('wallet.freeze') &&
 	    adminExchangeRouteSource.includes('wallet.unfreeze') &&
-	    adminExchangeRouteSource.includes('wallet.adjust') &&
-	    adminExchangeRouteSource.includes('freezeExchangeOrder') &&
-    adminExchangeRouteSource.includes('/risk-records') &&
-    adminExchangeRouteSource.includes('releaseExchangeOrderEscrow') &&
+		    adminExchangeRouteSource.includes('wallet.adjust') &&
+		    adminExchangeRouteSource.includes('freezeExchangeOrder') &&
+		    adminExchangeRouteSource.includes("fastify.post('/orders/:id/release'") &&
+		    adminExchangeRouteSource.includes('releaseExchangeOrderManually') &&
+		    adminExchangeRouteSource.includes("action: 'order.manual_release'") &&
+		    adminExchangeRouteSource.includes('订单存在未完结争议，请在争议管理中放款结案') &&
+	    adminExchangeRouteSource.includes('/risk-records') &&
+	    adminExchangeRouteSource.includes('releaseExchangeOrderEscrow') &&
     adminExchangeRouteSource.includes('resolveDispute: {') &&
     adminExchangeRouteSource.includes('releaseRemark: `交易所争议 ${id} 人工放款，争议冻结标记解除：${resolution}`') &&
     !adminExchangeRouteSource.includes("action: 'dispute.release', 'exchange_dispute'") &&
@@ -1374,6 +1378,7 @@ for (const operationType of ['exchange_purchase', 'exchange_withdrawal', 'exchan
 assert(
   adminExchangeViewSource.includes('refundOrder') &&
     adminExchangeViewSource.includes('freezeOrder') &&
+    adminExchangeViewSource.includes('releaseOrder') &&
     adminExchangeViewSource.includes('cancelOrder') &&
     adminExchangeViewSource.includes('runDisputeAction') &&
     adminExchangeViewSource.includes('freezeWallet') &&
@@ -1385,6 +1390,10 @@ assert(
 	adminExchangeViewSource.includes("title: '放款结案'") &&
 	adminExchangeViewSource.includes("confirmText: '确认放款结案'") &&
 	adminExchangeViewSource.includes("toast.success('争议已放款结案')") &&
+	adminExchangeViewSource.includes("toast.success('订单已人工放款')") &&
+	adminExchangeViewSource.includes("confirmText: '确认人工放款'") &&
+	adminExchangeViewSource.includes("api.exchange.releaseOrder") &&
+	adminExchangeViewSource.includes("['confirming', 'delivered', 'manual_review'].includes(item.status)") &&
 	adminExchangeViewSource.includes(">放款结案</button>") &&
 	!adminExchangeViewSource.includes("toast.success('争议已关闭')") &&
 	!adminExchangeViewSource.includes("title: '关闭并维持放款'") &&

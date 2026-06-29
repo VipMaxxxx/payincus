@@ -22,6 +22,7 @@ type AdminActionKind =
   | 'completeDelivery'
   | 'refundOrder'
   | 'freezeOrder'
+  | 'releaseOrder'
   | 'cancelOrder'
   | 'rejectDispute'
   | 'refundDispute'
@@ -527,6 +528,19 @@ function freezeOrder(order: any): void {
   })
 }
 
+function releaseOrder(order: any): void {
+  openAdminAction({
+    kind: 'releaseOrder',
+    title: '人工放款订单',
+    message: `订单 ${order.orderNo} 会跳过剩余确认期，扣除手续费后把托管款结算到卖家交易所余额。若存在未完结争议，请改走争议管理的放款结案。`,
+    target: order,
+    confirmText: '确认人工放款',
+    reasonLabel: '放款原因',
+    reasonPlaceholder: '填写人工确认依据，例如买家确认无争议、交割证据已核验、运营审批编号',
+    requiresReason: true
+  })
+}
+
 function cancelOrder(order: any): void {
   openAdminAction({
     kind: 'cancelOrder',
@@ -709,6 +723,10 @@ async function submitAdminAction(): Promise<void> {
       case 'freezeOrder':
         await api.exchange.freezeOrder(target.id, reason)
         toast.success('订单已冻结并进入人工审核')
+        break
+      case 'releaseOrder':
+        await api.exchange.releaseOrder(target.id, reason)
+        toast.success('订单已人工放款')
         break
       case 'cancelOrder':
         await api.exchange.cancelOrder(target.id, reason)
@@ -919,6 +937,14 @@ onMounted(loadActive)
                 @click="freezeOrder(item)"
               >
                 冻结
+              </button>
+              <button
+                v-if="['confirming', 'delivered', 'manual_review'].includes(item.status)"
+                class="btn btn-secondary btn-sm"
+                type="button"
+                @click="releaseOrder(item)"
+              >
+                放款
               </button>
               <button
                 v-if="!['completed', 'refunded', 'cancelled'].includes(item.status)"

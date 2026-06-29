@@ -2631,6 +2631,8 @@ const api = {
       http.post(`/admin/exchange/orders/${id}/refund`, { reason }),
     freezeOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
       http.post(`/admin/exchange/orders/${id}/freeze`, { reason }),
+    releaseOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
+      http.post(`/admin/exchange/orders/${id}/release`, { reason }),
     cancelOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
       http.post(`/admin/exchange/orders/${id}/cancel`, { reason }),
 	    listDeliveryTasks: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
