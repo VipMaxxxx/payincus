@@ -6,16 +6,40 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `ebf963345`
-- 提交日期 / Commit date: 2026-06-29
-- 提交说明 / Commit subject: Release v1.2.6 exchange wallet audit atomicity
-- 最新 tag / Latest tag: `v1.2.6`
+- 最新发布提交 / Latest Release Commit: `8c69a032f`
+- 提交日期 / Commit date: 2026-07-01
+- 提交说明 / Commit subject: Release v1.2.7 kawaii UI refresh
+- 最新 tag / Latest tag: `v1.2.7`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v1.2.7
+
+- 发布提交 / Release commit: `8c69a032f`
+- 提交日期 / Commit date: 2026-07-01
+- 提交说明 / Commit subject: Release v1.2.7 kawaii UI refresh
+
+# v1.2.7
+
+## 改进
+
+- 发布 Product Design / kawaii-cloud 主题升级：公共首页、套餐市场、认证页、用户端、资源方页面和管理端共享浅色云朵主题、玻璃质感卡片和更一致的导航布局。
+- 引入 Uiverse 风格的轻量动效，但保持为本地 CSS 实现：卡片 aurora 边框、按钮 glint 反馈、骨架屏流光和 loading 高亮都遵守 `prefers-reduced-motion`。
+- 增加主题图片资产，用于首页和市场页的可爱 IDC 视觉表达，不新增运行时依赖。
+- 收敛本地 UI 扫描中暴露的若干页面问题：普通用户日志页避免触发管理员接口、公开配置加载去重、集成中心 Telegram webhook 检查只在配置完整时执行，资源池本地 fixture 补齐默认 storage pool。
+
+## 验证
+
+- `pnpm --filter client build:user`
+- `pnpm --filter client build:admin`
+- `pnpm test`
+- `git diff --check`
+- `UI_SCAN_RUN_ID=2026-07-01T02-27-00-uiverse-motion-final node .ui-scan/run-cdp-ui-scan.mjs`
+- `DATABASE_URL=... JWT_SECRET=... COOKIE_SECRET=... ENCRYPTION_KEY=... RUN_RECHARGE_CALLBACK_SMOKE=false RUN_AGENT_HEARTBEAT_SMOKE=false RUN_AGENT_RELEASE_SMOKE=false pnpm smoke:split:nginx`
 
 ## v1.2.6
 
