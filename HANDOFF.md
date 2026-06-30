@@ -1,8 +1,212 @@
 # PayIncus Handoff
 
-Last updated: 2026-06-29 CST
+Last updated: 2026-07-01 03:12 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
+
+## Next Conversation Quick Start
+
+Give the next Codex session this file first. The active working directory is:
+
+```text
+/Users/max/.codex/worktrees/payincus-release-v124
+```
+
+The current task is the cute anime IDC UI redesign plus the now-authorized `v1.2.7` OTA. The user approved continuing the Product Design / Uiverse-inspired UI upgrade and explicitly asked to scan, confirm no issues, and push OTA. The release/tag/manifest side is complete; production OTA is still pending an authenticated production update entrypoint.
+
+### Current v1.2.7 Release / OTA Status
+
+- `v1.2.7` release commit: `8c69a032f` (`Release v1.2.7 kawaii UI refresh`).
+- Version-log/docs commit: `86b922c30` (`Update version log for v1.2.7`).
+- `payincus/main` and tag `v1.2.7` were pushed successfully.
+- GitHub Build & Release run `28468591931` -> success.
+- GitHub CI run `28468589556` -> success.
+- GitHub Pages run `28468589524` -> success.
+- GitHub Release `v1.2.7` exists with amd64/arm64 tarballs, SHA256 files, `incudal-v1.2.7-ota-manifest.json`, `ota-manifest.json`, plugin assets, and `plugin-market-index.json`.
+- OTA manifest proof:
+  - version/tag `v1.2.7`
+  - gitCommit `8c69a032fea9`
+  - amd64 sha256 `de64408bf14f4db7200e7c326f3adb5a46507eba8d32cf1ed3202a0d0ddc6613`
+  - arm64 sha256 `c4f5980c800af252e101a48d48c3ee94cd79aec30f642e08752dbbc2bfab2a0f`
+- Production has not yet switched to `v1.2.7`: public homepage still lacks `/images/kawaii/` markers, while `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` return OK.
+- Authenticated OTA trigger is the remaining blocker. Anonymous `https://admin.payincus.com/api/admin/system-update/check` returns 401. Chrome has a tab open at `https://admin.payincus.com/admin/system-update`, but Chrome currently blocks AppleScript JavaScript execution unless the user enables `View > Developer > Allow JavaScript from Apple Events`; do not change that browser security setting without explicit user approval. No usable SSH alias/direct origin host was found locally; `root@pay.payincus.com` reaches Cloudflare and times out on port 22.
+
+### Completed v1.2.7 Local / Release Verification
+
+```text
+pnpm build -> passed
+pnpm test -> passed
+pnpm --dir docs-site --ignore-workspace build -> passed
+git diff --check -> passed
+UI_SCAN_RUN_ID=2026-07-01T02-27-00-uiverse-motion-final node .ui-scan/run-cdp-ui-scan.mjs -> total 188, withIssues 0
+DATABASE_URL=... JWT_SECRET=... COOKIE_SECRET=... ENCRYPTION_KEY=... RUN_RECHARGE_CALLBACK_SMOKE=false RUN_AGENT_HEARTBEAT_SMOKE=false RUN_AGENT_RELEASE_SMOKE=false pnpm smoke:split:nginx -> passed
+FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=https://pay.payincus.com VERIFY_RETRIES=2 VERIFY_RETRY_DELAY=1 pnpm verify:split:host -> passed before OTA
+NODE_ENV=production PORT=3001 SERVE_STATIC_CLIENT=false VITE_API_BASE_URL=/api TRUST_PROXY=true FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com SITE_URL=https://pay.payincus.com PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0 pnpm verify:production -> passed static preflight
+```
+
+### First Commands For The Next Session
+
+Run these before editing:
+
+```bash
+cd /Users/max/.codex/worktrees/payincus-release-v124
+git status --short
+sed -n '1,140p' HANDOFF.md
+git diff --stat
+git diff -- client/src/views/PortalView.vue client/src/views/MarketView.vue client/src/styles/kawaii-cloud.css client/src/styles/main.css
+```
+
+If visual QA is needed, start the client locally:
+
+```bash
+pnpm --filter client dev -- --host 127.0.0.1
+```
+
+The last successful code-level check was:
+
+```text
+pnpm --filter client build:user -> passed
+git diff --check -- client/src/views/MarketView.vue client/src/styles/kawaii-cloud.css -> passed
+```
+
+### Important Constraints
+
+- The worktree is intentionally dirty and contains broad UI/theme work. Do not run `git reset`, `git checkout --`, or delete generated assets unless the user explicitly asks.
+- The user said not to update the docs site for the theme work, and later clarified that the redesign should focus on UI, not OTA.
+- The user also said not to redesign the admin side for the current Product Design pass. Existing dirty admin files still need inspection before any commit because earlier broad theme work touched them.
+- Keep purchase, login, package filtering, selected plan, and create-instance behavior intact while changing UI.
+- Treat production release sections below as historical production proof. They are not proof that the current UI redesign is released.
+
+### Current User Feedback To Preserve
+
+- Homepage hero direction is mostly acceptable, but supporting materials and motion still need to feel closer to the reference image.
+- Homepage second/product section was considered not advanced enough and too cluttered in earlier attempts.
+- Package list page must be fully redesigned in the same cute anime style.
+- Package detail panel had display issues: the visual map block was removed, the inner scrollbar was removed, and the diagonal background line crossing content was softened/removed.
+- Avoid repeated large anime/map assets stacked too close together.
+- Keep visuals cute and anime-styled, but readable and not crowded.
+
+### Files Most Likely To Continue Editing
+
+```text
+client/src/views/PortalView.vue
+client/src/views/MarketView.vue
+client/src/styles/kawaii-cloud.css
+client/src/styles/main.css
+client/src/components/public/PublicSiteHeader.vue
+client/src/components/public/PublicSiteLayout.vue
+client/public/images/kawaii/
+```
+
+Reference-only planning/mockup files:
+
+```text
+docs/ui-redesign/user-page-redesign-plan.md
+docs/ui-redesign/user-page-mockups.html
+docs/ui-redesign/user-page-preview-sheet.html
+```
+
+### Current Asset Inventory
+
+```text
+client/public/images/kawaii/hero-cloud-map.png
+client/public/images/kawaii/paya-cloud-operator-v2.png
+client/public/images/kawaii/paya-cloud-operator.png
+client/public/images/kawaii/paya-cloud-operator.webp
+```
+
+### Suggested Prompt For The Next Session
+
+```text
+继续 /Users/max/.codex/worktrees/payincus-release-v124 的本地 UI 重构。先读 HANDOFF.md 顶部交接和当前 diff，不要 OTA，不要动后端逻辑。重点继续优化公开首页和套餐列表/详情页，让它更接近可爱的二次元浅色 IDC 效果图，同时保持现有购买/筛选/创建实例逻辑不变。改完后跑 pnpm --filter client build:user 和 git diff --check。
+```
+
+## Current Local UI Redesign Handoff
+
+Updated: 2026-06-30 23:33 CST
+
+This section covers the active local-only Product Design / kawaii anime UI redesign work in `/Users/max/.codex/worktrees/payincus-release-v124`. It has not been released or OTA-deployed. Treat production release notes below as the last production baseline, and treat this section as the current dirty-worktree handoff.
+
+### Goal
+
+Build a light, cute anime-style IDC theme that matches the approved public homepage direction: bright blue/white cloud palette, anime operator artwork, soft network/map material, refined cards, meaningful motion, and support for light/dark mode. The user explicitly asked to focus on UI only and not update docs or OTA unless requested.
+
+### Current Scope
+
+- Public homepage and product sections are being redesigned around `client/src/views/PortalView.vue`.
+- Public package list and package detail are being redesigned around `client/src/views/MarketView.vue`.
+- Shared theme tokens, backgrounds, card styles, motion, and kawaii components live in `client/src/styles/kawaii-cloud.css`.
+- The shared stylesheet is imported from `client/src/styles/main.css`.
+- Public/anime assets are under `client/public/images/kawaii/`.
+- User-page redesign reference files were generated under `docs/ui-redesign/`, but the user later clarified that admin pages should not be part of the redesign preview.
+
+### Recent Completed UI Fixes
+
+- Removed the market package detail top visual/map block after the user pointed out the highlighted area should be deleted.
+- Removed the package detail plan-list inner scrollbar so the right detail panel no longer shows an ugly nested grey scrollbar.
+- Reworked the package detail shell background so a diagonal decorative line no longer crosses readable content.
+- Kept the public package selection and create-instance flow wired to the existing `MarketView.vue` state and actions; this was a visual/layout change, not a checkout logic rewrite.
+
+### Current Verification
+
+Latest local checks:
+
+```text
+pnpm --filter client build:user -> passed
+git diff --check -- client/src/views/MarketView.vue client/src/styles/kawaii-cloud.css -> passed
+rg "lg:max-h-72|linear-gradient\\(128deg|kawaii-market-detail-visual|kawaii-market-detail-map|kawaii-market-detail-route" client/src/views/MarketView.vue client/src/styles/kawaii-cloud.css -> no matches
+```
+
+### Current Dirty Tree Warning
+
+The worktree is intentionally dirty and broad. Do not reset it. Many files are modified from the ongoing theme pass, including user views, admin views, layout components, locale files, `client/src/styles/main.css`, `client/src/styles/kawaii-cloud.css`, `client/public/images/`, and `server/scripts/seed-bulk-local-data.ts`.
+
+Before committing or releasing, inspect the complete diff with:
+
+```bash
+git status --short
+git diff --stat
+git diff -- client/src/views/PortalView.vue client/src/views/MarketView.vue client/src/styles/kawaii-cloud.css client/src/styles/main.css
+```
+
+### Known Remaining Work
+
+- No OTA has been performed for this UI redesign.
+- No browser screenshot QA has been run after the latest package-detail display fix.
+- Public package list/detail still needs final visual acceptance from the user. The user has repeatedly said the second-page/product-list area was not advanced enough, so do not treat it as approved just because it builds.
+- Homepage hero is closer to the approved direction, but prior feedback said supporting visual materials and motion still felt weaker than the reference image.
+- Generated `docs/ui-redesign/*` preview artifacts are reference-only unless the user asks to keep or publish them.
+- The broad admin/user theme edits need separate review before any production release. Do not include admin UI in the next Product Design iteration unless the user explicitly asks.
+
+### Recommended Next Steps
+
+1. Start with visual QA, not backend work:
+
+```bash
+pnpm --filter client dev -- --host 127.0.0.1
+```
+
+Open the public homepage and `/market`, then compare desktop and mobile screenshots against the latest user feedback.
+
+2. Continue from the public package list/detail UI:
+
+- Keep the list/detail layout clean and less crowded.
+- Avoid repeated large background assets in stacked sections.
+- Keep anime artwork and cloud/map materials as accents, not blocks that obscure text.
+- Preserve existing purchase flow, source filters, region filters, selected package/plan state, and create-instance behavior.
+
+3. Run checks after each UI pass:
+
+```bash
+pnpm --filter client build:user
+git diff --check
+```
+
+4. Only after the user approves the local UI, decide whether to:
+
+- commit only the public UI files,
+- drop reference-only docs/mockups,
+- or prepare a release/OTA batch.
 
 ## Repository
 
@@ -401,6 +605,48 @@ Latest Exchange Marketplace hardening:
 - Exchange delivery task `step` now stays within the documented progress steps during reinstall; lower-level instance task progress is preserved under `progress.instanceTaskProgress`, avoiding raw or unknown steps such as `reinstall_queued` in user/admin delivery progress.
 - Exchange-sensitive password viewing and terminal access now use a separate lock: active/paused/locked/delivery-failed listings and escrowed/delivering/manual-review/failed orders block non-admin access; after forced rebuild reaches delivered/confirming/disputed, only the buyer who owns the rebuilt instance can access it.
 - The public non-sensitive Exchange config endpoint is explicitly treated as public in route guards, matching the user purchase UI that needs policy flags before login-sensitive actions.
+
+Latest `v1.2.6` Exchange validation refresh on 2026-06-29:
+
+```text
+pnpm --filter server test:exchange-marketplace-guards passed
+pnpm --filter server test:exchange-lifecycle-guards passed
+pnpm --filter server type-check passed
+pnpm --filter client type-check passed
+SMOKE_API_BASE_URL=https://pay.payincus.com pnpm --filter server smoke:exchange-marketplace passed in read-only mode
+pnpm --filter server build passed
+pnpm --filter client build passed
+pnpm test passed
+```
+
+This refresh did not modify the release worktree. It proves the current release source still satisfies the Exchange source-level guards, frontend/backend type checks, full user/admin/server build, full repository guard chain, and non-destructive production public Exchange smoke. It is not a substitute for a new destructive production trade, withdrawal payout, or manual seller settlement exercise.
+
+Exchange completion audit status:
+
+```text
+Proven by current code/tests/builds:
+- User entry: market, detail, sell/listing workflow, my listings, buys, sales, wallet, withdrawals, records, disputes.
+- Admin entry: overview, listings, orders, delivery tasks, wallets, withdrawals, disputes, risk records, config, audit logs.
+- Paused-only listing and stopped-first UI guidance.
+- Anonymous public/user serialization and contact/identity disclosure rejection.
+- Forced reinstall delivery design, old-access cleanup, anonymous Incus/display handoff, buyer-owned rebuild, and billing owner rebuild.
+- Buyer account balance debit, escrow hold, fee ledger, seller exchange wallet release path, withdrawal freeze/manual review, balance transfer ledger, and audit logs.
+- Operation locks across start/restart/reinstall/delete/upgrade/migrate/config/network/snapshot/backup/proxy-site/traffic-reset/auto-renew/ordinary-transfer/admin-billing surfaces.
+- Eligibility blocks for risk, order restriction, active tasks, overdue/expiring state, traffic limit, storage pool, host/package/plan allowlist, and duplicate active order states.
+- Production-safe public smoke for /api/exchange/config and /api/exchange/market anonymity/reinstall markers.
+
+Already observed in production evidence:
+- Real purchase -> buyer balance debit -> escrow hold -> forced rebuild -> anonymous handoff -> owner transfer -> rebuilt billing relation -> confirmation-period entry.
+- Dispute refund/release path has live evidence, including buyer refund balance log, escrow_refund wallet log, and dispute_release log.
+- Retry/rollback/cancel/refund audit evidence exists in production Exchange audit logs.
+
+Not yet fully proven by a fresh authorized production exercise:
+- Seller settlement after confirmation due time or explicit admin manual release on a live confirming order.
+- Withdrawal request -> admin approve -> payout proof -> complete/reject flow with real seller exchange balance.
+- A new destructive end-to-end smoke that intentionally lists a stopped test instance, purchases it, waits for delivery, and records the resulting order/listing/delivery/wallet/audit rows.
+```
+
+Current traffic-transfer policy note: despite older planning text saying "reset traffic baseline", the current product behavior and guard coverage preserve the listed instance's existing traffic usage and remaining quota through Exchange delivery. This follows the later operator decision that the traded instance should keep whatever traffic state it had at listing/purchase time.
 
 Remaining proof before claiming 100%:
 
