@@ -6,16 +6,40 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `8c69a032f`
+- Latest Release Commit / 最新发布提交: `e1280b967`
 - Commit date / 提交日期: 2026-07-01
-- Commit subject / 提交说明: Release v1.2.7 kawaii UI refresh
-- Latest tag / 最新 tag: `v1.2.7`
+- Commit subject / 提交说明: Release v1.2.8 auth and OTA cache hotfix
+- Latest tag / 最新 tag: `v1.2.8`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.2.8
+
+- Release commit / 发布提交: `e1280b967`
+- Commit date / 提交日期: 2026-07-01
+- Commit subject / 提交说明: Release v1.2.8 auth and OTA cache hotfix
+
+# v1.2.8
+
+## 修复
+
+- 修复交易所后台配置保存把只读的强制暂停策略写入数据库的问题，避免 Prisma `Unknown argument forceStoppedRequired` 导致配置保存失败。
+- 注册页发送验证码按钮不再因为 Turnstile token 尚未生成而硬禁用；点击后继续走现有校验并给出人机验证提示，避免页面看起来“不能用”。
+- Service Worker 静态资源改为网络优先并升级缓存名；新 worker 接管后自动刷新一次，降低 OTA 后旧 JS/CSS chunk 导致白屏、需要手动刷新才恢复的风险。
+
+## 验证
+
+- `pnpm --filter server exec tsx scripts/test-exchange-marketplace-guards.ts`
+- `pnpm --filter server type-check`
+- `pnpm --filter client build:user`
+- `pnpm --filter client build:admin`
+- `pnpm test`
+- `pnpm build`
+- `git diff --check`
 
 ## v1.2.7
 
