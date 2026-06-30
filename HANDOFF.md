@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-07-01 04:10 CST
+Last updated: 2026-07-01 04:18 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -57,7 +57,16 @@ pnpm test -> passed
 pnpm build -> passed
 pnpm --dir docs-site --ignore-workspace build -> passed
 git diff --check -> passed
+UI_SCAN_RUN_ID=2026-07-01T04-20-00-v129-auth-public-scan node <current-code public auth CDP scan> -> total 10, withIssues 0
 ```
+
+Latest screenshot scan output is local-only and intentionally untracked:
+
+```text
+.ui-scan/2026-07-01T04-20-00-v129-auth-public-scan/
+```
+
+It covered desktop and mobile `home`, `login`, `register`, `forgot-password`, and `admin-login` against the current `v1.2.9` code. Screenshots for register and forgot-password were manually inspected after the scan and were not blank, overflowing, or on the wrong route. The local backend was not started for this targeted scan because this worktree has no local `DATABASE_URL`; production API and split-host checks above are the authoritative backend/OTA evidence.
 
 ### First Commands For The Next Session
 
@@ -146,7 +155,7 @@ client/public/images/kawaii/paya-cloud-operator.webp
 
 Updated: 2026-06-30 23:33 CST
 
-This section covers the active local-only Product Design / kawaii anime UI redesign work in `/Users/max/.codex/worktrees/payincus-release-v124`. It has not been released or OTA-deployed. Treat production release notes below as the last production baseline, and treat this section as the current dirty-worktree handoff.
+This section is older design-process context for the Product Design / kawaii anime UI redesign work in `/Users/max/.codex/worktrees/payincus-release-v124`. The tracked release line has since advanced to `v1.2.9`; treat the top `Current v1.2.9 Production / OTA Status` section as authoritative for production. Keep this section only as historical feedback and design direction for future UI iterations.
 
 ### Goal
 
