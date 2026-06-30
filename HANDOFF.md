@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-07-01 03:12 CST
+Last updated: 2026-07-01 04:10 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -12,36 +12,51 @@ Give the next Codex session this file first. The active working directory is:
 /Users/max/.codex/worktrees/payincus-release-v124
 ```
 
-The current task is the cute anime IDC UI redesign plus the now-authorized `v1.2.7` OTA. The user approved continuing the Product Design / Uiverse-inspired UI upgrade and explicitly asked to scan, confirm no issues, and push OTA. The release/tag/manifest side is complete; production OTA is still pending an authenticated production update entrypoint.
+Production is currently on `v1.2.9`. The latest shipped work fixed the auth UI Turnstile token path for login, registration, and forgot-password, exempted forgot-password from the app layout/session redirect guard, and registered the service worker with a versioned URL plus `updateViaCache: 'none'` so stale Cloudflare/browser-cached `/sw.js` does not keep old assets active. Earlier in the same release chain, `v1.2.8` fixed the exchange config save failure caused by writing a non-Prisma field.
 
-### Current v1.2.7 Release / OTA Status
+The broader Product Design / Uiverse-inspired kawaii IDC UI work remains local design work unless called out in a tagged release section below. Do not assume all remaining dirty/untracked UI assets are production-ready.
 
-- `v1.2.7` release commit: `8c69a032f` (`Release v1.2.7 kawaii UI refresh`).
-- Version-log/docs commit: `86b922c30` (`Update version log for v1.2.7`).
-- `payincus/main` and tag `v1.2.7` were pushed successfully.
-- GitHub Build & Release run `28468591931` -> success.
-- GitHub CI run `28468589556` -> success.
-- GitHub Pages run `28468589524` -> success.
-- GitHub Release `v1.2.7` exists with amd64/arm64 tarballs, SHA256 files, `incudal-v1.2.7-ota-manifest.json`, `ota-manifest.json`, plugin assets, and `plugin-market-index.json`.
+### Current v1.2.9 Production / OTA Status
+
+- `v1.2.9` release commit: `f8249da10` (`Release v1.2.9 auth Turnstile cache hotfix`).
+- Version-log/docs commit: `54f08ff07` (`Update version log for v1.2.9`).
+- `payincus/main` and tag `v1.2.9` were pushed successfully.
+- GitHub Release `v1.2.9` exists with amd64/arm64 tarballs, SHA256 files, `incudal-v1.2.9-ota-manifest.json`, `ota-manifest.json`, plugin assets, and `plugin-market-index.json`.
 - OTA manifest proof:
-  - version/tag `v1.2.7`
-  - gitCommit `8c69a032fea9`
-  - amd64 sha256 `de64408bf14f4db7200e7c326f3adb5a46507eba8d32cf1ed3202a0d0ddc6613`
-  - arm64 sha256 `c4f5980c800af252e101a48d48c3ee94cd79aec30f642e08752dbbc2bfab2a0f`
-- Production has not yet switched to `v1.2.7`: public homepage still lacks `/images/kawaii/` markers, while `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` return OK.
-- Authenticated OTA trigger is the remaining blocker. Anonymous `https://admin.payincus.com/api/admin/system-update/check` returns 401. Chrome has a tab open at `https://admin.payincus.com/admin/system-update`, but Chrome currently blocks AppleScript JavaScript execution unless the user enables `View > Developer > Allow JavaScript from Apple Events`; do not change that browser security setting without explicit user approval. No usable SSH alias/direct origin host was found locally; `root@pay.payincus.com` reaches Cloudflare and times out on port 22.
+  - version/tag `v1.2.9`
+  - gitCommit `f8249da10192`
+  - amd64 sha256 `59385666dab4f07ea26deb6a2ac8058f04c8754588a01af08204dedff0dc8f7f`
+  - arm64 sha256 `9669c206b7dfe8dc8fa90a974a30335e17dab22edc7af2372da7ee1c628860f1`
+- Production current symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.2.9-20260630200642`.
+- Production `/opt/incudal/current/version.json`:
+  - version `v1.2.9`
+  - gitTag `v1.2.9`
+  - gitCommit `f8249da10192`
+  - buildTime `2026-06-30T20:04:31.494Z`
+  - deployedAt `2026-06-30T20:07:06.951Z`
+  - changelog `Release v1.2.9 auth Turnstile cache hotfix`
+- OTA task `#132`: `v1.2.8 -> v1.2.9`, status `success`, log `/opt/incudal/update-logs/system-update-132.log`, finished `2026-06-30T20:08:13.819Z`.
+- OTA log proof included artifact SHA256 verification, switch to `/opt/incudal/releases/v1.2.9-20260630200642`, production readiness verification, `verify:log-header`, and `System update completed successfully`.
+- Production backend service check: `systemctl is-active incudal-backend -> active`.
+- Production health checks:
+  - `https://pay.payincus.com/api/health -> {"status":"ok",...}`
+  - `https://admin.payincus.com/api/health -> {"status":"ok",...}`
+- Service worker proof: `https://pay.payincus.com/sw.js?v=1.2.9` contains `const CACHE_NAME = 'incudal-cache-v1.2.9'` and the network-first static resource strategy.
+- Post-OTA split-host verification passed:
+  - `FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=https://pay.payincus.com VERIFY_RETRIES=2 VERIFY_RETRY_DELAY=1 pnpm verify:split:host`
 
-### Completed v1.2.7 Local / Release Verification
+### Completed v1.2.9 Local / Release Verification
 
 ```text
-pnpm build -> passed
+pnpm --filter server exec tsx scripts/test-frontend-route-guards.ts -> passed
+pnpm --filter server exec tsx scripts/test-theme-system-guards.ts -> passed
+pnpm --filter client build:user -> passed
+pnpm --filter client build:admin -> passed
+pnpm --filter server type-check -> passed
 pnpm test -> passed
+pnpm build -> passed
 pnpm --dir docs-site --ignore-workspace build -> passed
 git diff --check -> passed
-UI_SCAN_RUN_ID=2026-07-01T02-27-00-uiverse-motion-final node .ui-scan/run-cdp-ui-scan.mjs -> total 188, withIssues 0
-DATABASE_URL=... JWT_SECRET=... COOKIE_SECRET=... ENCRYPTION_KEY=... RUN_RECHARGE_CALLBACK_SMOKE=false RUN_AGENT_HEARTBEAT_SMOKE=false RUN_AGENT_RELEASE_SMOKE=false pnpm smoke:split:nginx -> passed
-FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=https://pay.payincus.com VERIFY_RETRIES=2 VERIFY_RETRY_DELAY=1 pnpm verify:split:host -> passed before OTA
-NODE_ENV=production PORT=3001 SERVE_STATIC_CLIENT=false VITE_API_BASE_URL=/api TRUST_PROXY=true FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com SITE_URL=https://pay.payincus.com PAYMENT_CALLBACK_BASE_URL=https://pay.payincus.com PAYMENT_CALLBACK_IP_WHITELIST_REQUIRED=false PAYMENT_CALLBACK_SKIP_IP_WHITELIST=false INCUDAL_AGENT_RELEASE_REPOSITORY=VipMaxxxx/payincus RUN_LIVE_CHECKS=0 RUN_DB_CHECKS=0 pnpm verify:production -> passed static preflight
 ```
 
 ### First Commands For The Next Session
@@ -53,7 +68,8 @@ cd /Users/max/.codex/worktrees/payincus-release-v124
 git status --short
 sed -n '1,140p' HANDOFF.md
 git diff --stat
-git diff -- client/src/views/PortalView.vue client/src/views/MarketView.vue client/src/styles/kawaii-cloud.css client/src/styles/main.css
+git log --oneline --decorate -10
+git diff -- client/src/views/LoginView.vue client/src/views/RegisterView.vue client/src/views/ForgotPasswordView.vue client/src/App.vue client/src/utils/turnstile.ts client/src/main.ts client/src/admin/main.ts client/public/sw.js
 ```
 
 If visual QA is needed, start the client locally:
@@ -62,18 +78,21 @@ If visual QA is needed, start the client locally:
 pnpm --filter client dev -- --host 127.0.0.1
 ```
 
-The last successful code-level check was:
+The last successful production-facing checks were:
 
 ```text
+pnpm --filter server exec tsx scripts/test-frontend-route-guards.ts -> passed
 pnpm --filter client build:user -> passed
-git diff --check -- client/src/views/MarketView.vue client/src/styles/kawaii-cloud.css -> passed
+pnpm build -> passed
+git diff --check -> passed
+pnpm verify:split:host against production -> passed after OTA
 ```
 
 ### Important Constraints
 
-- The worktree is intentionally dirty and contains broad UI/theme work. Do not run `git reset`, `git checkout --`, or delete generated assets unless the user explicitly asks.
-- The user said not to update the docs site for the theme work, and later clarified that the redesign should focus on UI, not OTA.
-- The user also said not to redesign the admin side for the current Product Design pass. Existing dirty admin files still need inspection before any commit because earlier broad theme work touched them.
+- The worktree contains local generated/untracked UI scan and asset output. Do not run `git reset`, `git checkout --`, or delete generated assets unless the user explicitly asks.
+- The user said not to update the docs site for theme-only work, but release notes/version logs were updated for tagged production hotfixes.
+- The user also said not to redesign the admin side for the Product Design pass. Existing admin changes need inspection before any future UI commit.
 - Keep purchase, login, package filtering, selected plan, and create-instance behavior intact while changing UI.
 - Treat production release sections below as historical production proof. They are not proof that the current UI redesign is released.
 
@@ -89,13 +108,15 @@ git diff --check -- client/src/views/MarketView.vue client/src/styles/kawaii-clo
 ### Files Most Likely To Continue Editing
 
 ```text
-client/src/views/PortalView.vue
-client/src/views/MarketView.vue
-client/src/styles/kawaii-cloud.css
-client/src/styles/main.css
-client/src/components/public/PublicSiteHeader.vue
-client/src/components/public/PublicSiteLayout.vue
-client/public/images/kawaii/
+client/src/views/LoginView.vue
+client/src/views/RegisterView.vue
+client/src/views/ForgotPasswordView.vue
+client/src/App.vue
+client/src/utils/turnstile.ts
+client/src/main.ts
+client/src/admin/main.ts
+client/public/sw.js
+server/scripts/test-frontend-route-guards.ts
 ```
 
 Reference-only planning/mockup files:
