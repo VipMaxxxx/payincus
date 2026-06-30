@@ -371,7 +371,7 @@ onActivated(() => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <ThemeTemplateSlot slot-name="user.hosts.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
     <div class="page-header">

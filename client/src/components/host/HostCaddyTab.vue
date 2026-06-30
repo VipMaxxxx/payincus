@@ -490,12 +490,11 @@ const isEnabled = computed(() => caddyStatus.value.enabled)
     <Teleport to="body">
       <div 
         v-if="showInstallModal" 
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        class="modal-overlay"
         @click.self="showInstallModal = false"
       >
         <div 
-          class="w-full max-w-2xl rounded-lg shadow-xl"
-          :class="themeStore.isDark ? 'bg-gray-900' : 'bg-white'"
+          class="modal-content w-full max-w-2xl"
         >
           <div class="p-6">
             <h3 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">

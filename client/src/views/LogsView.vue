@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
+import { useAuthStore } from '@/stores/auth'
 import api, { type RiskOperationDefinition } from '@/api'
 import { useToast } from '@/stores/toast'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
@@ -19,6 +20,7 @@ defineOptions({ name: 'LogsView' })
 const { t, locale, tm } = useI18n()
 const toast = useToast()
 const themeStore = useThemeStore()
+const authStore = useAuthStore()
 
 // 数据
 const logs = ref<Log[]>([])
@@ -43,6 +45,7 @@ const expandedRows = ref<Set<number>>(new Set())
 const highRiskLogs = computed(() => logs.value.filter(log => log.risk_level === 'high' || log.risk_level === 'critical'))
 const approvalRequiredCount = computed(() => logs.value.filter(log => log.approval_required).length)
 const verificationRequiredCount = computed(() => logs.value.filter(log => log.verification_required).length)
+const canAccessAudit = computed(() => authStore.isAdmin)
 
 // 加载日志
 async function loadLogs(silent = false): Promise<void> {
@@ -84,6 +87,7 @@ async function loadModules(): Promise<void> {
 }
 
 async function loadRiskDefinitions(): Promise<void> {
+  if (!canAccessAudit.value) return
   try {
     const response = await api.logs.getRiskDefinitions()
     riskDefinitions.value = response.definitions || []
@@ -162,6 +166,7 @@ function formatRiskLevel(level: string | undefined): string {
 }
 
 async function exportAuditCsv(): Promise<void> {
+  if (!canAccessAudit.value) return
   try {
     const params: Record<string, unknown> = {
       limit: 1000
@@ -220,16 +225,16 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header">
       <h1 class="page-title">{{ $t('logs.title') }}</h1>
-      <button class="btn-primary" @click="exportAuditCsv">
+      <button v-if="canAccessAudit" class="btn-primary" @click="exportAuditCsv">
         {{ $t('logs.exportAudit') }}
       </button>
     </div>
 
-    <div class="grid gap-3 md:grid-cols-4">
-      <div class="card p-4">
+    <div class="grid gap-3" :class="canAccessAudit ? 'md:grid-cols-4' : 'md:grid-cols-3'">
+      <div v-if="canAccessAudit" class="card p-4">
         <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.riskDefinitions') }}</div>
         <div class="mt-2 text-2xl font-semibold text-themed">{{ riskDefinitions.length }}</div>
       </div>

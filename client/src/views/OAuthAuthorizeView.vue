@@ -117,39 +117,39 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-gray-50 px-4 py-10">
+  <main class="kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen px-4 py-10">
     <section class="mx-auto w-full max-w-xl">
-      <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <div class="card p-6">
         <div v-if="loading" class="space-y-3">
-          <div class="h-5 w-40 animate-pulse rounded bg-gray-200"></div>
-          <div class="h-4 w-full animate-pulse rounded bg-gray-100"></div>
-          <div class="h-4 w-4/5 animate-pulse rounded bg-gray-100"></div>
+          <div class="h-5 w-40 animate-pulse rounded bg-themed-secondary"></div>
+          <div class="h-4 w-full animate-pulse rounded bg-themed-tertiary"></div>
+          <div class="h-4 w-4/5 animate-pulse rounded bg-themed-tertiary"></div>
         </div>
 
         <div v-else-if="error" class="space-y-4">
-          <h1 class="text-lg font-semibold text-gray-900">OAuth 授权失败</h1>
+          <h1 class="text-lg font-semibold text-themed">OAuth 授权失败</h1>
           <p class="text-sm text-red-600">{{ error }}</p>
           <button class="btn-secondary w-full" @click="router.push('/dashboard')">返回控制台</button>
         </div>
 
         <div v-else-if="consent" class="space-y-6">
           <div>
-            <h1 class="text-lg font-semibold text-gray-900">授权 {{ consent.app.name }}</h1>
-            <p class="mt-2 break-all text-sm text-gray-500">{{ consent.request.redirectUri }}</p>
+            <h1 class="text-lg font-semibold text-themed">授权 {{ consent.app.name }}</h1>
+            <p class="mt-2 break-all text-sm text-themed-muted">{{ consent.request.redirectUri }}</p>
           </div>
 
           <div class="space-y-2">
             <div
               v-for="scope in requestedScopes"
               :key="scope"
-              class="flex items-start justify-between gap-4 rounded-md border border-gray-200 px-3 py-2"
+              class="flex items-start justify-between gap-4 rounded-md border border-themed bg-themed-surface px-3 py-2"
             >
               <div>
-                <div class="text-sm font-medium text-gray-900">
+                <div class="text-sm font-medium text-themed">
                   {{ scopeMetadataByScope.get(scope)?.title || scope }}
                 </div>
-                <div class="text-xs text-gray-500">{{ scopeMetadataByScope.get(scope)?.description || '访问授权范围内的公共 API' }}</div>
-                <div v-if="scopeMetadataByScope.get(scope)?.resources.length" class="mt-1 text-[11px] text-gray-400">
+                <div class="text-xs text-themed-muted">{{ scopeMetadataByScope.get(scope)?.description || '访问授权范围内的公共 API' }}</div>
+                <div v-if="scopeMetadataByScope.get(scope)?.resources.length" class="mt-1 text-[11px] text-themed-faint">
                   {{ scopeMetadataByScope.get(scope)?.resources.join(', ') }}
                 </div>
               </div>

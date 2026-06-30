@@ -288,7 +288,7 @@ function formatDate(value: string): string {
 </script>
 
 <template>
-  <div class="animate-fade-in">
+  <div class="kawaii-page animate-fade-in">
     <div class="page-header flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
         <h1 class="page-title">{{ t('admin.hosting.title') }}</h1>

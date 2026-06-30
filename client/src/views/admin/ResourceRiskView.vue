@@ -736,7 +736,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6 p-6">
+  <div class="kawaii-page space-y-6 p-6 animate-fade-in">
     <header class="flex flex-col gap-4 border-b border-themed pb-5 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 class="page-title">资源风控</h1>

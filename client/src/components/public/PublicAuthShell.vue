@@ -22,7 +22,7 @@ const brand = useBrand()
           class="mx-auto h-14 w-14 rounded-2xl"
         />
         <h1
-          class="mt-5 text-3xl font-normal tracking-[-0.02em] sm:text-[2rem] sm:leading-[1.15]"
+          class="mt-5 text-3xl font-normal tracking-normal sm:text-[2rem] sm:leading-[1.15]"
           :class="ui.title"
         >
           {{ title }}

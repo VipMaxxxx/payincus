@@ -166,7 +166,7 @@ const canUseCustomerBillingActions = computed<boolean>(() => !isAdminEntry && !i
 const countryFilterOptions = computed(() => availableCountries.value.map(code => code.toLowerCase()))
 const instanceLayoutMode = computed<InstanceLayoutMode>(() => (
   isDesktopViewport.value
-    ? (userSelectedLayout.value || 'list')
+    ? (userSelectedLayout.value || 'card')
     : 'card'
 ))
 const isCardLayout = computed<boolean>(() => instanceLayoutMode.value === 'card')
@@ -1436,9 +1436,9 @@ async function confirmBatchDestroy(): Promise<void> {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page kawaii-instances-page space-y-6 animate-fade-in">
     <!-- 页面头部 -->
-    <div class="page-header flex-col sm:flex-row gap-4 sm:gap-0">
+    <div class="kawaii-dashboard-hero kawaii-instances-command-center rounded-2xl p-5 page-header flex-col sm:flex-row gap-4 sm:gap-0">
       <div>
         <h1 class="page-title text-lg sm:text-xl">{{ $t('instance.title') }}</h1>
         <p class="page-description">
@@ -1462,7 +1462,7 @@ async function confirmBatchDestroy(): Promise<void> {
     </div>
 
     <!-- 搜索和筛选 -->
-    <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+    <div class="kawaii-instance-toolbar flex flex-col gap-3 rounded-2xl border p-3 xl:flex-row xl:items-center xl:justify-between">
       <div class="flex flex-col gap-3 flex-1 min-w-0 xl:flex-row xl:items-center">
         <div class="relative w-full xl:max-w-sm">
           <input
@@ -2290,7 +2290,7 @@ async function confirmBatchDestroy(): Promise<void> {
           <article
             v-for="instance in instances"
             :key="instance.id"
-            class="group relative min-w-0 rounded-lg border p-4 shadow-sm transition-colors duration-200"
+            class="kawaii-instance-card kawaii-instance-cloud-card group relative min-w-0 rounded-2xl border p-4 shadow-sm transition-[border-color,box-shadow,transform] duration-200"
             :class="[
               instance.status?.toLowerCase() === 'creating' ? 'creating-card' : '',
               recentlyOrderedInstanceId === instance.id ? (themeStore.isDark ? 'is-order-feedback-dark' : 'is-order-feedback-light') : '',
@@ -2446,7 +2446,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <button
                   v-if="!isAdminEntry"
                   type="button"
-                  class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
+                  class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
                   :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
                   @click.stop="openInstanceExchange(instance)"
                 >
@@ -2454,7 +2454,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 </button>
                 <button
                   type="button"
-                  class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
+                  class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
                   :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
                   @click.stop="openInstanceDetail(instance.id)"
                 >
@@ -2462,7 +2462,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 </button>
                 <button
                   type="button"
-                  class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
+                  class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
                   :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
                   :disabled="!canTransferInstance(instance)"
                   @click.stop="openInstanceTransfer(instance)"
@@ -2480,7 +2480,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <button
                   v-if="canResetInstanceTraffic(instance)"
                   type="button"
-                  class="inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
+                  class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
                   :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
                   :disabled="!!actionLoading[instance.id]"
                   @click.stop="openResetTrafficModal(instance)"

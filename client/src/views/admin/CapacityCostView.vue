@@ -135,7 +135,7 @@ onMounted(loadOverview)
 </script>
 
 <template>
-  <div class="page-container">
+  <div class="kawaii-page page-container animate-fade-in">
     <div class="page-header">
       <div>
         <h1 class="page-title">容量与成本</h1>

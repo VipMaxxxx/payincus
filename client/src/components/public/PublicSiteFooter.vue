@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
 
 const route = useRoute()
@@ -13,7 +12,6 @@ const router = useRouter()
 const { t } = useI18n()
 const authStore = useAuthStore()
 const configStore = useConfigStore()
-const themeStore = useThemeStore()
 const brand = useBrand()
 
 const isLoginRoute = computed(() => route.name === 'login')
@@ -36,17 +34,6 @@ const primaryActionLabel = computed(() => {
 
   return t('publicSite.actions.signIn')
 })
-
-const ui = computed(() => themeStore.isDark
-  ? {
-      secondaryButton: 'border-[#35507a] bg-[#1d365c] text-[#d3e3fd] hover:bg-[#274577]',
-      primaryButton: 'bg-[#a8c7fa] text-[#062e6f] shadow-[0_14px_30px_-16px_rgba(96,146,211,0.48)] hover:bg-[#bed7ff]'
-    }
-  : {
-      secondaryButton: 'border-[#c6d7f8] bg-[#d3e3fd] text-[#041e49] hover:bg-[#e8f0fe]',
-      primaryButton: 'bg-[#0b57d0] text-white shadow-[0_14px_30px_-16px_rgba(11,87,208,0.3)] hover:bg-[#0842a0]'
-    }
-)
 
 const secondaryAction = computed(() => (
   route.name === 'market'
@@ -89,7 +76,7 @@ void configStore.loadPublicConfig()
 </script>
 
 <template>
-  <footer class="relative border-t" :class="themeStore.isDark ? 'border-white/10' : 'border-black/10'">
+  <footer class="kawaii-public-footer relative border-t">
     <ThemeTemplateSlot
       slot-name="shared.footer"
       container-class="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8"
@@ -97,40 +84,36 @@ void configStore.loadPublicConfig()
 
     <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div
-        class="rounded-[32px] border p-6 shadow-sm sm:p-8"
-        :class="themeStore.isDark ? 'border-white/10 bg-white/[0.03]' : 'border-black/10 bg-white/90'"
+        class="kawaii-footer-panel rounded-[32px] border p-6 shadow-sm sm:p-8"
       >
         <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-2xl">
             <div class="flex items-center gap-3">
               <div
-                class="flex h-11 w-11 items-center justify-center rounded-2xl border"
-                :class="themeStore.isDark ? 'border-white/10 bg-white/5' : 'border-black/10 bg-white'"
+                class="kawaii-footer-logo flex h-11 w-11 items-center justify-center rounded-2xl border"
               >
                 <img :src="brand.brandLogoUrl" :alt="brand.brandName" class="h-6 w-6 rounded-xl object-contain" />
               </div>
               <div>
-                <div class="text-sm font-semibold" :class="themeStore.isDark ? 'text-white' : 'text-zinc-950'">{{ brand.brandName }}</div>
-                <div class="text-xs" :class="themeStore.isDark ? 'text-zinc-500' : 'text-zinc-500'">{{ brand.brandSubtitle }}</div>
+                <div class="text-sm font-semibold text-themed">{{ brand.brandName }}</div>
+                <div class="text-xs text-themed-muted">{{ brand.brandSubtitle }}</div>
               </div>
             </div>
 
-            <p class="mt-4 max-w-2xl text-sm leading-7" :class="themeStore.isDark ? 'text-zinc-400' : 'text-zinc-600'">
+            <p class="mt-4 max-w-2xl text-sm leading-7 text-themed-muted">
               {{ t('publicSite.footer.description') }}
             </p>
           </div>
 
           <div class="flex flex-col gap-3 sm:flex-row">
             <RouterLink
-              class="inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition-colors"
-              :class="ui.secondaryButton"
+              class="kawaii-secondary-button inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition-colors"
               :to="secondaryAction.to"
             >
               {{ secondaryAction.label }}
             </RouterLink>
             <button
-              class="inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition-colors"
-              :class="ui.primaryButton"
+              class="kawaii-primary-button inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition-colors"
               @click="handlePrimaryAction"
             >
               {{ primaryActionLabel }}
@@ -141,38 +124,37 @@ void configStore.loadPublicConfig()
 
       <div class="mt-10 grid gap-8 sm:grid-cols-2">
         <div class="space-y-3">
-          <div class="text-xs font-semibold uppercase tracking-[0.2em]" :class="themeStore.isDark ? 'text-zinc-500' : 'text-zinc-500'">
+          <div class="text-xs font-semibold uppercase tracking-[0.2em] text-themed-faint">
             {{ t('publicSite.footer.explore') }}
           </div>
           <div class="flex flex-col gap-2 text-sm">
-            <RouterLink class="transition-colors" :class="themeStore.isDark ? 'text-zinc-300 hover:text-white' : 'text-zinc-700 hover:text-zinc-950'" to="/">
+            <RouterLink class="kawaii-footer-link transition-colors" to="/">
               {{ t('publicSite.nav.home') }}
             </RouterLink>
-            <RouterLink class="transition-colors" :class="themeStore.isDark ? 'text-zinc-300 hover:text-white' : 'text-zinc-700 hover:text-zinc-950'" to="/market">
+            <RouterLink class="kawaii-footer-link transition-colors" to="/market">
               {{ t('publicSite.nav.products') }}
             </RouterLink>
-            <RouterLink class="transition-colors" :class="themeStore.isDark ? 'text-zinc-300 hover:text-white' : 'text-zinc-700 hover:text-zinc-950'" to="/help">
+            <RouterLink class="kawaii-footer-link transition-colors" to="/help">
               {{ t('publicSite.nav.help') }}
             </RouterLink>
           </div>
         </div>
 
         <div class="space-y-3">
-          <div class="text-xs font-semibold uppercase tracking-[0.2em]" :class="themeStore.isDark ? 'text-zinc-500' : 'text-zinc-500'">
+          <div class="text-xs font-semibold uppercase tracking-[0.2em] text-themed-faint">
             {{ t('publicSite.footer.account') }}
           </div>
           <div class="flex flex-col gap-2 text-sm">
             <RouterLink
               v-for="link in accountLinks"
               :key="link.to"
-              class="transition-colors"
-              :class="themeStore.isDark ? 'text-zinc-300 hover:text-white' : 'text-zinc-700 hover:text-zinc-950'"
+              class="kawaii-footer-link transition-colors"
               :to="link.to"
             >
               {{ link.label }}
             </RouterLink>
           </div>
-          <p class="text-xs leading-6" :class="themeStore.isDark ? 'text-zinc-500' : 'text-zinc-500'">
+          <p class="text-xs leading-6 text-themed-muted">
             {{ t('publicSite.footer.purchaseHint') }}
           </p>
         </div>

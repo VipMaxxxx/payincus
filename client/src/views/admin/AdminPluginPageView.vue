@@ -33,7 +33,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
+  <div class="kawaii-page p-6 space-y-6 animate-fade-in">
     <div v-if="loading" class="py-16 text-center text-themed-muted">加载中...</div>
 
     <template v-else-if="currentExtension">

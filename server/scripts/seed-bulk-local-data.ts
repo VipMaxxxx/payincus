@@ -1346,6 +1346,7 @@ async function syncInstanceChildren(
     await prisma.ipAddress.createMany({
       data: [
         {
+          hostId,
           instanceId,
           address: spec.ipv6,
           type: 'inet6',
@@ -1356,6 +1357,7 @@ async function syncInstanceChildren(
         ...(index % 5 === 0
           ? [
               {
+                hostId,
                 instanceId,
                 address: `${spec.ipv6.split('::')[0]}::${400 + index}`,
                 type: 'inet6',

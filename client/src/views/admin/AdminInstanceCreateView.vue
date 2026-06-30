@@ -586,7 +586,7 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto space-y-6 animate-fade-in">
+  <div class="kawaii-page max-w-3xl mx-auto space-y-6 animate-fade-in">
     <div class="page-header">
       <div>
         <h1 class="page-title">{{ $t('admin.instanceCreate.title') }}</h1>

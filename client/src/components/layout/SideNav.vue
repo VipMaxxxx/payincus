@@ -4,7 +4,6 @@ import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
 import { isAdminEntry, navMenuItems, type MenuItem } from '@/config/side-nav-items'
 import { dashboardPath } from '@/utils/app-paths'
@@ -29,7 +28,6 @@ const emit = defineEmits<{
 const route = useRoute()
 const authStore = useAuthStore()
 const configStore = useConfigStore()
-const themeStore = useThemeStore()
 const brand = useBrand()
 void configStore.loadPublicConfig()
 
@@ -248,7 +246,7 @@ onUnmounted(() => {
   <!-- Sidebar -->
   <aside 
     :class="[
-      'flex flex-col min-h-full transition-all duration-200 border-r z-50',
+      'kawaii-sidebar flex flex-col min-h-full transition-all duration-200 border-r z-50',
       // 移动端：mobileOpen 为 true 时显示，否则隐藏
       // 桌面端：始终显示 (md:flex)
       mobileOpen ? 'flex' : 'hidden md:flex',
@@ -258,16 +256,14 @@ onUnmounted(() => {
       // 位置
       'md:relative fixed inset-y-0 left-0',
       // 滑动动画的 transform
-      mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-      // 主题颜色
-      themeStore.isDark ? 'border-gray-800 bg-gray-950' : 'border-gray-200 bg-white'
+      mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
     ]"
   >
     <!-- Logo -->
     <div 
       class="h-14 flex items-center border-b"
       :class="[
-        themeStore.isDark ? 'border-gray-800' : 'border-gray-200',
+        'border-themed',
         collapsed && !mobileOpen ? 'justify-center px-2' : 'px-4'
       ]"
     >
@@ -279,8 +275,7 @@ onUnmounted(() => {
         />
         <span 
           v-if="!collapsed || mobileOpen" 
-          class="font-semibold text-sm"
-          :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
+          class="font-semibold text-sm text-themed"
         >{{ brand.brandName }}</span>
       </RouterLink>
     </div>
@@ -289,7 +284,7 @@ onUnmounted(() => {
       v-if="!collapsed || mobileOpen"
       :slot-name="shellBrandSlot"
       container-class="border-b px-4 py-3"
-      :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
+      class="border-themed"
     />
 
     <!-- 导航菜单 -->
@@ -300,7 +295,7 @@ onUnmounted(() => {
           <button
             v-if="!collapsed || mobileOpen" 
             class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-2xs font-medium transition-colors hover:bg-themed-hover"
-            :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
+            :class="'text-themed-muted'"
             type="button"
             @click="toggleGroup(item.label)"
           >
@@ -318,8 +313,7 @@ onUnmounted(() => {
           </button>
           <div 
             v-else 
-            class="mx-2"
-            :class="themeStore.isDark ? 'border-t border-gray-800' : 'border-t border-gray-200'"
+            class="mx-2 border-t border-themed"
           ></div>
         </div>
 
@@ -331,8 +325,8 @@ onUnmounted(() => {
             'flex items-center py-1.5 rounded text-sm transition-colors',
             collapsed && !mobileOpen ? 'justify-center px-0' : 'gap-2.5 px-2',
             isActive(item) 
-              ? (themeStore.isDark ? 'bg-gray-800 text-gray-100' : 'bg-gray-100 text-gray-900')
-              : (themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-900' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100')
+              ? 'is-active'
+              : 'text-themed-muted hover:text-themed hover:bg-themed-hover'
           ]"
           @click="handleLinkClick"
         >
@@ -462,16 +456,15 @@ onUnmounted(() => {
     <div 
       v-if="!collapsed || mobileOpen" 
       class="px-4 py-3 border-t flex items-center justify-between"
-      :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
+      :class="'border-themed'"
     >
-      <div class="text-2xs" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">{{ brand.brandName }}</div>
+      <div class="text-2xs text-themed-muted">{{ brand.brandName }}</div>
       <div class="flex items-center gap-2">
         <!-- 邮箱链接 -->
         <a 
           v-if="footerEmailHref"
           :href="footerEmailHref"
-          class="p-1 rounded transition-colors"
-          :class="themeStore.isDark ? 'text-gray-600 hover:text-gray-400 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+          class="kawaii-header-icon p-1 rounded transition-colors"
           title="Email"
           @click="handleLinkClick"
         >
@@ -485,8 +478,7 @@ onUnmounted(() => {
           :href="footerTelegramLink"
           target="_blank" 
           rel="noopener noreferrer"
-          class="p-1 rounded transition-colors"
-          :class="themeStore.isDark ? 'text-gray-600 hover:text-gray-400 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+          class="kawaii-header-icon p-1 rounded transition-colors"
           title="Telegram"
           @click="handleLinkClick"
         >

@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import api from '@/api'
 import { useToast } from '@/stores/toast'
-import { useThemeStore } from '@/stores/theme'
 import { useConfigStore } from '@/stores/config'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import TermsOfServiceModal from '@/components/TermsOfServiceModal.vue'
@@ -14,7 +13,6 @@ const { t } = useI18n()
 const toast = useToast()
 const router = useRouter()
 const route = useRoute()
-const themeStore = useThemeStore()
 const configStore = useConfigStore()
 
 type WalletTab = 'balance' | 'logs' | 'records' | 'aff'
@@ -947,14 +945,28 @@ function formatAmount() {
 </script>
 
 <template>
-  <div class="animate-fade-in">
+  <div class="kawaii-page kawaii-wallet-page space-y-5 animate-fade-in">
+    <div class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
+      <div>
+        <h1 class="page-title text-lg sm:text-xl">{{ configStore.freeSiteMode ? freeSiteCopy.walletBalanceTab : $t('wallet.title') }}</h1>
+        <p class="page-description">
+          {{ configStore.freeSiteMode ? freeSiteCopy.walletDescription : $t('wallet.description') }}
+        </p>
+      </div>
+      <button v-if="!configStore.freeSiteMode" class="btn btn-primary w-full justify-center sm:w-auto" @click="openRechargeModal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        {{ $t('wallet.recharge') }}
+      </button>
+    </div>
+
     <ThemeTemplateSlot slot-name="user.wallet.banner" container-class="mb-5 overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
     <!-- 顶部胶囊 Tabs -->
     <div class="mb-4 flex justify-center overflow-x-auto pb-1 sm:mb-5">
       <div
-        class="inline-flex max-w-full min-w-max rounded-full p-1"
-        :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
+        class="kawaii-browse-wrap inline-flex max-w-full min-w-max rounded-full p-1"
         role="tablist"
         :aria-label="$t('wallet.title')"
       >
@@ -964,14 +976,8 @@ function formatAmount() {
           type="button"
           role="tab"
           :aria-selected="activeTab === tab.key"
-          class="whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 focus-visible:outline-none sm:px-5"
-          :class="activeTab === tab.key
-            ? themeStore.isDark
-              ? 'bg-white text-gray-900 shadow-lg'
-              : 'bg-gray-900 text-white shadow-lg'
-            : themeStore.isDark
-              ? 'text-gray-400 hover:text-gray-200'
-              : 'text-gray-600 hover:text-gray-900'"
+          class="kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 focus-visible:outline-none sm:px-5"
+          :class="activeTab === tab.key ? 'active' : ''"
           @click="switchTab(tab.key)"
         >
           {{ tab.label }}
@@ -995,29 +1001,12 @@ function formatAmount() {
               <div class="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
                 {{ configStore.freeSiteMode ? freeSiteCopy.walletCurrentBalance : $t('wallet.currentBalance') }}
               </div>
-              <div class="mt-4 text-5xl font-semibold tracking-[-0.05em] text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-6xl">
+              <div class="mt-4 text-5xl font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-6xl">
                 {{ formatMoney(balance.balance) }}
               </div>
               <p class="mt-4 max-w-2xl text-sm leading-6 text-themed-muted">
                 {{ configStore.freeSiteMode ? freeSiteCopy.walletDescription : $t('wallet.description') }}
               </p>
-              <div v-if="!configStore.freeSiteMode" class="mt-7 flex flex-wrap gap-3 lg:hidden">
-                <button class="btn btn-primary btn-lg" @click="openRechargeModal">
-                  <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                  </svg>
-                  {{ $t('wallet.recharge') }}
-                </button>
-              </div>
-            </div>
-
-            <div v-if="!configStore.freeSiteMode" class="hidden lg:flex lg:flex-shrink-0 lg:justify-end">
-              <button class="btn btn-primary btn-lg" @click="openRechargeModal">
-                <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-                {{ $t('wallet.recharge') }}
-              </button>
             </div>
           </div>
 
@@ -1033,7 +1022,7 @@ function formatAmount() {
                   {{ metric.label }}
                 </div>
               </div>
-              <div class="mt-4 text-[30px] font-semibold tracking-[-0.04em] text-zinc-950 tabular-nums dark:text-zinc-50">
+              <div class="mt-4 text-[30px] font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                 {{ metric.value }}
               </div>
             </div>
@@ -1051,7 +1040,7 @@ function formatAmount() {
               <div class="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
                 {{ configStore.freeSiteMode ? freeSiteCopy.walletLogsTab : $t('wallet.tabs.logs') }}
               </div>
-              <div class="mt-4 text-4xl font-semibold tracking-[-0.04em] text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-5xl">
+              <div class="mt-4 text-4xl font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-5xl">
                 {{ logsTotal.toLocaleString() }}
               </div>
               <div class="mt-2 text-sm text-themed-muted">
@@ -1085,7 +1074,7 @@ function formatAmount() {
                   {{ metric.label }}
                 </div>
               </div>
-              <div class="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-zinc-950 tabular-nums dark:text-zinc-50">
+              <div class="mt-4 text-[28px] font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                 {{ metric.value }}
               </div>
             </div>
@@ -1161,7 +1150,7 @@ function formatAmount() {
                 <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
                   {{ $t('wallet.amount') }}
                 </div>
-                <div class="text-[15px] font-semibold tracking-[-0.01em] tabular-nums" :class="getAmountValueClass(log.amount)">
+                <div class="text-[15px] font-semibold tracking-normal tabular-nums" :class="getAmountValueClass(log.amount)">
                   {{ log.amount >= 0 ? '+' : '-' }}{{ formatMoney(Math.abs(log.amount)) }}
                 </div>
               </div>
@@ -1170,7 +1159,7 @@ function formatAmount() {
                 <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
                   {{ $t('wallet.balanceAfter') }}
                 </div>
-                <div class="text-[15px] font-medium tracking-[-0.01em] text-zinc-950 tabular-nums dark:text-zinc-50">
+                <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                   {{ formatMoney(log.balanceAfter) }}
                 </div>
               </div>
@@ -1223,7 +1212,7 @@ function formatAmount() {
               <div class="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
                 {{ $t('wallet.tabs.records') }}
               </div>
-              <div class="mt-4 text-4xl font-semibold tracking-[-0.04em] text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-5xl">
+              <div class="mt-4 text-4xl font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-5xl">
                 {{ recordsTotal.toLocaleString() }}
               </div>
               <div class="mt-2 text-sm text-themed-muted">
@@ -1254,7 +1243,7 @@ function formatAmount() {
                   {{ metric.label }}
                 </div>
               </div>
-              <div class="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-zinc-950 tabular-nums dark:text-zinc-50">
+              <div class="mt-4 text-[28px] font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                 {{ metric.value }}
               </div>
             </div>
@@ -1293,7 +1282,7 @@ function formatAmount() {
               <div class="min-w-0">
                 <div class="lg:hidden">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="truncate text-[15px] font-semibold tracking-[-0.01em] text-zinc-950 dark:text-zinc-50">{{ rec.orderNo }}</span>
+                    <span class="truncate text-[15px] font-semibold tracking-normal text-zinc-950 dark:text-zinc-50">{{ rec.orderNo }}</span>
                   </div>
                   <div class="mt-2 text-[15px] leading-7 text-zinc-500 dark:text-zinc-400">
                     {{ rec.provider?.name || '-' }}
@@ -1309,7 +1298,7 @@ function formatAmount() {
                 </div>
 
                 <div class="hidden lg:block">
-                  <span class="block truncate text-[15px] font-semibold tracking-[-0.01em] text-zinc-950 dark:text-zinc-50">
+                  <span class="block truncate text-[15px] font-semibold tracking-normal text-zinc-950 dark:text-zinc-50">
                     {{ rec.orderNo }}
                   </span>
                 </div>
@@ -1319,7 +1308,7 @@ function formatAmount() {
                 <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
                   {{ $t('wallet.amount') }}
                 </div>
-                <div class="text-[15px] font-medium tracking-[-0.01em] text-zinc-950 tabular-nums dark:text-zinc-50">
+                <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                   {{ formatMoney(rec.amount) }}
                 </div>
                 <div v-if="rec.actualAmount !== null" class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -1455,7 +1444,7 @@ function formatAmount() {
                 <div class="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
                   {{ $t('aff.affBalance') }}
                 </div>
-                <div class="mt-4 text-5xl font-semibold tracking-[-0.05em] text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-6xl">
+                <div class="mt-4 text-5xl font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-6xl">
                   {{ formatMoney(affStatus.currentBalance) }}
                 </div>
                 <p class="mt-4 max-w-2xl text-sm leading-6 text-themed-muted">
@@ -1492,7 +1481,7 @@ function formatAmount() {
                     {{ metric.label }}
                   </div>
                 </div>
-                <div class="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-zinc-950 tabular-nums dark:text-zinc-50">
+                <div class="mt-4 text-[28px] font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                   {{ metric.value }}
                 </div>
               </div>
@@ -1540,7 +1529,7 @@ function formatAmount() {
               >
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-[15px] font-semibold tracking-[-0.01em] text-zinc-950 dark:text-zinc-50">{{ code.code }}</span>
+                    <span class="text-[15px] font-semibold tracking-normal text-zinc-950 dark:text-zinc-50">{{ code.code }}</span>
                     <button class="text-themed-muted transition-colors hover:text-themed" @click="copyCode(code.code)">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -1572,7 +1561,7 @@ function formatAmount() {
                   <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
                     {{ $t('aff.usedCount') }}
                   </div>
-                  <div class="text-[15px] font-medium tracking-[-0.01em] text-zinc-950 tabular-nums dark:text-zinc-50">
+                  <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                     {{ code.usedCount.toLocaleString() }}
                   </div>
                 </div>
@@ -1581,7 +1570,7 @@ function formatAmount() {
                   <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
                     {{ $t('aff.earnings') }}
                   </div>
-                  <div class="text-[15px] font-medium tracking-[-0.01em] text-zinc-950 tabular-nums dark:text-zinc-50">
+                  <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                     {{ formatMoney(code.totalEarnings) }}
                   </div>
                 </div>
@@ -1681,7 +1670,7 @@ function formatAmount() {
                     <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
                       {{ $t('wallet.amount') }}
                     </div>
-                    <div class="text-[15px] font-semibold tracking-[-0.01em] tabular-nums" :class="getAmountValueClass(log.amount)">
+                    <div class="text-[15px] font-semibold tracking-normal tabular-nums" :class="getAmountValueClass(log.amount)">
                       {{ log.amount >= 0 ? '+' : '-' }}{{ formatMoney(Math.abs(log.amount)) }}
                     </div>
                   </div>
@@ -1690,7 +1679,7 @@ function formatAmount() {
                     <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
                       {{ $t('wallet.balanceAfter') }}
                     </div>
-                    <div class="text-[15px] font-medium tracking-[-0.01em] text-zinc-950 tabular-nums dark:text-zinc-50">
+                    <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                       {{ formatMoney(log.balanceAfter) }}
                     </div>
                   </div>
@@ -1763,7 +1752,7 @@ function formatAmount() {
                     <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
                       {{ $t('wallet.amount') }}
                     </div>
-                    <div class="text-[15px] font-medium tracking-[-0.01em] text-zinc-950 tabular-nums dark:text-zinc-50">
+                    <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
                       {{ formatMoney(w.amount) }}
                     </div>
                   </div>

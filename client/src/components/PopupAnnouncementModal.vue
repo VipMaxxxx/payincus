@@ -213,7 +213,7 @@ watch(visible, (isVisible) => {
         <div class="absolute inset-0 bg-black/45 backdrop-blur-sm"></div>
 
         <div
-          class="relative w-full max-w-[min(92vw,720px)] overflow-hidden rounded-lg border shadow-2xl md:w-auto md:max-w-[min(92vw,980px)]"
+          class="modal-content relative w-full max-w-[min(92vw,720px)] overflow-hidden rounded-2xl border md:w-auto md:max-w-[min(92vw,980px)]"
           :class="themeStore.isDark
             ? 'border-gray-800 bg-gray-950 text-gray-100'
             : 'border-gray-200 bg-white text-gray-900'"
@@ -221,7 +221,7 @@ watch(visible, (isVisible) => {
           <template v-if="hasPromo && promoPackage">
             <button
               type="button"
-              class="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition"
+              class="kawaii-action-button absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition"
               :class="themeStore.isDark
                 ? 'border-white/10 bg-gray-950/80 text-gray-200 hover:bg-gray-900'
                 : 'border-black/10 bg-white/90 text-gray-700 hover:bg-white'"
@@ -385,7 +385,7 @@ watch(visible, (isVisible) => {
 
         <div
           v-if="promoLightboxOpen && hasPromo && promoPackage && !promoImageFailed"
-          class="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 p-4"
+          class="kawaii-theme-exempt fixed inset-0 z-[110] flex items-center justify-center bg-black/85 p-4"
           role="dialog"
           aria-modal="true"
           :aria-label="t('popupAnnouncement.viewImage')"

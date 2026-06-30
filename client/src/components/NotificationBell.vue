@@ -128,8 +128,7 @@ onUnmounted(() => {
   <div ref="panelRef" class="relative">
     <!-- 铃铛按钮 -->
     <button
-      class="relative p-1.5 rounded transition-colors touch-target"
-      :class="themeStore.isDark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'"
+      class="kawaii-header-icon relative p-1.5 rounded transition-colors touch-target"
       :aria-label="t('inbox.notifications')"
       @click.stop="togglePanel"
     >
@@ -156,12 +155,12 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
-        class="fixed sm:absolute left-0 right-0 sm:left-auto sm:right-0 top-14 sm:top-auto sm:mt-2 sm:w-80 sm:rounded-lg shadow-xl py-2 z-50 border-y sm:border"
+        class="kawaii-menu-panel fixed sm:absolute left-0 right-0 sm:left-auto sm:right-0 top-14 sm:top-auto sm:mt-2 sm:w-80 sm:rounded-2xl py-2 z-50 border-y sm:border"
         :class="themeStore.isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'"
       >
         <!-- 标题栏 -->
-        <div class="flex items-center justify-between px-4 pb-2 border-b" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-200'">
-          <span class="font-medium text-sm" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">
+        <div class="flex items-center justify-between px-4 pb-2 border-b border-themed">
+          <span class="font-medium text-sm text-themed">
             {{ t('inbox.notifications') }}
           </span>
           <button
@@ -199,7 +198,7 @@ onUnmounted(() => {
             <button
               v-for="message in recentMessages"
               :key="message.id"
-              class="w-full px-4 py-3 text-left transition-colors"
+              class="kawaii-menu-item w-full px-4 py-3 text-left transition-colors"
               :class="[
                 themeStore.isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50',
                 !message.isRead ? (themeStore.isDark ? 'bg-gray-800/50' : 'bg-blue-50/50') : ''
@@ -258,7 +257,7 @@ onUnmounted(() => {
         </div>
 
         <!-- 底部 -->
-        <div class="pt-2 border-t" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-200'">
+        <div class="pt-2 border-t border-themed">
           <button
             class="w-full py-2 text-center text-sm transition-colors"
             :class="themeStore.isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'"

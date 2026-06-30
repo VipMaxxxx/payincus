@@ -3414,12 +3414,13 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
+    const dbPools = await db.getStoragePoolsByHostId(hostId)
+
     try {
       const client = await getIncusClient(host)
       const pools = await listStoragePools(client)
 
       // 从数据库获取存储池的用途信息
-      const dbPools = await db.getStoragePoolsByHostId(hostId)
       const purposeMap = new Map(dbPools.map(p => [p.name, p.purpose]))
 
       // 获取每个存储池的资源使用情况
@@ -3455,8 +3456,20 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       return { pools: poolsWithResources }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err)
-      request.log.error(err, 'Failed to get storage pools')
-      return reply.code(500).send({ error: `获取存储池列表失败: ${errorMessage}` })
+      request.log.warn(err, 'Falling back to database storage pools')
+      return {
+        pools: dbPools.map(pool => ({
+          name: pool.name,
+          driver: pool.driver,
+          status: 'Unavailable',
+          description: pool.description || '',
+          purpose: pool.purpose,
+          config: pool.config || {},
+          usedBy: 0,
+          space: null
+        })),
+        warning: `无法连接到 Incus，已显示数据库中登记的存储池: ${errorMessage}`
+      }
     }
   })
 

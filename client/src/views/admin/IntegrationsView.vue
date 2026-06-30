@@ -237,12 +237,11 @@ const summary = computed(() => {
 async function loadIntegrations(): Promise<void> {
   loading.value = true
   try {
-    const [configResponse, channelsResponse, storageResponse, paymentProvidersResponse, webhookResponse, historyResponse] = await Promise.allSettled([
+    const [configResponse, channelsResponse, storageResponse, paymentProvidersResponse, historyResponse] = await Promise.allSettled([
       api.systemConfig.list(),
       api.adminNotificationChannels.list(),
       api.storageConfigs.list(),
       api.admin.getPaymentProviders(),
-      api.telegram.getWebhookInfo(),
       api.integrations.history()
     ])
 
@@ -260,14 +259,22 @@ async function loadIntegrations(): Promise<void> {
     if (paymentProvidersResponse.status === 'fulfilled') {
       paymentProviders.value = paymentProvidersResponse.value.providers
     }
-    if (webhookResponse.status === 'fulfilled') {
-      telegramWebhook.value = webhookResponse.value.info
-    }
     if (historyResponse.status === 'fulfilled') {
       healthHistory.value = historyResponse.value
     }
 
-    const failed = [configResponse, channelsResponse, storageResponse, paymentProvidersResponse, webhookResponse, historyResponse].filter(result => result.status === 'rejected').length
+    if (configEnabled('telegram_bot_enabled') && hasValue('telegram_bot_token')) {
+      try {
+        const response = await api.telegram.getWebhookInfo()
+        telegramWebhook.value = response.info
+      } catch {
+        telegramWebhook.value = { last_error_message: 'Webhook 状态读取失败，请进入 Telegram 配置页复核。' }
+      }
+    } else {
+      telegramWebhook.value = null
+    }
+
+    const failed = [configResponse, channelsResponse, storageResponse, paymentProvidersResponse, historyResponse].filter(result => result.status === 'rejected').length
     if (failed > 0) {
       toast.warning(`集成中心有 ${failed} 个状态源读取失败，请进入对应配置页复核。`)
     }
@@ -304,7 +311,7 @@ onMounted(loadIntegrations)
 </script>
 
 <template>
-  <div class="page-container">
+  <div class="kawaii-page page-container animate-fade-in">
     <div class="page-header">
       <div>
         <h1 class="page-title">集成中心</h1>

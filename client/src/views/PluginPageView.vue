@@ -25,13 +25,15 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <div v-if="loading" class="py-16 text-center text-themed-muted">加载中...</div>
 
     <template v-else-if="currentExtension">
-      <div>
-        <h1 class="text-2xl font-semibold text-themed">{{ currentExtension.title }}</h1>
-        <p class="mt-1 text-sm text-themed-muted">{{ currentExtension.pluginName }} · {{ currentExtension.version || '-' }}</p>
+      <div class="kawaii-dashboard-hero page-header rounded-2xl p-5">
+        <div>
+          <h1 class="page-title text-lg sm:text-xl">{{ currentExtension.title }}</h1>
+          <p class="page-description">{{ currentExtension.pluginName }} · {{ currentExtension.version || '-' }}</p>
+        </div>
       </div>
       <PluginFrame :title="currentExtension.title" :url="currentExtension.url" />
     </template>

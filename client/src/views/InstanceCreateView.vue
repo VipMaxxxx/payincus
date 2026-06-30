@@ -1132,27 +1132,30 @@ async function createRiskReviewTicket(): Promise<void> {
 </script>
 
 <template>
-  <div class="animate-fade-in lg:h-full lg:flex lg:flex-col">
+  <div class="kawaii-page animate-fade-in lg:h-full lg:flex lg:flex-col">
+    <div class="kawaii-dashboard-hero page-header mb-4 rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0 lg:mb-3 lg:shrink-0">
+      <div>
+        <h1 class="page-title text-lg sm:text-xl">{{ $t('instance.createPage.title') }}</h1>
+        <p class="page-description">{{ $t('instance.createPage.description') }}</p>
+      </div>
+      <RouterLink to="/instances" class="btn btn-secondary w-full justify-center sm:w-auto">
+        {{ $t('common.back') }}
+      </RouterLink>
+    </div>
+
     <!-- 套餐来源切换器 -->
     <div v-if="!loading" class="flex justify-center mb-4 lg:mb-3 shrink-0">
       <div
-        class="inline-flex max-w-full overflow-x-auto p-1 rounded-full scrollbar-hide"
-        :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
+        class="kawaii-browse-wrap inline-flex max-w-full overflow-x-auto rounded-full p-1 scrollbar-hide"
       >
         <button
           v-for="source in sourceTabs"
           :key="source.key"
           type="button"
           :disabled="sourceLoading"
-          class="relative shrink-0 px-4 py-2 text-sm font-medium rounded-full transition-all duration-300"
+          class="kawaii-market-pill relative shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all duration-300"
           :class="[
-            packageSource === source.key
-              ? themeStore.isDark
-                ? 'bg-white text-gray-900 shadow-lg'
-                : 'bg-gray-900 text-white shadow-lg'
-              : themeStore.isDark
-                ? 'text-gray-400 hover:text-gray-200'
-                : 'text-gray-600 hover:text-gray-900',
+            packageSource === source.key ? 'active' : '',
             sourceLoading ? 'cursor-not-allowed opacity-50' : ''
           ]"
           @click="switchPackageSource(source.key)"

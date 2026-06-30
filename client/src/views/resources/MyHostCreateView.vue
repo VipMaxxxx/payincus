@@ -280,16 +280,17 @@ function closeAndGoBack() {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <ThemeTemplateSlot slot-name="user.host.create.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
     <!-- 居中容器 -->
     <div class="flex justify-center">
       <div class="w-full max-w-3xl space-y-6">
         <!-- 页面头部 -->
-        <div class="flex items-center gap-3">
-          <RouterLink :to="hostsPath()" class="transition-colors" :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'">
+        <div class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
+          <RouterLink :to="hostsPath()" class="btn btn-secondary btn-sm gap-1">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7" /></svg>
+            {{ t('common.back') }}
           </RouterLink>
           <div>
             <h1 class="page-title">{{ t('resources.hosts.create') }}</h1>

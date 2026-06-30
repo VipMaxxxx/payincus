@@ -291,7 +291,7 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
 </script>
 
 <template>
-  <div class="animate-fade-in">
+  <div class="kawaii-page animate-fade-in">
     <!-- 页面标题 -->
     <div class="page-header">
       <h1 class="page-title">{{ t('mail.title') }}</h1>

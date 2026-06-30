@@ -6893,6 +6893,7 @@ export default {
     // 工單系統
     tickets: {
         title: '工單中心',
+        subtitle: '提交問題、追蹤回覆，並查看與實例相關的支援記錄。',
         myTickets: '我的工單',
         hostTickets: '收到的工單',
         createTicket: '建立工單',

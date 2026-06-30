@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import { useBadgeStore } from '@/stores/badges'
 
@@ -16,13 +16,19 @@ const props = withDefaults(defineProps<{
 
 const themeStore = useThemeStore()
 const badgeStore = useBadgeStore()
+const imageErrored = ref(false)
 
 onMounted(() => {
   badgeStore.ensureBadge(props.badgeId)
 })
 
 watch(() => props.badgeId, (badgeId) => {
+  imageErrored.value = false
   badgeStore.ensureBadge(badgeId)
+})
+
+watch(() => themeStore.isDark, () => {
+  imageErrored.value = false
 })
 
 const sizeStyle = computed(() => ({
@@ -37,6 +43,10 @@ const roundedClass = computed(() => {
 })
 
 const badgeUrl = computed(() => {
+  if (imageErrored.value) {
+    return `/badges/${themeStore.isDark ? 'dark' : 'light'}/ignition.svg`
+  }
+
   const badge = badgeStore.getBadge(props.badgeId)
   if (badge) {
     if (themeStore.isDark) {
@@ -57,5 +67,6 @@ const badgeUrl = computed(() => {
     class="object-contain shrink-0"
     :class="roundedClass"
     :style="sizeStyle"
+    @error="imageErrored = true"
   />
 </template>

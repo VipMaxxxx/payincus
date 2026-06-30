@@ -1,5 +1,6 @@
 /* Geist 字体 - 必须在 @tailwind 之前 */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import './kawaii-cloud.css';
 
 @tailwind base;
 @tailwind components;

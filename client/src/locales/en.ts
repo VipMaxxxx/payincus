@@ -6499,6 +6499,7 @@ export default {
     // Ticket System
     tickets: {
         title: 'Ticket Center',
+        subtitle: 'Submit requests, follow replies, and review support records tied to your instances.',
         myTickets: 'My Tickets',
         hostTickets: 'Received Tickets',
         createTicket: 'Create Ticket',

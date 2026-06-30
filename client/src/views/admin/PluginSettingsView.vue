@@ -380,7 +380,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
+  <div class="kawaii-page p-6 space-y-6 animate-fade-in">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
         <button class="text-sm text-themed-muted hover:text-themed" @click="router.push('/admin/plugins')">

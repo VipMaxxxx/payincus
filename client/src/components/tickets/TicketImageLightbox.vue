@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
   <Transition name="modal">
     <div
       v-if="show"
-      class="fixed inset-0 z-[80] flex flex-col bg-black/90"
+      class="kawaii-theme-exempt fixed inset-0 z-[80] flex flex-col bg-black/90"
       @click.self="closeLightbox"
     >
       <div class="flex items-center justify-between gap-3 px-4 py-3 text-white">

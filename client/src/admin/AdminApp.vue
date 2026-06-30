@@ -126,15 +126,19 @@ onUnmounted(() => {
   <AppLayout v-if="showLayout">
     <RouterView v-slot="{ Component, route: currentRoute }">
       <template v-if="Component">
-        <KeepAlive :exclude="['AdminInstanceCreateView', 'MyHostDetailView', 'PackageFormView']" :max="10">
-          <component :is="Component" :key="currentRoute.name" />
-        </KeepAlive>
+        <Transition name="kawaii-route" mode="out-in">
+          <KeepAlive :exclude="['AdminInstanceCreateView', 'MyHostDetailView', 'PackageFormView']" :max="10">
+            <component :is="Component" :key="currentRoute.name" />
+          </KeepAlive>
+        </Transition>
       </template>
     </RouterView>
   </AppLayout>
   <RouterView v-else v-slot="{ Component, route: currentRoute }">
     <template v-if="Component">
-      <component :is="Component" :key="currentRoute.name" />
+      <Transition name="kawaii-route" mode="out-in">
+        <component :is="Component" :key="currentRoute.name" />
+      </Transition>
     </template>
   </RouterView>
   <ToastContainer />

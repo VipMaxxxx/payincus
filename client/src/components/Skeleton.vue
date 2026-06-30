@@ -1,8 +1,4 @@
 <script setup lang="ts">
-import { useThemeStore } from '@/stores/theme'
-
-const themeStore = useThemeStore()
-
 interface Props {
   type?: 'line' | 'circle' | 'card' | 'table' | 'text'
   width?: string
@@ -20,20 +16,24 @@ const props = withDefaults(defineProps<Props>(), {
   rows: 5,
   lines: 3
 })
+
+const skeletonBlock = 'kawaii-skeleton'
+const skeletonSoft = 'kawaii-skeleton opacity-70'
+const skeletonPanel = 'kawaii-card-soft border-themed'
 </script>
 
 <template>
   <!-- 线条骨架屏 -->
   <div 
     v-if="props.type === 'line'" 
-    :class="['skeleton-line', themeStore.isDark ? 'skeleton-dark' : 'skeleton-light']"
+    :class="['skeleton-line', skeletonBlock]"
     :style="{ width: props.width, height: props.height }"
   ></div>
 
   <!-- 圆形骨架屏 -->
   <div 
     v-else-if="props.type === 'circle'" 
-    :class="['skeleton-circle', themeStore.isDark ? 'skeleton-dark' : 'skeleton-light']"
+    :class="['skeleton-circle', skeletonBlock]"
     :style="{ width: props.size, height: props.size }"
   ></div>
 
@@ -43,14 +43,14 @@ const props = withDefaults(defineProps<Props>(), {
     class="card p-5 animate-pulse"
   >
     <div class="flex items-center justify-between mb-4">
-      <div class="h-5 rounded w-1/3" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"></div>
-      <div class="h-5 rounded w-14" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"></div>
+      <div class="h-5 rounded w-1/3" :class="skeletonBlock"></div>
+      <div class="h-5 rounded w-14" :class="skeletonBlock"></div>
     </div>
-    <div class="h-3 rounded w-3/4 mb-4" :class="themeStore.isDark ? 'bg-gray-800/50' : 'bg-gray-200/50'"></div>
+    <div class="h-3 rounded w-3/4 mb-4" :class="skeletonSoft"></div>
     <div class="grid grid-cols-2 gap-3">
       <div v-for="j in 4" :key="j" class="space-y-1">
-        <div class="h-3 rounded w-1/2" :class="themeStore.isDark ? 'bg-gray-800/50' : 'bg-gray-200/50'"></div>
-        <div class="h-4 rounded w-2/3" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"></div>
+        <div class="h-3 rounded w-1/2" :class="skeletonSoft"></div>
+        <div class="h-4 rounded w-2/3" :class="skeletonBlock"></div>
       </div>
     </div>
   </div>
@@ -62,35 +62,35 @@ const props = withDefaults(defineProps<Props>(), {
   >
     <div 
       class="h-10 rounded-t-lg mb-px"
-      :class="themeStore.isDark ? 'bg-gray-800/50' : 'bg-gray-100'"
+      :class="skeletonSoft"
     ></div>
     <div 
       v-for="i in props.rows" 
       :key="i" 
       class="h-14 border-b flex items-center px-4 gap-4"
-      :class="themeStore.isDark ? 'bg-gray-900/50 border-gray-800/50' : 'bg-gray-50 border-gray-100'"
+      :class="skeletonPanel"
     >
       <div 
         class="w-8 h-8 rounded"
-        :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"
+        :class="skeletonBlock"
       ></div>
       <div class="flex-1 space-y-1">
         <div 
           class="h-3 rounded w-1/4"
-          :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"
+          :class="skeletonBlock"
         ></div>
         <div 
           class="h-2 rounded w-1/6"
-          :class="themeStore.isDark ? 'bg-gray-800/50' : 'bg-gray-100'"
+          :class="skeletonSoft"
         ></div>
       </div>
       <div 
         class="h-6 rounded w-16"
-        :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"
+        :class="skeletonBlock"
       ></div>
       <div 
         class="h-4 rounded w-20"
-        :class="themeStore.isDark ? 'bg-gray-800/50' : 'bg-gray-100'"
+        :class="skeletonSoft"
       ></div>
     </div>
   </div>
@@ -105,7 +105,7 @@ const props = withDefaults(defineProps<Props>(), {
       :key="i" 
       class="h-4 rounded"
       :class="[
-        themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200',
+        skeletonBlock,
         i === props.lines ? 'w-3/4' : 'w-full'
       ]"
     ></div>
@@ -121,11 +121,4 @@ const props = withDefaults(defineProps<Props>(), {
   @apply rounded-full animate-pulse;
 }
 
-.skeleton-dark {
-  @apply bg-gray-800;
-}
-
-.skeleton-light {
-  @apply bg-gray-200;
-}
 </style>

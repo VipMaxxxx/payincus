@@ -439,7 +439,7 @@ loadCommands()
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header">
       <h1 class="page-title">{{ $t('nav.extensions') }}</h1>
       <p class="text-sm text-themed-muted mt-1">{{ $t('extensions.description') }}</p>

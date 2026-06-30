@@ -703,7 +703,7 @@ function getBillingCycleLabel(months: number): string {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header">
       <div>
         <h1 class="page-title">{{ t('resources.packages.title') }}</h1>

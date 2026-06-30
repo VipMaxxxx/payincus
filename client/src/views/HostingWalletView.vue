@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import api from '@/api'
 import { useToast } from '@/stores/toast'
 import { useAuthStore } from '@/stores/auth'
-import { useThemeStore } from '@/stores/theme'
 import { useConfigStore } from '@/stores/config'
 import UserAvatar from '@/components/UserAvatar.vue'
 import { getVipBadgeInlineStyle, normalizeVipBadgeStyle, type VipBadgeStyle } from '@/utils/vipBadge'
@@ -15,7 +14,6 @@ defineOptions({ name: 'HostingWalletView' })
 const { t } = useI18n()
 const toast = useToast()
 const authStore = useAuthStore()
-const themeStore = useThemeStore()
 const configStore = useConfigStore()
 
 interface HostingBalance {
@@ -585,24 +583,31 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="animate-fade-in">
+  <div class="kawaii-page space-y-5 animate-fade-in">
+    <div class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
+      <div>
+        <h1 class="page-title text-lg sm:text-xl">{{ t('hostingWallet.title') }}</h1>
+        <p class="page-description">{{ t('hostingWallet.description') }}</p>
+      </div>
+      <button
+        class="btn btn-primary w-full justify-center sm:w-auto"
+        :disabled="!canWithdraw"
+        @click="showWithdrawModal = true"
+      >
+        {{ t('hostingWallet.withdraw.button') }}
+      </button>
+    </div>
+
     <!-- 顶部胶囊 Tabs -->
-    <div class="mb-4 flex justify-center sm:mb-5">
+    <div class="flex justify-center">
       <div
-        class="inline-flex max-w-full overflow-x-auto p-1 rounded-full"
-        :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
+        class="kawaii-browse-wrap inline-flex max-w-full overflow-x-auto rounded-full p-1"
       >
         <button
           v-for="tab in tabs"
           :key="tab.key"
-          class="px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 whitespace-nowrap sm:px-5"
-          :class="activeTab === tab.key
-            ? themeStore.isDark
-              ? 'bg-white text-gray-900 shadow-lg'
-              : 'bg-gray-900 text-white shadow-lg'
-            : themeStore.isDark
-              ? 'text-gray-400 hover:text-gray-200'
-              : 'text-gray-600 hover:text-gray-900'"
+          class="kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 sm:px-5"
+          :class="activeTab === tab.key ? 'active' : ''"
           @click="handleTabChange(tab.key)"
         >
           {{ tab.label }}
@@ -633,7 +638,7 @@ onMounted(async () => {
     
     <template v-else>
       <!-- 头部统计区 -->
-      <div v-if="activeTab === 'overview'" class="card rounded-2xl p-4 sm:p-6 lg:p-7 mb-6">
+      <div v-if="activeTab === 'overview'" class="card rounded-2xl p-4 sm:p-6 lg:p-7">
         <div class="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:justify-between">
           <div class="min-w-0 flex-1">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

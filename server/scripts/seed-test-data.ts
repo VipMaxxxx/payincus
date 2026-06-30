@@ -132,6 +132,37 @@ const stats: SeedStats = {
 const userIds = new Map<string, number>()
 const hostIds = new Map<string, number>()
 
+async function ensureDefaultStoragePool(hostId: number, hostName: string): Promise<void> {
+  await prisma.storagePool.upsert({
+    where: {
+      hostId_name: {
+        hostId,
+        name: 'default'
+      }
+    },
+    create: {
+      hostId,
+      name: 'default',
+      driver: 'zfs',
+      purpose: 'instance_data',
+      description: 'Seed default system disk pool',
+      config: {
+        generatedBy: 'seed-test-data',
+        host: hostName
+      }
+    },
+    update: {
+      driver: 'zfs',
+      purpose: 'instance_data',
+      description: 'Seed default system disk pool',
+      config: {
+        generatedBy: 'seed-test-data',
+        host: hostName
+      }
+    }
+  })
+}
+
 function bytesFromGb(value: number): bigint {
   return BigInt(value) * 1024n * 1024n * 1024n
 }
@@ -250,6 +281,7 @@ async function ensureHost(spec: SeedHostSpec): Promise<number> {
       cpuAllowanceMax: spec.cpuAllowanceMax,
       memoryMax: spec.memoryMax
     })
+    await ensureDefaultStoragePool(hostId, spec.name)
 
     stats.hosts.created += 1
     hostIds.set(hostKey(spec.ownerUsername, spec.name), hostId)
@@ -276,6 +308,7 @@ async function ensureHost(spec: SeedHostSpec): Promise<number> {
     cpuAllowanceMax: spec.cpuAllowanceMax,
     memoryMax: spec.memoryMax
   })
+  await ensureDefaultStoragePool(existing.id, spec.name)
 
   stats.hosts.updated += 1
   hostIds.set(hostKey(spec.ownerUsername, spec.name), existing.id)

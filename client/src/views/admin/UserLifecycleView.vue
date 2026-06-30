@@ -252,7 +252,7 @@ onMounted(refreshAll)
 </script>
 
 <template>
-  <div class="lifecycle-page">
+  <div class="kawaii-page lifecycle-page animate-fade-in">
     <div class="page-header">
       <div>
         <h1>用户生命周期</h1>

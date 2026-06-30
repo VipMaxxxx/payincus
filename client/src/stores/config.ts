@@ -44,35 +44,47 @@ export const useConfigStore = defineStore('config', () => {
     const popupPromoPackage = ref<PopupPromoPackage | null>(null)
     const popupPromoUpdatedAt = ref<string | null>(null)
     const loaded = ref(false)
+    let loadPromise: Promise<void> | null = null
 
     async function loadPublicConfig(force = false) {
         if (loaded.value && !force) return
+
+        if (loadPromise && !force) return loadPromise
+
+        loadPromise = (async () => {
+            try {
+                const config = await api.systemConfig.getPublic()
+                registrationEnabled.value = config.registrationEnabled ?? true
+                requireInviteCode.value = config.requireInviteCode
+                ticketEnabled.value = config.ticketEnabled ?? true
+                freeSiteMode.value = config.freeSiteMode ?? false
+                mailAvailable.value = config.mailAvailable ?? true
+                turnstileEnabled.value = config.turnstileEnabled || false
+                turnstileSiteKey.value = config.turnstileSiteKey || null
+                avatarApiBase.value = config.avatarApiBase || 'https://api.dicebear.com/9.x'
+                brandName.value = config.brandName?.trim() || 'Incudal'
+                brandSubtitle.value = config.brandSubtitle?.trim() || '基于 Incus 的低价 NAT VPS'
+                brandLogoUrl.value = config.brandLogoUrl?.trim() || '/incudal_logo.webp'
+                transferFee.value = config.transferFee || 0
+                footerContactEmail.value = config.footerContactEmail ?? null
+                footerTelegramLink.value = config.footerTelegramLink ?? null
+                hostingMarketEntryEnabled.value = config.hostingMarketEntryEnabled ?? true
+                hostingNotice.value = config.hostingNotice ?? null
+                popupAnnouncement.value = config.popupAnnouncement ?? null
+                popupAnnouncementUpdatedAt.value = config.popupAnnouncementUpdatedAt ?? null
+                popupPromoImageUrl.value = config.popupPromoImageUrl ?? null
+                popupPromoPackage.value = config.popupPromoPackage ?? null
+                popupPromoUpdatedAt.value = config.popupPromoUpdatedAt ?? null
+                loaded.value = true
+            } catch (error) {
+                console.error('Failed to load public config:', error)
+            }
+        })()
+
         try {
-            const config = await api.systemConfig.getPublic()
-            registrationEnabled.value = config.registrationEnabled ?? true
-            requireInviteCode.value = config.requireInviteCode
-            ticketEnabled.value = config.ticketEnabled ?? true
-            freeSiteMode.value = config.freeSiteMode ?? false
-            mailAvailable.value = config.mailAvailable ?? true
-            turnstileEnabled.value = config.turnstileEnabled || false
-            turnstileSiteKey.value = config.turnstileSiteKey || null
-            avatarApiBase.value = config.avatarApiBase || 'https://api.dicebear.com/9.x'
-            brandName.value = config.brandName?.trim() || 'Incudal'
-            brandSubtitle.value = config.brandSubtitle?.trim() || '基于 Incus 的低价 NAT VPS'
-            brandLogoUrl.value = config.brandLogoUrl?.trim() || '/incudal_logo.webp'
-            transferFee.value = config.transferFee || 0
-            footerContactEmail.value = config.footerContactEmail ?? null
-            footerTelegramLink.value = config.footerTelegramLink ?? null
-            hostingMarketEntryEnabled.value = config.hostingMarketEntryEnabled ?? true
-            hostingNotice.value = config.hostingNotice ?? null
-            popupAnnouncement.value = config.popupAnnouncement ?? null
-            popupAnnouncementUpdatedAt.value = config.popupAnnouncementUpdatedAt ?? null
-            popupPromoImageUrl.value = config.popupPromoImageUrl ?? null
-            popupPromoPackage.value = config.popupPromoPackage ?? null
-            popupPromoUpdatedAt.value = config.popupPromoUpdatedAt ?? null
-            loaded.value = true
-        } catch (error) {
-            console.error('Failed to load public config:', error)
+            await loadPromise
+        } finally {
+            loadPromise = null
         }
     }
 

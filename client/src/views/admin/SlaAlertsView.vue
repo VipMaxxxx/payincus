@@ -254,7 +254,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
+  <div class="kawaii-page p-6 space-y-6 animate-fade-in">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div>
         <h1 class="text-2xl font-semibold text-themed">SLA 与告警</h1>

@@ -985,7 +985,7 @@ function _getQuotaPercent(used, limit) {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <!-- 页面头部 -->
     <div class="page-header flex-col sm:flex-row gap-4 sm:gap-0">
       <div>

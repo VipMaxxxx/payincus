@@ -805,7 +805,7 @@ function goBack(): void {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <!-- Header -->
     <div class="page-header">
       <div class="flex items-center gap-4">

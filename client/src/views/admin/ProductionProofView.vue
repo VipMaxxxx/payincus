@@ -244,7 +244,7 @@ async function copyCommand(key: string, command: string): Promise<void> {
 </script>
 
 <template>
-  <div class="page-container">
+  <div class="kawaii-page page-container animate-fade-in">
     <div class="page-header">
       <div>
         <h1 class="page-title">生产验收</h1>

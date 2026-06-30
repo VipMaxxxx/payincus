@@ -32,7 +32,7 @@ const authStore = useAuthStore()
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header">
       <h1 class="page-title">{{ $t('nav.settings') }}</h1>
     </div>

@@ -412,7 +412,7 @@ function riskToneClass(severity: string): string {
 </script>
 
 <template>
-  <div class="animate-fade-in">
+  <div class="kawaii-page animate-fade-in">
     <div class="page-header flex items-center justify-between gap-4">
       <div>
         <h1 class="page-title">{{ t('admin.statistics.title') }}</h1>

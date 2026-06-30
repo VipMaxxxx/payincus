@@ -319,10 +319,7 @@ async function handleRegister(): Promise<void> {
 </script>
 
 <template>
-  <div 
-    class="min-h-screen flex items-center justify-center p-4"
-    :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'"
-  >
+  <div class="kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-lg">
       <ThemeTemplateSlot
         slot-name="public.auth.aside"
@@ -338,13 +335,13 @@ async function handleRegister(): Promise<void> {
         />
         <h2 
           class="text-lg font-semibold mb-1"
-          :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
+          :class="'text-themed'"
         >
           {{ brand.brandName }}
         </h2>
         <p 
           class="text-sm"
-          :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-600'"
+          :class="'text-themed-muted'"
         >
           {{ $t('auth.createAccount') }}
         </p>
@@ -355,11 +352,11 @@ async function handleRegister(): Promise<void> {
         <svg class="w-12 h-12 mx-auto mb-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <p :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ $t('auth.registerSuccess') }}</p>
+        <p :class="'text-themed'">{{ $t('auth.registerSuccess') }}</p>
       </div>
 
       <div v-else-if="configLoading" class="card p-6 text-center">
-        <p :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ $t('common.loading') }}...</p>
+        <p :class="'text-themed'">{{ $t('common.loading') }}...</p>
       </div>
 
       <div v-else-if="!registrationEnabled" class="card p-6 text-center">
@@ -367,10 +364,10 @@ async function handleRegister(): Promise<void> {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m0 3.75h.007v.008H12v-.008z" />
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.34 3.94 1.82 18a1.875 1.875 0 0 0 1.604 2.812h17.152A1.875 1.875 0 0 0 22.18 18L13.66 3.94a1.875 1.875 0 0 0-3.32 0Z" />
         </svg>
-        <h3 class="text-base font-semibold mb-2" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+        <h3 class="text-base font-semibold mb-2" :class="'text-themed'">
           {{ $t('auth.registrationClosedTitle') }}
         </h3>
-        <p class="text-sm leading-6 mb-5" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+        <p class="text-sm leading-6 mb-5" :class="'text-themed-muted'">
           {{ $t('auth.registrationClosedMessage') }}
         </p>
         <button type="button" class="btn-primary w-full" @click="router.push('/login')">
@@ -384,7 +381,7 @@ async function handleRegister(): Promise<void> {
           <div v-if="requireInviteCode">
             <label 
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >
               {{ $t('auth.inviteCode') }} <span class="text-red-500">*</span>
             </label>
@@ -394,7 +391,7 @@ async function handleRegister(): Promise<void> {
           <div>
             <label 
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >
               {{ $t('auth.username') }} <span class="text-red-500">*</span>
             </label>
@@ -404,7 +401,7 @@ async function handleRegister(): Promise<void> {
           <div>
             <label 
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >
               {{ $t('auth.email') }} <span class="text-red-500">*</span>
             </label>
@@ -431,7 +428,7 @@ async function handleRegister(): Promise<void> {
           <div v-if="emailVerificationEnabled">
             <label 
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >
               {{ $t('auth.emailCode') }} <span class="text-red-500">*</span>
             </label>
@@ -473,7 +470,7 @@ async function handleRegister(): Promise<void> {
           <div>
             <label 
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >
               {{ $t('auth.password') }} <span class="text-red-500">*</span>
             </label>
@@ -483,7 +480,7 @@ async function handleRegister(): Promise<void> {
           <div>
             <label 
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >
               {{ $t('auth.confirmPassword') }} <span class="text-red-500">*</span>
             </label>
@@ -506,13 +503,12 @@ async function handleRegister(): Promise<void> {
               id="agree-terms"
               v-model="agreedToTerms"
               type="checkbox"
-              class="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              :class="themeStore.isDark ? 'bg-gray-800 border-gray-600' : ''"
+              class="mt-1 h-4 w-4 rounded border-themed bg-themed-surface text-sky-500 focus:ring-sky-300"
             />
             <label 
               for="agree-terms" 
               class="text-sm"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >
               {{ $t('auth.tos.agreePrefix') }}
               <button
@@ -553,7 +549,7 @@ async function handleRegister(): Promise<void> {
                 <h3 class="modal-title">{{ $t('auth.confirmEmail') }}</h3>
                 <button
                   type="button"
-                  class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  class="p-1 rounded transition-colors hover:bg-themed-hover"
                   @click="showEmailConfirmModal = false"
                 >
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -562,11 +558,11 @@ async function handleRegister(): Promise<void> {
                 </button>
               </div>
               <div class="modal-body text-center">
-                <p class="text-sm mb-4" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+                <p class="text-sm mb-4" :class="'text-themed-muted'">
                   {{ $t('auth.confirmEmailMessage') }}
                 </p>
                 <p class="text-lg font-medium break-all">
-                  <span :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ emailUsername || form.email.split('@')[0] }}</span>
+                  <span class="text-themed">{{ emailUsername || form.email.split('@')[0] }}</span>
                   <span class="text-red-500 font-bold">@{{ selectedEmailDomain || form.email.split('@')[1] }}</span>
                 </p>
               </div>
@@ -591,12 +587,12 @@ async function handleRegister(): Promise<void> {
         </Transition>
       </Teleport>
 
-      <p class="mt-6 text-center text-sm" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">
+      <p class="mt-6 text-center text-sm" :class="'text-themed-muted'">
         {{ $t('auth.hasAccount') }}
         <RouterLink 
           to="/login" 
           class="transition-colors"
-          :class="themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-700 hover:text-gray-900'"
+          :class="'text-themed-muted hover:text-themed'"
         >
           {{ $t('auth.login') }}
         </RouterLink>
@@ -604,8 +600,7 @@ async function handleRegister(): Promise<void> {
 
       <!-- 主题切换 -->
       <button
-        class="fixed bottom-4 right-4 p-2 rounded-lg transition-colors"
-        :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'"
+        class="kawaii-header-icon fixed bottom-4 right-4 p-2 rounded-lg transition-colors"
         @click="themeStore.toggleTheme"
       >
         <svg v-if="themeStore.mode === 'dark'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -166,18 +166,18 @@ onMounted(loadOrders)
 </script>
 
 <template>
-  <div class="space-y-5">
-    <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+  <div class="kawaii-page space-y-5 animate-fade-in">
+    <header class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
       <div>
-        <h1 class="text-2xl font-semibold text-themed">订单中心</h1>
-        <p class="mt-1 text-sm text-themed-muted">查看充值订单、实例新购、续费和退款账单。</p>
+        <h1 class="page-title text-lg sm:text-xl">订单中心</h1>
+        <p class="page-description">查看充值订单、实例新购、续费和退款账单。</p>
       </div>
-      <button class="btn btn-outline" :disabled="loading" @click="loadOrders">刷新</button>
+      <button class="btn btn-outline w-full justify-center sm:w-auto" :disabled="loading" @click="loadOrders">刷新</button>
     </header>
 
     <ThemeTemplateSlot slot-name="user.orders.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
-    <section class="rounded-lg border border-themed bg-themed-secondary p-4">
+    <section class="kawaii-panel rounded-2xl p-4">
       <div class="grid gap-3 md:grid-cols-[180px_180px_auto]">
         <select v-model="type" class="input" @change="status = ''; applyFilters()">
           <option v-for="item in typeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
@@ -191,7 +191,7 @@ onMounted(loadOrders)
 
     <div v-if="error" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ error }}</div>
 
-    <section class="overflow-hidden rounded-lg border border-themed bg-themed-secondary">
+    <section class="kawaii-card overflow-hidden rounded-2xl">
       <div v-if="loading" class="p-8 text-center text-sm text-themed-muted">正在加载订单...</div>
       <div v-else-if="orders.length === 0" class="p-8 text-center text-sm text-themed-muted">暂无订单记录</div>
       <div v-else class="overflow-x-auto">

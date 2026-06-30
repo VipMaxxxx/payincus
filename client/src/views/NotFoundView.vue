@@ -1,24 +1,15 @@
-<script setup lang="ts">
-import { useThemeStore } from '@/stores/theme'
-
-const themeStore = useThemeStore()
-</script>
-
 <template>
   <div 
-    class="min-h-screen flex items-center justify-center"
-    :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-white'"
+    class="kawaii-public-shell kawaii-auth-shell min-h-screen flex items-center justify-center p-4"
   >
-    <div class="text-center">
+    <div class="card w-full max-w-md p-8 text-center">
       <h1 
-        class="text-8xl font-bold"
-        :class="themeStore.isDark ? 'text-gray-800' : 'text-gray-200'"
+        class="text-8xl font-bold text-themed-faint"
       >
         404
       </h1>
       <p 
-        class="mt-4"
-        :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-600'"
+        class="mt-4 text-themed-muted"
       >
         {{ $t('error.notFound') }}
       </p>

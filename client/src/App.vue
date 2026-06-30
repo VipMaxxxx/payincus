@@ -176,23 +176,29 @@ onUnmounted(() => {
   <AppLayout v-if="showLayout">
     <RouterView v-slot="{ Component, route: currentRoute }">
       <template v-if="Component">
-        <!-- 使用 exclude 排除不需要缓存的页面，避免 include 匹配问题 -->
-        <KeepAlive :exclude="['InstanceCreateView', 'InstanceDetailView', 'PackageFormView', 'MyHostDetailView']" :max="10">
-          <component :is="Component" :key="currentRoute.name" />
-        </KeepAlive>
+        <Transition name="kawaii-route" mode="out-in">
+          <!-- 使用 exclude 排除不需要缓存的页面，避免 include 匹配问题 -->
+          <KeepAlive :exclude="['InstanceCreateView', 'InstanceDetailView', 'PackageFormView', 'MyHostDetailView']" :max="10">
+            <component :is="Component" :key="currentRoute.name" />
+          </KeepAlive>
+        </Transition>
       </template>
     </RouterView>
   </AppLayout>
   <PublicSiteLayout v-else-if="showPublicSiteLayout">
     <RouterView v-slot="{ Component, route: currentRoute }">
       <template v-if="Component">
-        <component :is="Component" :key="currentRoute.name" />
+        <Transition name="kawaii-route" mode="out-in">
+          <component :is="Component" :key="currentRoute.name" />
+        </Transition>
       </template>
     </RouterView>
   </PublicSiteLayout>
   <RouterView v-else v-slot="{ Component, route: currentRoute }">
     <template v-if="Component">
-      <component :is="Component" :key="currentRoute.name" />
+      <Transition name="kawaii-route" mode="out-in">
+        <component :is="Component" :key="currentRoute.name" />
+      </Transition>
     </template>
   </RouterView>
   <PopupAnnouncementModal />

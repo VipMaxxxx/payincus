@@ -223,7 +223,7 @@ function formatDate(dateStr: string | null | undefined): string {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 animate-fade-in">
+  <div class="kawaii-page mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 animate-fade-in">
     <div class="space-y-6">
       <!-- Header -->
       <div class="page-header">

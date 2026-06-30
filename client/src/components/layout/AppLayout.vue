@@ -34,6 +34,12 @@ const accountProfilePath = profilePath()
 const accountTerminalPath = terminalPath()
 const accountInstancesPath = instancesPath()
 const accountLoginPath = loginPath()
+const routeThemeClass = computed(() => {
+  const rawName = typeof route.name === 'string'
+    ? route.name
+    : route.path.split('/').filter(Boolean)[0] || 'home'
+  return `kawaii-route-${rawName.replace(/[^a-z0-9-]/gi, '-').toLowerCase()}`
+})
 
 async function handleLogout(): Promise<void> {
   userMenuOpen.value = false
@@ -111,7 +117,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen flex overflow-hidden" :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'">
+  <div class="kawaii-app-shell h-screen flex overflow-hidden" :class="routeThemeClass">
     <!-- 侧边导航 -->
     <SideNav 
       :collapsed="sidebarCollapsed" 
@@ -122,12 +128,11 @@ onUnmounted(() => {
     <!-- 主内容区 -->
     <div class="flex-1 flex flex-col min-w-0 h-full">
       <!-- 顶部栏 -->
-      <header class="h-14 flex items-center justify-between px-4 md:px-6 border-b" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200 bg-white'">
+      <header class="kawaii-topbar h-14 flex items-center justify-between px-4 md:px-6 border-b">
         <div class="flex items-center gap-2 md:gap-4">
           <!-- Mobile: Hamburger menu -->
           <button 
-            class="md:hidden p-1.5 rounded transition-colors touch-target"
-            :class="themeStore.isDark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'"
+            class="kawaii-header-icon md:hidden p-1.5 rounded transition-colors touch-target"
             :aria-label="t('nav.openMenu')"
             @click="toggleMobileMenu"
           >
@@ -138,8 +143,7 @@ onUnmounted(() => {
 
           <!-- Desktop: Toggle sidebar -->
           <button 
-            class="hidden md:block p-1.5 rounded transition-colors"
-            :class="themeStore.isDark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'"
+            class="kawaii-header-icon hidden md:block p-1.5 rounded transition-colors"
             :aria-label="t('nav.collapseSidebar')"
             @click="sidebarCollapsed = !sidebarCollapsed"
           >
@@ -157,7 +161,7 @@ onUnmounted(() => {
             />
             <span 
               class="font-semibold text-sm"
-              :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
+              :class="'text-themed'"
             >{{ brand.brandName }}</span>
           </div>
         </div>
@@ -167,8 +171,7 @@ onUnmounted(() => {
           <!-- 终端管理入口 -->
           <button
             v-if="!isAdminEntry"
-            class="p-1.5 rounded transition-colors touch-target"
-            :class="themeStore.isDark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'"
+            class="kawaii-header-icon p-1.5 rounded transition-colors touch-target"
             :title="t('nav.terminal')"
             :aria-label="t('nav.terminal')"
             @click="router.push(accountTerminalPath)"
@@ -183,8 +186,7 @@ onUnmounted(() => {
 
           <!-- 主题切换按钮 -->
           <button
-            class="theme-toggle relative group p-1.5 rounded transition-colors touch-target"
-            :class="themeStore.isDark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'"
+            class="kawaii-header-icon theme-toggle relative group p-1.5 rounded transition-colors touch-target"
             :title="getThemeTooltip()"
             :aria-label="t('nav.toggleTheme')"
             @click="themeStore.toggleTheme"
@@ -223,7 +225,7 @@ onUnmounted(() => {
             <!-- 悬停提示 (Desktop only) -->
             <span 
               class="hidden md:block absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-              :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700 border border-gray-200'"
+              :class="'kawaii-menu-panel text-themed'"
             >
               {{ getThemeTooltip() }}
             </span>
@@ -232,8 +234,7 @@ onUnmounted(() => {
           <!-- 语言切换 -->
           <div ref="langMenuRef" class="relative">
             <button
-              class="relative group px-2 py-1.5 rounded transition-colors touch-target text-xs font-medium"
-              :class="themeStore.isDark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'"
+              class="kawaii-header-icon relative group px-2 py-1.5 rounded transition-colors touch-target text-xs font-medium"
               :title="$t('language.' + (locale === 'zh-CN' ? 'zh' : 'en'))"
               :aria-label="t('nav.toggleLanguage')"
               @click.stop="toggleLangMenu"
@@ -252,18 +253,13 @@ onUnmounted(() => {
             >
               <div 
                 v-if="langMenuOpen"
-                class="absolute right-0 mt-2 w-36 rounded-lg shadow-lg py-1 z-50 border"
-                :class="themeStore.isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'"
+                class="kawaii-menu-panel absolute right-0 mt-2 w-36 rounded-lg py-1 z-50 border"
               >
                 <button
                   v-for="lang in supportedLocales"
                   :key="lang.code"
-                  class="w-full flex items-center justify-between px-3 py-2 text-sm transition-colors"
-                  :class="[
-                    locale === lang.code 
-                      ? (themeStore.isDark ? 'bg-gray-800 text-gray-100' : 'bg-gray-100 text-gray-900')
-                      : (themeStore.isDark ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100')
-                  ]"
+                  class="kawaii-menu-item w-full flex items-center justify-between px-3 py-2 text-sm transition-colors"
+                  :class="{ 'is-active': locale === lang.code }"
                   @click="changeLocale(lang.code)"
                 >
                   {{ lang.name }}
@@ -278,8 +274,7 @@ onUnmounted(() => {
           <!-- 用户菜单 -->
           <div ref="userMenuRef" class="relative">
             <button 
-              class="flex items-center gap-2 px-2 py-1 rounded transition-colors cursor-pointer"
-              :class="themeStore.isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'"
+              class="kawaii-header-icon flex items-center gap-2 px-2 py-1 rounded transition-colors cursor-pointer"
               @click.stop="toggleUserMenu"
             >
               <UserAvatar 
@@ -288,8 +283,8 @@ onUnmounted(() => {
                 :avatar-style="authStore.user?.avatarStyle || 'bigSmile'"
                 :size="28"
               />
-              <span class="hidden sm:block text-sm" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ authStore.user?.username }}</span>
-              <svg class="hidden sm:block w-4 h-4 transition-transform" :class="[themeStore.isDark ? 'text-gray-500' : 'text-gray-400', userMenuOpen ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span class="hidden sm:block text-sm text-themed">{{ authStore.user?.username }}</span>
+              <svg class="hidden sm:block w-4 h-4 transition-transform text-themed-muted" :class="userMenuOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -305,12 +300,10 @@ onUnmounted(() => {
             >
               <div 
                 v-if="userMenuOpen"
-                class="absolute right-0 mt-2 w-48 rounded-lg shadow-lg py-1 z-50 border"
-                :class="themeStore.isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'"
+                class="kawaii-menu-panel absolute right-0 mt-2 w-48 rounded-lg py-1 z-50 border"
               >
                 <button
-                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
-                  :class="themeStore.isDark ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100'"
+                  class="kawaii-menu-item w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
                   @click="navigateTo(accountProfilePath)"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -320,8 +313,7 @@ onUnmounted(() => {
                 </button>
                 <button
                   v-if="!isAdminEntry"
-                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
-                  :class="themeStore.isDark ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100'"
+                  class="kawaii-menu-item w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
                   @click="navigateTo(accountInstancesPath)"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -329,10 +321,9 @@ onUnmounted(() => {
                   </svg>
                   {{ $t('userMenu.myInstances') }}
                 </button>
-                <div class="my-1 border-t" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-200'"></div>
+                <div class="my-1 border-t border-themed"></div>
                 <button
-                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
-                  :class="themeStore.isDark ? 'text-red-400 hover:bg-gray-800' : 'text-red-600 hover:bg-gray-100'"
+                  class="kawaii-menu-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 transition-colors"
                   @click="handleLogout"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -347,7 +338,11 @@ onUnmounted(() => {
       </header>
 
       <!-- 页面内容 -->
-      <main class="flex-1 p-4 md:p-6 xl:px-14 2xl:px-24" :class="isSplitPane ? 'overflow-auto lg:overflow-hidden' : 'overflow-auto'">
+      <main class="kawaii-workspace flex-1 p-4 md:p-6 xl:px-14 2xl:px-24" :class="isSplitPane ? 'overflow-auto lg:overflow-hidden' : 'overflow-auto'">
+        <div v-if="!isSplitPane" class="kawaii-app-companion hidden xl:flex" aria-hidden="true">
+          <div class="kawaii-app-companion-bubble">有问题可以随时找我哦～</div>
+          <img src="/images/kawaii/paya-cloud-operator.webp" alt="" />
+        </div>
         <div class="w-full mx-auto" :class="isSplitPane ? 'lg:h-full' : ''">
           <slot />
         </div>

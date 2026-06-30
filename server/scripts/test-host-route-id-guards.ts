@@ -133,6 +133,14 @@ assert.ok(
 )
 
 assert.ok(
+  source.includes('const dbPools = await db.getStoragePoolsByHostId(hostId)') &&
+    source.includes("request.log.warn(err, 'Falling back to database storage pools')") &&
+    source.includes("status: 'Unavailable'") &&
+    source.includes('warning: `无法连接到 Incus，已显示数据库中登记的存储池: ${errorMessage}`'),
+  'host storage pool listing must fall back to registered database pools when Incus is unreachable'
+)
+
+assert.ok(
   storageTabSource.includes("driver: 'lvm' as 'zfs' | 'lvm' | 'btrfs' | 'dir'") &&
     storageTabSource.includes("driver: 'lvm',") &&
     storageTabSource.indexOf("{ value: 'lvm', label: 'LVM'") < storageTabSource.indexOf("{ value: 'zfs', label: 'ZFS'"),

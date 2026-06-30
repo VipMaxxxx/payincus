@@ -736,7 +736,7 @@ function getSeriesTitle(seriesId: string): string {
 </script>
 
 <template>
-  <div class="animate-fade-in">
+  <div class="kawaii-page animate-fade-in">
     <!-- 页面标题 -->
     <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>

@@ -215,7 +215,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <!-- Header -->
     <div class="page-header flex items-center justify-between">
       <div>

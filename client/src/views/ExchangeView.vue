@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import api from '@/api'
 import SensitiveVerificationModal from '@/components/SensitiveVerificationModal.vue'
 import { useToast } from '@/stores/toast'
-import { useThemeStore } from '@/stores/theme'
 import { formatBytes, formatDisk, formatMemory } from '@/utils/formatters'
 import type {
   ExchangeDispute,
@@ -48,7 +47,6 @@ interface DisputeDraft {
 
 const route = useRoute()
 const toast = useToast()
-const themeStore = useThemeStore()
 
 const activeTab = ref<ExchangeTab>('market')
 const tabs: Array<{ key: ExchangeTab; label: string }> = [
@@ -224,10 +222,7 @@ const activeInstanceId = computed(() => Number(route.query.instanceId || 0))
 
 function tabClass(tab: ExchangeTab): string {
   const active = activeTab.value === tab
-  if (active) return 'bg-accent text-white border-accent'
-  return themeStore.isDark
-    ? 'border-gray-800 text-gray-300 hover:bg-gray-900'
-    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+  return active ? 'kawaii-tab-active' : 'kawaii-tab-idle'
 }
 
 function pageSummary(total: number, page: number, size: number): string {
@@ -246,7 +241,7 @@ function deliveryPolicyEligibilityChecks(result: ExchangeEligibilityResult): Exc
 }
 
 function cardClass(extra = ''): string {
-  return ['card', extra].filter(Boolean).join(' ')
+  return ['card kawaii-card rounded-2xl', extra].filter(Boolean).join(' ')
 }
 
 function money(value: number | null | undefined): string {
@@ -313,10 +308,7 @@ function renewalPriceLabel(snapshot: ExchangeInstanceSnapshot): string {
 
 function marketPackageFilterClass(packageId: number | null): string {
   const active = selectedMarketPackageId.value === packageId
-  if (active) return 'border-accent bg-accent text-white'
-  return themeStore.isDark
-    ? 'border-gray-800 text-gray-300 hover:bg-gray-900'
-    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+  return active ? 'kawaii-tab-active' : 'kawaii-tab-idle'
 }
 
 function networkLabel(snapshot: ExchangeInstanceSnapshot): string {
@@ -1176,38 +1168,38 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div>
+  <div class="kawaii-page space-y-6">
+    <div class="kawaii-dashboard-hero rounded-2xl p-5">
       <h1 class="text-2xl font-semibold text-themed">交易所</h1>
       <p class="mt-1 text-sm text-themed-muted">出售的是实例剩余使用权。成交后平台托管资金，并强制重装后匿名交割。</p>
     </div>
 
-    <div class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+    <div class="kawaii-notice rounded-2xl px-4 py-3 text-sm">
       上架前必须先暂停实例；成交后原系统和数据不可恢复。买卖双方互不可见，提现进入人工审核。
     </div>
 
     <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm">
         <div class="font-medium text-themed">交易费率</div>
         <p class="mt-1 text-themed-muted">{{ policyFeeSummary() }}</p>
       </div>
-      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm">
         <div class="font-medium text-themed">交割确认</div>
         <p class="mt-1 text-themed-muted">
           确认期 {{ exchangeConfig.confirmationHours }} 小时，{{ exchangeConfig.autoConfirmEnabled ? '到期无争议自动放款' : '需平台人工确认放款' }}
         </p>
       </div>
-      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm">
         <div class="font-medium text-themed">提现规则</div>
         <p class="mt-1 text-themed-muted">{{ policyWithdrawalSummary() }}</p>
       </div>
-      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm">
         <div class="font-medium text-themed">交易限制</div>
         <p class="mt-1 text-themed-muted">
           每用户最多 {{ exchangeConfig.maxActiveListingsPerUser }} 个挂牌，每日最多购买 {{ exchangeConfig.maxPurchasesPerUserPerDay }} 次
         </p>
       </div>
-      <div class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm md:col-span-2 xl:col-span-4">
+      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm md:col-span-2 xl:col-span-4">
         <div class="font-medium text-themed">准入和交割策略</div>
         <p class="mt-1 text-themed-muted">
           最低剩余 {{ exchangeConfig.minRemainingDays }} 天，{{ exchangeConfig.expiringSoonDays }} 天内到期不可挂牌；最高溢价 {{ exchangeConfig.maxMarkupPercent }}%；独立 IP {{ exchangeConfig.allowPublicIpTransfer ? '允许随实例转让' : '不允许随实例转让' }}；买家自选镜像 {{ exchangeConfig.allowBuyerImageSelection ? '已开放' : '未开放' }}；争议超时 {{ exchangeConfig.disputeTimeoutHours }} 小时。
@@ -1254,8 +1246,8 @@ onMounted(async () => {
           {{ pkg.name }} · {{ pkg.count }}
         </button>
       </div>
-      <div v-if="marketLoading" class="card p-8 text-center text-themed-muted">加载中...</div>
-      <div v-else-if="market.length === 0" class="card p-8 text-center text-themed-muted">暂无可购买挂牌。</div>
+      <div v-if="marketLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
+      <div v-else-if="market.length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无可购买挂牌。</div>
       <div v-else class="grid gap-4 xl:grid-cols-3 lg:grid-cols-2">
         <article v-for="listing in market" :key="listing.id" :class="cardClass('p-5 space-y-4')">
           <div class="flex items-start justify-between gap-3">
@@ -1294,7 +1286,7 @@ onMounted(async () => {
             <dd class="text-themed-muted">{{ remainingDays(snapshotOf(listing).expiresAt) }}，到期 {{ formatDateOnly(snapshotOf(listing).expiresAt) }}</dd>
           </dl>
 
-          <div class="rounded bg-themed-secondary p-3 text-xs text-themed-muted">
+          <div class="kawaii-card-soft rounded-xl p-3 text-xs text-themed-muted">
             购买后进入资金托管和交割任务。买家获得重装后的新实例，不包含卖家原数据。
           </div>
           <div class="grid grid-cols-2 gap-2">
@@ -1322,8 +1314,8 @@ onMounted(async () => {
           </div>
           <button class="btn btn-secondary" type="button" @click="loadInstances">刷新</button>
         </div>
-        <div v-if="instancesLoading" class="card p-8 text-center text-themed-muted">加载中...</div>
-        <div v-else-if="instances.length === 0" class="card p-8 text-center text-themed-muted">暂无实例。</div>
+        <div v-if="instancesLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
+        <div v-else-if="instances.length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无实例。</div>
         <div v-else class="space-y-3">
           <article v-for="instance in instances" :key="instance.id" :class="cardClass('p-4')">
             <div class="flex flex-wrap items-start justify-between gap-3">
@@ -1393,7 +1385,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div v-if="eligibilityMap[instance.id]" class="mt-3 rounded bg-themed-secondary p-3 text-xs text-themed-muted">
+            <div v-if="eligibilityMap[instance.id]" class="kawaii-card-soft mt-3 rounded-xl p-3 text-xs text-themed-muted">
               交割时平台会清理 SSH key、终端会话、控制台 token、端口映射、代理站点、旧快照和备份策略；流量用量和剩余额度按挂牌实例当前状态交割。
             </div>
           </article>
@@ -1438,8 +1430,8 @@ onMounted(async () => {
         <h2 class="text-lg font-semibold text-themed">我的挂牌</h2>
         <button class="btn btn-secondary" type="button" @click="loadMyListings">刷新</button>
       </div>
-      <div v-if="myListingsLoading" class="card p-8 text-center text-themed-muted">加载中...</div>
-      <div v-else-if="myListings.length === 0" class="card p-8 text-center text-themed-muted">暂无挂牌。</div>
+      <div v-if="myListingsLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
+      <div v-else-if="myListings.length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无挂牌。</div>
       <div v-else class="grid gap-4 lg:grid-cols-2">
         <article v-for="listing in myListings" :key="listing.id" :class="cardClass('p-5 space-y-3')">
           <div class="flex items-start justify-between">
@@ -1471,8 +1463,8 @@ onMounted(async () => {
         <h2 class="text-lg font-semibold text-themed">{{ activeTab === 'buys' ? '我的买入' : '我的卖出' }}</h2>
         <button class="btn btn-secondary" type="button" @click="activeTab === 'buys' ? loadBuys() : loadSales()">刷新</button>
       </div>
-      <div v-if="activeTab === 'buys' ? buysLoading : salesLoading" class="card p-8 text-center text-themed-muted">加载中...</div>
-      <div v-else-if="(activeTab === 'buys' ? buys : sales).length === 0" class="card p-8 text-center text-themed-muted">暂无订单。</div>
+      <div v-if="activeTab === 'buys' ? buysLoading : salesLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
+      <div v-else-if="(activeTab === 'buys' ? buys : sales).length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无订单。</div>
       <div v-else class="space-y-3">
         <article v-for="order in (activeTab === 'buys' ? buys : sales)" :key="order.id" :class="cardClass('p-4')">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -1713,8 +1705,8 @@ onMounted(async () => {
         <h2 class="text-lg font-semibold text-themed">争议记录</h2>
         <button class="btn btn-secondary" type="button" @click="loadDisputes">刷新</button>
       </div>
-      <div v-if="disputesLoading" class="card p-8 text-center text-themed-muted">加载中...</div>
-      <div v-else-if="disputes.length === 0" class="card p-8 text-center text-themed-muted">暂无争议。</div>
+      <div v-if="disputesLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
+      <div v-else-if="disputes.length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无争议。</div>
       <div v-else class="space-y-3">
         <article v-for="item in disputes" :key="item.id" :class="cardClass('p-4')">
           <div class="flex flex-wrap justify-between gap-3">

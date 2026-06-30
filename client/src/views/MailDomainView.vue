@@ -165,10 +165,10 @@ function switchTab(tab: 'accounts' | 'dns' | 'settings') {
 </script>
 
 <template>
-  <div class="animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <!-- 返回按钮和标题 -->
-    <div class="mb-6">
-      <button class="btn btn-ghost btn-sm gap-1 mb-2 -ml-2" @click="router.push('/mail')">
+    <div class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
+      <button class="btn btn-secondary btn-sm gap-1" @click="router.push('/mail')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
         </svg>
@@ -176,11 +176,14 @@ function switchTab(tab: 'accounts' | 'dns' | 'settings') {
       </button>
       
       <div v-if="loading" class="h-8 bg-themed-secondary rounded animate-pulse w-48"></div>
-      <div v-else-if="domain" class="flex items-center gap-3">
-        <h1 class="text-xl font-bold text-themed">{{ domain.domain }}</h1>
-        <span :class="['badge', getStatusBadge(domain.status)]">
-          {{ t('mail.domainStatus.' + domain.status) }}
-        </span>
+      <div v-else-if="domain" class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-3">
+          <h1 class="page-title truncate text-lg sm:text-xl">{{ domain.domain }}</h1>
+          <span :class="['badge', getStatusBadge(domain.status)]">
+            {{ t('mail.domainStatus.' + domain.status) }}
+          </span>
+        </div>
+        <p class="page-description">{{ t('mail.description') }}</p>
       </div>
     </div>
 
@@ -191,30 +194,24 @@ function switchTab(tab: 'accounts' | 'dns' | 'settings') {
 
     <template v-else-if="domain">
       <!-- TAB 切换 -->
-      <div class="flex border-b border-themed mb-6">
+      <div class="kawaii-panel flex w-full gap-1 overflow-x-auto rounded-2xl p-1 sm:w-fit">
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="activeTab === 'accounts' 
-            ? 'border-blue-500 text-blue-500' 
-            : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all"
+          :class="activeTab === 'accounts' ? 'active' : ''"
           @click="switchTab('accounts')"
         >
           {{ t('mail.tabs.accounts') }}
         </button>
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="activeTab === 'dns' 
-            ? 'border-blue-500 text-blue-500' 
-            : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all"
+          :class="activeTab === 'dns' ? 'active' : ''"
           @click="switchTab('dns')"
         >
           {{ t('mail.tabs.dns') }}
         </button>
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="activeTab === 'settings' 
-            ? 'border-blue-500 text-blue-500' 
-            : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all"
+          :class="activeTab === 'settings' ? 'active' : ''"
           @click="switchTab('settings')"
         >
           {{ t('mail.tabs.settings') }}

@@ -354,7 +354,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6 p-6">
+  <div class="kawaii-page space-y-6 p-6 animate-fade-in">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 class="text-2xl font-semibold text-themed">交付保障</h1>

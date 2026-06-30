@@ -400,7 +400,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page-container">
+  <div class="kawaii-page page-container animate-fade-in">
     <div class="page-header">
       <div>
         <h1 class="page-title">秒杀管理</h1>

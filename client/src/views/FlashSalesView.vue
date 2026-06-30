@@ -92,7 +92,7 @@ onMounted(loadData)
 </script>
 
 <template>
-  <div class="page-container">
+  <div class="kawaii-page page-container animate-fade-in">
     <div class="page-header">
       <div>
         <h1 class="page-title">秒杀</h1>

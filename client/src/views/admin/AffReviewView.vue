@@ -131,7 +131,7 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 </script>
 
 <template>
-  <div :class="['animate-fade-in', props.embedded ? 'space-y-4' : '']">
+  <div :class="['animate-fade-in', props.embedded ? 'space-y-4' : 'kawaii-page space-y-6']">
     <!-- 页面头部 -->
     <div class="page-header">
       <h1 class="page-title">{{ $t('aff.adminTitle') }}</h1>

@@ -178,10 +178,7 @@ function getProviderInfo(provider: string): ProviderInfo {
 </script>
 
 <template>
-  <div 
-    class="min-h-screen flex items-center justify-center p-4"
-    :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'"
-  >
+  <div class="kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md">
       <ThemeTemplateSlot
         slot-name="public.auth.aside"
@@ -197,13 +194,13 @@ function getProviderInfo(provider: string): ProviderInfo {
         />
         <h2 
           class="text-lg font-semibold mb-1"
-          :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
+          :class="'text-themed'"
         >
           {{ brand.brandName }}
         </h2>
         <p 
           class="text-sm"
-          :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-600'"
+          :class="'text-themed-muted'"
         >
           {{ $t('auth.loginTo') }}
         </p>
@@ -215,7 +212,7 @@ function getProviderInfo(provider: string): ProviderInfo {
           <div>
             <label 
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >{{ $t('auth.usernameOrEmail') }}</label>
             <input
               v-model="username"
@@ -229,7 +226,7 @@ function getProviderInfo(provider: string): ProviderInfo {
           <div>
             <label 
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >{{ $t('auth.password') }}</label>
             <input
               v-model="password"
@@ -246,10 +243,10 @@ function getProviderInfo(provider: string): ProviderInfo {
             <div v-if="!useRecoveryCode">
               <label 
                 class="block text-sm mb-1.5"
-                :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+                :class="'text-themed-muted'"
               >
                 {{ $t('auth.twoFactorCode') }}
-                <span class="ml-2 text-xs" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-400'">
+                <span class="ml-2 text-xs text-themed-muted">
                   ({{ $t('auth.twoFactorOptional') }})
                 </span>
               </label>
@@ -261,7 +258,7 @@ function getProviderInfo(provider: string): ProviderInfo {
                 :placeholder="$t('auth.twoFactorCodePlaceholder')"
                 autocomplete="one-time-code"
               />
-              <p class="text-xs mt-1" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+              <p class="text-xs mt-1" :class="'text-themed-muted'">
                 {{ $t('auth.twoFactorOptionalHint') }}
               </p>
             </div>
@@ -269,7 +266,7 @@ function getProviderInfo(provider: string): ProviderInfo {
             <div v-else>
               <label 
                 class="block text-sm mb-1.5"
-                :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+                :class="'text-themed-muted'"
               >{{ $t('auth.recoveryCode') }}</label>
               <input
                 v-model="recoveryCode"
@@ -277,7 +274,7 @@ function getProviderInfo(provider: string): ProviderInfo {
                 class="input"
                 :placeholder="$t('auth.recoveryCodePlaceholder')"
               />
-              <p class="text-xs mt-1" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+              <p class="text-xs mt-1" :class="'text-themed-muted'">
                 {{ $t('auth.recoveryCodeHint') }}
               </p>
             </div>
@@ -285,7 +282,7 @@ function getProviderInfo(provider: string): ProviderInfo {
             <button
               type="button"
               class="text-xs mt-2 transition-colors"
-              :class="themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'"
+              :class="'text-themed-muted hover:text-themed'"
               @click="useRecoveryCode = !useRecoveryCode; totpCode = ''; recoveryCode = ''"
             >
               {{ useRecoveryCode ? $t('auth.useTotpCode') : $t('auth.useRecoveryCode') }}
@@ -322,13 +319,13 @@ function getProviderInfo(provider: string): ProviderInfo {
             <div class="absolute inset-0 flex items-center">
               <div 
                 class="w-full border-t"
-                :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
+                :class="'border-themed'"
               ></div>
             </div>
             <div class="relative flex justify-center text-sm">
               <span 
                 class="px-2"
-                :class="themeStore.isDark ? 'bg-gray-900 text-gray-500' : 'bg-white text-gray-500'"
+                :class="'bg-themed-surface text-themed-muted'"
               >{{ $t('auth.orUse') }}</span>
             </div>
           </div>
@@ -351,7 +348,7 @@ function getProviderInfo(provider: string): ProviderInfo {
           
           <p 
             class="mt-3 text-xs text-center"
-            :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
+            :class="'text-themed-muted'"
           >
             {{ $t('auth.oauthBindHint') }}
           </p>
@@ -359,24 +356,24 @@ function getProviderInfo(provider: string): ProviderInfo {
       </div>
 
       <div class="mt-6 space-y-2 text-center text-sm">
-        <p v-if="registrationEnabled" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">
+        <p v-if="registrationEnabled" :class="'text-themed-muted'">
           {{ $t('auth.noAccount') }}
           <RouterLink 
             to="/register" 
             class="transition-colors"
-            :class="themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-700 hover:text-gray-900'"
+            :class="'text-themed-muted hover:text-themed'"
           >
             {{ $t('auth.register') }}
           </RouterLink>
         </p>
-        <p v-else :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">
+        <p v-else :class="'text-themed-muted'">
           {{ $t('auth.registrationClosedShort') }}
         </p>
-        <p :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">
+        <p :class="'text-themed-muted'">
           <RouterLink 
             to="/forgot-password" 
             class="transition-colors"
-            :class="themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-700 hover:text-gray-900'"
+            :class="'text-themed-muted hover:text-themed'"
           >
             {{ $t('auth.forgotPasswordLink') }}
           </RouterLink>
@@ -388,8 +385,7 @@ function getProviderInfo(provider: string): ProviderInfo {
         <a
           v-if="contactEmailHref"
           :href="contactEmailHref"
-          class="p-2 rounded-lg transition-colors"
-          :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'"
+          class="kawaii-header-icon p-2 rounded-lg transition-colors"
           :title="$t('auth.contactEmail')"
           :aria-label="$t('auth.contactEmail')"
         >
@@ -404,8 +400,7 @@ function getProviderInfo(provider: string): ProviderInfo {
         </a>
 
         <button
-          class="p-2 rounded-lg transition-colors"
-          :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'"
+          class="kawaii-header-icon p-2 rounded-lg transition-colors"
           :title="themeStore.mode === 'dark' ? $t('theme.dark') : themeStore.mode === 'light' ? $t('theme.light') : $t('theme.system')"
           @click="themeStore.toggleTheme"
         >

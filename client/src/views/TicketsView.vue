@@ -909,23 +909,26 @@ function formatDateShort(dateString: string) {
 </script>
 
 <template>
-  <div class="min-h-screen">
-    <div class="py-6">
+  <div class="kawaii-page min-h-screen animate-fade-in">
+    <div class="space-y-6 py-6">
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-        <div class="flex items-center gap-3 mb-4 sm:mb-0">
-          <button v-if="viewMode !== 'list'" class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" @click="backToList">
-            <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
+        <div class="flex items-center gap-3">
+          <button v-if="viewMode !== 'list'" class="kawaii-action-button p-2 transition-colors" @click="backToList">
+            <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-            {{ viewMode === 'detail' ? t('tickets.ticketDetails') : viewMode === 'create' ? t('tickets.newTicket') : t('tickets.title') }}
-          </h1>
+          <div>
+            <h1 class="page-title text-lg sm:text-xl">
+              {{ viewMode === 'detail' ? t('tickets.ticketDetails') : viewMode === 'create' ? t('tickets.newTicket') : t('tickets.title') }}
+            </h1>
+            <p class="page-description">{{ t('tickets.subtitle') }}</p>
+          </div>
         </div>
         
         <!-- 管理员不显示"创建工单"按钮 -->
-        <button v-if="viewMode === 'list' && !authStore.isAdmin && configStore.ticketEnabled" class="flex items-center gap-2 px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors text-sm font-medium" @click="openCreateForm">
+        <button v-if="viewMode === 'list' && !authStore.isAdmin && configStore.ticketEnabled" class="btn btn-primary w-full justify-center sm:w-auto" @click="openCreateForm">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -933,20 +936,20 @@ function formatDateShort(dateString: string) {
         </button>
       </div>
 
-      <ThemeTemplateSlot slot-name="user.tickets.banner" container-class="mb-6 overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+      <ThemeTemplateSlot slot-name="user.tickets.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
       
       <!-- List View -->
       <template v-if="viewMode === 'list'">
         <!-- Tabs -->
-        <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+        <div class="kawaii-panel mb-6 flex w-full gap-1 overflow-x-auto rounded-2xl p-1 sm:w-fit">
           <!-- 普通用户显示"我的工单"标签，管理员不显示 -->
-          <button v-if="!authStore.isAdmin" :class="['px-4 py-3 text-sm font-medium border-b-2 transition-colors', activeTab === 'my' ? 'border-black dark:border-white text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300']" @click="switchTab('my')">
+          <button v-if="!authStore.isAdmin" :class="['kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all', activeTab === 'my' ? 'active' : '']" @click="switchTab('my')">
             {{ t('tickets.myTickets') }}
             <span v-if="pendingCount.userTickets > 0" class="ml-2 px-2 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full">
               {{ pendingCount.userTickets }}
             </span>
           </button>
-          <button v-if="isHostOwner" :class="['px-4 py-3 text-sm font-medium border-b-2 transition-colors', activeTab === 'host' ? 'border-black dark:border-white text-gray-900 dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300']" @click="switchTab('host')">
+          <button v-if="isHostOwner" :class="['kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all', activeTab === 'host' ? 'active' : '']" @click="switchTab('host')">
             {{ t('tickets.hostTickets') }}
             <span v-if="pendingCount.hostTickets > 0" class="ml-2 px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full">
               {{ pendingCount.hostTickets }}

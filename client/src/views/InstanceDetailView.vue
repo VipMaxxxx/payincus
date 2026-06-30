@@ -2516,7 +2516,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <div v-if="loading">
       <SkeletonLoader type="detail" />
     </div>

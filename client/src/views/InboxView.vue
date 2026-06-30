@@ -203,7 +203,7 @@ watch(() => route.path, () => {
 </script>
 
 <template>
-  <div>
+  <div class="kawaii-page animate-fade-in">
     <!-- Header -->
     <div class="page-header">
       <div>

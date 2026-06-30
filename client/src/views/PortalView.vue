@@ -6,15 +6,13 @@ import api from '@/api'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { usePageSeo } from '@/composables/usePageSeo'
 import { useAuthStore } from '@/stores/auth'
-import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
 import {
   formatPublicPrice,
   formatPublicTraffic,
   getStartingMonthlyPrice,
   type PackageSource,
-  type PublicPackage,
-  type PublicRegion
+  type PublicPackage
 } from '@/utils/publicCatalog'
 
 defineOptions({
@@ -22,14 +20,28 @@ defineOptions({
 })
 
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const authStore = useAuthStore()
-const themeStore = useThemeStore()
 const brand = useBrand()
 
 const packages = ref<PublicPackage[]>([])
-const regions = ref<PublicRegion[]>([])
 const loading = ref(true)
+type ProductLineKey = PackageSource | 'all'
+const activeProductLine = ref<ProductLineKey>('all')
+
+const isChineseLocale = computed(() => locale.value.startsWith('zh'))
+
+const heroTitlePrimary = computed(() => (
+  isChineseLocale.value ? '智能云计算' : 'Smart cloud computing'
+))
+
+const heroTitlePrefix = computed(() => (
+  isChineseLocale.value ? '连接' : 'Connect '
+))
+
+const heroTitleAccent = computed(() => (
+  isChineseLocale.value ? '无限可能' : 'infinite possibilities'
+))
 
 const spotlightPackages = computed(() => {
   const allPackages = [...packages.value].sort((left, right) => {
@@ -50,25 +62,26 @@ const spotlightPackages = computed(() => {
   return allPackages.slice(0, 4)
 })
 
-const statCards = computed(() => [
-  { label: t('publicSite.portal.stats.packages'), value: String(packages.value.length) },
-  { label: t('publicSite.portal.stats.regions'), value: String(regions.value.length) },
-  { label: t('publicSite.portal.stats.official'), value: String(packages.value.filter(pkg => pkg.sourceType === 'official').length) },
-  { label: t('publicSite.portal.stats.market'), value: String(packages.value.filter(pkg => pkg.sourceType === 'market').length) }
-])
-
-const platformCards = computed(() => [
+const heroFeatureCards = computed(() => [
   {
+    icon: 'network',
     title: t('publicSite.portal.experienceNoLoginTitle'),
     description: t('publicSite.portal.experienceNoLoginDescription')
   },
   {
+    icon: 'compute',
     title: t('publicSite.portal.experienceRoutingTitle'),
     description: t('publicSite.portal.experienceRoutingDescription')
   },
   {
-    title: t('publicSite.portal.experienceThemeTitle'),
-    description: t('publicSite.portal.experienceThemeDescription')
+    icon: 'secure',
+    title: t('publicSite.portal.officialTitle'),
+    description: t('publicSite.portal.officialPoint2')
+  },
+  {
+    icon: 'ops',
+    title: t('publicSite.portal.previewTitle'),
+    description: t('publicSite.portal.previewDescription')
   }
 ])
 
@@ -105,81 +118,26 @@ const consoleActionCompactLabel = computed(() => (
   authStore.isAuthenticated ? t('publicSite.actions.consoleCompact') : t('publicSite.actions.signIn')
 ))
 
-// Material 3 baseline tokens
-// Light: primary #0b57d0, on-primary #fff, primary-container #d3e3fd, on-primary-container #041e49
-//        surface #faf9fd, surface-container #eef0f8, surface-container-high #e8eaf2, outline-variant #c3c6cf
-// Dark:  primary #a8c7fa, on-primary #062e6f, primary-container #284777, on-primary-container #d3e3fd
-//        surface #111418, surface-container #1d2024, surface-container-high #272a2f, outline-variant #43474e
-const ui = computed(() => themeStore.isDark
-  ? {
-      badge: 'border-[#284777] bg-[#1a2c52] text-[#d3e3fd]',
-      body: 'text-[#c3c6cf]',
-      primaryButton: 'bg-[#a8c7fa] text-[#062e6f] shadow-[0_1px_2px_rgba(0,0,0,0.3),0_1px_3px_1px_rgba(0,0,0,0.15)] hover:bg-[#bdd3fb] hover:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_2px_6px_2px_rgba(0,0,0,0.15)] focus-visible:ring-[#a8c7fa]/40',
-      secondaryButton: 'bg-[#284777] text-[#d3e3fd] hover:bg-[#304f81] focus-visible:ring-[#a8c7fa]/40',
-      statCard: 'border-[#43474e] bg-[#1d2024]',
-      statValue: 'text-[#e3e2e6]',
-      statLabel: 'text-[#8e9199]',
-      heroTint: 'bg-[linear-gradient(180deg,rgba(26,44,82,0.55)_0%,rgba(26,44,82,0.25)_45%,rgba(17,20,24,0)_100%)]',
-      previewCard: 'bg-[#1a2c52] text-[#d3e3fd] shadow-[0_4px_8px_3px_rgba(0,0,0,0.15),0_1px_3px_rgba(0,0,0,0.3)]',
-      previewLabel: 'text-[#a8c7fa]',
-      previewTitle: 'text-[#eaf1ff]',
-      previewButton: 'bg-[#a8c7fa] text-[#062e6f] hover:bg-[#bdd3fb]',
-      previewBody: 'text-[#c3dafd]',
-      terminalCard: 'bg-[#0b1422] text-[#d3e3fd]',
-      terminalMeta: 'text-[#89a2cf]',
-      platformCard: 'bg-[#1f3159] text-[#eaf1ff]',
-      platformTitle: 'text-[#eaf1ff]',
-      platformBody: 'text-[#b8cbe8]',
-      sectionLabel: 'text-[#8e9199]',
-      sectionBody: 'text-[#c3c6cf]',
-      ecosystemOfficialCard: 'bg-[#1a2c52] text-[#d3e3fd]',
-      ecosystemMarketCard: 'bg-[#223527] text-[#c8e6c9]',
-      ecosystemOfficialBody: 'text-[#c3dafd]',
-      ecosystemMarketBody: 'text-[#b7d3b7]',
-      ecosystemOfficialList: 'text-[#eaf1ff]',
-      ecosystemMarketList: 'text-[#dbeadb]',
-      ecosystemOfficialButton: 'bg-[#a8c7fa] text-[#062e6f] hover:bg-[#bdd3fb]',
-      ecosystemMarketButton: 'bg-[#a0cfa2] text-[#0c3810] hover:bg-[#b4d9b5]',
-      browseWrap: 'border-[#43474e] bg-[#1d2024]',
-      browseCard: 'shadow-[0_1px_2px_rgba(0,0,0,0.3),0_1px_3px_1px_rgba(0,0,0,0.15)] hover:shadow-[0_1px_3px_rgba(0,0,0,0.3),0_4px_8px_3px_rgba(0,0,0,0.15)]',
-      emptyState: 'border-[#43474e] bg-[#1d2024] text-[#8e9199]',
-      skeleton: 'bg-[#272a2f]'
-    }
-  : {
-      badge: 'border-[#aac7fa]/60 bg-[#d3e3fd] text-[#041e49]',
-      body: 'text-[#43474e]',
-      primaryButton: 'bg-[#0b57d0] text-white shadow-[0_1px_2px_rgba(11,87,208,0.3),0_1px_3px_1px_rgba(11,87,208,0.15)] hover:bg-[#0848ad] hover:shadow-[0_1px_2px_rgba(11,87,208,0.3),0_2px_6px_2px_rgba(11,87,208,0.15)] focus-visible:ring-[#0b57d0]/30',
-      secondaryButton: 'bg-[#d3e3fd] text-[#041e49] hover:bg-[#c1d6fc] focus-visible:ring-[#0b57d0]/30',
-      statCard: 'bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08),0_1px_3px_1px_rgba(15,23,42,0.06)]',
-      statValue: 'text-[#1a1b20]',
-      statLabel: 'text-[#74777f]',
-      heroTint: 'bg-[linear-gradient(180deg,rgba(211,227,253,0.7)_0%,rgba(223,235,254,0.35)_45%,rgba(252,252,253,0)_100%)]',
-      previewCard: 'bg-[#d3e3fd] text-[#041e49] shadow-[0_1px_3px_rgba(11,87,208,0.1),0_4px_8px_3px_rgba(11,87,208,0.08)]',
-      previewLabel: 'text-[#1a4191]',
-      previewTitle: 'text-[#041e49]',
-      previewButton: 'bg-[#0b57d0] text-white hover:bg-[#0848ad]',
-      previewBody: 'text-[#24366e]',
-      terminalCard: 'bg-[#1b273e] text-[#e3ebff]',
-      terminalMeta: 'text-[#a8bce6]',
-      platformCard: 'bg-white/80 text-[#041e49]',
-      platformTitle: 'text-[#041e49]',
-      platformBody: 'text-[#3b4a73]',
-      sectionLabel: 'text-[#74777f]',
-      sectionBody: 'text-[#43474e]',
-      ecosystemOfficialCard: 'bg-[#d3e3fd] text-[#041e49]',
-      ecosystemMarketCard: 'bg-[#d7edd9] text-[#0c3810]',
-      ecosystemOfficialBody: 'text-[#24366e]',
-      ecosystemMarketBody: 'text-[#295330]',
-      ecosystemOfficialList: 'text-[#041e49]',
-      ecosystemMarketList: 'text-[#0c3810]',
-      ecosystemOfficialButton: 'bg-[#0b57d0] text-white hover:bg-[#0848ad]',
-      ecosystemMarketButton: 'bg-[#3a6a49] text-white hover:bg-[#2c5238]',
-      browseWrap: 'bg-[#eef0f8]',
-      browseCard: 'shadow-[0_1px_2px_rgba(15,23,42,0.08),0_1px_3px_1px_rgba(15,23,42,0.06)] hover:shadow-[0_1px_3px_rgba(15,23,42,0.1),0_4px_8px_3px_rgba(15,23,42,0.08)]',
-      emptyState: 'border-[#c3c6cf] bg-white text-[#74777f]',
-      skeleton: 'bg-[#e2e4ed]'
-    }
-)
+const ui = {
+  badge: 'kawaii-chip',
+  body: 'text-themed-muted',
+  primaryButton: 'kawaii-primary-button',
+  statValue: 'text-themed',
+  statLabel: 'text-themed-muted',
+  platformTitle: 'text-themed',
+  sectionLabel: 'text-themed-faint',
+  sectionBody: 'text-themed-muted',
+  ecosystemOfficialBody: 'text-themed-muted',
+  ecosystemMarketBody: 'text-themed-muted',
+  ecosystemOfficialList: 'text-themed',
+  ecosystemMarketList: 'text-themed',
+  ecosystemOfficialButton: 'kawaii-primary-button',
+  ecosystemMarketButton: 'kawaii-secondary-button',
+  browseWrap: 'kawaii-browse-wrap',
+  browseCard: '',
+  emptyState: 'kawaii-empty-state',
+  skeleton: 'kawaii-skeleton'
+}
 
 usePageSeo(() => ({
   title: `${brand.brandName} - ${brand.brandSubtitle}`,
@@ -202,55 +160,27 @@ function getPriceLabel(pkg: PublicPackage): string {
 }
 
 function getSourceChipClass(source: PackageSource): string {
-  if (source === 'official') {
-    return themeStore.isDark
-      ? 'border border-[#a8c7fa]/70 text-[#a8c7fa]'
-      : 'border border-[#0b57d0]/40 text-[#0b57d0]'
-  }
-
-  return themeStore.isDark
-    ? 'border border-[#a1cdb3]/70 text-[#a1cdb3]'
-    : 'border border-[#3a6a49]/40 text-[#3a6a49]'
+  return `kawaii-source-chip ${source === 'official' ? 'official' : 'market'}`
 }
 
 function getSourceDotClass(source: PackageSource): string {
-  if (source === 'official') {
-    return themeStore.isDark ? 'bg-[#a8c7fa]' : 'bg-[#0b57d0]'
-  }
-
-  return themeStore.isDark ? 'bg-[#a1cdb3]' : 'bg-[#3a6a49]'
+  return `kawaii-source-dot ${source === 'official' ? 'official' : 'market'}`
 }
 
 function getInstanceChipClass(instanceType: string): string {
-  if (instanceType === 'vm') {
-    return themeStore.isDark
-      ? 'border border-[#ffdfa6]/60 text-[#ffdfa6]'
-      : 'border border-[#7a5900]/40 text-[#7a5900]'
-  }
-
-  return themeStore.isDark
-    ? 'border border-[#8e9199]/60 text-[#c3c6cf]'
-    : 'border border-[#74777f]/40 text-[#43474e]'
+  return `kawaii-instance-chip ${instanceType === 'vm' ? 'vm' : 'lxc'}`
 }
 
-function getEcosystemCardClass(source: PackageSource): string {
-  if (source === 'official') {
-    return themeStore.isDark ? ui.value.ecosystemOfficialCard : ui.value.ecosystemOfficialCard
-  }
-  return themeStore.isDark ? ui.value.ecosystemMarketCard : ui.value.ecosystemMarketCard
-}
-
-function getPackageCardClass(_source: PackageSource): string {
-  return themeStore.isDark
-    ? 'bg-[#272a2f] hover:bg-[#2d3136]'
-    : 'bg-white hover:bg-[#f8f9fc]'
+function getPackageCardClass(source: PackageSource): string {
+  return `kawaii-package-card ${source === 'official' ? 'official' : 'market'}`
 }
 
 function getPriceTextClass(source: PackageSource): string {
-  if (source === 'official') {
-    return themeStore.isDark ? 'text-[#a8c7fa]' : 'text-[#0b57d0]'
-  }
-  return themeStore.isDark ? 'text-[#a1cdb3]' : 'text-[#3a6a49]'
+  return `kawaii-price-text ${source === 'official' ? 'official' : 'market'}`
+}
+
+function setActiveProductLine(source: ProductLineKey): void {
+  activeProductLine.value = source
 }
 
 function browseCatalog(source?: PackageSource): void {
@@ -283,17 +213,11 @@ async function loadCatalog(): Promise<void> {
   loading.value = true
 
   try {
-    const [packagesResponse, regionsResponse] = await Promise.all([
-      api.packages.listPublic(),
-      api.packages.getPublicRegions()
-    ])
-
+    const packagesResponse = await api.packages.listPublic()
     packages.value = (packagesResponse.packages || []) as unknown as PublicPackage[]
-    regions.value = regionsResponse.regions || []
   } catch (error) {
     console.error('Failed to load public catalog:', error)
     packages.value = []
-    regions.value = []
   } finally {
     loading.value = false
   }
@@ -305,122 +229,123 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="relative">
+  <div class="kawaii-page kawaii-home-page relative">
     <ThemeTemplateSlot
       slot-name="public.home.hero"
       container-class="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8"
     />
 
-    <section class="relative px-4 pb-20 pt-14 sm:px-6 lg:px-8">
-      <div class="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <div class="max-w-3xl">
-          <div
-            class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium"
-            :class="ui.badge"
-          >
-            <span class="h-1.5 w-1.5 rounded-full" :class="themeStore.isDark ? 'bg-[#a8c7fa]' : 'bg-[#0b57d0]'"></span>
-            {{ t('publicSite.portal.badge') }}
-          </div>
-
-          <h1 class="mt-6 text-4xl font-normal tracking-[-0.02em] sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]">
-            {{ t('publicSite.portal.title') }}
-          </h1>
-          <p class="mt-6 max-w-2xl text-base leading-7 sm:text-lg sm:leading-8" :class="ui.body">
-            {{ t('publicSite.portal.description') }}
-          </p>
-
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-            <button
-              class="inline-flex h-10 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-4"
-              :class="ui.primaryButton"
-              @click="browseCatalog()"
-            >
-              <span>{{ t('publicSite.actions.browseProducts') }}</span>
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 4.5l6 6m0 0l-6 6m6-6h-15" />
-              </svg>
-            </button>
-
-            <button
-              class="inline-flex h-10 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium tracking-[0.01em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4"
-              :class="ui.secondaryButton"
-              @click="goToConsole"
-            >
-              <span class="sm:hidden">{{ consoleActionCompactLabel }}</span>
-              <span class="hidden sm:inline">{{ consoleActionLabel }}</span>
-            </button>
-          </div>
-
-          <div class="mt-10 grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <section class="kawaii-hero-section relative overflow-hidden px-4 pb-10 pt-8 sm:px-6 lg:px-8">
+      <div class="kawaii-hero-shell relative mx-auto max-w-7xl px-1 pb-2 pt-8 sm:px-3 sm:pt-10 lg:px-4">
+        <div class="relative z-10 grid gap-8 lg:min-h-[35rem] lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
+          <div class="kawaii-hero-copy relative z-20 max-w-2xl">
             <div
-              v-for="item in statCards"
-              :key="item.label"
-              class="rounded-2xl px-4 py-4 transition-shadow duration-150"
-              :class="ui.statCard"
+              class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium"
+              :class="ui.badge"
             >
-              <div class="text-xs font-medium" :class="ui.statLabel">
-                {{ item.label }}
+              <span class="kawaii-source-dot official h-1.5 w-1.5 rounded-full"></span>
+              {{ t('publicSite.portal.badge') }}
+            </div>
+
+            <h1 class="kawaii-hero-heading mt-6 text-4xl font-extrabold sm:text-5xl lg:text-[4rem] lg:leading-[1.05]">
+              <span>{{ heroTitlePrimary }}</span>
+              <span>
+                {{ heroTitlePrefix }}<span class="kawaii-hero-accent">{{ heroTitleAccent }}</span>
+              </span>
+            </h1>
+            <p class="mt-6 max-w-2xl text-base leading-7 sm:text-lg sm:leading-8" :class="ui.body">
+              {{ t('publicSite.portal.description') }}
+            </p>
+
+            <div class="kawaii-hero-actions mt-8 flex flex-col gap-3 sm:flex-row">
+              <button
+                class="kawaii-primary-button inline-flex h-11 items-center justify-center gap-2 rounded-xl px-7 text-sm font-semibold transition-[background-color,box-shadow,transform,filter] duration-150 focus-visible:outline-none focus-visible:ring-4"
+                @click="browseCatalog()"
+              >
+                <span>{{ t('publicSite.actions.browseProducts') }}</span>
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 4.5l6 6m0 0l-6 6m6-6h-15" />
+                </svg>
+              </button>
+
+              <button
+                class="kawaii-secondary-button inline-flex h-11 items-center justify-center gap-2 rounded-xl px-7 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4"
+                @click="goToConsole"
+              >
+                <span class="sm:hidden">{{ consoleActionCompactLabel }}</span>
+                <span class="hidden sm:inline">{{ consoleActionLabel }}</span>
+              </button>
+            </div>
+
+          </div>
+
+          <div class="relative min-h-[24rem] lg:min-h-[41rem]">
+            <div class="kawaii-hero-visual-stage">
+              <img
+                src="/images/kawaii/hero-cloud-map.png"
+                alt=""
+                class="kawaii-hero-map-asset"
+                aria-hidden="true"
+                loading="eager"
+                decoding="async"
+              />
+              <div class="kawaii-map-label kawaii-map-label-lax" aria-hidden="true">
+                <strong>LAX</strong>
+                <span>CN2 GIA</span>
               </div>
-              <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.statValue">
-                {{ item.value }}
+              <div class="kawaii-map-label kawaii-map-label-hkg" aria-hidden="true">
+                <strong>HKG</strong>
+                <span>CN2 GIA</span>
+              </div>
+              <div class="kawaii-map-label kawaii-map-label-fra" aria-hidden="true">
+                <strong>FRA</strong>
+                <span>DE-CIX</span>
+              </div>
+              <div class="kawaii-map-label kawaii-map-label-syd" aria-hidden="true">
+                <strong>SYD</strong>
+                <span>Telstra</span>
+              </div>
+              <div class="relative z-10 min-h-[24rem] lg:min-h-[41rem]">
+                <div class="kawaii-mascot-layer absolute inset-x-0 bottom-0 flex items-end justify-center overflow-visible lg:justify-end">
+                  <img
+                    src="/images/kawaii/paya-cloud-operator-v2.png"
+                    alt="Payincus 云端助手"
+                    class="kawaii-mascot-image"
+                    loading="eager"
+                    decoding="async"
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="relative">
+        <div class="kawaii-hero-feature-strip relative z-10 mt-8 grid gap-3 lg:grid-cols-4">
           <div
-            class="relative overflow-hidden rounded-[28px] p-6"
-            :class="ui.previewCard"
+            v-for="feature in heroFeatureCards"
+            :key="feature.title"
+            class="kawaii-hero-feature-card rounded-2xl p-4"
           >
-            <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-start gap-3">
+              <div class="kawaii-hero-feature-icon">
+                <svg v-if="feature.icon === 'network'" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16.5A4.5 4.5 0 018.5 12H9a6 6 0 1111.31 3.73A3.5 3.5 0 0117.5 21h-10A3.5 3.5 0 014 16.5z" />
+                </svg>
+                <svg v-else-if="feature.icon === 'compute'" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 8h10M7 12h10M7 16h6M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                </svg>
+                <svg v-else-if="feature.icon === 'secure'" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3l7 3v5c0 4.5-2.9 8.4-7 9.8C7.9 19.4 5 15.5 5 11V6l7-3z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.5 12l1.7 1.7 3.8-4" />
+                </svg>
+                <svg v-else class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3v3m0 12v3M4.64 5.64l2.12 2.12m10.48 10.48l2.12 2.12M3 12h3m12 0h3M4.64 18.36l2.12-2.12M17.24 7.76l2.12-2.12" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12a3 3 0 106 0 3 3 0 00-6 0z" />
+                </svg>
+              </div>
               <div>
-                <div class="text-xs font-medium" :class="ui.previewLabel">
-                  {{ t('publicSite.portal.previewLabel') }}
-                </div>
-                <div class="mt-2 text-2xl font-normal tracking-[-0.02em]" :class="ui.previewTitle">
-                  {{ t('publicSite.portal.previewTitle') }}
-                </div>
-              </div>
-
-              <button
-                class="h-10 rounded-full px-5 text-sm font-medium transition-colors duration-150"
-                :class="ui.previewButton"
-                @click="browseCatalog()"
-              >
-                {{ t('publicSite.actions.viewCatalog') }}
-              </button>
-            </div>
-
-            <p class="mt-4 text-sm leading-6" :class="ui.previewBody">
-              {{ t('publicSite.portal.previewDescription') }}
-            </p>
-
-            <div class="mt-6 rounded-2xl p-5 font-mono text-xs leading-6" :class="ui.terminalCard">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <span>root@incudal</span>
-                <span :class="ui.terminalMeta">incus console</span>
-              </div>
-              <div class="mt-4 space-y-1">
-                <div>{{ t('publicSite.portal.controlPoint1') }}</div>
-                <div>{{ t('publicSite.portal.controlPoint2') }}</div>
-                <div>{{ t('publicSite.portal.controlPoint3') }}</div>
-              </div>
-            </div>
-
-            <div class="mt-6 grid gap-3 sm:grid-cols-3">
-              <div
-                v-for="card in platformCards"
-                :key="card.title"
-                class="rounded-2xl p-4 transition-colors duration-150"
-                :class="ui.platformCard"
-              >
-                <div class="text-sm font-medium" :class="ui.platformTitle">
-                  {{ card.title }}
-                </div>
-                <p class="mt-2 text-xs leading-5" :class="ui.platformBody">
-                  {{ card.description }}
-                </p>
+                <div class="text-sm font-semibold text-themed">{{ feature.title }}</div>
+                <p class="mt-2 text-xs leading-5 text-themed-muted">{{ feature.description }}</p>
               </div>
             </div>
           </div>
@@ -433,76 +358,140 @@ onMounted(() => {
       container-class="mx-auto max-w-7xl px-4 pb-6 sm:px-6 lg:px-8"
     />
 
-    <section class="px-4 py-20 sm:px-6 lg:px-8">
+    <section class="kawaii-product-section relative overflow-hidden px-4 py-16 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-7xl">
-        <div class="max-w-2xl">
-          <div class="text-xs font-medium" :class="ui.sectionLabel">
-            {{ t('publicSite.portal.catalogLabel') }}
+        <div
+          class="kawaii-product-showcase"
+          :class="`is-active-${activeProductLine}`"
+          @mouseleave="setActiveProductLine('all')"
+        >
+          <div class="kawaii-product-copy">
+            <div class="text-xs font-semibold uppercase tracking-[0.22em]" :class="ui.sectionLabel">
+              {{ t('publicSite.portal.catalogLabel') }}
+            </div>
+            <h2 class="mt-5 max-w-xl text-4xl font-extrabold tracking-normal text-themed sm:text-[3.25rem] sm:leading-[1.04]">
+              {{ t('publicSite.portal.catalogTitle') }}
+            </h2>
+            <p class="mt-5 max-w-2xl text-base leading-8" :class="ui.sectionBody">
+              {{ t('publicSite.portal.catalogDescription') }}
+            </p>
+
+            <div class="kawaii-product-tags mt-8">
+              <span>Direct / Hosted</span>
+              <span>LXC / KVM</span>
+              <span>IPv4 NAT / BGP</span>
+            </div>
           </div>
-          <h2 class="mt-4 text-3xl font-normal tracking-[-0.02em] sm:text-[2.25rem] sm:leading-[1.15]">
-            {{ t('publicSite.portal.catalogTitle') }}
-          </h2>
-          <p class="mt-4 text-base leading-7" :class="ui.sectionBody">
-            {{ t('publicSite.portal.catalogDescription') }}
-          </p>
-        </div>
 
-        <div class="mt-10 grid gap-6 lg:grid-cols-2">
-          <article
-            v-for="line in ecosystemCards"
-            :key="line.key"
-            class="rounded-[28px] p-7 transition-shadow duration-150"
-            :class="getEcosystemCardClass(line.source)"
-          >
-            <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 class="text-2xl font-normal tracking-[-0.02em]">
-                  {{ line.title }}
-                </h3>
-                <p class="mt-3 text-sm leading-6" :class="line.source === 'official' ? ui.ecosystemOfficialBody : ui.ecosystemMarketBody">
-                  {{ line.description }}
-                </p>
+          <div class="kawaii-product-stage" aria-hidden="true">
+            <img
+              src="/images/kawaii/hero-cloud-map.png"
+              alt=""
+              class="kawaii-product-stage-map"
+              loading="lazy"
+              decoding="async"
+            />
+            <span class="kawaii-network-line line-a"></span>
+            <span class="kawaii-network-line line-b"></span>
+            <span class="kawaii-network-line line-c"></span>
+            <span class="kawaii-network-node node-hkg official">
+              <strong>HKG</strong>
+              <em>CN2</em>
+            </span>
+            <span class="kawaii-network-node node-lax official">
+              <strong>LAX</strong>
+              <em>GIA</em>
+            </span>
+            <span class="kawaii-network-node node-fra market">
+              <strong>FRA</strong>
+              <em>BGP</em>
+            </span>
+            <span class="kawaii-network-node node-sgp market">
+              <strong>SGP</strong>
+              <em>Lite</em>
+            </span>
+            <div class="kawaii-product-stage-terminal">
+              <span>incus profile</span>
+              <strong>LXC / KVM / NAT</strong>
+            </div>
+          </div>
+
+          <div class="kawaii-product-selector">
+            <article
+              v-for="line in ecosystemCards"
+              :key="line.key"
+              class="kawaii-product-choice-card"
+              :class="[line.source, { 'is-active': activeProductLine === line.source }]"
+              tabindex="0"
+              @mouseenter="setActiveProductLine(line.source)"
+              @focusin="setActiveProductLine(line.source)"
+              @click="browseCatalog(line.source)"
+            >
+              <div class="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span
+                      class="rounded-lg px-2.5 py-1 text-[11px] font-semibold tracking-normal"
+                      :class="getSourceChipClass(line.source)"
+                    >
+                      {{ line.source === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
+                    </span>
+                    <span class="kawaii-product-line-badge">
+                      {{ line.source === 'official' ? (isChineseLocale ? '稳定供应' : 'Stable supply') : (isChineseLocale ? '更多选择' : 'More choices') }}
+                    </span>
+                  </div>
+
+                  <h3 class="mt-4 text-xl font-extrabold tracking-normal text-themed">
+                    {{ line.title }}
+                  </h3>
+                  <p class="mt-3 text-sm leading-6" :class="line.source === 'official' ? ui.ecosystemOfficialBody : ui.ecosystemMarketBody">
+                    {{ line.description }}
+                  </p>
+                </div>
+
+                <div class="kawaii-product-choice-meta" :class="line.source">
+                  <span>{{ line.source === 'official' ? 'Direct' : 'Hosted' }}</span>
+                  <strong>{{ line.source === 'official' ? 'CN2 / BGP' : 'Multi' }}</strong>
+                </div>
               </div>
-              <span
-                class="rounded-lg px-2.5 py-1 text-[11px] font-medium tracking-[0.02em]"
-                :class="getSourceChipClass(line.source)"
-              >
-                {{ line.source === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
-              </span>
-            </div>
 
-            <div class="mt-6 space-y-3 text-sm" :class="line.source === 'official' ? ui.ecosystemOfficialList : ui.ecosystemMarketList">
-              <div v-for="point in line.points" :key="point" class="flex items-start gap-3">
-                <span class="mt-1.5 h-1.5 w-1.5 rounded-full" :class="getSourceDotClass(line.source)"></span>
-                <span>{{ point }}</span>
+              <div class="mt-5 grid gap-2 text-sm sm:grid-cols-2" :class="line.source === 'official' ? ui.ecosystemOfficialList : ui.ecosystemMarketList">
+                <div v-for="point in line.points.slice(0, 2)" :key="point" class="flex items-start gap-2">
+                  <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="getSourceDotClass(line.source)"></span>
+                  <span>{{ point }}</span>
+                </div>
               </div>
-            </div>
 
-            <div class="mt-6">
-              <button
-                class="inline-flex h-10 items-center gap-2 rounded-full px-6 text-sm font-medium transition-colors duration-150"
-                :class="line.source === 'official' ? ui.ecosystemOfficialButton : ui.ecosystemMarketButton"
-                @click="browseCatalog(line.source)"
-              >
-                {{ line.source === 'official' ? t('publicSite.actions.browseOfficial') : t('publicSite.actions.browseMarket') }}
-              </button>
-            </div>
-          </article>
+              <div class="mt-5">
+                <button
+                  type="button"
+                  class="kawaii-product-choice-action"
+                  :class="line.source"
+                  @click.stop="browseCatalog(line.source)"
+                >
+                  {{ line.source === 'official' ? t('publicSite.actions.browseOfficial') : t('publicSite.actions.browseMarket') }}
+                  <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 4.5l6 6m0 0l-6 6m6-6h-15" />
+                  </svg>
+                </button>
+              </div>
+            </article>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="px-4 pb-20 sm:px-6 lg:px-8">
+    <section class="kawaii-plan-section px-4 pb-20 sm:px-6 lg:px-8">
       <div
-        class="mx-auto max-w-7xl rounded-[28px] px-6 py-10 sm:px-10"
+        class="mx-auto max-w-7xl rounded-[30px] px-6 py-9 sm:px-10"
         :class="ui.browseWrap"
       >
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-2xl">
-            <div class="text-xs font-medium" :class="ui.sectionLabel">
+            <div class="text-xs font-semibold uppercase tracking-[0.18em]" :class="ui.sectionLabel">
               {{ t('publicSite.portal.browseLabel') }}
             </div>
-            <h2 class="mt-4 text-3xl font-normal tracking-[-0.02em] sm:text-[2.25rem] sm:leading-[1.15]">
+            <h2 class="mt-4 text-3xl font-extrabold tracking-normal text-themed sm:text-[2.25rem] sm:leading-[1.12]">
               {{ t('publicSite.portal.browseTitle') }}
             </h2>
             <p class="mt-4 text-base leading-7" :class="ui.sectionBody">
@@ -511,7 +500,7 @@ onMounted(() => {
           </div>
 
           <button
-            class="inline-flex h-10 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-4"
+            class="inline-flex h-10 items-center justify-center gap-2 rounded-full px-6 text-sm font-medium tracking-normal transition-[background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-4"
             :class="ui.primaryButton"
             @click="browseCatalog()"
           >
@@ -524,7 +513,7 @@ onMounted(() => {
             <div
               v-for="index in 4"
               :key="index"
-              class="h-40 animate-pulse rounded-xl"
+              class="h-36 animate-pulse rounded-2xl"
               :class="ui.skeleton"
             ></div>
           </template>
@@ -533,20 +522,20 @@ onMounted(() => {
             <button
               v-for="pkg in spotlightPackages"
               :key="pkg.id"
-              class="flex flex-col gap-4 rounded-2xl p-5 text-left transition-[background-color,box-shadow] duration-150 sm:flex-row sm:items-start sm:justify-between"
+              class="kawaii-spotlight-package flex min-h-36 flex-col gap-4 rounded-2xl p-5 text-left transition-[border-color,box-shadow,transform] duration-150 sm:flex-row sm:items-stretch sm:justify-between"
               :class="[ui.browseCard, getPackageCardClass(pkg.sourceType)]"
               @click="openPackage(pkg)"
             >
-              <div class="min-w-0">
+              <div class="min-w-0 sm:max-w-[68%]">
                 <div class="flex flex-wrap items-center gap-2">
                   <span
-                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-normal"
                     :class="getSourceChipClass(pkg.sourceType)"
                   >
                     {{ pkg.sourceType === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
                   </span>
                   <span
-                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-[0.02em]"
+                    class="rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-normal"
                     :class="getInstanceChipClass(pkg.instance_type)"
                   >
                     {{ pkg.instance_type === 'vm' ? 'KVM' : 'LXC' }}
@@ -560,8 +549,8 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="sm:shrink-0 sm:text-right">
-                <div class="text-sm font-medium" :class="getPriceTextClass(pkg.sourceType)">
+              <div class="kawaii-package-side sm:shrink-0 sm:text-right">
+                <div class="text-sm font-extrabold" :class="getPriceTextClass(pkg.sourceType)">
                   {{ getPriceLabel(pkg) }}
                 </div>
                 <div class="mt-1 text-xs" :class="ui.statLabel">

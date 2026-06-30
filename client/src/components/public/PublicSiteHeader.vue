@@ -68,45 +68,6 @@ function onScroll(): void {
   scrolled.value = window.scrollY > 4
 }
 
-const ui = computed(() => themeStore.isDark
-  ? {
-      shell: scrolled.value
-        ? 'bg-[#111418]/85 backdrop-blur-xl border-b border-[#2a2d33]'
-        : 'bg-transparent border-b border-transparent',
-      brandMark: 'bg-[#1a2c52]',
-      brandText: 'text-[#e3e2e6]',
-      brandSubtext: 'text-[#8e9199]',
-      navRail: '',
-      navActive: 'bg-[#1a2c52] text-[#d3e3fd]',
-      navIdle: 'text-[#c3c6cf] hover:bg-[#272a2f] hover:text-[#e3e2e6]',
-      iconButton: 'text-[#c3c6cf] hover:bg-[#272a2f]',
-      menuPanel: 'border-[#43474e] bg-[#1d2024] shadow-[0_4px_8px_3px_rgba(0,0,0,0.15),0_1px_3px_rgba(0,0,0,0.3)]',
-      menuActive: 'bg-[#1a2c52] text-[#d3e3fd]',
-      menuIdle: 'text-[#c3c6cf] hover:bg-[#272a2f] hover:text-[#e3e2e6]',
-      cta: 'bg-[#a8c7fa] text-[#062e6f] shadow-[0_1px_2px_rgba(0,0,0,0.3),0_1px_3px_1px_rgba(0,0,0,0.15)] hover:bg-[#bdd3fb]',
-      mobileActive: 'bg-[#1a2c52] text-[#d3e3fd]',
-      mobileIdle: 'text-[#c3c6cf] hover:bg-[#272a2f] hover:text-[#e3e2e6]'
-    }
-  : {
-      shell: scrolled.value
-        ? 'bg-[#fcfcfd]/85 backdrop-blur-xl border-b border-[#e3e5ec]'
-        : 'bg-transparent border-b border-transparent',
-      brandMark: 'bg-[#d3e3fd]',
-      brandText: 'text-[#1a1b20]',
-      brandSubtext: 'text-[#74777f]',
-      navRail: '',
-      navActive: 'bg-[#d3e3fd] text-[#041e49]',
-      navIdle: 'text-[#43474e] hover:bg-[#eef0f8] hover:text-[#1a1b20]',
-      iconButton: 'text-[#43474e] hover:bg-[#eef0f8]',
-      menuPanel: 'border-[#c3c6cf] bg-white shadow-[0_4px_8px_3px_rgba(15,23,42,0.08),0_1px_3px_rgba(15,23,42,0.06)]',
-      menuActive: 'bg-[#d3e3fd] text-[#041e49]',
-      menuIdle: 'text-[#43474e] hover:bg-[#eef0f8] hover:text-[#1a1b20]',
-      cta: 'bg-[#0b57d0] text-white shadow-[0_1px_2px_rgba(11,87,208,0.3),0_1px_3px_1px_rgba(11,87,208,0.15)] hover:bg-[#0848ad]',
-      mobileActive: 'bg-[#d3e3fd] text-[#041e49]',
-      mobileIdle: 'text-[#43474e] hover:bg-[#eef0f8] hover:text-[#1a1b20]'
-    }
-)
-
 function handleClickOutside(event: MouseEvent): void {
   if (langMenuRef.value && !langMenuRef.value.contains(event.target as Node)) {
     langMenuOpen.value = false
@@ -186,24 +147,23 @@ onUnmounted(() => {
 
 <template>
   <header
-    class="sticky top-0 z-50 transition-[background-color,border-color,backdrop-filter] duration-200"
-    :class="ui.shell"
+    class="kawaii-public-header sticky top-0 z-50 border-b transition-[background-color,border-color,backdrop-filter] duration-200"
+    :class="scrolled ? 'is-scrolled' : ''"
   >
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex h-16 items-center justify-between gap-3 sm:gap-4">
         <div class="flex min-w-0 items-center gap-3 sm:gap-6">
           <RouterLink to="/" class="flex items-center gap-2 sm:gap-3">
             <div
-              class="flex h-10 w-10 items-center justify-center rounded-xl"
-              :class="ui.brandMark"
+              class="kawaii-brand-mark flex h-10 w-10 items-center justify-center rounded-xl"
             >
               <img :src="brand.brandLogoUrl" :alt="brand.brandName" class="h-6 w-6 rounded-xl object-contain" />
             </div>
             <div class="min-w-0">
-              <div class="truncate text-sm font-semibold tracking-[-0.02em]" :class="ui.brandText">
+              <div class="truncate text-sm font-semibold tracking-normal text-themed">
                 {{ brand.brandName }}
               </div>
-              <div class="hidden truncate text-xs sm:block" :class="ui.brandSubtext">
+              <div class="hidden truncate text-xs text-themed-muted sm:block">
                 {{ brand.brandSubtitle }}
               </div>
             </div>
@@ -214,10 +174,8 @@ onUnmounted(() => {
               v-for="item in navigation"
               :key="item.to"
               :to="item.to"
-              class="rounded-full px-4 py-2 text-sm font-medium tracking-[-0.01em] transition-colors duration-150"
-              :class="isActive(item.to)
-                ? ui.navActive
-                : ui.navIdle"
+              class="kawaii-public-nav-link rounded-full px-4 py-2 text-sm font-medium tracking-normal transition-colors duration-150"
+              :class="isActive(item.to) ? 'is-active' : ''"
             >
               {{ item.label }}
             </RouterLink>
@@ -226,8 +184,7 @@ onUnmounted(() => {
 
         <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <button
-            class="group relative rounded-full p-2.5 transition-colors duration-150"
-            :class="ui.iconButton"
+            class="kawaii-header-icon group relative rounded-full p-2.5 transition-colors duration-150"
             :title="getThemeTooltip()"
             :aria-label="t('nav.toggleTheme')"
             @click="themeStore.toggleTheme"
@@ -245,8 +202,7 @@ onUnmounted(() => {
 
           <div ref="langMenuRef" class="relative">
             <button
-              class="rounded-full px-3 py-2 text-xs font-semibold transition-colors duration-150 sm:px-3.5"
-              :class="ui.iconButton"
+              class="kawaii-header-icon rounded-full px-3 py-2 text-xs font-semibold transition-colors duration-150 sm:px-3.5"
               :aria-label="t('nav.toggleLanguage')"
               @click.stop="toggleLangMenu"
             >
@@ -263,16 +219,13 @@ onUnmounted(() => {
             >
               <div
                 v-if="langMenuOpen"
-                class="absolute right-0 mt-2 w-36 overflow-hidden rounded-[24px] border p-1 shadow-xl"
-                :class="ui.menuPanel"
+                class="kawaii-menu-panel absolute right-0 mt-2 w-36 overflow-hidden rounded-[24px] border p-1 shadow-xl"
               >
                 <button
                   v-for="lang in supportedLocales"
                   :key="lang.code"
-                  class="flex w-full items-center justify-between rounded-[18px] px-3 py-2 text-sm transition-[background-color,color]"
-                  :class="locale === lang.code
-                    ? ui.menuActive
-                    : ui.menuIdle"
+                  class="kawaii-menu-item flex w-full items-center justify-between rounded-[18px] px-3 py-2 text-sm transition-[background-color,color]"
+                  :class="locale === lang.code ? 'is-active' : ''"
                   @click="changeLocale(lang.code)"
                 >
                   <span>{{ lang.name }}</span>
@@ -285,8 +238,7 @@ onUnmounted(() => {
           </div>
 
           <button
-            class="inline-flex h-10 min-w-0 shrink-0 items-center gap-1.5 rounded-full px-5 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 sm:gap-2"
-            :class="ui.cta"
+            class="kawaii-header-cta inline-flex h-10 min-w-0 shrink-0 items-center gap-1.5 rounded-full px-5 text-sm font-medium tracking-[0.01em] transition-[background-color,box-shadow] duration-150 sm:gap-2"
             @click="handlePrimaryAction"
           >
             <span class="sm:hidden">{{ primaryActionCompactLabel }}</span>
@@ -303,10 +255,8 @@ onUnmounted(() => {
           v-for="item in navigation"
           :key="item.to"
           :to="item.to"
-          class="inline-flex min-w-0 items-center rounded-full px-3.5 py-2 text-xs font-semibold transition-colors duration-150"
-          :class="isActive(item.to)
-            ? ui.mobileActive
-            : ui.mobileIdle"
+          class="kawaii-public-nav-link inline-flex min-w-0 items-center rounded-full px-3.5 py-2 text-xs font-semibold transition-colors duration-150"
+          :class="isActive(item.to) ? 'is-active' : ''"
         >
           {{ item.compactLabel }}
         </RouterLink>

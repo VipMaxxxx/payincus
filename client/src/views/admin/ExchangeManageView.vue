@@ -799,7 +799,7 @@ onMounted(loadActive)
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-semibold text-themed">交易所管理</h1>

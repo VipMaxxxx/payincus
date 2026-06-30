@@ -6507,6 +6507,7 @@ export default {
     // 工单系统
     tickets: {
         title: '工单中心',
+        subtitle: '提交问题、跟进回复，并查看与实例相关的支持记录。',
         myTickets: '我的工单',
         hostTickets: '收到的工单',
         createTicket: '创建工单',

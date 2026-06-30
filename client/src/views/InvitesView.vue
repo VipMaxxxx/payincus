@@ -151,7 +151,7 @@ function nextPage(): void {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header flex-col gap-4 sm:flex-row sm:gap-0">
       <div>
         <h1 class="page-title">邀请码管理</h1>

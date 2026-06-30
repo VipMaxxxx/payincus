@@ -122,7 +122,7 @@ async function sendBroadcast() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="kawaii-page space-y-6 animate-fade-in">
     <!-- 页面标题 -->
     <div>
       <h2 class="text-xl font-semibold text-gray-900 dark:text-white">

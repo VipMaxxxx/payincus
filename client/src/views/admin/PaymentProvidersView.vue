@@ -391,7 +391,7 @@ function togglePaymentMethod(method: string) {
 </script>
 
 <template>
-  <div :class="['animate-fade-in', props.embedded ? 'space-y-4' : '']">
+  <div :class="['animate-fade-in', props.embedded ? 'space-y-4' : 'kawaii-page space-y-6']">
     <!-- 页面头部 -->
     <div class="page-header flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>

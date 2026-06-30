@@ -861,20 +861,20 @@ function getWheelTextTransform(index: number, total: number): string {
 </script>
 
 <template>
-  <div class="animate-fade-in">
+  <div class="kawaii-page animate-fade-in">
     <!-- 页面标题 -->
-    <div class="page-header">
+    <div class="kawaii-dashboard-hero page-header rounded-2xl p-5">
       <h1 class="page-title">{{ $t('entertainment.title') }}</h1>
       <p class="text-sm text-themed-muted mt-1">{{ $t('entertainment.description') }}</p>
     </div>
 
     <!-- 主选项卡（Vercel 极简风格） -->
-    <div class="flex gap-1 mb-6 p-1 bg-themed-secondary/50 rounded-lg w-fit">
+    <div class="kawaii-panel mb-6 flex w-full gap-1 overflow-x-auto rounded-2xl p-1 sm:w-fit">
       <button
-        class="relative flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 active:scale-95"
+        class="relative flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 active:scale-95"
         :class="mainTab === 'vip'
-          ? 'bg-themed text-themed shadow-sm'
-          : 'text-themed-secondary hover:text-themed hover:bg-themed/50'"
+          ? 'kawaii-tab-active'
+          : 'kawaii-tab-idle'"
         @click="mainTab = 'vip'"
       >
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -885,10 +885,10 @@ function getWheelTextTransform(index: number, total: number): string {
 
       <!-- 抽奖选项卡 -->
       <button
-        class="relative flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 active:scale-95"
-        :class="mainTab === 'lottery' 
-          ? 'bg-themed text-themed shadow-sm' 
-          : 'text-themed-secondary hover:text-themed hover:bg-themed/50'"
+        class="relative flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 active:scale-95"
+        :class="mainTab === 'lottery'
+          ? 'kawaii-tab-active'
+          : 'kawaii-tab-idle'"
         @click="mainTab = 'lottery'"
       >
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -900,10 +900,10 @@ function getWheelTextTransform(index: number, total: number): string {
       <!-- 签到选项卡：暂时下线，保留实现供后续改版复用 -->
       <button
         v-if="checkinFeatureEnabled"
-        class="relative flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 active:scale-95"
-        :class="mainTab === 'checkin' 
-          ? 'bg-themed text-themed shadow-sm' 
-          : 'text-themed-secondary hover:text-themed hover:bg-themed/50'"
+        class="relative flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 active:scale-95"
+        :class="mainTab === 'checkin'
+          ? 'kawaii-tab-active'
+          : 'kawaii-tab-idle'"
         @click="mainTab = 'checkin'"
       >
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -913,10 +913,10 @@ function getWheelTextTransform(index: number, total: number): string {
       </button>
 
       <button
-        class="relative flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 active:scale-95"
+        class="relative flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 active:scale-95"
         :class="mainTab === 'badge'
-          ? 'bg-themed text-themed shadow-sm'
-          : 'text-themed-secondary hover:text-themed hover:bg-themed/50'"
+          ? 'kawaii-tab-active'
+          : 'kawaii-tab-idle'"
         @click="badgeInitialTab = 'draw'; mainTab = 'badge'"
       >
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -933,7 +933,7 @@ function getWheelTextTransform(index: number, total: number): string {
     <!-- ==================== 抽奖功能区域 ==================== -->
     <div v-show="mainTab === 'lottery'">
       <!-- 积分卡片 -->
-      <div class="card p-4 mb-6">
+      <div class="kawaii-card card mb-6 rounded-2xl p-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div class="flex items-center gap-4">
             <div class="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
@@ -984,30 +984,30 @@ function getWheelTextTransform(index: number, total: number): string {
       </div>
 
       <!-- 子 TAB 切换 -->
-      <div class="flex border-b border-themed mb-6">
+      <div class="kawaii-panel mb-6 flex overflow-x-auto rounded-2xl px-3 pt-2">
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="activeTab === 'lottery' 
-            ? 'border-blue-500 text-blue-500' 
-            : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-subtab -mb-px shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+          :class="activeTab === 'lottery'
+            ? 'kawaii-subtab-active'
+            : 'hover:text-themed'"
           @click="switchTab('lottery')"
         >
           {{ $t('entertainment.tabs.lottery') }}
         </button>
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="activeTab === 'records' 
-            ? 'border-blue-500 text-blue-500' 
-            : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-subtab -mb-px shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+          :class="activeTab === 'records'
+            ? 'kawaii-subtab-active'
+            : 'hover:text-themed'"
           @click="switchTab('records')"
         >
           {{ $t('entertainment.tabs.records') }}
         </button>
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="activeTab === 'points' 
-            ? 'border-blue-500 text-blue-500' 
-            : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-subtab -mb-px shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+          :class="activeTab === 'points'
+            ? 'kawaii-subtab-active'
+            : 'hover:text-themed'"
           @click="switchTab('points')"
         >
           {{ $t('entertainment.tabs.points') }}
@@ -1033,7 +1033,7 @@ function getWheelTextTransform(index: number, total: number): string {
         </div>
 
         <!-- 无活动提示 -->
-        <div v-if="!lotteriesLoading && lotteries.length === 0" class="card p-8 text-center">
+        <div v-if="!lotteriesLoading && lotteries.length === 0" class="kawaii-card card rounded-2xl p-8 text-center">
           <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
             <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
@@ -1194,7 +1194,7 @@ function getWheelTextTransform(index: number, total: number): string {
               <div 
                 v-for="prize in wheelPrizes" 
                 :key="prize.id"
-                class="card p-3 text-center"
+                class="kawaii-prize-card card rounded-2xl p-3 text-center"
               >
                 <div 
                   class="w-3 h-3 rounded-full mx-auto mb-2"
@@ -1216,7 +1216,7 @@ function getWheelTextTransform(index: number, total: number): string {
       </div>
 
       <!-- 抽奖记录 TAB -->
-      <div v-show="activeTab === 'records'" class="card">
+      <div v-show="activeTab === 'records'" class="kawaii-card card rounded-2xl">
         <!-- 筛选栏 -->
         <div class="flex items-center gap-4 p-4 border-b border-themed">
           <div class="flex items-center gap-2">
@@ -1324,7 +1324,7 @@ function getWheelTextTransform(index: number, total: number): string {
       </div>
 
       <!-- 积分明细 TAB -->
-      <div v-show="activeTab === 'points'" class="card">
+      <div v-show="activeTab === 'points'" class="kawaii-card card rounded-2xl">
         <div v-if="pointsLogsLoading" class="p-8 text-center text-themed-muted">
           {{ $t('common.loading') }}...
         </div>
@@ -1386,7 +1386,7 @@ function getWheelTextTransform(index: number, total: number): string {
     <div v-show="checkinFeatureEnabled && mainTab === 'checkin'" class="space-y-6">
       <!-- 资源池卡片（总览） -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
-        <div class="card p-3 sm:p-4 border-l-4 border-blue-500">
+        <div class="kawaii-stat-tile rounded-2xl border-l-4 border-blue-500 p-3 sm:p-4">
           <div class="flex items-center gap-2 sm:gap-3">
             <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
               <svg class="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1399,7 +1399,7 @@ function getWheelTextTransform(index: number, total: number): string {
             </div>
           </div>
         </div>
-        <div class="card p-3 sm:p-4 border-l-4 border-purple-500">
+        <div class="kawaii-stat-tile rounded-2xl border-l-4 border-purple-500 p-3 sm:p-4">
           <div class="flex items-center gap-2 sm:gap-3">
             <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
               <svg class="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1412,7 +1412,7 @@ function getWheelTextTransform(index: number, total: number): string {
             </div>
           </div>
         </div>
-        <div class="card p-3 sm:p-4 border-l-4 border-amber-500">
+        <div class="kawaii-stat-tile rounded-2xl border-l-4 border-amber-500 p-3 sm:p-4">
           <div class="flex items-center gap-2 sm:gap-3">
             <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
               <svg class="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1425,7 +1425,7 @@ function getWheelTextTransform(index: number, total: number): string {
             </div>
           </div>
         </div>
-        <div class="card p-3 sm:p-4 border-l-4 border-emerald-500">
+        <div class="kawaii-stat-tile rounded-2xl border-l-4 border-emerald-500 p-3 sm:p-4">
           <div class="flex items-center gap-2 sm:gap-3">
             <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
               <svg class="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1441,31 +1441,31 @@ function getWheelTextTransform(index: number, total: number): string {
       </div>
 
       <!-- 签到子TAB切换 -->
-      <div class="flex border-b border-themed">
+      <div class="kawaii-panel flex overflow-x-auto rounded-2xl px-3 pt-2">
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="checkinTab === 'checkin' ? 'border-blue-500 text-blue-500' : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-subtab -mb-px shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+          :class="checkinTab === 'checkin' ? 'kawaii-subtab-active' : 'hover:text-themed'"
           @click="switchCheckinTab('checkin')"
         >
           {{ $t('checkin.tabCheckin') }}
         </button>
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="checkinTab === 'redeem' ? 'border-blue-500 text-blue-500' : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-subtab -mb-px shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+          :class="checkinTab === 'redeem' ? 'kawaii-subtab-active' : 'hover:text-themed'"
           @click="switchCheckinTab('redeem')"
         >
           {{ $t('checkin.tabRedeem') }}
         </button>
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="checkinTab === 'pool' ? 'border-blue-500 text-blue-500' : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-subtab -mb-px shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+          :class="checkinTab === 'pool' ? 'kawaii-subtab-active' : 'hover:text-themed'"
           @click="switchCheckinTab('pool')"
         >
           {{ $t('checkin.tabPool') }}
         </button>
         <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-          :class="checkinTab === 'logs' ? 'border-blue-500 text-blue-500' : 'border-transparent text-themed-muted hover:text-themed'"
+          class="kawaii-subtab -mb-px shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+          :class="checkinTab === 'logs' ? 'kawaii-subtab-active' : 'hover:text-themed'"
           @click="switchCheckinTab('logs')"
         >
           {{ $t('checkin.tabLogs') }}
@@ -1473,21 +1473,21 @@ function getWheelTextTransform(index: number, total: number): string {
       </div>
 
       <!-- 签到子TAB: 签到 -->
-      <div v-show="checkinTab === 'checkin'" class="card p-6">
+      <div v-show="checkinTab === 'checkin'" class="kawaii-card card rounded-2xl p-6">
         <div v-if="checkinStatus" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <div class="rounded-lg border border-themed p-3">
+          <div class="kawaii-stat-tile rounded-2xl p-3">
             <div class="text-xs text-themed-muted">{{ $t('checkin.currentPoints') }}</div>
             <div class="mt-1 text-xl font-semibold text-themed">{{ checkinStatus.currentPoints }}</div>
           </div>
-          <div class="rounded-lg border border-themed p-3">
+          <div class="kawaii-stat-tile rounded-2xl p-3">
             <div class="text-xs text-themed-muted">{{ $t('checkin.todayRange') }}</div>
             <div class="mt-1 text-xl font-semibold text-amber-500">{{ checkinStatus.minPoints }}-{{ checkinStatus.maxPoints }}</div>
           </div>
-          <div class="rounded-lg border border-themed p-3">
+          <div class="kawaii-stat-tile rounded-2xl p-3">
             <div class="text-xs text-themed-muted">{{ $t('checkin.streakDays') }}</div>
             <div class="mt-1 text-xl font-semibold text-emerald-500">{{ checkinStatus.streakDays }}</div>
           </div>
-          <div class="rounded-lg border border-themed p-3">
+          <div class="kawaii-stat-tile rounded-2xl p-3">
             <div class="text-xs text-themed-muted">{{ $t('checkin.monthCheckins') }}</div>
             <div class="mt-1 text-xl font-semibold text-blue-500">{{ checkinStatus.monthCheckins }}</div>
           </div>
@@ -1581,7 +1581,7 @@ function getWheelTextTransform(index: number, total: number): string {
       </div>
 
       <!-- 签到子TAB: 兑换码 -->
-      <div v-show="checkinTab === 'redeem'" class="card p-6">
+      <div v-show="checkinTab === 'redeem'" class="kawaii-card card rounded-2xl p-6">
         <h3 class="text-lg font-medium text-themed mb-4">{{ $t('checkin.redeemSystemCode') }}</h3>
         <div class="space-y-4">
           <div>
@@ -1602,7 +1602,7 @@ function getWheelTextTransform(index: number, total: number): string {
               :placeholder="$t('checkin.selectInstance')"
             />
           </div>
-          <div class="text-xs text-themed-muted p-3 rounded-lg bg-themed-secondary">
+          <div class="kawaii-card-soft rounded-xl p-3 text-xs text-themed-muted">
             <p>{{ $t('checkin.systemCodeHint') }}</p>
           </div>
           <button
@@ -1620,7 +1620,7 @@ function getWheelTextTransform(index: number, total: number): string {
       </div>
 
       <!-- 签到子TAB: 资源池应用 -->
-      <div v-show="checkinTab === 'pool'" class="card p-6">
+      <div v-show="checkinTab === 'pool'" class="kawaii-card card rounded-2xl p-6">
         <h3 class="text-lg font-medium text-themed mb-4">{{ $t('checkin.applyToInstance') }}</h3>
         <div class="grid gap-4 md:grid-cols-2">
           <div>
@@ -1668,7 +1668,7 @@ function getWheelTextTransform(index: number, total: number): string {
       </div>
 
       <!-- 签到子TAB: 记录 -->
-      <div v-show="checkinTab === 'logs'" class="card">
+      <div v-show="checkinTab === 'logs'" class="kawaii-card card rounded-2xl">
         <!-- 筛选 -->
         <div class="flex flex-wrap gap-4 p-4 border-b border-themed">
           <select v-model="poolLogsFilter.action" class="input py-1.5 text-sm" @change="poolLogsPage = 1; loadPoolLogs()">
@@ -1759,7 +1759,7 @@ function getWheelTextTransform(index: number, total: number): string {
           class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
           @click.self="closeResultModal"
         >
-          <div class="card p-6 w-full max-w-sm text-center animate-scale-in">
+          <div class="kawaii-card card w-full max-w-sm animate-scale-in rounded-2xl p-6 text-center">
             <div v-if="spinResult?.prizeType === 'nothing'" class="mb-4">
               <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                 <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1836,7 +1836,7 @@ function getWheelTextTransform(index: number, total: number): string {
           class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
           @click.self="closeMultiDrawModal"
         >
-          <div class="card p-6 w-full max-w-lg animate-scale-in">
+          <div class="kawaii-card card w-full max-w-lg animate-scale-in rounded-2xl p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-medium text-themed">{{ $t('entertainment.multiDrawResults') }}</h3>
               <button 

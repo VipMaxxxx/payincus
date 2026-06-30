@@ -139,6 +139,9 @@ const DEFAULT_RULES: AlertSeed[] = [
   }
 ]
 
+let defaultRulesSeeded = false
+let defaultRulesSeedPromise: Promise<void> | null = null
+
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
   if (!value || !POSITIVE_ROUTE_ID_PATTERN.test(value)) return fallback
   const parsed = Number(value)
@@ -232,9 +235,9 @@ function serializeAlert(event: any) {
   }
 }
 
-async function seedDefaultRules() {
-  await Promise.all(DEFAULT_RULES.map(rule =>
-    prisma.slaAlertRule.upsert({
+async function upsertDefaultRule(rule: AlertSeed) {
+  try {
+    await prisma.slaAlertRule.upsert({
       where: { code: rule.code },
       update: {},
       create: {
@@ -248,7 +251,29 @@ async function seedDefaultRules() {
         dedupeMinutes: rule.dedupeMinutes ?? 30
       }
     })
-  ))
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return
+    }
+    throw error
+  }
+}
+
+async function seedDefaultRules() {
+  if (defaultRulesSeeded) return
+
+  if (!defaultRulesSeedPromise) {
+    defaultRulesSeedPromise = (async () => {
+      for (const rule of DEFAULT_RULES) {
+        await upsertDefaultRule(rule)
+      }
+      defaultRulesSeeded = true
+    })().finally(() => {
+      defaultRulesSeedPromise = null
+    })
+  }
+
+  await defaultRulesSeedPromise
 }
 
 async function addAlertAction(

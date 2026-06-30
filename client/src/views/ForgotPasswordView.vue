@@ -167,10 +167,7 @@ function backToEmail() {
 </script>
 
 <template>
-  <div 
-    class="min-h-screen flex items-center justify-center p-4"
-    :class="themeStore.isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'"
-  >
+  <div class="kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-sm">
       <ThemeTemplateSlot
         slot-name="public.auth.aside"
@@ -186,13 +183,13 @@ function backToEmail() {
         />
         <h2 
           class="text-lg font-semibold mb-1"
-          :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
+          :class="'text-themed'"
         >
           {{ $t('auth.forgotPassword.title') }}
         </h2>
         <p 
           class="text-sm"
-          :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-600'"
+          :class="'text-themed-muted'"
         >
           {{ $t('auth.forgotPassword.subtitle') }}
         </p>
@@ -205,7 +202,7 @@ function backToEmail() {
           <div>
             <label
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >{{ $t('auth.email') }}</label>
             <input
               v-model="email"
@@ -259,7 +256,7 @@ function backToEmail() {
           <div>
             <label
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >{{ $t('auth.email') }}</label>
             <input
               :value="email"
@@ -272,7 +269,7 @@ function backToEmail() {
           <div>
             <label
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >{{ $t('auth.verificationCode') }}</label>
             <input
               v-model="code"
@@ -283,7 +280,7 @@ function backToEmail() {
               autocomplete="one-time-code"
               required
             />
-            <p class="text-xs mt-1" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+            <p class="text-xs mt-1" :class="'text-themed-muted'">
               {{ $t('auth.forgotPassword.codeHint') }}
             </p>
           </div>
@@ -291,7 +288,7 @@ function backToEmail() {
           <div>
             <label
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >{{ $t('auth.newPassword') }}</label>
             <input
               v-model="password"
@@ -306,7 +303,7 @@ function backToEmail() {
           <div>
             <label
               class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
+              :class="'text-themed-muted'"
             >{{ $t('auth.confirmPassword') }}</label>
             <input
               v-model="confirmPassword"
@@ -356,12 +353,12 @@ function backToEmail() {
         </form>
       </div>
 
-      <p class="mt-6 text-center text-sm" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">
+      <p class="mt-6 text-center text-sm" :class="'text-themed-muted'">
         {{ $t('auth.rememberPassword') }}
         <RouterLink 
           to="/login" 
           class="transition-colors"
-          :class="themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-700 hover:text-gray-900'"
+          :class="'text-themed-muted hover:text-themed'"
         >
           {{ $t('auth.login') }}
         </RouterLink>
