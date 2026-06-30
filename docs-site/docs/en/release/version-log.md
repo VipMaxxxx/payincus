@@ -6,16 +6,40 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `e1280b967`
+- Latest Release Commit / 最新发布提交: `f8249da10`
 - Commit date / 提交日期: 2026-07-01
-- Commit subject / 提交说明: Release v1.2.8 auth and OTA cache hotfix
-- Latest tag / 最新 tag: `v1.2.8`
+- Commit subject / 提交说明: Release v1.2.9 auth Turnstile cache hotfix
+- Latest tag / 最新 tag: `v1.2.9`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.2.9
+
+- Release commit / 发布提交: `f8249da10`
+- Commit date / 提交日期: 2026-07-01
+- Commit subject / 提交说明: Release v1.2.9 auth Turnstile cache hotfix
+
+# v1.2.9
+
+## 修复
+
+- 注册、登录和忘记密码页提交时会从 Turnstile 组件和隐藏响应字段重新读取 token，并在缺少验证时聚焦到可见验证区，避免验证码组件已完成但页面仍提示未验证。
+- 忘记密码页补入认证页白名单，避免残留会话检查把它当成普通用户页处理。
+- 前后台入口注册 Service Worker 时使用版本化 `/sw.js?v=...` 并禁用更新缓存，避免边缘缓存返回旧 `sw.js` 导致旧 JS/CSS chunk 持续生效。
+
+## 验证
+
+- `pnpm --filter server exec tsx scripts/test-frontend-route-guards.ts`
+- `pnpm --filter server exec tsx scripts/test-theme-system-guards.ts`
+- `pnpm --filter client build:user`
+- `pnpm --filter client build:admin`
+- `pnpm --filter server type-check`
+- `pnpm test`
+- `git diff --check`
 
 ## v1.2.8
 
