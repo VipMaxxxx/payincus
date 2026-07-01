@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-07-01 04:18 CST
+Last updated: 2026-07-01 14:24 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -12,44 +12,47 @@ Give the next Codex session this file first. The active working directory is:
 /Users/max/.codex/worktrees/payincus-release-v124
 ```
 
-Production is currently on `v1.2.9`. The latest shipped work fixed the auth UI Turnstile token path for login, registration, and forgot-password, exempted forgot-password from the app layout/session redirect guard, and registered the service worker with a versioned URL plus `updateViaCache: 'none'` so stale Cloudflare/browser-cached `/sw.js` does not keep old assets active. Earlier in the same release chain, `v1.2.8` fixed the exchange config save failure caused by writing a non-Prisma field.
+Production is currently on `v1.2.11`. The latest shipped work fixed the public help-center empty-state fallback and OAuth authorize error messaging in `v1.2.10`, then immediately shipped `v1.2.11` to sync the Service Worker cache name with the new release version so old static chunks are cleaned after OTA. Earlier in the same release chain, `v1.2.9` fixed the auth UI Turnstile token path and versioned `/sw.js` registration.
 
 The broader Product Design / Uiverse-inspired kawaii IDC UI work remains local design work unless called out in a tagged release section below. Do not assume all remaining dirty/untracked UI assets are production-ready.
 
-### Current v1.2.9 Production / OTA Status
+### Current v1.2.11 Production / OTA Status
 
-- `v1.2.9` release commit: `f8249da10` (`Release v1.2.9 auth Turnstile cache hotfix`).
-- Version-log/docs commit: `54f08ff07` (`Update version log for v1.2.9`).
-- `payincus/main` and tag `v1.2.9` were pushed successfully.
-- GitHub Release `v1.2.9` exists with amd64/arm64 tarballs, SHA256 files, `incudal-v1.2.9-ota-manifest.json`, `ota-manifest.json`, plugin assets, and `plugin-market-index.json`.
+- `v1.2.10` release commit: `19a4623aa` (`Release v1.2.10 help and OAuth fallback fixes`), tag pushed, GitHub Release generated, and production OTA task `#133` succeeded. This was immediately superseded by `v1.2.11` because post-OTA proof found `/sw.js?v=1.2.10` still used `incudal-cache-v1.2.9`.
+- `v1.2.11` release commit: `44054e29e` (`Release v1.2.11 service worker cache version`).
+- `payincus/main` and tag `v1.2.11` were pushed successfully.
+- GitHub Release `v1.2.11` exists with amd64/arm64 tarballs, SHA256 files, `incudal-v1.2.11-ota-manifest.json`, `ota-manifest.json`, plugin assets, and `plugin-market-index.json`.
 - OTA manifest proof:
-  - version/tag `v1.2.9`
-  - gitCommit `f8249da10192`
-  - amd64 sha256 `59385666dab4f07ea26deb6a2ac8058f04c8754588a01af08204dedff0dc8f7f`
-  - arm64 sha256 `9669c206b7dfe8dc8fa90a974a30335e17dab22edc7af2372da7ee1c628860f1`
-- Production current symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.2.9-20260630200642`.
+  - version/tag `v1.2.11`
+  - gitCommit `44054e29e532`
+  - amd64 sha256 `8c27b9385537ed4a2e2ca0c12ccb76293c696c0492f8791facdcf78f43c03878`
+  - arm64 sha256 `661b578220b5d4c8e7289ea11866ad3dbedfc332b9baf47a0409d652982ec5ab`
+- Production current symlink: `/opt/incudal/current -> /opt/incudal/releases/v1.2.11-20260701062140`.
 - Production `/opt/incudal/current/version.json`:
-  - version `v1.2.9`
-  - gitTag `v1.2.9`
-  - gitCommit `f8249da10192`
-  - buildTime `2026-06-30T20:04:31.494Z`
-  - deployedAt `2026-06-30T20:07:06.951Z`
-  - changelog `Release v1.2.9 auth Turnstile cache hotfix`
-- OTA task `#132`: `v1.2.8 -> v1.2.9`, status `success`, log `/opt/incudal/update-logs/system-update-132.log`, finished `2026-06-30T20:08:13.819Z`.
-- OTA log proof included artifact SHA256 verification, switch to `/opt/incudal/releases/v1.2.9-20260630200642`, production readiness verification, `verify:log-header`, and `System update completed successfully`.
+  - version `v1.2.11`
+  - gitTag `v1.2.11`
+  - gitCommit `44054e29e532`
+  - buildTime `2026-07-01T06:20:04.171Z`
+  - deployedAt `2026-07-01T06:22:05.600Z`
+  - changelog `Release v1.2.11 service worker cache version`
+- OTA task `#134`: `v1.2.10 -> v1.2.11`, status `success`, log `/opt/incudal/update-logs/system-update-134.log`, completed in the log at `2026-07-01T06:23:01.445Z`.
+- OTA log proof included artifact SHA256 verification, switch to `/opt/incudal/releases/v1.2.11-20260701062140`, production readiness verification, `verify:log-header`, and `System update completed successfully`.
 - Production backend service check: `systemctl is-active incudal-backend -> active`.
 - Production health checks:
   - `https://pay.payincus.com/api/health -> {"status":"ok",...}`
   - `https://admin.payincus.com/api/health -> {"status":"ok",...}`
-- Service worker proof: `https://pay.payincus.com/sw.js?v=1.2.9` contains `const CACHE_NAME = 'incudal-cache-v1.2.9'` and the network-first static resource strategy.
+- Service worker proof: `https://pay.payincus.com/sw.js?v=1.2.11` contains `const CACHE_NAME = 'incudal-cache-v1.2.11'` and the network-first static resource strategy.
+- Public help proof:
+  - `https://pay.payincus.com/api/help?page=1&pageSize=3 -> total 1, slug getting-started`, with both snake_case and camelCase date fields.
+  - `https://pay.payincus.com/api/help/article/__missing_v1211_probe__ -> 404 {"code":"ARTICLE_NOT_FOUND"}`.
 - Post-OTA split-host verification passed:
   - `FRONTEND_URL=https://pay.payincus.com ADMIN_FRONTEND_URL=https://admin.payincus.com BACKEND_URL=https://pay.payincus.com VERIFY_RETRIES=2 VERIFY_RETRY_DELAY=1 pnpm verify:split:host`
 
-### Completed v1.2.9 Local / Release Verification
+### Completed v1.2.11 Local / Release Verification
 
 ```text
+pnpm --filter server exec tsx scripts/test-content-route-guards.ts -> passed
 pnpm --filter server exec tsx scripts/test-frontend-route-guards.ts -> passed
-pnpm --filter server exec tsx scripts/test-theme-system-guards.ts -> passed
 pnpm --filter client build:user -> passed
 pnpm --filter client build:admin -> passed
 pnpm --filter server type-check -> passed
@@ -57,16 +60,18 @@ pnpm test -> passed
 pnpm build -> passed
 pnpm --dir docs-site --ignore-workspace build -> passed
 git diff --check -> passed
-UI_SCAN_RUN_ID=2026-07-01T04-20-00-v129-auth-public-scan node <current-code public auth CDP scan> -> total 10, withIssues 0
 ```
 
-Latest screenshot scan output is local-only and intentionally untracked:
+Latest targeted local screenshot/CDP scan outputs are local-only and intentionally untracked:
 
 ```text
 .ui-scan/2026-07-01T04-20-00-v129-auth-public-scan/
+.ui-scan/2026-07-01T-help-not-found-fix-local/
+.ui-scan/2026-07-01T-help-default-article-local/
+.ui-scan/2026-07-01T-oauth-error-fix-local/
 ```
 
-It covered desktop and mobile `home`, `login`, `register`, `forgot-password`, and `admin-login` against the current `v1.2.9` code. Screenshots for register and forgot-password were manually inspected after the scan and were not blank, overflowing, or on the wrong route. The local backend was not started for this targeted scan because this worktree has no local `DATABASE_URL`; production API and split-host checks above are the authoritative backend/OTA evidence.
+The v1.2.9 scan covered desktop and mobile `home`, `login`, `register`, `forgot-password`, and `admin-login`. The later targeted scans covered the help 404 copy, built-in getting-started help fallback, and OAuth unavailable-app error state. Production API and split-host checks above are the authoritative backend/OTA evidence.
 
 ### First Commands For The Next Session
 
@@ -78,7 +83,7 @@ git status --short
 sed -n '1,140p' HANDOFF.md
 git diff --stat
 git log --oneline --decorate -10
-git diff -- client/src/views/LoginView.vue client/src/views/RegisterView.vue client/src/views/ForgotPasswordView.vue client/src/App.vue client/src/utils/turnstile.ts client/src/main.ts client/src/admin/main.ts client/public/sw.js
+git diff -- client/src/views/HelpView.vue client/src/views/OAuthAuthorizeView.vue server/src/routes/help.ts client/public/sw.js
 ```
 
 If visual QA is needed, start the client locally:
@@ -91,6 +96,7 @@ The last successful production-facing checks were:
 
 ```text
 pnpm --filter server exec tsx scripts/test-frontend-route-guards.ts -> passed
+pnpm --filter server exec tsx scripts/test-content-route-guards.ts -> passed
 pnpm --filter client build:user -> passed
 pnpm build -> passed
 git diff --check -> passed

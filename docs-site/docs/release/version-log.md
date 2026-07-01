@@ -6,16 +6,64 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `f8249da10`
+- 最新发布提交 / Latest Release Commit: `44054e29e`
 - 提交日期 / Commit date: 2026-07-01
-- 提交说明 / Commit subject: Release v1.2.9 auth Turnstile cache hotfix
-- 最新 tag / Latest tag: `v1.2.9`
+- 提交说明 / Commit subject: Release v1.2.11 service worker cache version
+- 最新 tag / Latest tag: `v1.2.11`
 
 ## 未发布变更 / Unreleased Changes
 
 - 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v1.2.11
+
+- 发布提交 / Release commit: `44054e29e`
+- 提交日期 / Commit date: 2026-07-01
+- 提交说明 / Commit subject: Release v1.2.11 service worker cache version
+
+# v1.2.11
+
+## 修复
+
+- 同步 Service Worker 静态缓存名到 `v1.2.11`，确保 `/sw.js?v=1.2.11` 激活后会清理旧版本资源缓存，延续 OTA 后避免旧 chunk 白屏的缓存隔离策略。
+
+## 验证
+
+- `pnpm --filter client build:user`
+- `pnpm --filter client build:admin`
+- `pnpm --filter server type-check`
+- `pnpm test`
+- `pnpm build`
+- `pnpm --dir docs-site --ignore-workspace build`
+- `git diff --check`
+
+## v1.2.10
+
+- 发布提交 / Release commit: `19a4623aa`
+- 提交日期 / Commit date: 2026-07-01
+- 提交说明 / Commit subject: Release v1.2.10 help and OAuth fallback fixes
+
+# v1.2.10
+
+## 修复
+
+- 帮助中心在没有后台发布文章时提供内置“快速开始使用 Incudal”文章，避免线上帮助页空数据或文章缺失时显示通用加载失败。
+- 帮助文章详情页把 `ARTICLE_NOT_FOUND` 和 404 显示为明确的文章不存在状态，减少误判为系统错误。
+- OAuth 授权页对无效、停用或回调地址不匹配的客户端显示中文不可用提示，不再直接暴露原始英文错误。
+
+## 验证
+
+- `pnpm --filter server exec tsx scripts/test-content-route-guards.ts`
+- `pnpm --filter server exec tsx scripts/test-frontend-route-guards.ts`
+- `pnpm --filter client build:user`
+- `pnpm --filter client build:admin`
+- `pnpm --filter server type-check`
+- `pnpm test`
+- `pnpm build`
+- `pnpm --dir docs-site --ignore-workspace build`
+- `git diff --check`
 
 ## v1.2.9
 
