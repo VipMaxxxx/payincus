@@ -3,7 +3,7 @@
  * 提升二次加载速度，支持离线访问静态资源
  */
 
-const CACHE_NAME = 'incudal-cache-v1.2.9'
+const CACHE_NAME = 'incudal-cache-v1.2.11'
 
 // 需要缓存的静态资源类型
 const CACHEABLE_EXTENSIONS = ['.js', '.css', '.woff', '.woff2', '.ttf', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico']
