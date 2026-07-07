@@ -138,7 +138,6 @@ function stripAdminOnlyLocaleMessages(source: string): string {
     'freeSite',
     'publicSite',
     'wallet',
-    'aff',
     'vipBenefits',
     'hostingWallet',
     'friends',

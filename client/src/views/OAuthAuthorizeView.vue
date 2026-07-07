@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import type { OAuthProviderConsentResponse, PublicApiScopeMetadata } from '@/types/api'
+import { dashboardPath } from '@/utils/app-paths'
 
 const route = useRoute()
 const router = useRouter()
@@ -132,7 +133,7 @@ function deny() {
     redirectTo(deniedRedirect)
     return
   }
-  router.push('/dashboard')
+  router.push(dashboardPath())
 }
 
 onMounted(() => {
@@ -157,7 +158,7 @@ onMounted(() => {
           <p v-if="errorHint" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             {{ errorHint }}
           </p>
-          <button class="btn-secondary w-full" @click="router.push('/dashboard')">返回控制台</button>
+          <button class="btn-secondary w-full" @click="router.push(dashboardPath())">返回控制台</button>
         </div>
 
         <div v-else-if="consent" class="space-y-6">

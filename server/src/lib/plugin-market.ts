@@ -85,6 +85,7 @@ export interface PluginMarketIndex {
     fingerprint: string
     defaultReviewStatus: PluginMarketReviewStatus
     installPolicy: string[]
+    unavailableReason?: string
   }
 }
 
@@ -299,21 +300,28 @@ function getMarketFingerprint(entries: PluginMarketEntry[]): string {
   return createHash('sha256').update(JSON.stringify(stablePayload)).digest('hex')
 }
 
+const PLUGIN_MARKET_INSTALL_POLICY = ['GitHub index only', 'listed entries only', 'GitHub release artifact only', 'SHA256 required']
+
+export function buildUnavailablePluginMarketIndex(): PluginMarketIndex {
+  return {
+    plugins: [],
+    governance: {
+      totalEntries: 0,
+      visibleEntries: 0,
+      hiddenEntries: 0,
+      indexHost: null,
+      fingerprint: getMarketFingerprint([]),
+      defaultReviewStatus: 'pending',
+      installPolicy: PLUGIN_MARKET_INSTALL_POLICY,
+      unavailableReason: 'market_unavailable'
+    }
+  }
+}
+
 export async function fetchPluginMarketIndex(url?: string | null): Promise<PluginMarketIndex> {
   const effectiveUrl = url ?? await getPluginMarketIndexUrl()
   if (!effectiveUrl) {
-    return {
-      plugins: [],
-      governance: {
-        totalEntries: 0,
-        visibleEntries: 0,
-        hiddenEntries: 0,
-        indexHost: null,
-        fingerprint: getMarketFingerprint([]),
-        defaultReviewStatus: 'pending',
-        installPolicy: ['GitHub index only', 'listed entries only', 'GitHub release artifact only', 'SHA256 required']
-      }
-    }
+    return buildUnavailablePluginMarketIndex()
   }
   const trustedHosts = await getPluginMarketTrustedHosts()
   const parsed = assertGitHubIndexUrl(effectiveUrl, trustedHosts)
@@ -337,7 +345,7 @@ export async function fetchPluginMarketIndex(url?: string | null): Promise<Plugi
       indexHost: parsed.hostname,
       fingerprint: getMarketFingerprint(normalized),
       defaultReviewStatus: 'pending',
-      installPolicy: ['GitHub index only', 'listed entries only', 'GitHub release artifact only', 'SHA256 required']
+      installPolicy: PLUGIN_MARKET_INSTALL_POLICY
     }
   }
 }

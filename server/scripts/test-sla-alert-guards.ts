@@ -111,4 +111,14 @@ assert.ok(
   'SLA alert view must render overview, scan, actions, rules and typed data'
 )
 
+assert.ok(
+  alertViewSource.includes('class="space-y-3 p-4 lg:hidden"') &&
+    alertViewSource.includes('class="hidden overflow-hidden lg:block"') &&
+    alertViewSource.includes('table class="w-full table-fixed divide-y divide-themed text-sm"') &&
+    alertViewSource.includes('@click="selectedAlertId = alert.id"') &&
+    !alertViewSource.includes('class="overflow-x-auto"') &&
+    !alertViewSource.includes('table class="min-w-full'),
+  'SLA alert event list must keep selectable mobile cards and a fixed desktop table without broad horizontal overflow'
+)
+
 console.log('SLA alert guard tests passed')

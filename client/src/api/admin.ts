@@ -16,6 +16,7 @@ import type {
   InstanceWithDetails,
   InstanceStats,
   CreateInstanceRequest,
+  CreateInstanceResponse,
   FlashSaleCampaign,
   FlashSaleReservation,
   FlashSaleCampaignStatus,
@@ -1186,7 +1187,7 @@ const api = {
     get: (id: number): Promise<InstanceWithDetails> => http.get(`/instances/${id}`),
     getPassword: (id: number): Promise<{ rootPassword: string | null }> => http.get(`/instances/${id}/password`),
     getStats: (id: number): Promise<InstanceStats & { status?: string }> => http.get(`/instances/${id}/stats`),
-    create: (data: CreateInstanceRequest): Promise<Instance> => http.post('/instances', data),
+    create: (data: CreateInstanceRequest): Promise<CreateInstanceResponse> => http.post('/instances', data),
     getAvailableHosts: (params: Record<string, unknown> = {}): Promise<AvailableHost[]> =>
       http.get('/instances/available-hosts', { params }),
     getChangeHostOptions: (id: number): Promise<ChangeHostOptionsResponse> =>

@@ -8,7 +8,14 @@ const __dirname = dirname(__filename)
 
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:5432/payincus_test'
 
-const { MASKED_MAIL_SOURCE_API_KEY_VALUE, mergeMailSourceApiKeyForUpdate, sanitizeMailSourceForResponse } = await import('../src/db/mail.js')
+const {
+  MASKED_MAIL_SOURCE_API_KEY_VALUE,
+  mergeMailSourceApiKeyForUpdate,
+  sanitizeMailDomainForResponse,
+  sanitizeMailPlanForResponse,
+  sanitizeMailSourceForResponse,
+  sanitizeMailSubscriptionForResponse
+} = await import('../src/db/mail.js')
 const { decryptSensitiveData, encryptSensitiveData, isEncrypted } = await import('../src/lib/security.js')
 
 const source = {
@@ -28,6 +35,18 @@ const sanitized = sanitizeMailSourceForResponse(source)
 assert.equal(sanitized.apiKey, '', 'mail source API key must not be returned to browser')
 assert.equal(sanitized.apiKeyConfigured, true, 'mail source response must expose configured flag')
 assert.equal(sanitized.apiUrl, source.apiUrl, 'non-secret mail source fields must remain visible')
+
+const sanitizedPlan = sanitizeMailPlanForResponse({ id: 1, source })
+assert.equal(sanitizedPlan.source.apiKey, '', 'admin mail plan responses must redact nested source API keys')
+assert.equal(sanitizedPlan.source.apiKeyConfigured, true, 'admin mail plan responses must expose nested source configured flag')
+
+const sanitizedSubscription = sanitizeMailSubscriptionForResponse({ id: 1, source })
+assert.equal(sanitizedSubscription.source.apiKey, '', 'admin mail subscription responses must redact nested source API keys')
+
+const sanitizedDomain = sanitizeMailDomainForResponse({ id: 1, source, adminPassword: 'mail-admin-password' })
+assert.equal(sanitizedDomain.source.apiKey, '', 'admin mail domain responses must redact nested source API keys')
+assert.equal(sanitizedDomain.adminPassword, '', 'admin mail domain responses must not return admin passwords')
+assert.equal(sanitizedDomain.adminPasswordConfigured, true, 'admin mail domain responses must expose password configured flag')
 
 assert.equal(mergeMailSourceApiKeyForUpdate(undefined), undefined, 'omitted API key must preserve existing secret')
 assert.equal(mergeMailSourceApiKeyForUpdate(null), undefined, 'null API key must preserve existing secret')
@@ -69,8 +88,25 @@ assert.ok(
   'mail admin source responses must be sanitized'
 )
 assert.ok(
+  routeSource.includes('plans: plans.map(db.sanitizeMailPlanForResponse)') &&
+    routeSource.includes('subscriptions: result.subscriptions.map(db.sanitizeMailSubscriptionForResponse)') &&
+    routeSource.includes('domains: result.domains.map(db.sanitizeMailDomainForResponse)'),
+  'mail admin plan, subscription, and domain list responses must sanitize nested source secrets and domain passwords'
+)
+assert.ok(
   routeSource.includes('mergeMailSourceApiKeyForUpdate(sourceInput.apiKey)'),
   'mail admin source update must preserve existing API keys for blank masked inputs'
+)
+assert.ok(
+  !routeSource.includes('adminPassword: domain.adminPassword,'),
+  'mail user domain detail must not passively return domain admin passwords'
+)
+assert.ok(
+  routeSource.includes("'/domains/:id/admin-password'") &&
+    routeSource.includes('onRequest: [fastify.authenticate]') &&
+    routeSource.includes('domain.subscription.userId !== request.user.id') &&
+    routeSource.includes('adminPassword: domain.adminPassword ?? null'),
+  'mail domain admin password must require an explicit authenticated owner-only password endpoint'
 )
 assert.ok(
   !routeSource.includes("apiKey: '***' + source.apiKey.slice(-4)"),

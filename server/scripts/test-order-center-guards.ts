@@ -56,5 +56,22 @@ assert.ok(adminOrderView.includes('api.admin.createBalanceAdjustmentRequest'), '
 assert.ok(adminOrderView.includes('api.admin.approveBalanceAdjustmentRequest') && adminOrderView.includes('api.admin.rejectBalanceAdjustmentRequest'), 'order center must expose approval and rejection actions')
 assert.ok(!adminOrderView.includes('api.admin.adjustUserBalance'), 'order center must not directly mutate user balance from order detail')
 assert.ok(adminOrderView.includes('提交调账审批') && adminOrderView.includes('通过并执行'), 'order center must use approval-oriented UI wording')
+assert.ok(
+  adminOrderView.match(/class="space-y-3 p-4 lg:hidden"/g)?.length === 2 &&
+    adminOrderView.match(/class="hidden overflow-hidden lg:block"/g)?.length === 2 &&
+    adminOrderView.includes('table class="w-full table-fixed divide-y divide-themed"') &&
+    adminOrderView.includes('table class="w-full table-fixed divide-y divide-themed"') &&
+    !adminOrderView.includes('v-else class="overflow-x-auto"') &&
+    !adminOrderView.includes('table class="min-w-full divide-y divide-themed"'),
+  'admin order center must render mobile cards and fixed desktop tables instead of horizontal table scrolling'
+)
+assert.ok(
+  adminOrderView.includes('@click="openDetail(order)"') &&
+    adminOrderView.includes('@click="rejectAdjustmentRequest(request)"') &&
+    adminOrderView.includes('@click="approveAdjustmentRequest(request)"') &&
+    adminOrderView.includes('@click="goPage(page - 1)"') &&
+    adminOrderView.includes('@click="goRequestPage(requestPage - 1)"'),
+  'responsive admin order center must preserve detail, approval, and pagination actions'
+)
 
 console.log('order center guards passed')

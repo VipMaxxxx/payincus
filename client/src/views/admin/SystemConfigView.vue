@@ -688,15 +688,15 @@ async function sendTestEmail() {
       </div>
     </div>
 
-    <div class="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700">
+    <div class="grid grid-cols-2 gap-2 border-b border-gray-200 pb-2 dark:border-gray-700 sm:flex sm:gap-0 sm:overflow-x-auto sm:pb-0">
       <router-link
         v-for="item in systemSettingsNavigationItems"
         :key="item.path"
         :to="item.path"
-        class="shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+        class="min-w-0 rounded-lg border px-3 py-2 text-center text-xs font-medium transition-colors sm:shrink-0 sm:rounded-none sm:border-0 sm:border-b-2 sm:px-4 sm:py-3 sm:text-left sm:text-sm"
         :class="route.path === item.path
-          ? 'border-black dark:border-white text-gray-900 dark:text-white'
-          : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+          ? 'border-black bg-themed-secondary text-gray-900 dark:border-white dark:text-white sm:bg-transparent'
+          : 'border-gray-200 text-gray-500 hover:text-gray-700 dark:border-gray-700 dark:hover:text-gray-300 sm:border-transparent'"
       >
         {{ t(item.labelKey) }}
       </router-link>

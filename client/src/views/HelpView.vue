@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
 import { parseMarkdown } from '@/utils/markdown'
+import { helpPath } from '@/utils/app-paths'
 
 const route = useRoute()
 const router = useRouter()
@@ -192,7 +193,7 @@ function clearSearch(): void {
 }
 
 function goBack(): void {
-  router.push('/help')
+  router.push(helpPath())
 }
 
 // 计算文章 HTML

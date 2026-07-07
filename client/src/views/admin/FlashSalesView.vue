@@ -482,35 +482,79 @@ onMounted(async () => {
             </div>
             <button class="btn-secondary" type="button" @click="addFlashSaleItem">新增商品</button>
           </div>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-themed text-sm">
+          <div class="space-y-3 p-4 lg:hidden">
+            <div
+              v-for="(item, index) in form.items"
+              :key="index"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="text-sm font-medium text-themed">商品 #{{ index + 1 }}</div>
+                <button class="btn-secondary" type="button" @click="removeFlashSaleItem(index)">删除</button>
+              </div>
+              <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label class="space-y-1 sm:col-span-2">
+                  <span class="text-xs text-themed-muted">方案</span>
+                  <select v-model.number="item.packagePlanId" class="input w-full">
+                    <option v-for="plan in plans" :key="plan.id" :value="plan.id">
+                      {{ plan.name }} / {{ formatMoneyCents(plan.price) }}
+                    </option>
+                  </select>
+                </label>
+                <label class="space-y-1">
+                  <span class="text-xs text-themed-muted">秒杀价（元）</span>
+                  <input v-model.number="item.flashPrice" type="number" min="0" step="0.01" class="input w-full" />
+                </label>
+                <label class="space-y-1">
+                  <span class="text-xs text-themed-muted">库存</span>
+                  <input v-model.number="item.totalStock" type="number" min="1" step="1" class="input w-full" />
+                </label>
+                <label class="space-y-1">
+                  <span class="text-xs text-themed-muted">每人限购</span>
+                  <input v-model.number="item.perUserLimit" type="number" min="1" step="1" class="input w-full" />
+                </label>
+                <div class="flex flex-wrap items-center gap-4 pt-6">
+                  <label class="inline-flex items-center gap-2 text-xs text-themed">
+                    <input v-model="item.allowCoupon" type="checkbox" />
+                    优惠码
+                  </label>
+                  <label class="inline-flex items-center gap-2 text-xs text-themed">
+                    <input v-model="item.allowAff" type="checkbox" />
+                    AFF 返利
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed divide-y divide-themed text-sm">
               <thead class="text-left text-xs text-themed-muted">
                 <tr>
-                  <th class="px-4 py-3">方案</th>
-                  <th class="px-4 py-3">秒杀价（元）</th>
-                  <th class="px-4 py-3">库存</th>
-                  <th class="px-4 py-3">每人限购</th>
-                  <th class="px-4 py-3">优惠</th>
-                  <th class="px-4 py-3 text-right">操作</th>
+                  <th class="w-[32%] px-4 py-3">方案</th>
+                  <th class="w-[14%] px-4 py-3">秒杀价（元）</th>
+                  <th class="w-[12%] px-4 py-3">库存</th>
+                  <th class="w-[12%] px-4 py-3">每人限购</th>
+                  <th class="w-[16%] px-4 py-3">优惠</th>
+                  <th class="w-[14%] px-4 py-3 text-right">操作</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-themed">
                 <tr v-for="(item, index) in form.items" :key="index">
                   <td class="px-4 py-3">
-                    <select v-model.number="item.packagePlanId" class="input min-w-56">
+                    <select v-model.number="item.packagePlanId" class="input w-full">
                       <option v-for="plan in plans" :key="plan.id" :value="plan.id">
                         {{ plan.name }} / {{ formatMoneyCents(plan.price) }}
                       </option>
                     </select>
                   </td>
                   <td class="px-4 py-3">
-                    <input v-model.number="item.flashPrice" type="number" min="0" step="0.01" class="input w-32" />
+                    <input v-model.number="item.flashPrice" type="number" min="0" step="0.01" class="input w-full" />
                   </td>
                   <td class="px-4 py-3">
-                    <input v-model.number="item.totalStock" type="number" min="1" step="1" class="input w-28" />
+                    <input v-model.number="item.totalStock" type="number" min="1" step="1" class="input w-full" />
                   </td>
                   <td class="px-4 py-3">
-                    <input v-model.number="item.perUserLimit" type="number" min="1" step="1" class="input w-28" />
+                    <input v-model.number="item.perUserLimit" type="number" min="1" step="1" class="input w-full" />
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex flex-col gap-2">
@@ -665,33 +709,62 @@ onMounted(async () => {
           </div>
           <button class="btn-secondary" :disabled="reservationsLoading" @click="loadReservations(selectedCampaign.id)">刷新记录</button>
         </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-themed text-sm">
-            <thead class="text-left text-xs text-themed-muted">
-              <tr>
-                <th class="px-5 py-3">用户</th>
-                <th class="px-5 py-3">套餐</th>
-                <th class="px-5 py-3">实例</th>
-                <th class="px-5 py-3">金额</th>
-                <th class="px-5 py-3">状态</th>
-                <th class="px-5 py-3">时间</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-themed">
-              <tr v-if="reservations.length === 0">
-                <td colspan="6" class="px-5 py-8 text-center text-themed-muted">暂无记录</td>
-              </tr>
-              <tr v-for="record in reservations" :key="record.id">
-                <td class="px-5 py-3 text-themed">{{ record.user?.username || `UID ${record.userId}` }}</td>
-                <td class="px-5 py-3 text-themed-muted">{{ record.packageName }} / {{ record.planName }}</td>
-                <td class="px-5 py-3 text-themed-muted">{{ record.instance?.name || '-' }}</td>
-                <td class="px-5 py-3 text-orange-500">¥{{ record.amount.toFixed(2) }}</td>
-                <td class="px-5 py-3 text-themed-muted">{{ record.status }}</td>
-                <td class="px-5 py-3 text-themed-muted">{{ formatDate(record.createdAt) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <div v-if="reservations.length === 0" class="px-5 py-8 text-center text-themed-muted">暂无记录</div>
+        <template v-else>
+          <div class="space-y-3 p-4 lg:hidden">
+            <div
+              v-for="record in reservations"
+              :key="record.id"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="truncate font-medium text-themed">{{ record.user?.username || `UID ${record.userId}` }}</div>
+                  <div class="mt-1 truncate text-xs text-themed-muted">{{ record.packageName }} / {{ record.planName }}</div>
+                </div>
+                <div class="shrink-0 text-sm font-semibold text-orange-500">¥{{ record.amount.toFixed(2) }}</div>
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div class="text-themed-muted">实例</div>
+                  <div class="mt-1 truncate font-medium text-themed">{{ record.instance?.name || '-' }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">状态</div>
+                  <div class="mt-1 font-medium text-themed">{{ record.status }}</div>
+                </div>
+                <div class="col-span-2">
+                  <div class="text-themed-muted">时间</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatDate(record.createdAt) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed divide-y divide-themed text-sm">
+              <thead class="text-left text-xs text-themed-muted">
+                <tr>
+                  <th class="w-[18%] px-5 py-3">用户</th>
+                  <th class="w-[24%] px-5 py-3">套餐</th>
+                  <th class="w-[18%] px-5 py-3">实例</th>
+                  <th class="w-[12%] px-5 py-3">金额</th>
+                  <th class="w-[10%] px-5 py-3">状态</th>
+                  <th class="w-[18%] px-5 py-3">时间</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-themed">
+                <tr v-for="record in reservations" :key="record.id">
+                  <td class="truncate px-5 py-3 text-themed">{{ record.user?.username || `UID ${record.userId}` }}</td>
+                  <td class="truncate px-5 py-3 text-themed-muted">{{ record.packageName }} / {{ record.planName }}</td>
+                  <td class="truncate px-5 py-3 text-themed-muted">{{ record.instance?.name || '-' }}</td>
+                  <td class="px-5 py-3 text-orange-500">¥{{ record.amount.toFixed(2) }}</td>
+                  <td class="truncate px-5 py-3 text-themed-muted">{{ record.status }}</td>
+                  <td class="truncate px-5 py-3 text-themed-muted">{{ formatDate(record.createdAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </section>
     </template>
   </div>

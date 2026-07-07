@@ -1835,8 +1835,154 @@ function copyToClipboard(text: string) {
             </button>
           </div>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="inst in instances"
+            :key="inst.id"
+            class="rounded-xl border border-themed p-4"
+            :class="inst.status === 'deleted' ? 'opacity-60' : ''"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex min-w-0 items-start gap-3">
+                <input
+                  v-model="selectedInstanceIds"
+                  type="checkbox"
+                  class="checkbox mt-1"
+                  :value="inst.id"
+                  :disabled="inst.status === 'deleted'"
+                  :aria-label="$t('admin.billing.selectInstance')"
+                />
+                <div class="min-w-0">
+                  <button
+                    class="truncate text-left text-sm font-semibold text-themed hover:text-blue-500"
+                    @click="router.push(instanceDetailPath(inst.id))"
+                  >
+                    {{ inst.name }}
+                  </button>
+                  <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-themed-muted">
+                    <button class="font-mono text-blue-500 hover:text-blue-600" @click="router.push(instanceDetailPath(inst.id))">
+                      #{{ inst.id }}
+                    </button>
+                    <span v-if="inst.incusId" class="font-mono" :title="inst.incusId">{{ inst.incusId?.slice(0, 8) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex shrink-0 flex-col items-end gap-1">
+                <span :class="['badge', getStatusBadge(inst.status)]">{{ $t('instance.status.' + inst.status) }}</span>
+                <span v-if="inst.autoRenew" class="badge badge-info">{{ $t('admin.billing.autoRenew') }}</span>
+              </div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+              <span
+                class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                :class="inst.isHostedInstance
+                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
+                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'"
+              >
+                {{ inst.isHostedInstance ? $t('admin.billing.hosted') : $t('admin.billing.direct') }}
+              </span>
+              <button
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
+                :class="inst.instanceTypeLabel === 'PRIME' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'"
+                @click="router.push(instanceDetailPath(inst.id))"
+              >
+                {{ inst.instanceTypeLabel }}
+              </button>
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.user') }}</div>
+                <div class="mt-1 flex min-w-0 items-center gap-2">
+                  <UserAvatar :username="inst.user?.username || ''" :avatar-style="inst.user?.avatarStyle || 'bottts'" :badge-id="inst.user?.avatarBadgeId || null" :size="24" />
+                  <div class="min-w-0">
+                    <div class="truncate text-themed">{{ inst.user?.username || '-' }}</div>
+                    <div class="truncate text-xs text-themed-muted">#{{ inst.user?.id }} {{ inst.user?.email || '' }}</div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.package') }}</div>
+                <div class="mt-1 truncate text-themed">{{ inst.package?.name || '-' }}</div>
+                <div class="truncate text-xs text-themed-muted">{{ inst.packagePlan?.name || '-' }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.host') }}</div>
+                <div class="mt-1 truncate text-themed">{{ inst.host?.name || '-' }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.price') }}</div>
+                <button
+                  v-if="inst.billingPrice"
+                  class="mt-1 font-medium text-blue-500 hover:text-blue-600 hover:underline"
+                  @click="openPriceModal(inst)"
+                >
+                  {{ formatMoney(inst.billingPrice) }}
+                </button>
+                <span v-else class="mt-1 block text-themed-muted">-</span>
+                <div class="text-xs text-themed-muted">{{ inst.billingCycle ? $t('admin.billing.cycleMonths', { months: inst.billingCycle }) : '-' }}</div>
+              </div>
+              <div v-if="showDateColumns">
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.purchaseDate') }}</div>
+                <div class="mt-1 text-themed-muted">{{ formatDate(inst.createdAt) }}</div>
+              </div>
+              <div v-if="showDateColumns">
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.expiresAt') }}</div>
+                <div class="mt-1 text-themed-muted">{{ formatDate(inst.expiresAt) }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.remainingDays') }}</div>
+                <div class="mt-1">
+                  <span
+                    v-if="inst.remainingDays !== null"
+                    :class="[
+                      'font-medium',
+                      inst.remainingDays <= 0 ? 'text-red-500' :
+                      inst.remainingDays <= 7 ? 'text-yellow-500' : 'text-green-500'
+                    ]"
+                  >
+                    {{ inst.remainingDays <= 0 ? $t('admin.billing.expired') : inst.remainingDays + ' ' + $t('admin.billing.days') }}
+                  </span>
+                  <span v-else class="text-themed-muted">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap justify-end gap-1 border-t border-themed pt-3">
+              <button
+                v-if="inst.status === 'suspended'"
+                class="btn btn-xs btn-ghost text-green-500"
+                @click="openActionModal('unsuspend', inst)"
+              >
+                {{ $t('admin.billing.unsuspend') }}
+              </button>
+              <button class="btn btn-xs btn-ghost" @click="openActionModal('extend', inst)">
+                {{ $t('admin.billing.extend') }}
+              </button>
+              <button
+                v-if="inst.remainingDays > 0"
+                class="btn btn-xs btn-ghost text-blue-500"
+                @click="openUpgradeModal(inst)"
+              >
+                {{ $t('admin.billing.upgradePlan') }}
+              </button>
+              <button
+                v-if="!inst.hasAffBinding"
+                class="btn btn-xs btn-ghost text-purple-500"
+                @click="openActionModal('applyDiscount', inst)"
+              >
+                {{ $t('admin.billing.applyDiscount') }}
+              </button>
+              <button class="btn btn-xs btn-ghost text-red-500" @click="openActionModal('deleteRefund', inst)">
+                {{ $t('admin.billing.deleteRefund') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="hidden lg:block">
+          <table class="w-full table-fixed text-sm">
             <thead class="bg-themed-secondary/80">
               <tr>
                 <th class="w-11 p-3 whitespace-nowrap">
@@ -1850,21 +1996,21 @@ function copyToClipboard(text: string) {
                     @change="toggleSelectAllCurrentPage"
                   />
                 </th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.hostingType') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.instanceType') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">ID</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.instanceName') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.instanceStatus') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.user') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.package') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.plan') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.host') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.price') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.cycle') }}</th>
-                <th v-if="showDateColumns" class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.purchaseDate') }}</th>
-                <th v-if="showDateColumns" class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.expiresAt') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.remainingDays') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('common.actions') }}</th>
+                <th class="w-[7%] text-left p-3">{{ $t('admin.billing.hostingType') }}</th>
+                <th class="w-[7%] text-left p-3">{{ $t('admin.billing.instanceType') }}</th>
+                <th class="w-[7%] text-left p-3">ID</th>
+                <th class="w-[10%] text-left p-3">{{ $t('admin.billing.instanceName') }}</th>
+                <th class="w-[8%] text-left p-3">{{ $t('admin.billing.instanceStatus') }}</th>
+                <th class="w-[11%] text-left p-3">{{ $t('admin.billing.user') }}</th>
+                <th class="w-[8%] text-left p-3">{{ $t('admin.billing.package') }}</th>
+                <th class="w-[8%] text-left p-3">{{ $t('admin.billing.plan') }}</th>
+                <th class="w-[7%] text-left p-3">{{ $t('admin.billing.host') }}</th>
+                <th class="w-[7%] text-left p-3">{{ $t('admin.billing.price') }}</th>
+                <th class="w-[6%] text-left p-3">{{ $t('admin.billing.cycle') }}</th>
+                <th v-if="showDateColumns" class="w-[8%] text-left p-3">{{ $t('admin.billing.purchaseDate') }}</th>
+                <th v-if="showDateColumns" class="w-[8%] text-left p-3">{{ $t('admin.billing.expiresAt') }}</th>
+                <th class="w-[7%] text-left p-3">{{ $t('admin.billing.remainingDays') }}</th>
+                <th class="w-[13%] text-left p-3">{{ $t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -1919,7 +2065,8 @@ function copyToClipboard(text: string) {
                 <!-- 实例名 -->
                 <td class="p-3">
                   <span 
-                    class="text-themed font-medium hover:text-blue-500 cursor-pointer"
+                    class="block truncate text-themed font-medium hover:text-blue-500 cursor-pointer"
+                    :title="inst.name"
                     @click="router.push(instanceDetailPath(inst.id))"
                   >{{ inst.name }}</span>
                 </td>
@@ -1933,7 +2080,7 @@ function copyToClipboard(text: string) {
                   <div class="flex items-center gap-2">
                     <UserAvatar :username="inst.user?.username || ''" :avatar-style="inst.user?.avatarStyle || 'bottts'" :badge-id="inst.user?.avatarBadgeId || null" :size="28" />
                     <div class="flex flex-col">
-                      <span class="text-themed font-medium">{{ inst.user?.username || '-' }}</span>
+                      <span class="truncate text-themed font-medium">{{ inst.user?.username || '-' }}</span>
                       <div class="flex items-center gap-1 text-xs text-themed-muted">
                         <span>#{{ inst.user?.id }}</span>
                         <span v-if="inst.user?.email" class="truncate max-w-32" :title="inst.user.email">{{ inst.user.email }}</span>
@@ -1942,11 +2089,11 @@ function copyToClipboard(text: string) {
                   </div>
                 </td>
                 <!-- 套餐名 -->
-                <td class="p-3 whitespace-nowrap">{{ inst.package?.name || '-' }}</td>
+                <td class="p-3 truncate" :title="inst.package?.name">{{ inst.package?.name || '-' }}</td>
                 <!-- 方案名 -->
-                <td class="p-3 whitespace-nowrap">{{ inst.packagePlan?.name || '-' }}</td>
+                <td class="p-3 truncate" :title="inst.packagePlan?.name">{{ inst.packagePlan?.name || '-' }}</td>
                 <!-- 宿主机名 -->
-                <td class="p-3 whitespace-nowrap">{{ inst.host?.name || '-' }}</td>
+                <td class="p-3 truncate" :title="inst.host?.name">{{ inst.host?.name || '-' }}</td>
                 <!-- 价格（可点击修改） -->
                 <td class="p-3 whitespace-nowrap">
                   <button
@@ -1980,7 +2127,7 @@ function copyToClipboard(text: string) {
                 </td>
                 <!-- 操作 -->
                 <td class="p-3 whitespace-nowrap">
-                  <div class="flex items-center gap-1">
+                  <div class="flex flex-wrap items-center gap-1">
                     <button
                       v-if="inst.status === 'suspended'"
                       class="btn btn-xs btn-ghost text-green-500"
@@ -2075,16 +2222,48 @@ function copyToClipboard(text: string) {
             {{ $t('admin.billing.recordType') }} / {{ $t('admin.billing.amount') }}
           </div>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="rec in records"
+            :key="rec.id"
+            class="rounded-xl border border-themed p-4"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium text-themed">{{ getRecordTypeLabel(rec.type) }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ formatDate(rec.createdAt) }}</div>
+              </div>
+              <div class="shrink-0 text-sm font-semibold" :class="rec.amount >= 0 ? 'text-green-500' : 'text-red-500'">
+                {{ formatMoney(rec.amount) }}
+              </div>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.instance') }}</div>
+                <div class="mt-1 truncate text-themed">{{ rec.instance?.name || '-' }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.user') }}</div>
+                <div class="mt-1 truncate text-themed">{{ rec.user?.username || '-' }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-xs text-themed-muted">{{ $t('admin.billing.remark') }}</div>
+                <div class="mt-1 break-words text-themed-muted">{{ rec.remark || '-' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hidden lg:block">
+          <table class="w-full table-fixed text-sm">
             <thead class="bg-themed-secondary/80">
               <tr>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.recordType') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.amount') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.instance') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.user') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.remark') }}</th>
-                <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.time') }}</th>
+                <th class="w-[16%] text-left p-3">{{ $t('admin.billing.recordType') }}</th>
+                <th class="w-[12%] text-left p-3">{{ $t('admin.billing.amount') }}</th>
+                <th class="w-[18%] text-left p-3">{{ $t('admin.billing.instance') }}</th>
+                <th class="w-[14%] text-left p-3">{{ $t('admin.billing.user') }}</th>
+                <th class="w-[24%] text-left p-3">{{ $t('admin.billing.remark') }}</th>
+                <th class="w-[16%] text-left p-3">{{ $t('admin.billing.time') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -2093,9 +2272,9 @@ function copyToClipboard(text: string) {
                 <td class="p-3 whitespace-nowrap" :class="rec.amount >= 0 ? 'text-green-500' : 'text-red-500'">
                   {{ formatMoney(rec.amount) }}
                 </td>
-                <td class="p-3 whitespace-nowrap">{{ rec.instance?.name || '-' }}</td>
-                <td class="p-3 whitespace-nowrap">{{ rec.user?.username || '-' }}</td>
-                <td class="p-3 text-themed-muted max-w-xs truncate">{{ rec.remark || '-' }}</td>
+                <td class="p-3 truncate" :title="rec.instance?.name">{{ rec.instance?.name || '-' }}</td>
+                <td class="p-3 truncate" :title="rec.user?.username">{{ rec.user?.username || '-' }}</td>
+                <td class="p-3 text-themed-muted truncate" :title="rec.remark">{{ rec.remark || '-' }}</td>
                 <td class="p-3 text-themed-muted whitespace-nowrap">{{ formatDate(rec.createdAt) }}</td>
               </tr>
             </tbody>
@@ -2243,8 +2422,8 @@ function copyToClipboard(text: string) {
           </div>
         </div>
 
-        <div class="hidden overflow-x-auto md:block">
-          <table class="w-full text-sm">
+        <div class="hidden overflow-hidden md:block">
+          <table class="w-full table-fixed text-sm">
             <thead class="bg-themed-secondary/80">
               <tr>
                 <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.rechargeOrderNo') }}</th>
@@ -2462,8 +2641,8 @@ function copyToClipboard(text: string) {
           </div>
         </div>
 
-        <div class="hidden overflow-x-auto md:block">
-          <table class="w-full text-sm">
+        <div class="hidden overflow-hidden md:block">
+          <table class="w-full table-fixed text-sm">
             <thead class="bg-themed-secondary/80">
               <tr>
                 <th class="text-left p-3 whitespace-nowrap">{{ $t('admin.billing.refundId') }}</th>
@@ -2984,16 +3163,28 @@ function copyToClipboard(text: string) {
 
               <div v-if="batchPricePreview.userImpacts.length > 0" class="rounded-lg border border-themed overflow-hidden">
                 <div class="bg-themed-secondary px-3 py-2 text-sm font-medium text-themed">{{ $t('admin.billing.batchUserImpact') }}</div>
-                <div class="max-h-40 overflow-auto">
+                <div class="max-h-48 overflow-auto">
                   <div
                     v-for="impact in batchPricePreview.userImpacts"
                     :key="impact.userId"
-                    class="grid min-w-[520px] grid-cols-4 gap-2 border-t border-themed px-3 py-2 text-sm"
+                    class="grid grid-cols-2 gap-2 border-t border-themed px-3 py-2 text-sm md:grid-cols-4"
                   >
-                    <div class="font-medium text-themed">{{ impact.username }}</div>
-                    <div class="text-themed-muted">{{ formatMoney(impact.balanceBefore) }}</div>
-                    <div :class="impact.netDiff > 0 ? 'text-red-600 dark:text-red-400' : impact.netDiff < 0 ? 'text-green-600 dark:text-green-400' : 'text-themed-muted'">{{ formatPriceDiff(impact.netDiff) }}</div>
-                    <div :class="impact.insufficientBalance ? 'text-red-600 dark:text-red-400 font-medium' : 'text-themed'">{{ formatMoney(impact.balanceAfter) }}</div>
+                    <div>
+                      <div class="text-xs text-themed-muted">{{ $t('admin.billing.user') }}</div>
+                      <div class="truncate font-medium text-themed" :title="impact.username">{{ impact.username }}</div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-themed-muted">{{ $t('admin.billing.userBalance') }}</div>
+                      <div class="text-themed-muted">{{ formatMoney(impact.balanceBefore) }}</div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-themed-muted">{{ $t('admin.billing.priceDifference') }}</div>
+                      <div :class="impact.netDiff > 0 ? 'text-red-600 dark:text-red-400' : impact.netDiff < 0 ? 'text-green-600 dark:text-green-400' : 'text-themed-muted'">{{ formatPriceDiff(impact.netDiff) }}</div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-themed-muted">{{ $t('admin.billing.userBalance') }}</div>
+                      <div :class="impact.insufficientBalance ? 'text-red-600 dark:text-red-400 font-medium' : 'text-themed'">{{ formatMoney(impact.balanceAfter) }}</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3001,24 +3192,56 @@ function copyToClipboard(text: string) {
               <div class="rounded-lg border border-themed overflow-hidden">
                 <div class="bg-themed-secondary px-3 py-2 text-sm font-medium text-themed">{{ $t('admin.billing.batchPreviewDetails') }}</div>
                 <div class="max-h-64 overflow-auto">
-                  <table class="w-full min-w-[720px] text-sm">
+                  <div class="space-y-2 p-3 lg:hidden">
+                    <div
+                      v-for="item in batchPricePreview.items"
+                      :key="item.id"
+                      class="rounded-lg border border-themed p-3 text-sm"
+                    >
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="truncate font-medium text-themed" :title="item.name || ''">{{ item.name || '-' }}</div>
+                          <div class="text-xs text-themed-muted">#{{ item.id }} · {{ item.user?.username || '-' }}</div>
+                        </div>
+                        <span class="shrink-0" :class="getBatchPriceItemStatusClass(item.status)">{{ item.error || getBatchPriceItemStatusLabel(item.status) }}</span>
+                      </div>
+                      <div class="mt-3 grid grid-cols-3 gap-2 text-right">
+                        <div>
+                          <div class="text-xs text-themed-muted">{{ $t('admin.billing.currentPrice') }}</div>
+                          <div>{{ item.oldPrice !== null ? formatMoney(item.oldPrice) : '-' }}</div>
+                        </div>
+                        <div>
+                          <div class="text-xs text-themed-muted">{{ $t('admin.billing.newPrice') }}</div>
+                          <div>{{ formatMoney(item.newPrice) }}</div>
+                        </div>
+                        <div>
+                          <div class="text-xs text-themed-muted">{{ $t('admin.billing.priceDifference') }}</div>
+                          <div :class="item.priceDiff > 0 ? 'text-red-600 dark:text-red-400' : item.priceDiff < 0 ? 'text-green-600 dark:text-green-400' : 'text-themed-muted'">
+                            {{ formatPriceDiff(item.priceDiff) }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <table class="hidden w-full table-fixed text-sm lg:table">
                     <thead class="bg-themed-secondary/60">
                       <tr>
-                        <th class="text-left p-2">{{ $t('admin.billing.instance') }}</th>
-                        <th class="text-left p-2">{{ $t('admin.billing.user') }}</th>
-                        <th class="text-right p-2">{{ $t('admin.billing.currentPrice') }}</th>
-                        <th class="text-right p-2">{{ $t('admin.billing.newPrice') }}</th>
-                        <th class="text-right p-2">{{ $t('admin.billing.priceDifference') }}</th>
-                        <th class="text-left p-2">{{ $t('admin.billing.result') }}</th>
+                        <th class="w-[24%] text-left p-2">{{ $t('admin.billing.instance') }}</th>
+                        <th class="w-[16%] text-left p-2">{{ $t('admin.billing.user') }}</th>
+                        <th class="w-[14%] text-right p-2">{{ $t('admin.billing.currentPrice') }}</th>
+                        <th class="w-[14%] text-right p-2">{{ $t('admin.billing.newPrice') }}</th>
+                        <th class="w-[14%] text-right p-2">{{ $t('admin.billing.priceDifference') }}</th>
+                        <th class="w-[18%] text-left p-2">{{ $t('admin.billing.result') }}</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-for="item in batchPricePreview.items" :key="item.id" class="border-t border-themed">
                         <td class="p-2">
-                          <div class="font-medium text-themed">{{ item.name || '-' }}</div>
+                          <div class="truncate font-medium text-themed" :title="item.name || ''">{{ item.name || '-' }}</div>
                           <div class="text-xs text-themed-muted">#{{ item.id }}</div>
                         </td>
-                        <td class="p-2 text-themed-muted">{{ item.user?.username || '-' }}</td>
+                        <td class="p-2 text-themed-muted truncate" :title="item.user?.username || ''">{{ item.user?.username || '-' }}</td>
                         <td class="p-2 text-right">{{ item.oldPrice !== null ? formatMoney(item.oldPrice) : '-' }}</td>
                         <td class="p-2 text-right">{{ formatMoney(item.newPrice) }}</td>
                         <td class="p-2 text-right" :class="item.priceDiff > 0 ? 'text-red-600 dark:text-red-400' : item.priceDiff < 0 ? 'text-green-600 dark:text-green-400' : 'text-themed-muted'">

@@ -8,6 +8,7 @@ const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'utf8')
 const storageTabSource = readFileSync(resolve(__dirname, '../../client/src/components/host/HostStorageTab.vue'), 'utf8')
+const hostOpsTabSource = readFileSync(resolve(__dirname, '../../client/src/components/host/HostOpsTab.vue'), 'utf8')
 const zhCnLocaleSource = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
 const enLocaleSource = readFileSync(resolve(__dirname, '../../client/src/locales/en.ts'), 'utf8')
 
@@ -73,6 +74,15 @@ assert.ok(
     source.includes('instanceId === null || pageSize === null') &&
     source.includes('take: pageSize ?? 20'),
   'host ops audit query routes must strictly validate optional instanceId and pageSize filters'
+)
+assert.ok(
+  (hostOpsTabSource.match(/table class="w-full table-fixed text-sm"/g)?.length ?? 0) >= 2 &&
+    hostOpsTabSource.includes('@click="runAuditScan"') &&
+    hostOpsTabSource.includes('@click="runAuditKillProcess"') &&
+    hostOpsTabSource.includes('networkResult') &&
+    !hostOpsTabSource.includes('class="overflow-x-auto rounded-xl border"') &&
+    !hostOpsTabSource.includes('table class="min-w-full text-sm"'),
+  'HostOpsTab must render audit process and network repair results in fixed tables without horizontal overflow while preserving scan and kill-process actions'
 )
 
 assert.ok(

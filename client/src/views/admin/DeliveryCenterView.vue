@@ -448,8 +448,77 @@ onMounted(() => {
           />
         </div>
 
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-left text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div v-if="repairCases.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+            暂无升级同步修复任务
+          </div>
+          <div
+            v-for="item in repairCases"
+            :key="item.id"
+            class="rounded-lg border border-themed bg-themed p-4 text-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold text-themed">#{{ item.id }} {{ issueTypeLabel(item.assuranceCase.issueType) }}</div>
+                <div class="mt-1 text-xs text-themed-muted">
+                  {{ item.instance?.name || `#${item.instanceId}` }} · {{ item.user?.username || `用户 #${item.userId}` }}
+                </div>
+              </div>
+              <span class="shrink-0 rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(item.assuranceCase.status)">
+                {{ caseStatusLabel(item.assuranceCase.status) }}
+              </span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">节点</div>
+                <div class="mt-1 text-themed">{{ item.host?.name || `节点 #${item.hostId}` }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">最近扣费</div>
+                <div class="mt-1 text-themed">{{ formatAmount(item.billing?.amount) }} · {{ formatDate(item.billing?.createdAt) }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
+                <div class="text-themed-muted">目标资源</div>
+                <div class="mt-1 text-themed">
+                  CPU {{ item.instance?.cpu ?? '-' }}% / 内存 {{ item.instance?.memory ?? '-' }} MB / 磁盘 {{ item.instance?.disk ?? '-' }} MB
+                </div>
+                <div class="mt-1 text-themed">带宽 {{ item.instance?.limitsIngress || '不限速' }} / {{ item.instance?.limitsEgress || '不限速' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
+                <div class="text-themed-muted">错误</div>
+                <div class="mt-1 break-words text-themed">{{ item.assuranceCase.lastError || item.assuranceCase.title }}</div>
+                <div v-if="item.assuranceCase.handledByUsername" class="mt-1 text-themed-muted">
+                  {{ item.assuranceCase.handledByUsername }} · {{ formatDate(item.assuranceCase.handledAt) }}
+                </div>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                class="btn-primary btn-sm"
+                :disabled="!!caseActionLoading || item.assuranceCase.status === 'recovered' || item.assuranceCase.status === 'closed'"
+                @click="runRepairCaseAction(item, 'retry-sync')"
+              >
+                {{ caseActionLoading === `retry-sync:${item.id}` ? '同步中...' : '重试同步' }}
+              </button>
+              <button
+                class="btn-secondary btn-sm"
+                :disabled="!!caseActionLoading || item.assuranceCase.status === 'recovered'"
+                @click="runRepairCaseAction(item, 'recovered')"
+              >
+                标记恢复
+              </button>
+              <button
+                class="btn-secondary btn-sm"
+                :disabled="!!caseActionLoading || item.assuranceCase.status === 'closed'"
+                @click="runRepairCaseAction(item, 'closed')"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-left text-sm">
             <thead class="border-b border-themed text-xs uppercase text-themed-muted">
               <tr>
                 <th class="px-4 py-3 font-medium">Case</th>
@@ -565,8 +634,58 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-left text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div v-if="tasks.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+            暂无交付任务
+          </div>
+          <button
+            v-for="task in tasks"
+            :key="task.id"
+            type="button"
+            class="block w-full rounded-lg border border-themed bg-themed p-4 text-left text-sm transition hover:bg-themed-tertiary"
+            :class="selectedTaskId === task.id ? 'bg-themed-tertiary ring-1 ring-primary/30' : ''"
+            @click="selectedTaskId = task.id"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold text-themed">#{{ task.id }} {{ taskTypeLabel(task.taskType) }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ task.progress || '暂无进度' }}</div>
+              </div>
+              <span class="shrink-0 rounded-md border px-2 py-1 text-xs" :class="badgeClass(task.status)">
+                {{ statusLabel(task.status) }}
+              </span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">实例</div>
+                <div class="mt-1 text-themed">{{ task.instance?.name || `#${task.instanceId}` }}</div>
+                <div class="mt-1 truncate">{{ task.instance?.image || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">用户</div>
+                <div class="mt-1 text-themed">{{ task.user?.username || `#${task.userId}` }}</div>
+                <div class="mt-1 truncate">{{ task.user?.email || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">节点</div>
+                <div class="mt-1 text-themed">{{ task.host?.name || `#${task.hostId}` }}</div>
+                <div class="mt-1">{{ task.host?.location || task.host?.countryCode || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">保障</div>
+                <span class="mt-1 inline-flex rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(task.assuranceCase?.status)">
+                  {{ caseStatusLabel(task.assuranceCase?.status) }}
+                </span>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
+                <div class="text-themed-muted">创建时间</div>
+                <div class="mt-1 text-themed">{{ formatDate(task.createdAt) }}</div>
+              </div>
+            </div>
+          </button>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-left text-sm">
               <thead class="border-b border-themed text-xs uppercase text-themed-muted">
                 <tr>
                   <th class="px-4 py-3 font-medium">任务</th>

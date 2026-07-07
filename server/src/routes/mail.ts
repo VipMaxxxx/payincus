@@ -581,7 +581,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate, fastify.requireAdmin]
   }, async () => {
     const plans = await db.getAllMailPlans()
-    return { plans }
+    return { plans: plans.map(db.sanitizeMailPlanForResponse) }
   })
 
   // 创建方案
@@ -731,7 +731,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       pageSize: parsePositiveQueryInteger(pageSize, 20, 100)
     })
     
-    return result
+    return {
+      ...result,
+      subscriptions: result.subscriptions.map(db.sanitizeMailSubscriptionForResponse)
+    }
   })
 
   // 管理员退订（删除订阅）
@@ -875,7 +878,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       pageSize: parsePositiveQueryInteger(pageSize, 20, 100)
     })
     
-    return result
+    return {
+      ...result,
+      domains: result.domains.map(db.sanitizeMailDomainForResponse)
+    }
   })
 
   // ==================== 用户端：公开接口 ====================
@@ -1395,7 +1401,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         verifiedAt: domain.verifiedAt,
         createdAt: domain.createdAt,
         adminUsername: domain.adminUsername,
-        adminPassword: domain.adminPassword,
+        adminPasswordConfigured: Boolean(domain.adminPassword),
         sourceCode: domain.source.code,
         accounts: domain.accounts.map((a: MailAccount) => ({
           id: a.id,
@@ -1408,6 +1414,24 @@ export default async function mailRoutes(fastify: FastifyInstance) {
           createdAt: a.createdAt
         }))
       }
+    }
+  })
+
+  // 显式获取域名管理员密码，避免域名详情页加载时被动暴露敏感字段
+  fastify.get<{
+    Params: { id: string }
+  }>('/domains/:id/admin-password', {
+    onRequest: [fastify.authenticate]
+  }, async (request, reply) => {
+    const domainId = parsePositiveRouteId(request.params.id)
+    const domain = await db.getMailDomainById(domainId)
+
+    if (!domain || domain.subscription.userId !== request.user.id) {
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+    }
+
+    return {
+      adminPassword: domain.adminPassword ?? null
     }
   })
 

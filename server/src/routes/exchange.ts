@@ -464,7 +464,7 @@ export default async function exchangeRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '交易订单 ID 无效' })
     }
     try {
-      return getUserExchangeOrder(request.user.id, orderId)
+      return await getUserExchangeOrder(request.user.id, orderId)
     } catch (error) {
       return sendExchangeError(reply, error)
     }

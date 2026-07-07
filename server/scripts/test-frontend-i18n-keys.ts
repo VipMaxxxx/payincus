@@ -91,7 +91,8 @@ function assertLocaleContainsKeys(localeName: string, source: string): void {
 
 function collectFrontendTranslationKeys(): Set<string> {
   const files = [
-    'client/src/views/admin/EntertainmentView.vue'
+    'client/src/views/admin/EntertainmentView.vue',
+    'client/src/views/admin/AffReviewView.vue'
   ]
   const keys = new Set<string>()
   const keyPatterns = [
@@ -106,7 +107,7 @@ function collectFrontendTranslationKeys(): Set<string> {
     for (const pattern of keyPatterns) {
       for (const match of source.matchAll(pattern)) {
         const key = match[1]
-        if (key.startsWith('entertainment.')) keys.add(key)
+        if (key.startsWith('entertainment.') || key.startsWith('aff.')) keys.add(key)
       }
     }
   }
@@ -127,6 +128,8 @@ function assertFrontendKeysExist(): void {
   const keys = collectFrontendTranslationKeys()
   assert.ok(keys.has('entertainment.admin.title'), 'frontend i18n guard must cover admin benefits page keys')
   assert.ok(keys.has('entertainment.prizeTypes.badge'), 'frontend i18n guard must cover shared benefits prize type keys')
+  assert.ok(keys.has('aff.adminTitle'), 'frontend i18n guard must cover admin AFF review title')
+  assert.ok(keys.has('aff.withdrawalStatus.pending'), 'frontend i18n guard must cover admin AFF review nested status labels')
 
   for (const [localeName, messages] of Object.entries(localeMessages)) {
     for (const key of keys) {
@@ -156,6 +159,10 @@ function assertSplitLocalePruneKeepsAdminBenefits(): void {
   assert.ok(
     !userOnlyTopLevelKeysSource.includes("'entertainment'"),
     'admin locale prune must not remove the whole entertainment namespace because the admin benefits page uses entertainment.admin'
+  )
+  assert.ok(
+    !userOnlyTopLevelKeysSource.includes("'aff'"),
+    'admin locale prune must not remove the aff namespace because the admin billing AFF review page uses aff.* labels'
   )
   assert.ok(
     adminPruneSource.includes('adminEntertainmentRemovedKeys') &&

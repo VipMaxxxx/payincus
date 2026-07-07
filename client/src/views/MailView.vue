@@ -8,6 +8,7 @@ import { useConfigStore } from '@/stores/config'
 import { translateError } from '@/utils/errorHandler'
 import FlagIcon from '@/components/FlagIcon.vue'
 import { freeSiteCopy } from '@/utils/freeSiteFun'
+import { mailDomainPath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -208,7 +209,7 @@ async function addDomain() {
 }
 
 function goToDomain(id: number) {
-  router.push(`/mail/domains/${id}`)
+  router.push(mailDomainPath(id))
 }
 
 // 续费相关

@@ -18,7 +18,7 @@ assert.ok(
 
 assert.equal(
   (routeSource.match(/parsePositiveRouteId\(request\.params\.id\)/g) ?? []).length,
-  9,
+  10,
   'mail source, plan, subscription, and domain :id routes must use strict positive ID parsing'
 )
 

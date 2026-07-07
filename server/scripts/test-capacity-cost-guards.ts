@@ -100,4 +100,15 @@ assert.ok(
   'capacity cost feature must not alter instance provisioning or package selling paths'
 )
 
+assert.ok(
+  (view.match(/class="space-y-3 p-4 lg:hidden"/g)?.length ?? 0) >= 2 &&
+    (view.match(/class="hidden overflow-hidden lg:block"/g)?.length ?? 0) >= 2 &&
+    view.includes('table class="w-full table-fixed divide-y divide-themed text-sm"') &&
+    view.includes('table class="w-full table-fixed divide-y divide-themed text-sm"') &&
+    view.includes('@click="saveCostProfile(host)"') &&
+    !view.includes('class="overflow-x-auto"') &&
+    !view.includes('table class="min-w-full'),
+  'capacity cost view must keep mobile cards, fixed desktop tables, and host cost save actions'
+)
+
 console.log('capacity cost guard tests passed')

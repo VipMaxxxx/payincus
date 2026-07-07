@@ -62,7 +62,7 @@ async function loadLogs(silent = false): Promise<void> {
     if (searchQuery.value) {
       params.search = searchQuery.value
     }
-    
+
     const response = await api.logs.list(params)
     const data = response as { logs?: Log[]; total?: number; totalPages?: number }
     logs.value = data.logs || []
@@ -258,8 +258,8 @@ onMounted(async () => {
         <!-- Module filter -->
         <div class="flex-1 min-w-[200px]">
           <label class="block text-xs text-themed-muted mb-1.5">{{ $t('logs.module') }}</label>
-          <select 
-            v-model="selectedModule" 
+          <select
+            v-model="selectedModule"
             class="input"
             @change="handleSearch"
           >
@@ -272,11 +272,11 @@ onMounted(async () => {
         <div class="flex-1 min-w-[200px]">
           <label class="block text-xs text-themed-muted mb-1.5">{{ $t('logs.search') }}</label>
           <div class="flex gap-2">
-            <input 
-              v-model="searchQuery" 
+            <input
+              v-model="searchQuery"
               type="text"
-              class="input flex-1" 
-              :placeholder="$t('logs.searchPlaceholder')" 
+              class="input flex-1"
+              :placeholder="$t('logs.searchPlaceholder')"
               @keyup.enter="handleSearch"
             />
             <button class="btn-secondary h-[38px]" @click="handleSearch">{{ $t('logs.search') }}</button>
@@ -289,42 +289,178 @@ onMounted(async () => {
     <!-- Logs Table -->
     <SkeletonLoader v-if="loading" type="table" />
 
-    <div v-else class="card overflow-x-auto">
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[920px]">
+    <template v-else>
+      <div v-if="logs.length === 0" class="card p-8 text-center text-themed-secondary">
+        {{ $t('logs.noLogs') }}
+      </div>
+
+      <div v-else class="space-y-3 lg:hidden">
+        <div
+          v-for="log in logs"
+          :key="log.id"
+          class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="truncate text-sm font-semibold text-themed">{{ formatAction(log.action) }}</div>
+              <div class="mt-1 text-xs text-themed-muted">{{ formatDate(log.created_at) }}</div>
+            </div>
+            <span :class="['badge shrink-0 whitespace-nowrap', getResultClass(log.result)]">
+              {{ formatResult(log.result) }}
+            </span>
+          </div>
+
+          <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ $t('logs.user') }}</div>
+              <div class="mt-1 truncate text-themed">{{ log.username || $t('logs.system') }}</div>
+            </div>
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ $t('logs.module') }}</div>
+              <div class="mt-1 truncate text-themed">{{ formatModule(log.module) }}</div>
+            </div>
+          </div>
+
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <span :class="['badge whitespace-nowrap', getRiskClass(log.risk_level)]">
+              {{ formatRiskLevel(log.risk_level) }}
+            </span>
+            <span v-if="log.risk_title" class="min-w-0 truncate text-xs text-themed-muted">
+              {{ log.risk_title }}
+            </span>
+          </div>
+
+          <div class="mt-3 rounded-lg bg-themed-secondary px-3 py-2 text-sm">
+            <div class="mb-1 text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ $t('logs.content') }}</div>
+            <span v-if="!isContentLong(formatContent(log.content))" class="text-themed-secondary">
+              {{ formatContent(log.content) }}
+            </span>
+            <template v-else>
+              <div v-if="!expandedRows.has(log.id)" class="flex min-w-0 items-center gap-2">
+                <span class="min-w-0 flex-1 truncate text-themed-secondary">{{ formatContent(log.content).slice(0, 72) }}...</span>
+                <button
+                  type="button"
+                  class="shrink-0 text-xs text-themed-secondary hover:underline"
+                  @click="toggleContent(log.id)"
+                >
+                  {{ $t('logs.expand') }}
+                </button>
+              </div>
+              <div v-else class="space-y-2">
+                <p class="whitespace-pre-wrap break-words text-themed-secondary">{{ formatContent(log.content) }}</p>
+                <button
+                  type="button"
+                  class="text-xs text-themed-secondary hover:underline"
+                  @click="toggleContent(log.id)"
+                >
+                  {{ $t('logs.collapse') }}
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div
+          v-if="total > 0"
+          class="flex flex-col gap-3 rounded-lg border border-themed bg-themed-surface px-4 py-3"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm text-themed-secondary">
+              {{ $t('logs.totalRecords', { total, page, totalPages }) }}
+            </span>
+            <select
+              v-model="pageSize"
+              class="text-sm rounded-md border-0 py-1 pl-2 pr-7 ring-1 ring-inset focus:ring-2 focus:ring-primary cursor-pointer"
+              :class="themeStore.isDark
+                ? 'bg-gray-800 text-gray-300 ring-gray-700'
+                : 'bg-gray-50 text-gray-700 ring-gray-200'"
+              @change="handlePageSizeChange"
+            >
+              <option :value="10">10 / {{ $t('common.page') }}</option>
+              <option :value="30">30 / {{ $t('common.page') }}</option>
+              <option :value="50">50 / {{ $t('common.page') }}</option>
+              <option :value="100">100 / {{ $t('common.page') }}</option>
+            </select>
+          </div>
+          <div v-if="totalPages > 1" class="flex items-center justify-center gap-1">
+            <button
+              :disabled="page === 1 || refreshing"
+              class="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm transition-colors"
+              :class="[
+                page === 1
+                  ? 'opacity-40 cursor-not-allowed'
+                  : themeStore.isDark
+                    ? 'hover:bg-gray-800 text-gray-400'
+                    : 'hover:bg-gray-100 text-gray-600'
+              ]"
+              @click="page = Math.max(1, page - 1); loadLogs(true)"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div
+              class="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium"
+              :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'"
+            >
+              <span>{{ page }}</span>
+              <span :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-400'">/</span>
+              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">{{ totalPages }}</span>
+            </div>
+            <button
+              :disabled="page === totalPages || refreshing"
+              class="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm transition-colors"
+              :class="[
+                page === totalPages
+                  ? 'opacity-40 cursor-not-allowed'
+                  : themeStore.isDark
+                    ? 'hover:bg-gray-800 text-gray-400'
+                    : 'hover:bg-gray-100 text-gray-600'
+              ]"
+              @click="page = Math.min(totalPages, page + 1); loadLogs(true)"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="logs.length > 0" class="card hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed">
           <thead>
             <tr class="border-b border-themed">
-              <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.time') }}</th>
-              <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.user') }}</th>
-              <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.module') }}</th>
-              <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.action') }}</th>
-              <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.riskLevel') }}</th>
-              <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.content') }}</th>
-              <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.result') }}</th>
+              <th class="w-[16%] text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.time') }}</th>
+              <th class="w-[12%] text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.user') }}</th>
+              <th class="w-[13%] text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.module') }}</th>
+              <th class="w-[14%] text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.action') }}</th>
+              <th class="w-[12%] text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.riskLevel') }}</th>
+              <th class="w-[25%] text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.content') }}</th>
+              <th class="w-[8%] text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.result') }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="logs.length === 0" class="border-b border-themed">
-              <td colspan="7" class="py-8 text-center text-themed-secondary">
-                {{ $t('logs.noLogs') }}
-              </td>
-            </tr>
-            <tr 
-              v-for="log in logs" 
+            <tr
+              v-for="log in logs"
               :key="log.id"
               class="border-b border-themed hover:bg-themed/5 transition-colors"
             >
               <td class="py-3 px-4 text-sm text-themed-secondary whitespace-nowrap">
                 {{ formatDate(log.created_at) }}
               </td>
-              <td class="py-3 px-4 text-sm text-themed whitespace-nowrap">
-                {{ log.username || $t('logs.system') }}
+              <td class="py-3 px-4 text-sm text-themed">
+                <div class="truncate" :title="log.username || $t('logs.system')">
+                  {{ log.username || $t('logs.system') }}
+                </div>
               </td>
-              <td class="py-3 px-4 text-sm text-themed whitespace-nowrap">
-                <span class="badge badge-default whitespace-nowrap">{{ formatModule(log.module) }}</span>
+              <td class="py-3 px-4 text-sm text-themed">
+                <span class="badge badge-default max-w-full truncate whitespace-nowrap">{{ formatModule(log.module) }}</span>
               </td>
-              <td class="py-3 px-4 text-sm text-themed whitespace-nowrap">
-                {{ formatAction(log.action) }}
+              <td class="py-3 px-4 text-sm text-themed">
+                <div class="truncate" :title="formatAction(log.action)">
+                  {{ formatAction(log.action) }}
+                </div>
               </td>
               <td class="py-3 px-4 text-sm text-themed whitespace-nowrap">
                 <span :class="['badge whitespace-nowrap', getRiskClass(log.risk_level)]">
@@ -335,7 +471,7 @@ onMounted(async () => {
                 </div>
               </td>
               <td class="py-3 px-4 text-sm">
-                <div class="max-w-xs lg:max-w-md">
+                <div class="max-w-full">
                   <!-- 短内容直接显示 -->
                   <span v-if="!isContentLong(formatContent(log.content))" class="text-themed-secondary">
                     {{ formatContent(log.content) }}
@@ -379,11 +515,10 @@ onMounted(async () => {
             </tr>
           </tbody>
         </table>
-      </div>
 
       <!-- Pagination -->
-      <div 
-        v-if="total > 0" 
+      <div
+        v-if="total > 0"
         class="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t border-themed"
       >
         <div class="flex items-center gap-3">
@@ -393,8 +528,8 @@ onMounted(async () => {
           <select
             v-model="pageSize"
             class="text-sm rounded-md border-0 py-1 pl-2 pr-7 ring-1 ring-inset focus:ring-2 focus:ring-primary cursor-pointer"
-            :class="themeStore.isDark 
-              ? 'bg-gray-800 text-gray-300 ring-gray-700' 
+            :class="themeStore.isDark
+              ? 'bg-gray-800 text-gray-300 ring-gray-700'
               : 'bg-gray-50 text-gray-700 ring-gray-200'"
             @change="handlePageSizeChange"
           >
@@ -409,10 +544,10 @@ onMounted(async () => {
             :disabled="page === 1 || refreshing"
             class="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm transition-colors"
             :class="[
-              page === 1 
-                ? 'opacity-40 cursor-not-allowed' 
-                : themeStore.isDark 
-                  ? 'hover:bg-gray-800 text-gray-400' 
+              page === 1
+                ? 'opacity-40 cursor-not-allowed'
+                : themeStore.isDark
+                  ? 'hover:bg-gray-800 text-gray-400'
                   : 'hover:bg-gray-100 text-gray-600'
             ]"
             @click="page = Math.max(1, page - 1); loadLogs(true)"
@@ -421,7 +556,7 @@ onMounted(async () => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <div 
+          <div
             class="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium"
             :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'"
           >
@@ -433,10 +568,10 @@ onMounted(async () => {
             :disabled="page === totalPages || refreshing"
             class="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm transition-colors"
             :class="[
-              page === totalPages 
-                ? 'opacity-40 cursor-not-allowed' 
-                : themeStore.isDark 
-                  ? 'hover:bg-gray-800 text-gray-400' 
+              page === totalPages
+                ? 'opacity-40 cursor-not-allowed'
+                : themeStore.isDark
+                  ? 'hover:bg-gray-800 text-gray-400'
                   : 'hover:bg-gray-100 text-gray-600'
             ]"
             @click="page = Math.min(totalPages, page + 1); loadLogs(true)"
@@ -448,5 +583,6 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>

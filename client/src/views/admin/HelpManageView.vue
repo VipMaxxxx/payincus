@@ -459,41 +459,75 @@ function formatDate(dateStr: string | null | undefined): string {
     </div>
 
     <div v-else-if="activeTab === 'articles'" class="space-y-4">
-      <div class="card overflow-x-auto">
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-[800px]">
+      <div class="card overflow-hidden">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="article in articles"
+            :key="article.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate font-medium text-themed">{{ article.title }}</div>
+                <div class="mt-1 break-all font-mono text-xs text-themed-muted">/help/{{ article.slug }}</div>
+              </div>
+              <span :class="['badge shrink-0', article.published ? 'badge-success' : 'badge-default']">
+                {{ article.published ? t('admin.helpManage.published') : t('admin.helpManage.draft') }}
+              </span>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-themed-muted">
+              <div class="flex min-w-0 items-center gap-2">
+                <span
+                  class="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                  :style="{ backgroundColor: getCategoryColor(article.category) }"
+                ></span>
+                <span class="truncate text-themed-secondary">{{ getCategoryLabel(article.category) }}</span>
+              </div>
+              <span>{{ formatDate(article.updated_at) }}</span>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button class="btn-ghost btn-sm" @click="openEdit(article)">{{ t('common.edit') }}</button>
+              <button class="btn-ghost btn-sm" @click="togglePublished(article)">
+                {{ article.published ? t('admin.helpManage.hide') : t('admin.helpManage.publish') }}
+              </button>
+              <button class="btn-ghost btn-sm text-error" @click="deleteArticle(article)">{{ t('common.delete') }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
             <thead class="bg-themed-tertiary border-b border-themed">
               <tr>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.helpManage.articleTitleCol') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.helpManage.categoryCol') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.helpManage.statusCol') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.helpManage.updatedAtCol') }}</th>
-                <th class="text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.helpManage.actionsCol') }}</th>
+                <th class="w-[34%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.articleTitleCol') }}</th>
+                <th class="w-[18%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.categoryCol') }}</th>
+                <th class="w-[12%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.statusCol') }}</th>
+                <th class="w-[18%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.updatedAtCol') }}</th>
+                <th class="w-[18%] text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.actionsCol') }}</th>
               </tr>
             </thead>
             <tbody class="divide-themed">
               <tr v-for="article in articles" :key="article.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 whitespace-nowrap">
-                  <div class="text-themed font-medium">{{ article.title }}</div>
-                  <div class="text-xs text-themed-muted font-mono">/help/{{ article.slug }}</div>
+                <td class="px-4 py-3">
+                  <div class="truncate text-themed font-medium">{{ article.title }}</div>
+                  <div class="truncate text-xs text-themed-muted font-mono">/help/{{ article.slug }}</div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap">
-                  <div class="flex items-center gap-2">
-                    <span 
-                      class="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                <td class="px-4 py-3">
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="w-2.5 h-2.5 rounded-full flex-shrink-0"
                       :style="{ backgroundColor: getCategoryColor(article.category) }"
                     ></span>
-                    <span class="text-sm text-themed-secondary">{{ getCategoryLabel(article.category) }}</span>
+                    <span class="truncate text-sm text-themed-secondary">{{ getCategoryLabel(article.category) }}</span>
                   </div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap">
-                  <span :class="['badge whitespace-nowrap', article.published ? 'badge-success' : 'badge-default']">
+                <td class="px-4 py-3">
+                  <span :class="['badge', article.published ? 'badge-success' : 'badge-default']">
                     {{ article.published ? t('admin.helpManage.published') : t('admin.helpManage.draft') }}
                   </span>
                 </td>
-                <td class="px-4 py-3 text-sm text-themed-muted whitespace-nowrap">{{ formatDate(article.updated_at) }}</td>
-                <td class="px-4 py-3 text-right whitespace-nowrap">
-                  <div class="flex items-center justify-end gap-2">
+                <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(article.updated_at) }}</td>
+                <td class="px-4 py-3 text-right">
+                  <div class="flex flex-wrap items-center justify-end gap-2">
                     <button class="btn-ghost btn-sm" @click="openEdit(article)">{{ t('common.edit') }}</button>
                     <button class="btn-ghost btn-sm" @click="togglePublished(article)">
                       {{ article.published ? t('admin.helpManage.hide') : t('admin.helpManage.publish') }}
@@ -508,7 +542,7 @@ function formatDate(dateStr: string | null | undefined): string {
       </div>
 
       <!-- Pagination -->
-      <div v-if="totalPages > 1" class="flex items-center justify-between text-sm text-themed-muted">
+      <div v-if="totalPages > 1" class="flex flex-col gap-3 text-sm text-themed-muted sm:flex-row sm:items-center sm:justify-between">
         <span>{{ t('admin.helpManage.totalArticles', { count: total }) }}</span>
         <div class="flex items-center gap-2">
           <button :disabled="page <= 1" class="btn-ghost btn-sm" @click="page--; loadArticles()">{{ t('admin.helpManage.prevPage') }}</button>

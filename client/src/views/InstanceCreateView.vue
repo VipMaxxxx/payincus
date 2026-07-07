@@ -33,6 +33,7 @@ import ImageSelector from '@/components/instance/ImageSelector.vue'
 import SSHKeySelector from '@/components/instance/SSHKeySelector.vue'
 import InitCommandSelector from '@/components/extensions/InitCommandSelector.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
+import { instancesPath, profilePath, ticketsPath } from '@/utils/app-paths'
 import UserAvatar from '@/components/UserAvatar.vue'
 import type { Package, UserQuota, SshKey, AvailableHost, CreateInstanceRequest } from '@/types/api'
 import { normalizePackageSourceQuery, toPackageSourceRequest, type PackageSource } from '@/utils/publicCatalog'
@@ -1103,15 +1104,22 @@ async function handleSubmit(): Promise<void> {
       turnstileToken: verificationToken
     }
 
-    await api.instances.create(requestPayload)
+    const response = await api.instances.create(requestPayload)
     
     toast.success(t('instance.createPage.createSuccess'))
-    router.push('/instances')
+    resetCreateTurnstile()
+    submitting.value = false
+    await router.push({
+      path: instancesPath(),
+      query: response.instance?.id ? { created: String(response.instance.id) } : undefined
+    })
   } catch (err: any) {
     error.value = translateError(err)
     orderRiskReviewAvailable.value = err?.code === 'ORDER_RESTRICTED_BY_RISK'
   } finally {
-    resetCreateTurnstile()
+    if (submitting.value) {
+      resetCreateTurnstile()
+    }
     submitting.value = false
   }
 }
@@ -1122,7 +1130,7 @@ async function createRiskReviewTicket(): Promise<void> {
   try {
     const response = await api.resourceRisk.createReviewTicket('实例创建被资源风控限制，申请人工审核解除下单限制。')
     toast.success(`审核工单已创建：#${response.ticket.id}`)
-    router.push('/tickets')
+    router.push(ticketsPath(response.ticket.id))
   } catch (err: any) {
     toast.error(err?.message || '创建审核工单失败')
   } finally {
@@ -1138,7 +1146,7 @@ async function createRiskReviewTicket(): Promise<void> {
         <h1 class="page-title text-lg sm:text-xl">{{ $t('instance.createPage.title') }}</h1>
         <p class="page-description">{{ $t('instance.createPage.description') }}</p>
       </div>
-      <RouterLink to="/instances" class="btn btn-secondary w-full justify-center sm:w-auto">
+      <RouterLink :to="instancesPath()" class="btn btn-secondary w-full justify-center sm:w-auto">
         {{ $t('common.back') }}
       </RouterLink>
     </div>
@@ -1430,7 +1438,7 @@ async function createRiskReviewTicket(): Promise<void> {
             </div>
             <div v-if="sshKeys.length === 0" class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-400 dark:border-yellow-500/30 rounded-lg">
               <p class="text-sm text-yellow-800 dark:text-yellow-300 font-medium mb-1">⚠️ {{ $t('instance.createPage.missingSshKey') }}</p>
-              <p class="text-xs text-yellow-700 dark:text-yellow-400">{{ $t('instance.createPage.missingSshKeyDesc') }} <router-link to="/profile" class="underline hover:text-yellow-900 dark:hover:text-yellow-200 font-medium">{{ $t('instance.createPage.profileSettings') }}</router-link> {{ $t('instance.createPage.addSshKey') }}</p>
+              <p class="text-xs text-yellow-700 dark:text-yellow-400">{{ $t('instance.createPage.missingSshKeyDesc') }} <router-link :to="profilePath()" class="underline hover:text-yellow-900 dark:hover:text-yellow-200 font-medium">{{ $t('instance.createPage.profileSettings') }}</router-link> {{ $t('instance.createPage.addSshKey') }}</p>
             </div>
             <div v-if="!quotaCheck.valid" class="p-3 rounded-lg border" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30' : 'bg-red-50 border-red-200'">
               <p class="text-sm font-medium mb-2" :class="themeStore.isDark ? 'text-red-400' : 'text-red-700'">{{ $t('instance.createPage.quotaInsufficient') }}</p>

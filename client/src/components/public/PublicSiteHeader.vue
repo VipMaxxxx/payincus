@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/config'
 import { useThemeStore } from '@/stores/theme'
 import { useBrand } from '@/composables/useBrand'
 import { supportedLocales, setLocale, type Locale } from '@/locales'
+import { dashboardPath, helpPath, loginPath, marketPath, registerPath } from '@/utils/app-paths'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,14 +22,14 @@ const langMenuRef = ref<HTMLElement | null>(null)
 
 const navigation = computed(() => [
   { label: t('publicSite.nav.home'), compactLabel: t('publicSite.nav.overview'), to: '/' },
-  { label: t('publicSite.nav.products'), compactLabel: t('publicSite.nav.products'), to: '/market' },
-  { label: t('publicSite.nav.help'), compactLabel: t('publicSite.nav.help'), to: '/help' }
+  { label: t('publicSite.nav.products'), compactLabel: t('publicSite.nav.products'), to: marketPath() },
+  { label: t('publicSite.nav.help'), compactLabel: t('publicSite.nav.help'), to: helpPath() }
 ])
 
 const isLoginRoute = computed(() => route.name === 'login')
 const isRegisterRoute = computed(() => route.name === 'register')
 const isForgotPasswordRoute = computed(() => route.name === 'forgot-password')
-const consoleTarget = computed(() => '/dashboard')
+const consoleTarget = computed(() => dashboardPath())
 
 const primaryActionLabel = computed(() => {
   if (authStore.isAuthenticated) {
@@ -120,16 +121,16 @@ function handlePrimaryAction(): void {
   }
 
   if (isLoginRoute.value && configStore.registrationEnabled) {
-    void router.push('/register')
+    void router.push(registerPath())
     return
   }
 
   if (isRegisterRoute.value || isForgotPasswordRoute.value) {
-    void router.push('/login')
+    void router.push(loginPath())
     return
   }
 
-  void router.push('/login')
+  void router.push(loginPath())
 }
 
 onMounted(() => {

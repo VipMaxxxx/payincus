@@ -11,6 +11,7 @@ import { focusTurnstileSection, readTurnstileToken } from '@/utils/turnstile'
 import api from '@/api'
 import { useBrand } from '@/composables/useBrand'
 import { buildApiUrl } from '@/utils/api-url'
+import { forgotPasswordPath, registerPath } from '@/utils/app-paths'
 
 const router = useRouter()
 const route = useRoute()
@@ -36,6 +37,7 @@ const turnstileSectionRef = ref<HTMLElement | null>(null)
 void turnstileRef.value // 模板中通过 ref 使用
 const footerContactEmail = ref<string | null>(null)
 const registrationEnabled = ref<boolean>(true)
+const isTurnstileChallengeAvailable = computed<boolean>(() => turnstileEnabled.value && Boolean(turnstileSiteKey.value))
 
 const contactEmailHref = computed(() => {
   const email = footerContactEmail.value?.trim()
@@ -76,7 +78,7 @@ function onTurnstileExpire() {
 }
 
 function getLoginTurnstileToken(): string | null | undefined {
-  if (!turnstileEnabled.value) return undefined
+  if (!isTurnstileChallengeAvailable.value) return undefined
 
   const token = readTurnstileToken(turnstileRef.value, turnstileToken.value)
   if (token) {
@@ -305,7 +307,7 @@ function getProviderInfo(provider: string): ProviderInfo {
 
           <!-- Turnstile 验证 -->
           <div
-            v-if="turnstileEnabled && turnstileSiteKey"
+            v-if="isTurnstileChallengeAvailable"
             ref="turnstileSectionRef"
             tabindex="-1"
             class="rounded-lg border p-3"
@@ -380,7 +382,7 @@ function getProviderInfo(provider: string): ProviderInfo {
         <p v-if="registrationEnabled" :class="'text-themed-muted'">
           {{ $t('auth.noAccount') }}
           <RouterLink 
-            to="/register" 
+            :to="registerPath()"
             class="transition-colors"
             :class="'text-themed-muted hover:text-themed'"
           >
@@ -392,7 +394,7 @@ function getProviderInfo(provider: string): ProviderInfo {
         </p>
         <p :class="'text-themed-muted'">
           <RouterLink 
-            to="/forgot-password" 
+            :to="forgotPasswordPath()"
             class="transition-colors"
             :class="'text-themed-muted hover:text-themed'"
           >

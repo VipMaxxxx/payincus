@@ -6,6 +6,7 @@ import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useBrand } from '@/composables/useBrand'
+import { dashboardPath, forgotPasswordPath, helpPath, loginPath, marketPath, registerPath } from '@/utils/app-paths'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,7 +18,7 @@ const brand = useBrand()
 const isLoginRoute = computed(() => route.name === 'login')
 const isRegisterRoute = computed(() => route.name === 'register')
 const isForgotPasswordRoute = computed(() => route.name === 'forgot-password')
-const consoleTarget = computed(() => '/dashboard')
+const consoleTarget = computed(() => dashboardPath())
 
 const primaryActionLabel = computed(() => {
   if (authStore.isAuthenticated) {
@@ -38,7 +39,7 @@ const primaryActionLabel = computed(() => {
 const secondaryAction = computed(() => (
   route.name === 'market'
     ? { to: '/', label: t('publicSite.nav.overview') }
-    : { to: '/market', label: t('publicSite.actions.browseProducts') }
+    : { to: marketPath(), label: t('publicSite.actions.browseProducts') }
 ))
 
 const accountLinks = computed(() => {
@@ -47,9 +48,9 @@ const accountLinks = computed(() => {
   }
 
   return [
-    { label: t('auth.login'), to: '/login' },
-    ...(configStore.registrationEnabled ? [{ label: t('auth.register'), to: '/register' }] : []),
-    { label: t('auth.forgotPasswordLink'), to: '/forgot-password' }
+    { label: t('auth.login'), to: loginPath() },
+    ...(configStore.registrationEnabled ? [{ label: t('auth.register'), to: registerPath() }] : []),
+    { label: t('auth.forgotPasswordLink'), to: forgotPasswordPath() }
   ]
 })
 
@@ -60,16 +61,16 @@ function handlePrimaryAction(): void {
   }
 
   if (isLoginRoute.value && configStore.registrationEnabled) {
-    void router.push('/register')
+    void router.push(registerPath())
     return
   }
 
   if (isRegisterRoute.value || isForgotPasswordRoute.value) {
-    void router.push('/login')
+    void router.push(loginPath())
     return
   }
 
-  void router.push('/login')
+  void router.push(loginPath())
 }
 
 void configStore.loadPublicConfig()
@@ -131,10 +132,10 @@ void configStore.loadPublicConfig()
             <RouterLink class="kawaii-footer-link transition-colors" to="/">
               {{ t('publicSite.nav.home') }}
             </RouterLink>
-            <RouterLink class="kawaii-footer-link transition-colors" to="/market">
+            <RouterLink class="kawaii-footer-link transition-colors" :to="marketPath()">
               {{ t('publicSite.nav.products') }}
             </RouterLink>
-            <RouterLink class="kawaii-footer-link transition-colors" to="/help">
+            <RouterLink class="kawaii-footer-link transition-colors" :to="helpPath()">
               {{ t('publicSite.nav.help') }}
             </RouterLink>
           </div>

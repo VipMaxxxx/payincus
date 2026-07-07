@@ -166,6 +166,7 @@ assert(
     themeMarket.includes("entry.reviewStatus !== 'listed'") &&
     themeMarket.includes('Theme market entry must pin a SHA256 checksum') &&
     themeMarket.includes('Theme package SHA256 mismatch') &&
+    themeMarket.includes('buildUnavailableThemeMarketIndex') &&
     themeMarket.includes('getCurrentVersionMetadata') &&
     themeMarket.includes('theme package validation required'),
   'theme market runtime must read a stable online index, trust only allowed hosts, require listed entries, pin SHA256, and enforce compatibility before install'
@@ -208,6 +209,8 @@ assert(
     adminThemeRoutes.includes('Theme config file must be a PNG, JPEG, or WebP image') &&
     adminThemeRoutes.includes('theme.config_file.upload') &&
     adminThemeRoutes.includes("fastify.get('/market'") &&
+    adminThemeRoutes.includes('Theme market index unavailable') &&
+    adminThemeRoutes.includes('buildUnavailableThemeMarketIndex') &&
     adminThemeRoutes.includes("fastify.post<{ Body: ThemeMarketInstallBody }>('/market/install'") &&
     adminThemeRoutes.includes('fetchThemeMarketIndex') &&
     adminThemeRoutes.includes('downloadMarketTheme') &&
@@ -264,6 +267,7 @@ assert(
     apiTypes.includes('export interface ThemePackageRecord') &&
     apiTypes.includes('export interface ThemeMarketEntry') &&
     apiTypes.includes('export interface ThemeMarketGovernance') &&
+    apiTypes.includes('unavailableReason?: string') &&
     apiTypes.includes('export interface ThemeMarketSubmission') &&
     apiTypes.includes('export interface ThemeMarketSubmissionScanResult') &&
     apiTypes.includes('export interface PayIncusThemeConfigField') &&
@@ -355,6 +359,7 @@ assert(
     pluginCenter.includes('publishThemeMarketIndex') &&
     pluginCenter.includes('主题投稿审核') &&
     pluginCenter.includes('主题市场') &&
+    pluginCenter.includes('主题市场源暂时不可用') &&
     pluginCenter.includes('uploadTheme') &&
     pluginCenter.includes('themeConfigFields') &&
     pluginCenter.includes('themeConfigGroups') &&

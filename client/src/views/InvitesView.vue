@@ -5,6 +5,7 @@ import api from '@/api'
 import type { InviteCostOption, UserInvite, UserInviteSummary } from '@/types/api'
 import { useToast } from '@/stores/toast'
 import { useThemeStore } from '@/stores/theme'
+import { dashboardPath } from '@/utils/app-paths'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 
@@ -157,7 +158,7 @@ function nextPage(): void {
         <h1 class="page-title">邀请码管理</h1>
         <p class="page-description">生成新的注册链接，并查看每个邀请码的使用情况。</p>
       </div>
-      <RouterLink to="/dashboard" class="btn-ghost w-full justify-center sm:w-auto">
+      <RouterLink :to="dashboardPath()" class="btn-ghost w-full justify-center sm:w-auto">
         返回概览
       </RouterLink>
     </div>
@@ -265,27 +266,77 @@ function nextPage(): void {
         <div v-else-if="invites.length === 0" class="p-8 text-center text-themed-muted">
           暂无邀请码
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-themed">
+        <div v-else class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="invite in invites"
+            :key="invite.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <code class="block truncate text-sm font-semibold text-themed-secondary" :title="invite.code">
+                  {{ invite.code }}
+                </code>
+                <div class="mt-1 text-xs text-themed-muted">
+                  {{ invite.costSnapshot?.displayAmount || '管理员生成' }}
+                </div>
+              </div>
+              <span class="badge shrink-0 whitespace-nowrap" :class="getStatus(invite).className">
+                {{ getStatus(invite).label }}
+              </span>
+            </div>
+
+            <div class="mt-4 rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-themed-muted">使用人</div>
+              <div v-if="invite.usedByUser" class="flex min-w-0 items-center gap-2">
+                <UserAvatar
+                  :username="invite.usedByUser.username"
+                  :email="invite.usedByUser.email"
+                  :avatar-style="invite.usedByUser.avatarStyle"
+                  :badge-id="invite.usedByUser.avatarBadgeId"
+                  :size="32"
+                />
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-themed">{{ invite.usedByUser.username }}</p>
+                  <p class="truncate text-xs text-themed-muted">{{ invite.usedByUser.email || '-' }}</p>
+                </div>
+              </div>
+              <span v-else class="text-sm text-themed-muted">-</span>
+            </div>
+
+            <div class="mt-3 rounded-lg bg-themed-secondary px-3 py-2 text-sm text-themed-muted">
+              <div>生成 {{ formatDate(invite.createdAt) }}</div>
+              <div v-if="invite.usedAt">使用 {{ formatDate(invite.usedAt) }}</div>
+              <div v-else-if="invite.expiresAt">过期 {{ formatDate(invite.expiresAt) }}</div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-2">
+              <button class="btn-ghost btn-sm justify-center" @click="copyText(invite.code, '邀请码已复制')">复制码</button>
+              <button class="btn-secondary btn-sm justify-center" @click="copyText(getInviteLink(invite), '邀请链接已复制')">复制链接</button>
+            </div>
+          </div>
+        </div>
+        <div v-if="invites.length > 0" class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed divide-y divide-themed">
             <thead>
               <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">邀请码</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">状态</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">使用人</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">生成成本</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">时间</th>
-                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-themed-muted">操作</th>
+                <th class="w-[20%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">邀请码</th>
+                <th class="w-[10%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">状态</th>
+                <th class="w-[24%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">使用人</th>
+                <th class="w-[14%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">生成成本</th>
+                <th class="w-[20%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">时间</th>
+                <th class="w-[12%] px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-themed-muted">操作</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
               <tr v-for="invite in invites" :key="invite.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 whitespace-nowrap">
-                  <code class="text-sm text-themed-secondary">{{ invite.code }}</code>
+                <td class="px-4 py-3">
+                  <code class="block truncate text-sm text-themed-secondary" :title="invite.code">{{ invite.code }}</code>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
                   <span class="badge" :class="getStatus(invite).className">{{ getStatus(invite).label }}</span>
                 </td>
-                <td class="px-4 py-3 min-w-[220px]">
+                <td class="px-4 py-3">
                   <div v-if="invite.usedByUser" class="flex items-center gap-2">
                     <UserAvatar
                       :username="invite.usedByUser.username"
@@ -301,16 +352,16 @@ function nextPage(): void {
                   </div>
                   <span v-else class="text-sm text-themed-muted">-</span>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-themed-muted">
-                  {{ invite.costSnapshot?.displayAmount || '管理员生成' }}
+                <td class="px-4 py-3 text-sm text-themed-muted">
+                  <div class="truncate">{{ invite.costSnapshot?.displayAmount || '管理员生成' }}</div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-themed-muted">
+                <td class="px-4 py-3 text-sm text-themed-muted">
                   <div>生成 {{ formatDate(invite.createdAt) }}</div>
                   <div v-if="invite.usedAt">使用 {{ formatDate(invite.usedAt) }}</div>
                   <div v-else-if="invite.expiresAt">过期 {{ formatDate(invite.expiresAt) }}</div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-right">
-                  <div class="inline-flex gap-2">
+                <td class="px-4 py-3 text-right">
+                  <div class="inline-flex flex-wrap justify-end gap-2">
                     <button class="btn-ghost btn-sm" @click="copyText(invite.code, '邀请码已复制')">复制码</button>
                     <button class="btn-secondary btn-sm" @click="copyText(getInviteLink(invite), '邀请链接已复制')">复制链接</button>
                   </div>
@@ -322,10 +373,10 @@ function nextPage(): void {
 
         <div v-if="total > 0" class="flex flex-col gap-3 border-t border-themed px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p class="text-sm text-themed-muted">共 {{ total }} 条</p>
-          <div class="flex items-center gap-2">
-            <button class="btn-ghost btn-sm" :disabled="page <= 1" @click="previousPage">上一页</button>
-            <span class="text-sm text-themed-muted">{{ page }} / {{ totalPages }}</span>
-            <button class="btn-ghost btn-sm" :disabled="page >= totalPages" @click="nextPage">下一页</button>
+          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex">
+            <button class="btn-ghost btn-sm justify-center" :disabled="page <= 1" @click="previousPage">上一页</button>
+            <span class="min-w-[72px] text-center text-sm text-themed-muted">{{ page }} / {{ totalPages }}</span>
+            <button class="btn-ghost btn-sm justify-center" :disabled="page >= totalPages" @click="nextPage">下一页</button>
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import api from '@/api'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import { useToast } from '@/stores/toast'
+import { instanceCreatePath } from '@/utils/app-paths'
 import type { FlashSaleCampaign, FlashSaleItem, FlashSaleReservation } from '@/types/api'
 
 const router = useRouter()
@@ -78,7 +79,7 @@ async function loadReservations(): Promise<void> {
 
 function buy(item: FlashSaleItem): void {
   void router.push({
-    path: '/instances/create',
+    path: instanceCreatePath(),
     query: {
       source: item.plan.package.sourceType,
       package: String(item.plan.package.id),
@@ -173,27 +174,54 @@ onMounted(loadData)
           </div>
           <button class="btn-secondary" :disabled="reservationsLoading" @click="loadReservations">刷新记录</button>
         </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-themed">
+        <div v-if="reservations.length === 0" class="px-5 py-8 text-center text-themed-muted">暂无抢购记录</div>
+        <div v-else class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="record in reservations"
+            :key="record.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate text-sm font-semibold text-themed" :title="record.campaignName">{{ record.campaignName }}</div>
+                <div class="mt-1 truncate text-xs text-themed-muted" :title="`${record.packageName} / ${record.planName}`">
+                  {{ record.packageName }} / {{ record.planName }}
+                </div>
+              </div>
+              <div class="shrink-0 text-right">
+                <div class="font-semibold text-orange-500">¥{{ record.amount.toFixed(2) }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ record.status }}</div>
+              </div>
+            </div>
+            <div class="mt-3 rounded-lg bg-themed-secondary px-3 py-2 text-xs text-themed-muted">
+              {{ formatDate(record.createdAt) }}
+            </div>
+          </div>
+        </div>
+        <div v-if="reservations.length > 0" class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed divide-y divide-themed">
             <thead>
               <tr class="text-left text-xs text-themed-muted">
-                <th class="px-5 py-3">活动</th>
-                <th class="px-5 py-3">套餐</th>
-                <th class="px-5 py-3">金额</th>
-                <th class="px-5 py-3">状态</th>
-                <th class="px-5 py-3">时间</th>
+                <th class="w-[24%] px-5 py-3">活动</th>
+                <th class="w-[28%] px-5 py-3">套餐</th>
+                <th class="w-[12%] px-5 py-3">金额</th>
+                <th class="w-[14%] px-5 py-3">状态</th>
+                <th class="w-[22%] px-5 py-3">时间</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed text-sm">
-              <tr v-if="reservations.length === 0">
-                <td colspan="5" class="px-5 py-8 text-center text-themed-muted">暂无抢购记录</td>
-              </tr>
               <tr v-for="record in reservations" :key="record.id">
-                <td class="px-5 py-3 text-themed">{{ record.campaignName }}</td>
-                <td class="px-5 py-3 text-themed-muted">{{ record.packageName }} / {{ record.planName }}</td>
-                <td class="px-5 py-3 text-orange-500">¥{{ record.amount.toFixed(2) }}</td>
-                <td class="px-5 py-3 text-themed-muted">{{ record.status }}</td>
-                <td class="px-5 py-3 text-themed-muted">{{ formatDate(record.createdAt) }}</td>
+                <td class="px-5 py-3 text-themed">
+                  <div class="truncate" :title="record.campaignName">{{ record.campaignName }}</div>
+                </td>
+                <td class="px-5 py-3 text-themed-muted">
+                  <div class="truncate" :title="`${record.packageName} / ${record.planName}`">{{ record.packageName }} / {{ record.planName }}</div>
+                </td>
+                <td class="px-5 py-3 text-orange-500 whitespace-nowrap">¥{{ record.amount.toFixed(2) }}</td>
+                <td class="px-5 py-3 text-themed-muted">
+                  <div class="truncate" :title="record.status">{{ record.status }}</div>
+                </td>
+                <td class="px-5 py-3 text-themed-muted whitespace-nowrap">{{ formatDate(record.createdAt) }}</td>
               </tr>
             </tbody>
           </table>

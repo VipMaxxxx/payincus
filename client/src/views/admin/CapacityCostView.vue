@@ -191,27 +191,91 @@ onMounted(loadOverview)
           <h2 class="text-lg font-semibold text-themed">Host 库存与成本</h2>
           <p class="mt-1 text-sm text-themed-muted">成本仅用于后台毛利估算，不参与实例创建、扣费或自动停售。</p>
         </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-themed text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="host in overview.hosts"
+            :key="host.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate font-medium text-themed">{{ host.name }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ host.location || '-' }} · {{ host.status }} · {{ host.instanceType }}</div>
+              </div>
+              <div class="shrink-0 text-right text-xs text-themed-muted">
+                <div>{{ formatNumber(host.capacity.instanceCount) }} 个实例</div>
+                <div class="mt-1">{{ formatTraffic(host.capacity.trafficUsedBytes) }}</div>
+              </div>
+            </div>
+            <div class="mt-4 space-y-2">
+              <div
+                v-for="item in [
+                  { label: 'CPU', ratio: host.capacity.cpuUsageRatio, text: `${formatNumber(host.capacity.cpuUsed)} / ${formatNumber(host.capacity.cpuTotal)}%` },
+                  { label: '内存', ratio: host.capacity.memoryUsageRatio, text: `${formatMb(host.capacity.memoryUsed)} / ${formatMb(host.capacity.memoryTotal)}` },
+                  { label: '磁盘', ratio: host.capacity.diskUsageRatio, text: `${formatMb(host.capacity.diskUsed)} / ${formatMb(host.capacity.diskTotal)}` },
+                  { label: '端口', ratio: host.capacity.natPortUsageRatio, text: `${formatNumber(host.capacity.natPortUsed)} / ${formatNumber(host.capacity.natPortTotal)}` }
+                ]"
+                :key="item.label"
+              >
+                <div class="flex justify-between gap-3 text-xs text-themed-muted">
+                  <span>{{ item.label }}</span>
+                  <span class="text-right">{{ item.text }} · {{ formatPercent(item.ratio) }}</span>
+                </div>
+                <div class="h-1.5 rounded bg-themed-muted">
+                  <div
+                    class="h-1.5 rounded"
+                    :class="usageBarClass(item.ratio)"
+                    :style="{ width: `${Math.min(item.ratio * 100, 100)}%` }"
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label class="text-xs text-themed-muted">
+                月成本
+                <input v-model.number="costForms[host.id].monthlyCost" type="number" min="0" step="0.01" class="input mt-1 w-full" />
+              </label>
+              <label class="text-xs text-themed-muted">
+                IPv4 成本
+                <input v-model.number="costForms[host.id].ipv4MonthlyCost" type="number" min="0" step="0.01" class="input mt-1 w-full" />
+              </label>
+              <label class="text-xs text-themed-muted">
+                每 TB 成本
+                <input v-model.number="costForms[host.id].trafficTbCost" type="number" min="0" step="0.01" class="input mt-1 w-full" />
+              </label>
+              <label class="text-xs text-themed-muted sm:col-span-2">
+                备注
+                <input v-model="costForms[host.id].notes" maxlength="500" class="input mt-1 w-full" placeholder="供应商、账期或成本口径" />
+              </label>
+            </div>
+            <div class="mt-4 flex justify-end">
+              <button class="btn-primary" :disabled="savingHostId === host.id" @click="saveCostProfile(host)">
+                {{ savingHostId === host.id ? '保存中' : '保存' }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed divide-y divide-themed text-sm">
             <thead class="bg-themed-muted/40 text-left text-xs uppercase text-themed-muted">
               <tr>
-                <th class="px-5 py-3">Host</th>
-                <th class="px-5 py-3">资源水位</th>
-                <th class="px-5 py-3">实例 / 流量</th>
-                <th class="px-5 py-3">月成本</th>
-                <th class="px-5 py-3">IPv4 / TB 成本</th>
-                <th class="px-5 py-3">备注</th>
-                <th class="px-5 py-3 text-right">操作</th>
+                <th class="w-[16%] px-5 py-3">Host</th>
+                <th class="w-[24%] px-5 py-3">资源水位</th>
+                <th class="w-[12%] px-5 py-3">实例 / 流量</th>
+                <th class="w-[10%] px-5 py-3">月成本</th>
+                <th class="w-[16%] px-5 py-3">IPv4 / TB 成本</th>
+                <th class="w-[14%] px-5 py-3">备注</th>
+                <th class="w-[8%] px-5 py-3 text-right">操作</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
               <tr v-for="host in overview.hosts" :key="host.id" class="align-top">
                 <td class="px-5 py-4">
-                  <div class="font-medium text-themed">{{ host.name }}</div>
-                  <div class="mt-1 text-xs text-themed-muted">{{ host.location || '-' }} · {{ host.status }} · {{ host.instanceType }}</div>
+                  <div class="truncate font-medium text-themed">{{ host.name }}</div>
+                  <div class="mt-1 truncate text-xs text-themed-muted">{{ host.location || '-' }} · {{ host.status }} · {{ host.instanceType }}</div>
                 </td>
                 <td class="px-5 py-4">
-                  <div class="space-y-2 min-w-[220px]">
+                  <div class="space-y-2">
                     <div
                       v-for="item in [
                         { label: 'CPU', ratio: host.capacity.cpuUsageRatio, text: `${formatNumber(host.capacity.cpuUsed)} / ${formatNumber(host.capacity.cpuTotal)}%` },
@@ -221,9 +285,9 @@ onMounted(loadOverview)
                       ]"
                       :key="item.label"
                     >
-                      <div class="flex justify-between text-xs text-themed-muted">
+                      <div class="flex justify-between gap-3 text-xs text-themed-muted">
                         <span>{{ item.label }}</span>
-                        <span>{{ item.text }} · {{ formatPercent(item.ratio) }}</span>
+                        <span class="truncate text-right">{{ item.text }} · {{ formatPercent(item.ratio) }}</span>
                       </div>
                       <div class="h-1.5 rounded bg-themed-muted">
                         <div
@@ -237,20 +301,20 @@ onMounted(loadOverview)
                 </td>
                 <td class="px-5 py-4 text-themed">
                   <div>{{ formatNumber(host.capacity.instanceCount) }} 个实例</div>
-                  <div class="mt-1 text-xs text-themed-muted">{{ formatTraffic(host.capacity.trafficUsedBytes) }}</div>
+                  <div class="mt-1 truncate text-xs text-themed-muted">{{ formatTraffic(host.capacity.trafficUsedBytes) }}</div>
                 </td>
                 <td class="px-5 py-4">
-                  <input v-model.number="costForms[host.id].monthlyCost" type="number" min="0" step="0.01" class="input w-28" />
+                  <input v-model.number="costForms[host.id].monthlyCost" type="number" min="0" step="0.01" class="input w-full" />
                 </td>
                 <td class="px-5 py-4">
-                  <div class="flex gap-2">
-                    <input v-model.number="costForms[host.id].ipv4MonthlyCost" type="number" min="0" step="0.01" class="input w-24" />
-                    <input v-model.number="costForms[host.id].trafficTbCost" type="number" min="0" step="0.01" class="input w-24" />
+                  <div class="grid grid-cols-2 gap-2">
+                    <input v-model.number="costForms[host.id].ipv4MonthlyCost" type="number" min="0" step="0.01" class="input w-full" />
+                    <input v-model.number="costForms[host.id].trafficTbCost" type="number" min="0" step="0.01" class="input w-full" />
                   </div>
                   <div class="mt-1 text-xs text-themed-muted">IPv4 / 每 TB</div>
                 </td>
                 <td class="px-5 py-4">
-                  <input v-model="costForms[host.id].notes" maxlength="500" class="input w-48" placeholder="供应商、账期或成本口径" />
+                  <input v-model="costForms[host.id].notes" maxlength="500" class="input w-full" placeholder="供应商、账期或成本口径" />
                 </td>
                 <td class="px-5 py-4 text-right">
                   <button class="btn-primary" :disabled="savingHostId === host.id" @click="saveCostProfile(host)">
@@ -268,38 +332,73 @@ onMounted(loadOverview)
           <h2 class="text-lg font-semibold text-themed">套餐毛利估算</h2>
           <p class="mt-1 text-sm text-themed-muted">按绑定 Host 的平均成本估算，价格不会因此自动变化。</p>
         </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-themed text-sm">
-            <thead class="bg-themed-muted/40 text-left text-xs uppercase text-themed-muted">
-              <tr>
-                <th class="px-5 py-3">套餐 / 方案</th>
-                <th class="px-5 py-3">月收入</th>
-                <th class="px-5 py-3">预计成本</th>
-                <th class="px-5 py-3">预计毛利</th>
-                <th class="px-5 py-3">毛利率</th>
-                <th class="px-5 py-3">已售 / 可售</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-themed">
-              <tr v-if="marginPlans.length === 0">
-                <td colspan="6" class="px-5 py-8 text-center text-themed-muted">暂无已绑定 Host 的启用方案</td>
-              </tr>
-              <tr v-for="plan in marginPlans" :key="plan.planId">
-                <td class="px-5 py-4">
-                  <div class="font-medium text-themed">{{ plan.packageName }}</div>
-                  <div class="mt-1 text-xs text-themed-muted">{{ plan.planName }}</div>
-                </td>
-                <td class="px-5 py-4 text-themed">{{ formatMoney(plan.revenueMonthly) }}</td>
-                <td class="px-5 py-4 text-themed">{{ formatMoney(plan.estimatedCostMonthly) }}</td>
-                <td class="px-5 py-4" :class="plan.estimatedMarginMonthly < 0 ? 'text-rose-600' : 'text-emerald-600'">
+        <div v-if="marginPlans.length === 0" class="px-5 py-8 text-center text-themed-muted">暂无已绑定 Host 的启用方案</div>
+        <template v-else>
+          <div class="space-y-3 p-4 lg:hidden">
+            <div
+              v-for="plan in marginPlans"
+              :key="plan.planId"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="truncate font-medium text-themed">{{ plan.packageName }}</div>
+                  <div class="mt-1 truncate text-xs text-themed-muted">{{ plan.planName }}</div>
+                </div>
+                <div class="shrink-0 text-right text-sm font-semibold" :class="plan.estimatedMarginMonthly < 0 ? 'text-rose-600' : 'text-emerald-600'">
                   {{ formatMoney(plan.estimatedMarginMonthly) }}
-                </td>
-                <td class="px-5 py-4 text-themed">{{ formatPercent(plan.marginRatio) }}</td>
-                <td class="px-5 py-4 text-themed">{{ formatNumber(plan.soldCount) }} / {{ formatNumber(plan.availableSlots) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                </div>
+              </div>
+              <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div class="text-themed-muted">月收入</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatMoney(plan.revenueMonthly) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">预计成本</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatMoney(plan.estimatedCostMonthly) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">毛利率</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatPercent(plan.marginRatio) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">已售 / 可售</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatNumber(plan.soldCount) }} / {{ formatNumber(plan.availableSlots) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed divide-y divide-themed text-sm">
+              <thead class="bg-themed-muted/40 text-left text-xs uppercase text-themed-muted">
+                <tr>
+                  <th class="w-[30%] px-5 py-3">套餐 / 方案</th>
+                  <th class="w-[14%] px-5 py-3">月收入</th>
+                  <th class="w-[14%] px-5 py-3">预计成本</th>
+                  <th class="w-[14%] px-5 py-3">预计毛利</th>
+                  <th class="w-[12%] px-5 py-3">毛利率</th>
+                  <th class="w-[16%] px-5 py-3">已售 / 可售</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-themed">
+                <tr v-for="plan in marginPlans" :key="plan.planId">
+                  <td class="px-5 py-4">
+                    <div class="truncate font-medium text-themed">{{ plan.packageName }}</div>
+                    <div class="mt-1 truncate text-xs text-themed-muted">{{ plan.planName }}</div>
+                  </td>
+                  <td class="px-5 py-4 text-themed">{{ formatMoney(plan.revenueMonthly) }}</td>
+                  <td class="px-5 py-4 text-themed">{{ formatMoney(plan.estimatedCostMonthly) }}</td>
+                  <td class="px-5 py-4" :class="plan.estimatedMarginMonthly < 0 ? 'text-rose-600' : 'text-emerald-600'">
+                    {{ formatMoney(plan.estimatedMarginMonthly) }}
+                  </td>
+                  <td class="px-5 py-4 text-themed">{{ formatPercent(plan.marginRatio) }}</td>
+                  <td class="px-5 py-4 text-themed">{{ formatNumber(plan.soldCount) }} / {{ formatNumber(plan.availableSlots) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </section>
     </template>
   </div>

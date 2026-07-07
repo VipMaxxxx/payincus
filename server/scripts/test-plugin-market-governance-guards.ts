@@ -53,6 +53,7 @@ assert.ok(
 
 assert.ok(
   clientTypes.includes('PluginMarketGovernance') &&
+    clientTypes.includes('unavailableReason?: string') &&
     clientTypes.includes("reviewStatus: 'pending' | 'listed' | 'delisted' | 'rejected'") &&
     clientTypes.includes("trustLevel: 'official' | 'verified' | 'third_party'") &&
     clientTypes.includes('revenueSharePercent') &&
@@ -67,6 +68,7 @@ assert.ok(
     pluginCenter.includes('可信来源') &&
     pluginCenter.includes('兼容范围') &&
     pluginCenter.includes('权限声明') &&
+    pluginCenter.includes('扩展市场源暂时不可用') &&
     pluginCenter.includes('buildMarketInstallConfirmation') &&
     pluginCenter.includes('canInstallMarketEntry(entry)'),
   'plugin center UI must disclose governance fields and require install confirmation'

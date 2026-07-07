@@ -83,6 +83,15 @@ assert.ok(
   'production proof workspace must explain read-only behavior, backup/restore boundaries, current proof progress, exchange live E2E operator proof, proof commands, final refs, and redaction rules'
 )
 
+assert.ok(
+  view.includes('class="space-y-3 p-4 lg:hidden"') &&
+    view.includes('class="hidden overflow-hidden lg:block"') &&
+    view.includes('table class="w-full table-fixed divide-y divide-themed text-sm"') &&
+    !view.includes('class="overflow-x-auto"') &&
+    !view.includes('table class="min-w-full'),
+  'production proof checklist must keep mobile cards and a fixed desktop table without broad horizontal overflow'
+)
+
 const forbiddenExecutionMarkers = [
   'api.',
   'fetch(',

@@ -96,6 +96,39 @@ export function sanitizeMailSourceForResponse<T extends MailSource>(
   }
 }
 
+export function sanitizeMailPlanForResponse<T extends { source: MailSource }>(
+  plan: T
+): Omit<T, 'source'> & { source: ReturnType<typeof sanitizeMailSourceForResponse> } {
+  return {
+    ...plan,
+    source: sanitizeMailSourceForResponse(plan.source)
+  }
+}
+
+export function sanitizeMailSubscriptionForResponse<T extends { source: MailSource }>(
+  subscription: T
+): Omit<T, 'source'> & { source: ReturnType<typeof sanitizeMailSourceForResponse> } {
+  return {
+    ...subscription,
+    source: sanitizeMailSourceForResponse(subscription.source)
+  }
+}
+
+export function sanitizeMailDomainForResponse<T extends { source: MailSource; adminPassword: string | null }>(
+  domain: T
+): Omit<T, 'source' | 'adminPassword'> & {
+  source: ReturnType<typeof sanitizeMailSourceForResponse>
+  adminPassword: string
+  adminPasswordConfigured: boolean
+} {
+  return {
+    ...domain,
+    source: sanitizeMailSourceForResponse(domain.source),
+    adminPassword: '',
+    adminPasswordConfigured: Boolean(domain.adminPassword)
+  }
+}
+
 export function mergeMailSourceApiKeyForUpdate(nextApiKey: string | null | undefined): string | undefined {
   if (
     nextApiKey === undefined ||

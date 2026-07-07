@@ -102,4 +102,26 @@ assert(
   'Admin flash sale UI and API must allow editing generated campaign content and item settings'
 )
 
+assert(
+  adminViewSource.includes('table class="w-full table-fixed divide-y divide-themed text-sm"') &&
+    adminViewSource.includes('table class="w-full table-fixed divide-y divide-themed text-sm"') &&
+    (adminViewSource.match(/class="space-y-3 p-4 lg:hidden"/g)?.length ?? 0) >= 2 &&
+    (adminViewSource.match(/class="hidden overflow-hidden lg:block"/g)?.length ?? 0) >= 2 &&
+    !adminViewSource.includes('class="overflow-x-auto"') &&
+    !adminViewSource.includes('table class="min-w-full'),
+  'Admin flash sale item and reservation tables must keep mobile cards and fixed desktop tables without broad horizontal overflow'
+)
+
+assert(
+  adminViewSource.includes('v-model.number="item.packagePlanId"') &&
+    adminViewSource.includes('v-model.number="item.flashPrice"') &&
+    adminViewSource.includes('v-model.number="item.totalStock"') &&
+    adminViewSource.includes('v-model.number="item.perUserLimit"') &&
+    adminViewSource.includes('v-model="item.allowCoupon"') &&
+    adminViewSource.includes('v-model="item.allowAff"') &&
+    adminViewSource.includes('@click="removeFlashSaleItem(index)"') &&
+    adminViewSource.includes('@click="loadReservations(selectedCampaign.id)"'),
+  'Admin flash sale responsive layout must preserve item edit fields, deletion, and reservation refresh actions'
+)
+
 console.log('flash sale guard checks passed')

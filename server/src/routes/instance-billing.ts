@@ -102,6 +102,16 @@ function formatUpgradeCapacityMessage(reason?: string | null): string {
   }
 }
 
+function serializePlanPriceYuan(price: unknown): number {
+  const value = Number(price)
+  return Number.isFinite(value) ? value / 100 : 0
+}
+
+function serializeInstanceBillingPriceYuan(price: unknown, fallbackPlanPrice: unknown): number {
+  const value = Number(price)
+  return Number.isFinite(value) && value > 0 ? value : serializePlanPriceYuan(fallbackPlanPrice)
+}
+
 async function checkExchangeBillingLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
   const exchangeLock = await getExchangeOperationLock(instanceId)
   if (!exchangeLock.locked) return false
@@ -873,13 +883,13 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
           oldPlan: {
             id: preview.oldPlan.id,
             name: preview.oldPlan.name,
-            price: Number(instance.billingPrice) || Number(preview.oldPlan.price),
+            price: serializeInstanceBillingPriceYuan(instance.billingPrice, preview.oldPlan.price),
             billingCycle: instance.billingCycle || preview.oldPlan.billingCycle
           },
           newPlan: {
             id: preview.newPlan.id,
             name: preview.newPlan.name,
-            price: Number(preview.newPlan.price),
+            price: serializePlanPriceYuan(preview.newPlan.price),
             billingCycle: preview.newPlan.billingCycle,
             isActive: preview.newPlan.isActive,
             isSoldOut: preview.newPlan.isSoldOut

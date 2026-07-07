@@ -545,8 +545,41 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
         </div>
       </form>
 
-      <div class="mt-6 overflow-x-auto">
-        <table class="min-w-full text-sm">
+      <div class="mt-6 space-y-3 lg:hidden">
+        <div v-if="oauthApps.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+          暂无对外 OAuth 应用。
+        </div>
+        <div v-for="appItem in oauthApps" :key="appItem.id" class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-medium text-themed">{{ appItem.name }}</div>
+              <div class="mt-1 break-all font-mono text-xs text-themed-muted">{{ appItem.clientId }}</div>
+            </div>
+            <span class="shrink-0" :class="appItem.enabled ? 'text-green-500' : 'text-yellow-500'">{{ appItem.enabled ? '启用' : '停用' }}</span>
+          </div>
+          <div class="mt-3 space-y-2 text-xs text-themed-muted">
+            <div>
+              <div class="mb-1 font-medium text-themed">Redirect URI</div>
+              <div v-for="uri in appItem.redirectUris" :key="uri" class="break-all">{{ uri }}</div>
+            </div>
+            <div>
+              <div class="mb-1 font-medium text-themed">Scope</div>
+              <div class="flex flex-wrap gap-1">
+                <span v-for="scope in appItem.scopes" :key="scope" class="rounded bg-themed px-2 py-1 font-mono text-[11px] text-themed">
+                  {{ scope }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button class="btn-secondary btn-sm" @click="editOAuthApp(appItem)">编辑</button>
+            <button class="btn-secondary btn-sm" @click="rotateOAuthAppSecret(appItem)">轮换 Secret</button>
+            <button class="btn-ghost btn-sm text-error" @click="deleteOAuthApp(appItem)">删除</button>
+          </div>
+        </div>
+      </div>
+      <div class="mt-6 hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed text-sm">
           <thead class="border-b border-themed text-left text-themed-muted">
             <tr>
               <th class="py-3 pr-4">应用</th>
@@ -623,8 +656,60 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
         <button class="btn-primary" @click="applyOAuthAuthorizationFilters">筛选</button>
       </div>
 
-      <div class="mt-6 overflow-x-auto">
-        <table class="min-w-full text-sm">
+      <div class="mt-6 space-y-3 lg:hidden">
+        <div v-if="oauthAuthorizations.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+          暂无 OAuth 授权记录。
+        </div>
+        <div
+          v-for="authorization in oauthAuthorizations"
+          :key="authorization.id"
+          class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-medium text-themed">{{ authorization.user.username }}</div>
+              <div class="mt-1 break-all text-xs text-themed-muted">#{{ authorization.user.id }} · {{ authorization.user.email || '无邮箱' }}</div>
+            </div>
+            <span class="shrink-0" :class="authorization.active ? 'text-green-500' : 'text-yellow-500'">
+              {{ formatOAuthAuthorizationStatus(authorization) }}
+            </span>
+          </div>
+          <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+            <div class="rounded-md bg-themed p-2">
+              <div class="text-themed-muted">应用</div>
+              <div class="mt-1 font-medium text-themed">{{ authorization.app.name }}</div>
+              <div class="mt-1 break-all font-mono">{{ authorization.app.clientId }}</div>
+            </div>
+            <div class="rounded-md bg-themed p-2">
+              <div class="text-themed-muted">活跃 Token</div>
+              <div class="mt-1 text-themed">Access: {{ authorization.tokenStats.activeAccessTokens }}</div>
+              <div class="mt-1 text-themed">Refresh: {{ authorization.tokenStats.activeRefreshTokens }}</div>
+            </div>
+            <div class="rounded-md bg-themed p-2 sm:col-span-2">
+              <div class="text-themed-muted">Scope</div>
+              <div class="mt-1 flex flex-wrap gap-1">
+                <span v-for="scope in authorization.scopes" :key="scope" class="rounded bg-themed-secondary px-2 py-1 font-mono text-[11px] text-themed">
+                  {{ scope }}
+                </span>
+              </div>
+            </div>
+            <div class="rounded-md bg-themed p-2 sm:col-span-2">
+              <div class="text-themed-muted">最后授权</div>
+              <div class="mt-1 text-themed">{{ new Date(authorization.lastAuthorizedAt).toLocaleString() }}</div>
+              <div v-if="authorization.revokedAt" class="mt-1 text-themed-muted">撤销：{{ new Date(authorization.revokedAt).toLocaleString() }}</div>
+            </div>
+          </div>
+          <button
+            class="btn-ghost btn-sm mt-3 text-error"
+            :disabled="Boolean(authorization.revokedAt)"
+            @click="revokeOAuthAuthorization(authorization)"
+          >
+            撤销授权
+          </button>
+        </div>
+      </div>
+      <div class="mt-6 hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed text-sm">
           <thead class="border-b border-themed text-left text-themed-muted">
             <tr>
               <th class="py-3 pr-4">用户</th>

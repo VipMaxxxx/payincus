@@ -194,33 +194,77 @@ onMounted(loadOrders)
     <section class="kawaii-card overflow-hidden rounded-2xl">
       <div v-if="loading" class="p-8 text-center text-sm text-themed-muted">正在加载订单...</div>
       <div v-else-if="orders.length === 0" class="p-8 text-center text-sm text-themed-muted">暂无订单记录</div>
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-themed">
+      <div v-else class="space-y-3 p-4 lg:hidden">
+        <div
+          v-for="order in orders"
+          :key="order.id"
+          class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="truncate text-sm font-semibold text-themed" :title="order.title">{{ order.title }}</div>
+              <div class="mt-1 truncate font-mono text-xs text-themed-muted" :title="order.orderNo">{{ order.orderNo }}</div>
+            </div>
+            <span :class="['inline-flex shrink-0 rounded-full border px-2 py-0.5 text-xs', statusClass(order.status)]">
+              {{ statusLabel(order) }}
+            </span>
+          </div>
+
+          <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">类型</div>
+              <div class="mt-1 truncate text-themed">{{ sourceLabel(order.sourceType) }}</div>
+            </div>
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">金额</div>
+              <div class="mt-1 font-semibold text-themed">{{ formatMoney(order.amount) }}</div>
+            </div>
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">关联实例</div>
+              <div class="mt-1 truncate text-themed" :title="instanceName(order)">{{ instanceName(order) }}</div>
+            </div>
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">时间</div>
+              <div class="mt-1 text-xs text-themed">{{ formatTime(order.createdAt) }}</div>
+            </div>
+          </div>
+
+          <div class="mt-4 flex justify-end">
+            <button class="btn btn-sm btn-outline" @click="openDetail(order)">详情</button>
+          </div>
+        </div>
+      </div>
+      <div v-if="orders.length > 0" class="hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed divide-y divide-themed">
           <thead class="bg-themed-tertiary">
             <tr class="text-left text-xs font-medium text-themed-muted">
-              <th class="px-4 py-3">订单</th>
-              <th class="px-4 py-3">类型</th>
-              <th class="px-4 py-3">金额</th>
-              <th class="px-4 py-3">状态</th>
-              <th class="px-4 py-3">关联实例</th>
-              <th class="px-4 py-3">时间</th>
-              <th class="px-4 py-3 text-right">操作</th>
+              <th class="w-[25%] px-4 py-3">订单</th>
+              <th class="w-[12%] px-4 py-3">类型</th>
+              <th class="w-[11%] px-4 py-3">金额</th>
+              <th class="w-[11%] px-4 py-3">状态</th>
+              <th class="w-[17%] px-4 py-3">关联实例</th>
+              <th class="w-[16%] px-4 py-3">时间</th>
+              <th class="w-[8%] px-4 py-3 text-right">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-themed">
             <tr v-for="order in orders" :key="order.id" class="text-sm">
               <td class="px-4 py-3">
-                <div class="font-medium text-themed">{{ order.title }}</div>
-                <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+                <div class="truncate font-medium text-themed" :title="order.title">{{ order.title }}</div>
+                <div class="truncate font-mono text-xs text-themed-muted" :title="order.orderNo">{{ order.orderNo }}</div>
               </td>
-              <td class="px-4 py-3 text-themed-muted">{{ sourceLabel(order.sourceType) }}</td>
-              <td class="px-4 py-3 font-medium text-themed">{{ formatMoney(order.amount) }}</td>
+              <td class="px-4 py-3 text-themed-muted">
+                <div class="truncate">{{ sourceLabel(order.sourceType) }}</div>
+              </td>
+              <td class="px-4 py-3 font-medium text-themed whitespace-nowrap">{{ formatMoney(order.amount) }}</td>
               <td class="px-4 py-3">
-                <span :class="['inline-flex rounded-full border px-2 py-0.5 text-xs', statusClass(order.status)]">{{ statusLabel(order) }}</span>
+                <span :class="['inline-flex max-w-full rounded-full border px-2 py-0.5 text-xs', statusClass(order.status)]">{{ statusLabel(order) }}</span>
               </td>
-              <td class="px-4 py-3 text-themed-muted">{{ instanceName(order) }}</td>
-              <td class="px-4 py-3 text-themed-muted">{{ formatTime(order.createdAt) }}</td>
-              <td class="px-4 py-3 text-right">
+              <td class="px-4 py-3 text-themed-muted">
+                <div class="truncate" :title="instanceName(order)">{{ instanceName(order) }}</div>
+              </td>
+              <td class="px-4 py-3 text-themed-muted whitespace-nowrap">{{ formatTime(order.createdAt) }}</td>
+              <td class="px-4 py-3 text-right whitespace-nowrap">
                 <button class="btn btn-sm btn-outline" @click="openDetail(order)">详情</button>
               </td>
             </tr>
@@ -228,12 +272,12 @@ onMounted(loadOrders)
         </table>
       </div>
 
-      <div class="flex items-center justify-between border-t border-themed px-4 py-3 text-sm text-themed-muted">
+      <div class="flex flex-col items-stretch justify-between gap-3 border-t border-themed px-4 py-3 text-sm text-themed-muted sm:flex-row sm:items-center">
         <span>共 {{ total }} 条记录</span>
-        <div class="flex items-center gap-2">
-          <button class="btn btn-sm btn-outline" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
-          <span>{{ page }} / {{ totalPages }}</span>
-          <button class="btn btn-sm btn-outline" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
+        <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex">
+          <button class="btn btn-sm btn-outline justify-center" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
+          <span class="min-w-[72px] text-center">{{ page }} / {{ totalPages }}</span>
+          <button class="btn btn-sm btn-outline justify-center" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
         </div>
       </div>
     </section>

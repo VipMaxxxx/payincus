@@ -17,7 +17,7 @@ import DistroIcon from '@/components/icons/DistroIcon.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
 import InstanceOrderMenu from '@/components/instance/InstanceOrderMenu.vue'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel } from '@/utils/freeSiteFun'
-import { instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'
+import { exchangePath, instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'InstancesView' })
@@ -64,6 +64,7 @@ void configStore.loadPublicConfig()
 
 const instances = ref<Instance[]>([])
 const loading = ref<boolean>(true)
+const listError = ref<string>('')
 const actionLoading = ref<Record<number, string>>({})
 const orderLoading = ref<boolean>(false)
 const recentlyOrderedInstanceId = ref<number | null>(null)
@@ -292,6 +293,25 @@ function setInstanceLayoutMode(mode: InstanceLayoutMode): void {
   }
 }
 
+function prepareCreatedInstanceRefresh(): boolean {
+  if (!route.query.created) return false
+
+  search.value = ''
+  countryFilter.value = null
+  page.value = 1
+  selectedIds.value = new Set()
+  loading.value = true
+  return true
+}
+
+function clearCreatedInstanceRouteHint(): void {
+  if (!route.query.created) return
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.created
+  void router.replace({ path: route.path, query: nextQuery })
+}
+
 onMounted(async (): Promise<void> => {
   updateViewportState()
   loadInstanceLayoutPreference()
@@ -314,8 +334,10 @@ onMounted(async (): Promise<void> => {
     filterUserId.value = null
     filterUserName.value = ''
   }
-  
-  await loadInstances()
+
+  const forceReload = prepareCreatedInstanceRefresh()
+  await loadInstances(forceReload)
+  clearCreatedInstanceRouteHint()
   // 每 15 秒自动刷新
   refreshInterval = setInterval(loadInstances, 15000)
 })
@@ -373,8 +395,10 @@ onActivated(async () => {
     page.value = 1
   }
   
+  const forceReload = prepareCreatedInstanceRefresh()
   // 总是重新加载数据以确保最新
-  await loadInstances()
+  await loadInstances(forceReload)
+  clearCreatedInstanceRouteHint()
 })
 
 async function loadInstances(force = false): Promise<void> {
@@ -392,6 +416,7 @@ async function loadInstances(force = false): Promise<void> {
   ) return
   
   try {
+    listError.value = ''
     const params: { page: number; pageSize: number; search: string; userId?: number } = {
       page: page.value,
       pageSize: pageSize.value,
@@ -426,6 +451,7 @@ async function loadInstances(force = false): Promise<void> {
     }
   } catch (error) {
     console.error('Failed to load instances:', error)
+    listError.value = translateError(error) || t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -757,7 +783,7 @@ function getInstanceExchangeState(instance: Instance): { label: string; hint: st
 }
 
 function openInstanceExchange(instance: Instance): void {
-  void router.push({ path: '/exchange', query: { instanceId: String(instance.id) } })
+  void router.push({ path: exchangePath(), query: { instanceId: String(instance.id) } })
 }
 
 function canResetInstanceTraffic(instance: Instance): boolean {
@@ -1751,6 +1777,27 @@ async function confirmBatchDestroy(): Promise<void> {
       :cols="isDesktopViewport ? 3 : 1"
     />
 
+    <!-- 加载失败 -->
+    <div v-else-if="listError" class="card p-12 text-center">
+      <svg
+        class="w-16 h-16 mx-auto mb-4"
+        :class="themeStore.isDark ? 'text-red-400' : 'text-red-500'"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      </svg>
+      <h3
+        class="text-lg font-medium mb-2"
+        :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'"
+      >
+        {{ $t('common.loadFailed') }}
+      </h3>
+      <p class="text-themed-muted mb-4">{{ listError }}</p>
+      <button class="btn-primary" @click="loadInstances(true)">{{ $t('common.retry') }}</button>
+    </div>
+
     <!-- 空状态 -->
     <div v-else-if="instances.length === 0" class="card p-12 text-center">
       <svg 
@@ -1773,8 +1820,8 @@ async function confirmBatchDestroy(): Promise<void> {
     <!-- 实例列表 -->
     <template v-else>
       <!-- 列表布局 -->
-      <div v-if="instanceLayoutMode === 'list'" class="hidden sm:block card overflow-x-auto">
-        <table class="w-full min-w-[1180px]">
+      <div v-if="instanceLayoutMode === 'list'" class="hidden overflow-hidden sm:block card">
+        <table class="w-full table-fixed">
           <thead
             class="border-b"
             :class="themeStore.isDark ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-50 border-gray-200'"

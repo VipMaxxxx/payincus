@@ -11,6 +11,7 @@ const authRouteSource = readFileSync(resolve(__dirname, '../src/routes/auth.ts')
 const usersRouteSource = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
 const oauthRouteSource = readFileSync(resolve(__dirname, '../src/routes/oauth.ts'), 'utf8')
 const loginRecordsDbSource = readFileSync(resolve(__dirname, '../src/db/login-records.ts'), 'utf8')
+const turnstileLibSource = readFileSync(resolve(__dirname, '../src/lib/turnstile.ts'), 'utf8')
 const adminUsersViewSource = readFileSync(resolve(__dirname, '../../client/src/views/admin/UsersView.vue'), 'utf8')
 const apiSource = readFileSync(resolve(__dirname, '../../client/src/api/index.ts'), 'utf8')
 const adminApiSource = readFileSync(resolve(__dirname, '../../client/src/api/admin.ts'), 'utf8')
@@ -21,6 +22,10 @@ function routeSection(source: string, startMarker: string, endMarker: string): s
   const end = source.indexOf(endMarker, start)
   assert.notEqual(end, -1, `missing route end marker: ${endMarker}`)
   return source.slice(start, end)
+}
+
+function countOccurrences(source: string, needle: string): number {
+  return source.split(needle).length - 1
 }
 
 const adminResetPasswordRoute = routeSection(
@@ -104,6 +109,17 @@ assert.ok(
 )
 
 assert.ok(
+  appSource.includes('errorResponseBuilder: (_request, context) => {') &&
+    appSource.includes("new Error('Too many requests, please try again later')") &&
+    appSource.includes('error.statusCode = context.statusCode') &&
+    appSource.includes("error.code = 'RATE_LIMIT_EXCEEDED'") &&
+    appSource.includes('error.retryAfter = context.after') &&
+    appSource.includes('return error') &&
+    !appSource.includes('errorResponseBuilder: (_request, context) => ({'),
+  'rate limit errorResponseBuilder must throw an Error with statusCode so throttled requests return 429 instead of 500'
+)
+
+assert.ok(
   appSource.includes("fastify.decorate('authenticate', async function") &&
     appSource.includes('await request.jwtVerify()') &&
     appSource.includes('await ensureActiveAccessToken(request, reply)'),
@@ -136,6 +152,18 @@ assert.ok(
   loginRoute.includes('findUserByUsernameOrEmail(username)') &&
     !loginRoute.includes("username: { type: 'string', minLength: 3, maxLength: 32 }"),
   'login schema must not cap username-or-email identifiers at the registration username length'
+)
+
+const turnstileDisabledReturnIndex = turnstileLibSource.indexOf('if (!config.enabled) {\n            return\n        }')
+const turnstileConfigIncompleteIndex = turnstileLibSource.indexOf('if (!config.siteKey || !config.secretKey)')
+const turnstileTokenReadIndex = turnstileLibSource.indexOf('const token = (request.body as { turnstileToken?: string })?.turnstileToken')
+assert.notEqual(turnstileDisabledReturnIndex, -1, 'Turnstile verifier must skip when the feature flag is disabled')
+assert.notEqual(turnstileConfigIncompleteIndex, -1, 'Turnstile verifier must require both site key and secret key before enforcing tokens')
+assert.notEqual(turnstileTokenReadIndex, -1, 'Turnstile verifier token read not found')
+assert.ok(
+  turnstileDisabledReturnIndex < turnstileTokenReadIndex &&
+    turnstileConfigIncompleteIndex < turnstileTokenReadIndex,
+  'Turnstile verifier must not require tokens before confirming the feature is enabled and fully configured'
 )
 
 assert.ok(
@@ -241,6 +269,40 @@ assert.ok(
     !adminUsersViewSource.includes('copyGeneratedPassword'),
   'admin users UI must not display or copy server-generated plaintext reset passwords'
 )
+
+assert.ok(
+  countOccurrences(adminUsersViewSource, 'class="space-y-3 lg:hidden"') >= 3 &&
+    countOccurrences(adminUsersViewSource, 'class="card hidden overflow-hidden lg:block"') >= 2 &&
+    adminUsersViewSource.includes('table class="w-full table-fixed"') &&
+    adminUsersViewSource.includes('table class="w-full table-fixed"') &&
+    adminUsersViewSource.includes('table class="w-full table-fixed text-sm"') &&
+    adminUsersViewSource.includes('class="hidden overflow-hidden rounded-lg border border-themed lg:block"') &&
+    !adminUsersViewSource.includes('v-else class="card overflow-x-auto"') &&
+    !adminUsersViewSource.includes('table class="w-full min-w-[800px]"'),
+  'admin users UI must provide mobile cards and fixed desktop tables without the old horizontal overflow table shells'
+)
+
+for (const actionBinding of [
+  '@click="openBalanceModal(user)"',
+  '@click="openPointsModal(user)"',
+  '@click="openHostingBalanceModal(user)"',
+  '@click="viewUserInstances(user)"',
+  '@click="openLoginRecordsModal(user)"',
+  '@click="openSendMessageModal(user)"',
+  '@click="openResetPasswordModal(user)"',
+  '@click="toggleUserRole(user)"',
+  '@click="openDisable2FAModal(user)"',
+  '@click="openUnbindGitHubModal(user)"',
+  '@click="toggleUserStatus(user)"',
+  '@click="deleteInvite(invite)"',
+  '@click="changeHostingBalanceLogsPage(hostingBalanceLogsPage - 1)"',
+  '@click="changeHostingBalanceLogsPage(hostingBalanceLogsPage + 1)"'
+] as const) {
+  assert.ok(
+    adminUsersViewSource.includes(actionBinding),
+    `admin users responsive UI must preserve action binding: ${actionBinding}`
+  )
+}
 
 for (const [name, route] of [
   ['admin password reset', adminResetPasswordRoute],

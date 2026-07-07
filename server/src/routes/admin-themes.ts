@@ -14,7 +14,7 @@ import {
 } from '../db/themes.js'
 import { createLog, LogModule, LogResult } from '../db/logs.js'
 import { getThemeDataDir, getThemePackageMaxBytes, getThemeStagingDir, resolveThemeAsset, validateAndExtractThemePackage, type PayIncusThemeManifest } from '../lib/theme-package.js'
-import { downloadMarketTheme, fetchThemeMarketIndex } from '../lib/theme-market.js'
+import { buildUnavailableThemeMarketIndex, downloadMarketTheme, fetchThemeMarketIndex } from '../lib/theme-market.js'
 import { getCombinedAdminIdAllowlist } from '../lib/runtime-settings.js'
 
 interface ThemeParams {
@@ -225,7 +225,12 @@ export default async function adminThemeRoutes(fastify: FastifyInstance) {
   fastify.get('/market', {
     onRequest: [fastify.authenticateAdmin]
   }, async () => {
-    return await fetchThemeMarketIndex()
+    try {
+      return await fetchThemeMarketIndex()
+    } catch (error) {
+      fastify.log.warn({ err: error }, 'Theme market index unavailable')
+      return buildUnavailableThemeMarketIndex()
+    }
   })
 
   fastify.post<{ Body: ThemeMarketInstallBody }>('/market/install', {

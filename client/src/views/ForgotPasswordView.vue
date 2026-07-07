@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
@@ -7,8 +7,10 @@ import { useToast } from '@/stores/toast'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { focusTurnstileSection, readTurnstileToken } from '@/utils/turnstile'
+import { translateError } from '@/utils/errorHandler'
 import api from '@/api'
 import { useBrand } from '@/composables/useBrand'
+import { loginPath } from '@/utils/app-paths'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -32,6 +34,7 @@ const turnstileSiteKey = ref<string>('')
 const turnstileToken = ref<string>('')
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 const turnstileSectionRef = ref<HTMLElement | null>(null)
+const isTurnstileChallengeAvailable = computed<boolean>(() => turnstileEnabled.value && Boolean(turnstileSiteKey.value))
 
 onMounted(async (): Promise<void> => {
   try {
@@ -48,7 +51,7 @@ function onTurnstileExpire() {
 }
 
 function getForgotPasswordTurnstileToken(): string | null | undefined {
-  if (!turnstileEnabled.value) return undefined
+  if (!isTurnstileChallengeAvailable.value) return undefined
 
   const token = readTurnstileToken(turnstileRef.value, turnstileToken.value)
   if (token) {
@@ -84,7 +87,7 @@ async function sendVerificationCode(): Promise<void> {
     }
     turnstileToken.value = ''
   } catch (err: any) {
-    error.value = err?.message || t('common.error')
+    error.value = translateError(err)
     // Reset turnstile on error
     if (turnstileRef.value) {
       turnstileRef.value.reset?.()
@@ -150,10 +153,10 @@ async function resetPassword(): Promise<void> {
     
     // 跳转到登录页面
     setTimeout(() => {
-      router.push('/login')
+      router.push(loginPath())
     }, 2000)
   } catch (err: any) {
-    error.value = err?.message || t('common.error')
+    error.value = translateError(err)
     // Reset turnstile on error
     if (turnstileRef.value) {
       turnstileRef.value.reset?.()
@@ -228,7 +231,7 @@ function backToEmail() {
 
           <!-- Turnstile 验证 -->
           <div
-            v-if="turnstileEnabled && turnstileSiteKey"
+            v-if="isTurnstileChallengeAvailable"
             ref="turnstileSectionRef"
             tabindex="-1"
             class="rounded-lg border p-3"
@@ -264,7 +267,7 @@ function backToEmail() {
           <button
             type="button"
             class="btn-ghost w-full"
-            @click="router.push('/login')"
+            @click="router.push(loginPath())"
           >
             {{ $t('common.back') }}
           </button>
@@ -336,7 +339,7 @@ function backToEmail() {
 
           <!-- Turnstile 验证 -->
           <div
-            v-if="turnstileEnabled && turnstileSiteKey"
+            v-if="isTurnstileChallengeAvailable"
             ref="turnstileSectionRef"
             tabindex="-1"
             class="rounded-lg border p-3"
@@ -382,7 +385,7 @@ function backToEmail() {
       <p class="mt-6 text-center text-sm" :class="'text-themed-muted'">
         {{ $t('auth.rememberPassword') }}
         <RouterLink 
-          to="/login" 
+          :to="loginPath()"
           class="transition-colors"
           :class="'text-themed-muted hover:text-themed'"
         >

@@ -4,6 +4,7 @@ import { useRoute, RouterLink } from 'vue-router'
 import api from '@/api'
 import PluginFrame from '@/components/plugins/PluginFrame.vue'
 import type { PluginClientExtension } from '@/types/api'
+import { dashboardPath } from '@/utils/app-paths'
 
 const route = useRoute()
 const loading = ref(true)
@@ -41,7 +42,7 @@ onMounted(async () => {
     <div v-else class="card p-8 text-center">
       <h1 class="text-xl font-semibold text-themed">插件不可用</h1>
       <p class="mt-2 text-sm text-themed-muted">该插件页面未启用，或当前账号无权访问。</p>
-      <RouterLink to="/dashboard" class="btn-primary mt-5 inline-flex">返回控制台</RouterLink>
+      <RouterLink :to="dashboardPath()" class="btn-primary mt-5 inline-flex">返回控制台</RouterLink>
     </div>
   </div>
 </template>

@@ -121,6 +121,27 @@ assert.ok(
 )
 
 assert.ok(
+  deliveryViewSource.match(/class="space-y-3 p-4 lg:hidden"/g)?.length === 2 &&
+    deliveryViewSource.match(/class="hidden overflow-hidden lg:block"/g)?.length === 2 &&
+    deliveryViewSource.includes('table class="w-full table-fixed text-left text-sm"') &&
+    deliveryViewSource.includes('table class="w-full table-fixed text-left text-sm"') &&
+    !deliveryViewSource.includes('<div class="overflow-x-auto">') &&
+    !deliveryViewSource.includes('table class="min-w-full text-left text-sm"'),
+  'delivery center must use mobile cards and fixed desktop tables instead of mobile horizontal table scrolling'
+)
+
+assert.ok(
+  deliveryViewSource.includes('@click="runRepairCaseAction(item, \'retry-sync\')"') &&
+    deliveryViewSource.includes('@click="runRepairCaseAction(item, \'recovered\')"') &&
+    deliveryViewSource.includes('@click="runRepairCaseAction(item, \'closed\')"') &&
+    deliveryViewSource.includes('@click="selectedTaskId = task.id"') &&
+    deliveryViewSource.includes(':class="selectedTaskId === task.id ?') &&
+    deliveryViewSource.includes('@click="goRepairPage(repairPage - 1)"') &&
+    deliveryViewSource.includes('@click="goPage(page - 1)"'),
+  'delivery center responsive layout must preserve repair actions, task selection, and pagination controls'
+)
+
+assert.ok(
   notifierSource.includes("| 'delivery_assurance_update'") &&
     notifierSource.includes('delivery_assurance_update:') &&
     notifierSource.includes('交付保障通知'),

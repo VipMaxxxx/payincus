@@ -442,15 +442,47 @@ const regionOptions = [
         {{ t('admin.mail.noSources') }}
       </div>
 
-      <div v-else class="card overflow-x-auto">
-        <table class="table-auto w-full min-w-[640px]">
+      <template v-else>
+        <div class="space-y-3 lg:hidden">
+          <div v-for="source in sources" :key="source.id" class="card p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex min-w-0 items-center gap-2">
+                <FlagIcon :code="source.code" class="w-5 h-5 shrink-0" />
+                <div class="min-w-0">
+                  <div class="truncate text-sm font-medium text-themed">{{ source.name }}</div>
+                  <div class="text-xs uppercase text-themed-muted">{{ source.code }}</div>
+                </div>
+              </div>
+              <div class="shrink-0 text-right text-sm text-themed">
+                {{ source.planCount || 0 }} {{ t('admin.mail.plans') }}
+              </div>
+            </div>
+            <div class="mt-3 break-all font-mono text-xs text-themed-muted">{{ source.apiUrl }}</div>
+            <div class="mt-4 flex justify-end gap-2 border-t border-themed pt-3">
+              <button class="btn btn-ghost btn-xs" @click="openEditSourceModal(source)">
+                {{ t('common.edit') }}
+              </button>
+              <button
+                class="btn btn-ghost btn-xs text-error"
+                :disabled="actionLoading === `delete-source-${source.id}`"
+                @click="deleteSource(source)"
+              >
+                <span v-if="actionLoading === `delete-source-${source.id}`" class="loading loading-spinner loading-xs"></span>
+                <span v-else>{{ t('common.delete') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
           <thead>
             <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.region') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.name') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.apiEndpoint') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.plans') }}</th>
-              <th class="px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
+              <th class="w-[12%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.region') }}</th>
+              <th class="w-[22%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.name') }}</th>
+              <th class="w-[38%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.apiEndpoint') }}</th>
+              <th class="w-[12%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.plans') }}</th>
+              <th class="w-[16%] px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-themed">
@@ -461,8 +493,8 @@ const regionOptions = [
                   <span class="text-sm text-themed">{{ source.code.toUpperCase() }}</span>
                 </div>
               </td>
-              <td class="px-4 py-3 text-sm text-themed">{{ source.name }}</td>
-              <td class="px-4 py-3 text-sm text-themed-muted font-mono text-xs">{{ source.apiUrl }}</td>
+              <td class="px-4 py-3 text-sm text-themed truncate">{{ source.name }}</td>
+              <td class="px-4 py-3 font-mono text-xs text-themed-muted truncate" :title="source.apiUrl">{{ source.apiUrl }}</td>
               <td class="px-4 py-3 text-sm text-themed">{{ source.planCount || 0 }}</td>
               <td class="px-4 py-3 text-right">
                 <button class="btn btn-ghost btn-xs" @click="openEditSourceModal(source)">
@@ -480,7 +512,8 @@ const regionOptions = [
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+      </template>
     </div>
 
     <!-- 方案 TAB -->
@@ -495,16 +528,58 @@ const regionOptions = [
         {{ t('admin.mail.noPlans') }}
       </div>
 
-      <div v-else class="card overflow-x-auto">
-        <table class="table-auto w-full min-w-[640px]">
+      <template v-else>
+        <div class="space-y-3 lg:hidden">
+          <div v-for="plan in plans" :key="plan.id" class="card p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate text-sm font-medium text-themed">{{ plan.name }}</div>
+                <div v-if="plan.description" class="mt-1 line-clamp-2 text-xs text-themed-muted">{{ plan.description }}</div>
+              </div>
+              <div class="shrink-0 text-right text-sm font-medium text-themed">
+                {{ formatPrice(plan.price) }}/{{ plan.billingCycle === 'monthly' ? t('mail.month') : t('mail.year') }}
+              </div>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.mail.source') }}</div>
+                <div class="mt-1 truncate text-themed">{{ plan.source?.name || '-' }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.mail.domainLimit') }}</div>
+                <div class="mt-1 text-themed">{{ plan.domainLimit }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.mail.diskLimit') }}</div>
+                <div class="mt-1 text-themed">{{ plan.diskLimitGb }} GB</div>
+              </div>
+            </div>
+            <div class="mt-4 flex justify-end gap-2 border-t border-themed pt-3">
+              <button class="btn btn-ghost btn-xs" @click="openEditPlanModal(plan)">
+                {{ t('common.edit') }}
+              </button>
+              <button
+                class="btn btn-ghost btn-xs text-error"
+                :disabled="actionLoading === `delete-plan-${plan.id}`"
+                @click="deletePlan(plan)"
+              >
+                <span v-if="actionLoading === `delete-plan-${plan.id}`" class="loading loading-spinner loading-xs"></span>
+                <span v-else>{{ t('common.delete') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
           <thead>
             <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.name') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.source') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.domainLimit') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.diskLimit') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.price') }}</th>
-              <th class="px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
+              <th class="w-[26%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.name') }}</th>
+              <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.source') }}</th>
+              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.domainLimit') }}</th>
+              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.diskLimit') }}</th>
+              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.price') }}</th>
+              <th class="w-[14%] px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-themed">
@@ -513,7 +588,7 @@ const regionOptions = [
                 <div class="text-sm font-medium text-themed">{{ plan.name }}</div>
                 <div v-if="plan.description" class="text-xs text-themed-muted">{{ plan.description }}</div>
               </td>
-              <td class="px-4 py-3 text-sm text-themed">{{ plan.source?.name || '-' }}</td>
+              <td class="px-4 py-3 text-sm text-themed truncate">{{ plan.source?.name || '-' }}</td>
               <td class="px-4 py-3 text-sm text-themed">{{ plan.domainLimit }}</td>
               <td class="px-4 py-3 text-sm text-themed">{{ plan.diskLimitGb }} GB</td>
               <td class="px-4 py-3 text-sm text-themed">
@@ -535,7 +610,8 @@ const regionOptions = [
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+      </template>
     </div>
 
     <!-- 订阅 TAB -->
@@ -569,16 +645,57 @@ const regionOptions = [
         {{ subscriptionsSearch ? t('common.noSearchResults') : t('admin.mail.noSubscriptions') }}
       </div>
 
-      <div v-else class="card overflow-x-auto">
-        <table class="table-auto w-full min-w-[800px]">
+      <template v-else>
+        <div class="space-y-3 lg:hidden">
+          <div v-for="sub in subscriptions" :key="sub.id" class="card p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex min-w-0 items-center gap-3">
+                <UserAvatar :username="sub.user?.username || ''" :email="sub.user?.email" :avatar-style="sub.user?.avatarStyle" :badge-id="sub.user?.avatarBadgeId || null" :size="32" />
+                <div class="min-w-0">
+                  <div class="truncate text-sm font-medium text-themed">{{ sub.user?.username || '-' }}</div>
+                  <div class="truncate text-xs text-themed-muted">ID: {{ sub.user?.id || '-' }} · {{ sub.user?.email || '-' }}</div>
+                </div>
+              </div>
+              <span :class="['badge badge-sm shrink-0', getStatusBadge(sub.status)]">
+                {{ t('mail.status.' + sub.status) }}
+              </span>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.mail.plan') }}</div>
+                <div class="mt-1 truncate text-themed">{{ sub.plan?.name || '-' }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.mail.expiresAt') }}</div>
+                <div class="mt-1 text-themed">{{ formatDate(sub.expiresAt) }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('common.createdAt') }}</div>
+                <div class="mt-1 text-themed-muted">{{ formatDate(sub.createdAt) }}</div>
+              </div>
+            </div>
+            <div class="mt-4 flex justify-end border-t border-themed pt-3">
+              <button
+                class="btn btn-ghost btn-xs text-error"
+                :disabled="actionLoading === 'unsub'"
+                @click="openUnsubModal(sub)"
+              >
+                {{ t('admin.mail.unsub.button') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
           <thead>
             <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.user') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.plan') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.status') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.expiresAt') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.createdAt') }}</th>
-              <th class="px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
+              <th class="w-[30%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.user') }}</th>
+              <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.plan') }}</th>
+              <th class="w-[12%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.status') }}</th>
+              <th class="w-[16%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.expiresAt') }}</th>
+              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.createdAt') }}</th>
+              <th class="w-[10%] px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-themed">
@@ -587,12 +704,12 @@ const regionOptions = [
                 <div class="flex items-center gap-3">
                   <UserAvatar :username="sub.user?.username || ''" :email="sub.user?.email" :avatar-style="sub.user?.avatarStyle" :badge-id="sub.user?.avatarBadgeId || null" :size="32" />
                   <div class="min-w-0">
-                    <div class="text-sm font-medium text-themed">{{ sub.user?.username || '-' }}</div>
-                    <div class="text-xs text-themed-muted">ID: {{ sub.user?.id || '-' }} · {{ sub.user?.email || '-' }}</div>
+                    <div class="truncate text-sm font-medium text-themed">{{ sub.user?.username || '-' }}</div>
+                    <div class="truncate text-xs text-themed-muted">ID: {{ sub.user?.id || '-' }} · {{ sub.user?.email || '-' }}</div>
                   </div>
                 </div>
               </td>
-              <td class="px-4 py-3 text-sm text-themed">{{ sub.plan?.name || '-' }}</td>
+              <td class="px-4 py-3 text-sm text-themed truncate">{{ sub.plan?.name || '-' }}</td>
               <td class="px-4 py-3">
                 <span :class="['badge badge-sm', getStatusBadge(sub.status)]">
                   {{ t('mail.status.' + sub.status) }}
@@ -612,7 +729,8 @@ const regionOptions = [
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+      </template>
 
       <!-- 订阅分页 -->
       <div v-if="totalSubscriptions > 0" class="flex items-center justify-between text-sm text-themed-muted">
@@ -668,26 +786,51 @@ const regionOptions = [
         {{ domainsSearch ? t('common.noSearchResults') : t('admin.mail.noDomains') }}
       </div>
 
-      <div v-else class="card overflow-x-auto">
-        <table class="table-auto w-full min-w-[800px]">
+      <template v-else>
+        <div class="space-y-3 lg:hidden">
+          <div v-for="domain in domains" :key="domain.id" class="card p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="break-all text-sm font-medium text-themed">{{ domain.domain }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ t('common.createdAt') }}: {{ formatDate(domain.createdAt) }}</div>
+              </div>
+              <span :class="['badge badge-sm shrink-0', getStatusBadge(domain.status)]">
+                {{ t('mail.domainStatus.' + domain.status) }}
+              </span>
+            </div>
+            <div class="mt-4 flex items-center gap-3">
+              <UserAvatar :username="domain.subscription?.user?.username || ''" :email="domain.subscription?.user?.email" :avatar-style="domain.subscription?.user?.avatarStyle" :badge-id="domain.subscription?.user?.avatarBadgeId || null" :size="32" />
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm font-medium text-themed">{{ domain.subscription?.user?.username || '-' }}</div>
+                <div class="truncate text-xs text-themed-muted">ID: {{ domain.subscription?.user?.id || '-' }} · {{ domain.subscription?.user?.email || '-' }}</div>
+              </div>
+              <div class="shrink-0 text-right text-sm text-themed">
+                {{ domain._count?.accounts || 0 }} {{ t('admin.mail.accounts') }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
           <thead>
             <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.domain') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.user') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.status') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.accounts') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.createdAt') }}</th>
+              <th class="w-[26%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.domain') }}</th>
+              <th class="w-[32%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.user') }}</th>
+              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.status') }}</th>
+              <th class="w-[12%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.accounts') }}</th>
+              <th class="w-[16%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.createdAt') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-themed">
             <tr v-for="domain in domains" :key="domain.id">
-              <td class="px-4 py-3 text-sm font-medium text-themed">{{ domain.domain }}</td>
+              <td class="px-4 py-3 text-sm font-medium text-themed truncate" :title="domain.domain">{{ domain.domain }}</td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-3">
                   <UserAvatar :username="domain.subscription?.user?.username || ''" :email="domain.subscription?.user?.email" :avatar-style="domain.subscription?.user?.avatarStyle" :badge-id="domain.subscription?.user?.avatarBadgeId || null" :size="32" />
                   <div class="min-w-0">
-                    <div class="text-sm font-medium text-themed">{{ domain.subscription?.user?.username || '-' }}</div>
-                    <div class="text-xs text-themed-muted">ID: {{ domain.subscription?.user?.id || '-' }} · {{ domain.subscription?.user?.email || '-' }}</div>
+                    <div class="truncate text-sm font-medium text-themed">{{ domain.subscription?.user?.username || '-' }}</div>
+                    <div class="truncate text-xs text-themed-muted">ID: {{ domain.subscription?.user?.id || '-' }} · {{ domain.subscription?.user?.email || '-' }}</div>
                   </div>
                 </div>
               </td>
@@ -701,7 +844,8 @@ const regionOptions = [
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+      </template>
 
       <!-- 域名分页 -->
       <div v-if="totalDomains > 0" class="flex items-center justify-between text-sm text-themed-muted">

@@ -176,9 +176,9 @@ onUnmounted(() => {
   <AppLayout v-if="showLayout">
     <RouterView v-slot="{ Component, route: currentRoute }">
       <template v-if="Component">
-        <Transition name="kawaii-route" mode="out-in">
+        <Transition name="kawaii-route">
           <!-- 使用 exclude 排除不需要缓存的页面，避免 include 匹配问题 -->
-          <KeepAlive :exclude="['InstanceCreateView', 'InstanceDetailView', 'PackageFormView', 'MyHostDetailView']" :max="10">
+          <KeepAlive :exclude="['InstancesView', 'InstanceCreateView', 'InstanceDetailView', 'PackageFormView', 'MyHostDetailView']" :max="10">
             <component :is="Component" :key="currentRoute.name" />
           </KeepAlive>
         </Transition>

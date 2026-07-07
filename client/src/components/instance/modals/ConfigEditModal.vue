@@ -274,8 +274,8 @@ function handleClose() {
         
           <!-- Body -->
           <div class="px-6 py-6">
-            <div class="overflow-x-auto">
-              <table class="w-full">
+            <div class="overflow-hidden">
+              <table class="w-full table-fixed">
                 <thead>
                   <tr class="border-b" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
                     <th class="text-left py-3 pr-4 text-sm font-medium" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">

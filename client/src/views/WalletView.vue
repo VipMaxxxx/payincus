@@ -8,6 +8,7 @@ import { useConfigStore } from '@/stores/config'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import TermsOfServiceModal from '@/components/TermsOfServiceModal.vue'
 import { freeSiteCopy } from '@/utils/freeSiteFun'
+import { instanceDetailPath, walletPath } from '@/utils/app-paths'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -67,6 +68,7 @@ const showLotteryGiftOnly = ref(false) // 抽奖赠送筛选：false=排除抽�
 // 充值弹窗
 const showRechargeModal = ref(false)
 const rechargeLoading = ref(false)
+const providersLoading = ref(false)
 const providers = ref<any[]>([])
 const selectedProvider = ref<number | null>(null)
 const rechargeAmount = ref(10)
@@ -80,6 +82,7 @@ const agreedToNoRefund = ref(false)
 const agreedToRechargeNotice = ref(false)
 const showManualPaymentModal = ref(false)
 const manualPaymentInfo = ref<ManualPaymentInfo | null>(null)
+let providersLoadSeq = 0
 
 // 充值记录
 const rechargeRecords = ref<any[]>([])
@@ -197,7 +200,7 @@ onMounted(async () => {
     const orderNo = route.query.out_trade_no as string
     
     // 清除 URL 参数，避免刷新页面重复处理
-    router.replace({ path: '/wallet' })
+    router.replace({ path: walletPath() })
     
     // 切换到充值记录标签页
     switchTab('records')
@@ -289,9 +292,20 @@ async function loadLogs() {
   }
 }
 
+function resetRechargeProviderSelection() {
+  providers.value = []
+  selectedProvider.value = null
+  selectedPaymentMethod.value = ''
+}
+
 async function loadProviders() {
+  const loadSeq = ++providersLoadSeq
+  providersLoading.value = true
+  resetRechargeProviderSelection()
   try {
     const res = await api.billing.getPaymentProviders()
+    if (loadSeq !== providersLoadSeq) return
+
     providers.value = res.providers || []
     if (providers.value.length > 0) {
       selectedProvider.value = providers.value[0].id
@@ -299,7 +313,13 @@ async function loadProviders() {
       updateDefaultPaymentMethod(providers.value[0])
     }
   } catch (err: any) {
-    toast.error(t('wallet.loadProvidersFailed') + ': ' + err.message)
+    if (loadSeq === providersLoadSeq) {
+      toast.error(t('wallet.loadProvidersFailed') + ': ' + err.message)
+    }
+  } finally {
+    if (loadSeq === providersLoadSeq) {
+      providersLoading.value = false
+    }
   }
 }
 
@@ -411,6 +431,10 @@ function openRechargeModal() {
 async function createRechargeOrder() {
   if (configStore.freeSiteMode) return
 
+  if (providersLoading.value) {
+    toast.info(t('common.loading'))
+    return
+  }
   if (!selectedProvider.value) {
     toast.error(t('wallet.selectProvider'))
     return
@@ -1119,7 +1143,7 @@ function formatAmount() {
                     <button
                       v-if="log.instanceId"
                       class="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
-                      @click="router.push(`/instances/${log.instanceId}`)"
+                      @click="router.push(instanceDetailPath(log.instanceId))"
                     >
                       #{{ log.instanceId }}
                     </button>
@@ -1136,7 +1160,7 @@ function formatAmount() {
                   <button
                     v-if="log.instanceId"
                     class="shrink-0 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
-                    @click="router.push(`/instances/${log.instanceId}`)"
+                    @click="router.push(instanceDetailPath(log.instanceId))"
                   >
                     #{{ log.instanceId }}
                   </button>
@@ -1633,7 +1657,7 @@ function formatAmount() {
                         <button
                           v-if="log.instanceId"
                           class="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
-                          @click="router.push(`/instances/${log.instanceId}`)"
+                          @click="router.push(instanceDetailPath(log.instanceId))"
                         >
                           #{{ log.instanceId }}
                         </button>
@@ -1653,7 +1677,7 @@ function formatAmount() {
                       <button
                         v-if="log.instanceId"
                         class="shrink-0 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
-                        @click="router.push(`/instances/${log.instanceId}`)"
+                        @click="router.push(instanceDetailPath(log.instanceId))"
                       >
                         #{{ log.instanceId }}
                       </button>
@@ -1839,7 +1863,16 @@ function formatAmount() {
             <!-- 支付渠道选择 -->
             <div>
               <label class="label text-xs uppercase tracking-wide text-themed-muted mb-2">{{ $t('wallet.paymentMethod') }}</label>
-              <div v-if="providers.length === 0" class="text-themed-muted text-sm p-4 rounded-lg bg-themed-secondary text-center">
+              <div v-if="providersLoading" class="text-themed-muted text-sm p-4 rounded-lg bg-themed-secondary text-center">
+                <span class="inline-flex items-center justify-center gap-2">
+                  <svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  {{ $t('common.loading') }}
+                </span>
+              </div>
+              <div v-else-if="providers.length === 0" class="text-themed-muted text-sm p-4 rounded-lg bg-themed-secondary text-center">
                 {{ $t('wallet.noProviders') }}
               </div>
               <div v-else class="grid grid-cols-2 gap-3">
@@ -2016,17 +2049,17 @@ function formatAmount() {
             <button class="btn btn-ghost" @click="showRechargeModal = false">{{ $t('common.cancel') }}</button>
             <button
               class="btn btn-primary min-w-[120px]"
-              :disabled="rechargeLoading || !selectedProvider || rechargeAmount <= 0 || !agreedToNoRefund || !agreedToRechargeNotice || !agreedToTerms"
+              :disabled="providersLoading || rechargeLoading || !selectedProvider || rechargeAmount <= 0 || !agreedToNoRefund || !agreedToRechargeNotice || !agreedToTerms"
               @click="createRechargeOrder"
             >
-              <svg v-if="!rechargeLoading" class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg v-if="!providersLoading && !rechargeLoading" class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               <svg v-else class="w-4 h-4 mr-1.5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              {{ rechargeLoading ? $t('common.processing') : $t('wallet.pay') }}
+              {{ providersLoading ? $t('common.loading') : (rechargeLoading ? $t('common.processing') : $t('wallet.pay')) }}
             </button>
           </div>
         </div>

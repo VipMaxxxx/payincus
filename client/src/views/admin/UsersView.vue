@@ -1120,9 +1120,187 @@ function _getQuotaPercent(used, limit) {
       </div>
       
       <!-- 用户表格 -->
-      <div v-else class="card overflow-x-auto">
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-[800px]">
+      <template v-else>
+        <div class="space-y-3 lg:hidden">
+          <div
+            v-for="user in users"
+            :key="user.id"
+            class="card p-4"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex min-w-0 items-center gap-3">
+                <UserAvatar
+                  :username="user.username"
+                  :email="user.email"
+                  :avatar-style="user.avatarStyle || 'bigSmile'"
+                  :badge-id="user.avatarBadgeId || null"
+                  :size="40"
+                />
+                <div class="min-w-0">
+                  <div class="truncate text-sm font-medium text-themed">{{ user.username }}</div>
+                  <div class="truncate text-xs text-themed-muted">{{ user.email || t('admin.users.noEmail') }}</div>
+                  <div class="mt-1 font-mono text-xs text-themed-muted">#{{ user.id }}</div>
+                </div>
+              </div>
+              <div class="flex shrink-0 flex-col items-end gap-1">
+                <span :class="['badge whitespace-nowrap', user.role === 'admin' ? 'badge-default' : 'badge-default']">
+                  {{ user.role === 'admin' ? t('admin.users.admin') : t('admin.users.user') }}
+                </span>
+                <span :class="['badge whitespace-nowrap', user.status === 'active' ? 'badge-success' : 'badge-error']">
+                  {{ user.status === 'active' ? t('admin.users.active') : t('admin.users.banned') }}
+                </span>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-tertiary p-2">
+                <div>{{ t('admin.users.balance') }}</div>
+                <button
+                  class="mt-1 text-left text-sm font-medium hover:text-primary"
+                  :class="user.balance > 0 ? 'text-success' : 'text-themed-muted'"
+                  :title="t('admin.users.viewBalance')"
+                  @click="openBalanceModal(user)"
+                >
+                  ¥{{ (user.balance || 0).toFixed(2) }}
+                </button>
+                <div v-if="user.totalConsume > 0" class="mt-1">
+                  {{ t('admin.users.consumed') }} ¥{{ (user.totalConsume || 0).toFixed(2) }}
+                </div>
+              </div>
+              <div class="rounded-md bg-themed-tertiary p-2">
+                <div>{{ t('admin.users.points') }}</div>
+                <button
+                  class="mt-1 text-left text-sm font-medium hover:text-primary"
+                  :class="user.points > 0 ? 'text-amber-500' : 'text-themed-muted'"
+                  :title="t('admin.users.adjustPoints')"
+                  @click="openPointsModal(user)"
+                >
+                  {{ user.points || 0 }}
+                </button>
+                <div v-if="(user.totalEarnedPoints - user.points) > 0" class="mt-1">
+                  {{ t('admin.users.spent') }} {{ user.totalEarnedPoints - user.points }}
+                </div>
+              </div>
+              <div class="rounded-md bg-themed-tertiary p-2">
+                <div>{{ t('admin.users.hostingBalance') }}</div>
+                <button
+                  class="mt-1 text-left text-sm font-medium hover:text-primary"
+                  :class="user.hostingBalance > 0 ? 'text-success' : 'text-themed-muted'"
+                  :title="t('admin.users.viewHostingBalance')"
+                  @click="openHostingBalanceModal(user)"
+                >
+                  ¥{{ (user.hostingBalance || 0).toFixed(2) }}
+                </button>
+                <div v-if="user.hostingBalanceFrozen > 0" class="mt-1">
+                  {{ t('admin.users.frozen') }} ¥{{ (user.hostingBalanceFrozen || 0).toFixed(2) }}
+                </div>
+              </div>
+              <div class="rounded-md bg-themed-tertiary p-2">
+                <div>{{ t('admin.users.allInstances') }}</div>
+                <div class="mt-1 flex items-center gap-2 text-themed">
+                  <span>{{ user.instanceCount || 0 }} {{ t('admin.users.instances') }}</span>
+                  <button
+                    v-if="user.instanceCount > 0"
+                    class="btn-ghost btn-xs p-1 text-themed-muted hover:text-themed"
+                    :title="t('admin.users.viewInstances')"
+                    @click="viewUserInstances(user)"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <button
+                class="rounded-md bg-themed-tertiary p-2 text-left sm:col-span-2"
+                :title="t('admin.users.viewLoginRecords')"
+                @click="openLoginRecordsModal(user)"
+              >
+                <div>{{ t('admin.users.userActivity') }}</div>
+                <div class="mt-1 text-themed">
+                  {{ formatRegisteredAge(user.createdAt) }}
+                  <template v-if="user.lastLogin"> · {{ formatDate(user.lastLogin.createdAt) }}</template>
+                </div>
+                <div class="mt-1 truncate">{{ user.lastLogin?.ip || t('admin.users.noLoginRecord') }}</div>
+              </button>
+            </div>
+
+            <div class="mt-4 flex flex-wrap justify-end gap-1 border-t border-themed pt-3">
+              <button class="btn-ghost btn-sm" :title="t('admin.users.viewInstances')" @click="viewUserInstances(user)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+                </svg>
+              </button>
+              <button
+                v-if="user.id !== authStore.user?.id"
+                class="btn-ghost btn-sm"
+                :title="t('admin.users.sendMessage')"
+                @click="openSendMessageModal(user)"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </button>
+              <button class="btn-ghost btn-sm" :title="t('admin.users.resetPassword')" @click="openResetPasswordModal(user)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+              </button>
+              <button
+                v-if="user.id !== authStore.user?.id"
+                class="btn-ghost btn-sm"
+                :class="user.role === 'admin' ? 'text-warning' : 'text-info'"
+                :title="user.role === 'admin' ? t('admin.users.demoteAdmin') : t('admin.users.promoteAdmin')"
+                @click="toggleUserRole(user)"
+              >
+                <svg v-if="user.role === 'admin'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 12H6" />
+                </svg>
+                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3.75l7.5 3v5.25c0 4.35-2.94 8.4-7.5 9.75-4.56-1.35-7.5-5.4-7.5-9.75V6.75l7.5-3z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 12.25l1.5 1.5 3.5-3.75" />
+                </svg>
+              </button>
+              <button
+                v-if="user.twoFAEnabled"
+                class="btn-ghost btn-sm text-warning"
+                :title="t('admin.users.disable2FA')"
+                @click="openDisable2FAModal(user)"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </button>
+              <button
+                v-if="user.hasGithubBinding"
+                class="btn-ghost btn-sm text-info"
+                :title="t('admin.users.unbindGitHub')"
+                @click="openUnbindGitHubModal(user)"
+              >
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                </svg>
+              </button>
+              <button
+                v-if="user.role !== 'admin'"
+                class="btn-ghost btn-sm"
+                :class="user.status === 'active' ? 'text-warning' : 'text-success'"
+                :title="user.status === 'active' ? t('admin.users.ban') : t('admin.users.unban')"
+                @click="toggleUserStatus(user)"
+              >
+                <svg v-if="user.status === 'active'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
             <thead class="bg-themed-tertiary border-b border-themed">
               <tr>
                 <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">ID</th>
@@ -1362,7 +1540,7 @@ function _getQuotaPercent(used, limit) {
             </tbody>
           </table>
         </div>
-      </div>
+      </template>
 
       <!-- 分页 -->
       <div 
@@ -1465,24 +1643,92 @@ function _getQuotaPercent(used, limit) {
         {{ inviteStatusFilter === 'all' ? t('admin.users.noInvites') : t('admin.users.noMatchingInvites') }}
       </div>
 
-      <div v-else class="card overflow-x-auto">
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-[800px]">
+      <template v-else>
+        <div class="space-y-3 lg:hidden">
+          <div
+            v-for="invite in invites"
+            :key="invite.id"
+            class="card p-4"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-mono text-sm font-medium text-themed break-all">{{ invite.code }}</div>
+                <div class="mt-2">
+                  <span :class="['badge whitespace-nowrap', getInviteStatus(invite).class]">{{ getInviteStatus(invite).label }}</span>
+                </div>
+              </div>
+              <button
+                class="btn-ghost btn-sm shrink-0 text-error"
+                @click="deleteInvite(invite)"
+              >
+                {{ t('admin.users.deleteInvite') }}
+              </button>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.users.createdBy') }}</div>
+                <div v-if="invite.createdByUsername" class="mt-1 flex min-w-0 items-center gap-2">
+                  <UserAvatar
+                    v-if="invite.createdByAvatarStyle"
+                    :username="invite.createdByUsername"
+                    :email="invite.createdByEmail"
+                    :avatar-style="invite.createdByAvatarStyle"
+                    :badge-id="invite.createdByAvatarBadgeId || null"
+                    :size="24"
+                  />
+                  <span class="truncate text-themed">{{ invite.createdByUsername }}</span>
+                </div>
+                <span v-else class="mt-1 block text-themed-muted">-</span>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.users.usedBy') }}</div>
+                <div v-if="invite.usedByUsername" class="mt-1 flex min-w-0 items-center gap-2">
+                  <UserAvatar
+                    v-if="invite.usedByAvatarStyle"
+                    :username="invite.usedByUsername"
+                    :email="invite.usedByEmail"
+                    :avatar-style="invite.usedByAvatarStyle"
+                    :badge-id="invite.usedByAvatarBadgeId || null"
+                    :size="24"
+                  />
+                  <span class="truncate text-themed">{{ invite.usedByUsername }}</span>
+                </div>
+                <span v-else class="mt-1 block text-themed-muted">-</span>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.users.createdAt') }}</div>
+                <div class="mt-1 text-themed-secondary">{{ formatDate(invite.createdAt) }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-themed-muted">{{ t('admin.users.usedExpireAt') }}</div>
+                <div class="mt-1 text-themed-secondary">
+                  <span v-if="invite.usedAt">{{ formatDate(invite.usedAt) }}</span>
+                  <span v-else-if="invite.expiresAt">{{ formatDate(invite.expiresAt) }}</span>
+                  <span v-else class="text-themed-faint">{{ t('admin.users.permanent') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
             <thead class="bg-themed-tertiary border-b border-themed">
               <tr>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.inviteCode') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.createdBy') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.inviteStatus') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.usedBy') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.createdAt') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.usedExpireAt') }}</th>
-                <th class="text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('common.actions') }}</th>
+                <th class="w-[18%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.inviteCode') }}</th>
+                <th class="w-[15%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.createdBy') }}</th>
+                <th class="w-[12%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.inviteStatus') }}</th>
+                <th class="w-[15%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.usedBy') }}</th>
+                <th class="w-[15%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.createdAt') }}</th>
+                <th class="w-[15%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.usedExpireAt') }}</th>
+                <th class="w-[10%] text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-themed">
               <tr v-for="invite in invites" :key="invite.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 font-mono text-sm text-themed-secondary whitespace-nowrap">{{ invite.code }}</td>
-                <td class="px-4 py-3 text-sm whitespace-nowrap">
+                <td class="px-4 py-3 font-mono text-sm text-themed-secondary truncate" :title="invite.code">{{ invite.code }}</td>
+                <td class="px-4 py-3 text-sm">
                   <div v-if="invite.createdByUsername" class="flex items-center gap-2">
                     <UserAvatar
                       v-if="invite.createdByAvatarStyle"
@@ -1492,14 +1738,14 @@ function _getQuotaPercent(used, limit) {
                       :badge-id="invite.createdByAvatarBadgeId || null"
                       :size="24"
                     />
-                    <span class="text-themed">{{ invite.createdByUsername }}</span>
+                    <span class="truncate text-themed">{{ invite.createdByUsername }}</span>
                   </div>
                   <span v-else class="text-themed-muted">-</span>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap">
+                <td class="px-4 py-3">
                   <span :class="['badge whitespace-nowrap', getInviteStatus(invite).class]">{{ getInviteStatus(invite).label }}</span>
                 </td>
-                <td class="px-4 py-3 text-sm whitespace-nowrap">
+                <td class="px-4 py-3 text-sm">
                   <div v-if="invite.usedByUsername" class="flex items-center gap-2">
                     <UserAvatar
                       v-if="invite.usedByAvatarStyle"
@@ -1509,7 +1755,7 @@ function _getQuotaPercent(used, limit) {
                       :badge-id="invite.usedByAvatarBadgeId || null"
                       :size="24"
                     />
-                    <span class="text-themed">{{ invite.usedByUsername }}</span>
+                    <span class="truncate text-themed">{{ invite.usedByUsername }}</span>
                   </div>
                   <span v-else class="text-themed-muted">-</span>
                 </td>
@@ -1531,7 +1777,7 @@ function _getQuotaPercent(used, limit) {
             </tbody>
           </table>
         </div>
-      </div>
+      </template>
 
       <div 
         v-if="invitesTotal > 0" 
@@ -2634,15 +2880,41 @@ function _getQuotaPercent(used, limit) {
                   {{ t('common.noData') }}
                 </div>
                 <div v-else>
-                  <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                  <div class="space-y-3 lg:hidden">
+                    <div
+                      v-for="log in hostingBalanceLogs"
+                      :key="log.id"
+                      class="rounded-lg border border-themed p-3"
+                    >
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <span class="badge badge-default">{{ getHostingLogTypeLabel(log.type, log.actionType) }}</span>
+                          <div class="mt-2 text-xs text-themed-muted">{{ new Date(log.createdAt).toLocaleString() }}</div>
+                        </div>
+                        <div
+                          class="shrink-0 text-right text-sm font-semibold"
+                          :class="log.type === 'income' || log.type === 'unfreeze' ? 'text-success' : 'text-error'"
+                        >
+                          {{ log.type === 'income' || log.type === 'unfreeze' ? '+' : '-' }}¥{{ log.amount.toFixed(2) }}
+                        </div>
+                      </div>
+                      <div class="mt-3 flex items-center justify-between gap-3">
+                        <span v-if="log.frozen" class="badge badge-warning">{{ t('admin.users.frozen') }}</span>
+                        <span v-else class="badge badge-success">{{ t('admin.users.available') }}</span>
+                        <span class="min-w-0 truncate text-sm text-themed-muted" :title="log.description">{{ log.description || '-' }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="hidden overflow-hidden rounded-lg border border-themed lg:block">
+                    <table class="w-full table-fixed text-sm">
                       <thead class="text-xs text-themed-muted uppercase border-b border-themed">
                         <tr>
-                          <th class="text-left py-2 px-2">{{ t('admin.users.logTime') }}</th>
-                          <th class="text-left py-2 px-2">{{ t('admin.users.logType') }}</th>
-                          <th class="text-right py-2 px-2">{{ t('admin.users.logAmount') }}</th>
-                          <th class="text-left py-2 px-2">{{ t('admin.users.logStatus') }}</th>
-                          <th class="text-left py-2 px-2">{{ t('admin.users.logDescription') }}</th>
+                          <th class="w-[24%] text-left py-2 px-2">{{ t('admin.users.logTime') }}</th>
+                          <th class="w-[18%] text-left py-2 px-2">{{ t('admin.users.logType') }}</th>
+                          <th class="w-[16%] text-right py-2 px-2">{{ t('admin.users.logAmount') }}</th>
+                          <th class="w-[14%] text-left py-2 px-2">{{ t('admin.users.logStatus') }}</th>
+                          <th class="w-[28%] text-left py-2 px-2">{{ t('admin.users.logDescription') }}</th>
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-themed">

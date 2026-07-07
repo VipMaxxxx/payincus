@@ -23,7 +23,7 @@ import SnapshotManager from '@/components/SnapshotManager.vue'
 import TrafficStats from '@/components/instance/TrafficStats.vue'
 import AddPortModal from '@/components/instance/modals/AddPortModal.vue'
 import PortConflictModal from '@/components/instance/modals/PortConflictModal.vue'
-import { helpPath, hostDetailPath, instancesPath, isAdminEntry } from '@/utils/app-paths'
+import { exchangePath, helpPath, hostDetailPath, instancesPath, isAdminEntry } from '@/utils/app-paths'
 import RebuildModal from '@/components/instance/modals/RebuildModal.vue'
 import RecreateModal from '@/components/instance/modals/RecreateModal.vue'
 import TransferModal from '@/components/instance/modals/TransferModal.vue'
@@ -1362,7 +1362,7 @@ async function stopInstanceForExchangeListing(): Promise<void> {
 
 function openInstanceExchangeListing(): void {
   if (!instance.value?.id) return
-  void router.push({ path: '/exchange', query: { instanceId: String(instance.value.id) } })
+  void router.push({ path: exchangePath(), query: { instanceId: String(instance.value.id) } })
 }
 
 // 续费成功处理
@@ -2950,7 +2950,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
             >
               <div class="pointer-events-none absolute inset-0 overflow-hidden">
                 <div
-                  class="absolute -top-8 -right-8 h-24 w-24 rounded-full blur-3xl"
+                  class="absolute right-0 top-0 h-20 w-20 rounded-full blur-3xl"
                   :class="themeStore.isDark ? 'bg-sky-500/10' : 'bg-sky-100/70'"
                 />
                 <div

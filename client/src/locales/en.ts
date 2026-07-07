@@ -32,6 +32,7 @@ export default {
         previous: 'Previous',
         close: 'Close',
         reset: 'Reset',
+        retry: 'Retry',
         refresh: 'Refresh',
         copy: 'Copy',
         copied: 'Copied',

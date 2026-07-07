@@ -17,6 +17,7 @@ import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 import { getRandomFunnyQuote } from '@/data/funnyQuotes'
 import { freeSiteCopy } from '@/utils/freeSiteFun'
 import { getVipBadgeInlineStyle, normalizeVipBadgeStyle, type VipBadgeStyle } from '@/utils/vipBadge'
+import { entertainmentPath, instanceCreatePath, instanceDetailPath, instancesPath } from '@/utils/app-paths'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'DashboardView' })
@@ -468,7 +469,7 @@ function getInstanceRowClass(): string {
             <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
           </svg>
         </a>
-        <RouterLink to="/instances/create" class="btn-primary w-full sm:w-auto justify-center">
+        <RouterLink :to="instanceCreatePath()" class="btn-primary w-full sm:w-auto justify-center">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -490,7 +491,7 @@ function getInstanceRowClass(): string {
               <div class="flex items-center justify-between gap-3">
                 <div class="text-xs font-semibold uppercase text-themed-muted">{{ t('dashboard.instanceStatusOverview') }}</div>
                 <RouterLink
-                  to="/instances"
+                  :to="instancesPath()"
                   class="inline-flex items-center justify-center rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors sm:hidden"
                   :class="themeStore.isDark ? 'border-gray-700 bg-gray-900/70 text-gray-200 hover:bg-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'"
                 >
@@ -507,7 +508,7 @@ function getInstanceRowClass(): string {
             </div>
 
             <RouterLink
-              to="/instances"
+              :to="instancesPath()"
               class="hidden items-center justify-center rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors sm:inline-flex"
               :class="themeStore.isDark ? 'border-gray-700 bg-gray-900/70 text-gray-200 hover:bg-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'"
             >
@@ -638,7 +639,7 @@ function getInstanceRowClass(): string {
                 <div class="mt-1 text-xs text-themed-muted">管理员为您定向发放的资源兑换码。</div>
               </div>
               <RouterLink
-                to="/checkin"
+                :to="{ path: entertainmentPath(), query: { tab: 'checkin' } }"
                 class="inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
                 :class="themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-200 hover:bg-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'"
               >
@@ -679,7 +680,7 @@ function getInstanceRowClass(): string {
           <p class="mt-1 text-xs text-themed-muted">{{ instanceListSummary }}</p>
         </div>
         <RouterLink 
-          to="/instances" 
+          :to="instancesPath()"
           class="inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-medium transition-colors"
           :class="themeStore.isDark ? 'bg-gray-900 text-gray-300 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
         >
@@ -728,14 +729,14 @@ function getInstanceRowClass(): string {
           </svg>
         </div>
         <p class="text-themed-muted text-sm mb-4">{{ $t('dashboard.noInstances') }}</p>
-        <RouterLink to="/instances/create" class="btn-primary btn-sm">{{ configStore.freeSiteMode ? freeSiteCopy.dashboardCreateFirst : $t('dashboard.createFirst') }}</RouterLink>
+        <RouterLink :to="instanceCreatePath()" class="btn-primary btn-sm">{{ configStore.freeSiteMode ? freeSiteCopy.dashboardCreateFirst : $t('dashboard.createFirst') }}</RouterLink>
       </div>
 
       <div v-else class="p-3 sm:p-4">
         <RouterLink 
           v-for="instance in recentInstances" 
           :key="instance.id"
-          :to="`/instances/${instance.id}`"
+          :to="instanceDetailPath(instance.id)"
           class="kawaii-dashboard-instance-row group relative block overflow-hidden rounded-lg border p-3.5 transition-all duration-200 mb-3 last:mb-0 sm:p-4"
           :class="getInstanceRowClass()"
         >
@@ -833,7 +834,7 @@ function getInstanceRowClass(): string {
         :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
       >
         <RouterLink 
-          to="/instances" 
+          :to="instancesPath()"
           class="text-sm transition-colors"
           :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'"
         >

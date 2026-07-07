@@ -423,8 +423,8 @@ async function handleSelfSubmit(): Promise<void> {
 
   toast.success(t('host.createInstance.success'))
 
-  if (result?.id) {
-    router.push(instanceDetailPath(result.id))
+  if (result.instance?.id) {
+    router.push(instanceDetailPath(result.instance.id))
   }
 }
 

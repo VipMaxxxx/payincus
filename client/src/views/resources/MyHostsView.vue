@@ -469,9 +469,86 @@ onActivated(() => {
       <p class="text-xs text-themed-muted mt-2">{{ t('resources.hosts.noHostsHint') }}</p>
     </div>
 
-    <div v-else class="card overflow-x-auto">
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[800px]">
+    <template v-else>
+      <div class="grid gap-3 lg:hidden">
+        <div
+          v-for="host in hosts"
+          :key="host.id"
+          role="button"
+          tabindex="0"
+          class="w-full rounded-lg border border-themed bg-themed-surface p-4 text-left shadow-sm transition-colors hover:bg-themed-hover"
+          @click="goToDetail(host)"
+          @keydown.enter.prevent="goToDetail(host)"
+          @keydown.space.prevent="goToDetail(host)"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-3">
+              <FlagIcon :code="host.countryCode" size="sm" />
+              <div class="min-w-0">
+                <div class="truncate text-sm font-semibold text-themed">
+                  {{ host.name?.toUpperCase() || host.name }}
+                </div>
+                <div class="mt-1 truncate text-xs text-themed-muted">
+                  {{ host.location || host.url }}
+                </div>
+              </div>
+            </div>
+            <span class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-themed px-2 py-1 text-xs text-themed-secondary">
+              <span :class="['h-2 w-2 rounded-full', getStatusClass(host.status)]"></span>
+              {{ host.status }}
+            </span>
+          </div>
+
+          <div v-if="isAdmin && scope === 'hosted'" class="mt-4 rounded-lg bg-themed-secondary px-3 py-2">
+            <div class="mb-1 text-[11px] font-medium uppercase tracking-wide text-themed-muted">
+              {{ t('resources.hosts.owner') }}
+            </div>
+            <div v-if="host.owner" class="flex items-center gap-2">
+              <UserAvatar :avatar-style="host.owner.avatarStyle" :badge-id="host.owner.avatarBadgeId || null" :size="28" :username="host.owner.username" />
+              <div class="min-w-0">
+                <div class="truncate text-sm font-medium text-themed">{{ host.owner.username }}</div>
+                <div class="text-xs text-themed-muted">UID: {{ host.owner.id }}</div>
+              </div>
+            </div>
+            <span v-else class="text-sm text-themed-muted">-</span>
+          </div>
+
+          <div class="mt-4 grid grid-cols-3 gap-2 text-sm">
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ t('admin.hosts.cpu') }}</div>
+              <div class="mt-1 font-semibold text-themed">{{ host.cpuAllowanceMax || 0 }}%</div>
+            </div>
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ t('admin.hosts.memory') }}</div>
+              <div class="mt-1 font-semibold text-themed">{{ formatMemory(host.memoryMax || 0) }}</div>
+            </div>
+            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ t('admin.hosts.instances') }}</div>
+              <div class="mt-1 font-semibold text-themed">{{ host.instanceCount }}</div>
+            </div>
+          </div>
+
+          <div v-if="scope === 'mine' || (isAdmin && scope === 'hosted')" class="mt-4 flex items-center justify-end gap-2" @click.stop>
+            <template v-if="scope === 'mine'">
+              <button type="button" class="btn-ghost btn-sm" @click.stop="testHost(host)">{{ t('admin.hosts.test') }}</button>
+              <button type="button" class="btn-ghost btn-sm text-error" @click.stop="deleteHost(host)">{{ t('admin.hosts.delete') }}</button>
+            </template>
+            <template v-else-if="isAdmin && scope === 'hosted'">
+              <button
+                type="button"
+                class="btn-ghost btn-sm text-primary"
+                :disabled="takingOverHostId === host.id"
+                @click.stop="takeoverHost(host)"
+              >
+                {{ takingOverHostId === host.id ? t('resources.hosts.takeoverOfficialLoading') : t('resources.hosts.takeoverOfficial') }}
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="card hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed">
           <thead
             class="border-b"
             :class="themeStore.isDark ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-50 border-gray-200'"
@@ -561,8 +638,8 @@ onActivated(() => {
             </tr>
           </tbody>
         </table>
-      </div>
     </div>
+    </template>
 
     <!-- 分页 -->
     <div v-if="total > 0" class="flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-themed-muted">

@@ -72,30 +72,25 @@ export async function verifyTurnstileToken(
 
 /**
  * 创建 Turnstile 验证 preHandler
- * @param required 是否必须验证（false 时如果未启用则跳过）
+ * @param _required 保留旧调用签名；是否强制验证由系统开关和完整密钥配置共同决定
  */
-export function createTurnstileVerifier(required: boolean = true) {
+export function createTurnstileVerifier(_required: boolean = true) {
     return async function verifyTurnstile(
         request: FastifyRequest,
         reply: FastifyReply
     ): Promise<void> {
         const config = await getTurnstileConfig()
 
-        // 如果未启用 Turnstile
+        // 如果未启用 Turnstile，始终跳过验证。生产切换开关时可能保留旧密钥，
+        // 不能让后端继续要求前端已经不再渲染的挑战组件。
         if (!config.enabled) {
-            if (required) {
-                // 必须验证但未启用，检查是否配置了密钥
-                if (!config.secretKey) {
-                    return // 未配置则跳过验证
-                }
-            } else {
-                return // 非必须且未启用，跳过
-            }
+            return
         }
 
-        // 已启用但未配置密钥
-        if (!config.secretKey) {
-            console.warn('Turnstile enabled but secret key not configured')
+        // 已启用但未完整配置密钥。site key 缺失时前端无法渲染挑战组件，
+        // secret key 缺失时后端无法验证 token；两者都不能强制要求 token。
+        if (!config.siteKey || !config.secretKey) {
+            console.warn('Turnstile enabled but site key or secret key is not configured')
             return // 跳过验证
         }
 

@@ -188,8 +188,7 @@ onMounted(loadPools)
         </div>
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
+      <table class="w-full table-fixed text-sm">
           <thead class="text-left text-themed-muted border-b border-themed">
             <tr>
               <th class="py-2">地址</th>
@@ -211,8 +210,7 @@ onMounted(loadPools)
               </td>
             </tr>
           </tbody>
-        </table>
-      </div>
+      </table>
     </div>
 
     <div v-if="showCreate" class="modal-overlay">

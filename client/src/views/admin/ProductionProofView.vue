@@ -307,15 +307,40 @@ async function copyCommand(key: string, command: string): Promise<void> {
         <h2 class="text-lg font-semibold text-themed">Proof 清单</h2>
         <p class="mt-1 text-sm text-themed-muted">状态只代表当前账本口径，最终通过必须以生产日志、后台页面、数据库脱敏摘要或用户提供输出为准。</p>
       </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-themed text-sm">
+      <div class="space-y-3 p-4 lg:hidden">
+        <div
+          v-for="item in proofItems"
+          :key="item.key"
+          class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 font-medium text-themed">{{ item.title }}</div>
+            <span class="inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium" :class="statusClass(item.status)">
+              {{ statusLabel(item.status) }}
+            </span>
+          </div>
+          <div class="mt-3 text-sm font-medium" :class="riskClass(item.risk)">{{ riskLabel(item.risk) }}</div>
+          <div class="mt-3 space-y-3 text-sm">
+            <div>
+              <div class="text-xs text-themed-muted">当前证据口径</div>
+              <div class="mt-1 text-themed-muted">{{ item.evidence }}</div>
+            </div>
+            <div>
+              <div class="text-xs text-themed-muted">记录要求</div>
+              <div class="mt-1 text-themed-muted">{{ item.safeNote }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed divide-y divide-themed text-sm">
           <thead class="bg-themed-muted/40 text-left text-xs uppercase text-themed-muted">
             <tr>
-              <th class="px-5 py-3">项目</th>
-              <th class="px-5 py-3">状态</th>
-              <th class="px-5 py-3">风险</th>
-              <th class="px-5 py-3">当前证据口径</th>
-              <th class="px-5 py-3">记录要求</th>
+              <th class="w-[18%] px-5 py-3">项目</th>
+              <th class="w-[12%] px-5 py-3">状态</th>
+              <th class="w-[10%] px-5 py-3">风险</th>
+              <th class="w-[30%] px-5 py-3">当前证据口径</th>
+              <th class="w-[30%] px-5 py-3">记录要求</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-themed">
@@ -327,8 +352,8 @@ async function copyCommand(key: string, command: string): Promise<void> {
                 </span>
               </td>
               <td class="px-5 py-4 font-medium" :class="riskClass(item.risk)">{{ riskLabel(item.risk) }}</td>
-              <td class="max-w-md px-5 py-4 text-themed-muted">{{ item.evidence }}</td>
-              <td class="max-w-md px-5 py-4 text-themed-muted">{{ item.safeNote }}</td>
+              <td class="px-5 py-4 text-themed-muted">{{ item.evidence }}</td>
+              <td class="px-5 py-4 text-themed-muted">{{ item.safeNote }}</td>
             </tr>
           </tbody>
         </table>

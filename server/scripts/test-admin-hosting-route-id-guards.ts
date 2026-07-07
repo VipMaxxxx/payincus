@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/routes/admin-hosting.ts'), 'utf8')
+const viewSource = readFileSync(resolve(__dirname, '../../client/src/views/admin/HostingView.vue'), 'utf8')
 
 assert.ok(
   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
@@ -31,5 +32,25 @@ for (const forbiddenPattern of [
     `admin hosting routes must not use loose path ID parsing: ${forbiddenPattern}`
   )
 }
+
+assert.ok(
+  viewSource.includes('table class="w-full table-fixed"') &&
+    viewSource.includes('table class="w-full table-fixed"') &&
+    (viewSource.match(/class="space-y-3 p-4 lg:hidden"/g)?.length ?? 0) >= 2 &&
+    (viewSource.match(/class="hidden overflow-hidden lg:block"/g)?.length ?? 0) >= 2 &&
+    !viewSource.includes('v-else class="overflow-x-auto"') &&
+    !viewSource.includes('table class="w-full min-w-[1040px]"') &&
+    !viewSource.includes('table class="w-full min-w-[820px]"'),
+  'admin hosting view must keep mobile cards and fixed desktop tables for owners and zones'
+)
+
+assert.ok(
+  viewSource.includes('@click="toggleOwnerSort(column.key)"') &&
+    viewSource.includes('@change="loadOwners"') &&
+    viewSource.includes('@click="sortOrder = sortOrder === \'asc\' ? \'desc\' : \'asc\'; loadOwners()"') &&
+    viewSource.includes('@click="deleteZone(zone)"') &&
+    viewSource.includes('deletingZoneId === zone.id'),
+  'admin hosting responsive layout must preserve owner sorting and zone delete actions'
+)
 
 console.log('admin hosting route ID guard tests passed')

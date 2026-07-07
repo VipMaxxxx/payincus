@@ -1193,7 +1193,7 @@ function buildInstanceData(
     suspendedAt: spec.suspendedAt,
     suspendedBy: spec.suspendedBy,
     suspendReason: spec.suspendReason,
-    billingPrice: plan.price,
+    billingPrice: plan.price / 100,
     billingCycle: plan.billingCycle,
     autoRenew: spec.autoRenew,
     iconBadgeId: index % 9 === 0 ? 'fire' : null,

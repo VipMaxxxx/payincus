@@ -957,16 +957,16 @@ onMounted(async () => {
         
         <template v-else>
           <!-- PC端表格 -->
-          <div class="hidden md:block overflow-x-auto">
-            <table class="w-full">
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed">
               <thead class="bg-themed-secondary">
                 <tr>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.type') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.amount') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.status') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.buyer') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.instance') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.time') }}</th>
+                  <th class="w-[13%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.type') }}</th>
+                  <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.amount') }}</th>
+                  <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.status') }}</th>
+                  <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.buyer') }}</th>
+                  <th class="w-[25%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.instance') }}</th>
+                  <th class="w-[16%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.logs.columns.time') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-themed">
@@ -994,13 +994,13 @@ onMounted(async () => {
                   <td class="px-4 py-3">
                     <div v-if="log.instance" class="flex items-center gap-2">
                       <UserAvatar :username="log.instance.buyer.username" :avatar-style="log.instance.buyer.avatarStyle" :badge-id="log.instance.buyer.avatarBadgeId || null" :size="28" class="shrink-0" />
-                      <span class="text-sm text-themed truncate max-w-[120px]">{{ log.instance.buyer.username || t('hostingWallet.logs.unknownUser') }}</span>
+                      <span class="truncate text-sm text-themed">{{ log.instance.buyer.username || t('hostingWallet.logs.unknownUser') }}</span>
                     </div>
                     <span v-else class="text-themed-muted">-</span>
                   </td>
                   <td class="px-4 py-3">
                     <template v-if="log.instance">
-                      <div class="text-sm text-themed">
+                      <div class="truncate text-sm text-themed">
                         <RouterLink
                           :to="{ name: 'instance-detail', params: { id: log.instance.id } }"
                           class="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 hover:underline font-mono"
@@ -1010,7 +1010,7 @@ onMounted(async () => {
                         <span class="mx-1">{{ log.instance.name }}</span>
                         <span v-if="log.instance.deleted" class="text-xs text-themed-muted">({{ t('common.deleted') }})</span>
                       </div>
-                      <div class="text-xs text-themed-muted">
+                      <div class="truncate text-xs text-themed-muted">
                         <RouterLink
                           :to="{ name: 'my-host-detail', params: { id: log.instance.host.id } }"
                           class="hover:text-blue-500 dark:hover:text-blue-400 hover:underline"
@@ -1028,7 +1028,7 @@ onMounted(async () => {
           </div>
           
           <!-- 移动端卡片 -->
-          <div class="md:hidden p-4 space-y-2">
+          <div class="p-4 space-y-2 lg:hidden">
             <div
               v-for="log in logs"
               :key="log.id"
@@ -1088,20 +1088,20 @@ onMounted(async () => {
         </template>
         
         <!-- 分页 -->
-        <div v-if="logsTotalPages > 1" class="p-4 border-t border-themed flex items-center justify-between">
+        <div v-if="logsTotalPages > 1" class="grid grid-cols-1 gap-3 p-4 border-t border-themed sm:grid-cols-[auto_1fr] sm:items-center">
           <span class="text-sm text-themed-muted">{{ t('common.total') }} {{ logsTotal }} {{ t('common.items') }}</span>
-          <div class="flex items-center gap-2">
+          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:justify-end">
             <button
               :disabled="logsPage === 1"
-              class="btn btn-sm btn-ghost"
+              class="btn btn-sm btn-ghost justify-self-start"
               @click="loadLogs(logsPage - 1)"
             >
               {{ t('hostingWallet.prevPage') }}
             </button>
-            <span class="text-sm text-themed-muted px-2">{{ logsPage }} / {{ logsTotalPages }}</span>
+            <span class="justify-self-center text-sm text-themed-muted px-2">{{ logsPage }} / {{ logsTotalPages }}</span>
             <button
               :disabled="logsPage >= logsTotalPages"
-              class="btn btn-sm btn-ghost"
+              class="btn btn-sm btn-ghost justify-self-end"
               @click="loadLogs(logsPage + 1)"
             >
               {{ t('hostingWallet.nextPage') }}
@@ -1169,15 +1169,15 @@ onMounted(async () => {
         
         <template v-else>
           <!-- PC端表格 -->
-          <div class="hidden md:block overflow-x-auto">
-            <table class="w-full">
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed">
               <thead class="bg-themed-secondary">
                 <tr>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.amount') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.actualAmount') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.target') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.status') }}</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.time') }}</th>
+                  <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.amount') }}</th>
+                  <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.actualAmount') }}</th>
+                  <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.target') }}</th>
+                  <th class="w-[28%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.status') }}</th>
+                  <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('hostingWallet.withdrawals.columns.time') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-themed">
@@ -1189,7 +1189,7 @@ onMounted(async () => {
                     <span :class="['badge', getStatusClass(w.status)]">
                       {{ getStatusLabel(w.status) }}
                     </span>
-                    <div v-if="w.rejectReason" class="text-xs text-red-500 mt-1">{{ w.rejectReason }}</div>
+                    <div v-if="w.rejectReason" class="mt-1 truncate text-xs text-red-500">{{ w.rejectReason }}</div>
                   </td>
                   <td class="px-4 py-3 text-sm text-themed-muted whitespace-nowrap">{{ formatDate(w.createdAt) }}</td>
                 </tr>
@@ -1198,7 +1198,7 @@ onMounted(async () => {
           </div>
           
           <!-- 移动端卡片 -->
-          <div class="md:hidden p-4 space-y-3">
+          <div class="p-4 space-y-3 lg:hidden">
             <div v-for="w in withdrawals" :key="w.id" class="p-4 bg-themed-secondary rounded-lg">
               <div class="flex items-center justify-between mb-2">
                 <span class="font-mono font-semibold text-lg text-themed">{{ formatMoney(w.amount) }}</span>
@@ -1220,19 +1220,19 @@ onMounted(async () => {
         </template>
         
         <!-- 分页 -->
-        <div v-if="withdrawalsTotalPages > 1" class="p-4 border-t border-themed flex justify-center">
-          <div class="flex items-center gap-2">
+        <div v-if="withdrawalsTotalPages > 1" class="p-4 border-t border-themed">
+          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:justify-center">
             <button
               :disabled="withdrawalsPage === 1"
-              class="btn btn-sm btn-ghost"
+              class="btn btn-sm btn-ghost justify-self-start"
               @click="loadWithdrawals(withdrawalsPage - 1)"
             >
               {{ t('hostingWallet.prevPage') }}
             </button>
-            <span class="text-sm text-themed-muted px-2">{{ withdrawalsPage }} / {{ withdrawalsTotalPages }}</span>
+            <span class="justify-self-center text-sm text-themed-muted px-2">{{ withdrawalsPage }} / {{ withdrawalsTotalPages }}</span>
             <button
               :disabled="withdrawalsPage >= withdrawalsTotalPages"
-              class="btn btn-sm btn-ghost"
+              class="btn btn-sm btn-ghost justify-self-end"
               @click="loadWithdrawals(withdrawalsPage + 1)"
             >
               {{ t('hostingWallet.nextPage') }}

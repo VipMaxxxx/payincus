@@ -273,7 +273,7 @@ onMounted(loadData)
         </div>
       </div>
 
-      <div class="mt-5 space-y-3 md:hidden">
+      <div class="mt-5 space-y-3 lg:hidden">
         <div v-for="card in records" :key="card.id" class="rounded-lg border border-themed bg-themed-surface p-4">
           <div class="flex items-start gap-3">
             <input type="checkbox" class="mt-1 h-4 w-4 rounded text-accent" :checked="selectedIds.has(card.id)" @change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)" />
@@ -310,17 +310,17 @@ onMounted(loadData)
         <div v-if="!loading && records.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
       </div>
 
-      <div class="mt-5 hidden overflow-x-auto md:block">
-        <table class="min-w-full text-sm">
+      <div class="mt-5 hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed text-sm">
           <thead class="border-b border-themed text-left text-themed-muted">
             <tr>
-              <th class="py-3 pr-4"></th>
-              <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCards.amount') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCards.statusTitle') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCardsAdmin.createdAndUsed') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCards.expiresAt') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCards.action') }}</th>
+              <th class="w-[4%] py-3 pr-4"></th>
+              <th class="w-[28%] py-3 pr-4">{{ t('giftCards.code') }}</th>
+              <th class="w-[14%] py-3 pr-4">{{ t('giftCards.amount') }}</th>
+              <th class="w-[12%] py-3 pr-4">{{ t('giftCards.statusTitle') }}</th>
+              <th class="w-[20%] py-3 pr-4">{{ t('giftCardsAdmin.createdAndUsed') }}</th>
+              <th class="w-[12%] py-3 pr-4">{{ t('giftCards.expiresAt') }}</th>
+              <th class="w-[10%] py-3 pr-4">{{ t('giftCards.action') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -328,8 +328,8 @@ onMounted(loadData)
               <td class="py-3 pr-4">
                 <input type="checkbox" class="h-4 w-4 rounded text-accent" :checked="selectedIds.has(card.id)" @change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)" />
               </td>
-              <td class="max-w-[320px] py-3 pr-4 font-mono text-xs text-themed">
-                <span class="break-all">{{ card.code }}</span>
+              <td class="py-3 pr-4 font-mono text-xs text-themed">
+                <span class="block truncate">{{ card.code }}</span>
               </td>
               <td class="py-3 pr-4 text-themed">
                 <div>{{ formatMoney(card.balanceValue) }}</div>
@@ -337,9 +337,9 @@ onMounted(loadData)
               </td>
               <td class="py-3 pr-4" :class="statusClass(card.status)">{{ statusLabel(card.status) }}</td>
               <td class="py-3 pr-4 text-xs text-themed-muted">
-                <div>{{ t('giftCardsAdmin.createdBy', { user: card.createdBy?.username || '-' }) }}</div>
-                <div>{{ t('giftCardsAdmin.owner', { user: card.owner?.username || '-' }) }}</div>
-                <div>{{ t('giftCardsAdmin.usedBy', { user: card.usedBy?.username || '-' }) }}</div>
+                <div class="truncate">{{ t('giftCardsAdmin.createdBy', { user: card.createdBy?.username || '-' }) }}</div>
+                <div class="truncate">{{ t('giftCardsAdmin.owner', { user: card.owner?.username || '-' }) }}</div>
+                <div class="truncate">{{ t('giftCardsAdmin.usedBy', { user: card.usedBy?.username || '-' }) }}</div>
               </td>
               <td class="py-3 pr-4 text-themed-muted">{{ formatDate(card.expiresAt) }}</td>
               <td class="py-3 pr-4">

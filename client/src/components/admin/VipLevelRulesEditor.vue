@@ -252,43 +252,153 @@ onMounted(() => {
     </div>
 
     <div v-else class="card overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-themed">
+      <div class="space-y-3 p-4 lg:hidden">
+        <div
+          v-for="rule in rules"
+          :key="rule.level"
+          class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <span
+              class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold"
+              :style="getVipBadgeInlineStyle(rule.badgeStyle)"
+            >
+              VIP{{ rule.level }}
+            </span>
+            <label class="inline-flex items-center gap-2 text-sm text-themed">
+              <input v-model="rule.enabled" type="checkbox" class="rounded border-themed text-primary-600 focus:ring-primary-500" />
+              {{ rule.enabled ? t('common.enabled') : t('common.disabled') }}
+            </label>
+          </div>
+
+          <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label class="text-xs text-themed-muted">
+              {{ t('admin.vipRules.badgeBgColor') }}
+              <div class="mt-1 flex items-center gap-2">
+                <input
+                  v-model="rule.badgeStyle.backgroundColor"
+                  type="color"
+                  class="h-9 w-10 shrink-0 rounded border border-themed bg-transparent p-1"
+                  :aria-label="t('admin.vipRules.badgeBgColor')"
+                />
+                <input
+                  v-model.trim="rule.badgeStyle.backgroundColor"
+                  type="text"
+                  maxlength="7"
+                  class="input min-w-0 flex-1 font-mono text-sm"
+                  placeholder="#FEF3C7"
+                />
+              </div>
+            </label>
+            <label class="text-xs text-themed-muted">
+              {{ t('admin.vipRules.badgeTextColor') }}
+              <div class="mt-1 flex items-center gap-2">
+                <input
+                  v-model="rule.badgeStyle.textColor"
+                  type="color"
+                  class="h-9 w-10 shrink-0 rounded border border-themed bg-transparent p-1"
+                  :aria-label="t('admin.vipRules.badgeTextColor')"
+                />
+                <input
+                  v-model.trim="rule.badgeStyle.textColor"
+                  type="text"
+                  maxlength="7"
+                  class="input min-w-0 flex-1 font-mono text-sm"
+                  placeholder="#92400E"
+                />
+              </div>
+            </label>
+            <label v-if="!isUserRules" class="text-xs text-themed-muted">
+              {{ t('admin.vipRules.mode') }}
+              <select v-model="rule.conditionMode" class="input mt-1 w-full">
+                <option value="any">{{ t('admin.vipRules.modeAny') }}</option>
+                <option value="all">{{ t('admin.vipRules.modeAll') }}</option>
+              </select>
+            </label>
+            <label v-if="isUserRules" class="text-xs text-themed-muted">
+              {{ userMetricThresholdLabel }}
+              <input
+                v-if="userMetric === 'totalRecharge'"
+                v-model="rule.minRecharge"
+                type="number"
+                min="0"
+                step="0.01"
+                class="input mt-1 w-full"
+                :placeholder="t('admin.vipRules.noLimit')"
+              />
+              <input
+                v-else
+                v-model="rule.minConsume"
+                type="number"
+                min="0"
+                step="0.01"
+                class="input mt-1 w-full"
+                :placeholder="t('admin.vipRules.noLimit')"
+              />
+            </label>
+            <label v-if="!isUserRules" class="text-xs text-themed-muted">
+              {{ t('admin.vipRules.minHostingIncome') }}
+              <input
+                v-model="rule.minHostingIncome"
+                type="number"
+                min="0"
+                step="0.01"
+                class="input mt-1 w-full"
+                :placeholder="t('admin.vipRules.noLimit')"
+              />
+            </label>
+            <label v-if="!isUserRules" class="text-xs text-themed-muted">
+              {{ t('admin.vipRules.minHostingInstances') }}
+              <input
+                v-model="rule.minHostingInstances"
+                type="number"
+                min="0"
+                step="1"
+                class="input mt-1 w-full"
+                :placeholder="t('admin.vipRules.noLimit')"
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed divide-y divide-themed">
           <thead class="bg-themed-secondary/40">
             <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">
+              <th class="w-[10%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">
                 {{ t('admin.vipRules.level') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">
+              <th class="w-[20%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">
                 {{ t('admin.vipRules.badgeBgColor') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">
+              <th class="w-[20%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">
                 {{ t('admin.vipRules.badgeTextColor') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">
+              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">
                 {{ t('admin.vipRules.enabled') }}
               </th>
               <th
                 v-if="!isUserRules"
-                class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted"
+                class="w-[14%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted"
               >
                 {{ t('admin.vipRules.mode') }}
               </th>
               <th
                 v-if="isUserRules"
-                class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted"
+                class="w-[36%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted"
               >
                 {{ userMetricThresholdLabel }}
               </th>
               <th
                 v-if="!isUserRules"
-                class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted"
+                class="w-[16%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted"
               >
                 {{ t('admin.vipRules.minHostingIncome') }}
               </th>
               <th
                 v-if="!isUserRules"
-                class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted"
+                class="w-[16%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted"
               >
                 {{ t('admin.vipRules.minHostingInstances') }}
               </th>
@@ -296,7 +406,7 @@ onMounted(() => {
           </thead>
           <tbody class="divide-y divide-themed bg-themed-primary">
             <tr v-for="rule in rules" :key="rule.level" class="hover:bg-themed-hover">
-              <td class="whitespace-nowrap px-4 py-4">
+              <td class="px-4 py-4">
                 <span
                   class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold"
                   :style="getVipBadgeInlineStyle(rule.badgeStyle)"
@@ -304,60 +414,60 @@ onMounted(() => {
                   VIP{{ rule.level }}
                 </span>
               </td>
-              <td class="min-w-[170px] px-4 py-4">
+              <td class="px-4 py-4">
                 <div class="flex items-center gap-2">
                   <input
                     v-model="rule.badgeStyle.backgroundColor"
                     type="color"
-                    class="h-9 w-10 rounded border border-themed bg-transparent p-1"
+                    class="h-9 w-10 shrink-0 rounded border border-themed bg-transparent p-1"
                     :aria-label="t('admin.vipRules.badgeBgColor')"
                   />
                   <input
                     v-model.trim="rule.badgeStyle.backgroundColor"
                     type="text"
                     maxlength="7"
-                    class="input font-mono text-sm"
+                    class="input min-w-0 flex-1 font-mono text-sm"
                     placeholder="#FEF3C7"
                   />
                 </div>
               </td>
-              <td class="min-w-[170px] px-4 py-4">
+              <td class="px-4 py-4">
                 <div class="flex items-center gap-2">
                   <input
                     v-model="rule.badgeStyle.textColor"
                     type="color"
-                    class="h-9 w-10 rounded border border-themed bg-transparent p-1"
+                    class="h-9 w-10 shrink-0 rounded border border-themed bg-transparent p-1"
                     :aria-label="t('admin.vipRules.badgeTextColor')"
                   />
                   <input
                     v-model.trim="rule.badgeStyle.textColor"
                     type="text"
                     maxlength="7"
-                    class="input font-mono text-sm"
+                    class="input min-w-0 flex-1 font-mono text-sm"
                     placeholder="#92400E"
                   />
                 </div>
               </td>
-              <td class="whitespace-nowrap px-4 py-4">
+              <td class="px-4 py-4">
                 <label class="inline-flex items-center gap-2 text-sm text-themed">
                   <input v-model="rule.enabled" type="checkbox" class="rounded border-themed text-primary-600 focus:ring-primary-500" />
                   {{ rule.enabled ? t('common.enabled') : t('common.disabled') }}
                 </label>
               </td>
-              <td v-if="!isUserRules" class="min-w-[150px] px-4 py-4">
-                <select v-model="rule.conditionMode" class="input">
+              <td v-if="!isUserRules" class="px-4 py-4">
+                <select v-model="rule.conditionMode" class="input w-full">
                   <option value="any">{{ t('admin.vipRules.modeAny') }}</option>
                   <option value="all">{{ t('admin.vipRules.modeAll') }}</option>
                 </select>
               </td>
-              <td v-if="isUserRules" class="min-w-[180px] px-4 py-4">
+              <td v-if="isUserRules" class="px-4 py-4">
                 <input
                   v-if="userMetric === 'totalRecharge'"
                   v-model="rule.minRecharge"
                   type="number"
                   min="0"
                   step="0.01"
-                  class="input"
+                  class="input w-full"
                   :placeholder="t('admin.vipRules.noLimit')"
                 />
                 <input
@@ -366,27 +476,27 @@ onMounted(() => {
                   type="number"
                   min="0"
                   step="0.01"
-                  class="input"
+                  class="input w-full"
                   :placeholder="t('admin.vipRules.noLimit')"
                 />
               </td>
-              <td v-if="!isUserRules" class="min-w-[190px] px-4 py-4">
+              <td v-if="!isUserRules" class="px-4 py-4">
                 <input
                   v-model="rule.minHostingIncome"
                   type="number"
                   min="0"
                   step="0.01"
-                  class="input"
+                  class="input w-full"
                   :placeholder="t('admin.vipRules.noLimit')"
                 />
               </td>
-              <td v-if="!isUserRules" class="min-w-[170px] px-4 py-4">
+              <td v-if="!isUserRules" class="px-4 py-4">
                 <input
                   v-model="rule.minHostingInstances"
                   type="number"
                   min="0"
                   step="1"
-                  class="input"
+                  class="input w-full"
                   :placeholder="t('admin.vipRules.noLimit')"
                 />
               </td>

@@ -654,6 +654,7 @@ export interface ThemeMarketGovernance {
   fingerprint: string
   defaultReviewStatus: 'pending' | 'listed' | 'delisted' | 'rejected'
   installPolicy: string[]
+  unavailableReason?: string
 }
 
 export type ThemeMarketSubmissionReviewStatus = 'pending' | 'listed' | 'rejected' | 'delisted'
@@ -1462,6 +1463,7 @@ export interface PluginMarketGovernance {
   fingerprint: string
   defaultReviewStatus: 'pending' | 'listed' | 'delisted' | 'rejected'
   installPolicy: string[]
+  unavailableReason?: string
 }
 
 export interface PluginClientExtension {
@@ -1856,6 +1858,19 @@ export interface CreateInstanceRequest {
   flashSaleItemId?: number
   idempotencyKey?: string
   turnstileToken?: string
+}
+
+export interface CreateInstanceResponse {
+  message: string
+  instance: {
+    id: number
+    name: string
+    incusId: string
+    host: string
+    status: Instance['status']
+    sshPort: number | null
+    rootPassword?: string | null
+  }
 }
 
 export type ExchangeListingStatus = 'active' | 'paused' | 'delisted' | 'locked' | 'sold' | 'delivery_failed' | 'force_delisted'

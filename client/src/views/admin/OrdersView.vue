@@ -602,8 +602,51 @@ onMounted(() => {
     <section class="overflow-hidden rounded-lg border border-themed bg-themed-secondary">
       <div v-if="loading" class="p-8 text-center text-sm text-themed-muted">正在加载订单...</div>
       <div v-else-if="orders.length === 0" class="p-8 text-center text-sm text-themed-muted">暂无订单记录</div>
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-themed">
+      <template v-else>
+        <div class="space-y-3 p-4 lg:hidden">
+          <button
+            v-for="order in orders"
+            :key="order.id"
+            type="button"
+            class="block w-full rounded-lg border border-themed bg-themed p-4 text-left text-sm transition hover:bg-themed-tertiary"
+            @click="openDetail(order)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-themed">{{ order.title }}</div>
+                <div class="mt-1 break-all text-xs text-themed-muted">{{ order.orderNo }}</div>
+              </div>
+              <span :class="['shrink-0 rounded-full border px-2 py-0.5 text-xs', statusClass(order.status)]">{{ statusLabel(order) }}</span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">用户</div>
+                <div class="mt-1 text-themed">{{ order.user?.username || `#${order.userId}` }}</div>
+                <div class="mt-1 break-all">{{ order.user?.email || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">金额</div>
+                <div class="mt-1 font-medium text-themed">{{ formatMoney(order.amount) }}</div>
+                <div class="mt-1">{{ sourceLabel(order.sourceType) }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">关联实例</div>
+                <div class="mt-1 text-themed">{{ instanceName(order) }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">时间</div>
+                <div class="mt-1 text-themed">{{ formatTime(order.createdAt) }}</div>
+              </div>
+            </div>
+            <div v-if="order.operationCase" class="mt-3">
+              <span :class="['inline-flex rounded-full border px-2 py-0.5 text-xs', operationStatusClass(order.operationCase.status)]">
+                {{ operationStatusLabel(order.operationCase.status) }}
+              </span>
+            </div>
+          </button>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed divide-y divide-themed">
           <thead class="bg-themed-tertiary">
             <tr class="text-left text-xs font-medium text-themed-muted">
               <th class="px-4 py-3">订单</th>
@@ -645,7 +688,8 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+      </template>
 
       <div class="flex items-center justify-between border-t border-themed px-4 py-3 text-sm text-themed-muted">
         <span>共 {{ total }} 条记录</span>
@@ -674,8 +718,51 @@ onMounted(() => {
       <div v-if="requestError" class="m-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ requestError }}</div>
       <div v-if="requestLoading" class="p-6 text-center text-sm text-themed-muted">正在加载审批任务...</div>
       <div v-else-if="adjustmentRequests.length === 0" class="p-6 text-center text-sm text-themed-muted">暂无调账审批任务</div>
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-themed">
+      <template v-else>
+        <div class="space-y-3 p-4 lg:hidden">
+          <div v-for="request in adjustmentRequests" :key="request.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                <div class="mt-1 break-words text-xs text-themed-muted">{{ request.reason }}</div>
+              </div>
+              <span :class="['shrink-0 rounded-full border px-2 py-0.5 text-xs', adjustmentStatusClass(request.status)]">
+                {{ adjustmentStatusLabel(request.status) }}
+              </span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">用户</div>
+                <div class="mt-1 text-themed">{{ request.user.username }}</div>
+                <div class="mt-1">申请人 {{ request.requestedBy.username }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">金额</div>
+                <div class="mt-1 font-medium" :class="request.amount >= 0 ? 'text-green-700' : 'text-red-700'">
+                  {{ request.amount >= 0 ? '+' : '' }}{{ formatMoney(request.amount) }}
+                </div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">来源</div>
+                <div class="mt-1 text-themed">{{ request.orderNo || '-' }}</div>
+                <div class="mt-1">{{ request.sourceType || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">时间</div>
+                <div class="mt-1 text-themed">{{ formatTime(request.createdAt) }}</div>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap justify-end gap-2">
+              <template v-if="request.status === 'pending'">
+                <button class="btn btn-sm btn-outline text-red-600" :disabled="reviewLoadingId === request.id" @click="rejectAdjustmentRequest(request)">驳回</button>
+                <button class="btn btn-sm btn-primary" :disabled="reviewLoadingId === request.id" @click="approveAdjustmentRequest(request)">通过并执行</button>
+              </template>
+              <span v-else class="text-xs text-themed-muted">{{ request.reviewedBy?.username || '-' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed divide-y divide-themed">
           <thead class="bg-themed-tertiary">
             <tr class="text-left text-xs font-medium text-themed-muted">
               <th class="px-4 py-3">申请</th>
@@ -720,7 +807,8 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+      </template>
 
       <div class="flex items-center justify-between border-t border-themed px-4 py-3 text-sm text-themed-muted">
         <span>共 {{ requestTotal }} 条审批</span>

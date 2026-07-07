@@ -14,6 +14,7 @@ import {
   type PackageSource,
   type PublicPackage
 } from '@/utils/publicCatalog'
+import { dashboardPath, loginPath, marketPath } from '@/utils/app-paths'
 
 defineOptions({
   name: 'PortalView'
@@ -185,14 +186,14 @@ function setActiveProductLine(source: ProductLineKey): void {
 
 function browseCatalog(source?: PackageSource): void {
   void router.push({
-    path: '/market',
+    path: marketPath(),
     query: source ? { source } : undefined
   })
 }
 
 function openPackage(pkg: PublicPackage): void {
   void router.push({
-    path: '/market',
+    path: marketPath(),
     query: {
       source: pkg.sourceType,
       package: String(pkg.id)
@@ -202,11 +203,11 @@ function openPackage(pkg: PublicPackage): void {
 
 function goToConsole(): void {
   if (authStore.isAuthenticated) {
-    void router.push('/dashboard')
+    void router.push(dashboardPath())
     return
   }
 
-  void router.push('/login')
+  void router.push(loginPath())
 }
 
 async function loadCatalog(): Promise<void> {

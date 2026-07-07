@@ -207,6 +207,7 @@ function hasInlineAdminOnlyCheck(route: RouteInfo): boolean {
 function isAdminLikeRoute(route: RouteInfo): boolean {
   if (route.options.includes('authenticateAdmin') || route.options.includes('requireAdmin')) return true
   if (route.file.startsWith('admin-')) return true
+  if (route.file === 'mail.ts' && route.path === '/domains/:id/admin-password') return false
   if (route.path.startsWith('/api/admin') || route.path.includes('/admin')) return true
   if (hasInlineAdminOnlyCheck(route)) return true
 

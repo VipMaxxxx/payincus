@@ -317,10 +317,17 @@ await fastify.register(rateLimit, {
     }
     return request.ip
   },
-  errorResponseBuilder: (_request, context) => ({
-    error: 'Too many requests, please try again later',
-    retryAfter: context.after
-  }),
+  errorResponseBuilder: (_request, context) => {
+    const error = new Error('Too many requests, please try again later') as Error & {
+      statusCode?: number
+      code?: string
+      retryAfter?: string
+    }
+    error.statusCode = context.statusCode
+    error.code = 'RATE_LIMIT_EXCEEDED'
+    error.retryAfter = context.after
+    return error
+  },
   // 跳过白名单路径和非 API 请求
   allowList: (request) => {
     if (!request.url.startsWith('/api/')) {

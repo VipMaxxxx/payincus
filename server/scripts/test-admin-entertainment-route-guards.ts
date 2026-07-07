@@ -5,6 +5,10 @@ import { resolve } from 'node:path'
 const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/admin-entertainment.ts'), 'utf8')
 const lotteryDbSource = readFileSync(resolve(process.cwd(), 'src/db/lottery.ts'), 'utf8')
 const pointsDbSource = readFileSync(resolve(process.cwd(), 'src/db/points.ts'), 'utf8')
+const adminEntertainmentViewSource = readFileSync(
+  resolve(process.cwd(), '../client/src/views/admin/EntertainmentView.vue'),
+  'utf8'
+)
 
 assert.ok(
   routeSource.includes('function parsePositiveRouteId(value: string): number | null') &&
@@ -118,6 +122,33 @@ assert.ok(
     pointsDbSource.includes('type: \'admin_adjust\'') &&
     pointsDbSource.includes('if (amount < 0 && userPoints.points + amount < 0)'),
   'admin points adjustment DB helper must keep the points lock and non-negative balance guard'
+)
+
+assert.ok(
+  adminEntertainmentViewSource.includes('table class="w-full table-fixed"') &&
+    adminEntertainmentViewSource.includes('table class="w-full table-fixed"') &&
+    adminEntertainmentViewSource.includes('table class="w-full table-fixed"') &&
+    adminEntertainmentViewSource.includes('table class="w-full table-fixed"') &&
+    adminEntertainmentViewSource.includes('table class="w-full table-fixed"'),
+  'admin entertainment checkin, lotteries, records, users, and badges tables must keep fixed desktop table layouts'
+)
+
+assert.ok(
+  (adminEntertainmentViewSource.match(/class="space-y-3 p-4 lg:hidden"/g)?.length ?? 0) >= 5 &&
+    (adminEntertainmentViewSource.match(/class="hidden overflow-hidden lg:block"/g)?.length ?? 0) >= 5 &&
+    !adminEntertainmentViewSource.includes('v-else class="overflow-x-auto"') &&
+    !adminEntertainmentViewSource.includes('table class="w-full"'),
+  'admin entertainment list sections must keep mobile cards and avoid unconstrained desktop overflow tables'
+)
+
+assert.ok(
+  adminEntertainmentViewSource.includes('@click="openPrizesModal(lottery)"') &&
+    adminEntertainmentViewSource.includes('@click="openNotificationModal(lottery)"') &&
+    adminEntertainmentViewSource.includes('@click="openEditLotteryModal(lottery)"') &&
+    adminEntertainmentViewSource.includes('@click="deleteLottery(lottery.id)"') &&
+    adminEntertainmentViewSource.includes('@click="openEditBadgeModal(badge)"') &&
+    adminEntertainmentViewSource.includes('@click="deleteBadge(badge.id)"'),
+  'admin entertainment responsive layout must preserve lottery and badge management actions'
 )
 
 console.log('admin entertainment route guard tests passed')

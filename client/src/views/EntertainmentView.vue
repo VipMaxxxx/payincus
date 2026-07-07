@@ -1245,48 +1245,100 @@ function getWheelTextTransform(index: number, total: number): string {
         <div v-else-if="records.length === 0" class="p-8 text-center text-themed-muted">
           {{ $t('entertainment.noRecords') }}
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.lotteryName') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.prize') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.prizeType') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.value') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.time') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-themed">
-              <tr v-for="rec in records" :key="rec.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 text-sm text-themed">{{ rec.lotteryName || '-' }}</td>
-                <td class="px-4 py-3 text-sm text-themed">{{ rec.prizeName || '-' }}</td>
-                <td class="px-4 py-3 text-sm">
-                  <span 
-                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
-                    :style="{ 
-                      backgroundColor: getPrizeColor(rec.prizeType) + '20', 
-                      color: getPrizeColor(rec.prizeType) 
-                    }"
-                  >
-                    {{ getPrizeTypeName(rec.prizeType) }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-sm text-themed">
-                  <template v-if="rec.prizeType === 'points'">+{{ rec.prizeValue }} {{ $t('entertainment.pointsUnit') }}</template>
-                  <template v-else-if="rec.prizeType === 'balance'">+¥{{ (rec.prizeValue / 100).toFixed(2) }}</template>
-                  <template v-else-if="rec.prizeType === 'badge'">{{ rec.prizeName || $t('entertainment.prizeTypes.badge') }}</template>
-                  <template v-else-if="rec.prizeType === 'instance'">{{ rec.instanceDesc || $t('entertainment.wonInstance') }}</template>
-                  <template v-else-if="rec.prizeType === 'cpu'">+{{ rec.prizeValue }}%</template>
-                  <template v-else-if="rec.prizeType === 'memory'">+{{ rec.prizeValue }}MB</template>
-                  <template v-else-if="rec.prizeType === 'disk'">+{{ rec.prizeValue }}MB</template>
-                  <template v-else-if="rec.prizeType === 'traffic'">+{{ rec.prizeValue }}GB</template>
-                  <template v-else>-</template>
-                </td>
-                <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(rec.createdAt) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        
+        <template v-else>
+          <div class="space-y-3 p-4 lg:hidden">
+            <div
+              v-for="rec in records"
+              :key="rec.id"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-themed">{{ rec.lotteryName || '-' }}</p>
+                  <p class="mt-1 truncate text-xs text-themed-muted">{{ rec.prizeName || '-' }}</p>
+                </div>
+                <span
+                  class="inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium"
+                  :style="{
+                    backgroundColor: getPrizeColor(rec.prizeType) + '20',
+                    color: getPrizeColor(rec.prizeType)
+                  }"
+                >
+                  {{ getPrizeTypeName(rec.prizeType) }}
+                </span>
+              </div>
+              <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt class="text-xs text-themed-muted">{{ $t('entertainment.value') }}</dt>
+                  <dd class="mt-1 font-medium text-themed">
+                    <template v-if="rec.prizeType === 'points'">+{{ rec.prizeValue }} {{ $t('entertainment.pointsUnit') }}</template>
+                    <template v-else-if="rec.prizeType === 'balance'">+¥{{ (rec.prizeValue / 100).toFixed(2) }}</template>
+                    <template v-else-if="rec.prizeType === 'badge'">{{ rec.prizeName || $t('entertainment.prizeTypes.badge') }}</template>
+                    <template v-else-if="rec.prizeType === 'instance'">{{ rec.instanceDesc || $t('entertainment.wonInstance') }}</template>
+                    <template v-else-if="rec.prizeType === 'cpu'">+{{ rec.prizeValue }}%</template>
+                    <template v-else-if="rec.prizeType === 'memory'">+{{ rec.prizeValue }}MB</template>
+                    <template v-else-if="rec.prizeType === 'disk'">+{{ rec.prizeValue }}MB</template>
+                    <template v-else-if="rec.prizeType === 'traffic'">+{{ rec.prizeValue }}GB</template>
+                    <template v-else>-</template>
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-themed-muted">{{ $t('entertainment.time') }}</dt>
+                  <dd class="mt-1 text-themed">{{ formatDate(rec.createdAt) }}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed">
+              <thead>
+                <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                  <th class="w-[24%] px-4 py-3 font-medium">{{ $t('entertainment.lotteryName') }}</th>
+                  <th class="w-[24%] px-4 py-3 font-medium">{{ $t('entertainment.prize') }}</th>
+                  <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.prizeType') }}</th>
+                  <th class="w-[18%] px-4 py-3 font-medium">{{ $t('entertainment.value') }}</th>
+                  <th class="w-[18%] px-4 py-3 font-medium">{{ $t('entertainment.time') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-themed">
+                <tr v-for="rec in records" :key="rec.id" class="hover:bg-themed-hover">
+                  <td class="px-4 py-3 text-sm text-themed">
+                    <div class="truncate">{{ rec.lotteryName || '-' }}</div>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-themed">
+                    <div class="truncate">{{ rec.prizeName || '-' }}</div>
+                  </td>
+                  <td class="px-4 py-3 text-sm">
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium"
+                      :style="{
+                        backgroundColor: getPrizeColor(rec.prizeType) + '20',
+                        color: getPrizeColor(rec.prizeType)
+                      }"
+                    >
+                      {{ getPrizeTypeName(rec.prizeType) }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-themed">
+                    <div class="truncate">
+                      <template v-if="rec.prizeType === 'points'">+{{ rec.prizeValue }} {{ $t('entertainment.pointsUnit') }}</template>
+                      <template v-else-if="rec.prizeType === 'balance'">+¥{{ (rec.prizeValue / 100).toFixed(2) }}</template>
+                      <template v-else-if="rec.prizeType === 'badge'">{{ rec.prizeName || $t('entertainment.prizeTypes.badge') }}</template>
+                      <template v-else-if="rec.prizeType === 'instance'">{{ rec.instanceDesc || $t('entertainment.wonInstance') }}</template>
+                      <template v-else-if="rec.prizeType === 'cpu'">+{{ rec.prizeValue }}%</template>
+                      <template v-else-if="rec.prizeType === 'memory'">+{{ rec.prizeValue }}MB</template>
+                      <template v-else-if="rec.prizeType === 'disk'">+{{ rec.prizeValue }}MB</template>
+                      <template v-else-if="rec.prizeType === 'traffic'">+{{ rec.prizeValue }}GB</template>
+                      <template v-else>-</template>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(rec.createdAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
           <!-- 分页 -->
           <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-themed">
             <!-- 每页条数 -->
@@ -1320,7 +1372,7 @@ function getWheelTextTransform(index: number, total: number): string {
               </button>
             </div>
           </div>
-        </div>
+        </template>
       </div>
 
       <!-- 积分明细 TAB -->
@@ -1331,49 +1383,81 @@ function getWheelTextTransform(index: number, total: number): string {
         <div v-else-if="pointsLogs.length === 0" class="p-8 text-center text-themed-muted">
           {{ $t('entertainment.noPointsLogs') }}
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.pointsLogType') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.pointsChange') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.pointsAfter') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.remark') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.time') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-themed">
-              <tr v-for="log in pointsLogs" :key="log.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 text-sm text-themed">{{ getPointsLogTypeName(log.type) }}</td>
-                <td class="px-4 py-3 text-sm" :class="log.amount >= 0 ? 'text-green-500' : 'text-red-500'">
+        <template v-else>
+          <div class="space-y-3 p-4 lg:hidden">
+            <div
+              v-for="log in pointsLogs"
+              :key="log.id"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-themed">{{ getPointsLogTypeName(log.type) }}</p>
+                  <p class="mt-1 truncate text-xs text-themed-muted">{{ log.remark || '-' }}</p>
+                </div>
+                <span class="shrink-0 text-sm font-semibold" :class="log.amount >= 0 ? 'text-green-500' : 'text-red-500'">
                   {{ log.amount >= 0 ? '+' : '' }}{{ log.amount }}
-                </td>
-                <td class="px-4 py-3 text-sm text-themed">{{ log.pointsAfter }}</td>
-                <td class="px-4 py-3 text-sm text-themed-muted">{{ log.remark || '-' }}</td>
-                <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(log.createdAt) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        
+                </span>
+              </div>
+              <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt class="text-xs text-themed-muted">{{ $t('entertainment.pointsAfter') }}</dt>
+                  <dd class="mt-1 font-medium text-themed">{{ log.pointsAfter }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-themed-muted">{{ $t('entertainment.time') }}</dt>
+                  <dd class="mt-1 text-themed">{{ formatDate(log.createdAt) }}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed">
+              <thead>
+                <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                  <th class="w-[20%] px-4 py-3 font-medium">{{ $t('entertainment.pointsLogType') }}</th>
+                  <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.pointsChange') }}</th>
+                  <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.pointsAfter') }}</th>
+                  <th class="w-[30%] px-4 py-3 font-medium">{{ $t('entertainment.remark') }}</th>
+                  <th class="w-[18%] px-4 py-3 font-medium">{{ $t('entertainment.time') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-themed">
+                <tr v-for="log in pointsLogs" :key="log.id" class="hover:bg-themed-hover">
+                  <td class="px-4 py-3 text-sm text-themed">{{ getPointsLogTypeName(log.type) }}</td>
+                  <td class="px-4 py-3 text-sm" :class="log.amount >= 0 ? 'text-green-500' : 'text-red-500'">
+                    {{ log.amount >= 0 ? '+' : '' }}{{ log.amount }}
+                  </td>
+                  <td class="px-4 py-3 text-sm text-themed">{{ log.pointsAfter }}</td>
+                  <td class="px-4 py-3 text-sm text-themed-muted">
+                    <div class="truncate">{{ log.remark || '-' }}</div>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(log.createdAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
           <!-- 分页 -->
-          <div v-if="pointsLogsTotalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-themed">
+          <div v-if="pointsLogsTotalPages > 1" class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-4 border-t border-themed sm:flex sm:justify-center">
             <button
-              class="btn btn-sm btn-ghost"
+              class="btn btn-sm btn-ghost justify-self-start"
               :disabled="pointsLogsPage <= 1"
               @click="pointsLogsPage--; loadPointsLogs()"
             >
               {{ $t('common.prevPage') }}
             </button>
-            <span class="text-sm text-themed-muted">{{ pointsLogsPage }} / {{ pointsLogsTotalPages }}</span>
+            <span class="text-sm text-themed-muted justify-self-center">{{ pointsLogsPage }} / {{ pointsLogsTotalPages }}</span>
             <button
-              class="btn btn-sm btn-ghost"
+              class="btn btn-sm btn-ghost justify-self-end"
               :disabled="pointsLogsPage >= pointsLogsTotalPages"
               @click="pointsLogsPage++; loadPointsLogs()"
             >
               {{ $t('common.nextPage') }}
             </button>
           </div>
-        </div>
+        </template>
       </div>
     <!-- 抽奖功能区域结束 -->
     </div>
@@ -1691,45 +1775,79 @@ function getWheelTextTransform(index: number, total: number): string {
         
         <div v-if="poolLogsLoading" class="p-8 text-center text-themed-muted">{{ $t('common.loading') }}...</div>
         <div v-else-if="poolLogs.length === 0" class="p-8 text-center text-themed-muted">{{ $t('checkin.noLogs') }}</div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                <th class="px-4 py-3 font-medium">{{ $t('checkin.action') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('checkin.resourceType') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('checkin.amount') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('checkin.instance') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('checkin.time') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-themed">
-              <tr v-for="log in poolLogs" :key="log.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 text-sm text-themed">{{ getActionName(log.action) }}</td>
-                <td class="px-4 py-3 text-sm">
-                  <span :class="['px-2 py-0.5 rounded text-xs font-medium', getResourceBgColor(log.resourceType), getResourceColor(log.resourceType)]">
-                    {{ getResourceTypeName(log.resourceType) }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-sm" :class="log.amount >= 0 ? 'text-emerald-500' : 'text-red-500'">
-                  {{ log.amount >= 0 ? '+' : '' }}{{ log.amount }}{{ getResourceUnit(log.resourceType) }}
-                </td>
-                <td class="px-4 py-3 text-sm text-themed-muted">{{ log.instance?.name || '-' }}</td>
-                <td class="px-4 py-3 text-sm text-themed-muted">{{ new Date(log.createdAt).toLocaleString() }}</td>
-              </tr>
-            </tbody>
-          </table>
-          
+        <template v-else>
+          <div class="space-y-3 p-4 lg:hidden">
+            <div
+              v-for="log in poolLogs"
+              :key="log.id"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-themed">{{ getActionName(log.action) }}</p>
+                  <p class="mt-1 truncate text-xs text-themed-muted">{{ log.instance?.name || '-' }}</p>
+                </div>
+                <span :class="['shrink-0 rounded px-2 py-0.5 text-xs font-medium', getResourceBgColor(log.resourceType), getResourceColor(log.resourceType)]">
+                  {{ getResourceTypeName(log.resourceType) }}
+                </span>
+              </div>
+              <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt class="text-xs text-themed-muted">{{ $t('checkin.amount') }}</dt>
+                  <dd class="mt-1 font-semibold" :class="log.amount >= 0 ? 'text-emerald-500' : 'text-red-500'">
+                    {{ log.amount >= 0 ? '+' : '' }}{{ log.amount }}{{ getResourceUnit(log.resourceType) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-themed-muted">{{ $t('checkin.time') }}</dt>
+                  <dd class="mt-1 text-themed">{{ new Date(log.createdAt).toLocaleString() }}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed">
+              <thead>
+                <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                  <th class="w-[20%] px-4 py-3 font-medium">{{ $t('checkin.action') }}</th>
+                  <th class="w-[16%] px-4 py-3 font-medium">{{ $t('checkin.resourceType') }}</th>
+                  <th class="w-[16%] px-4 py-3 font-medium">{{ $t('checkin.amount') }}</th>
+                  <th class="w-[28%] px-4 py-3 font-medium">{{ $t('checkin.instance') }}</th>
+                  <th class="w-[20%] px-4 py-3 font-medium">{{ $t('checkin.time') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-themed">
+                <tr v-for="log in poolLogs" :key="log.id" class="hover:bg-themed-hover">
+                  <td class="px-4 py-3 text-sm text-themed">{{ getActionName(log.action) }}</td>
+                  <td class="px-4 py-3 text-sm">
+                    <span :class="['rounded px-2 py-0.5 text-xs font-medium', getResourceBgColor(log.resourceType), getResourceColor(log.resourceType)]">
+                      {{ getResourceTypeName(log.resourceType) }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-sm" :class="log.amount >= 0 ? 'text-emerald-500' : 'text-red-500'">
+                    {{ log.amount >= 0 ? '+' : '' }}{{ log.amount }}{{ getResourceUnit(log.resourceType) }}
+                  </td>
+                  <td class="px-4 py-3 text-sm text-themed-muted">
+                    <div class="truncate">{{ log.instance?.name || '-' }}</div>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-themed-muted">{{ new Date(log.createdAt).toLocaleString() }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
           <!-- 分页 -->
-          <div v-if="poolLogsTotalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-themed">
-            <button class="btn btn-sm btn-ghost" :disabled="poolLogsPage <= 1" @click="poolLogsPage--; loadPoolLogs()">
+          <div v-if="poolLogsTotalPages > 1" class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-4 border-t border-themed sm:flex sm:justify-center">
+            <button class="btn btn-sm btn-ghost justify-self-start" :disabled="poolLogsPage <= 1" @click="poolLogsPage--; loadPoolLogs()">
               {{ $t('common.prevPage') }}
             </button>
-            <span class="text-sm text-themed-muted">{{ poolLogsPage }} / {{ poolLogsTotalPages }}</span>
-            <button class="btn btn-sm btn-ghost" :disabled="poolLogsPage >= poolLogsTotalPages" @click="poolLogsPage++; loadPoolLogs()">
+            <span class="text-sm text-themed-muted justify-self-center">{{ poolLogsPage }} / {{ poolLogsTotalPages }}</span>
+            <button class="btn btn-sm btn-ghost justify-self-end" :disabled="poolLogsPage >= poolLogsTotalPages" @click="poolLogsPage++; loadPoolLogs()">
               {{ $t('common.nextPage') }}
             </button>
           </div>
-        </div>
+        </template>
       </div>
     </div>
 

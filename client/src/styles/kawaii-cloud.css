@@ -1262,7 +1262,8 @@
 
     .kawaii-hero-map-asset {
       left: 50%;
-      width: min(128vw, 32rem);
+      width: min(100%, 28rem);
+      max-width: 100%;
       opacity: 0.5;
       mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / 0.85) 20%, #000 100%);
       -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / 0.85) 20%, #000 100%);
@@ -1596,6 +1597,7 @@
     grid-area: stage;
     z-index: 1;
     min-height: 25.5rem;
+    overflow: hidden;
   }
 
   .kawaii-product-stage::after {
@@ -1953,6 +1955,12 @@
 
     .kawaii-product-stage {
       min-height: 16rem;
+    }
+
+    .kawaii-product-stage-map {
+      left: 50%;
+      width: 100%;
+      max-width: 100%;
     }
 
     .kawaii-network-node {

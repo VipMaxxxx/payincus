@@ -1699,8 +1699,8 @@ async function runAuditKillProcess() {
             {{ loadingAction === 'auditScan' ? '刷新中...' : '刷新进程' }}
           </button>
         </div>
-        <div class="overflow-x-auto rounded-xl border" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
-          <table class="min-w-full text-sm">
+        <div class="overflow-hidden rounded-xl border" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
+          <table class="w-full table-fixed text-sm">
             <thead :class="themeStore.isDark ? 'bg-gray-900' : 'bg-gray-50'">
               <tr>
                 <th class="px-4 py-3 text-left font-medium text-themed">PID</th>
@@ -1963,8 +1963,8 @@ async function runAuditKillProcess() {
           </div>
         </div>
 
-        <div v-if="networkResult" class="overflow-x-auto rounded-xl border" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
-          <table class="min-w-full text-sm">
+        <div v-if="networkResult" class="overflow-hidden rounded-xl border" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
+          <table class="w-full table-fixed text-sm">
             <thead :class="themeStore.isDark ? 'bg-gray-900' : 'bg-gray-50'">
               <tr>
                 <th class="px-4 py-3 text-left font-medium text-themed">ID</th>

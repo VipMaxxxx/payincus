@@ -169,61 +169,114 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
       <div v-else-if="withdrawals.length === 0" class="p-8 text-center text-themed-muted">
         {{ $t('aff.noRequests') }}
       </div>
-      <div v-else class="overflow-x-auto">
-        <table class="w-full min-w-[960px]">
-          <thead>
-            <tr class="border-b border-themed text-left text-sm text-themed-muted">
-              <th class="px-4 py-3 font-medium">ID</th>
-              <th class="px-4 py-3 font-medium">{{ $t('aff.user') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('aff.requestAmount') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('aff.userBalance') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('aff.status') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('aff.requestTime') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('aff.rejectReason') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="w in withdrawals" :key="w.id" class="hover:bg-themed-hover">
-              <td class="px-4 py-3 text-sm text-themed font-mono">#{{ w.id }}</td>
-              <td class="px-4 py-3">
-                <div class="text-sm text-themed font-medium">{{ w.username }}</div>
-                <div class="text-xs text-themed-muted">ID: {{ w.userId }}</div>
-              </td>
-              <td class="px-4 py-3 text-sm font-medium text-themed">{{ formatMoney(w.amount) }}</td>
-              <td class="px-4 py-3 text-sm text-themed-muted">{{ formatMoney(w.userAffBalance) }}</td>
-              <td class="px-4 py-3">
-                <span :class="['badge badge-sm', getStatusBadge(w.status)]">
-                  {{ getStatusName(w.status) }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(w.createdAt) }}</td>
-              <td class="px-4 py-3 text-sm text-themed-muted">{{ w.rejectReason || '-' }}</td>
-              <td class="px-4 py-3">
-                <template v-if="w.status === 'pending'">
-                  <div class="flex flex-wrap gap-2">
-                    <button
-                      class="btn btn-xs btn-success"
-                      :disabled="approveLoading === w.id"
-                      @click="approveWithdrawal(w)"
-                    >
-                      {{ approveLoading === w.id ? $t('common.processing') : $t('aff.approve') }}
-                    </button>
-                    <button
-                      class="btn btn-xs btn-ghost text-red-500 hover:bg-red-500/10"
-                      @click="openRejectModal(w)"
-                    >
-                      {{ $t('aff.reject') }}
-                    </button>
-                  </div>
-                </template>
-                <template v-else>
-                  <span class="text-themed-muted">-</span>
-                </template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <template v-else>
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="w in withdrawals"
+            :key="w.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-mono text-xs text-themed-muted">#{{ w.id }}</div>
+                <div class="mt-1 truncate text-sm font-semibold text-themed">{{ w.username }}</div>
+                <div class="mt-1 text-xs text-themed-muted">ID: {{ w.userId }}</div>
+              </div>
+              <span :class="['badge badge-sm shrink-0', getStatusBadge(w.status)]">
+                {{ getStatusName(w.status) }}
+              </span>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <div class="text-themed-muted">{{ $t('aff.requestAmount') }}</div>
+                <div class="mt-1 font-semibold text-themed">{{ formatMoney(w.amount) }}</div>
+              </div>
+              <div>
+                <div class="text-themed-muted">{{ $t('aff.userBalance') }}</div>
+                <div class="mt-1 font-medium text-themed">{{ formatMoney(w.userAffBalance) }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-themed-muted">{{ $t('aff.requestTime') }}</div>
+                <div class="mt-1 font-medium text-themed">{{ formatDate(w.createdAt) }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-themed-muted">{{ $t('aff.rejectReason') }}</div>
+                <div class="mt-1 break-words font-medium text-themed">{{ w.rejectReason || '-' }}</div>
+              </div>
+            </div>
+            <div v-if="w.status === 'pending'" class="mt-4 flex flex-wrap gap-2">
+              <button
+                class="btn btn-xs btn-success"
+                :disabled="approveLoading === w.id"
+                @click="approveWithdrawal(w)"
+              >
+                {{ approveLoading === w.id ? $t('common.processing') : $t('aff.approve') }}
+              </button>
+              <button
+                class="btn btn-xs btn-ghost text-red-500 hover:bg-red-500/10"
+                @click="openRejectModal(w)"
+              >
+                {{ $t('aff.reject') }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
+            <thead>
+              <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                <th class="w-[8%] px-4 py-3 font-medium">ID</th>
+                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('aff.user') }}</th>
+                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('aff.requestAmount') }}</th>
+                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('aff.userBalance') }}</th>
+                <th class="w-[10%] px-4 py-3 font-medium">{{ $t('aff.status') }}</th>
+                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('aff.requestTime') }}</th>
+                <th class="w-[14%] px-4 py-3 font-medium">{{ $t('aff.rejectReason') }}</th>
+                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-themed">
+              <tr v-for="w in withdrawals" :key="w.id" class="hover:bg-themed-hover">
+                <td class="px-4 py-3 text-sm text-themed font-mono">#{{ w.id }}</td>
+                <td class="px-4 py-3">
+                  <div class="truncate text-sm text-themed font-medium">{{ w.username }}</div>
+                  <div class="text-xs text-themed-muted">ID: {{ w.userId }}</div>
+                </td>
+                <td class="px-4 py-3 text-sm font-medium text-themed">{{ formatMoney(w.amount) }}</td>
+                <td class="px-4 py-3 text-sm text-themed-muted">{{ formatMoney(w.userAffBalance) }}</td>
+                <td class="px-4 py-3">
+                  <span :class="['badge badge-sm', getStatusBadge(w.status)]">
+                    {{ getStatusName(w.status) }}
+                  </span>
+                </td>
+                <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(w.createdAt) }}</td>
+                <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ w.rejectReason || '-' }}</td>
+                <td class="px-4 py-3">
+                  <template v-if="w.status === 'pending'">
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        class="btn btn-xs btn-success"
+                        :disabled="approveLoading === w.id"
+                        @click="approveWithdrawal(w)"
+                      >
+                        {{ approveLoading === w.id ? $t('common.processing') : $t('aff.approve') }}
+                      </button>
+                      <button
+                        class="btn btn-xs btn-ghost text-red-500 hover:bg-red-500/10"
+                        @click="openRejectModal(w)"
+                      >
+                        {{ $t('aff.reject') }}
+                      </button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span class="text-themed-muted">-</span>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <!-- 分页 -->
         <div v-if="totalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-themed">
@@ -243,7 +296,7 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
             {{ $t('common.nextPage') }}
           </button>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 拒绝弹窗 -->

@@ -860,29 +860,60 @@ function getSeriesTitle(seriesId: string): string {
         <div v-else-if="checkinLogs.length === 0" class="p-8 text-center text-themed-muted">
           {{ $t('entertainment.admin.checkin.noLogs') }}
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.date') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.points') }}</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.streakDays') }}</th>
-                <th class="px-4 py-3 font-medium">IP</th>
-                <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.time') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-themed">
-              <tr v-for="record in checkinLogs" :key="record.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 text-sm text-themed">{{ record.username }} #{{ record.userId }}</td>
-                <td class="px-4 py-3 text-sm text-themed">{{ record.dateKey }}</td>
-                <td class="px-4 py-3 text-sm font-medium text-amber-500">+{{ record.points }}</td>
-                <td class="px-4 py-3 text-sm text-themed">{{ record.streakDays }}</td>
-                <td class="px-4 py-3 text-sm text-themed-muted">{{ record.ipAddress || '-' }}</td>
-                <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(record.createdAt) }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <template v-else>
+          <div class="space-y-3 p-4 lg:hidden">
+            <div
+              v-for="record in checkinLogs"
+              :key="record.id"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="truncate text-sm font-semibold text-themed">{{ record.username }} #{{ record.userId }}</div>
+                  <div class="mt-1 text-xs text-themed-muted">{{ record.dateKey }}</div>
+                </div>
+                <div class="shrink-0 text-sm font-semibold text-amber-500">+{{ record.points }}</div>
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div class="text-themed-muted">{{ $t('entertainment.admin.checkin.streakDays') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ record.streakDays }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">IP</div>
+                  <div class="mt-1 break-all font-medium text-themed">{{ record.ipAddress || '-' }}</div>
+                </div>
+                <div class="col-span-2">
+                  <div class="text-themed-muted">{{ $t('entertainment.admin.checkin.time') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatDate(record.createdAt) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed">
+              <thead>
+                <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                  <th class="w-[22%] px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
+                  <th class="w-[14%] px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.date') }}</th>
+                  <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.points') }}</th>
+                  <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.streakDays') }}</th>
+                  <th class="w-[18%] px-4 py-3 font-medium">IP</th>
+                  <th class="w-[22%] px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.time') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-themed">
+                <tr v-for="record in checkinLogs" :key="record.id" class="hover:bg-themed-hover">
+                  <td class="truncate px-4 py-3 text-sm text-themed">{{ record.username }} #{{ record.userId }}</td>
+                  <td class="truncate px-4 py-3 text-sm text-themed">{{ record.dateKey }}</td>
+                  <td class="px-4 py-3 text-sm font-medium text-amber-500">+{{ record.points }}</td>
+                  <td class="px-4 py-3 text-sm text-themed">{{ record.streakDays }}</td>
+                  <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ record.ipAddress || '-' }}</td>
+                  <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(record.createdAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <div v-if="checkinLogsTotalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-themed">
             <button
               class="btn btn-sm btn-ghost"
@@ -900,7 +931,7 @@ function getSeriesTitle(seriesId: string): string {
               {{ $t('common.nextPage') }}
             </button>
           </div>
-        </div>
+        </template>
       </div>
     </div>
 
@@ -912,85 +943,158 @@ function getSeriesTitle(seriesId: string): string {
       <div v-else-if="lotteries.length === 0" class="p-8 text-center text-themed-muted">
         {{ $t('entertainment.admin.noLotteries') }}
       </div>
-      <div v-else class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-themed text-left text-sm text-themed-muted">
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.lotteryName') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.costPoints') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.prizes') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.totalDraws') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.status') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="lottery in lotteries" :key="lottery.id" class="hover:bg-themed-hover">
-              <td class="px-4 py-3">
-                <div class="text-sm font-medium text-themed">{{ lottery.name }}</div>
-                <div v-if="lottery.description" class="text-xs text-themed-muted truncate max-w-xs">
+      <template v-else>
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="lottery in lotteries"
+            :key="lottery.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate text-sm font-semibold text-themed">{{ lottery.name }}</div>
+                <div v-if="lottery.description" class="mt-1 line-clamp-2 text-xs text-themed-muted">
                   {{ lottery.description }}
                 </div>
-              </td>
-              <td class="px-4 py-3 text-sm text-themed">{{ lottery.costPoints }}</td>
-              <td class="px-4 py-3 text-sm text-themed">{{ lottery.prizesCount || lottery.prizes?.length || 0 }}</td>
-              <td class="px-4 py-3 text-sm text-themed">{{ lottery.totalDraws }}</td>
-              <td class="px-4 py-3">
-                <span :class="['badge badge-sm', lottery.isActive ? 'badge-success' : 'badge-ghost']">
-                  {{ lottery.isActive ? $t('entertainment.admin.active') : $t('entertainment.admin.inactive') }}
-                </span>
-              </td>
-              <td class="px-4 py-3">
-                <div class="flex gap-1">
-                  <button class="btn btn-xs btn-ghost" :title="$t('entertainment.admin.managePrizes')" @click="openPrizesModal(lottery)">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H4.5a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21" />
-                    </svg>
-                  </button>
-                  <button 
-                    class="btn btn-xs btn-ghost" 
-                    :class="{ 'text-green-500': lottery.notificationConfig?.enabled }"
-                    :title="$t('entertainment.admin.notification.title')" 
-                    @click="openNotificationModal(lottery)"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
-                  </button>
-                  <button class="btn btn-xs btn-ghost" @click="openEditLotteryModal(lottery)">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button 
-                    v-if="deleteConfirmId !== lottery.id"
-                    class="btn btn-xs btn-ghost text-red-500" 
-                    @click="deleteConfirmId = lottery.id"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                  <template v-else>
-                    <button 
-                      class="btn btn-xs btn-error"
-                      :disabled="deleting"
-                      @click="deleteLottery(lottery.id)"
-                    >
-                      {{ $t('common.confirm') }}
+              </div>
+              <span :class="['badge badge-sm shrink-0', lottery.isActive ? 'badge-success' : 'badge-ghost']">
+                {{ lottery.isActive ? $t('entertainment.admin.active') : $t('entertainment.admin.inactive') }}
+              </span>
+            </div>
+            <div class="mt-3 grid grid-cols-3 gap-3 text-xs">
+              <div>
+                <div class="text-themed-muted">{{ $t('entertainment.admin.costPoints') }}</div>
+                <div class="mt-1 font-medium text-themed">{{ lottery.costPoints }}</div>
+              </div>
+              <div>
+                <div class="text-themed-muted">{{ $t('entertainment.admin.prizes') }}</div>
+                <div class="mt-1 font-medium text-themed">{{ lottery.prizesCount || lottery.prizes?.length || 0 }}</div>
+              </div>
+              <div>
+                <div class="text-themed-muted">{{ $t('entertainment.admin.totalDraws') }}</div>
+                <div class="mt-1 font-medium text-themed">{{ lottery.totalDraws }}</div>
+              </div>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button class="btn btn-xs btn-ghost" :title="$t('entertainment.admin.managePrizes')" @click="openPrizesModal(lottery)">
+                {{ $t('entertainment.admin.managePrizes') }}
+              </button>
+              <button
+                class="btn btn-xs btn-ghost"
+                :class="{ 'text-green-500': lottery.notificationConfig?.enabled }"
+                :title="$t('entertainment.admin.notification.title')"
+                @click="openNotificationModal(lottery)"
+              >
+                {{ $t('entertainment.admin.notification.title') }}
+              </button>
+              <button class="btn btn-xs btn-ghost" @click="openEditLotteryModal(lottery)">
+                {{ $t('common.edit') }}
+              </button>
+              <button
+                v-if="deleteConfirmId !== lottery.id"
+                class="btn btn-xs btn-ghost text-red-500"
+                @click="deleteConfirmId = lottery.id"
+              >
+                {{ $t('common.delete') }}
+              </button>
+              <template v-else>
+                <button
+                  class="btn btn-xs btn-error"
+                  :disabled="deleting"
+                  @click="deleteLottery(lottery.id)"
+                >
+                  {{ $t('common.confirm') }}
+                </button>
+                <button
+                  class="btn btn-xs btn-ghost"
+                  @click="deleteConfirmId = null"
+                >
+                  {{ $t('common.cancel') }}
+                </button>
+              </template>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
+            <thead>
+              <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                <th class="w-[30%] px-4 py-3 font-medium">{{ $t('entertainment.admin.lotteryName') }}</th>
+                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.costPoints') }}</th>
+                <th class="w-[10%] px-4 py-3 font-medium">{{ $t('entertainment.admin.prizes') }}</th>
+                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.totalDraws') }}</th>
+                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.status') }}</th>
+                <th class="w-[24%] px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-themed">
+              <tr v-for="lottery in lotteries" :key="lottery.id" class="hover:bg-themed-hover">
+                <td class="px-4 py-3">
+                  <div class="truncate text-sm font-medium text-themed">{{ lottery.name }}</div>
+                  <div v-if="lottery.description" class="truncate text-xs text-themed-muted">
+                    {{ lottery.description }}
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-sm text-themed">{{ lottery.costPoints }}</td>
+                <td class="px-4 py-3 text-sm text-themed">{{ lottery.prizesCount || lottery.prizes?.length || 0 }}</td>
+                <td class="px-4 py-3 text-sm text-themed">{{ lottery.totalDraws }}</td>
+                <td class="px-4 py-3">
+                  <span :class="['badge badge-sm', lottery.isActive ? 'badge-success' : 'badge-ghost']">
+                    {{ lottery.isActive ? $t('entertainment.admin.active') : $t('entertainment.admin.inactive') }}
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex flex-wrap gap-1">
+                    <button class="btn btn-xs btn-ghost" :title="$t('entertainment.admin.managePrizes')" @click="openPrizesModal(lottery)">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H4.5a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21" />
+                      </svg>
                     </button>
-                    <button 
+                    <button
                       class="btn btn-xs btn-ghost"
-                      @click="deleteConfirmId = null"
+                      :class="{ 'text-green-500': lottery.notificationConfig?.enabled }"
+                      :title="$t('entertainment.admin.notification.title')"
+                      @click="openNotificationModal(lottery)"
                     >
-                      {{ $t('common.cancel') }}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                      </svg>
                     </button>
-                  </template>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                    <button class="btn btn-xs btn-ghost" @click="openEditLotteryModal(lottery)">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button
+                      v-if="deleteConfirmId !== lottery.id"
+                      class="btn btn-xs btn-ghost text-red-500"
+                      @click="deleteConfirmId = lottery.id"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                    <template v-else>
+                      <button
+                        class="btn btn-xs btn-error"
+                        :disabled="deleting"
+                        @click="deleteLottery(lottery.id)"
+                      >
+                        {{ $t('common.confirm') }}
+                      </button>
+                      <button
+                        class="btn btn-xs btn-ghost"
+                        @click="deleteConfirmId = null"
+                      >
+                        {{ $t('common.cancel') }}
+                      </button>
+                    </template>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         
         <!-- 分页 -->
         <div v-if="lotteriesTotalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-themed">
@@ -1010,7 +1114,7 @@ function getSeriesTitle(seriesId: string): string {
             {{ $t('common.nextPage') }}
           </button>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 中奖记录 TAB -->
@@ -1054,44 +1158,85 @@ function getSeriesTitle(seriesId: string): string {
       <div v-else-if="records.length === 0" class="p-8 text-center text-themed-muted">
         {{ $t('entertainment.admin.noRecords') }}
       </div>
-      <div v-else class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-themed text-left text-sm text-themed-muted">
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.lotteryName') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.prize') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.prizeType') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.value') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.time') }}</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="rec in records" :key="rec.id" class="hover:bg-themed-hover">
-              <td class="px-4 py-3 text-sm text-themed">{{ rec.username || rec.userId }}</td>
-              <td class="px-4 py-3 text-sm text-themed">{{ rec.lotteryName || '-' }}</td>
-              <td class="px-4 py-3 text-sm text-themed">{{ rec.prizeName || '-' }}</td>
-              <td class="px-4 py-3 text-sm">
-                <span class="badge badge-sm">{{ getPrizeTypeName(rec.prizeType) }}</span>
-              </td>
-              <td class="px-4 py-3 text-sm text-themed">
-                <template v-if="rec.prizeType === 'points'">+{{ rec.prizeValue }}</template>
-                <template v-else-if="rec.prizeType === 'balance'">+¥{{ (rec.prizeValue / 100).toFixed(2) }}</template>
-                <template v-else-if="rec.prizeType === 'badge'">{{ rec.prizeName || $t('entertainment.prizeTypes.badge') }}</template>
-                <template v-else-if="rec.prizeType === 'instance'">{{ rec.instanceDesc || $t('entertainment.wonInstance') }}</template>
-                <template v-else-if="rec.prizeType === 'cpu'">+{{ rec.prizeValue }}%</template>
-                <template v-else-if="rec.prizeType === 'memory'">+{{ rec.prizeValue }}MB</template>
-                <template v-else-if="rec.prizeType === 'disk'">+{{ rec.prizeValue }}MB</template>
-                <template v-else-if="rec.prizeType === 'traffic'">+{{ rec.prizeValue }}GB</template>
-                <template v-else>-</template>
-              </td>
-              <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(rec.createdAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <template v-else>
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="rec in records"
+            :key="rec.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate text-sm font-semibold text-themed">{{ rec.username || rec.userId }}</div>
+                <div class="mt-1 truncate text-xs text-themed-muted">{{ rec.lotteryName || '-' }}</div>
+              </div>
+              <span class="badge badge-sm shrink-0">{{ getPrizeTypeName(rec.prizeType) }}</span>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <div class="text-themed-muted">{{ $t('entertainment.admin.prize') }}</div>
+                <div class="mt-1 font-medium text-themed">{{ rec.prizeName || '-' }}</div>
+              </div>
+              <div>
+                <div class="text-themed-muted">{{ $t('entertainment.admin.value') }}</div>
+                <div class="mt-1 font-medium text-themed">
+                  <template v-if="rec.prizeType === 'points'">+{{ rec.prizeValue }}</template>
+                  <template v-else-if="rec.prizeType === 'balance'">+¥{{ (rec.prizeValue / 100).toFixed(2) }}</template>
+                  <template v-else-if="rec.prizeType === 'badge'">{{ rec.prizeName || $t('entertainment.prizeTypes.badge') }}</template>
+                  <template v-else-if="rec.prizeType === 'instance'">{{ rec.instanceDesc || $t('entertainment.wonInstance') }}</template>
+                  <template v-else-if="rec.prizeType === 'cpu'">+{{ rec.prizeValue }}%</template>
+                  <template v-else-if="rec.prizeType === 'memory'">+{{ rec.prizeValue }}MB</template>
+                  <template v-else-if="rec.prizeType === 'disk'">+{{ rec.prizeValue }}MB</template>
+                  <template v-else-if="rec.prizeType === 'traffic'">+{{ rec.prizeValue }}GB</template>
+                  <template v-else>-</template>
+                </div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-themed-muted">{{ $t('entertainment.time') }}</div>
+                <div class="mt-1 font-medium text-themed">{{ formatDate(rec.createdAt) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
+            <thead>
+              <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                <th class="w-[18%] px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
+                <th class="w-[20%] px-4 py-3 font-medium">{{ $t('entertainment.admin.lotteryName') }}</th>
+                <th class="w-[20%] px-4 py-3 font-medium">{{ $t('entertainment.admin.prize') }}</th>
+                <th class="w-[13%] px-4 py-3 font-medium">{{ $t('entertainment.admin.prizeType') }}</th>
+                <th class="w-[14%] px-4 py-3 font-medium">{{ $t('entertainment.admin.value') }}</th>
+                <th class="w-[15%] px-4 py-3 font-medium">{{ $t('entertainment.time') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-themed">
+              <tr v-for="rec in records" :key="rec.id" class="hover:bg-themed-hover">
+                <td class="truncate px-4 py-3 text-sm text-themed">{{ rec.username || rec.userId }}</td>
+                <td class="truncate px-4 py-3 text-sm text-themed">{{ rec.lotteryName || '-' }}</td>
+                <td class="truncate px-4 py-3 text-sm text-themed">{{ rec.prizeName || '-' }}</td>
+                <td class="px-4 py-3 text-sm">
+                  <span class="badge badge-sm">{{ getPrizeTypeName(rec.prizeType) }}</span>
+                </td>
+                <td class="truncate px-4 py-3 text-sm text-themed">
+                  <template v-if="rec.prizeType === 'points'">+{{ rec.prizeValue }}</template>
+                  <template v-else-if="rec.prizeType === 'balance'">+¥{{ (rec.prizeValue / 100).toFixed(2) }}</template>
+                  <template v-else-if="rec.prizeType === 'badge'">{{ rec.prizeName || $t('entertainment.prizeTypes.badge') }}</template>
+                  <template v-else-if="rec.prizeType === 'instance'">{{ rec.instanceDesc || $t('entertainment.wonInstance') }}</template>
+                  <template v-else-if="rec.prizeType === 'cpu'">+{{ rec.prizeValue }}%</template>
+                  <template v-else-if="rec.prizeType === 'memory'">+{{ rec.prizeValue }}MB</template>
+                  <template v-else-if="rec.prizeType === 'disk'">+{{ rec.prizeValue }}MB</template>
+                  <template v-else-if="rec.prizeType === 'traffic'">+{{ rec.prizeValue }}GB</template>
+                  <template v-else>-</template>
+                </td>
+                <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(rec.createdAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         
         <!-- 分页 -->
-        <div class="flex justify-between items-center p-4 border-t border-themed">
+        <div class="flex flex-col gap-3 p-4 border-t border-themed sm:flex-row sm:items-center sm:justify-between">
           <!-- 每页数量 -->
           <div class="flex items-center gap-2">
             <span class="text-sm text-themed-muted">{{ $t('common.perPage') }}:</span>
@@ -1125,7 +1270,7 @@ function getSeriesTitle(seriesId: string): string {
             </button>
           </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 用户积分 TAB -->
@@ -1136,29 +1281,60 @@ function getSeriesTitle(seriesId: string): string {
       <div v-else-if="users.length === 0" class="p-8 text-center text-themed-muted">
         {{ $t('entertainment.admin.noUsers') }}
       </div>
-      <div v-else class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-themed text-left text-sm text-themed-muted">
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.currentPoints') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.totalEarned') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.totalSpent') }}</th>
-              <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.lastConvertedAt') }}</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="user in users" :key="user.userId" class="hover:bg-themed-hover">
-              <td class="px-4 py-3 text-sm text-themed">{{ user.username || user.userId }}</td>
-              <td class="px-4 py-3 text-sm font-medium text-amber-500">{{ user.points?.toLocaleString() }}</td>
-              <td class="px-4 py-3 text-sm text-green-500">+{{ user.totalEarned?.toLocaleString() }}</td>
-              <td class="px-4 py-3 text-sm text-red-500">-{{ user.totalSpent?.toLocaleString() }}</td>
-              <td class="px-4 py-3 text-sm text-themed-muted">
-                {{ user.lastConvertedAt ? formatDate(user.lastConvertedAt) : '-' }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <template v-else>
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="user in users"
+            :key="user.userId"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate text-sm font-semibold text-themed">{{ user.username || user.userId }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ $t('entertainment.admin.currentPoints') }}</div>
+              </div>
+              <div class="shrink-0 text-sm font-semibold text-amber-500">{{ user.points?.toLocaleString() }}</div>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <div class="text-themed-muted">{{ $t('entertainment.admin.totalEarned') }}</div>
+                <div class="mt-1 font-medium text-green-500">+{{ user.totalEarned?.toLocaleString() }}</div>
+              </div>
+              <div>
+                <div class="text-themed-muted">{{ $t('entertainment.admin.totalSpent') }}</div>
+                <div class="mt-1 font-medium text-red-500">-{{ user.totalSpent?.toLocaleString() }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-themed-muted">{{ $t('entertainment.admin.lastConvertedAt') }}</div>
+                <div class="mt-1 font-medium text-themed">{{ user.lastConvertedAt ? formatDate(user.lastConvertedAt) : '-' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed">
+            <thead>
+              <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                <th class="w-[28%] px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
+                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.admin.currentPoints') }}</th>
+                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.admin.totalEarned') }}</th>
+                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.admin.totalSpent') }}</th>
+                <th class="w-[24%] px-4 py-3 font-medium">{{ $t('entertainment.admin.lastConvertedAt') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-themed">
+              <tr v-for="user in users" :key="user.userId" class="hover:bg-themed-hover">
+                <td class="truncate px-4 py-3 text-sm text-themed">{{ user.username || user.userId }}</td>
+                <td class="px-4 py-3 text-sm font-medium text-amber-500">{{ user.points?.toLocaleString() }}</td>
+                <td class="px-4 py-3 text-sm text-green-500">+{{ user.totalEarned?.toLocaleString() }}</td>
+                <td class="px-4 py-3 text-sm text-red-500">-{{ user.totalSpent?.toLocaleString() }}</td>
+                <td class="truncate px-4 py-3 text-sm text-themed-muted">
+                  {{ user.lastConvertedAt ? formatDate(user.lastConvertedAt) : '-' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         
         <!-- 分页 -->
         <div v-if="usersTotalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-themed">
@@ -1178,7 +1354,7 @@ function getSeriesTitle(seriesId: string): string {
             {{ $t('common.nextPage') }}
           </button>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 徽章管理 TAB -->
@@ -1250,54 +1426,99 @@ function getSeriesTitle(seriesId: string): string {
             <div v-if="filteredBadges.length === 0" class="p-8 text-center text-themed-muted">
               {{ $t('entertainment.admin.badgeCatalog.badges.empty') }}
             </div>
-            <div v-else class="overflow-x-auto">
-              <table class="w-full">
-                <thead>
-                  <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                    <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableBadge') }}</th>
-                    <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableSeries') }}</th>
-                    <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableAssetUrl') }}</th>
-                    <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableStatus') }}</th>
-                    <th class="px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableUsage') }}</th>
-                    <th class="px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-themed">
-                  <tr v-for="badge in filteredBadges" :key="badge.id" class="hover:bg-themed-hover">
-                    <td class="px-4 py-3">
-                      <div class="flex items-center gap-3">
-                        <img :src="badge.assetUrlLight || badge.assetUrl" :alt="badge.fullLabel" class="w-10 h-10 object-contain rounded-lg" loading="lazy" />
-                        <div class="min-w-0">
-                          <div class="text-sm font-semibold text-themed">{{ badge.name }}</div>
-                          <div class="text-xs text-themed-muted truncate max-w-52">{{ badge.fullLabel }}</div>
-                          <div class="text-xs text-themed-faint">{{ badge.id }}</div>
+            <template v-else>
+              <div class="space-y-3 p-4 lg:hidden">
+                <div
+                  v-for="badge in filteredBadges"
+                  :key="badge.id"
+                  class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+                >
+                  <div class="flex items-start gap-3">
+                    <img :src="badge.assetUrlLight || badge.assetUrl" :alt="badge.fullLabel" class="h-11 w-11 shrink-0 rounded-lg object-contain" loading="lazy" />
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-sm font-semibold text-themed">{{ badge.name }}</div>
+                      <div class="mt-1 truncate text-xs text-themed-muted">{{ badge.fullLabel }}</div>
+                      <div class="mt-1 break-all text-xs text-themed-faint">{{ badge.id }}</div>
+                    </div>
+                    <span :class="['badge badge-sm shrink-0', badge.isActive && badge.seriesIsActive ? 'badge-success' : 'badge-ghost']">
+                      {{ badge.isActive && badge.seriesIsActive ? $t('entertainment.admin.badgeCatalog.badges.drawable') : $t('entertainment.admin.badgeCatalog.badges.notDrawable') }}
+                    </span>
+                  </div>
+                  <div class="mt-3 space-y-2 text-xs">
+                    <div class="flex justify-between gap-3">
+                      <span class="text-themed-muted">{{ $t('entertainment.admin.badgeCatalog.badges.tableSeries') }}</span>
+                      <span class="min-w-0 truncate font-medium text-themed">{{ badge.seriesNameZh || badge.seriesTitle }}</span>
+                    </div>
+                    <div>
+                      <div class="text-themed-muted">{{ $t('entertainment.admin.badgeCatalog.badges.tableAssetUrl') }}</div>
+                      <div class="mt-1 break-all font-medium text-themed">{{ badge.assetUrl }}</div>
+                    </div>
+                    <div>
+                      <div class="text-themed-muted">{{ $t('entertainment.admin.badgeCatalog.badges.tableUsage') }}</div>
+                      <div class="mt-1 font-medium text-themed">
+                        {{ $t('entertainment.admin.badgeCatalog.badges.usage', { ownership: badge.ownershipCount || 0, avatar: badge.avatarUseCount || 0, instance: badge.instanceUseCount || 0 }) }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-4 flex flex-wrap gap-2">
+                    <button class="btn btn-xs btn-ghost" @click="openEditBadgeModal(badge)">{{ $t('common.edit') }}</button>
+                    <template v-if="deletingBadgeId === badge.id">
+                      <button class="btn btn-xs btn-error" @click="deleteBadge(badge.id)">{{ $t('common.confirm') }}</button>
+                      <button class="btn btn-xs btn-ghost" @click="deletingBadgeId = null">{{ $t('common.cancel') }}</button>
+                    </template>
+                    <button v-else class="btn btn-xs btn-ghost text-red-500" @click="deletingBadgeId = badge.id">{{ $t('common.delete') }}</button>
+                  </div>
+                </div>
+              </div>
+              <div class="hidden overflow-hidden lg:block">
+                <table class="w-full table-fixed">
+                  <thead>
+                    <tr class="border-b border-themed text-left text-sm text-themed-muted">
+                      <th class="w-[26%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableBadge') }}</th>
+                      <th class="w-[15%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableSeries') }}</th>
+                      <th class="w-[20%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableAssetUrl') }}</th>
+                      <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableStatus') }}</th>
+                      <th class="w-[15%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableUsage') }}</th>
+                      <th class="w-[12%] px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-themed">
+                    <tr v-for="badge in filteredBadges" :key="badge.id" class="hover:bg-themed-hover">
+                      <td class="px-4 py-3">
+                        <div class="flex items-center gap-3">
+                          <img :src="badge.assetUrlLight || badge.assetUrl" :alt="badge.fullLabel" class="h-10 w-10 shrink-0 rounded-lg object-contain" loading="lazy" />
+                          <div class="min-w-0">
+                            <div class="truncate text-sm font-semibold text-themed">{{ badge.name }}</div>
+                            <div class="truncate text-xs text-themed-muted">{{ badge.fullLabel }}</div>
+                            <div class="truncate text-xs text-themed-faint">{{ badge.id }}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td class="px-4 py-3 text-sm text-themed">{{ badge.seriesNameZh || badge.seriesTitle }}</td>
-                    <td class="px-4 py-3 text-xs text-themed-muted max-w-64 truncate">{{ badge.assetUrl }}</td>
-                    <td class="px-4 py-3">
-                      <span :class="['badge badge-sm', badge.isActive && badge.seriesIsActive ? 'badge-success' : 'badge-ghost']">
-                        {{ badge.isActive && badge.seriesIsActive ? $t('entertainment.admin.badgeCatalog.badges.drawable') : $t('entertainment.admin.badgeCatalog.badges.notDrawable') }}
-                      </span>
-                    </td>
-                    <td class="px-4 py-3 text-xs text-themed-muted">
-                      {{ $t('entertainment.admin.badgeCatalog.badges.usage', { ownership: badge.ownershipCount || 0, avatar: badge.avatarUseCount || 0, instance: badge.instanceUseCount || 0 }) }}
-                    </td>
-                    <td class="px-4 py-3">
-                      <div class="flex gap-1">
-                        <button class="btn btn-xs btn-ghost" @click="openEditBadgeModal(badge)">{{ $t('common.edit') }}</button>
-                        <template v-if="deletingBadgeId === badge.id">
-                          <button class="btn btn-xs btn-error" @click="deleteBadge(badge.id)">{{ $t('common.confirm') }}</button>
-                          <button class="btn btn-xs btn-ghost" @click="deletingBadgeId = null">{{ $t('common.cancel') }}</button>
-                        </template>
-                        <button v-else class="btn btn-xs btn-ghost text-red-500" @click="deletingBadgeId = badge.id">{{ $t('common.delete') }}</button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                      </td>
+                      <td class="truncate px-4 py-3 text-sm text-themed">{{ badge.seriesNameZh || badge.seriesTitle }}</td>
+                      <td class="truncate px-4 py-3 text-xs text-themed-muted">{{ badge.assetUrl }}</td>
+                      <td class="px-4 py-3">
+                        <span :class="['badge badge-sm', badge.isActive && badge.seriesIsActive ? 'badge-success' : 'badge-ghost']">
+                          {{ badge.isActive && badge.seriesIsActive ? $t('entertainment.admin.badgeCatalog.badges.drawable') : $t('entertainment.admin.badgeCatalog.badges.notDrawable') }}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 text-xs text-themed-muted">
+                        {{ $t('entertainment.admin.badgeCatalog.badges.usage', { ownership: badge.ownershipCount || 0, avatar: badge.avatarUseCount || 0, instance: badge.instanceUseCount || 0 }) }}
+                      </td>
+                      <td class="px-4 py-3">
+                        <div class="flex flex-wrap gap-1">
+                          <button class="btn btn-xs btn-ghost" @click="openEditBadgeModal(badge)">{{ $t('common.edit') }}</button>
+                          <template v-if="deletingBadgeId === badge.id">
+                            <button class="btn btn-xs btn-error" @click="deleteBadge(badge.id)">{{ $t('common.confirm') }}</button>
+                            <button class="btn btn-xs btn-ghost" @click="deletingBadgeId = null">{{ $t('common.cancel') }}</button>
+                          </template>
+                          <button v-else class="btn btn-xs btn-ghost text-red-500" @click="deletingBadgeId = badge.id">{{ $t('common.delete') }}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
           </div>
         </div>
       </template>

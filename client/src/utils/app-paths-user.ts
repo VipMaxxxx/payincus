@@ -4,6 +4,14 @@ export function loginPath(): string {
   return '/login'
 }
 
+export function registerPath(inviteCode?: string): string {
+  return inviteCode ? `/register/${encodeURIComponent(inviteCode)}` : '/register'
+}
+
+export function forgotPasswordPath(): string {
+  return '/forgot-password'
+}
+
 export function profilePath(): string {
   return '/profile'
 }
@@ -16,8 +24,20 @@ export function dashboardPath(): string {
   return '/dashboard'
 }
 
+export function marketPath(): string {
+  return '/market'
+}
+
 export function walletPath(): string {
   return '/wallet'
+}
+
+export function exchangePath(): string {
+  return '/exchange'
+}
+
+export function entertainmentPath(): string {
+  return '/entertainment'
 }
 
 export function helpPath(): string {
@@ -26,6 +46,14 @@ export function helpPath(): string {
 
 export function inboxPath(): string {
   return '/inbox'
+}
+
+export function mailPath(): string {
+  return '/mail'
+}
+
+export function mailDomainPath(id: number | string): string {
+  return `/mail/domains/${encodeURIComponent(String(id))}`
 }
 
 export function transfersPath(): string {

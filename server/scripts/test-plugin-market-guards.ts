@@ -34,12 +34,15 @@ assert.ok(
     market.includes('/releases/download/') &&
     market.includes('Stable plugin market assets must be under /plugin-market/packages or /plugin-market/manifests') &&
     market.includes('Plugin package SHA256 mismatch') &&
+    market.includes('buildUnavailablePluginMarketIndex') &&
     market.includes("createHash('sha256')"),
   'plugin market must read a trusted stable index and require trusted package URLs with SHA256 verification'
 )
 
 assert.ok(
   adminRoute.includes('/market/install') &&
+    adminRoute.includes('Plugin market index unavailable') &&
+    adminRoute.includes('buildUnavailablePluginMarketIndex') &&
     adminRoute.includes('downloadMarketPlugin(entry)') &&
     adminRoute.includes("sourceType: 'market'") &&
     adminRoute.includes('PLUGIN_MARKET_INSTALL_FAILED'),

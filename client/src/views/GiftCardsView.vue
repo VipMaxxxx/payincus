@@ -25,6 +25,7 @@ const turnstileEnabled = ref(false)
 const turnstileSiteKey = ref('')
 const turnstileToken = ref('')
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+const isTurnstileChallengeAvailable = computed<boolean>(() => turnstileEnabled.value && Boolean(turnstileSiteKey.value))
 
 const statusOptions = computed<Array<{ value: GiftCardStatus | ''; label: string }>>(() => [
   { value: '', label: t('giftCards.status.all') },
@@ -120,7 +121,7 @@ async function loadCards(): Promise<void> {
 }
 
 function getTurnstileToken(): string | undefined {
-  if (!turnstileEnabled.value) return undefined
+  if (!isTurnstileChallengeAvailable.value) return undefined
   const widgetToken = turnstileRef.value?.getToken?.()
   if (widgetToken) {
     turnstileToken.value = widgetToken
@@ -148,7 +149,7 @@ function resetTurnstile(): void {
 
 function requireTurnstileToken(): string | undefined | null {
   const token = getTurnstileToken()
-  if (turnstileEnabled.value && !token) {
+  if (isTurnstileChallengeAvailable.value && !token) {
     toast.warning(t('giftCards.toast.turnstileRequired'))
     return null
   }
@@ -245,7 +246,7 @@ onMounted(async () => {
     </div>
 
     <div class="grid gap-6 lg:grid-cols-2">
-      <section v-if="turnstileEnabled && turnstileSiteKey" class="card p-6 lg:col-span-2">
+      <section v-if="isTurnstileChallengeAvailable" class="card p-6 lg:col-span-2">
         <h2 class="text-base font-semibold text-themed">{{ t('giftCards.turnstileTitle') }}</h2>
         <p class="mt-1 text-sm text-themed-muted">{{ t('giftCards.turnstileDescription') }}</p>
         <div class="mt-4">
@@ -295,7 +296,7 @@ onMounted(async () => {
         </select>
       </div>
 
-      <div class="mt-5 space-y-3 md:hidden">
+      <div class="mt-5 space-y-3 lg:hidden">
         <div v-for="card in cards" :key="card.id" class="rounded-lg border border-themed bg-themed-surface p-4">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -324,21 +325,21 @@ onMounted(async () => {
         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
       </div>
 
-      <div class="mt-5 hidden overflow-x-auto md:block">
-        <table class="min-w-full text-sm">
+      <div class="mt-5 hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed text-sm">
           <thead class="border-b border-themed text-left text-themed-muted">
             <tr>
-              <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCards.amount') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCards.statusTitle') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCards.expiresAt') }}</th>
-              <th class="py-3 pr-4">{{ t('giftCards.action') }}</th>
+              <th class="w-[38%] py-3 pr-4">{{ t('giftCards.code') }}</th>
+              <th class="w-[14%] py-3 pr-4">{{ t('giftCards.amount') }}</th>
+              <th class="w-[14%] py-3 pr-4">{{ t('giftCards.statusTitle') }}</th>
+              <th class="w-[18%] py-3 pr-4">{{ t('giftCards.expiresAt') }}</th>
+              <th class="w-[16%] py-3 pr-4">{{ t('giftCards.action') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="card in cards" :key="card.id" class="border-b border-themed">
-              <td class="max-w-[360px] py-3 pr-4 font-mono text-xs text-themed">
-                <span class="break-all">{{ displayCardCode(card) }}</span>
+              <td class="py-3 pr-4 font-mono text-xs text-themed">
+                <span class="block truncate">{{ displayCardCode(card) }}</span>
               </td>
               <td class="py-3 pr-4 text-themed">{{ formatMoney(card.balanceValue) }}</td>
               <td class="py-3 pr-4" :class="statusClass(card.status)">{{ statusLabel(card.status) }}</td>

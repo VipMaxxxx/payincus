@@ -900,9 +900,9 @@ assert(
 				exchangeRouteSource.includes('normalizePurchaseBody') &&
 				exchangeRouteSource.includes('imageAlias: input.imageAlias') &&
 				exchangeRouteSource.includes('sshKeyId: input.sshKeyId') &&
-		    exchangeRouteSource.includes('/orders/:orderId') &&
-		    exchangeRouteSource.includes('getUserExchangeOrder(request.user.id, orderId)') &&
-		    exchangeRouteSource.includes('/wallet/transfer') &&
+			    exchangeRouteSource.includes('/orders/:orderId') &&
+			    exchangeRouteSource.includes('return await getUserExchangeOrder(request.user.id, orderId)') &&
+			    exchangeRouteSource.includes('/wallet/transfer') &&
     exchangeRouteSource.includes('/withdrawals') &&
     exchangeRouteSource.includes('/orders/:orderId/disputes') &&
     exchangeRouteSource.includes('requireExchangeVerification') &&

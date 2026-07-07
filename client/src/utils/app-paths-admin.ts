@@ -4,6 +4,14 @@ export function loginPath(): string {
   return '/admin/login'
 }
 
+export function registerPath(): string {
+  return '/admin/login'
+}
+
+export function forgotPasswordPath(): string {
+  return '/admin/login'
+}
+
 export function profilePath(): string {
   return '/admin/profile'
 }
@@ -16,8 +24,20 @@ export function dashboardPath(): string {
   return '/admin/users'
 }
 
+export function marketPath(): string {
+  return '/admin/resources/packages'
+}
+
 export function walletPath(): string {
   return '/admin/billing'
+}
+
+export function exchangePath(): string {
+  return '/admin/exchange'
+}
+
+export function entertainmentPath(): string {
+  return '/admin/entertainment'
 }
 
 export function helpPath(): string {
@@ -26,6 +46,14 @@ export function helpPath(): string {
 
 export function inboxPath(): string {
   return '/admin/inbox'
+}
+
+export function mailPath(): string {
+  return '/admin/mail'
+}
+
+export function mailDomainPath(_id?: number | string): string {
+  return '/admin/mail'
 }
 
 export function transfersPath(): string {

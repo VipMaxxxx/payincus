@@ -67,6 +67,7 @@ export interface ThemeMarketIndex {
     fingerprint: string
     defaultReviewStatus: ThemeMarketReviewStatus
     installPolicy: string[]
+    unavailableReason?: string
   }
 }
 
@@ -247,21 +248,28 @@ function getThemeMarketFingerprint(entries: ThemeMarketEntry[]): string {
   return createHash('sha256').update(JSON.stringify(stablePayload)).digest('hex')
 }
 
+const THEME_MARKET_INSTALL_POLICY = ['stable theme index only', 'listed entries only', 'SHA256 required', 'theme package validation required']
+
+export function buildUnavailableThemeMarketIndex(): ThemeMarketIndex {
+  return {
+    themes: [],
+    governance: {
+      totalEntries: 0,
+      visibleEntries: 0,
+      hiddenEntries: 0,
+      indexHost: null,
+      fingerprint: getThemeMarketFingerprint([]),
+      defaultReviewStatus: 'pending',
+      installPolicy: THEME_MARKET_INSTALL_POLICY,
+      unavailableReason: 'market_unavailable'
+    }
+  }
+}
+
 export async function fetchThemeMarketIndex(url?: string | null): Promise<ThemeMarketIndex> {
   const effectiveUrl = url ?? await getThemeMarketIndexUrl()
   if (!effectiveUrl) {
-    return {
-      themes: [],
-      governance: {
-        totalEntries: 0,
-        visibleEntries: 0,
-        hiddenEntries: 0,
-        indexHost: null,
-        fingerprint: getThemeMarketFingerprint([]),
-        defaultReviewStatus: 'pending',
-        installPolicy: ['stable theme index only', 'listed entries only', 'SHA256 required', 'theme package validation required']
-      }
-    }
+    return buildUnavailableThemeMarketIndex()
   }
 
   const trustedHosts = await getThemeMarketTrustedHosts()
@@ -286,7 +294,7 @@ export async function fetchThemeMarketIndex(url?: string | null): Promise<ThemeM
       indexHost: parsed.hostname,
       fingerprint: getThemeMarketFingerprint(normalized),
       defaultReviewStatus: 'pending',
-      installPolicy: ['stable theme index only', 'listed entries only', 'SHA256 required', 'theme package validation required']
+      installPolicy: THEME_MARKET_INSTALL_POLICY
     }
   }
 }

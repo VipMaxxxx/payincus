@@ -946,7 +946,11 @@ async function loadThemeMarket() {
     const response = await api.themes.market()
     themeMarket.value = response.themes
     themeMarketGovernance.value = response.governance
-    if (themeMarket.value.length === 0) toast.success('主题市场暂无可安装主题')
+    if (themeMarketGovernance.value?.unavailableReason) {
+      toast.warning('主题市场源暂时不可用，已显示为空列表')
+    } else if (themeMarket.value.length === 0) {
+      toast.success('主题市场暂无可安装主题')
+    }
   } catch (err: any) {
     toast.error('加载主题市场失败：' + (err?.message || String(err)))
   } finally {
@@ -1260,7 +1264,11 @@ async function loadMarket() {
     const response = await api.plugins.market()
     market.value = response.plugins
     marketGovernance.value = response.governance || null
-    if (market.value.length === 0) toast.success('扩展市场暂无可安装扩展')
+    if (marketGovernance.value?.unavailableReason) {
+      toast.warning('扩展市场源暂时不可用，已显示为空列表')
+    } else if (market.value.length === 0) {
+      toast.success('扩展市场暂无可安装扩展')
+    }
   } catch (err: any) {
     toast.error('加载扩展市场失败：' + (err?.message || String(err)))
   } finally {
@@ -1773,8 +1781,8 @@ watch(() => route.query.tab, tab => {
               <button class="btn-primary" :disabled="!selectedFile || uploading" @click="uploadPlugin">{{ uploading ? '安装中...' : '上传安装' }}</button>
             </div>
           </div>
-          <div class="mt-4 overflow-x-auto">
-            <table class="min-w-full text-sm">
+          <div class="mt-4 overflow-hidden">
+            <table class="w-full table-fixed text-sm">
               <thead class="text-left text-themed-muted">
                 <tr>
                   <th class="py-2 pr-4">扩展</th>
@@ -2038,7 +2046,7 @@ watch(() => route.query.tab, tab => {
           </div>
           <div class="rounded border border-themed bg-themed p-3">
             <div class="text-xs text-themed-muted">索引来源</div>
-            <div class="mt-1 truncate font-semibold text-themed">{{ marketGovernance?.indexHost || '-' }}</div>
+            <div class="mt-1 truncate font-semibold text-themed">{{ marketGovernance?.unavailableReason ? '不可用' : (marketGovernance?.indexHost || '-') }}</div>
           </div>
           <div class="rounded border border-themed bg-themed p-3">
             <div class="text-xs text-themed-muted">索引指纹</div>
@@ -2048,8 +2056,10 @@ watch(() => route.query.tab, tab => {
 
         <div v-if="market.length === 0" class="px-5 py-16 text-center">
           <div class="mx-auto max-w-md">
-            <h3 class="text-base font-semibold text-themed">暂无市场扩展</h3>
-            <p class="mt-2 text-sm leading-6 text-themed-muted">请确认已配置扩展市场索引地址，然后刷新市场读取受信扩展包。</p>
+            <h3 class="text-base font-semibold text-themed">{{ marketGovernance?.unavailableReason ? '扩展市场源不可用' : '暂无市场扩展' }}</h3>
+            <p class="mt-2 text-sm leading-6 text-themed-muted">
+              {{ marketGovernance?.unavailableReason ? '请检查市场 URL、受信主机配置或稍后重试。' : '请确认已配置扩展市场索引地址，然后刷新市场读取受信扩展包。' }}
+            </p>
             <button class="btn-secondary mt-4" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
           </div>
         </div>
@@ -2321,7 +2331,7 @@ watch(() => route.query.tab, tab => {
                 只展示已上架并固定 SHA256 的主题；安装后仍会执行 payincus.theme.json、CSS 和包路径校验。
               </p>
               <p v-if="themeMarketGovernance" class="mt-1 font-mono text-[11px] text-themed-muted">
-                {{ themeMarketGovernance.indexHost || '未配置市场地址' }} · {{ themeMarketGovernance.visibleEntries }} / {{ themeMarketGovernance.totalEntries }} listed · {{ themeMarketGovernance.fingerprint.slice(0, 12) }}
+                {{ themeMarketGovernance.unavailableReason ? '市场源不可用' : (themeMarketGovernance.indexHost || '未配置市场地址') }} · {{ themeMarketGovernance.visibleEntries }} / {{ themeMarketGovernance.totalEntries }} listed · {{ themeMarketGovernance.fingerprint.slice(0, 12) }}
               </p>
             </div>
             <button class="btn-secondary" :disabled="themeMarketLoading" @click="loadThemeMarket">
@@ -2331,7 +2341,7 @@ watch(() => route.query.tab, tab => {
 
           <div v-if="themeMarketLoading" class="mt-4 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">主题市场加载中...</div>
           <div v-else-if="themeMarket.length === 0" class="mt-4 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">
-            当前主题市场暂无可安装主题。
+            {{ themeMarketGovernance?.unavailableReason ? '主题市场源暂时不可用，请检查市场 URL、受信主机配置或稍后重试。' : '当前主题市场暂无可安装主题。' }}
           </div>
           <div v-else class="mt-4 grid gap-3 xl:grid-cols-2">
             <article
@@ -2465,8 +2475,8 @@ watch(() => route.query.tab, tab => {
           <h3 class="text-base font-semibold text-themed">暂无主题包</h3>
           <p class="mt-2 text-sm text-themed-muted">上传包含 payincus.theme.json 和 dist/theme.css 的 .tar.gz 主题包后，可以先预览再启用。</p>
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full text-sm">
+        <div v-else class="overflow-hidden">
+          <table class="w-full table-fixed text-sm">
             <thead class="border-b border-themed text-left text-themed-muted">
               <tr>
                 <th class="px-5 py-3">主题</th>
@@ -2633,8 +2643,8 @@ watch(() => route.query.tab, tab => {
         <div v-else-if="capabilityReviews.length === 0" class="px-5 py-16 text-center text-sm text-themed-muted">
           当前筛选下暂无扩展能力审核记录。安装声明 action、service extension、gateway extension 或 storage 的扩展后会自动生成。
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full text-sm">
+        <div v-else class="overflow-hidden">
+          <table class="w-full table-fixed text-sm">
             <thead class="border-b border-themed text-left text-themed-muted">
               <tr>
                 <th class="px-5 py-3">扩展</th>
@@ -2739,8 +2749,75 @@ watch(() => route.query.tab, tab => {
         </div>
 
         <div v-if="actionRateLimitsLoading" class="px-5 py-16 text-center text-themed-muted">加载中...</div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full table-fixed text-sm">
+        <div v-else class="overflow-hidden">
+          <div class="grid gap-4 p-4 md:hidden">
+            <article
+              v-for="(policy, index) in actionRateLimitDrafts"
+              :key="`mobile-${index}`"
+              class="rounded-lg border border-themed bg-themed p-4"
+            >
+              <div class="mb-4 flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-themed-muted">策略 {{ index + 1 }}</div>
+                  <div class="mt-1 truncate font-mono text-sm font-semibold text-themed">{{ policy.pluginId || '*' }}</div>
+                </div>
+                <button class="btn-secondary shrink-0" :disabled="actionRateLimitDrafts.length <= 1" @click="removeActionRateLimitDraft(index)">移除</button>
+              </div>
+              <div class="grid gap-3">
+                <label class="grid gap-1 text-sm text-themed-secondary">
+                  <span>扩展 ID</span>
+                  <input
+                    v-model="policy.pluginId"
+                    class="w-full min-w-0 rounded border border-themed bg-themed px-3 py-2 font-mono text-xs text-themed"
+                    placeholder="* 或 com.example.plugin"
+                  >
+                </label>
+                <label class="grid gap-1 text-sm text-themed-secondary">
+                  <span>Action</span>
+                  <input
+                    v-model="policy.actionName"
+                    class="w-full min-w-0 rounded border border-themed bg-themed px-3 py-2 font-mono text-xs text-themed"
+                    placeholder="* 或 reserveStock"
+                  >
+                </label>
+                <label class="grid gap-1 text-sm text-themed-secondary">
+                  <span>策略</span>
+                  <select v-model="policy.rateLimit" class="w-full min-w-0 rounded border border-themed bg-themed px-3 py-2 text-themed">
+                    <option value="normal">normal</option>
+                    <option value="strict">strict</option>
+                  </select>
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="grid min-w-0 gap-1 text-sm text-themed-secondary">
+                    <span>窗口请求数</span>
+                    <input
+                      v-model.number="policy.maxRequests"
+                      type="number"
+                      min="1"
+                      max="10000"
+                      class="w-full min-w-0 rounded border border-themed bg-themed px-3 py-2 text-themed"
+                    >
+                  </label>
+                  <label class="grid min-w-0 gap-1 text-sm text-themed-secondary">
+                    <span>窗口秒数</span>
+                    <input
+                      v-model.number="policy.windowSeconds"
+                      type="number"
+                      min="10"
+                      max="3600"
+                      class="w-full min-w-0 rounded border border-themed bg-themed px-3 py-2 text-themed"
+                    >
+                  </label>
+                </div>
+                <label class="inline-flex h-10 items-center gap-2 text-themed">
+                  <input v-model="policy.enabled" type="checkbox" class="h-4 w-4 rounded border-themed">
+                  <span>{{ policy.enabled ? '启用' : '停用' }}</span>
+                </label>
+              </div>
+            </article>
+          </div>
+          <div class="hidden md:block">
+          <table class="w-full table-fixed text-sm">
             <thead class="border-b border-themed text-left text-themed-muted">
               <tr>
                 <th class="w-[240px] px-5 py-3">扩展 ID</th>
@@ -2804,6 +2881,7 @@ watch(() => route.query.tab, tab => {
               </tr>
             </tbody>
           </table>
+          </div>
           <div class="border-t border-themed px-5 py-4 text-xs leading-5 text-themed-muted">
             生效优先级：指定扩展 + 指定 action，高于指定扩展全部 action，高于全局 `*`。保存策略会清理当前对应窗口，下一次 dispatch 按新策略重新计数。
           </div>
@@ -2888,8 +2966,8 @@ watch(() => route.query.tab, tab => {
 
         <div v-if="eventsLoading" class="px-5 py-16 text-center text-themed-muted">加载中...</div>
         <div v-else-if="pluginEvents.length === 0" class="px-5 py-16 text-center text-sm text-themed-muted">当前筛选下暂无事件投递日志。</div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full text-sm">
+        <div v-else class="overflow-hidden">
+          <table class="w-full table-fixed text-sm">
             <thead class="border-b border-themed text-left text-themed-muted">
               <tr>
                 <th class="px-5 py-3">事件</th>

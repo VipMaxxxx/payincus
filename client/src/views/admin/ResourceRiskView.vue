@@ -778,8 +778,92 @@ onMounted(() => {
       </nav>
 
       <section v-if="activeTab === 'instances'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div v-if="instances.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+            暂无实例风险状态。
+          </div>
+          <div v-for="item in instances" :key="item.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-themed">{{ item.instance?.name || item.instanceId }}</div>
+                <div class="mt-1 text-xs text-themed-muted">
+                  {{ item.user?.username || item.userId }} · {{ item.host?.name || item.hostId }}
+                </div>
+              </div>
+              <span :class="badgeClass(item.level)">{{ item.score }}</span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">状态</div>
+                <div class="mt-1 text-themed">{{ item.status }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">限速</div>
+                <div class="mt-1 text-themed">{{ item.currentBandwidthLimit || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
+                <div class="text-themed-muted">原因</div>
+                <div class="mt-1 break-words text-themed">{{ item.reason || '-' }}</div>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button class="btn-secondary px-3 py-1 text-xs" @click="openEvidence(item)">证据</button>
+              <button class="btn-secondary px-3 py-1 text-xs" @click="evaluateInstance(item)">评估</button>
+              <button
+                v-if="!isSuspendedRisk(item)"
+                class="btn-secondary px-3 py-1 text-xs"
+                @click="manualQos(item)"
+              >
+                限速
+              </button>
+              <button
+                v-if="isSuspendedRisk(item)"
+                class="btn-primary px-3 py-1 text-xs"
+                @click="manualUnsuspend(item)"
+              >
+                解除封禁
+              </button>
+              <button
+                v-else
+                class="btn-danger px-3 py-1 text-xs"
+                @click="manualSuspend(item)"
+              >
+                封禁
+              </button>
+              <button
+                v-if="hasActiveOrderRestriction(item)"
+                class="btn-primary px-3 py-1 text-xs"
+                @click="releaseOrderRestrictionFromState(item)"
+              >
+                解除限单
+              </button>
+              <button
+                v-else-if="hasOtherActiveOrderRestriction(item)"
+                class="btn-secondary px-3 py-1 text-xs"
+                disabled
+                title="该账号存在其他实例触发的下单限制，请到下单限制列表按来源实例处理"
+              >
+                账号已限单
+              </button>
+              <button
+                v-else
+                class="btn-secondary px-3 py-1 text-xs"
+                @click="manualOrderRestrict(item)"
+              >
+                限单
+              </button>
+              <button
+                class="btn-secondary px-3 py-1 text-xs"
+                :disabled="isNormalRisk(item)"
+                @click="releaseInstance(item)"
+              >
+                解除风控
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-sm">
             <thead class="bg-themed-secondary text-themed-muted">
               <tr>
                 <th class="p-3 text-left">实例</th>
@@ -889,8 +973,40 @@ onMounted(() => {
       </section>
 
       <section v-else-if="activeTab === 'events'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div v-if="events.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+            暂无风险事件。
+          </div>
+          <div v-for="event in events" :key="event.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-themed">{{ event.instance?.name || event.instanceId }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ formatDate(event.createdAt) }}</div>
+              </div>
+              <span :class="badgeClass(event.severity)">{{ event.severity }}</span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">类型</div>
+                <div class="mt-1 text-themed">{{ event.type }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">评分</div>
+                <div class="mt-1 text-themed">{{ event.scoreAfter }} / {{ event.scoreDelta >= 0 ? '+' : '' }}{{ event.scoreDelta }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">动作</div>
+                <div class="mt-1 text-themed">{{ event.actionTaken || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
+                <div class="text-themed-muted">说明</div>
+                <div class="mt-1 break-words text-themed">{{ event.message }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-sm">
             <thead class="bg-themed-secondary text-themed-muted">
               <tr>
                 <th class="p-3 text-left">时间</th>
@@ -941,8 +1057,39 @@ onMounted(() => {
       </section>
 
       <section v-else-if="activeTab === 'restrictions'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div v-if="restrictions.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+            暂无下单限制。
+          </div>
+          <div v-for="item in restrictions" :key="item.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-themed">{{ item.user?.username || item.userId }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ item.sourceInstance?.name || item.sourceInstanceId || '-' }}</div>
+              </div>
+              <span :class="item.status === 'active' ? 'badge badge-error' : 'badge badge-success'">{{ item.status }}</span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">工单</div>
+                <div class="mt-1 text-themed">{{ item.ticketId ? `#${item.ticketId}` : '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">创建时间</div>
+                <div class="mt-1 text-themed">{{ formatDate(item.createdAt) }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
+                <div class="text-themed-muted">原因</div>
+                <div class="mt-1 break-words text-themed">{{ item.reason }}</div>
+              </div>
+            </div>
+            <div class="mt-3 flex justify-end">
+              <button class="btn-primary px-3 py-1 text-xs" :disabled="item.status !== 'active'" @click="releaseRestriction(item)">解除</button>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-sm">
             <thead class="bg-themed-secondary text-themed-muted">
               <tr>
                 <th class="p-3 text-left">用户</th>
@@ -1056,8 +1203,60 @@ onMounted(() => {
             <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="addQosTier">新增档位</button>
           </div>
 
-          <div class="overflow-x-auto rounded-lg border border-themed">
-            <table class="min-w-[1180px] w-full text-sm">
+          <div class="space-y-3 lg:hidden">
+            <div
+              v-for="(tier, index) in policyForm.qosTiers"
+              :key="index"
+              class="rounded-lg border border-themed bg-themed p-4 text-sm"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div class="font-semibold text-themed">QoS 档位 #{{ index + 1 }}</div>
+                <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="removeQosTier(index)">删除</button>
+              </div>
+              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                <label class="space-y-1">
+                  <span class="label">档位</span>
+                  <input v-model.number="tier.level" class="input w-full" type="number" min="1" />
+                </label>
+                <label class="space-y-1">
+                  <span class="label">限速 Mbps</span>
+                  <input v-model.number="tier.bandwidthMbps" class="input w-full" type="number" min="1" />
+                </label>
+                <label class="space-y-1">
+                  <span class="label">触发分数</span>
+                  <input v-model.number="tier.score" class="input w-full" type="number" min="1" max="100" />
+                </label>
+                <label class="space-y-1">
+                  <span class="label">恢复分数</span>
+                  <input v-model.number="tier.recoverScore" class="input w-full" type="number" min="0" max="99" />
+                </label>
+                <label class="space-y-1">
+                  <span class="label">最短限速</span>
+                  <input v-model.number="tier.minDurationMinutes" class="input w-full" type="number" min="1" />
+                </label>
+                <label class="space-y-1">
+                  <span class="label">降档冷却</span>
+                  <input v-model.number="tier.cooldownMinutes" class="input w-full" type="number" min="1" />
+                </label>
+              </div>
+              <div class="mt-3 grid gap-2 text-sm text-themed sm:grid-cols-3">
+                <label class="flex items-center gap-2">
+                  <input v-model="tier.allowFurtherDowngrade" type="checkbox" />
+                  继续降档
+                </label>
+                <label class="flex items-center gap-2">
+                  <input v-model="tier.notifyUser" type="checkbox" />
+                  通知用户
+                </label>
+                <label class="flex items-center gap-2">
+                  <input v-model="tier.restrictOrders" type="checkbox" />
+                  限单
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="hidden overflow-hidden rounded-lg border border-themed lg:block">
+            <table class="w-full table-fixed text-sm">
               <thead class="bg-themed-secondary text-themed-muted">
                 <tr>
                   <th class="p-3 text-left">档位</th>
@@ -1330,8 +1529,38 @@ onMounted(() => {
               <div class="border-b border-themed px-4 py-3">
                 <h3 class="font-semibold text-themed">24 小时趋势</h3>
               </div>
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+              <div class="space-y-3 p-4 lg:hidden">
+                <div v-if="evidenceDetail.trends.hourly24h.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+                  暂无 24 小时趋势。
+                </div>
+                <div
+                  v-for="bucket in evidenceDetail.trends.hourly24h.slice(-12)"
+                  :key="bucket.bucketStart"
+                  class="rounded-lg border border-themed bg-themed-surface p-3 text-sm"
+                >
+                  <div class="font-medium text-themed">{{ formatTrendBucket(bucket.bucketStart, 'hour') }}</div>
+                  <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+                    <div class="rounded-md resource-risk-evidence-code p-2">
+                      <div>平均/峰值带宽</div>
+                      <div class="mt-1 text-themed">{{ formatMetric(bucket.avgTotalMbps, ' Mbps') }} / {{ formatMetric(bucket.maxTotalMbps, ' Mbps') }}</div>
+                    </div>
+                    <div class="rounded-md resource-risk-evidence-code p-2">
+                      <div>平均/峰值 PPS</div>
+                      <div class="mt-1 text-themed">{{ formatMetric(bucket.avgPps) }} / {{ formatMetric(bucket.maxPps) }}</div>
+                    </div>
+                    <div class="rounded-md resource-risk-evidence-code p-2">
+                      <div>平均/峰值 CPU</div>
+                      <div class="mt-1 text-themed">{{ bucket.avgCpuPercent === null ? '-' : formatMetric(bucket.avgCpuPercent, '%') }} / {{ bucket.maxCpuPercent === null ? '-' : formatMetric(bucket.maxCpuPercent, '%') }}</div>
+                    </div>
+                    <div class="rounded-md resource-risk-evidence-code p-2">
+                      <div>流量</div>
+                      <div class="mt-1 text-themed">{{ formatBytes(bucket.totalBytes) }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="hidden overflow-hidden lg:block">
+                <table class="w-full table-fixed text-sm">
                   <thead class="resource-risk-evidence-code text-themed-muted">
                     <tr>
                       <th class="p-3 text-left">时间</th>
@@ -1361,8 +1590,38 @@ onMounted(() => {
               <div class="border-b border-themed px-4 py-3">
                 <h3 class="font-semibold text-themed">7 天趋势</h3>
               </div>
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+              <div class="space-y-3 p-4 lg:hidden">
+                <div v-if="evidenceDetail.trends.daily7d.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+                  暂无 7 天趋势。
+                </div>
+                <div
+                  v-for="bucket in evidenceDetail.trends.daily7d"
+                  :key="bucket.bucketStart"
+                  class="rounded-lg border border-themed bg-themed-surface p-3 text-sm"
+                >
+                  <div class="font-medium text-themed">{{ formatTrendBucket(bucket.bucketStart, 'day') }}</div>
+                  <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+                    <div class="rounded-md resource-risk-evidence-code p-2">
+                      <div>平均/峰值带宽</div>
+                      <div class="mt-1 text-themed">{{ formatMetric(bucket.avgTotalMbps, ' Mbps') }} / {{ formatMetric(bucket.maxTotalMbps, ' Mbps') }}</div>
+                    </div>
+                    <div class="rounded-md resource-risk-evidence-code p-2">
+                      <div>平均/峰值 PPS</div>
+                      <div class="mt-1 text-themed">{{ formatMetric(bucket.avgPps) }} / {{ formatMetric(bucket.maxPps) }}</div>
+                    </div>
+                    <div class="rounded-md resource-risk-evidence-code p-2">
+                      <div>平均/峰值 CPU</div>
+                      <div class="mt-1 text-themed">{{ bucket.avgCpuPercent === null ? '-' : formatMetric(bucket.avgCpuPercent, '%') }} / {{ bucket.maxCpuPercent === null ? '-' : formatMetric(bucket.maxCpuPercent, '%') }}</div>
+                    </div>
+                    <div class="rounded-md resource-risk-evidence-code p-2">
+                      <div>流量</div>
+                      <div class="mt-1 text-themed">{{ formatBytes(bucket.totalBytes) }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="hidden overflow-hidden lg:block">
+                <table class="w-full table-fixed text-sm">
                   <thead class="resource-risk-evidence-code text-themed-muted">
                     <tr>
                       <th class="p-3 text-left">日期</th>
@@ -1393,8 +1652,42 @@ onMounted(() => {
             <div class="border-b border-themed px-4 py-3">
               <h3 class="font-semibold text-themed">最近资源样本</h3>
             </div>
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-sm">
+            <div class="space-y-3 p-4 lg:hidden">
+              <div v-if="evidenceDetail.samples.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+                暂无资源样本。
+              </div>
+              <div
+                v-for="sample in evidenceDetail.samples.slice(0, 12)"
+                :key="sample.id"
+                class="rounded-lg border border-themed bg-themed-surface p-3 text-sm"
+              >
+                <div class="font-medium text-themed">{{ formatDate(sample.sampledAt) }}</div>
+                <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+                  <div class="rounded-md resource-risk-evidence-code p-2">
+                    <div>带宽</div>
+                    <div class="mt-1 text-themed">{{ formatMetric(sample.totalMbps, ' Mbps') }}</div>
+                  </div>
+                  <div class="rounded-md resource-risk-evidence-code p-2">
+                    <div>PPS</div>
+                    <div class="mt-1 text-themed">{{ formatMetric(sample.pps) }}</div>
+                  </div>
+                  <div class="rounded-md resource-risk-evidence-code p-2">
+                    <div>CPU</div>
+                    <div class="mt-1 text-themed">{{ sample.cpuPercent === null ? '-' : formatMetric(sample.cpuPercent, '%') }}</div>
+                  </div>
+                  <div class="rounded-md resource-risk-evidence-code p-2">
+                    <div>流量增量</div>
+                    <div class="mt-1 text-themed">{{ formatBytes(sample.totalBytesDelta) }}</div>
+                  </div>
+                  <div class="rounded-md resource-risk-evidence-code p-2 sm:col-span-2">
+                    <div>来源</div>
+                    <div class="mt-1 text-themed">{{ sample.source }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="hidden overflow-hidden lg:block">
+              <table class="w-full table-fixed text-sm">
                 <thead class="resource-risk-evidence-code text-themed-muted">
                   <tr>
                     <th class="p-3 text-left">采样时间</th>
@@ -1463,8 +1756,37 @@ onMounted(() => {
             <div class="border-b border-themed px-4 py-3">
               <h3 class="font-semibold text-themed">关联下单限制</h3>
             </div>
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-sm">
+            <div class="space-y-3 p-4 lg:hidden">
+              <div v-if="evidenceDetail.restrictions.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+                暂无关联限单。
+              </div>
+              <div
+                v-for="restriction in evidenceDetail.restrictions"
+                :key="restriction.id"
+                class="rounded-lg border border-themed bg-themed-surface p-3 text-sm"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="font-medium text-themed">#{{ restriction.id }}</div>
+                  <span :class="restriction.status === 'active' ? 'badge badge-error' : 'badge badge-success'">{{ restriction.status }}</span>
+                </div>
+                <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+                  <div class="rounded-md resource-risk-evidence-code p-2">
+                    <div>工单</div>
+                    <div class="mt-1 text-themed">{{ restriction.ticketId ? `#${restriction.ticketId}` : '-' }}</div>
+                  </div>
+                  <div class="rounded-md resource-risk-evidence-code p-2">
+                    <div>创建时间</div>
+                    <div class="mt-1 text-themed">{{ formatDate(restriction.createdAt) }}</div>
+                  </div>
+                  <div class="rounded-md resource-risk-evidence-code p-2 sm:col-span-2">
+                    <div>原因</div>
+                    <div class="mt-1 break-words text-themed">{{ restriction.reason }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="hidden overflow-hidden lg:block">
+              <table class="w-full table-fixed text-sm">
                 <thead class="resource-risk-evidence-code text-themed-muted">
                   <tr>
                     <th class="p-3 text-left">ID</th>

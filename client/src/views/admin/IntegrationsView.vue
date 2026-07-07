@@ -416,35 +416,57 @@ onMounted(loadIntegrations)
       <div v-if="recentIntegrationFailures.length === 0" class="mt-4 rounded-lg border border-themed bg-themed-muted/20 p-4 text-sm text-themed-muted">
         暂无异常记录。
       </div>
-      <div v-else class="mt-4 overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead class="text-left text-themed-muted">
-            <tr>
-              <th class="whitespace-nowrap px-3 py-2 font-medium">时间</th>
-              <th class="whitespace-nowrap px-3 py-2 font-medium">集成项</th>
-              <th class="whitespace-nowrap px-3 py-2 font-medium">状态</th>
-              <th class="px-3 py-2 font-medium">结果</th>
-              <th class="whitespace-nowrap px-3 py-2 font-medium">耗时</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="record in recentIntegrationFailures" :key="record.id">
-              <td class="whitespace-nowrap px-3 py-3 text-themed-muted">{{ formatCheckedAt(record.checkedAt) }}</td>
-              <td class="whitespace-nowrap px-3 py-3 font-medium text-themed">{{ record.title }}</td>
-              <td class="whitespace-nowrap px-3 py-3">
-                <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="healthBadgeClass(record.status)">
-                  {{ healthStatusLabel(record.status) }}
-                </span>
-              </td>
-              <td class="px-3 py-3 text-themed-secondary">
-                <div>{{ record.message }}</div>
-                <div v-if="record.detail" class="mt-1 text-xs text-themed-muted">{{ record.detail }}</div>
-              </td>
-              <td class="whitespace-nowrap px-3 py-3 text-themed-muted">{{ formatDuration(record.durationMs) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <template v-else>
+        <div class="mt-4 space-y-3 lg:hidden">
+          <div
+            v-for="record in recentIntegrationFailures"
+            :key="record.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate font-medium text-themed">{{ record.title }}</div>
+                <div class="mt-1 text-xs text-themed-muted">{{ formatCheckedAt(record.checkedAt) }}</div>
+              </div>
+              <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium" :class="healthBadgeClass(record.status)">
+                {{ healthStatusLabel(record.status) }}
+              </span>
+            </div>
+            <div class="mt-3 text-sm text-themed-secondary">{{ record.message }}</div>
+            <div v-if="record.detail" class="mt-1 break-all text-xs text-themed-muted">{{ record.detail }}</div>
+            <div class="mt-3 text-xs text-themed-muted">耗时 {{ formatDuration(record.durationMs) }}</div>
+          </div>
+        </div>
+        <div class="mt-4 hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-sm">
+            <thead class="text-left text-themed-muted">
+              <tr>
+                <th class="w-[18%] px-3 py-2 font-medium">时间</th>
+                <th class="w-[18%] px-3 py-2 font-medium">集成项</th>
+                <th class="w-[12%] px-3 py-2 font-medium">状态</th>
+                <th class="w-[42%] px-3 py-2 font-medium">结果</th>
+                <th class="w-[10%] px-3 py-2 font-medium">耗时</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-themed">
+              <tr v-for="record in recentIntegrationFailures" :key="record.id">
+                <td class="truncate px-3 py-3 text-themed-muted">{{ formatCheckedAt(record.checkedAt) }}</td>
+                <td class="truncate px-3 py-3 font-medium text-themed">{{ record.title }}</td>
+                <td class="px-3 py-3">
+                  <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="healthBadgeClass(record.status)">
+                    {{ healthStatusLabel(record.status) }}
+                  </span>
+                </td>
+                <td class="px-3 py-3 text-themed-secondary">
+                  <div class="truncate">{{ record.message }}</div>
+                  <div v-if="record.detail" class="mt-1 truncate text-xs text-themed-muted">{{ record.detail }}</div>
+                </td>
+                <td class="truncate px-3 py-3 text-themed-muted">{{ formatDuration(record.durationMs) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
     </div>
   </div>
 </template>

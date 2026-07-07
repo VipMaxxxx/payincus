@@ -267,7 +267,7 @@ onUnmounted(() => {
         collapsed && !mobileOpen ? 'justify-center px-2' : 'px-4'
       ]"
     >
-      <RouterLink to="/" class="flex items-center gap-2.5" @click="handleLinkClick">
+      <RouterLink :to="navDashboardPath" class="flex items-center gap-2.5" @click="handleLinkClick">
         <img
           :src="brand.brandLogoUrl"
           :alt="brand.brandName"

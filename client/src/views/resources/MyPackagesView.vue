@@ -802,19 +802,146 @@ function getBillingCycleLabel(months: number): string {
 
     <template v-else>
       <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <div class="space-y-3 p-4 lg:hidden">
+          <div
+            v-for="pkg in paginatedPackages"
+            :key="pkg.id"
+            class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            :class="pkg.active !== 1 ? 'opacity-60' : ''"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="truncate text-sm font-medium" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">{{ pkg.name }}</span>
+                  <span
+                    v-if="isPackagePublic(pkg)"
+                    class="inline-flex shrink-0 items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30"
+                  >
+                    {{ t('resources.packages.publicBadge') }}
+                  </span>
+                </div>
+                <p v-if="pkg.description" class="mt-1 line-clamp-2 text-xs text-themed-muted">{{ pkg.description }}</p>
+              </div>
+              <span v-if="pkg.active === 1" class="badge badge-success shrink-0 text-xs">{{ t('admin.packages.active') }}</span>
+              <span v-else class="badge badge-default shrink-0 text-xs" :title="t('admin.packages.archivedHint')">{{ t('admin.packages.inactive') }}</span>
+            </div>
+
+            <div v-if="isAdmin && scope === 'hosted'" class="mt-4 rounded-lg bg-themed-secondary p-3">
+              <div v-if="pkg.owner" class="flex items-center gap-2">
+                <UserAvatar :avatar-style="pkg.owner.avatarStyle" :badge-id="pkg.owner.avatarBadgeId || null" :size="28" :username="pkg.owner.username" />
+                <div class="min-w-0">
+                  <div class="truncate text-sm font-medium text-themed">{{ pkg.owner.username }}</div>
+                  <div class="text-xs text-themed-muted">UID: {{ pkg.owner.id }}</div>
+                </div>
+              </div>
+              <span v-else class="text-sm text-themed-muted">-</span>
+            </div>
+
+            <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt class="text-xs text-themed-muted">{{ t('resources.packages.networkModeColumn') }}</dt>
+                <dd class="mt-1 text-themed">{{ getPackageNetworkModeLabel(pkg) }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-themed-muted">{{ t('resources.packages.instanceTypeColumn') }}</dt>
+                <dd class="mt-1 text-themed">{{ getPackageInstanceTypeLabel(pkg) }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-themed-muted">{{ t('resources.packages.trafficMultiplierColumn') }}</dt>
+                <dd class="mt-1 font-mono text-themed" :title="getPackageTrafficMultiplierTitle(pkg)">{{ getPackageTrafficMultiplierLabel(pkg) }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-themed-muted">{{ t('resources.packages.instanceColumn') }}</dt>
+                <dd class="mt-1 font-mono text-themed">{{ pkg.instance_count || 0 }}</dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="text-xs text-themed-muted">{{ t('resources.packages.hostColumn') }}</dt>
+                <dd class="mt-1 line-clamp-2 text-themed-muted">{{ getHostNames(pkg) }}</dd>
+              </div>
+            </dl>
+
+            <div v-if="scope === 'mine'" class="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-themed pt-3">
+              <button
+                v-if="!isAdminEntry"
+                type="button"
+                class="p-1.5 transition-colors rounded"
+                :class="themeStore.isDark ? 'text-gray-500 hover:text-blue-400 hover:bg-gray-800' : 'text-gray-400 hover:text-blue-600 hover:bg-gray-100'"
+                :title="t('resources.packages.copyShareLink')"
+                @click="copyShareLink(pkg)"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              </button>
+              <button
+                class="p-1.5 transition-colors rounded"
+                :class="themeStore.isDark ? 'text-gray-500 hover:text-indigo-400 hover:bg-gray-800' : 'text-gray-400 hover:text-indigo-600 hover:bg-gray-100'"
+                :title="t('resources.plans.manage')"
+                @click="openPlansModal(pkg)"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+              </button>
+              <button
+                class="p-1.5 transition-colors rounded"
+                :class="themeStore.isDark ? 'text-gray-500 hover:text-teal-400 hover:bg-gray-800' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'"
+                :title="t('quotaRelease.title')"
+                @click="openQuotaReleaseModal(pkg)"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </button>
+              <button
+                class="p-1.5 transition-colors rounded"
+                :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                :title="t('common.edit')"
+                @click="openEdit(pkg)"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="px-2 py-1 text-xs font-medium transition-colors rounded"
+                :class="isPackageActive(pkg)
+                  ? (themeStore.isDark ? 'text-amber-300 hover:bg-amber-500/10' : 'text-amber-700 hover:bg-amber-50')
+                  : (themeStore.isDark ? 'text-emerald-300 hover:bg-emerald-500/10' : 'text-emerald-700 hover:bg-emerald-50')"
+                :disabled="activeChangingId === pkg.id"
+                :title="isPackageActive(pkg) ? t('admin.packages.deactivate') : t('admin.packages.activate')"
+                @click="togglePackageActive(pkg)"
+              >
+                {{ activeChangingId === pkg.id ? t('common.loading') : (isPackageActive(pkg) ? t('admin.packages.deactivate') : t('admin.packages.activate')) }}
+              </button>
+              <button
+                class="p-1.5 transition-colors rounded"
+                :class="themeStore.isDark ? 'text-gray-500 hover:text-error hover:bg-gray-800' : 'text-gray-400 hover:text-error hover:bg-gray-100'"
+                :title="t('common.delete')"
+                @click="deletePackage(pkg)"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-sm">
             <thead>
               <tr :class="themeStore.isDark ? 'bg-gray-800/50 border-b border-gray-700' : 'bg-gray-50 border-b border-gray-200'">
-                <th class="text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('admin.packages.name') }}</th>
-                <th v-if="isAdmin && scope === 'hosted'" class="text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.owner') }}</th>
-                <th class="text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('admin.packages.status') }}</th>
-                <th class="text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.networkModeColumn') }}</th>
-                <th class="text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.instanceTypeColumn') }}</th>
-                <th class="text-right px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.trafficMultiplierColumn') }}</th>
-                <th class="text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.hostColumn') }}</th>
-                <th class="text-right px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.instanceColumn') }}</th>
-                <th v-if="scope === 'mine'" class="text-right px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('common.actions') }}</th>
+                <th class="w-[18%] text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('admin.packages.name') }}</th>
+                <th v-if="isAdmin && scope === 'hosted'" class="w-[16%] text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.owner') }}</th>
+                <th class="w-[10%] text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('admin.packages.status') }}</th>
+                <th class="w-[12%] text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.networkModeColumn') }}</th>
+                <th class="w-[12%] text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.instanceTypeColumn') }}</th>
+                <th class="w-[12%] text-right px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.trafficMultiplierColumn') }}</th>
+                <th class="w-[14%] text-left px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.hostColumn') }}</th>
+                <th class="w-[8%] text-right px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('resources.packages.instanceColumn') }}</th>
+                <th v-if="scope === 'mine'" class="w-[22%] text-right px-4 py-3 font-medium text-themed-muted whitespace-nowrap">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -828,7 +955,7 @@ function getBillingCycleLabel(months: number): string {
                 ]"
               >
                 <!-- 套餐名称 -->
-                <td class="px-4 py-3 whitespace-nowrap">
+                <td class="px-4 py-3">
                   <div class="flex items-center gap-2 min-w-0">
                     <span class="font-medium truncate" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">{{ pkg.name }}</span>
                     <span
@@ -857,12 +984,12 @@ function getBillingCycleLabel(months: number): string {
                   <span v-else class="badge badge-default text-xs" :title="t('admin.packages.archivedHint')">{{ t('admin.packages.inactive') }}</span>
                 </td>
                 <!-- 网络模式 -->
-                <td class="px-4 py-3 whitespace-nowrap" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
-                  {{ getPackageNetworkModeLabel(pkg) }}
+                <td class="px-4 py-3" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
+                  <div class="truncate">{{ getPackageNetworkModeLabel(pkg) }}</div>
                 </td>
                 <!-- 实例类型 -->
-                <td class="px-4 py-3 whitespace-nowrap" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
-                  {{ getPackageInstanceTypeLabel(pkg) }}
+                <td class="px-4 py-3" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
+                  <div class="truncate">{{ getPackageInstanceTypeLabel(pkg) }}</div>
                 </td>
                 <!-- 流量倍率 -->
                 <td
@@ -873,8 +1000,8 @@ function getBillingCycleLabel(months: number): string {
                   {{ getPackageTrafficMultiplierLabel(pkg) }}
                 </td>
                 <!-- 绑定宿主机 -->
-                <td class="px-4 py-3 whitespace-nowrap">
-                  <span class="text-xs text-themed-muted max-w-32 truncate block">{{ getHostNames(pkg) }}</span>
+                <td class="px-4 py-3">
+                  <span class="block truncate text-xs text-themed-muted">{{ getHostNames(pkg) }}</span>
                 </td>
                 <!-- 套餐下实例数 -->
                 <td class="px-4 py-3 text-right font-mono whitespace-nowrap" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
@@ -882,7 +1009,7 @@ function getBillingCycleLabel(months: number): string {
                 </td>
                 <!-- 操作 -->
                 <td v-if="scope === 'mine'" class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-1">
+                  <div class="flex flex-wrap items-center justify-end gap-1">
                     <!-- 分享链接 -->
                     <button
                       v-if="!isAdminEntry"

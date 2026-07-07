@@ -21,6 +21,7 @@ import {
   type PublicRegion
 } from '@/utils/publicCatalog'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel } from '@/utils/freeSiteFun'
+import { instanceCreatePath, loginPath } from '@/utils/app-paths'
 
 defineOptions({
   name: 'MarketView'
@@ -521,15 +522,15 @@ function createInstance(pkg: PublicPackage): void {
 
   if (authStore.isAuthenticated) {
     void router.push({
-      path: '/instances/create',
+      path: instanceCreatePath(),
       query
     })
     return
   }
 
-  const redirect = `/instances/create?${new URLSearchParams(query).toString()}`
+  const redirect = `${instanceCreatePath()}?${new URLSearchParams(query).toString()}`
   void router.push({
-    path: '/login',
+    path: loginPath(),
     query: { redirect }
   })
 }

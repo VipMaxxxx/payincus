@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -12,6 +12,7 @@ import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import TermsOfServiceModal from '@/components/TermsOfServiceModal.vue'
 import api from '@/api'
 import { useBrand } from '@/composables/useBrand'
+import { dashboardPath, loginPath } from '@/utils/app-paths'
 
 const isAdminEntry = import.meta.env.VITE_APP_ENTRY === 'admin'
 
@@ -86,6 +87,7 @@ const turnstileToken = ref<string>('')
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 const turnstileSectionRef = ref<HTMLElement | null>(null)
 void turnstileRef.value // 模板中通过 ref 使用
+const isTurnstileChallengeAvailable = computed<boolean>(() => turnstileEnabled.value && Boolean(turnstileSiteKey.value))
 
 // Terms of Service
 const agreedToTerms = ref<boolean>(false)
@@ -99,13 +101,13 @@ function onTurnstileExpire() {
 }
 
 function resetTurnstileChallenge(): void {
-  if (!turnstileEnabled.value) return
+  if (!isTurnstileChallengeAvailable.value) return
   turnstileToken.value = ''
   turnstileRef.value?.reset?.()
 }
 
 function getRegisterTurnstileToken(): string | null | undefined {
-  if (!turnstileEnabled.value) return undefined
+  if (!isTurnstileChallengeAvailable.value) return undefined
 
   const token = readTurnstileToken(turnstileRef.value, turnstileToken.value)
   if (token) {
@@ -180,13 +182,16 @@ async function sendVerificationCode(): Promise<void> {
     return
   }
 
+  const verificationToken = getRegisterTurnstileToken()
+  if (verificationToken === null) return
+
   sendingCode.value = true
   error.value = ''
 
   try {
     await api.auth.sendVerificationCode(
       form.value.email,
-      turnstileEnabled.value ? turnstileToken.value : undefined
+      verificationToken || undefined
     )
     codeSent.value = true
     // Start countdown
@@ -319,7 +324,7 @@ async function handleRegister(): Promise<void> {
 
     // 注册成功后自动登录并跳转到客户面板
     // 优化：减少延迟时间从 1.5 秒到 0.5 秒
-    setTimeout(() => router.push('/dashboard'), 500)
+    setTimeout(() => router.push(dashboardPath()), 500)
   } catch (err: any) {
     error.value = translateError(err)
     resetTurnstileChallenge()
@@ -381,7 +386,7 @@ async function handleRegister(): Promise<void> {
         <p class="text-sm leading-6 mb-5" :class="'text-themed-muted'">
           {{ $t('auth.registrationClosedMessage') }}
         </p>
-        <button type="button" class="btn-primary w-full" @click="router.push('/login')">
+        <button type="button" class="btn-primary w-full" @click="router.push(loginPath())">
           {{ $t('auth.backToLogin') }}
         </button>
       </div>
@@ -417,15 +422,15 @@ async function handleRegister(): Promise<void> {
               {{ $t('auth.email') }} <span class="text-red-500">*</span>
             </label>
             <!-- 邮箱白名单模式：左边输入用户名，右边选择域名 -->
-            <div v-if="emailDomainWhitelistEnabled && allowedEmailDomains.length > 0" class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div v-if="emailDomainWhitelistEnabled && allowedEmailDomains.length > 0" class="flex items-center gap-2">
               <input 
                 v-model="emailUsername" 
                 type="text" 
                 class="input min-w-0 flex-1" 
                 :placeholder="$t('auth.emailUsernamePlaceholder')" 
               />
-              <div class="flex items-center text-themed-muted">@</div>
-              <select v-model="selectedEmailDomain" class="input w-full sm:w-auto sm:min-w-[140px]">
+              <div class="shrink-0 text-themed-muted">@</div>
+              <select v-model="selectedEmailDomain" class="input w-32 max-w-[45%] shrink-0 sm:w-auto sm:min-w-[140px]">
                 <option v-for="domain in allowedEmailDomains" :key="domain" :value="domain">
                   {{ domain }}
                 </option>
@@ -500,7 +505,7 @@ async function handleRegister(): Promise<void> {
 
           <!-- Turnstile 验证 -->
           <div
-            v-if="turnstileEnabled && turnstileSiteKey"
+            v-if="isTurnstileChallengeAvailable"
             ref="turnstileSectionRef"
             tabindex="-1"
             class="rounded-lg border p-3"
@@ -608,7 +613,7 @@ async function handleRegister(): Promise<void> {
       <p class="mt-6 text-center text-sm" :class="'text-themed-muted'">
         {{ $t('auth.hasAccount') }}
         <RouterLink 
-          to="/login" 
+          :to="loginPath()"
           class="transition-colors"
           :class="'text-themed-muted hover:text-themed'"
         >

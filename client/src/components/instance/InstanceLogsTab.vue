@@ -191,8 +191,7 @@ onMounted(async () => {
 
     <!-- Desktop Table View -->
     <div v-else class="card overflow-hidden hidden sm:block">
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[600px]">
+      <table class="w-full table-fixed">
           <thead>
             <tr class="border-b border-themed">
               <th class="text-left py-3 px-4 text-xs font-medium text-themed-muted whitespace-nowrap">{{ $t('logs.time') }}</th>
@@ -262,8 +261,7 @@ onMounted(async () => {
               </td>
             </tr>
           </tbody>
-        </table>
-      </div>
+      </table>
 
       <!-- Pagination (Desktop) -->
       <div 

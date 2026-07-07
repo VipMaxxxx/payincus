@@ -126,6 +126,10 @@ assert(
     !userGenerateRouteSection.includes('onRequest: [fastify.authenticate, turnstileRequired]') &&
     userView.includes("import TurnstileWidget from '@/components/TurnstileWidget.vue'") &&
     userView.includes('api.systemConfig.getPublic()') &&
+    userView.includes('const isTurnstileChallengeAvailable = computed<boolean>(() => turnstileEnabled.value && Boolean(turnstileSiteKey.value))') &&
+    userView.includes('if (!isTurnstileChallengeAvailable.value) return undefined') &&
+    userView.includes('if (isTurnstileChallengeAvailable.value && !token)') &&
+    userView.includes('v-if="isTurnstileChallengeAvailable"') &&
     userView.includes('v-model="turnstileToken"') &&
     userView.includes('turnstileRef.value?.getToken?.()') &&
     userView.includes('input[name="cf-turnstile-response"]') &&
@@ -155,8 +159,21 @@ assert(
 	    adminNav.includes("path: '/admin/gift-cards'") &&
 	    userView.includes('TurnstileWidget') &&
 	    userView.includes("t('giftCards.redeemTitle')") &&
+	    userView.includes('class="mt-5 space-y-3 lg:hidden"') &&
+	    userView.includes('class="mt-5 hidden overflow-hidden lg:block"') &&
+	    userView.includes('class="w-full table-fixed text-sm"') &&
+	    userView.includes('class="block truncate"') &&
+	    userView.includes('@click="toggleCodeReveal(card)"') &&
+	    userView.includes('@click="copyCode(card.code)"') &&
+	    !userView.includes('class="w-full min-w-[860px] table-fixed text-sm"') &&
 	    zhLocale.includes("redeemTitle: '兑换礼品卡'") &&
 	    adminView.includes("t('giftCardsAdmin.description')") &&
+	    adminView.includes('class="mt-5 space-y-3 lg:hidden"') &&
+	    adminView.includes('class="mt-5 hidden overflow-hidden lg:block"') &&
+	    adminView.includes('class="w-full table-fixed text-sm"') &&
+	    adminView.includes('@change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)"') &&
+	    adminView.includes('@click="updateCardStatus(card)"') &&
+	    adminView.includes('@click="deleteCard(card)"') &&
 	    zhLocale.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
 	    adminView.includes("t('giftCardsAdmin.revealCode')") &&
 	    zhLocale.includes("revealCode: '显示完整兑换码'") &&

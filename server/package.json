@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "description": "PayIncus backend service",
   "type": "module",
   "main": "dist/app.js",
@@ -41,6 +41,7 @@
     "test:admin-billing-route-id-guards": "node --import tsx scripts/test-admin-billing-route-id-guards.ts",
     "test:admin-entertainment-route-guards": "node --import tsx scripts/test-admin-entertainment-route-guards.ts",
     "test:admin-route-guards": "node --import tsx scripts/test-admin-route-guards.ts",
+    "test:aff-review-ui-guards": "node --import tsx scripts/test-aff-review-ui-guards.ts",
     "test:auth-session-status-guards": "node --import tsx scripts/test-auth-session-status-guards.ts",
     "test:auto-policy-scheduler-guards": "node --import tsx scripts/test-auto-policy-scheduler-guards.ts",
     "test:balance-adjustment-approval-guards": "node --import tsx scripts/test-balance-adjustment-approval-guards.ts",
@@ -62,6 +63,7 @@
     "test:entertainment-vip-points-locks": "node --import tsx scripts/test-entertainment-vip-points-locks.ts",
     "test:entertainment-route-guards": "node --import tsx scripts/test-entertainment-route-guards.ts",
     "test:vip-benefit-route-guards": "node --import tsx scripts/test-vip-benefit-route-guards.ts",
+    "test:vip-level-rules-ui-guards": "node --import tsx scripts/test-vip-level-rules-ui-guards.ts",
     "test:geoip-guard": "node --import tsx scripts/test-geoip-guard.ts",
     "test:gift-card-guards": "node --import tsx scripts/test-gift-card-guards.ts",
     "test:gift-card-flow": "node --import tsx scripts/test-gift-card-flow.ts",

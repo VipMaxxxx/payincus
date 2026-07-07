@@ -386,83 +386,157 @@ function formatDate(value: string): string {
           <p class="text-sm text-themed-muted mt-2">{{ t('admin.hosting.owners.emptyHint') }}</p>
         </div>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full min-w-[1040px]">
-            <thead class="bg-themed-secondary border-b border-themed">
-              <tr>
-                <th class="text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.user') }}</th>
-                <th
-                  v-for="column in sortableOwnerColumns"
-                  :key="column.key"
-                  class="px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider"
-                  :class="column.align === 'right' ? 'text-right' : 'text-left'"
-                  :aria-sort="getSortAria(column.key)"
-                >
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-1 rounded px-1.5 py-1 -mx-1.5 -my-1 transition-colors hover:bg-themed-hover hover:text-themed"
-                    :class="[
-                      column.align === 'right' ? 'justify-end' : 'justify-start',
-                      sortBy === column.key ? 'text-themed' : ''
-                    ]"
-                    @click="toggleOwnerSort(column.key)"
-                  >
-                    <span>{{ t(column.labelKey) }}</span>
-                    <span class="inline-flex w-3 justify-center text-[10px] leading-none text-themed-muted">
-                      <template v-if="sortBy === column.key">{{ sortOrder === 'asc' ? '↑' : '↓' }}</template>
-                      <template v-else>↕</template>
-                    </span>
-                  </button>
-                </th>
-                <th class="text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.createdAt') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-themed">
-              <tr v-for="owner in owners" :key="owner.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <UserAvatar
-                      :username="owner.username"
-                      :email="owner.email"
-                      :avatar-style="owner.avatarStyle"
-                      :badge-id="owner.avatarBadgeId"
-                      :size="36"
-                    />
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium text-themed truncate">{{ owner.username }}</span>
-                        <span class="text-xs text-themed-muted">#{{ owner.id }}</span>
-                      </div>
-                      <div class="text-xs text-themed-muted truncate">{{ owner.email || t('admin.hosting.owners.noEmail') }}</div>
+        <template v-else>
+          <div class="space-y-3 p-4 lg:hidden">
+            <div class="grid grid-cols-[1fr_auto] gap-2">
+              <select v-model="sortBy" class="input" @change="loadOwners">
+                <option v-for="column in sortableOwnerColumns" :key="column.key" :value="column.key">
+                  {{ t(column.labelKey) }}
+                </option>
+              </select>
+              <button class="btn btn-ghost" type="button" @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; loadOwners()">
+                {{ sortOrder === 'asc' ? '↑' : '↓' }}
+              </button>
+            </div>
+            <div
+              v-for="owner in owners"
+              :key="owner.id"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex min-w-0 items-center gap-3">
+                  <UserAvatar
+                    :username="owner.username"
+                    :email="owner.email"
+                    :avatar-style="owner.avatarStyle"
+                    :badge-id="owner.avatarBadgeId"
+                    :size="36"
+                  />
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="truncate font-medium text-themed">{{ owner.username }}</span>
+                      <span class="text-xs text-themed-muted">#{{ owner.id }}</span>
                     </div>
+                    <div class="truncate text-xs text-themed-muted">{{ owner.email || t('admin.hosting.owners.noEmail') }}</div>
                   </div>
-                </td>
-                <td class="px-4 py-3 whitespace-nowrap">
-                  <span
-                    class="badge border"
-                    :class="owner.vipLevel > 0 ? '' : 'badge-default'"
-                    :style="owner.vipLevel > 0 ? getVipBadgeInlineStyle(normalizeVipBadgeStyle(owner.vipBadgeStyle, owner.vipLevel)) : undefined"
+                </div>
+                <span
+                  class="badge shrink-0 border"
+                  :class="owner.vipLevel > 0 ? '' : 'badge-default'"
+                  :style="owner.vipLevel > 0 ? getVipBadgeInlineStyle(normalizeVipBadgeStyle(owner.vipBadgeStyle, owner.vipLevel)) : undefined"
+                >
+                  VIP {{ owner.vipLevel }}
+                </span>
+              </div>
+              <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.hostingBalance') }}</div>
+                  <div class="mt-1 font-mono font-medium text-themed">{{ formatMoney(owner.hostingBalance.available) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.frozenBalance') }}</div>
+                  <div class="mt-1 font-mono font-medium text-amber-600 dark:text-amber-400">{{ formatMoney(owner.hostingBalance.frozen) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.totalIncome') }}</div>
+                  <div class="mt-1 font-mono font-medium text-emerald-600 dark:text-emerald-400">{{ formatMoney(owner.hostingBalance.historicalTotal) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.createdAt') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatDate(owner.createdAt) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.hostCount') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ numberFormatter.format(owner.hostCount) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.packageCount') }} / {{ t('admin.hosting.owners.instanceCount') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ numberFormatter.format(owner.listedPackageCount) }} / {{ numberFormatter.format(owner.instanceCount) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed">
+              <thead class="bg-themed-secondary border-b border-themed">
+                <tr>
+                  <th class="w-[20%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.user') }}</th>
+                  <th
+                    v-for="column in sortableOwnerColumns"
+                    :key="column.key"
+                    class="px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider"
+                    :class="[
+                      column.align === 'right' ? 'text-right' : 'text-left',
+                      column.key === 'vipLevel' ? 'w-[10%]' : '',
+                      column.key === 'hostingBalance' ? 'w-[12%]' : '',
+                      column.key === 'frozenBalance' ? 'w-[12%]' : '',
+                      column.key === 'totalIncome' ? 'w-[12%]' : '',
+                      column.key === 'hostCount' ? 'w-[8%]' : '',
+                      column.key === 'packageCount' ? 'w-[8%]' : '',
+                      column.key === 'instanceCount' ? 'w-[8%]' : ''
+                    ]"
+                    :aria-sort="getSortAria(column.key)"
                   >
-                    VIP {{ owner.vipLevel }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-right font-mono text-sm text-themed whitespace-nowrap">
-                  {{ formatMoney(owner.hostingBalance.available) }}
-                </td>
-                <td class="px-4 py-3 text-right font-mono text-sm text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                  {{ formatMoney(owner.hostingBalance.frozen) }}
-                </td>
-                <td class="px-4 py-3 text-right font-mono text-sm text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                  {{ formatMoney(owner.hostingBalance.historicalTotal) }}
-                </td>
-                <td class="px-4 py-3 text-right text-sm text-themed whitespace-nowrap">{{ numberFormatter.format(owner.hostCount) }}</td>
-                <td class="px-4 py-3 text-right text-sm text-themed whitespace-nowrap">{{ numberFormatter.format(owner.listedPackageCount) }}</td>
-                <td class="px-4 py-3 text-right text-sm text-themed whitespace-nowrap">{{ numberFormatter.format(owner.instanceCount) }}</td>
-                <td class="px-4 py-3 text-sm text-themed-muted whitespace-nowrap">{{ formatDate(owner.createdAt) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 rounded px-1.5 py-1 -mx-1.5 -my-1 transition-colors hover:bg-themed-hover hover:text-themed"
+                      :class="[
+                        column.align === 'right' ? 'justify-end' : 'justify-start',
+                        sortBy === column.key ? 'text-themed' : ''
+                      ]"
+                      @click="toggleOwnerSort(column.key)"
+                    >
+                      <span>{{ t(column.labelKey) }}</span>
+                      <span class="inline-flex w-3 justify-center text-[10px] leading-none text-themed-muted">
+                        <template v-if="sortBy === column.key">{{ sortOrder === 'asc' ? '↑' : '↓' }}</template>
+                        <template v-else>↕</template>
+                      </span>
+                    </button>
+                  </th>
+                  <th class="w-[10%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.createdAt') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-themed">
+                <tr v-for="owner in owners" :key="owner.id" class="hover:bg-themed-hover">
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <UserAvatar
+                        :username="owner.username"
+                        :email="owner.email"
+                        :avatar-style="owner.avatarStyle"
+                        :badge-id="owner.avatarBadgeId"
+                        :size="36"
+                      />
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="font-medium text-themed truncate">{{ owner.username }}</span>
+                          <span class="text-xs text-themed-muted">#{{ owner.id }}</span>
+                        </div>
+                        <div class="text-xs text-themed-muted truncate">{{ owner.email || t('admin.hosting.owners.noEmail') }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span
+                      class="badge border"
+                      :class="owner.vipLevel > 0 ? '' : 'badge-default'"
+                      :style="owner.vipLevel > 0 ? getVipBadgeInlineStyle(normalizeVipBadgeStyle(owner.vipBadgeStyle, owner.vipLevel)) : undefined"
+                    >
+                      VIP {{ owner.vipLevel }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-right font-mono text-sm text-themed">{{ formatMoney(owner.hostingBalance.available) }}</td>
+                  <td class="px-4 py-3 text-right font-mono text-sm text-amber-600 dark:text-amber-400">{{ formatMoney(owner.hostingBalance.frozen) }}</td>
+                  <td class="px-4 py-3 text-right font-mono text-sm text-emerald-600 dark:text-emerald-400">{{ formatMoney(owner.hostingBalance.historicalTotal) }}</td>
+                  <td class="px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(owner.hostCount) }}</td>
+                  <td class="px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(owner.listedPackageCount) }}</td>
+                  <td class="px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(owner.instanceCount) }}</td>
+                  <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(owner.createdAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
 
         <div class="px-4 py-3 border-t border-themed flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span class="text-sm text-themed-muted">
@@ -577,56 +651,105 @@ function formatDate(value: string): string {
           <p class="text-sm text-themed-muted mt-2">{{ t('admin.hosting.zones.emptyHint') }}</p>
         </div>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full min-w-[820px]">
-            <thead class="bg-themed-secondary border-b border-themed">
-              <tr>
-                <th class="text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.zones.zone') }}</th>
-                <th class="text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.zones.owner') }}</th>
-                <th class="text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.hostCount') }}</th>
-                <th class="text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.packageCount') }}</th>
-                <th class="text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.createdAt') }}</th>
-                <th class="text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('common.actions') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-themed">
-              <tr v-for="zone in zones" :key="zone.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <img :src="zone.logoUrl" :alt="zone.name" class="w-10 h-10 rounded-full object-cover border border-themed" />
-                    <div class="min-w-0">
-                      <div class="font-medium text-themed truncate">{{ zone.name }}</div>
-                      <div class="text-xs text-themed-muted">#{{ zone.id }}</div>
-                    </div>
+        <template v-else>
+          <div class="space-y-3 p-4 lg:hidden">
+            <div
+              v-for="zone in zones"
+              :key="zone.id"
+              class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex min-w-0 items-center gap-3">
+                  <img :src="zone.logoUrl" :alt="zone.name" class="w-10 h-10 rounded-full object-cover border border-themed" />
+                  <div class="min-w-0">
+                    <div class="font-medium text-themed truncate">{{ zone.name }}</div>
+                    <div class="text-xs text-themed-muted">#{{ zone.id }}</div>
                   </div>
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <UserAvatar
-                      :username="zone.owner.username"
-                      :email="zone.owner.email"
-                      :avatar-style="zone.owner.avatarStyle"
-                      :badge-id="zone.owner.avatarBadgeId"
-                      :size="32"
-                    />
-                    <div class="min-w-0">
-                      <div class="font-medium text-themed truncate">{{ zone.owner.username }} <span class="text-xs text-themed-muted">#{{ zone.owner.id }}</span></div>
-                      <div class="text-xs text-themed-muted truncate">{{ zone.owner.email || t('admin.hosting.owners.noEmail') }}</div>
+                </div>
+                <button class="btn btn-ghost btn-sm shrink-0 text-red-600 dark:text-red-400" :disabled="deletingZoneId === zone.id" @click="deleteZone(zone)">
+                  {{ deletingZoneId === zone.id ? t('common.processing') : t('common.delete') }}
+                </button>
+              </div>
+              <div class="mt-4 flex items-center gap-3 min-w-0">
+                <UserAvatar
+                  :username="zone.owner.username"
+                  :email="zone.owner.email"
+                  :avatar-style="zone.owner.avatarStyle"
+                  :badge-id="zone.owner.avatarBadgeId"
+                  :size="32"
+                />
+                <div class="min-w-0">
+                  <div class="font-medium text-themed truncate">{{ zone.owner.username }} <span class="text-xs text-themed-muted">#{{ zone.owner.id }}</span></div>
+                  <div class="text-xs text-themed-muted truncate">{{ zone.owner.email || t('admin.hosting.owners.noEmail') }}</div>
+                </div>
+              </div>
+              <div class="mt-4 grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.hostCount') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ numberFormatter.format(zone.hostCount) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.packageCount') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ numberFormatter.format(zone.listedPackageCount) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">{{ t('admin.hosting.owners.createdAt') }}</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatDate(zone.createdAt) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed">
+              <thead class="bg-themed-secondary border-b border-themed">
+                <tr>
+                  <th class="w-[22%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.zones.zone') }}</th>
+                  <th class="w-[26%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.zones.owner') }}</th>
+                  <th class="w-[10%] text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.hostCount') }}</th>
+                  <th class="w-[12%] text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.packageCount') }}</th>
+                  <th class="w-[16%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.createdAt') }}</th>
+                  <th class="w-[14%] text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('common.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-themed">
+                <tr v-for="zone in zones" :key="zone.id" class="hover:bg-themed-hover">
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <img :src="zone.logoUrl" :alt="zone.name" class="w-10 h-10 rounded-full object-cover border border-themed" />
+                      <div class="min-w-0">
+                        <div class="font-medium text-themed truncate">{{ zone.name }}</div>
+                        <div class="text-xs text-themed-muted">#{{ zone.id }}</div>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td class="px-4 py-3 text-right text-sm text-themed whitespace-nowrap">{{ numberFormatter.format(zone.hostCount) }}</td>
-                <td class="px-4 py-3 text-right text-sm text-themed whitespace-nowrap">{{ numberFormatter.format(zone.listedPackageCount) }}</td>
-                <td class="px-4 py-3 text-sm text-themed-muted whitespace-nowrap">{{ formatDate(zone.createdAt) }}</td>
-                <td class="px-4 py-3 text-right whitespace-nowrap">
-                  <button class="btn btn-ghost btn-sm text-red-600 dark:text-red-400" :disabled="deletingZoneId === zone.id" @click="deleteZone(zone)">
-                    {{ deletingZoneId === zone.id ? t('common.processing') : t('common.delete') }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <UserAvatar
+                        :username="zone.owner.username"
+                        :email="zone.owner.email"
+                        :avatar-style="zone.owner.avatarStyle"
+                        :badge-id="zone.owner.avatarBadgeId"
+                        :size="32"
+                      />
+                      <div class="min-w-0">
+                        <div class="font-medium text-themed truncate">{{ zone.owner.username }} <span class="text-xs text-themed-muted">#{{ zone.owner.id }}</span></div>
+                        <div class="text-xs text-themed-muted truncate">{{ zone.owner.email || t('admin.hosting.owners.noEmail') }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(zone.hostCount) }}</td>
+                  <td class="px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(zone.listedPackageCount) }}</td>
+                  <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(zone.createdAt) }}</td>
+                  <td class="px-4 py-3 text-right">
+                    <button class="btn btn-ghost btn-sm text-red-600 dark:text-red-400" :disabled="deletingZoneId === zone.id" @click="deleteZone(zone)">
+                      {{ deletingZoneId === zone.id ? t('common.processing') : t('common.delete') }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </section>
     </div>
 

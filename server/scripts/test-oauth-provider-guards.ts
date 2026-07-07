@@ -180,6 +180,26 @@ assert(
 )
 
 assert(
+  oauthView.match(/class="mt-6 space-y-3 lg:hidden"/g)?.length === 2 &&
+    oauthView.match(/class="mt-6 hidden overflow-hidden lg:block"/g)?.length === 2 &&
+    oauthView.includes('table class="w-full table-fixed text-sm"') &&
+    oauthView.includes('table class="w-full table-fixed text-sm"') &&
+    !oauthView.includes('class="mt-6 overflow-x-auto"') &&
+    !oauthView.includes('table class="min-w-full text-sm"'),
+  'OAuth admin UI must render mobile cards and fixed desktop tables instead of horizontal table scrolling'
+)
+
+assert(
+  oauthView.includes('@click="editOAuthApp(appItem)"') &&
+    oauthView.includes('@click="rotateOAuthAppSecret(appItem)"') &&
+    oauthView.includes('@click="deleteOAuthApp(appItem)"') &&
+    oauthView.includes('@click="revokeOAuthAuthorization(authorization)"') &&
+    oauthView.includes('@click="setOAuthAuthorizationPage(oauthAuthorizationFilters.page - 1)"') &&
+    oauthView.includes('@click="setOAuthAuthorizationPage(oauthAuthorizationFilters.page + 1)"'),
+  'OAuth responsive admin UI must preserve app management, authorization revoke, and pagination actions'
+)
+
+assert(
   developmentDocs.includes('GET /oauth/authorize') &&
     developmentDocs.includes('GET /api/oauth-provider/scopes') &&
     developmentDocs.includes('scopeMetadata') &&

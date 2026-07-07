@@ -20,6 +20,7 @@ import type {
   InstanceWithDetails,
   InstanceStats,
   CreateInstanceRequest,
+  CreateInstanceResponse,
   FlashSaleCampaign,
   FlashSaleReservation,
   UpdateInstanceRequest,
@@ -776,7 +777,7 @@ const api = {
     get: (id: number): Promise<InstanceWithDetails> => http.get(`/instances/${id}`),
     getPassword: (id: number): Promise<{ rootPassword: string | null }> => http.get(`/instances/${id}/password`),
     getStats: (id: number): Promise<InstanceStats & { status?: string }> => http.get(`/instances/${id}/stats`),
-    create: (data: CreateInstanceRequest): Promise<Instance> => http.post('/instances', data),
+    create: (data: CreateInstanceRequest): Promise<CreateInstanceResponse> => http.post('/instances', data),
     getAvailableHosts: (params: Record<string, unknown> = {}): Promise<AvailableHost[]> =>
       http.get('/instances/available-hosts', { params }),
     getChangeHostOptions: (id: number): Promise<ChangeHostOptionsResponse> =>
@@ -4190,6 +4191,9 @@ const api = {
         diskUsedMb: number
         verifiedAt: string | null
         createdAt: string
+        adminUsername: string | null
+        adminPasswordConfigured: boolean
+        sourceCode: string
         accounts: Array<{
           id: number
           email: string
@@ -4202,6 +4206,10 @@ const api = {
         }>
       }
     }> => http.get(`/mail/domains/${id}`),
+
+    getDomainAdminPassword: (id: number): Promise<{
+      adminPassword: string | null
+    }> => http.get(`/mail/domains/${id}/admin-password`),
 
     // 添加域名
     addDomain: (domain: string): Promise<{

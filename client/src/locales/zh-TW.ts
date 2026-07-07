@@ -41,6 +41,7 @@ export default {
         previous: '上一步',
         close: '關閉',
         reset: '重設',
+        retry: '重試',
         refresh: '重新整理',
         copy: '複製',
         copied: '已複製',

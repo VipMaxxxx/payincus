@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/routes/instance-billing.ts'), 'utf8')
+const bulkSeedSource = readFileSync(resolve(__dirname, './seed-bulk-local-data.ts'), 'utf8')
 
 assert.ok(
   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
@@ -71,6 +72,21 @@ assert.ok(
     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
     recordsRoute.includes('type: normalizeBillingRecordType(type)'),
   'instance billing records route must normalize pagination and type before DB reads'
+)
+
+assert.ok(
+  source.includes('function serializePlanPriceYuan(price: unknown): number') &&
+    source.includes('function serializeInstanceBillingPriceYuan(price: unknown, fallbackPlanPrice: unknown): number') &&
+    source.includes('price: serializeInstanceBillingPriceYuan(instance.billingPrice, preview.oldPlan.price)') &&
+    source.includes('price: serializePlanPriceYuan(preview.newPlan.price)') &&
+    !source.includes('price: Number(preview.newPlan.price)'),
+  'plan-change preview must serialize PackagePlan.price from cents to yuan before returning prices to clients'
+)
+
+assert.ok(
+  bulkSeedSource.includes('billingPrice: plan.price / 100') &&
+    !bulkSeedSource.includes('billingPrice: plan.price,'),
+  'bulk local seed must store instance billingPrice in yuan, matching production create/change-plan billing logic'
 )
 
 for (const forbiddenPattern of [

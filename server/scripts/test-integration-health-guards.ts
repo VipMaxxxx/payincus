@@ -106,6 +106,16 @@ assert(
 )
 
 assert(
+  integrationsView.includes('class="mt-4 space-y-3 lg:hidden"') &&
+    integrationsView.includes('class="mt-4 hidden overflow-hidden lg:block"') &&
+    integrationsView.includes('table class="w-full table-fixed text-sm"') &&
+    integrationsView.includes('v-for="record in recentIntegrationFailures"') &&
+    !integrationsView.includes('class="mt-4 overflow-x-auto"') &&
+    !integrationsView.includes('table class="min-w-full text-sm"'),
+  'admin Integration Center recent failures must keep mobile cards and a fixed desktop table without broad horizontal overflow'
+)
+
+assert(
   matrix.includes('一键测试') &&
     matrix.includes('真实外部健康探测') &&
     enMatrix.includes('one-click tests') &&

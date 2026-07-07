@@ -28,7 +28,7 @@ import {
 } from '../db/plugins.js'
 import { prisma } from '../db/prisma.js'
 import { createLog, LogModule, LogResult } from '../db/logs.js'
-import { assertMarketEntryInstallable, downloadMarketPlugin, fetchPluginMarketIndex } from '../lib/plugin-market.js'
+import { assertMarketEntryInstallable, buildUnavailablePluginMarketIndex, downloadMarketPlugin, fetchPluginMarketIndex } from '../lib/plugin-market.js'
 import { getPluginDataDir, getPluginLogDir, getPluginPackageMaxBytes, getPluginStagingDir, resolveInside, validateAndExtractPluginPackage } from '../lib/plugin-package.js'
 import { processDuePluginEventRetries, replayPluginEventLog } from '../lib/plugin-runtime.js'
 import type { PayIncusPluginManifest, PluginConfigFieldManifest } from '../lib/plugin-manifest.js'
@@ -542,7 +542,12 @@ export default async function adminPluginRoutes(fastify: FastifyInstance) {
   fastify.get('/market', {
     onRequest: [fastify.authenticateAdmin]
   }, async () => {
-    return await fetchPluginMarketIndex()
+    try {
+      return await fetchPluginMarketIndex()
+    } catch (error) {
+      fastify.log.warn({ err: error }, 'Plugin market index unavailable')
+      return buildUnavailablePluginMarketIndex()
+    }
   })
 
   fastify.get('/tasks', {

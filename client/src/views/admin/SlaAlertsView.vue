@@ -318,16 +318,56 @@ onMounted(() => {
             <div class="font-medium text-themed">告警事件</div>
             <div class="mt-1 text-xs text-themed-muted">共 {{ total }} 条记录</div>
           </div>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-themed text-sm">
+          <div v-if="alerts.length > 0" class="space-y-3 p-4 lg:hidden">
+            <button
+              v-for="alert in alerts"
+              :key="alert.id"
+              type="button"
+              class="w-full rounded-lg border border-themed bg-themed-surface p-4 text-left shadow-sm"
+              :class="selectedAlertId === alert.id ? 'ring-2 ring-blue-500' : ''"
+              @click="selectedAlertId = alert.id"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="font-medium text-themed">{{ alert.title }}</div>
+                  <div class="mt-1 line-clamp-2 text-xs text-themed-muted">{{ alert.message }}</div>
+                </div>
+                <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs" :class="severityClass(alert.severity)">
+                  {{ severityLabel(alert.severity) }}
+                </span>
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div class="text-themed-muted">状态</div>
+                  <span class="mt-1 inline-flex rounded-full border px-2 py-0.5" :class="statusClass(alert.status)">
+                    {{ statusLabel(alert.status) }}
+                  </span>
+                </div>
+                <div>
+                  <div class="text-themed-muted">模块</div>
+                  <div class="mt-1 font-medium text-themed">{{ moduleLabel(alert.module) }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">次数</div>
+                  <div class="mt-1 font-medium text-themed">{{ alert.triggerCount }}</div>
+                </div>
+                <div>
+                  <div class="text-themed-muted">最近触发</div>
+                  <div class="mt-1 font-medium text-themed">{{ formatDate(alert.lastTriggeredAt) }}</div>
+                </div>
+              </div>
+            </button>
+          </div>
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed divide-y divide-themed text-sm">
               <thead>
                 <tr class="text-left text-xs text-themed-muted">
-                  <th class="px-4 py-3 font-medium">等级</th>
-                  <th class="px-4 py-3 font-medium">状态</th>
-                  <th class="px-4 py-3 font-medium">模块</th>
-                  <th class="px-4 py-3 font-medium">告警</th>
-                  <th class="px-4 py-3 font-medium">次数</th>
-                  <th class="px-4 py-3 font-medium">最近触发</th>
+                  <th class="w-[10%] px-4 py-3 font-medium">等级</th>
+                  <th class="w-[10%] px-4 py-3 font-medium">状态</th>
+                  <th class="w-[14%] px-4 py-3 font-medium">模块</th>
+                  <th class="w-[42%] px-4 py-3 font-medium">告警</th>
+                  <th class="w-[8%] px-4 py-3 font-medium">次数</th>
+                  <th class="w-[16%] px-4 py-3 font-medium">最近触发</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-themed">
@@ -348,19 +388,19 @@ onMounted(() => {
                       {{ statusLabel(alert.status) }}
                     </span>
                   </td>
-                  <td class="px-4 py-3 text-themed-muted">{{ moduleLabel(alert.module) }}</td>
+                  <td class="truncate px-4 py-3 text-themed-muted">{{ moduleLabel(alert.module) }}</td>
                   <td class="px-4 py-3">
-                    <div class="font-medium text-themed">{{ alert.title }}</div>
-                    <div class="mt-1 max-w-xl truncate text-xs text-themed-muted">{{ alert.message }}</div>
+                    <div class="truncate font-medium text-themed">{{ alert.title }}</div>
+                    <div class="mt-1 truncate text-xs text-themed-muted">{{ alert.message }}</div>
                   </td>
                   <td class="px-4 py-3 text-themed-muted">{{ alert.triggerCount }}</td>
-                  <td class="px-4 py-3 text-themed-muted">{{ formatDate(alert.lastTriggeredAt) }}</td>
-                </tr>
-                <tr v-if="alerts.length === 0">
-                  <td colspan="6" class="px-4 py-8 text-center text-sm text-themed-muted">暂无匹配告警</td>
+                  <td class="truncate px-4 py-3 text-themed-muted">{{ formatDate(alert.lastTriggeredAt) }}</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div v-if="alerts.length === 0" class="px-4 py-8 text-center text-sm text-themed-muted">
+            暂无匹配告警
           </div>
           <div class="flex items-center justify-between border-t border-themed p-4 text-sm text-themed-muted">
             <span>第 {{ page }} / {{ totalPages }} 页</span>

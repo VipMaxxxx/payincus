@@ -207,6 +207,61 @@ assert(
 )
 
 assert(
+  (adminView.match(/class="space-y-3 p-4 lg:hidden"/g)?.length || 0) >= 3 &&
+    (adminView.match(/class="hidden overflow-hidden lg:block"/g)?.length || 0) >= 3 &&
+    adminView.includes('table class="w-full table-fixed text-sm"') &&
+    adminView.includes('table class="w-full table-fixed text-sm"') &&
+    adminView.includes('table class="w-full table-fixed text-sm"') &&
+    adminView.includes('table class="w-full table-fixed text-sm"') &&
+    adminView.includes('table class="w-full table-fixed text-sm"') &&
+    !adminView.includes('<div class="overflow-x-auto">') &&
+    !adminView.includes('table class="min-w-full text-sm"'),
+  'resource risk admin main lists must render mobile cards and fixed desktop tables'
+)
+
+assert(
+  adminView.includes('v-for="bucket in evidenceDetail.trends.hourly24h.slice(-12)"') &&
+    adminView.includes("formatTrendBucket(bucket.bucketStart, 'hour')") &&
+    adminView.includes('v-for="bucket in evidenceDetail.trends.daily7d"') &&
+    adminView.includes("formatTrendBucket(bucket.bucketStart, 'day')") &&
+    adminView.includes('v-for="sample in evidenceDetail.samples.slice(0, 12)"') &&
+    adminView.includes("formatMetric(sample.totalMbps, ' Mbps')") &&
+    adminView.includes('formatBytes(sample.totalBytesDelta)') &&
+    adminView.includes('v-for="restriction in evidenceDetail.restrictions"') &&
+    adminView.includes('restriction.status === \'active\'') &&
+    adminView.includes('暂无 24 小时趋势。') &&
+    adminView.includes('暂无 7 天趋势。') &&
+    adminView.includes('暂无资源样本。') &&
+    adminView.includes('暂无关联限单。'),
+  'resource risk evidence details must preserve trend, sample, and restriction data in responsive layouts'
+)
+
+assert(
+  adminView.includes('@click="openEvidence(item)"') &&
+    adminView.includes('@click="evaluateInstance(item)"') &&
+    adminView.includes('@click="manualQos(item)"') &&
+    adminView.includes('@click="manualSuspend(item)"') &&
+    adminView.includes('@click="manualUnsuspend(item)"') &&
+    adminView.includes('@click="manualOrderRestrict(item)"') &&
+    adminView.includes('@click="releaseOrderRestrictionFromState(item)"') &&
+    adminView.includes('@click="releaseInstance(item)"') &&
+    adminView.includes('@click="releaseRestriction(item)"') &&
+    adminView.includes('@click="addQosTier"') &&
+    adminView.includes('@click="removeQosTier(index)"') &&
+    adminView.includes('v-model.number="tier.level"') &&
+    adminView.includes('v-model.number="tier.bandwidthMbps"') &&
+    adminView.includes('v-model.number="tier.recoverScore"') &&
+    adminView.includes('v-model.number="tier.cooldownMinutes"') &&
+    adminView.includes('v-model="tier.allowFurtherDowngrade"') &&
+    adminView.includes('v-model="tier.notifyUser"') &&
+    adminView.includes('v-model="tier.restrictOrders"') &&
+    adminView.includes('@click="changeInstancesPage(instancesPage.page - 1)"') &&
+    adminView.includes('@click="changeEventsPage(eventsPage.page - 1)"') &&
+    adminView.includes('@click="changeRestrictionsPage(restrictionsPage.page - 1)"'),
+  'resource risk responsive main lists must preserve evidence, manual risk actions, restriction release, and pagination'
+)
+
+assert(
   !schema.includes('userRiskScore') &&
     !schema.includes('accountRiskScore') &&
     riskService.includes('instanceRiskState') &&

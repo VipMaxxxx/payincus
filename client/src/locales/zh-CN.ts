@@ -32,6 +32,7 @@ export default {
         previous: '上一步',
         close: '关闭',
         reset: '重置',
+        retry: '重试',
         refresh: '刷新',
         copy: '复制',
         copied: '已复制',
