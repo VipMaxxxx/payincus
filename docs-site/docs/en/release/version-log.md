@@ -6,16 +6,43 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `edd97236f`
+- Latest Release Commit / 最新发布提交: `62338ac31`
 - Commit date / 提交日期: 2026-07-08
-- Commit subject / 提交说明: Release v1.3.1 auth redirect fixes
-- Latest tag / 最新 tag: `v1.3.1`
+- Commit subject / 提交说明: Release v1.3.2 stale asset recovery
+- Latest tag / 最新 tag: `v1.3.2`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.3.2
+
+- Release commit / 发布提交: `62338ac31`
+- Commit date / 提交日期: 2026-07-08
+- Commit subject / 提交说明: Release v1.3.2 stale asset recovery
+
+# v1.3.2
+
+## 修复与稳定性
+
+- 增加前后台统一的旧静态资源恢复逻辑：捕获 Vite preload、动态 import、router 和 Vue 错误中的旧 chunk 加载失败，清理 Incudal 静态缓存后自动刷新，减少 OTA 后点击页面无反应或白屏需要手动刷新的情况。
+- 登录、注册、忘记密码等 Turnstile 验证区域固定显示验证状态，明确区分“未验证 / 已验证 / 已过期 / 验证失败”，避免用户误判当前验证码是否已经完成。
+- 移除前端生产 HTML 中残留的 Figma capture 外链，降低线上 CSP/外部脚本噪音。
+- 同步前端路由守卫测试，覆盖旧静态资源恢复、Figma capture 移除和 Turnstile 固定状态提示。
+- 同步 Service Worker 静态缓存名到 `v1.3.2`，确保 OTA 后客户端获取新版本静态资源。
+
+## 验证
+
+- `pnpm --filter server test:frontend-route-guards`
+- `pnpm --filter client type-check`
+- `pnpm --filter client build:user`
+- `pnpm --filter client build:admin`
+- `pnpm build`
+- `git diff --check`
+- 本地 CDP 全页扫描：202 页，0 issues。
+- 本地可见导航点击扫描：用户端 desktop/mobile 36/36，通过；管理端 desktop/mobile 60/60，通过。
 
 ## v1.3.1
 
