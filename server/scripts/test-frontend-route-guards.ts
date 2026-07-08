@@ -32,6 +32,9 @@ const appLayoutSource = readRepoFile('client/src/components/layout/AppLayout.vue
 const notificationBellSource = readRepoFile('client/src/components/NotificationBell.vue')
 const mainSource = readRepoFile('client/src/main.ts')
 const adminMainSource = readRepoFile('client/src/admin/main.ts')
+const indexHtmlSource = readRepoFile('client/index.html')
+const staleAssetRecoverySource = readRepoFile('client/src/utils/staleAssetRecovery.ts')
+const turnstileWidgetSource = readRepoFile('client/src/components/TurnstileWidget.vue')
 const publicHeaderSource = readRepoFile('client/src/components/public/PublicSiteHeader.vue')
 const publicFooterSource = readRepoFile('client/src/components/public/PublicSiteFooter.vue')
 const sideNavSource = readRepoFile('client/src/components/layout/SideNav.vue')
@@ -576,6 +579,35 @@ assert.ok(
     adminMainSource.includes('const serviceWorkerUrl = `/sw.js?v=${encodeURIComponent(clientPackage.version)}`') &&
     adminMainSource.includes("navigator.serviceWorker.register(serviceWorkerUrl, { updateViaCache: 'none' })"),
   'user and admin entries must register a versioned Service Worker URL with updateViaCache disabled so edge-cached /sw.js cannot pin old chunks'
+)
+assert.ok(
+  staleAssetRecoverySource.includes("window.addEventListener('vite:preloadError'") &&
+    staleAssetRecoverySource.includes("window.addEventListener('unhandledrejection'") &&
+    staleAssetRecoverySource.includes("window.addEventListener('error'") &&
+    staleAssetRecoverySource.includes("cacheName.startsWith('incudal-cache-')") &&
+    staleAssetRecoverySource.includes('window.location.reload()') &&
+    mainSource.includes('installStaleAssetRecovery()') &&
+    adminMainSource.includes('installStaleAssetRecovery()') &&
+    userRouterSource.includes("scheduleStaleAssetReload('user-router-error'") &&
+    adminRouterSource.includes("scheduleStaleAssetReload('admin-router-error'") &&
+    appSource.includes("scheduleStaleAssetReload('app-error-captured'") &&
+    adminAppSource.includes("scheduleStaleAssetReload('admin-app-error-captured'"),
+  'user and admin frontends must recover from stale Vite chunks/preload failures by clearing Incudal static caches and reloading'
+)
+assert.ok(
+  !indexHtmlSource.includes('https://mcp.figma.com/mcp/html-to-design/capture.js'),
+  'production index.html must not load the Figma capture script'
+)
+assert.ok(
+  turnstileWidgetSource.includes("verificationState = ref<'pending' | 'verified' | 'expired' | 'error'>('pending')") &&
+    turnstileWidgetSource.includes("t('common.turnstileStatusTitle')") &&
+    turnstileWidgetSource.includes("t('common.turnstileUnverified')") &&
+    turnstileWidgetSource.includes("t('common.turnstileVerified')") &&
+    turnstileWidgetSource.includes('class="turnstile-status-row"') &&
+    turnstileWidgetSource.includes('class="turnstile-status-pill"') &&
+    turnstileWidgetSource.includes("verificationState.value = 'verified'") &&
+    turnstileWidgetSource.includes("verificationState.value = 'pending'"),
+  'TurnstileWidget must show a fixed verification status row so users can distinguish unverified and verified states'
 )
 assert.ok(
   appPathsSource.includes("export function exchangePath(): string") &&

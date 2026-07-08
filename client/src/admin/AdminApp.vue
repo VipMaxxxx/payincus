@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/config'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import { buildApiUrl } from '@/utils/api-url'
+import { isStaleAssetLoadError, scheduleStaleAssetReload } from '@/utils/staleAssetRecovery'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -58,17 +59,9 @@ async function handleVisibilityChange() {
 
 onErrorCaptured((err, _instance, info) => {
   console.error('组件错误捕获:', err, info)
-  if (err && typeof err === 'object' && 'message' in err) {
-    const errorMessage = String(err.message)
-    if (errorMessage.includes('Failed to fetch dynamically imported module') ||
-        errorMessage.includes('Loading chunk') ||
-        errorMessage.includes('ChunkLoadError')) {
-      console.warn('检测到代码块加载失败，尝试重新加载页面')
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
-      return false
-    }
+  if (isStaleAssetLoadError(err)) {
+    scheduleStaleAssetReload('admin-app-error-captured', err)
+    return false
   }
   return true
 })

@@ -9,6 +9,7 @@ import PublicSiteLayout from '@/components/public/PublicSiteLayout.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import PopupAnnouncementModal from '@/components/PopupAnnouncementModal.vue'
 import { buildApiUrl } from '@/utils/api-url'
+import { isStaleAssetLoadError, scheduleStaleAssetReload } from '@/utils/staleAssetRecovery'
 
 const route = useRoute()
 const router = useRouter()
@@ -97,17 +98,9 @@ async function handleVisibilityChange() {
 onErrorCaptured((err, _instance, info) => {
   console.error('组件错误捕获:', err, info)
   // 如果是chunk加载错误，尝试重新加载
-  if (err && typeof err === 'object' && 'message' in err) {
-    const errorMessage = String(err.message)
-    if (errorMessage.includes('Failed to fetch dynamically imported module') ||
-        errorMessage.includes('Loading chunk') ||
-        errorMessage.includes('ChunkLoadError')) {
-      console.warn('检测到代码块加载失败，尝试重新加载页面')
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
-      return false // 阻止错误继续传播
-    }
+  if (isStaleAssetLoadError(err)) {
+    scheduleStaleAssetReload('app-error-captured', err)
+    return false // 阻止错误继续传播
   }
   return true // 允许错误继续传播到全局错误处理
 })

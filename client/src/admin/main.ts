@@ -4,6 +4,7 @@ import router from '../router/admin'
 import i18n, { getLocale } from '../locales'
 import App from './AdminApp.vue'
 import clientPackage from '../../package.json'
+import { installStaleAssetRecovery, isStaleAssetLoadError, scheduleStaleAssetReload } from '../utils/staleAssetRecovery'
 import '../styles/main.css'
 import 'flag-icons/css/flag-icons.min.css'
 
@@ -15,20 +16,13 @@ app.use(router)
 app.use(i18n)
 
 document.documentElement.lang = getLocale()
+installStaleAssetRecovery()
 
 app.config.errorHandler = (err, _instance, info) => {
   console.error('Vue应用错误:', err, info)
-  if (err && typeof err === 'object' && 'message' in err) {
-    const errorMessage = String(err.message)
-    if (errorMessage.includes('Failed to fetch dynamically imported module') ||
-        errorMessage.includes('Loading chunk') ||
-        errorMessage.includes('ChunkLoadError')) {
-      console.warn('检测到代码块加载失败，尝试重新加载页面')
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
-      return
-    }
+  if (isStaleAssetLoadError(err)) {
+    scheduleStaleAssetReload('admin-vue-error-handler', err)
+    return
   }
 }
 

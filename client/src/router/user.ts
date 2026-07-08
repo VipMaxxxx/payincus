@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import type { RouteLocationNormalized, NavigationGuardNext, RouteRecordRaw } from 'vue-router'
 import api from '@/api'
+import { isStaleAssetLoadError, scheduleStaleAssetReload } from '@/utils/staleAssetRecovery'
 
 // OAuth 登录码处理状态
 let oauthProcessing = false
@@ -327,16 +328,9 @@ router.onError((error) => {
     stack: error.stack,
     url: window.location.href
   })
-  // 如果是组件加载失败，尝试重新加载页面
-  if (error.message?.includes('Failed to fetch dynamically imported module') ||
-    error.message?.includes('Loading chunk') ||
-    error.message?.includes('ChunkLoadError') ||
-    error.name === 'ChunkLoadError') {
-    console.warn('检测到代码块加载失败，尝试重新加载页面')
-    // 延迟一下，避免快速重载循环
-    setTimeout(() => {
-      window.location.reload()
-    }, 1000)
+  // 如果是组件加载失败，说明客户端还持有旧版本 chunk，刷新到新版本。
+  if (isStaleAssetLoadError(error)) {
+    scheduleStaleAssetReload('user-router-error', error)
   }
 })
 
