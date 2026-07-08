@@ -127,8 +127,8 @@ async function handleLogin(): Promise<void> {
   try {
     // 始终发送2FA代码（如果有），后端会根据用户是否启用2FA来决定是否验证
     await authStore.login(
-      username.value, 
-      password.value, 
+      username.value,
+      password.value,
       !useRecoveryCode.value && totpCode.value ? totpCode.value : undefined,
       useRecoveryCode.value && recoveryCode.value ? recoveryCode.value : undefined,
       verificationToken || undefined
@@ -142,7 +142,7 @@ async function handleLogin(): Promise<void> {
 
     // 安全改进：验证 redirect 参数防止开放重定向漏洞
     const safeRedirect = getSafeRedirectUrl(route.query.redirect as string, '/dashboard')
-    router.push(safeRedirect)
+    await router.replace(safeRedirect)
   } catch (err: any) {
     error.value = err?.message || String(err)
     // 如果验证码错误，清空验证码让用户重新输入

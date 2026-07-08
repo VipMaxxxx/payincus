@@ -309,7 +309,6 @@ async function handleRegister(): Promise<void> {
     localStorage.setItem('token', response.token)
     authStore.syncToken()
     await authStore.fetchCurrentUser()
-    success.value = true
     // Clean up countdown timer
     if (countdownTimer) {
       clearInterval(countdownTimer)
@@ -322,9 +321,8 @@ async function handleRegister(): Promise<void> {
       return
     }
 
-    // 注册成功后自动登录并跳转到客户面板
-    // 优化：减少延迟时间从 1.5 秒到 0.5 秒
-    setTimeout(() => router.push(dashboardPath()), 500)
+    success.value = true
+    await router.replace(dashboardPath())
   } catch (err: any) {
     error.value = translateError(err)
     resetTurnstileChallenge()

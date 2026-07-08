@@ -423,7 +423,7 @@ router.beforeEach(async (to: RouteLocationNormalized, _from: RouteLocationNormal
       next({ name: 'login', query: { adminOnly: '1' } })
       return
     }
-    next({ name: 'dashboard' })
+    next({ name: 'dashboard', replace: true })
     return
   }
 
