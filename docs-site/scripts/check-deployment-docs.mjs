@@ -77,7 +77,8 @@ const robots = read('docs-site/docs/public/robots.txt')
 requireText(robots, 'Sitemap: https://payincus.com/sitemap.xml', 'robots.txt')
 
 const workflow = read('.github/workflows/docs-pages.yml')
-requireText(workflow, "- 'v*'", 'docs workflow')
+requireText(workflow, '- main', 'docs workflow')
+rejectText(workflow, "- 'v*'", 'docs workflow')
 requireText(workflow, 'check:deployment', 'docs workflow')
 
 console.log('Deployment documentation guards passed.')
