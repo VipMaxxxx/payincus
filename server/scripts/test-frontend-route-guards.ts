@@ -574,17 +574,22 @@ assert.ok(
 assert.ok(
   mainSource.includes("import clientPackage from '../package.json'") &&
     mainSource.includes('const serviceWorkerUrl = `/sw.js?v=${encodeURIComponent(clientPackage.version)}`') &&
+    mainSource.includes('shouldReloadForServiceWorkerControllerChange(clientPackage.version)') &&
     mainSource.includes("navigator.serviceWorker.register(serviceWorkerUrl, { updateViaCache: 'none' })") &&
     adminMainSource.includes("import clientPackage from '../../package.json'") &&
     adminMainSource.includes('const serviceWorkerUrl = `/sw.js?v=${encodeURIComponent(clientPackage.version)}`') &&
+    adminMainSource.includes('shouldReloadForServiceWorkerControllerChange(clientPackage.version)') &&
     adminMainSource.includes("navigator.serviceWorker.register(serviceWorkerUrl, { updateViaCache: 'none' })"),
-  'user and admin entries must register a versioned Service Worker URL with updateViaCache disabled so edge-cached /sw.js cannot pin old chunks'
+  'user and admin entries must register a versioned Service Worker URL with updateViaCache disabled and avoid repeated controllerchange reloads'
 )
 assert.ok(
   staleAssetRecoverySource.includes("window.addEventListener('vite:preloadError'") &&
     staleAssetRecoverySource.includes("window.addEventListener('unhandledrejection'") &&
     staleAssetRecoverySource.includes("window.addEventListener('error'") &&
     staleAssetRecoverySource.includes("cacheName.startsWith('incudal-cache-')") &&
+    staleAssetRecoverySource.includes("const STALE_ASSET_RELOAD_SIGNATURE_KEY = 'incudal:stale-asset-reload-signature'") &&
+    staleAssetRecoverySource.includes("window.sessionStorage.getItem(STALE_ASSET_RELOAD_SIGNATURE_KEY) === signature") &&
+    staleAssetRecoverySource.includes("const SERVICE_WORKER_RELOAD_KEY_PREFIX = 'incudal:service-worker-controller-reloaded:'") &&
     staleAssetRecoverySource.includes('window.location.reload()') &&
     mainSource.includes('installStaleAssetRecovery()') &&
     adminMainSource.includes('installStaleAssetRecovery()') &&
@@ -592,7 +597,7 @@ assert.ok(
     adminRouterSource.includes("scheduleStaleAssetReload('admin-router-error'") &&
     appSource.includes("scheduleStaleAssetReload('app-error-captured'") &&
     adminAppSource.includes("scheduleStaleAssetReload('admin-app-error-captured'"),
-  'user and admin frontends must recover from stale Vite chunks/preload failures by clearing Incudal static caches and reloading'
+  'user and admin frontends must recover from stale Vite chunks/preload failures without entering reload loops'
 )
 assert.ok(
   !indexHtmlSource.includes('https://mcp.figma.com/mcp/html-to-design/capture.js'),

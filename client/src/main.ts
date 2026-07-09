@@ -4,7 +4,12 @@ import router from './router/user'
 import i18n, { getLocale } from './locales'
 import App from './App.vue'
 import clientPackage from '../package.json'
-import { installStaleAssetRecovery, isStaleAssetLoadError, scheduleStaleAssetReload } from './utils/staleAssetRecovery'
+import {
+  installStaleAssetRecovery,
+  isStaleAssetLoadError,
+  scheduleStaleAssetReload,
+  shouldReloadForServiceWorkerControllerChange
+} from './utils/staleAssetRecovery'
 import './styles/main.css'
 import 'flag-icons/css/flag-icons.min.css'
 
@@ -56,6 +61,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   let refreshingForNewWorker = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (refreshingForNewWorker) return
+    if (!shouldReloadForServiceWorkerControllerChange(clientPackage.version)) return
     refreshingForNewWorker = true
     window.location.reload()
   })

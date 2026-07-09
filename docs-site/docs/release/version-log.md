@@ -6,22 +6,42 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `62338ac31`
-- 提交日期 / Commit date: 2026-07-08
-- 提交说明 / Commit subject: Release v1.3.2 stale asset recovery
-- 最新 tag / Latest tag: `v1.3.2`
+- 最新发布提交 / Latest Release Commit: `f32e44e02`
+- 提交日期 / Commit date: 2026-07-09
+- 提交说明 / Commit subject: Release v1.3.3 demo safeguards and UI polish
+- 最新 tag / Latest tag: `v1.3.3`
 
 ## 未发布变更 / Unreleased Changes
 
-### 其他变更 / Other Changes
-
-- feat: 全量改造UI为二次元动漫风格 `f9df2160c`
-
-### 新增能力 / New Capabilities
-
-- Add demo login and read-only safeguards / 新增演示登录与只读保护 `81641a7a9`
+- 该 tag 与相邻 tag 指向同一提交，未产生额外 Git commit。
 
 ## 历史版本 / Historical Versions
+
+## v1.3.3
+
+- 发布提交 / Release commit: `f32e44e02`
+- 提交日期 / Commit date: 2026-07-09
+- 提交说明 / Commit subject: Release v1.3.3 demo safeguards and UI polish
+
+# v1.3.3
+
+## 修复与体验
+
+- 合并演示账号一键登录和只读保护：演示账号登录历史脱敏，受保护账号禁止修改密码和管理员重置密码。
+- 前端保留最新生产主线功能的前提下，合入二次元风格的轻量视觉升级：字体、主题色、动效 token、实例配置卡片、镜像选择下拉和资料页标题细节。
+- 镜像选择下拉改为 Teleport 到 `body`，避免被父级滚动容器裁切。
+- Markdown 渲染增加基础 HTML 清理，降低帮助文档等富文本内容的 XSS 风险。
+- 同步 Service Worker 静态缓存名到 `v1.3.3`，确保 OTA 后客户端获取新版本静态资源。
+
+## 验证
+
+- `pnpm --filter client type-check`
+- `pnpm --filter server type-check`
+- `pnpm --filter server test:demo-account-safety-guards`
+- `pnpm --filter server test:demo-notification-redaction-guards`
+- `pnpm --filter server test:demo-readonly-redaction-guards`
+- `pnpm --filter server test:frontend-route-guards`
+- `pnpm build`
 
 ## v1.3.2
 
