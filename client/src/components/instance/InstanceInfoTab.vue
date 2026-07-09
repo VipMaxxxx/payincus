@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useThemeStore } from '@/stores/theme'
 import { formatMemory, formatDisk, formatDate } from '@/utils/formatters'
 import type { Instance } from '@/types/api'
 import FlagIcon from '@/components/FlagIcon.vue'
@@ -51,7 +50,6 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
-const themeStore = useThemeStore()
 
 const isRunning = computed<boolean>(() => {
   const s = props.instance?.status?.toLowerCase()
@@ -72,10 +70,10 @@ function getInstanceTypeClass(type: string | undefined | null): string {
   const normalizedType = String(type || 'container').toLowerCase()
   switch (normalizedType) {
     case 'vm':
-      return themeStore.isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
+      return 'bg-purple-900/50 text-purple-400 border border-purple-500/30'
     case 'container':
     default:
-      return themeStore.isDark ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-600'
+      return 'bg-green-900/50 text-green-400 border border-green-500/30'
   }
 }
 
@@ -96,17 +94,17 @@ function getNetworkModeClass(mode: string | undefined | null): string {
   const normalizedMode = String(mode || 'nat').toLowerCase()
   switch (normalizedMode) {
     case 'nat':
-      return themeStore.isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-600'
+      return 'bg-red-900/30 text-red-400 border border-red-500/30'
     case 'nat_ipv6':
-      return themeStore.isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
+      return 'bg-blue-900/50 text-blue-400 border border-blue-500/30'
     case 'nat_ipv6_nat':
-      return themeStore.isDark ? 'bg-cyan-900/50 text-cyan-400' : 'bg-cyan-100 text-cyan-600'
+      return 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/30'
     case 'ipv6_only':
-      return themeStore.isDark ? 'bg-purple-900/50 text-purple-400' : 'bg-purple-100 text-purple-600'
+      return 'bg-purple-900/50 text-purple-400 border border-purple-500/30'
     case 'ipv6_nat':
-      return themeStore.isDark ? 'bg-teal-900/50 text-teal-400' : 'bg-teal-100 text-teal-600'
+      return 'bg-teal-900/50 text-teal-400 border border-teal-500/30'
     default:
-      return themeStore.isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-600'
+      return 'bg-red-900/30 text-red-400 border border-red-500/30'
   }
 }
 
@@ -177,34 +175,25 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
 <template>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <!-- Basic Info -->
-    <div class="card p-5">
-      <h2 
-        class="text-sm font-medium mb-4"
-        :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
-      >
+    <div class="card shadow-pop p-5 rounded-2xl border-2 border-themed">
+      <h2 class="text-themed font-semibold text-sm mb-4">
         {{ t('instance.detail.info.title') }}
       </h2>
       <dl class="space-y-3 text-sm">
         <div class="flex justify-between items-center">
-          <dt class="text-gray-500">{{ t('instance.detail.info.instanceId') }}</dt>
+          <dt class="text-themed-muted">{{ t('instance.detail.info.instanceId') }}</dt>
           <dd class="flex items-center gap-2">
-            <span
-              class="font-mono text-xs"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
-            >
+            <span class="font-mono text-xs text-themed-muted">
               {{ instance.id }}
               <template v-if="instance.incus_id">
-                <span :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-400'">/</span>
+                <span class="text-themed-secondary">/</span>
                 <span>{{ instance.incus_id }}</span>
               </template>
             </span>
             <!-- 托管UID：仅托管节点实例显示 -->
             <button
               v-if="instance.hostOwnerInfo"
-              class="text-xs px-1.5 py-0.5 rounded transition-colors"
-              :class="themeStore.isDark 
-                ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' 
-                : 'bg-blue-50 text-blue-600 hover:bg-blue-100'"
+              class="text-xs px-1.5 py-0.5 rounded-lg bg-blue-900/30 text-blue-400 hover:bg-blue-900/50 hover:shadow-glow-sakura transition-all border border-blue-500/30"
               @click="showHostOwnerModal = true"
             >
               {{ t('instance.detail.info.hostUid') }}:{{ instance.hostOwnerInfo.id }}
@@ -212,15 +201,15 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
           </dd>
         </div>
         <div class="flex justify-between">
-          <dt class="text-gray-500">{{ t('instance.detail.info.image') }}</dt>
-          <dd :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ formatImageName(instance.image, (instance as any).imageName) }}</dd>
+          <dt class="text-themed-muted">{{ t('instance.detail.info.image') }}</dt>
+          <dd class="text-themed font-medium">{{ formatImageName(instance.image, (instance as any).imageName) }}</dd>
         </div>
         <div class="flex justify-between items-center">
-          <dt class="text-gray-500">{{ t('instance.detail.info.instanceMode') }}</dt>
+          <dt class="text-themed-muted">{{ t('instance.detail.info.instanceMode') }}</dt>
           <dd class="flex items-center gap-2">
             <span
               :class="[
-                'text-xs px-1.5 py-0.5 rounded',
+                'text-xs px-1.5 py-0.5 rounded-lg',
                 getInstanceTypeClass((instance as any).instance_type)
               ]"
             >
@@ -228,7 +217,7 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
             </span>
             <span
               :class="[
-                'text-xs px-1.5 py-0.5 rounded',
+                'text-xs px-1.5 py-0.5 rounded-lg',
                 getNetworkModeClass(instance.network_mode)
               ]"
             >
@@ -237,11 +226,11 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
           </dd>
         </div>
         <div v-if="instance.ssh_port" class="flex justify-between">
-          <dt class="text-gray-500">{{ t('instance.detail.info.sshPort') }}</dt>
-          <dd :class="['flex items-center gap-2', themeStore.isDark ? 'text-gray-300' : 'text-gray-700']">
+          <dt class="text-themed-muted">{{ t('instance.detail.info.sshPort') }}</dt>
+          <dd class="flex items-center gap-2 text-themed font-medium">
             <span class="font-mono">{{ instance.ssh_port }}</span>
-            <button 
-              class="text-blue-400/70 hover:text-blue-400"
+            <button
+              class="text-blue-400/70 hover:text-blue-400 transition-colors"
               :title="t('instance.detail.info.sshHelpTitle')"
               @click="showSshHelpModal = true"
             >
@@ -249,8 +238,8 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </button>
-            <button 
-              class="text-xs text-blue-500 hover:text-blue-400"
+            <button
+              class="text-xs text-blue-400 hover:text-sakura-300 transition-colors"
               @click="emit('copy', instance.ssh_port?.toString() || '')"
             >
               {{ t('instance.detail.info.copy') }}
@@ -258,21 +247,21 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
           </dd>
         </div>
         <div class="flex justify-between">
-          <dt class="text-gray-500">{{ t('instance.detail.info.rootPassword') }}</dt>
-          <dd :class="['flex items-center gap-2', themeStore.isDark ? 'text-gray-300' : 'text-gray-700']">
-            <span 
+          <dt class="text-themed-muted">{{ t('instance.detail.info.rootPassword') }}</dt>
+          <dd class="flex items-center gap-2 text-themed font-medium">
+            <span
               :id="'pwd-' + instance.id"
               class="font-mono"
             >{{ showPassword[instance.id] && instancePassword?.[instance.id] ? instancePassword[instance.id] : '••••••••' }}</span>
-            <button 
-              class="text-xs text-blue-500 hover:text-blue-400"
+            <button
+              class="text-xs text-blue-400 hover:text-sakura-300 transition-colors"
               @click="emit('toggle-password', instance.id)"
             >
               {{ showPassword[instance.id] ? t('instance.detail.info.hide') : t('instance.detail.info.show') }}
             </button>
-            <button 
+            <button
               v-if="showPassword[instance.id] && instancePassword?.[instance.id]"
-              class="text-xs text-blue-500 hover:text-blue-400"
+              class="text-xs text-blue-400 hover:text-sakura-300 transition-colors"
               @click="emit('copy', instancePassword[instance.id] || '')"
             >
               {{ t('instance.detail.info.copy') }}
@@ -281,51 +270,44 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
         </div>
         <!-- 节点 - 移到创建/到期时间上面 -->
         <div class="flex justify-between">
-          <dt class="text-gray-500">{{ t('instance.detail.info.host') }}</dt>
-          <dd :class="['flex items-center gap-2', themeStore.isDark ? 'text-gray-300' : 'text-gray-700']">
+          <dt class="text-themed-muted">{{ t('instance.detail.info.host') }}</dt>
+          <dd class="flex items-center gap-2 text-themed font-medium">
             <FlagIcon v-if="(instance as any).host?.country_code || (instance as any).hostCountryCode" :code="(instance as any).host?.country_code || (instance as any).hostCountryCode || 'us'" size="sm" />
             <span class="uppercase">{{ (instance as any).host?.name || (instance as any).host || '-' }}</span>
           </dd>
         </div>
         <div class="flex justify-between">
-          <dt class="text-gray-500">{{ t('instance.detail.info.createdAt') }}</dt>
-          <dd 
-            class="text-xs"
-            :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
-          >
+          <dt class="text-themed-muted">{{ t('instance.detail.info.createdAt') }}</dt>
+          <dd class="text-xs text-themed-muted">
             {{ formatDate(instance.created_at) }}
           </dd>
         </div>
         <!-- 到期时间 -->
         <div v-if="instance.expires_at" class="flex justify-between">
-          <dt class="text-gray-500">{{ t('instance.detail.info.expiresAt') }}</dt>
-          <dd 
+          <dt class="text-themed-muted">{{ t('instance.detail.info.expiresAt') }}</dt>
+          <dd
             class="text-xs"
-            :class="[
-              new Date(instance.expires_at) <= new Date() 
-                ? (themeStore.isDark ? 'text-red-400' : 'text-red-600')
-                : (themeStore.isDark ? 'text-gray-400' : 'text-gray-600')
-            ]"
+            :class="new Date(instance.expires_at) <= new Date() ? 'text-red-400' : 'text-themed-muted'"
           >
             {{ formatDate(instance.expires_at) }}
           </dd>
         </div>
         <!-- 封停信息 -->
-        <div v-if="instance.status === 'suspended'" class="p-2 rounded-lg" :class="themeStore.isDark ? 'bg-red-900/30' : 'bg-red-50'">
+        <div v-if="instance.status === 'suspended'" class="p-2 rounded-lg bg-red-900/30 border border-red-500/30">
           <div class="flex items-center gap-2 mb-1">
-            <svg class="w-4 h-4" :class="themeStore.isDark ? 'text-red-400' : 'text-red-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span class="text-sm font-medium" :class="themeStore.isDark ? 'text-red-400' : 'text-red-600'">{{ t('instance.detail.info.suspended') }}</span>
+            <span class="text-sm font-medium text-red-400">{{ t('instance.detail.info.suspended') }}</span>
           </div>
-          <p class="text-xs" :class="themeStore.isDark ? 'text-red-300' : 'text-red-600'">
+          <p class="text-xs text-red-300">
             <span class="font-medium">{{ t('instance.detail.info.suspendReasonLabel') }}:</span>
             {{ getSuspendReasonText(instance.suspend_reason) }}
           </p>
-          <p v-if="instance.suspended_at" class="text-xs mt-1" :class="themeStore.isDark ? 'text-red-400/70' : 'text-red-500/70'">
+          <p v-if="instance.suspended_at" class="text-xs mt-1 text-red-400/70">
             {{ t('instance.detail.info.suspendedAt') }}: {{ formatDate(instance.suspended_at) }}
           </p>
-          <p class="text-xs mt-2" :class="themeStore.isDark ? 'text-red-400/80' : 'text-red-500/80'">
+          <p class="text-xs mt-2 text-red-400/80">
             {{ t('instance.detail.info.suspendTip') }}
           </p>
         </div>
@@ -333,20 +315,16 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
     </div>
 
     <!-- Resource Usage -->
-    <div class="card p-5">
+    <div class="card shadow-pop p-5 rounded-2xl border-2 border-themed">
       <div class="flex items-center justify-between mb-4">
-        <h2 
-          class="text-sm font-medium"
-          :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
-        >
+        <h2 class="text-themed font-semibold text-sm">
           {{ t('instance.detail.info.resourceUsage') }}
         </h2>
         <div class="flex items-center gap-2">
           <!-- 兑换按钮 -->
           <button
             v-if="props.enableResourcePool"
-            class="text-xs px-2 py-1 rounded transition-colors"
-            :class="themeStore.isDark ? 'bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600'"
+            class="text-xs px-2 py-1 rounded-lg bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 hover:shadow-glow-sakura transition-all border border-emerald-500/30"
             @click="emit('redeem')"
           >
             <svg class="w-3.5 h-3.5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -356,11 +334,11 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
           </button>
           <!-- 编辑按钮 -->
           <button
-            class="text-xs px-2 py-1 rounded transition-colors"
+            class="text-xs px-2 py-1 rounded-lg transition-all border"
             :class="[
-              canEditConfig 
-                ? (themeStore.isDark ? 'bg-gray-800 hover:bg-gray-700 text-gray-400' : 'bg-gray-100 hover:bg-gray-200 text-gray-600')
-                : (themeStore.isDark ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed')
+              canEditConfig
+                ? 'bg-gray-800/50 hover:bg-gray-700/50 text-themed-muted hover:text-themed border-themed/30 hover:shadow-glow-sakura'
+                : 'bg-gray-800/30 text-themed-secondary cursor-not-allowed border-themed/20'
             ]"
             :disabled="!canEditConfig"
             :title="canEditConfig ? '' : t('instance.detail.info.cannotEditConfig')"
@@ -371,10 +349,9 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
             </svg>
             {{ t('common.edit') }}
           </button>
-          <div 
-            v-if="isRunning && statsLoading" 
-            class="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin"
-            :class="themeStore.isDark ? 'border-gray-600' : 'border-gray-400'"
+          <div
+            v-if="isRunning && statsLoading"
+            class="w-3 h-3 border-2 border-sakura-400 border-t-transparent rounded-full animate-spin"
           ></div>
         </div>
       </div>
@@ -382,40 +359,37 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
         <!-- CPU -->
         <div>
           <div class="flex justify-between text-sm mb-1">
-            <span class="text-gray-500">
+            <span class="text-themed-muted">
               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
               </svg>
               {{ t('instance.detail.info.cpu') }}
             </span>
-            <span :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ instance.cpu }}%</span>
+            <span class="text-themed font-medium">{{ instance.cpu }}%</span>
           </div>
         </div>
         <!-- Memory -->
         <div>
           <div class="flex justify-between text-sm mb-1">
-            <span class="text-gray-500">
+            <span class="text-themed-muted">
               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
               </svg>
               {{ t('instance.detail.info.memory') }}
-              <span class="text-xs text-gray-400 ml-1">({{ t('instance.detail.info.includesCache') }})</span>
+              <span class="text-xs text-themed-secondary ml-1">({{ t('instance.detail.info.includesCache') }})</span>
             </span>
-            <span :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+            <span class="text-themed font-medium">
               <template v-if="stats.memory.usage > 0">
-                {{ formatMemory(stats.memory.usage) }} / 
+                {{ formatMemory(stats.memory.usage) }} /
               </template>
               {{ formatMemory(stats.memory.limit > 0 ? stats.memory.limit : instance.memory) }}
-              <span v-if="stats.memory.usagePercent > 0" class="text-xs text-gray-500 ml-1">
+              <span v-if="stats.memory.usagePercent > 0" class="text-xs text-themed-muted ml-1">
                 ({{ stats.memory.usagePercent }}%)
               </span>
             </span>
           </div>
-          <div 
-            class="h-2 rounded-full overflow-hidden"
-            :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"
-          >
-            <div 
+          <div class="h-2 rounded-full overflow-hidden bg-themed/20">
+            <div
               class="h-full rounded-full transition-all duration-500"
               :class="stats.memory.usagePercent > 80 ? 'bg-red-500' : stats.memory.usagePercent > 60 ? 'bg-yellow-500' : 'bg-green-500'"
               :style="{ width: stats.memory.usagePercent + '%' }"
@@ -425,27 +399,24 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
         <!-- Disk -->
         <div>
           <div class="flex justify-between text-sm mb-1">
-            <span class="text-gray-500">
+            <span class="text-themed-muted">
               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
               </svg>
               {{ t('instance.detail.info.disk') }}
             </span>
-            <span :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+            <span class="text-themed font-medium">
               <template v-if="stats.disk.usage > 0">
-                {{ formatDisk(stats.disk.usage) }} / 
+                {{ formatDisk(stats.disk.usage) }} /
               </template>
               {{ formatDisk(stats.disk.limit > 0 ? stats.disk.limit : instance.disk) }}
-              <span v-if="stats.disk.usagePercent > 0" class="text-xs text-gray-500 ml-1">
+              <span v-if="stats.disk.usagePercent > 0" class="text-xs text-themed-muted ml-1">
                 ({{ stats.disk.usagePercent }}%)
               </span>
             </span>
           </div>
-          <div 
-            class="h-2 rounded-full overflow-hidden"
-            :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'"
-          >
-            <div 
+          <div class="h-2 rounded-full overflow-hidden bg-themed/20">
+            <div
               class="h-full rounded-full transition-all duration-500"
               :class="stats.disk.usagePercent > 80 ? 'bg-red-500' : stats.disk.usagePercent > 60 ? 'bg-yellow-500' : 'bg-purple-500'"
               :style="{ width: stats.disk.usagePercent + '%' }"
@@ -455,15 +426,15 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
         <!-- Monthly Traffic -->
         <div>
           <div class="flex justify-between text-sm mb-1">
-            <span class="text-gray-500">
+            <span class="text-themed-muted">
               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
               </svg>
               {{ t('traffic.monthlyUsage') }}
             </span>
-            <span :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+            <span class="text-themed font-medium">
               <template v-if="trafficLoading">
-                <span class="text-xs text-gray-400">{{ t('common.loading') }}</span>
+                <span class="text-xs text-themed-secondary">{{ t('common.loading') }}</span>
               </template>
               <template v-else-if="trafficData">
                 {{ trafficData.monthlyUsedFormatted }}
@@ -473,31 +444,28 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
                 <template v-else>
                   / {{ t('traffic.unlimited') }}
                 </template>
-                <span class="text-xs text-gray-500 ml-1">
+                <span class="text-xs text-themed-muted ml-1">
                   ({{ (trafficData.percentage || 0).toFixed(1) }}%)
                 </span>
               </template>
               <template v-else>
-                <span class="text-xs text-gray-400">{{ t('traffic.noData') }}</span>
+                <span class="text-xs text-themed-secondary">{{ t('traffic.noData') }}</span>
               </template>
             </span>
           </div>
-          <div 
-            class="h-2 rounded-full overflow-hidden"
-            :class="[
-              themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200',
-              { 'opacity-0': !trafficData || trafficLoading }
-            ]"
+          <div
+            class="h-2 rounded-full overflow-hidden bg-themed/20"
+            :class="{ 'opacity-0': !trafficData || trafficLoading }"
           >
-            <div 
+            <div
               :class="['h-full rounded-full transition-all duration-500', trafficProgressBarClass]"
               :style="{ width: Math.min(Math.max(trafficData?.percentage || 0, 0), 100) + '%' }"
             ></div>
           </div>
         </div>
         <!-- Bandwidth Limits -->
-        <div class="pt-2 border-t" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
-          <div class="flex justify-between text-xs text-gray-500">
+        <div class="pt-2 border-t-2 border-themed">
+          <div class="flex justify-between text-xs text-themed-muted">
             <span>
               <span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-1"></span>
               {{ t('instance.detail.info.ingressLimit') }}: {{ formatBandwidth(instance.limitsIngress) }}
@@ -527,24 +495,23 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
             </div>
             <div class="modal-body space-y-4">
               <!-- IPv4 连接说明 -->
-              <div class="p-3 rounded-lg" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'">
+              <div class="p-3 rounded-lg bg-themed/30 border border-themed/30">
                 <div class="flex items-center gap-2 mb-2">
-                  <span class="text-xs font-medium px-2 py-0.5 rounded" :class="themeStore.isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'">IPv4</span>
+                  <span class="text-xs font-medium px-2 py-0.5 rounded-lg bg-themed/50 text-themed border border-themed/30">IPv4</span>
                 </div>
-                <p class="text-sm" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+                <p class="text-sm text-themed">
                   {{ t('instance.detail.info.sshHelpIpv4') }}
                 </p>
               </div>
               <!-- IPv6 连接说明（仅在 nat_ipv6 模式下显示） -->
-              <div 
+              <div
                 v-if="instance.network_mode === 'nat_ipv6'"
-                class="p-3 rounded-lg" 
-                :class="themeStore.isDark ? 'bg-blue-900/30' : 'bg-blue-50'"
+                class="p-3 rounded-lg bg-blue-900/30 border border-blue-500/30"
               >
                 <div class="flex items-center gap-2 mb-2">
-                  <span class="text-xs font-medium px-2 py-0.5 rounded" :class="themeStore.isDark ? 'bg-blue-800 text-blue-300' : 'bg-blue-100 text-blue-600'">IPv6</span>
+                  <span class="text-xs font-medium px-2 py-0.5 rounded-lg bg-blue-800/50 text-blue-300 border border-blue-500/30">IPv6</span>
                 </div>
-                <p class="text-sm" :class="themeStore.isDark ? 'text-blue-200' : 'text-blue-700'">
+                <p class="text-sm text-blue-200">
                   {{ t('instance.detail.info.sshHelpIpv6') }}
                 </p>
               </div>
@@ -601,9 +568,8 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
               </div>
               <!-- 详细信息 -->
               <div class="space-y-3">
-                <div 
-                  class="flex items-center justify-between p-3 rounded-lg"
-                  :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'"
+                <div
+                  class="flex items-center justify-between p-3 rounded-lg bg-themed/30 border border-themed/30"
                 >
                   <span class="text-sm text-themed-muted flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -611,13 +577,12 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
                     </svg>
                     {{ t('instance.detail.info.hostOwnerHostCount') }}
                   </span>
-                  <span class="text-sm font-semibold" :class="themeStore.isDark ? 'text-blue-400' : 'text-blue-600'">
+                  <span class="text-sm font-semibold text-blue-400">
                     {{ instance.hostOwnerInfo.hostCount }}
                   </span>
                 </div>
-                <div 
-                  class="flex items-center justify-between p-3 rounded-lg"
-                  :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'"
+                <div
+                  class="flex items-center justify-between p-3 rounded-lg bg-themed/30 border border-themed/30"
                 >
                   <span class="text-sm text-themed-muted flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -625,13 +590,12 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
                     </svg>
                     {{ t('instance.detail.info.hostOwnerInstanceCount') }}
                   </span>
-                  <span class="text-sm font-semibold" :class="themeStore.isDark ? 'text-green-400' : 'text-green-600'">
+                  <span class="text-sm font-semibold text-green-400">
                     {{ instance.hostOwnerInfo.instanceCount }}
                   </span>
                 </div>
-                <div 
-                  class="flex items-center justify-between p-3 rounded-lg"
-                  :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'"
+                <div
+                  class="flex items-center justify-between p-3 rounded-lg bg-themed/30 border border-themed/30"
                 >
                   <span class="text-sm text-themed-muted flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -639,7 +603,7 @@ function formatBandwidth(bandwidth: string | null | undefined): string {
                     </svg>
                     {{ t('instance.detail.info.hostOwnerRegisteredDays') }}
                   </span>
-                  <span class="text-sm font-semibold" :class="themeStore.isDark ? 'text-purple-400' : 'text-purple-600'">
+                  <span class="text-sm font-semibold text-purple-400">
                     {{ instance.hostOwnerInfo.registeredDays }} {{ t('common.days') }}
                   </span>
                 </div>

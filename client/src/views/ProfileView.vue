@@ -34,7 +34,7 @@ const authStore = useAuthStore()
 <template>
   <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header">
-      <h1 class="page-title">{{ $t('nav.settings') }}</h1>
+      <h1 class="page-title">⚙️ {{ $t('nav.settings') }}</h1>
     </div>
 
     <ThemeTemplateSlot slot-name="user.profile.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
 import DistroIcon from '@/components/icons/DistroIcon.vue'
@@ -33,6 +33,8 @@ const emit = defineEmits<{
 const themeStore = useThemeStore()
 const isOpen = ref(false)
 const searchQuery = ref('')
+const buttonRef = ref<HTMLElement | null>(null)
+const dropdownStyle = ref<{ top: string; left: string; width: string }>({ top: '0px', left: '0px', width: '0px' })
 
 const selectedImageData = computed(() => {
   return props.availableImages.find(img => img.value === props.selectedImage)
@@ -41,7 +43,7 @@ const selectedImageData = computed(() => {
 const filteredImages = computed(() => {
   if (!searchQuery.value) return props.availableImages
   const query = searchQuery.value.toLowerCase()
-  return props.availableImages.filter(img => 
+  return props.availableImages.filter(img =>
     img.label.toLowerCase().includes(query)
   )
 })
@@ -65,7 +67,23 @@ function selectImage(value: string) {
 
 function toggleDropdown() {
   isOpen.value = !isOpen.value
-  if (!isOpen.value) searchQuery.value = ''
+  if (!isOpen.value) {
+    searchQuery.value = ''
+  } else {
+    // 打开时计算下拉框位置
+    updateDropdownPosition()
+  }
+}
+
+function updateDropdownPosition() {
+  if (buttonRef.value) {
+    const rect = buttonRef.value.getBoundingClientRect()
+    dropdownStyle.value = {
+      top: `${rect.bottom + 8}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`
+    }
+  }
 }
 
 // 点击外部关闭
@@ -77,10 +95,19 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
-// 监听点击事件
-if (typeof window !== 'undefined') {
+// 在组件挂载时添加事件监听器
+onMounted(() => {
   document.addEventListener('click', handleClickOutside)
-}
+  window.addEventListener('scroll', updateDropdownPosition, true)
+  window.addEventListener('resize', updateDropdownPosition)
+})
+
+// 在组件卸载时移除事件监听器，防止内存泄漏
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('scroll', updateDropdownPosition, true)
+  window.removeEventListener('resize', updateDropdownPosition)
+})
 </script>
 
 <template>
@@ -121,11 +148,12 @@ if (typeof window !== 'undefined') {
     <div v-else class="image-selector-container relative">
       <!-- Trigger button -->
       <button
+        ref="buttonRef"
         type="button"
         class="w-full flex items-center gap-3 p-3 rounded-lg border transition-colors"
         :class="[
-          themeStore.isDark 
-            ? 'border-gray-700 bg-gray-900 hover:border-gray-600' 
+          themeStore.isDark
+            ? 'border-gray-700 bg-gray-900 hover:border-gray-600'
             : 'border-gray-200 bg-white hover:border-gray-300',
           isOpen ? (themeStore.isDark ? 'border-blue-500' : 'border-blue-500') : ''
         ]"
@@ -137,109 +165,112 @@ if (typeof window !== 'undefined') {
           :size="28"
           class="flex-shrink-0"
         />
-        <span 
+        <span
           class="flex-1 text-left text-sm"
           :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'"
         >
           {{ selectedImageData?.label || props.title || t('instance.selector.selectSystem') }}
         </span>
-        <svg 
+        <svg
           class="w-4 h-4 flex-shrink-0 transition-transform"
           :class="[
             themeStore.isDark ? 'text-gray-500' : 'text-gray-400',
             isOpen ? 'rotate-180' : ''
           ]"
-          fill="none" 
-          stroke="currentColor" 
+          fill="none"
+          stroke="currentColor"
           viewBox="0 0 24 24"
         >
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      
-      <!-- Dropdown panel -->
-      <div 
-        v-show="isOpen"
-        class="absolute z-50 w-full mt-2 rounded-lg border shadow-lg overflow-hidden"
-        :class="themeStore.isDark ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'"
-      >
-        <!-- Search input -->
-        <div class="p-2 border-b" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-100'">
-          <input
-            v-model="searchQuery"
-            type="text"
-            :placeholder="t('common.search')"
-            class="w-full px-3 py-2 text-sm rounded-md border outline-none"
-            :class="themeStore.isDark 
-              ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500 focus:border-blue-500' 
-              : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-500'"
-            @click.stop
-          />
-        </div>
-        
-        <!-- Options list -->
-        <div class="max-h-72 overflow-y-auto">
-          <template v-for="(images, distro) in groupedImages" :key="distro">
-            <!-- Group header -->
-            <div 
-              class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider sticky top-0"
-              :class="themeStore.isDark ? 'bg-gray-800 text-gray-500' : 'bg-gray-50 text-gray-500'"
-            >
-              {{ distro }}
-            </div>
-            <!-- Group items -->
-            <button
-              v-for="img in images"
-              :key="img.value"
-              type="button"
-              class="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors"
-              :class="[
-                themeStore.isDark 
-                  ? 'hover:bg-gray-800' 
-                  : 'hover:bg-gray-50',
-                selectedImage === img.value 
-                  ? (themeStore.isDark ? 'bg-blue-900/30' : 'bg-blue-50') 
-                  : ''
-              ]"
-              @click.stop="selectImage(img.value)"
-            >
-              <DistroIcon
-                :distro="img.icon || img.label"
-                :size="24"
-                class="flex-shrink-0"
-              />
-              <span 
-                class="text-sm"
+
+      <!-- Dropdown panel (fixed positioning to escape overflow parent) -->
+      <Teleport to="body">
+        <div
+          v-show="isOpen"
+          class="fixed z-[9999] rounded-lg border shadow-lg overflow-hidden"
+          :class="themeStore.isDark ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'"
+          :style="{ top: dropdownStyle.top, left: dropdownStyle.left, width: dropdownStyle.width }"
+        >
+          <!-- Search input -->
+          <div class="p-2 border-b" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-100'">
+            <input
+              v-model="searchQuery"
+              type="text"
+              :placeholder="t('common.search')"
+              class="w-full px-3 py-2 text-sm rounded-md border outline-none"
+              :class="themeStore.isDark
+                ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500 focus:border-blue-500'
+                : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-500'"
+              @click.stop
+            />
+          </div>
+
+          <!-- Options list -->
+          <div class="max-h-72 overflow-y-auto">
+            <template v-for="(images, distro) in groupedImages" :key="distro">
+              <!-- Group header -->
+              <div
+                class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider sticky top-0"
+                :class="themeStore.isDark ? 'bg-gray-800 text-gray-500' : 'bg-gray-50 text-gray-500'"
+              >
+                {{ distro }}
+              </div>
+              <!-- Group items -->
+              <button
+                v-for="img in images"
+                :key="img.value"
+                type="button"
+                class="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors"
                 :class="[
-                  themeStore.isDark ? 'text-gray-200' : 'text-gray-900',
-                  selectedImage === img.value ? 'font-medium' : ''
+                  themeStore.isDark
+                    ? 'hover:bg-gray-800'
+                    : 'hover:bg-gray-50',
+                  selectedImage === img.value
+                    ? (themeStore.isDark ? 'bg-blue-900/30' : 'bg-blue-50')
+                    : ''
                 ]"
+                @click.stop="selectImage(img.value)"
               >
-                {{ img.label }}
-              </span>
-              <!-- Check mark for selected -->
-              <svg 
-                v-if="selectedImage === img.value"
-                class="w-4 h-4 ml-auto text-blue-500" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </button>
-          </template>
-          
-          <!-- No results -->
-          <div 
-            v-if="Object.keys(groupedImages).length === 0"
-            class="px-3 py-6 text-center text-sm"
-            :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-400'"
-          >
-            {{ t('common.noResults') }}
+                <DistroIcon
+                  :distro="img.icon || img.label"
+                  :size="24"
+                  class="flex-shrink-0"
+                />
+                <span
+                  class="text-sm"
+                  :class="[
+                    themeStore.isDark ? 'text-gray-200' : 'text-gray-900',
+                    selectedImage === img.value ? 'font-medium' : ''
+                  ]"
+                >
+                  {{ img.label }}
+                </span>
+                <!-- Check mark for selected -->
+                <svg
+                  v-if="selectedImage === img.value"
+                  class="w-4 h-4 ml-auto text-blue-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+            </template>
+
+            <!-- No results -->
+            <div
+              v-if="Object.keys(groupedImages).length === 0"
+              class="px-3 py-6 text-center text-sm"
+              :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-400'"
+            >
+              {{ t('common.noResults') }}
+            </div>
           </div>
         </div>
-      </div>
+      </Teleport>
     </div>
   </div>
 </template>

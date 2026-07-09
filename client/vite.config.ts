@@ -563,9 +563,9 @@ export default defineConfig(({ mode }) => {
       minify: 'terser',
       terserOptions: {
         compress: {
-          // 临时保留 console.error 和 console.warn，方便调试白屏问题
-          drop_console: false,  // 临时禁用，方便调试
-          pure_funcs: ['console.log', 'console.debug', 'console.info'],  // 只移除这些
+          // 生产环境移除所有 console 日志，但保留 error 用于错误追踪
+          drop_console: false,
+          pure_funcs: ['console.log', 'console.debug', 'console.info', 'console.warn'],
           drop_debugger: true,
         },
       },

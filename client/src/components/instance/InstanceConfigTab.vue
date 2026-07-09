@@ -3,7 +3,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
 import { useToast } from '@/stores/toast'
-import { useThemeStore } from '@/stores/theme'
 import type { InstanceConfigResponse, InstanceConfig } from '@/types/api'
 import ChangeHostCard from '@/components/instance/ChangeHostCard.vue'
 
@@ -23,7 +22,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const toast = useToast()
-const themeStore = useThemeStore()
 
 const loading = ref(true)
 const config = ref<InstanceConfigResponse | null>(null)
@@ -232,7 +230,7 @@ async function boostProcesses(): Promise<void> {
 <template>
   <div class="space-y-6">
     <!-- Loading -->
-    <div v-if="loading" class="card p-8 text-center">
+    <div v-if="loading" class="card shadow-pop p-8 text-center">
       <div class="loading-spinner w-8 h-8 mx-auto"></div>
       <p class="text-themed-muted mt-4">{{ t('common.loading') }}</p>
     </div>
@@ -240,7 +238,7 @@ async function boostProcesses(): Promise<void> {
     <template v-else-if="config">
       <!-- Header -->
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-medium" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
+        <h2 class="text-lg font-semibold text-themed">
           {{ t('instanceConfig.title') }}
         </h2>
       </div>
@@ -260,10 +258,10 @@ async function boostProcesses(): Promise<void> {
       />
 
       <!-- SWAP Section -->
-      <div v-if="config.swap.available || config.swap.enabled" class="card p-6">
+      <div v-if="config.swap.available || config.swap.enabled" class="card shadow-pop p-6">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-sm font-medium mb-1" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+            <h3 class="text-themed font-semibold text-sm mb-1">
               {{ t('instanceConfig.sections.swap') }}
             </h3>
             <p class="text-sm text-themed-muted">
@@ -272,16 +270,14 @@ async function boostProcesses(): Promise<void> {
             <p class="text-xs text-themed-muted mt-2">
               {{ config.swap.requiresRunning ? t('instanceConfig.swap.vmHint') : t('instanceConfig.swap.containerHint') }}
             </p>
-            <p class="text-xs mt-1" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-600'">
+            <p class="text-xs mt-1 text-themed-accent">
               {{ t('instanceConfig.swap.toggleHint') }}
             </p>
           </div>
           <div class="flex flex-col items-end gap-2">
             <span
-              class="px-2.5 py-1 rounded-full text-xs font-medium"
-              :class="config.swap.enabled
-                ? (themeStore.isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700')
-                : (themeStore.isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')"
+              :class="config.swap.enabled ? 'badge-success' : 'badge-muted'"
+              class="px-2.5 py-1 rounded-xl text-xs font-medium"
             >
               {{ config.swap.enabled ? t('instanceConfig.swap.enabled') : t('instanceConfig.swap.disabled') }}
             </span>
@@ -312,8 +308,8 @@ async function boostProcesses(): Promise<void> {
       </div>
 
       <!-- Storage I/O Section -->
-      <div class="card p-6">
-        <h3 class="text-sm font-medium mb-4" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+      <div class="card shadow-pop p-6">
+        <h3 class="text-themed font-semibold text-sm mb-4">
           {{ t('instanceConfig.sections.storageIO') }}
         </h3>
         <div v-if="ioLimitMode === 'throughput'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -330,8 +326,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('limits_read') }}</span>
-                <span v-if="isOverridden('limits_read')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('limits_read') }}</span>
+                <span v-if="isOverridden('limits_read')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -349,8 +345,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('limits_write') }}</span>
-                <span v-if="isOverridden('limits_write')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('limits_write') }}</span>
+                <span v-if="isOverridden('limits_write')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -370,8 +366,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('limits_read_iops') }}</span>
-                <span v-if="isOverridden('limits_read_iops')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('limits_read_iops') }}</span>
+                <span v-if="isOverridden('limits_read_iops')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -389,8 +385,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('limits_write_iops') }}</span>
-                <span v-if="isOverridden('limits_write_iops')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('limits_write_iops') }}</span>
+                <span v-if="isOverridden('limits_write_iops')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -398,8 +394,8 @@ async function boostProcesses(): Promise<void> {
       </div>
 
       <!-- Network Limits Section -->
-      <div class="card p-6">
-        <h3 class="text-sm font-medium mb-4" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+      <div class="card shadow-pop p-6">
+        <h3 class="text-themed font-semibold text-sm mb-4">
           {{ t('instanceConfig.sections.networkLimits') }}
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -416,8 +412,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ formatNetworkValue('limits_ingress') }}</span>
-                <span v-if="isOverridden('limits_ingress')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ formatNetworkValue('limits_ingress') }}</span>
+                <span v-if="isOverridden('limits_ingress')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -435,8 +431,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ formatNetworkValue('limits_egress') }}</span>
-                <span v-if="isOverridden('limits_egress')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ formatNetworkValue('limits_egress') }}</span>
+                <span v-if="isOverridden('limits_egress')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -444,8 +440,8 @@ async function boostProcesses(): Promise<void> {
       </div>
 
       <!-- Process & Scheduling Section -->
-      <div class="card p-6">
-        <h3 class="text-sm font-medium mb-4" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+      <div class="card shadow-pop p-6">
+        <h3 class="text-themed font-semibold text-sm mb-4">
           {{ t('instanceConfig.sections.processScheduling') }}
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -462,12 +458,12 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('limits_processes') }}</span>
-                <span v-if="isOverridden('limits_processes')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('limits_processes') }}</span>
+                <span v-if="isOverridden('limits_processes')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
                 <!-- 提升进程数按钮 -->
                 <button
                   v-if="canBoostProcesses && !editMode"
-                  class="ml-2 px-2 py-1 text-xs rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center gap-1"
+                  class="ml-2 px-2 py-1 text-xs rounded-xl bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 transition-colors flex items-center gap-1 border-2 border-accent-primary/30"
                   @click="showBoostModal = true"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -492,8 +488,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('limits_cpu_priority') }}</span>
-                <span v-if="isOverridden('limits_cpu_priority')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('limits_cpu_priority') }}</span>
+                <span v-if="isOverridden('limits_cpu_priority')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -501,8 +497,8 @@ async function boostProcesses(): Promise<void> {
       </div>
 
       <!-- Boot Settings Section -->
-      <div v-if="props.showBootSettings !== false" class="card p-6">
-        <h3 class="text-sm font-medium mb-4" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">
+      <div v-if="props.showBootSettings !== false" class="card shadow-pop p-6">
+        <h3 class="text-themed font-semibold text-sm mb-4">
           {{ t('instanceConfig.sections.bootSettings') }}
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -520,8 +516,8 @@ async function boostProcesses(): Promise<void> {
             <template v-else>
               <label class="block text-xs text-themed-muted mb-1">{{ t('packageForm.fields.bootAutostart') }}</label>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('boot_autostart') ? t('common.yes') : t('common.no') }}</span>
-                <span v-if="isOverridden('boot_autostart')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('boot_autostart') ? t('common.yes') : t('common.no') }}</span>
+                <span v-if="isOverridden('boot_autostart')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -539,8 +535,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('boot_autostart_priority') }}</span>
-                <span v-if="isOverridden('boot_autostart_priority')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('boot_autostart_priority') }}</span>
+                <span v-if="isOverridden('boot_autostart_priority')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -558,8 +554,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('boot_autostart_delay') }}</span>
-                <span v-if="isOverridden('boot_autostart_delay')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('boot_autostart_delay') }}</span>
+                <span v-if="isOverridden('boot_autostart_delay')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -577,8 +573,8 @@ async function boostProcesses(): Promise<void> {
             </template>
             <template v-else>
               <div class="flex items-center gap-2">
-                <span class="text-themed">{{ getEffectiveValue('boot_host_shutdown_timeout') }}</span>
-                <span v-if="isOverridden('boot_host_shutdown_timeout')" class="badge badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
+                <span class="text-themed font-medium">{{ getEffectiveValue('boot_host_shutdown_timeout') }}</span>
+                <span v-if="isOverridden('boot_host_shutdown_timeout')" class="badge-info text-xs">{{ t('instanceConfig.overridden') }}</span>
               </div>
             </template>
           </div>
@@ -593,20 +589,17 @@ async function boostProcesses(): Promise<void> {
           <!-- 背景遮罩 -->
           <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="showBoostModal = false"></div>
           <!-- 弹窗内容 -->
-          <div
-            class="relative w-full max-w-md mx-4 rounded-xl shadow-xl overflow-hidden"
-            :class="themeStore.isDark ? 'bg-gray-800' : 'bg-white'"
-          >
+          <div class="relative w-full max-w-md mx-4 rounded-2xl shadow-pop overflow-hidden bg-surface border-2 border-themed">
             <!-- 头部 -->
-            <div class="px-6 py-4 border-b" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-100'">
+            <div class="px-6 py-4 border-b-2 border-themed">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                  <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="w-10 h-10 rounded-xl bg-accent-primary/10 flex items-center justify-center border-2 border-accent-primary/30">
+                  <svg class="w-5 h-5 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                   </svg>
                 </div>
                 <div>
-                  <h3 class="text-lg font-semibold" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">
+                  <h3 class="text-lg font-semibold text-themed">
                     {{ t('instanceConfig.boostProcesses.title') }}
                   </h3>
                 </div>
@@ -614,14 +607,14 @@ async function boostProcesses(): Promise<void> {
             </div>
             <!-- 内容 -->
             <div class="px-6 py-4">
-              <p class="text-sm leading-relaxed" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
+              <p class="text-sm leading-relaxed text-themed-muted">
                 {{ t('instanceConfig.boostProcesses.confirm', {
                   type: instanceType === 'vm' ? 'KVM' : 'LXC',
                   limit: processLimit
                 }) }}
               </p>
-              <div class="mt-4 p-3 rounded-lg" :class="themeStore.isDark ? 'bg-blue-500/10' : 'bg-blue-50'">
-                <div class="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+              <div class="mt-4 p-3 rounded-xl bg-accent-primary/10 border-2 border-accent-primary/30">
+                <div class="flex items-center gap-2 text-sm text-accent-primary">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -630,17 +623,16 @@ async function boostProcesses(): Promise<void> {
               </div>
             </div>
             <!-- 底部按钮 -->
-            <div class="px-6 py-4 border-t flex justify-end gap-3" :class="themeStore.isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-100 bg-gray-50'">
+            <div class="px-6 py-4 border-t-2 border-themed flex justify-end gap-3 bg-surface-secondary">
               <button
-                class="px-4 py-2 text-sm rounded-lg transition-colors"
-                :class="themeStore.isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-200'"
+                class="btn-secondary"
                 :disabled="boostLoading"
                 @click="showBoostModal = false"
               >
                 {{ t('common.cancel') }}
               </button>
               <button
-                class="px-4 py-2 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center gap-2"
+                class="btn-primary flex items-center gap-2"
                 :disabled="boostLoading"
                 @click="boostProcesses"
               >
@@ -661,35 +653,31 @@ async function boostProcesses(): Promise<void> {
       <Transition name="modal">
         <div v-if="showSwapModal" class="fixed inset-0 z-50 flex items-center justify-center">
           <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="showSwapModal = false"></div>
-          <div
-            class="relative w-full max-w-md mx-4 rounded-xl shadow-xl overflow-hidden"
-            :class="themeStore.isDark ? 'bg-gray-800' : 'bg-white'"
-          >
-            <div class="px-6 py-4 border-b" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-100'">
-              <h3 class="text-lg font-semibold" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">
+          <div class="relative w-full max-w-md mx-4 rounded-2xl shadow-pop overflow-hidden bg-surface border-2 border-themed">
+            <div class="px-6 py-4 border-b-2 border-themed">
+              <h3 class="text-lg font-semibold text-themed">
                 {{ t(`instanceConfig.swap.${swapAction}ConfirmTitle`) }}
               </h3>
             </div>
             <div class="px-6 py-4 space-y-3">
-              <p class="text-sm leading-relaxed" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
+              <p class="text-sm leading-relaxed text-themed-muted">
                 {{ t(`instanceConfig.swap.${swapAction}ConfirmText`, { size: formatSwapSize(config?.swap.sizeMb || 0) }) }}
               </p>
-              <div class="p-3 rounded-lg" :class="themeStore.isDark ? 'bg-amber-500/10 text-amber-300' : 'bg-amber-50 text-amber-700'">
+              <div class="p-3 rounded-xl bg-accent-secondary/10 text-accent-secondary border-2 border-accent-secondary/30">
                 <p class="text-sm">{{ t('instanceConfig.swap.toggleHint') }}</p>
               </div>
             </div>
-            <div class="px-6 py-4 border-t flex justify-end gap-3" :class="themeStore.isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-100 bg-gray-50'">
+            <div class="px-6 py-4 border-t-2 border-themed flex justify-end gap-3 bg-surface-secondary">
               <button
-                class="px-4 py-2 text-sm rounded-lg transition-colors"
-                :class="themeStore.isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-200'"
+                class="btn-secondary"
                 :disabled="swapActionLoading"
                 @click="showSwapModal = false"
               >
                 {{ t('common.cancel') }}
               </button>
               <button
-                class="px-4 py-2 text-sm rounded-lg text-white transition-colors flex items-center gap-2"
-                :class="swapAction === 'enable' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-zinc-700 hover:bg-zinc-800'"
+                class="flex items-center gap-2"
+                :class="swapAction === 'enable' ? 'btn-primary' : 'btn-secondary'"
                 :disabled="swapActionLoading"
                 @click="submitSwapAction"
               >

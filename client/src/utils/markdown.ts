@@ -160,6 +160,56 @@ function createCustomRenderer(): Renderer {
 }
 
 /**
+ * 基本的 HTML 清理函数，防止 XSS 攻击
+ * 只允许安全的标签和属性
+ */
+function sanitizeHtml(html: string): string {
+  // 允许的安全标签（不包括 script, iframe, object 等危险标签）
+  const allowedTags = [
+    'p', 'br', 'span', 'div', 'a', 'strong', 'b', 'em', 'i', 'u', 's', 'del',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li',
+    'blockquote', 'pre', 'code',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'img', 'figure', 'figcaption',
+    'hr', 'kbd', 'sup', 'sub'
+  ]
+
+  // 允许的安全属性
+  const allowedAttributes = ['href', 'title', 'alt', 'src', 'class', 'id', 'target', 'rel', 'loading']
+
+  // 移除 javascript: 和 data: URL
+  let sanitized = html.replace(/(href|src)\s*=\s*["']?\s*(javascript|data):/gi, '$1="about:blank#blocked-')
+
+  // 移除 on* 事件处理器
+  sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')
+
+  // 移除不在白名单中的标签（将其转义而不是删除，保留内容）
+  const tagRegex = /<\/?(\w+)([^>]*)>/g
+  sanitized = sanitized.replace(tagRegex, (match, tagName, attributes) => {
+    if (!allowedTags.includes(tagName.toLowerCase())) {
+      // 转义危险标签
+      return match.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    }
+
+    // 过滤属性
+    if (attributes) {
+      const filteredAttrs = attributes.replace(/(\w+)\s*=\s*["']([^"']*)["']/g, (attrMatch: string, attrName: string) => {
+        if (allowedAttributes.includes(attrName.toLowerCase())) {
+          return attrMatch
+        }
+        return ''
+      })
+      return `<${tagName}${filteredAttrs}>`
+    }
+
+    return match
+  })
+
+  return sanitized
+}
+
+/**
  * 配置 marked 选项
  */
 function configureMarked(): void {
@@ -185,7 +235,10 @@ export function parseMarkdown(content: string): string {
   const processedContent = parseCustomAlerts(content)
 
   // 使用 marked 解析
-  return marked(processedContent) as string
+  const html = marked(processedContent) as string
+
+  // 清理潜在的 XSS 攻击
+  return sanitizeHtml(html)
 }
 
 /**

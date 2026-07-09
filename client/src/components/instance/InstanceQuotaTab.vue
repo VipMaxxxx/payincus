@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useThemeStore } from '@/stores/theme'
 import type { Instance, Snapshot } from '@/types/api'
 
 const { t } = useI18n()
@@ -31,7 +30,6 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
-const themeStore = useThemeStore()
 
 const localForm = ref({ ...props.quotaForm })
 
@@ -43,31 +41,28 @@ watch(localForm, (newVal) => {
 
 <template>
   <div class="space-y-4">
-    <div class="card p-5">
-      <h2 
-        class="text-sm font-medium mb-4"
-        :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
-      >
+    <div class="card shadow-pop p-5">
+      <h2 class="text-sm text-themed font-semibold mb-4">
         {{ t('instance.detail.quotaTab.title') }}
       </h2>
-      
+
       <div class="space-y-4">
         <!-- NAT 端口配额 -->
         <div>
-          <label class="block text-sm mb-2" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+          <label class="block text-sm text-themed-muted mb-2">
             {{ t('instance.detail.quotaTab.portLimit') }}
           </label>
           <div class="flex items-center gap-2">
-            <input 
-              v-model.number="localForm.portLimit" 
+            <input
+              v-model.number="localForm.portLimit"
               type="number"
-              class="input flex-1" 
-              :min="Math.max(1, portMappingsCount)" 
+              class="input flex-1"
+              :min="Math.max(1, portMappingsCount)"
               :max="1000"
               :placeholder="t('instance.detail.quotaTab.placeholder')"
             />
           </div>
-          <div class="mt-2 text-xs" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">
+          <div class="mt-2 text-xs text-themed-muted">
             <div>{{ t('instance.detail.quotaTab.currentUsage') }}: {{ portMappingsCount }} {{ t('instance.detail.quotaTab.portMappings') }}</div>
             <div v-if="instance.port_limit !== null && instance.port_limit !== undefined">
               {{ t('instance.detail.quotaTab.quotaLimit') }}: {{ instance.port_limit }} {{ t('instance.detail.quotaTab.unit') }}
@@ -80,20 +75,20 @@ watch(localForm, (newVal) => {
 
         <!-- 快照配额 -->
         <div>
-          <label class="block text-sm mb-2" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+          <label class="block text-sm text-themed-muted mb-2">
             {{ t('instance.detail.quotaTab.snapshotLimit') }}
           </label>
           <div class="flex items-center gap-2">
-            <input 
-              v-model.number="localForm.snapshotLimit" 
+            <input
+              v-model.number="localForm.snapshotLimit"
               type="number"
-              class="input flex-1" 
-              :min="Math.max(1, snapshots.length)" 
+              class="input flex-1"
+              :min="Math.max(1, snapshots.length)"
               :max="1000"
               :placeholder="t('instance.detail.quotaTab.placeholder')"
             />
           </div>
-          <div class="mt-2 text-xs" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">
+          <div class="mt-2 text-xs text-themed-muted">
             <div>{{ t('instance.detail.quotaTab.currentUsage') }}: {{ snapshots.length }} {{ t('instance.detail.quotaTab.snapshots') }}</div>
             <div v-if="instance.snapshot_limit !== null && instance.snapshot_limit !== undefined">
               {{ t('instance.detail.quotaTab.quotaLimit') }}: {{ instance.snapshot_limit }} {{ t('instance.detail.quotaTab.unit') }}
@@ -107,8 +102,8 @@ watch(localForm, (newVal) => {
 
       <!-- 统一保存按钮 -->
       <div class="mt-6 flex justify-end">
-        <button 
-          :disabled="quotaSaving" 
+        <button
+          :disabled="quotaSaving"
           class="btn-primary"
           @click="emit('save')"
         >
