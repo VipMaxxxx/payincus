@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-07-09 21:55 CST
+Last updated: 2026-07-09 22:10 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -12,13 +12,13 @@ Give the next Codex session this file first. The active working directory is:
 /Users/max/.codex/worktrees/payincus-release-v133
 ```
 
-Production is currently still on `v1.3.2`. `v1.3.3` has been merged locally, committed, pushed to `payincus/main`, tagged, and released on GitHub, but it has not shipped to production because OTA task `#139` failed production readiness and auto-rolled back. The blocker is the active Epay/yipay provider API URL `https://max.xinyuqicheng.cn/plugin/EpayApi/GatewayV1`: production cannot resolve `max.xinyuqicheng.cn`, so `verify:production` fails the payment-provider safe outbound URL check. Do not bypass this check for release; fix or intentionally disable/update the payment provider configuration first.
+Production is currently on `v1.3.3`. The first OTA attempt `#139` failed production readiness and auto-rolled back because the active Epay/yipay provider API URL `https://max.xinyuqicheng.cn/plugin/EpayApi/GatewayV1` cannot be resolved from production. The user then explicitly said payment judgement is not needed, so OTA task `#140` was rerun with `RUN_DB_CHECKS=0`; it passed static production environment checks, split-host checks, Agent manifest check, log/header exposure checks, and completed successfully. Payment runtime signature/status/amount/idempotency checks were not changed.
 
-The latest shipped work remains `v1.3.2`, which adds stale frontend asset recovery for user/admin shells, router and Vue dynamic-import failures, fixes the Turnstile verified/pending/expired/error status presentation, removes the Figma capture script from the production HTML shell, extends frontend route-guard coverage, and bumps the Service Worker cache name to `incudal-cache-v1.3.2`.
+The latest shipped work adds demo login/read-only safeguards, demo data redaction guards, UI polish, release notes, and bumps the Service Worker cache name to `incudal-cache-v1.3.3`.
 
-The release commit/tag and OTA evidence below are production proof for `v1.3.2`. Remaining untracked `.ui-scan/` output is local-only evidence and should not be treated as tracked release content.
+The release commit/tag and OTA evidence below are production proof for `v1.3.3`. Remaining untracked `.ui-scan/` output is local-only evidence and should not be treated as tracked release content.
 
-### v1.3.3 Pushed / Release Ready, OTA Blocked
+### Current v1.3.3 Production / OTA Status
 
 - `v1.3.3` release commit/tag: `f32e44e02` (`Release v1.3.3 demo safeguards and UI polish`).
 - `payincus/main` and tag `v1.3.3` were pushed successfully.
@@ -40,7 +40,7 @@ The release commit/tag and OTA evidence below are production proof for `v1.3.2`.
   - `systemctl is-active incudal-backend -> active`
   - `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned `{"status":"ok",...}`
   - `/opt/incudal` could resolve tag `v1.3.3` to `f32e44e`
-- OTA task `#139`: `v1.3.2 -> v1.3.3`, log `/opt/incudal/update-logs/system-update-139.log`, failed during `pnpm verify:production`.
+- First OTA attempt `#139`: `v1.3.2 -> v1.3.3`, log `/opt/incudal/update-logs/system-update-139.log`, failed during `pnpm verify:production`.
   - The OTA package downloaded and verified successfully.
   - The updater switched current to `/opt/incudal/releases/v1.3.3-20260709135116`.
   - Backend health became ready after 2 attempts.
@@ -48,12 +48,22 @@ The release commit/tag and OTA evidence below are production proof for `v1.3.2`.
   - `pnpm verify:production` failed because active payment provider `#1` (`Epay`, `yipay`) has an API URL whose hostname cannot be resolved from production: `max.xinyuqicheng.cn`.
   - Existing warnings also appeared for stale DE-01 Agent heartbeat, running instances on hosts without fresh heartbeat, one HKCMI public package whose online bound hosts cannot satisfy its minimum requirement, and sold-out public packages `HKCN2` / `DEBGP`.
   - The updater auto-rolled back to `/opt/incudal/releases/v1.3.2-20260708121306`.
-- Post-failure production state:
+- Final OTA task `#140`: `v1.3.2 -> v1.3.3`, log `/opt/incudal/update-logs/system-update-140.log`, ran with `RUN_DB_CHECKS=0` after the user explicitly waived payment judgement.
+  - OTA artifact verified: amd64 sha256 `44ccd47c588db0bbc69e72922fe583258bab6e2d71f3737df8a34f17a54bd2ac`.
+  - Prisma migrate deploy found no pending migrations.
+  - The updater switched current to `/opt/incudal/releases/v1.3.3-20260709140748`.
+  - Backend health became ready after 2 attempts.
+  - `bash scripts/verify-split-host.sh` passed for user/admin frontend assets, proxied API, proxied WebSocket, and backend direct API.
+  - `pnpm verify:production` passed with `Database checks skipped because RUN_DB_CHECKS=0`, static production environment checks passed, split-host checks passed, and Agent manifest check passed.
+  - `pnpm verify:log-header` passed; it confirmed the backend root did not serve frontend HTML and current secret values were not present in scanned logs.
+  - Log contains `System update completed successfully`.
+- Current production state after task `#140`:
   - `systemctl is-active incudal-backend -> active`
-  - `/opt/incudal/current -> /opt/incudal/releases/v1.3.2-20260708121306`
-  - `/opt/incudal/current/version.json` reports version/tag `v1.3.2`, gitCommit `62338ac31e5e`
+  - `/opt/incudal/current -> /opt/incudal/releases/v1.3.3-20260709140748`
+  - `/opt/incudal/current/version.json` reports version/tag `v1.3.3`, gitCommit `f32e44e02077`, buildTime `2026-07-09T13:47:14.025Z`, deployedAt `2026-07-09T14:08:12.900Z`
   - `https://pay.payincus.com/api/health` and `https://admin.payincus.com/api/health` returned `{"status":"ok",...}`
-  - `https://pay.payincus.com/sw.js` still contains `const CACHE_NAME = 'incudal-cache-v1.3.2'`
+  - `https://pay.payincus.com/sw.js?v=1.3.3` and `https://admin.payincus.com/sw.js?v=1.3.3` contain `const CACHE_NAME = 'incudal-cache-v1.3.3'`
+  - Bare `https://pay.payincus.com/sw.js` may still be a Cloudflare cache HIT for `incudal-cache-v1.3.2` until CDN TTL expires; frontend registration uses the versioned URL `/sw.js?v=1.3.3`.
 
 ### Completed v1.3.3 Local / Release Verification
 
@@ -71,9 +81,10 @@ pnpm test -> passed
 git diff --check -> passed
 GitHub Actions CI / Build & Release / Docs Pages -> passed
 Production OTA task #139 -> failed and auto-rolled back because payment provider DNS readiness failed
+Production OTA task #140 with RUN_DB_CHECKS=0 -> passed
 ```
 
-### Current v1.3.2 Production / OTA Status
+### Previous v1.3.2 Production / OTA Status
 
 - `v1.3.2` release commit: `62338ac31` (`Release v1.3.2 stale asset recovery`).
 - `payincus/main` and tag `v1.3.2` were pushed successfully.
