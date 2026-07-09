@@ -3,7 +3,7 @@
 # PayIncus 面板一键部署脚本（产物包模式）
 #
 # 功能：
-#   - 安装 Node.js 22、PostgreSQL 16、Redis 7
+#   - 安装 Node.js 22、PostgreSQL 16 和系统仓库提供的 Redis
 #   - 从 GitHub Releases 下载预构建产物包
 #   - 自动配置数据库、环境变量、systemd 服务
 #   - 支持 Nginx+Certbot / Cloudflare Tunnel / 纯端口 三种外部访问方案
@@ -319,10 +319,17 @@ show_banner() {
 
 # ========================== 检查已有安装 ==========================
 check_existing() {
-    if [[ -d "$INSTALL_DIR" && -f "${INSTALL_DIR}/server/dist/app.js" ]]; then
+    if [[ -d "$INSTALL_DIR" && (
+        -f "${INSTALL_DIR}/server/dist/app.js" ||
+        -f "${INSTALL_DIR}/current/server/dist/app.js"
+    ) ]]; then
         return 0  # 已安装
     fi
     return 1  # 未安装
+}
+
+is_atomic_layout() {
+    [[ -L "${INSTALL_DIR}/current" && -f "${INSTALL_DIR}/current/server/dist/app.js" ]]
 }
 
 # ========================== 安装 Node.js ==========================
@@ -456,20 +463,72 @@ download_release() {
     local filename="incudal-${version}-linux-${ARCH}.tar.gz"
     local download_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}"
     local tmp_file="/tmp/${filename}"
+    local checksum_url="${download_url}.sha256"
+    local checksum_file="${tmp_file}.sha256"
 
     info "下载地址: ${download_url}"
 
     if curl -fSL --progress-bar --connect-timeout 15 --max-time 600 \
-        "$download_url" -o "$tmp_file" 2>/dev/null; then
+        "$download_url" -o "$tmp_file" 2>/dev/null && \
+        curl -fsSL --connect-timeout 15 --max-time 60 \
+        "$checksum_url" -o "$checksum_file" 2>/dev/null && \
+        verify_release_checksum "$tmp_file"; then
         local file_size
         file_size=$(du -h "$tmp_file" | cut -f1 || true)
-        log "下载完成 (${file_size})"
+        log "下载和 SHA256 校验完成 (${file_size})"
         echo "$tmp_file"
         return 0
     fi
 
-    rm -f "$tmp_file" 2>/dev/null || true
+    rm -f "$tmp_file" "$checksum_file" 2>/dev/null || true
     return 1
+}
+
+verify_release_checksum() {
+    local tar_file="$1"
+    local checksum_file="${tar_file}.sha256"
+    local expected=""
+    local actual=""
+
+    if [[ ! -f "$checksum_file" ]]; then
+        error "缺少校验文件: ${checksum_file}"
+        error "请从同一 GitHub Release 下载对应的 .sha256 文件"
+        return 1
+    fi
+
+    expected=$(grep -Eo '^[A-Fa-f0-9]{64}' "$checksum_file" | head -n1 || true)
+    if [[ ! "$expected" =~ ^[A-Fa-f0-9]{64}$ ]]; then
+        error "SHA256 文件格式无效: ${checksum_file}"
+        return 1
+    fi
+
+    actual=$(sha256sum "$tar_file" | awk '{print $1}')
+    if [[ "${actual,,}" != "${expected,,}" ]]; then
+        error "产物包 SHA256 校验失败: $(basename "$tar_file")"
+        return 1
+    fi
+
+    return 0
+}
+
+validate_release_archive() {
+    local tar_file="$1"
+    local entry=""
+
+    if ! tar -tzf "$tar_file" >/dev/null 2>&1; then
+        error "产物包不是有效的 tar.gz 文件: ${tar_file}"
+        return 1
+    fi
+
+    while IFS= read -r entry; do
+        entry="${entry#./}"
+        if [[ "$entry" == /* || "$entry" == ".." || "$entry" == ../* || "$entry" == */../* || "$entry" == */.. ]]; then
+            error "产物包包含不安全路径: ${entry}"
+            return 1
+        fi
+    done < <(tar -tzf "$tar_file")
+
+    return 0
 }
 
 # ========================== 扫描手动放置的产物包 ==========================
@@ -513,6 +572,7 @@ wait_for_manual_package() {
     echo "" >&2
     echo -e "  ${BOLD}所需文件名格式：${NC}" >&2
     echo -e "  ${GREEN}incudal-vX.Y.Z-linux-${ARCH}.tar.gz${NC}" >&2
+    echo -e "  ${GREEN}incudal-vX.Y.Z-linux-${ARCH}.tar.gz.sha256${NC}" >&2
     echo "" >&2
     echo -e "  ${DIM}提示: 可使用 scp、wget、rz 等方式将文件传到服务器${NC}" >&2
     echo -e "  ${DIM}例如: scp incudal-v1.0.0-linux-${ARCH}.tar.gz root@服务器IP:${MANUAL_PKG_DIR}/${NC}" >&2
@@ -557,6 +617,13 @@ wait_for_manual_package() {
 
                 # 连续 3 次（9 秒）大小不变，认为上传完成
                 if [[ $stable_count -ge 3 ]]; then
+                    if [[ ! -f "${pkg_file}.sha256" ]]; then
+                        info "已收到产物包，继续等待对应的 $(basename "${pkg_file}.sha256")..."
+                        stable_count=0
+                        sleep 3
+                        continue
+                    fi
+
                     # 检查最小文件大小
                     local size_kb=$((current_size / 1024))
                     if [[ $size_kb -lt $MIN_SIZE_KB ]]; then
@@ -651,6 +718,9 @@ install_release() {
 
     step "安装产物包..."
 
+    verify_release_checksum "$tar_file" || return 1
+    validate_release_archive "$tar_file" || return 1
+
     # 创建安装目录
     mkdir -p "$INSTALL_DIR"
 
@@ -695,7 +765,7 @@ install_release() {
     fi
 
     # 清理下载的临时文件
-    rm -f "$tar_file"
+    rm -f "$tar_file" "${tar_file}.sha256"
 
     # 创建证书目录
     mkdir -p "${INSTALL_DIR}/server/certs"
@@ -1449,6 +1519,12 @@ do_upgrade() {
         exit 1
     fi
 
+    if is_atomic_layout; then
+        error "检测到原子 OTA 布局，不能使用旧版 --upgrade 覆盖 current/releases"
+        error "请在管理后台执行 OTA；如需命令行维护，请使用后台生成的更新任务"
+        exit 1
+    fi
+
     info "检测到已安装的 PayIncus，准备升级..."
 
     apt-get update -qq >/dev/null 2>&1
@@ -1466,6 +1542,11 @@ do_upgrade() {
         exit 1
     fi
     install_release "$tar_file" true
+
+    local version="unknown"
+    if [[ -f "${INSTALL_DIR}/version.json" ]]; then
+        version=$(node -e "try { console.log(require('${INSTALL_DIR}/version.json').version || 'unknown') } catch { console.log('unknown') }")
+    fi
 
     # 修复权限
     chown -R "${RUN_USER}:${RUN_USER}" "$INSTALL_DIR"
@@ -1497,6 +1578,7 @@ do_uninstall() {
     echo -e "  ${RED}  1. 停止并删除 PayIncus systemd 服务${NC}"
     echo -e "  ${RED}  2. 删除安装目录 ${INSTALL_DIR}${NC}"
     echo -e "  ${RED}  3. 删除系统用户 ${RUN_USER}${NC}"
+    echo -e "  ${RED}  安装目录中的插件、主题、运行资产、OTA release 和更新日志也会被删除${NC}"
     echo -e "  ${YELLOW}  注意：PostgreSQL/Redis 和数据库数据不会被删除${NC}"
     echo ""
     echo -ne "  ${BOLD}确认卸载？${NC}[y/N]: "
@@ -1683,4 +1765,6 @@ main() {
     esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

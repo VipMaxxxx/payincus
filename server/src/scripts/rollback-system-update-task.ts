@@ -167,6 +167,12 @@ async function main(): Promise<void> {
       }
       await switchCurrentRelease(backupPath)
     } else {
+      // 原子发布布局的备份位于 installDir/releases 内。若当前布局已不是原子软链，
+      // 下面的 rm(installDir) 会连同备份一起删掉（且无法保留根目录的 .env/certs），
+      // 属于无法安全自动恢复的状态——直接报错交由人工处理，绝不删除安装目录。
+      if (backupIsAtomicRelease) {
+        throw new Error('Refusing legacy rollback for an atomic-release backup while current layout is not an atomic symlink; manual recovery required to avoid deleting the install directory')
+      }
       await log(`Preserving current install before rollback: ${rollbackBackup}`)
       if (existsSync(installDir)) {
         await cp(installDir, rollbackBackup, { recursive: true, preserveTimestamps: true })

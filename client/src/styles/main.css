@@ -1161,6 +1161,164 @@
   @apply bg-gray-100 text-gray-700;
 }
 
+/* ============================================================
+   专业化中性覆盖层（去 二次元/花哨）
+   置于文件末尾且不入 @layer，以最高优先级扁平化 kawaii 装饰层，
+   无需逐页改动即可让全站呈现克制、专业的 SaaS 控制台外观。
+   ============================================================ */
+
+/* 1) 外壳：去掉漂移渐变背景与动画，改为纯色 */
+.kawaii-app-shell,
+.kawaii-public-shell,
+.kawaii-auth-shell,
+.dark .kawaii-app-shell,
+.dark .kawaii-public-shell,
+.dark .kawaii-auth-shell {
+  background: var(--kawaii-bg) !important;
+  animation: none !important;
+}
+
+/* 2) 删除装饰性覆盖层、背景插画、浮动吉祥物与光晕 */
+.kawaii-public-glow,
+.kawaii-app-companion,
+.kawaii-app-companion-bubble,
+.kawaii-mascot-stage,
+.kawaii-mascot-image,
+.kawaii-hero-float {
+  display: none !important;
+}
+.kawaii-auth-shell::before,
+.kawaii-page::before,
+.kawaii-workspace::before,
+.kawaii-workspace::after,
+.kawaii-dashboard-hero::before,
+.kawaii-dashboard-hero::after,
+.kawaii-stat-tile::after,
+.kawaii-instance-cloud-card::after,
+.kawaii-mascot-stage::before,
+.kawaii-mascot-stage::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  animation: none !important;
+}
+
+/* 3) 去掉极光描边、按钮扫光等 ::before/::after 装饰动画 */
+.kawaii-card::before,
+.kawaii-card-soft::before,
+.kawaii-panel::before,
+.kawaii-package-card::before,
+.kawaii-package-card::after,
+.kawaii-stat-tile::before,
+.kawaii-primary-button::before,
+.kawaii-action-button::before,
+.card::before,
+.btn-primary::before {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+  opacity: 0 !important;
+}
+
+/* 4) 关闭全局玻璃拟态模糊 */
+.kawaii-topbar,
+.kawaii-sidebar,
+.kawaii-menu-panel,
+.kawaii-public-header,
+.kawaii-card,
+.kawaii-card-soft,
+.kawaii-panel,
+.kawaii-stat-tile,
+.kawaii-package-card,
+.kawaii-hero-panel {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 5) 阴影收敛为细微中性 */
+.kawaii-topbar,
+.kawaii-sidebar,
+.kawaii-menu-panel,
+.kawaii-card,
+.kawaii-card-soft,
+.kawaii-panel,
+.kawaii-stat-tile,
+.kawaii-package-card,
+.kawaii-instance-card,
+.card,
+.kawaii-brand-mark {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05) !important;
+}
+
+/* 6) 渐变 CTA / 主按钮 / 选中态 → 纯色克制蓝 */
+.kawaii-header-cta,
+.kawaii-primary-button,
+.btn-primary {
+  background-image: none !important;
+  background-color: #2563eb !important;
+  color: #fff !important;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05) !important;
+}
+.kawaii-header-cta:hover,
+.kawaii-primary-button:hover,
+.btn-primary:hover {
+  background-color: #1d4ed8 !important;
+  filter: none !important;
+  transform: none !important;
+}
+.kawaii-public-nav-link.is-active,
+.kawaii-menu-item.is-active,
+.kawaii-sidebar a.router-link-active {
+  background-image: none !important;
+  background-color: color-mix(in srgb, var(--kawaii-primary) 12%, transparent) !important;
+  color: var(--kawaii-primary-strong) !important;
+  box-shadow: none !important;
+}
+.kawaii-brand-mark,
+.kawaii-footer-logo {
+  background-image: none !important;
+  background-color: var(--kawaii-surface) !important;
+}
+
+/* 7) 页头 / 仪表盘 hero → 扁平，无渐变无动画 */
+.page-header,
+.kawaii-dashboard-hero,
+.kawaii-page-header {
+  background-image: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+/* 8) 大圆角收敛 */
+.kawaii-card,
+.kawaii-card-soft,
+.kawaii-panel,
+.kawaii-package-card,
+.kawaii-stat-tile,
+.modal-content,
+.kawaii-auth-card,
+.kawaii-page-header {
+  border-radius: 8px !important;
+}
+
+/* 9) 关闭花哨关键帧动画 */
+.kawaii-float,
+.kawaii-sheen,
+.kawaii-network-node,
+.kawaii-network-line,
+.kawaii-skeleton,
+.kawaii-mascot-image {
+  animation: none !important;
+}
+
+/* 10) 渐变文字价格 → 纯色 */
+.kawaii-price-text {
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--kawaii-text) !important;
+}
+
 /* ============ 滑块/进度条主题适配 ============ */
 .dark .slider-track {
   @apply bg-gray-800;

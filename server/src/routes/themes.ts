@@ -184,6 +184,9 @@ export default async function themeRoutes(fastify: FastifyInstance) {
         .header('Referrer-Policy', 'same-origin')
         .header('X-Content-Type-Options', 'nosniff')
         .header('X-Robots-Tag', 'noindex')
+        // 主题包内可能夹带 SVG/HTML 等可执行脚本的文件；作为顶层文档打开时用严格 CSP + sandbox
+        // 阻断内联脚本，防止存储型 XSS。该头对以 <link>/<img>/<font> 加载的子资源无副作用。
+        .header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; sandbox")
         .send(body)
     } catch {
       return reply.code(404).send({ error: 'Theme asset not found', code: 'THEME_ASSET_NOT_FOUND' })

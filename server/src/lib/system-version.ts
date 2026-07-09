@@ -116,13 +116,32 @@ function normalizeOtaArtifact(input: unknown): OtaArtifactInfo | null {
   return { name, platform, arch, url, sha256, size }
 }
 
+/**
+ * 判断 URL 是否为可信的 GitHub Release 主机。
+ * 仅对可信主机附带 release token，避免被构造的 release JSON 把凭证泄露到攻击者主机。
+ */
+export function isTrustedReleaseHost(rawUrl: string): boolean {
+  try {
+    const u = new URL(rawUrl)
+    if (u.protocol !== 'https:') return false
+    const host = u.hostname.toLowerCase()
+    return host === 'github.com'
+      || host === 'api.github.com'
+      || host === 'codeload.github.com'
+      || host === 'objects.githubusercontent.com'
+      || host.endsWith('.githubusercontent.com')
+  } catch {
+    return false
+  }
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const headers: Record<string, string> = {
     accept: 'application/vnd.github+json',
     'user-agent': 'payincus-online-update'
   }
   const token = getReleaseToken()
-  if (token) headers.authorization = `Bearer ${token}`
+  if (token && isTrustedReleaseHost(url)) headers.authorization = `Bearer ${token}`
 
   const response = await fetch(url, { headers })
   if (!response.ok) {

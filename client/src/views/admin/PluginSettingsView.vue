@@ -384,7 +384,7 @@ onMounted(() => {
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
         <button class="text-sm text-themed-muted hover:text-themed" @click="router.push('/admin/plugins')">
-          ← 返回扩展中心
+          返回扩展中心
         </button>
         <h1 class="mt-3 text-2xl font-semibold text-themed">{{ displayPluginName(plugin) }}</h1>
         <p class="mt-1 text-sm text-themed-muted">独立扩展设置页。扩展安装、启用和卸载仍在扩展中心维护。</p>

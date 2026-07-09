@@ -1,6 +1,21 @@
+---
+title: systemd 服务
+description: 配置 PayIncus 后端、在线更新与回滚服务
+---
+
 # systemd 服务
 
-生产环境应使用 systemd 管理后端和 OTA oneshot 任务。后端服务长期运行，在线更新和回滚由受限 systemd 模板按任务 ID 启动。
+<p class="doc-lead">使用 systemd 管理长期运行的后端服务，以及按任务 ID 启动的 OTA 更新和回滚 oneshot。</p>
+
+<div class="doc-meta">
+  <div><span>主服务</span><strong>incudal-backend</strong></div>
+  <div><span>运行用户</span><strong>incudal</strong></div>
+  <div><span>工作目录</span><strong>/opt/incudal/current</strong></div>
+</div>
+
+::: tip 配置来源
+优先复制仓库中的受控模板，不要手工拼接 unit。修改后使用 `systemctl daemon-reload` 并检查服务状态。
+:::
 
 ## 后端服务
 
@@ -26,7 +41,7 @@ User=incudal
 Group=incudal
 WorkingDirectory=/opt/incudal/current
 EnvironmentFile=/opt/incudal/.env
-ExecStartPre=cd /opt/incudal/current/server && pnpm exec prisma migrate deploy
+ExecStartPre=/usr/bin/bash -lc 'cd /opt/incudal/current/server && pnpm exec prisma migrate deploy'
 ExecStart=/usr/bin/node /opt/incudal/current/server/dist/app.js
 ```
 
@@ -45,6 +60,9 @@ ExecStart=/usr/bin/node /opt/incudal/current/server/dist/app.js
 /opt/incudal/plugin-data
 /opt/incudal/plugin-logs
 /opt/incudal/plugin-staging
+/opt/incudal/themes
+/opt/incudal/theme-data
+/opt/incudal/theme-staging
 ```
 
 不要把 `/`、`/etc` 或数据库目录加入 `ReadWritePaths`。支付密钥、数据库地址、OAuth secret、SMTP 密码和安装 token 只应放在 `/opt/incudal/.env` 或后台加密配置里。

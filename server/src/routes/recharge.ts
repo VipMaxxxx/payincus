@@ -3074,10 +3074,10 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       return reply.status(400).send({ error: '支付金额与订单金额不匹配' })
     }
 
+    // 订单本地过期不再静默丢弃：回调已验签验额说明款项真实到账，
+    // 继续走幂等入账（completeRecharge 只会对 pending/paid 订单入账一次）。
     if (record.expiredAt && new Date(record.expiredAt) < new Date()) {
-      request.log.warn({ orderNo: record.orderNo, expiredAt: record.expiredAt }, '插件支付回调订单已过期，拒绝处理')
-      await markCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex, clientIp)
-      return { code: 'SUCCESS', message: 'OK' }
+      request.log.warn({ orderNo: record.orderNo, expiredAt: record.expiredAt }, '插件支付回调订单已过本地过期时间，但已验签验额，按真实到账继续入账')
     }
 
     const completion = await db.completeRecharge(record.orderNo, {
@@ -3461,12 +3461,13 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       }
     }
 
-    // 9. 检查订单是否已过期
+    // 9. 订单本地过期处理：
+    // 回调已通过签名与金额校验，说明用户确实在网关完成了支付（钱已到账），
+    // 不能仅因本地过期时间就静默丢弃、导致用户付了款却不入账。
+    // 因此这里不再拦截，继续走下面的幂等入账（completeRecharge 只会对 pending/paid 订单入账一次）。
+    // 配合 billing-scheduler 的取消宽限期，迟到但有效的回调仍能落在可入账的订单上。
     if (record.expiredAt && new Date(record.expiredAt) < new Date()) {
-      request.log.warn({ orderNo, expiredAt: record.expiredAt }, '订单已过期，拒绝处理回调')
-      await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)
-      // 过期订单不处理，但返回成功避免支付平台重试
-      return provider.type === 'yipay' && epayVersion === 'v1' ? 'success' : { code: 'SUCCESS', message: 'OK' }
+      request.log.warn({ orderNo, expiredAt: record.expiredAt }, '订单已过本地过期时间，但回调已验签验额，按真实到账继续入账')
     }
 
     // 10. 检查订单状态（幂等性处理）

@@ -41,8 +41,12 @@ const dbBackoff = createWorkerDbBackoff('UploadWorker')
  * 服务启动时清理僵尸任务
  */
 export async function cleanupStaleUploadTasks(): Promise<void> {
+    // 仅清理确实超时（超过 UPLOAD_TIMEOUT）的 PROCESSING 任务，避免多节点部署下误杀其他节点在跑的上传任务。
     const result = await prisma.backupUploadTask.updateMany({
-        where: { status: 'PROCESSING' },
+        where: {
+            status: 'PROCESSING',
+            startedAt: { lt: new Date(Date.now() - UPLOAD_TIMEOUT) }
+        },
         data: {
             status: 'FAILED',
             error: '系统重启，任务中断',

@@ -1723,7 +1723,7 @@ async function sendTestEmail() {
           <!-- Help Link -->
           <div class="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
             <p class="text-sm text-blue-400">
-              💡 {{ t('admin.system.turnstile.helpText') }}
+              {{ t('admin.system.turnstile.helpText') }}
               <a
                 href="https://dash.cloudflare.com/?to=/:account/turnstile"
                 target="_blank"
@@ -1767,7 +1767,7 @@ async function sendTestEmail() {
           <!-- Help Link -->
           <div class="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
             <p class="text-sm text-blue-400">
-              💡 {{ t('admin.system.avatar.helpText') }}
+              {{ t('admin.system.avatar.helpText') }}
               <a
                 href="https://www.dicebear.com/how-to-use/http-api"
                 target="_blank"
@@ -1965,7 +1965,7 @@ async function sendTestEmail() {
           <!-- Help Link -->
           <div class="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
             <p class="text-sm text-blue-400">
-              💡 {{ t('admin.system.smtp.helpText') }}
+              {{ t('admin.system.smtp.helpText') }}
             </p>
           </div>
         </div>
@@ -2035,7 +2035,7 @@ async function sendTestEmail() {
           <!-- Help Link -->
           <div class="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
             <p class="text-sm text-blue-400">
-              💡 {{ t('admin.system.emailDomain.helpText') }}
+              {{ t('admin.system.emailDomain.helpText') }}
             </p>
           </div>
         </div>

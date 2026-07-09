@@ -1,120 +1,86 @@
 ---
 layout: home
-title: PayIncus
-
-hero:
-  name: PayIncus
-  text: Commercial delivery and billing for Incus hosting
-  tagline: Manage NAT VPS sales, resource delivery, billing, tickets, notifications, Agent reporting, extension marketplace, themes, and admin OTA updates.
-  image:
-    src: /incudal_logo.webp
-    alt: PayIncus
-  actions:
-    - theme: brand
-      text: Get Started
-      link: /en/guide/introduction
-    - theme: alt
-      text: Live Demo
-      link: /en/demo
-    - theme: alt
-      text: Marketplace
-      link: /en/plugins/market
-
-features:
-  - title: Automation
-    details: Orders, billing, instance lifecycle, rollback, notifications, and OTA updates run through auditable workflows.
-  - title: Responsive
-    details: The user portal and admin console are separate builds for focused desktop and mobile workflows.
-  - title: Performant
-    details: Static frontends, same-origin API, split Nginx deployment, and production preflight checks keep delivery stable.
-  - title: Personalization
-    details: The Extension Center and theme system support controlled third-party capabilities and brand surfaces.
-  - title: Open Operation
-    details: Key production paths are backed by version logs, OTA tasks, production proof, and redacted audit records.
-  - title: Extensible
-    details: Public API, OAuth Provider, SDK, events, action runtime, and extension storage form the developer platform.
+title: PayIncus Documentation
+description: PayIncus deployment, operations, development, and OTA documentation
 ---
 
-::: info Extension Center
-[Extension Development](/en/plugins/overview): Extension Center, online marketplace, themes, OAuth Provider, Public API, and SDK entrypoints for third-party developers.
-:::
-
-<section class="payincus-section">
-  <p class="payincus-kicker">What is PayIncus?</p>
-  <h2>A delivery, billing, and operations console for hosting businesses</h2>
-  <p>PayIncus connects user purchases, balance billing, Incus instance delivery, web terminal access, tickets, notifications, payment callbacks, Agent reporting, and admin upgrades in one controlled platform.</p>
-  <div class="payincus-grid">
-    <div class="payincus-card">
-      <strong>User Portal</strong>
-      <span>Marketplace, instances, terminal, wallet, orders, tickets, notifications, invites, and self-service actions.</span>
+<main class="docs-home">
+  <section class="docs-home-masthead">
+    <div class="docs-home-brand">
+      <img class="docs-home-logo" src="/incudal_logo.webp" alt="PayIncus">
+      <div>
+        <p class="docs-home-eyebrow">PayIncus Documentation</p>
+        <h1>PayIncus Docs</h1>
+        <p class="docs-home-summary">Deployment, operations, extension development, and production maintenance for the PayIncus Incus delivery platform, including the extension marketplace, themes, and admin OTA updates. Start with the task in front of you.</p>
+        <div class="docs-home-actions">
+          <a class="docs-home-button primary" href="/en/deployment/one-click-install">Deploy PayIncus</a>
+          <a class="docs-home-button" href="/en/guide/introduction">Understand the system</a>
+          <a class="docs-home-button" href="/en/api/overview">View the API</a>
+        </div>
+      </div>
     </div>
-    <div class="payincus-card">
-      <strong>Admin Console</strong>
-      <span>Users, packages, hosts, images, orders, payment providers, finance, support, resource pools, SLA, alerts, and OTA.</span>
-    </div>
-    <div class="payincus-card">
-      <strong>Production Ops</strong>
-      <span>Atomic current/releases deployment, Release artifact verification, production preflight, rollback, and redacted proof records.</span>
-    </div>
-  </div>
-</section>
+    <aside class="docs-home-release">
+      <span>Production Operations</span>
+      <strong>Releases, updates, and acceptance</strong>
+      <p>Installation, OTA, and rollback use GitHub Releases with SHA256 verification as the source of truth.</p>
+      <a href="/en/release/version-log">Review the version log</a>
+      <a href="/en/deployment/production-checklist">Open the production checklist</a>
+    </aside>
+  </section>
 
-<section class="payincus-section payincus-split">
-  <div>
-    <p class="payincus-kicker">Extensions</p>
-    <h2>Live marketplace and third-party developer platform</h2>
-    <p>The Extension Center supports upload installs, online marketplace installs, submission review, scanning, publishing, enable/disable/uninstall, configuration forms, event delivery, webhook actions, extension storage, Gateway Extensions, Server Extensions, and SDK examples.</p>
-    <div class="payincus-links">
-      <a class="payincus-link" href="/en/plugins/overview"><strong>Extensions</strong> Capabilities and security boundaries</a>
-      <a class="payincus-link" href="/en/plugins/market"><strong>Marketplace</strong> Stable online market directory</a>
-      <a class="payincus-link" href="/en/plugins/development"><strong>Extension Development</strong> Development guide, manifest, events, actions, storage, and themes</a>
+  <section class="docs-home-section">
+    <div class="docs-home-section-label">
+      <h2>Start here</h2>
+      <p>Choose the entry closest to your current task.</p>
     </div>
-  </div>
-  <div class="payincus-code-panel">
-    GET https://payincus.com/plugin-market/index.json<br>
-    GET https://payincus.com/theme-market/index.json<br>
-    GET https://payincus.com/sdk/payincus-public-api.ts<br>
-    POST /api/v1/plugins/:pluginId/actions/:action
-  </div>
-</section>
-
-<section class="payincus-section payincus-split">
-  <div>
-    <p class="payincus-kicker">PayIncus API</p>
-    <h2>Automate the platform with OAuth, API tokens, and SDKs</h2>
-    <p>The Public API provides `/api/v1`, OpenAPI, Bearer tokens, scopes, pagination, sorting, allowlisted filters, and a unified error model. Integrations can read the authorized user's products, services, orders, billing records, tickets, notifications, and controlled extension actions.</p>
-    <div class="payincus-links">
-      <a class="payincus-link" href="/en/api/overview"><strong>API Reference</strong> Public API and permissions</a>
-      <a class="payincus-link" href="/en/plugins/sdk"><strong>SDK</strong> TypeScript SDK and examples</a>
+    <div class="docs-home-links">
+      <a class="docs-home-link" href="/en/deployment/one-click-install"><span class="docs-home-link-index">01</span><span><strong>One-click install</strong><small>Bootstrap a clean Debian or Ubuntu server.</small></span></a>
+      <a class="docs-home-link" href="/en/deployment/manual-install"><span class="docs-home-link-index">02</span><span><strong>Manual install</strong><small>Integrate with existing PostgreSQL, Nginx, systemd, and release operations.</small></span></a>
+      <a class="docs-home-link" href="/en/guide/split-deployment"><span class="docs-home-link-index">03</span><span><strong>Split deployment</strong><small>Configure user, admin, API, and domain boundaries.</small></span></a>
+      <a class="docs-home-link" href="/en/guide/ota-update"><span class="docs-home-link-index">04</span><span><strong>Admin OTA</strong><small>Verify Releases, switch versions, and run controlled rollback.</small></span></a>
     </div>
-  </div>
-  <div class="payincus-code-panel">
-    Authorization: Bearer pat_xxx<br>
-    GET /api/v1/me<br>
-    GET /api/v1/services?include=product<br>
-    POST /api/v1/services/:id/actions<br>
-    POST /api/v1/tickets/:id/replies
-  </div>
-</section>
+  </section>
 
-<section class="payincus-section">
-  <p class="payincus-kicker">Deploy</p>
-  <h2>A fixed path from installation to production acceptance</h2>
-  <p>The documentation is organized around installation, split deployment, environment variables, systemd, Nginx, production acceptance, and admin OTA updates.</p>
-  <div class="payincus-grid">
-    <a class="payincus-link" href="/en/deployment/one-click-install"><strong>One-click Install</strong> Panel installation and bootstrap</a>
-    <a class="payincus-link" href="/en/guide/split-deployment"><strong>Split Deployment</strong> User, admin, and API boundaries</a>
-    <a class="payincus-link" href="/en/guide/ota-update"><strong>Admin OTA</strong> Release artifact updates and rollback</a>
-  </div>
-</section>
+  <section class="docs-home-section">
+    <div class="docs-home-section-label">
+      <h2>Browse by work</h2>
+      <p>The information architecture follows deployment, operations, and development work.</p>
+    </div>
+    <div class="docs-home-columns">
+      <div class="docs-home-column">
+        <h3>Deploy and operate</h3>
+        <a href="/en/deployment/environment">Environment variables</a>
+        <a href="/en/deployment/systemd">systemd service</a>
+        <a href="/en/deployment/nginx">Nginx split deployment</a>
+        <a href="/en/troubleshooting/common-errors">Common errors</a>
+      </div>
+      <div class="docs-home-column">
+        <h3>Product operations</h3>
+        <a href="/en/user/dashboard">User portal</a>
+        <a href="/en/admin/overview">Admin console</a>
+        <a href="/en/features/billing">Payments and billing</a>
+        <a href="/en/features/instances">Instances and delivery</a>
+      </div>
+      <div class="docs-home-column">
+        <h3>Develop and extend</h3>
+        <a href="/en/plugins/overview">Extension Center</a>
+        <a href="/en/plugins/development">Extension development</a>
+        <a href="/en/plugins/sdk">TypeScript SDK</a>
+        <a href="/en/api/overview">Public API</a>
+      </div>
+    </div>
+  </section>
 
-<section class="payincus-section">
-  <p class="payincus-kicker">Community</p>
-  <h2>Connect project, releases, and production proof</h2>
-  <div class="payincus-links">
-    <a class="payincus-link" href="https://t.me/Payincus"><strong>Telegram</strong> Join the PayIncus group</a>
-    <a class="payincus-link" href="https://github.com/VipMaxxxx/payincus"><strong>GitHub</strong> View source and releases</a>
-    <a class="payincus-link" href="/en/release/version-log"><strong>Releases</strong> Review the system version log</a>
-    <a class="payincus-link" href="/en/deployment/production-checklist"><strong>Production Proof</strong> Go-live acceptance rules</a>
-  </div>
-</section>
+  <section class="docs-home-section">
+    <div class="docs-home-section-label">
+      <h2>Project links</h2>
+      <p>Source, community, marketplace, and demo environment.</p>
+    </div>
+    <div class="docs-home-links">
+      <a class="docs-home-link" href="https://github.com/VipMaxxxx/payincus"><span class="docs-home-link-index">GH</span><span><strong>GitHub</strong><small>Source, Releases, and issue tracking.</small></span></a>
+      <a class="docs-home-link" href="https://t.me/Payincus"><span class="docs-home-link-index">TG</span><span><strong>Telegram</strong><small>Join the PayIncus project group.</small></span></a>
+      <a class="docs-home-link" href="/en/plugins/market"><span class="docs-home-link-index">EX</span><span><strong>Extension Market</strong><small>Governed extension listings and installation boundaries.</small></span></a>
+      <a class="docs-home-link" href="/en/demo"><span class="docs-home-link-index">DE</span><span><strong>Live Demo</strong><small>Demo accounts and read-only limitations.</small></span></a>
+    </div>
+  </section>
+</main>

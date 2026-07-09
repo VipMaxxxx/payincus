@@ -1,5 +1,24 @@
 import { defineConfig } from 'vitepress'
 
+const siteOrigin = 'https://payincus.com'
+
+function routeFromRelativePath(relativePath: string) {
+  let route = relativePath.replace(/\\/g, '/').replace(/\.md$/, '')
+  route = route.replace(/(^|\/)index$/, '$1')
+  route = route.startsWith('/') ? route : `/${route}`
+  return route || '/'
+}
+
+function localeRoutes(route: string) {
+  if (route === '/en/') {
+    return { zh: '/', en: '/en/' }
+  }
+  if (route.startsWith('/en/')) {
+    return { zh: route.slice(3) || '/', en: route }
+  }
+  return { zh: route, en: route === '/' ? '/en/' : `/en${route}` }
+}
+
 const zhNav = [
   { text: '首页', link: '/' },
   { text: '文档', link: '/guide/introduction' },
@@ -421,6 +440,19 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   appearance: true,
+  sitemap: {
+    hostname: siteOrigin
+  },
+  transformHead({ pageData }) {
+    const route = routeFromRelativePath(pageData.relativePath)
+    const locales = localeRoutes(route)
+    return [
+      ['link', { rel: 'canonical', href: `${siteOrigin}${route}` }],
+      ['link', { rel: 'alternate', hreflang: 'zh-CN', href: `${siteOrigin}${locales.zh}` }],
+      ['link', { rel: 'alternate', hreflang: 'en-US', href: `${siteOrigin}${locales.en}` }],
+      ['link', { rel: 'alternate', hreflang: 'x-default', href: `${siteOrigin}${locales.zh}` }]
+    ]
+  },
   head: [
     ['link', { rel: 'icon', href: '/incudal_logo.webp' }],
     ['meta', { name: 'theme-color', content: '#111827' }]

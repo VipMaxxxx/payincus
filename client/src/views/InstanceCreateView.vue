@@ -1437,7 +1437,7 @@ async function createRiskReviewTicket(): Promise<void> {
               <p class="mt-1.5 text-xs text-themed-muted">{{ $t('instance.createPage.autoNameHint') }}</p>
             </div>
             <div v-if="sshKeys.length === 0" class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-400 dark:border-yellow-500/30 rounded-lg">
-              <p class="text-sm text-yellow-800 dark:text-yellow-300 font-medium mb-1">⚠️ {{ $t('instance.createPage.missingSshKey') }}</p>
+              <p class="text-sm text-yellow-800 dark:text-yellow-300 font-medium mb-1">{{ $t('instance.createPage.missingSshKey') }}</p>
               <p class="text-xs text-yellow-700 dark:text-yellow-400">{{ $t('instance.createPage.missingSshKeyDesc') }} <router-link :to="profilePath()" class="underline hover:text-yellow-900 dark:hover:text-yellow-200 font-medium">{{ $t('instance.createPage.profileSettings') }}</router-link> {{ $t('instance.createPage.addSshKey') }}</p>
             </div>
             <div v-if="!quotaCheck.valid" class="p-3 rounded-lg border" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30' : 'bg-red-50 border-red-200'">

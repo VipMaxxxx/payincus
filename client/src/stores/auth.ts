@@ -72,6 +72,15 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('token')
   }
 
+  // 仅清除当前标签页内存中的认证状态，保留共享的 localStorage.token。
+  // 用于“管理员误入用户端 / 非管理员误入管理端”这类跨端驱离场景：
+  // 不能清共享 token，否则会通过 storage 事件把另一端（合法会话）一起登出。
+  function clearInMemoryAuth() {
+    token.value = null
+    user.value = null
+    quota.value = null
+  }
+
   async function logout() {
     // 先调用后端登出 API（清除服务端会话和记录日志）
     // 必须在清除本地状态之前调用，否则请求拦截器无法获取 token
@@ -130,6 +139,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     syncToken,
     clearLocalAuth,
+    clearInMemoryAuth,
     checkSession
   }
 })

@@ -1,16 +1,31 @@
+---
+title: One-click Install
+description: Deploy PayIncus on Debian or Ubuntu from a verified GitHub Release
+---
+
 # One-click Install
 
-The recommended production path is `scripts/install-panel.sh`. The script downloads the PayIncus GitHub Release artifact, initializes the database and `.env`, creates systemd services, and configures separate Nginx sites for the user portal and admin console.
+<p class="doc-lead">Deploy PayIncus on a clean server with the official installer. It configures dependencies, database access, environment variables, systemd, and the selected external access mode.</p>
+
+<div class="doc-meta">
+  <div><span>Use case</span><strong>First production install</strong></div>
+  <div><span>Supported OS</span><strong>Debian / Ubuntu</strong></div>
+  <div><span>Default path</span><strong>/opt/incudal</strong></div>
+</div>
+
+::: tip Expected result
+The installation creates separate user and admin frontends with a local backend service. Release artifacts are extracted only after SHA256 verification.
+:::
 
 ## Requirements
 
-- A clean Linux server, preferably Debian or Ubuntu.
-- root or sudo access.
-- Two public domains:
-  - User portal: `panel.example.com`
-  - Admin console: `admin.example.com`
-- A/AAAA records already point to the server.
-- Public access to ports 80 and 443.
+Every mode requires a clean Debian or Ubuntu server and root or sudo access. External access requirements depend on the mode selected during installation:
+
+| Mode | Domain and network requirements |
+| --- | --- |
+| Nginx + Certbot | Prepare separate user and admin domains, point A/AAAA records to the server, and expose ports 80/443. |
+| Cloudflare Tunnel | Manage both domains in Cloudflare and prepare Tunnel credentials; inbound public ports 80/443 are not required. |
+| Service only | The script does not require domains or configure TLS; an existing reverse proxy or internal gateway must expose the local backend. |
 
 The default install directory is `/opt/incudal`. This is the real path used by the installer, systemd templates, OTA worker, and production release layout.
 
@@ -32,7 +47,7 @@ During installation, provide:
 
 - Installs Node.js, pnpm, PostgreSQL, Redis, Nginx, and systemd dependencies.
 - Creates the database connection and `/opt/incudal/.env`.
-- Downloads the latest GitHub Release artifact.
+- Downloads the latest GitHub Release artifact and its `.sha256`, then verifies it before extraction.
 - Extracts PayIncus into `/opt/incudal`.
 - Runs Prisma migrations and Prisma Client generation.
 - Creates the `incudal` system user and `incudal-backend` service.
@@ -47,7 +62,9 @@ sudo bash install-panel.sh --upgrade
 sudo bash install-panel.sh --uninstall
 ```
 
-Upgrade preserves `.env`, certificates, plugins, themes, runtime cache, and OTA directories. Uninstall asks for confirmation before removing services and the install directory.
+`--upgrade` is only for the legacy non-atomic layout. If `/opt/incudal/current` is an atomic symlink, the script exits safely; use admin OTA instead so `current/releases` is not overwritten.
+
+Legacy upgrades preserve `.env`, certificates, plugins, themes, runtime caches, and OTA directories. Uninstall removes all of `/opt/incudal`, including local plugins, themes, runtime assets, OTA releases, and update logs. PostgreSQL/Redis services and database data are not removed automatically. Back up the database and installation directory first.
 
 ## Post-install Checks
 

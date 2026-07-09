@@ -48,8 +48,13 @@ const dbBackoff = createWorkerDbBackoff('RestoreWorker')
  * 把所有 PROCESSING 状态的任务标记为 FAILED
  */
 export async function cleanupStaleTasks(): Promise<void> {
+    // 仅清理确实超时（超过 RESTORE_TIMEOUT）的 PROCESSING 任务，而不是无条件把所有 PROCESSING 置为 FAILED。
+    // 多节点部署下，无条件清理会误杀其他节点上正在执行的任务；按启动时间阈值判断可避免。
     const result = await prisma.restoreTask.updateMany({
-        where: { status: 'PROCESSING' },
+        where: {
+            status: 'PROCESSING',
+            startedAt: { lt: new Date(Date.now() - RESTORE_TIMEOUT) }
+        },
         data: {
             status: 'FAILED',
             error: '系统重启，任务中断',

@@ -62,7 +62,7 @@ docs-site/              VitePress 文档站
 - Node.js 20+，生产推荐 Node.js 22
 - pnpm 9.14.2
 - PostgreSQL，生产推荐 PostgreSQL 16
-- Redis 7，安装脚本会保留 `REDIS_URL` 兼容后续分布式状态扩展
+- Redis（建议 7；一键安装使用系统仓库版本），安装脚本会保留 `REDIS_URL` 兼容后续分布式状态扩展
 - Nginx + systemd
 - Go 1.22+，仅开发或构建 Agent 时需要
 

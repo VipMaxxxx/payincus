@@ -238,7 +238,7 @@ onMounted(() => {
 
     <section class="kawaii-hero-section relative overflow-hidden px-4 pb-10 pt-8 sm:px-6 lg:px-8">
       <div class="kawaii-hero-shell relative mx-auto max-w-7xl px-1 pb-2 pt-8 sm:px-3 sm:pt-10 lg:px-4">
-        <div class="relative z-10 grid gap-8 lg:min-h-[35rem] lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
+        <div class="relative z-10">
           <div class="kawaii-hero-copy relative z-20 max-w-2xl">
             <div
               class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium"
@@ -279,53 +279,13 @@ onMounted(() => {
             </div>
 
           </div>
-
-          <div class="relative min-h-[24rem] lg:min-h-[41rem]">
-            <div class="kawaii-hero-visual-stage">
-              <img
-                src="/images/kawaii/hero-cloud-map.png"
-                alt=""
-                class="kawaii-hero-map-asset"
-                aria-hidden="true"
-                loading="eager"
-                decoding="async"
-              />
-              <div class="kawaii-map-label kawaii-map-label-lax" aria-hidden="true">
-                <strong>LAX</strong>
-                <span>CN2 GIA</span>
-              </div>
-              <div class="kawaii-map-label kawaii-map-label-hkg" aria-hidden="true">
-                <strong>HKG</strong>
-                <span>CN2 GIA</span>
-              </div>
-              <div class="kawaii-map-label kawaii-map-label-fra" aria-hidden="true">
-                <strong>FRA</strong>
-                <span>DE-CIX</span>
-              </div>
-              <div class="kawaii-map-label kawaii-map-label-syd" aria-hidden="true">
-                <strong>SYD</strong>
-                <span>Telstra</span>
-              </div>
-              <div class="relative z-10 min-h-[24rem] lg:min-h-[41rem]">
-                <div class="kawaii-mascot-layer absolute inset-x-0 bottom-0 flex items-end justify-center overflow-visible lg:justify-end">
-                  <img
-                    src="/images/kawaii/paya-cloud-operator-v2.png"
-                    alt="Payincus 云端助手"
-                    class="kawaii-mascot-image"
-                    loading="eager"
-                    decoding="async"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
-        <div class="kawaii-hero-feature-strip relative z-10 mt-8 grid gap-3 lg:grid-cols-4">
+        <div class="kawaii-hero-feature-strip relative z-10 mt-8 grid gap-3 lg:!mt-8 lg:grid-cols-4">
           <div
             v-for="feature in heroFeatureCards"
             :key="feature.title"
-            class="kawaii-hero-feature-card rounded-2xl p-4"
+            class="kawaii-hero-feature-card rounded-lg p-4"
           >
             <div class="flex items-start gap-3">
               <div class="kawaii-hero-feature-icon">
@@ -381,39 +341,6 @@ onMounted(() => {
               <span>Direct / Hosted</span>
               <span>LXC / KVM</span>
               <span>IPv4 NAT / BGP</span>
-            </div>
-          </div>
-
-          <div class="kawaii-product-stage" aria-hidden="true">
-            <img
-              src="/images/kawaii/hero-cloud-map.png"
-              alt=""
-              class="kawaii-product-stage-map"
-              loading="lazy"
-              decoding="async"
-            />
-            <span class="kawaii-network-line line-a"></span>
-            <span class="kawaii-network-line line-b"></span>
-            <span class="kawaii-network-line line-c"></span>
-            <span class="kawaii-network-node node-hkg official">
-              <strong>HKG</strong>
-              <em>CN2</em>
-            </span>
-            <span class="kawaii-network-node node-lax official">
-              <strong>LAX</strong>
-              <em>GIA</em>
-            </span>
-            <span class="kawaii-network-node node-fra market">
-              <strong>FRA</strong>
-              <em>BGP</em>
-            </span>
-            <span class="kawaii-network-node node-sgp market">
-              <strong>SGP</strong>
-              <em>Lite</em>
-            </span>
-            <div class="kawaii-product-stage-terminal">
-              <span>incus profile</span>
-              <strong>LXC / KVM / NAT</strong>
             </div>
           </div>
 
@@ -484,7 +411,7 @@ onMounted(() => {
 
     <section class="kawaii-plan-section px-4 pb-20 sm:px-6 lg:px-8">
       <div
-        class="mx-auto max-w-7xl rounded-[30px] px-6 py-9 sm:px-10"
+        class="mx-auto max-w-7xl rounded-lg px-6 py-9 sm:px-10"
         :class="ui.browseWrap"
       >
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -514,7 +441,7 @@ onMounted(() => {
             <div
               v-for="index in 4"
               :key="index"
-              class="h-36 animate-pulse rounded-2xl"
+              class="h-36 animate-pulse rounded-lg"
               :class="ui.skeleton"
             ></div>
           </template>
@@ -523,7 +450,7 @@ onMounted(() => {
             <button
               v-for="pkg in spotlightPackages"
               :key="pkg.id"
-              class="kawaii-spotlight-package flex min-h-36 flex-col gap-4 rounded-2xl p-5 text-left transition-[border-color,box-shadow,transform] duration-150 sm:flex-row sm:items-stretch sm:justify-between"
+              class="kawaii-spotlight-package flex min-h-36 flex-col gap-4 rounded-lg p-5 text-left transition-[border-color,box-shadow,transform] duration-150 sm:flex-row sm:items-stretch sm:justify-between"
               :class="[ui.browseCard, getPackageCardClass(pkg.sourceType)]"
               @click="openPackage(pkg)"
             >
@@ -563,7 +490,7 @@ onMounted(() => {
 
           <div
             v-else
-            class="rounded-2xl border border-dashed px-4 py-8 text-center text-sm"
+            class="rounded-lg border border-dashed px-4 py-8 text-center text-sm"
             :class="ui.emptyState"
           >
             {{ t('publicSite.portal.emptyPackages') }}

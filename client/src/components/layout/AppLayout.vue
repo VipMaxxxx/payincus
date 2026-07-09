@@ -339,10 +339,6 @@ onUnmounted(() => {
 
       <!-- 页面内容 -->
       <main class="kawaii-workspace flex-1 p-4 md:p-6 xl:px-14 2xl:px-24" :class="isSplitPane ? 'overflow-auto lg:overflow-hidden' : 'overflow-auto'">
-        <div v-if="!isSplitPane" class="kawaii-app-companion hidden xl:flex" aria-hidden="true">
-          <div class="kawaii-app-companion-bubble">有问题可以随时找我哦～</div>
-          <img src="/images/kawaii/paya-cloud-operator.webp" alt="" />
-        </div>
         <div class="w-full mx-auto" :class="isSplitPane ? 'lg:h-full' : ''">
           <slot />
         </div>

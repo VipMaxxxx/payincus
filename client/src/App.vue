@@ -115,11 +115,20 @@ onMounted(() => {
   tokenRefreshTimer = window.setInterval(async () => {
     if (authStore.isAuthenticated) {
       try {
-        const response = await fetch(buildApiUrl('/auth/refresh'), {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' }
-        })
+        // 定时刷新加 15 秒超时兜底：/auth/refresh 挂起时不会长期占用连接或悬挂 Promise
+        const refreshController = new AbortController()
+        const refreshTimeoutId = setTimeout(() => refreshController.abort(), 15_000)
+        let response: Response
+        try {
+          response = await fetch(buildApiUrl('/auth/refresh'), {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            signal: refreshController.signal
+          })
+        } finally {
+          clearTimeout(refreshTimeoutId)
+        }
         if (response.ok) {
           const data = await response.json()
           if (data.token) {
@@ -128,7 +137,7 @@ onMounted(() => {
           }
         }
       } catch {
-        // 刷新失败时不处理，等待下次刷新或请求时的自动刷新
+        // 刷新失败（含超时中止）时不处理，等待下次刷新或请求时的自动刷新
         console.warn('定时 token 刷新失败')
       }
     }

@@ -459,8 +459,10 @@ router.beforeEach(async (to: RouteLocationNormalized, _from: RouteLocationNormal
     return
   }
 
-  if (authStore.isAuthenticated && !authStore.isAdmin) {
-    await authStore.logout()
+  // 仅在明确得知是非管理员账号时才驱离；user 为空（/auth/me 瞬时失败/部署抖动）时
+  // 不能把管理员误当作非管理员整段登出。驱离只清本标签页内存态，保留共享 token 不影响用户端会话。
+  if (authStore.isAuthenticated && authStore.user && !authStore.isAdmin) {
+    authStore.clearInMemoryAuth()
     next({ name: 'login' })
     return
   }

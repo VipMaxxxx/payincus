@@ -298,14 +298,7 @@ function normalizeWebhookBaseUrl(value: string): string | null {
   }
 }
 
-function firstHeaderValue(value: string | string[] | undefined): string | null {
-  if (Array.isArray(value)) {
-    return value[0] || null
-  }
-  return value || null
-}
-
-function buildWebhookUrl(request: FastifyRequest, baseUrl?: string): string | null {
+function buildWebhookUrl(_request: FastifyRequest, baseUrl?: string): string | null {
   const explicitBaseUrl = typeof baseUrl === 'string' ? normalizeWebhookBaseUrl(baseUrl) : null
   if (explicitBaseUrl) {
     return `${explicitBaseUrl}/api/telegram/webhook`
@@ -319,16 +312,9 @@ function buildWebhookUrl(request: FastifyRequest, baseUrl?: string): string | nu
     }
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    return null
-  }
-
-  const forwardedProto = firstHeaderValue(request.headers['x-forwarded-proto'])
-  const forwardedHost = firstHeaderValue(request.headers['x-forwarded-host'])
-  const host = forwardedHost || firstHeaderValue(request.headers.host) || request.hostname
-  const proto = forwardedProto || request.protocol
-  const normalized = normalizeWebhookBaseUrl(`${proto}://${host}`)
-  return normalized ? `${normalized}/api/telegram/webhook` : null
+  // 不再从客户端可伪造的 X-Forwarded-Host/Proto 推导 webhook 地址，
+  // 否则攻击者可把 bot webhook 指向自己的主机。所有环境都要求显式 baseUrl 或已配置的 SITE_URL/FRONTEND_URL。
+  return null
 }
 
 function normalizeTelegramCommand(text: string): string {

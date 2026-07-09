@@ -1,6 +1,6 @@
 import { createReadStream } from 'fs'
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
-import { extname, join } from 'path'
+import { extname, join, posix } from 'path'
 import { createHash } from 'crypto'
 import type { Readable } from 'stream'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
@@ -258,15 +258,31 @@ function latestManifest(plugin: Awaited<ReturnType<typeof getPlugin>>): { manife
   }
 }
 
+/**
+ * 归一化插件资源路径（消解 ./、多余分隔符），供鉴权策略匹配与文件读取共用同一路径，
+ * 避免二者对同一文件判定不一致（如 `./pages/x.html` 绕过 adminPages 鉴权）。
+ * 返回 null 表示路径非法。
+ */
+function normalizePluginAssetPath(assetPath: string): string | null {
+  const normalized = posix.normalize(assetPath).replace(/^\/+/, '')
+  if (!normalized || normalized === '.' || normalized.startsWith('..') || normalized.includes('\\')) {
+    return null
+  }
+  return normalized
+}
+
 function getProtectedAssetPolicy(manifest: PayIncusPluginManifest, assetPath: string): { requiresAuth: boolean; adminOnly: boolean } {
+  const normalizeEntry = (entry: string | undefined | null): string | null =>
+    typeof entry === 'string' ? normalizePluginAssetPath(entry) : null
+
   for (const page of manifest.entrypoints?.adminPages || []) {
-    if (page.entry === assetPath) {
+    if (normalizeEntry(page.entry) === assetPath) {
       return { requiresAuth: true, adminOnly: true }
     }
   }
 
   for (const page of manifest.entrypoints?.userPages || []) {
-    if (page.entry === assetPath && page.requiresAuth === true) {
+    if (normalizeEntry(page.entry) === assetPath && page.requiresAuth === true) {
       return { requiresAuth: true, adminOnly: false }
     }
   }
@@ -1868,8 +1884,10 @@ export default async function pluginRoutes(fastify: FastifyInstance) {
     return { data: data ? serializePluginStorageItem(data) : null }
   })
 
+  // 该路由同时服务 user 作用域（普通用户）与 global 作用域（仅管理员，见下方 role 检查）。
+  // 用 authenticate 而非 authenticateUser，否则 authenticateUser 会挡掉管理员，导致 global 写入永远不可达。
   fastify.put<{ Params: PluginScopedStorageParams; Querystring: PluginScopedStorageQuery; Body: PluginStorageBody }>('/:pluginId/scoped-storage/:scope/:key', {
-    onRequest: [fastify.authenticateUser],
+    onRequest: [fastify.authenticate],
     schema: {
       body: {
         type: 'object',
@@ -1923,8 +1941,9 @@ export default async function pluginRoutes(fastify: FastifyInstance) {
     return { data: serializePluginStorageItem(data) }
   })
 
+  // 同上：global 作用域删除仅管理员，用 authenticate 以免 authenticateUser 挡掉管理员导致不可达
   fastify.delete<{ Params: PluginScopedStorageParams; Querystring: PluginScopedStorageQuery }>('/:pluginId/scoped-storage/:scope/:key', {
-    onRequest: [fastify.authenticateUser]
+    onRequest: [fastify.authenticate]
   }, async (request, reply) => {
     const pluginId = normalizePluginId(request.params.pluginId)
     const scope = normalizeStorageScope(request.params.scope)
@@ -1974,8 +1993,9 @@ export default async function pluginRoutes(fastify: FastifyInstance) {
     return { data: data ? serializePluginTableRow(data) : null }
   })
 
+  // 同上：global 作用域表写入仅管理员，用 authenticate 以免 authenticateUser 挡掉管理员导致不可达
   fastify.put<{ Params: PluginTableStorageParams; Querystring: PluginScopedStorageQuery; Body: PluginStorageBody }>('/:pluginId/table-storage/:scope/:table/:rowKey', {
-    onRequest: [fastify.authenticateUser]
+    onRequest: [fastify.authenticate]
   }, async (request, reply) => {
     let value: unknown
     try {
@@ -2028,8 +2048,9 @@ export default async function pluginRoutes(fastify: FastifyInstance) {
     return { data: serializePluginTableRow(data) }
   })
 
+  // 同上：global 作用域表删除仅管理员，用 authenticate 以免 authenticateUser 挡掉管理员导致不可达
   fastify.delete<{ Params: PluginTableStorageParams; Querystring: PluginScopedStorageQuery }>('/:pluginId/table-storage/:scope/:table/:rowKey', {
-    onRequest: [fastify.authenticateUser]
+    onRequest: [fastify.authenticate]
   }, async (request, reply) => {
     const pluginId = normalizePluginId(request.params.pluginId)
     const scope = normalizeStorageScope(request.params.scope)
@@ -2075,8 +2096,9 @@ export default async function pluginRoutes(fastify: FastifyInstance) {
     return { data: migrations.map(serializePluginTableMigration) }
   })
 
+  // 表迁移仅管理员（见下方 role 检查）。用 authenticate 以免 authenticateUser 挡掉管理员导致不可达。
   fastify.post<{ Params: PluginTableMigrationParams; Body: PluginTableMigrationBody }>('/:pluginId/table-storage/:table/migrations', {
-    onRequest: [fastify.authenticateUser]
+    onRequest: [fastify.authenticate]
   }, async (request, reply) => {
     const pluginId = normalizePluginId(request.params.pluginId)
     const tableName = normalizePluginTableName(request.params.table)
@@ -2374,8 +2396,13 @@ export default async function pluginRoutes(fastify: FastifyInstance) {
   fastify.get('/assets/:pluginId/*', async (request: FastifyRequest<{ Querystring: AssetQuery }>, reply: FastifyReply) => {
     const params = request.params as { pluginId?: string; '*': string }
     const pluginId = params.pluginId ? normalizePluginId(params.pluginId) : null
-    const assetPath = params['*'] || ''
-    if (!pluginId || !assetPath || assetPath.startsWith('/') || assetPath.includes('..') || assetPath.includes('\\')) {
+    const rawAssetPath = params['*'] || ''
+    if (!pluginId || !rawAssetPath || rawAssetPath.startsWith('/') || rawAssetPath.includes('..') || rawAssetPath.includes('\\')) {
+      return reply.code(400).send({ error: 'Invalid plugin asset path', code: 'INVALID_PLUGIN_ASSET_PATH' })
+    }
+    // 归一化后再用于鉴权策略与文件读取，两者必须使用同一路径，避免 ./ 前缀绕过受保护页面鉴权
+    const assetPath = normalizePluginAssetPath(rawAssetPath)
+    if (!assetPath) {
       return reply.code(400).send({ error: 'Invalid plugin asset path', code: 'INVALID_PLUGIN_ASSET_PATH' })
     }
     const loaded = await loadEnabledPluginManifest(pluginId)

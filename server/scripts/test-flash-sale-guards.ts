@@ -1,8 +1,11 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { fileURLToPath } from 'node:url'
+
+const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 
 function read(path: string): string {
-  return readFileSync(resolve(new URL('../..', import.meta.url).pathname, path), 'utf8')
+  return readFileSync(resolve(repoRoot, path), 'utf8')
 }
 
 function assert(condition: unknown, message: string): void {

@@ -77,8 +77,10 @@ const localNginxSplitSmoke = readRepoFile('scripts/smoke-local-nginx-split.sh')
 const serverApp = readRepoFile('server/src/app.ts')
 const viteConfig = readRepoFile('client/vite.config.ts')
 const clientApi = readRepoFile('client/src/api/index.ts')
+const clientAdminApi = readRepoFile('client/src/api/admin.ts')
 const clientApiUrl = readRepoFile('client/src/utils/api-url.ts')
 const clientApp = readRepoFile('client/src/App.vue')
+const clientAdminApp = readRepoFile('client/src/admin/AdminApp.vue')
 const terminalCore = readRepoFile('client/src/lib/terminal-core.ts')
 const clientDistPath = resolve(repoRoot, 'client/dist')
 
@@ -102,6 +104,36 @@ function assertForwardedProxyHeaderConfig(name: string, source: string): void {
 
 function countOccurrences(source: string, pattern: string): number {
   return source.split(pattern).length - 1
+}
+
+// 每个定时/拦截层的 /auth/refresh 刷新请求都必须：走 buildApiUrl 封装、携带凭证，
+// 且用 AbortController + 15 秒超时兜底（避免 refresh 挂起时长期占用连接/悬挂 Promise）。
+function assertRefreshFetchTimeoutProtected(name: string, source: string, expectedCount: number): void {
+  assert.equal(
+    countOccurrences(source, "fetch(buildApiUrl('/auth/refresh'), {"),
+    expectedCount,
+    `${name} must contain exactly ${expectedCount} /auth/refresh fetch call(s) through buildApiUrl`
+  )
+  assert.equal(
+    countOccurrences(source, "credentials: 'include'"),
+    expectedCount,
+    `${name} each /auth/refresh fetch must include credentials so refresh cookies are sent`
+  )
+  assert.equal(
+    countOccurrences(source, 'signal: refreshController.signal'),
+    expectedCount,
+    `${name} each /auth/refresh fetch must pass an AbortController abort signal for timeout protection`
+  )
+  assert.equal(
+    countOccurrences(source, 'refreshController.abort(), 15_000'),
+    expectedCount,
+    `${name} each /auth/refresh fetch must abort after a 15s (15_000ms) timeout`
+  )
+  assert.equal(
+    countOccurrences(source, 'clearTimeout(refreshTimeoutId)'),
+    expectedCount,
+    `${name} each /auth/refresh fetch must clear its timeout after the request settles`
+  )
 }
 
 function assertBalancedNginxBraces(name: string, source: string): void {
@@ -621,16 +653,12 @@ assert.ok(
 )
 assert.ok(clientApi.includes("const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'"), 'client axios base URL must default to same-origin /api')
 assert.ok(clientApi.includes('withCredentials: true'), 'client axios must include credentials so cross-site API refresh cookies can be stored and sent')
-assert.equal(
-  clientApi.match(/fetch\(buildApiUrl\('\/auth\/refresh'\), \{[\s\S]*?credentials: 'include'/g)?.length ?? 0,
-  2,
-  'client refresh-token fetch calls in API interceptors must include credentials'
-)
-assert.ok(
-  clientApp.includes("fetch(buildApiUrl('/auth/refresh'), {") &&
-    clientApp.includes("credentials: 'include'"),
-  'client scheduled refresh-token fetch must include credentials'
-)
+// 所有 /auth/refresh 刷新入口（用户/管理端拦截层各 2 处，用户/管理端定时刷新各 1 处）
+// 必须携带凭证并具备 AbortController + 15s 超时保护。
+assertRefreshFetchTimeoutProtected('client API interceptor (api/index.ts)', clientApi, 2)
+assertRefreshFetchTimeoutProtected('client admin API interceptor (api/admin.ts)', clientAdminApi, 2)
+assertRefreshFetchTimeoutProtected('client scheduled refresh (App.vue)', clientApp, 1)
+assertRefreshFetchTimeoutProtected('client admin scheduled refresh (admin/AdminApp.vue)', clientAdminApp, 1)
 assert.ok(clientApiUrl.includes("const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'"), 'client API URL helper must default to same-origin /api')
 assert.ok(clientApiUrl.includes('export function buildApiWebSocketUrl') && clientApiUrl.includes("const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:'"), 'client WebSocket URLs must derive from API base URL and current origin')
 assert.ok(terminalCore.includes("buildApiWebSocketUrl(`/ws/instances/${instanceId}/terminal?ticket=${encodeURIComponent(ticket)}`)"), 'terminal WebSocket path must stay under /api/ws via buildApiWebSocketUrl')
@@ -759,7 +787,8 @@ const allowedClientNetworkPrimitiveLines = new Map<string, string[]>([
 ])
 
 for (const file of clientSourceFiles) {
-  const relativePath = file.path.slice(repoRoot.length + 1)
+  // 归一化为正斜杠，保证 allowlist 在 Windows（反斜杠路径）与 Linux/CI 上一致命中
+  const relativePath = file.path.slice(repoRoot.length + 1).replace(/\\/g, '/')
   for (const forbidden of forbiddenClientSourceStrings) {
     assert.ok(!file.content.includes(forbidden), `client source must not hardcode ${forbidden}: ${relativePath}`)
   }

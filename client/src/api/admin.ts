@@ -754,13 +754,22 @@ async function proactiveRefreshToken(): Promise<string | null> {
   lastRefreshAttempt = now
 
   try {
-    const refreshResponse = await fetch(buildApiUrl('/auth/refresh'), {
-      method: 'POST',
-      credentials: 'include', // 重要：发送 Cookie（包含 refreshToken）
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
+    // 刷新请求加超时兜底：/auth/refresh 挂起时避免 isRefreshing 长期为真导致全站请求排队卡死
+    const refreshController = new AbortController()
+    const refreshTimeoutId = setTimeout(() => refreshController.abort(), 15_000)
+    let refreshResponse: Response
+    try {
+      refreshResponse = await fetch(buildApiUrl('/auth/refresh'), {
+        method: 'POST',
+        credentials: 'include', // 重要：发送 Cookie（包含 refreshToken）
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        signal: refreshController.signal
+      })
+    } finally {
+      clearTimeout(refreshTimeoutId)
+    }
 
     if (!refreshResponse.ok) {
       // 如果是 401 或 400，说明 refreshToken 也失效了，需要重新登录
@@ -907,13 +916,22 @@ http.interceptors.response.use(
 
       try {
         // 尝试刷新 token（使用 fetch API，避免触发拦截器循环）
-        const refreshResponse = await fetch(buildApiUrl('/auth/refresh'), {
-          method: 'POST',
-          credentials: 'include', // 重要：发送 Cookie（包含 refreshToken）
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        })
+        // 刷新请求加超时兜底：避免 /auth/refresh 挂起时后续请求全部排队卡死
+        const refreshController = new AbortController()
+        const refreshTimeoutId = setTimeout(() => refreshController.abort(), 15_000)
+        let refreshResponse: Response
+        try {
+          refreshResponse = await fetch(buildApiUrl('/auth/refresh'), {
+            method: 'POST',
+            credentials: 'include', // 重要：发送 Cookie（包含 refreshToken）
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            signal: refreshController.signal
+          })
+        } finally {
+          clearTimeout(refreshTimeoutId)
+        }
 
         if (!refreshResponse.ok) {
           // 如果是 401 或 400，说明 refreshToken 也失效了，需要重新登录

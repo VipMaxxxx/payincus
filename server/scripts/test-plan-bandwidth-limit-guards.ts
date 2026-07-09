@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { fileURLToPath } from 'url'
 import assert from 'node:assert/strict'
 import { normalizePlanTrafficLimitSpeed } from '../src/services/traffic-bandwidth.js'
 
@@ -11,7 +12,7 @@ function excludes(source: string, pattern: string, label: string): void {
   assert.ok(!source.includes(pattern), `Unexpected ${label}: ${pattern}`)
 }
 
-const repoRoot = resolve(new URL('../..', import.meta.url).pathname)
+const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const instancesSource = readFileSync(resolve(repoRoot, 'server/src/routes/instances.ts'), 'utf8')
 const adminBillingSource = readFileSync(resolve(repoRoot, 'server/src/routes/admin-billing.ts'), 'utf8')
 const hostsSource = readFileSync(resolve(repoRoot, 'server/src/routes/hosts.ts'), 'utf8')

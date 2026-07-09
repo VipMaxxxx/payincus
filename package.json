@@ -1,6 +1,6 @@
 {
   "name": "payincus",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "description": "PayIncus commercial Incus platform",
   "type": "module",
   "private": true,
@@ -43,6 +43,7 @@
     "test:public-api-sdk-guards": "pnpm --filter server test:public-api-sdk-guards",
     "test:extension-platform": "pnpm --filter server test:extension-platform-guards",
     "test:agent": "cd agent && go test ./...",
+    "test:installer": "bash scripts/test-install-panel-guards.sh",
     "test:demo-account-safety-guards": "pnpm --filter server test:demo-account-safety-guards",
     "test:demo-notification-redaction-guards": "pnpm --filter server test:demo-notification-redaction-guards",
     "test:demo-readonly-redaction-guards": "pnpm --filter server test:demo-readonly-redaction-guards"

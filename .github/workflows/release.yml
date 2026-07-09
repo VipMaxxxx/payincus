@@ -48,6 +48,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
+      - name: 校验一键安装脚本
+        run: bash scripts/test-install-panel-guards.sh
+
       # ===== 安装依赖 =====
       - name: 安装全部依赖
         run: pnpm install --frozen-lockfile --ignore-scripts

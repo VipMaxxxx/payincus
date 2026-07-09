@@ -146,6 +146,8 @@ export default async function systemUpdateRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: TaskParams }>('/tasks/:id/logs', {
     onRequest: [fastify.authenticateAdmin]
   }, async (request: FastifyRequest<{ Params: TaskParams }>, reply: FastifyReply) => {
+    // 更新日志含命令输出/路径，仅限可管理更新的超级管理员读取（与 /start、/rollback 一致）
+    if (!(await requireUpdateManager(request, reply))) return
     const id = parsePositiveId(request.params.id)
     if (!id) return reply.code(400).send({ error: 'Invalid task id', code: 'INVALID_TASK_ID' })
     const task = await getSystemUpdateTask(id)

@@ -480,7 +480,7 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
         <p>{{ t('admin.oauth.step2') }}</p>
         <p>{{ t('admin.oauth.step3') }}</p>
         <p>{{ t('admin.oauth.step4') }}</p>
-        <p class="text-yellow-500">⚠️ {{ t('admin.oauth.warning') }}</p>
+        <p class="text-yellow-500">{{ t('admin.oauth.warning') }}</p>
       </div>
     </div>
 

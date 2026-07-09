@@ -213,8 +213,10 @@ export async function generateGiftCardFromBalance(input: {
         const balanceAfter = toMoney(updatedUser.balance)
         const balanceLog = await tx.balanceLog.create({
           data: {
+            // 礼品卡是保值凭证（可转赠/他账兑换），发行扣款不是真实服务消费，
+            // 必须用独立类型，避免被 getUsersTotalConsumeMap 计入可兑换积分的消费额而被刷分。
             userId: input.userId,
-            type: 'consume',
+            type: 'gift_card_issue',
             amount: toDecimal(-amount),
             balanceBefore: toDecimal(balanceBefore),
             balanceAfter: toDecimal(balanceAfter),

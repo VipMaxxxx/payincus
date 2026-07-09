@@ -9,6 +9,7 @@ import { fetchPluginMarketIndex } from '../lib/plugin-market.js'
 import { fetchThemeMarketIndex } from '../lib/theme-market.js'
 import { checkForUpdates } from '../lib/system-version.js'
 import { StorageFactory } from '../storage/factory.js'
+import { assertSafeHttpUrl, safeOutboundDispatcher } from '../lib/outbound-security.js'
 
 type IntegrationHealthStatus = 'ok' | 'warning' | 'error' | 'skipped'
 
@@ -257,15 +258,18 @@ async function checkLsky() {
 
   const apiBase = lskyApiBase(config.baseUrl, config.apiVersion)
   const endpoint = config.apiVersion === 'v2' ? `${apiBase}/group` : `${apiBase}/profile`
+  // 管理员配置的 baseUrl 可能指向内网，探测前做 SSRF 校验，并用连接期再校验的 dispatcher 防 DNS rebinding
+  await assertSafeHttpUrl(endpoint, 'Lsky endpoint')
   const response = await fetch(endpoint, {
     method: 'GET',
     redirect: 'manual',
+    dispatcher: safeOutboundDispatcher,
     signal: AbortSignal.timeout(15_000),
     headers: {
       Accept: 'application/json',
       Authorization: `Bearer ${config.token}`
     }
-  })
+  } as RequestInit)
 
   if (!response.ok) {
     return {

@@ -1,8 +1,8 @@
 # Manual Install
 
-Manual deployment is for environments that already manage PostgreSQL, Nginx, systemd, TLS certificates and release operations. Production should still use two public frontend domains and a backend that listens only on localhost or an internal address.
+Manual deployment is intended for environments that already manage PostgreSQL, Nginx, systemd, TLS, and release operations. This procedure uses a SHA256-verified GitHub Release artifact and creates the same atomic layout used by admin OTA.
 
-This guide assumes:
+Example environment:
 
 ```text
 Install directory: /opt/incudal
@@ -13,7 +13,7 @@ Backend: 127.0.0.1:3001
 
 ## Runtime Dependencies
 
-The server needs Node.js 20+, pnpm, PostgreSQL, Nginx and systemd. Incus hosts and Agents can run on the same machine or separate machines.
+The server needs Node.js 22, pnpm 9.14.2, PostgreSQL 16, Redis, Nginx, and systemd. Redis 7 is recommended; use the production readiness checks as the authoritative minimum.
 
 ```bash
 corepack enable
@@ -22,19 +22,60 @@ node -v
 pnpm -v
 ```
 
-## Directories and User
+## Create Directories and User
 
 ```bash
 sudo useradd --system --home /opt/incudal --shell /usr/sbin/nologin incudal 2>/dev/null || true
-sudo mkdir -p /opt/incudal/current /opt/incudal/releases /opt/incudal/update-logs
-sudo chown -R incudal:incudal /opt/incudal
+sudo install -d -o incudal -g incudal /opt/incudal /opt/incudal/releases /opt/incudal/update-logs
+sudo install -d -o incudal -g incudal /opt/incudal/plugins /opt/incudal/plugin-data /opt/incudal/plugin-logs /opt/incudal/plugin-staging
+sudo install -d -o incudal -g incudal /opt/incudal/themes /opt/incudal/theme-data /opt/incudal/theme-staging
 ```
 
-In the atomic OTA layout, `/opt/incudal/current` points to the active release. Manual deployments should use the same shape so the admin OTA workflow can be enabled later.
+Do not create `/opt/incudal/current` as a regular directory. It must be a symlink to the active release.
+
+## Download and Verify a Release
+
+Confirm the version and server architecture on [GitHub Releases](https://github.com/VipMaxxxx/payincus/releases). The version below is an example; replace it with the production tag you intend to deploy.
+
+```bash
+export VERSION=v1.3.4
+export ARCH=amd64
+export PACKAGE="incudal-${VERSION}-linux-${ARCH}.tar.gz"
+export RELEASE_DIR="/opt/incudal/releases/${VERSION}"
+
+curl -fLO "https://github.com/VipMaxxxx/payincus/releases/download/${VERSION}/${PACKAGE}"
+curl -fLO "https://github.com/VipMaxxxx/payincus/releases/download/${VERSION}/${PACKAGE}.sha256"
+sha256sum -c "${PACKAGE}.sha256"
+```
+
+Stop immediately if verification fails. Do not extract or start the service.
+
+## Install the Release and Switch `current`
+
+```bash
+sudo install -d -o incudal -g incudal "${RELEASE_DIR}"
+sudo tar -xzf "${PACKAGE}" -C "${RELEASE_DIR}"
+sudo chown -R incudal:incudal "${RELEASE_DIR}"
+
+sudo rm -f /opt/incudal/releases/.next-current
+sudo ln -s "${RELEASE_DIR}" /opt/incudal/releases/.next-current
+sudo mv -Tf /opt/incudal/releases/.next-current /opt/incudal/current
+readlink -f /opt/incudal/current
+test -f /opt/incudal/current/server/dist/app.js
+```
+
+The release artifact already contains the built user portal, admin console, backend, and production dependencies. Do not rerun `pnpm install` or `pnpm build` on the server. Custom source builds should be produced by a separate CI pipeline with the same layout and a trusted SHA256.
 
 ## Environment
 
-Start from `.env.example` and configure production values. The minimum production set is:
+```bash
+sudo cp /opt/incudal/current/.env.example /opt/incudal/.env
+sudo chown incudal:incudal /opt/incudal/.env
+sudo chmod 600 /opt/incudal/.env
+sudo editor /opt/incudal/.env
+```
+
+Configure production values using [Environment Variables](/en/deployment/environment). The minimum set includes:
 
 ```dotenv
 NODE_ENV=production
@@ -52,69 +93,26 @@ FRONTEND_URL=https://panel.example.com
 ADMIN_FRONTEND_URL=https://admin.example.com
 SITE_URL=https://panel.example.com
 PAYMENT_CALLBACK_BASE_URL=https://panel.example.com
-
-VITE_API_BASE_URL=/api
-VITE_CUSTOMER_BASE_URL=https://panel.example.com
-VITE_ADMIN_BASE_URL=https://admin.example.com
 ```
 
-Never set `RESET_DATABASE` in production. Enable payment, SMTP, Telegram, Turnstile, Lsky, extension marketplace, theme marketplace and OTA variables only after configuring the corresponding providers.
-
-## Install Dependencies
-
-```bash
-pnpm install --frozen-lockfile
-pnpm --filter server exec prisma generate
-```
+Never set `RESET_DATABASE` in production. Enable payment, SMTP, Telegram, Turnstile, object storage, extension market, theme market, and OTA variables only after configuring their providers.
 
 ## Database Migration
 
-```bash
-pnpm --filter server exec prisma migrate deploy
-```
-
-Back up PostgreSQL before running production migrations. Do not use development reset commands on production data.
-
-## Build
+Back up PostgreSQL first, then run:
 
 ```bash
-VITE_API_BASE_URL=/api \
-VITE_CUSTOMER_BASE_URL=https://panel.example.com \
-VITE_ADMIN_BASE_URL=https://admin.example.com \
-pnpm build
+sudo -u incudal env HOME=/opt/incudal bash -lc \
+  'cd /opt/incudal/current/server && pnpm exec prisma migrate deploy'
 ```
 
-Expected outputs:
+Do not use development reset commands on production data.
 
-```text
-client/dist/user/index.html
-client/dist/admin/index.html
-server/dist/app.js
-```
+## Install systemd and Nginx
 
-`pnpm build` also runs frontend boundary guards so the user and admin bundles are not mixed.
+Install and verify the [systemd Service](/en/deployment/systemd). Its working directory must be `/opt/incudal/current`, and it must load `/opt/incudal/.env`.
 
-## Start Backend
-
-For a temporary smoke run:
-
-```bash
-NODE_ENV=production \
-HOST=127.0.0.1 \
-PORT=3001 \
-SERVE_STATIC_CLIENT=false \
-FRONTEND_URL=https://panel.example.com \
-ADMIN_FRONTEND_URL=https://admin.example.com \
-SITE_URL=https://panel.example.com \
-PAYMENT_CALLBACK_BASE_URL=https://panel.example.com \
-node server/dist/app.js
-```
-
-Production should run the backend under systemd. See [systemd Service](/en/deployment/systemd). The service working directory should point at `/opt/incudal/current` and read environment variables from `/opt/incudal/.env`.
-
-## Nginx
-
-The user portal and admin console must use separate domains and static roots:
+The user and admin frontends require separate domains and static roots:
 
 ```text
 panel.example.com -> /opt/incudal/current/client/dist/user
@@ -126,18 +124,14 @@ Proxy `/api/` and `/api/ws/` to the backend. See [Nginx Split Deployment](/en/de
 ## Verification
 
 ```bash
+systemctl is-active incudal-backend
+curl -fsS http://127.0.0.1:3001/api/health
+
+cd /opt/incudal/current
 FRONTEND_URL=https://panel.example.com \
 ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
 
-```bash
-ENV_FILE=/opt/incudal/.env \
-FRONTEND_URL=https://panel.example.com \
-ADMIN_FRONTEND_URL=https://admin.example.com \
-BACKEND_URL=http://127.0.0.1:3001 \
-pnpm verify:production
-```
-
-Final production acceptance still requires real payment, real Incus/Agent, SMTP/notification, Turnstile, backup/restore and response-header proof. See [Production Checklist](/en/deployment/production-checklist).
+Final production acceptance still requires real payment, Incus/Agent, SMTP/notifications, Turnstile, backup/restore, and response-header evidence. See the [Production Checklist](/en/deployment/production-checklist).

@@ -28,6 +28,8 @@ const enLocale = read('client/src/locales/en.ts')
 const twLocale = read('client/src/locales/zh-TW.ts')
 const serverPackage = read('server/package.json')
 const rootPackage = read('package.json')
+const giftCardIssueEnumMigration = read('server/prisma/migrations/20260709000000_add_gift_card_issue_balance_log_type/migration.sql')
+const giftCardIssueReclassifyMigration = read('server/prisma/migrations/20260709000100_reclassify_gift_card_issue_history/migration.sql')
 
 assert(
   schema.includes('model GiftCard') &&
@@ -39,6 +41,26 @@ assert(
     migration.includes('CREATE TABLE "gift_cards"') &&
     migration.includes('CREATE UNIQUE INDEX "gift_cards_code_key"'),
   'gift card schema and migration must persist code status, ownership, usage, batch, and user relations'
+)
+
+// 礼品卡发行必须使用独立的 gift_card_issue 账本类型（避免被计入可兑换消费额而被刷积分）
+assert(
+  schema.includes('gift_card_issue') &&
+    giftCardIssueEnumMigration.includes("ALTER TYPE \"BalanceLogType\" ADD VALUE IF NOT EXISTS 'gift_card_issue'"),
+  'BalanceLogType must define a dedicated gift_card_issue enum value via migration'
+)
+
+// 历史重分类迁移必须使用收紧后的结构化关联（created_by_id AND owner_id AND face_value AND 紧时间窗），
+// 避免把同期同金额的正常消费误判为“用余额生成礼品卡”，并在迁移时打印受影响行数便于核对。
+assert(
+  giftCardIssueReclassifyMigration.includes(`SET "type" = 'gift_card_issue'`) &&
+    giftCardIssueReclassifyMigration.includes(`bl."type" = 'consume'`) &&
+    giftCardIssueReclassifyMigration.includes(`gc."created_by_id" = bl."user_id"`) &&
+    giftCardIssueReclassifyMigration.includes(`gc."owner_id" = bl."user_id"`) &&
+    giftCardIssueReclassifyMigration.includes(`gc."face_value" = (-bl."amount")`) &&
+    giftCardIssueReclassifyMigration.includes(`INTERVAL '10 seconds'`) &&
+    giftCardIssueReclassifyMigration.includes('RAISE NOTICE'),
+  'gift_card_issue history reclassification must correlate on created_by_id AND owner_id AND face_value AND a tight time window, and log an affected-row count'
 )
 
 assert(
@@ -56,7 +78,7 @@ const userGenerateSection = db.slice(
 
 assert(
   userGenerateSection.includes('where: { id: input.userId, balance: { gte: amount } }') &&
-    userGenerateSection.includes("type: 'consume'") &&
+    userGenerateSection.includes("type: 'gift_card_issue'") &&
     userGenerateSection.includes('amount: toDecimal(-amount)') &&
     userGenerateSection.includes('createGiftCardInTransaction(tx') &&
     !route.includes('const result = await prisma.$transaction') &&

@@ -29,7 +29,7 @@ LimitNOFILE=65536
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/incudal /opt/incudal/current /opt/incudal/releases /opt/incudal/server/certs /opt/incudal/plugins /opt/incudal/plugin-data /opt/incudal/plugin-logs /opt/incudal/plugin-staging /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs
+ReadWritePaths=/opt/incudal /opt/incudal/current /opt/incudal/releases /opt/incudal/server/certs /opt/incudal/plugins /opt/incudal/plugin-data /opt/incudal/plugin-logs /opt/incudal/plugin-staging /opt/incudal/themes /opt/incudal/theme-data /opt/incudal/theme-staging /opt/incudal/.npm /opt/incudal/.cache /opt/incudal/.git /opt/incudal/update-logs
 PrivateTmp=true
 
 StandardOutput=journal

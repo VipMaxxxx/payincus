@@ -790,8 +790,20 @@ export default async function adminSlaAlertsRoutes(fastify: FastifyInstance) {
       if (!severity) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
       data.severity = severity
     }
-    if (request.body?.thresholdMinutes !== undefined) data.thresholdMinutes = request.body.thresholdMinutes
-    if (request.body?.thresholdCount !== undefined) data.thresholdCount = request.body.thresholdCount
+    if (request.body?.thresholdMinutes !== undefined) {
+      const value = request.body.thresholdMinutes === null ? null : Number(request.body.thresholdMinutes)
+      if (value !== null && (!Number.isSafeInteger(value) || value < 0 || value > 30 * 24 * 60)) {
+        return reply.code(400).send({ error: '阈值分钟必须是 0 到 43200 之间的整数或为空' })
+      }
+      data.thresholdMinutes = value
+    }
+    if (request.body?.thresholdCount !== undefined) {
+      const value = request.body.thresholdCount === null ? null : Number(request.body.thresholdCount)
+      if (value !== null && (!Number.isSafeInteger(value) || value < 0 || value > 1_000_000)) {
+        return reply.code(400).send({ error: '阈值次数必须是 0 到 1000000 之间的整数或为空' })
+      }
+      data.thresholdCount = value
+    }
     if (request.body?.dedupeMinutes !== undefined) {
       const dedupe = Number(request.body.dedupeMinutes)
       if (!Number.isSafeInteger(dedupe) || dedupe < 5 || dedupe > 24 * 60) {

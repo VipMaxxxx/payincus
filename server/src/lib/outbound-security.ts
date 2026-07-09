@@ -1,5 +1,7 @@
 import { lookup as dnsLookup } from 'dns/promises'
-import { isIP } from 'net'
+import { lookup as dnsLookupCb } from 'dns'
+import { isIP, type LookupFunction } from 'net'
+import { Agent } from 'undici'
 
 export class OutboundTargetValidationError extends Error {
   constructor(message: string) {
@@ -153,6 +155,40 @@ export async function assertSafeHttpUrl(url: string, label = 'URL'): Promise<URL
   await assertPublicHostname(parsed.hostname)
   return parsed
 }
+
+/**
+ * 连接期再校验的 DNS lookup：即使域名在“校验通过”与“真正发起连接”之间发生 DNS rebinding
+ * （解析到内网/保留地址），也会在建立连接时被拒绝，从而消除 assertPublicHostname 之后的 TOCTOU 窗口。
+ * 仅影响地址解析，不改变 TLS SNI（仍使用原始主机名），因此不破坏 HTTPS 证书校验。
+ */
+const revalidatingLookup: LookupFunction = (hostname, options, callback) => {
+  dnsLookupCb(hostname, { ...(options as object), all: true, verbatim: true }, (err, addresses) => {
+    const cb = callback as (err: NodeJS.ErrnoException | null, address?: string, family?: number) => void
+    if (err) {
+      cb(err)
+      return
+    }
+    const list = Array.isArray(addresses) ? addresses : []
+    if (list.length === 0) {
+      cb(new OutboundTargetValidationError('Unable to resolve hostname') as NodeJS.ErrnoException)
+      return
+    }
+    for (const record of list) {
+      if (isIpPrivateOrReserved(record.address)) {
+        cb(new OutboundTargetValidationError('Target resolved to a private or reserved IP') as NodeJS.ErrnoException)
+        return
+      }
+    }
+    const first = list[0]
+    cb(null, first.address, first.family)
+  })
+}
+
+/**
+ * 用于所有“已通过 assertSafe*Url 校验的外发请求”的 undici dispatcher。
+ * 在 fetch(..., { dispatcher: safeOutboundDispatcher }) 中传入即可获得连接期防 rebinding 保护。
+ */
+export const safeOutboundDispatcher = new Agent({ connect: { lookup: revalidatingLookup } })
 
 export async function assertSafeStorageTarget(
   type: 'WEBDAV' | 'FTP' | 'SFTP' | 'S3',

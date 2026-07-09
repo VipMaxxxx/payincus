@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { fileURLToPath } from 'url'
 import assert from 'node:assert/strict'
 
 function includes(source: string, pattern: string, label: string): void {
@@ -10,7 +11,7 @@ function excludes(source: string, pattern: string, label: string): void {
   assert.ok(!source.includes(pattern), `Unexpected ${label}: ${pattern}`)
 }
 
-const repoRoot = resolve(new URL('../..', import.meta.url).pathname)
+const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const hostsSource = readFileSync(resolve(repoRoot, 'server/src/db/hosts.ts'), 'utf8')
 const paginationSource = readFileSync(resolve(repoRoot, 'server/src/db/pagination.ts'), 'utf8')
 const billingOpsSource = readFileSync(resolve(repoRoot, 'server/src/db/billing-operations.ts'), 'utf8')

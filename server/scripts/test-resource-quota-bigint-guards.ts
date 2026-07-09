@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { fileURLToPath } from 'url'
 import assert from 'node:assert/strict'
 import {
   parseNullablePostgresBigIntInput,
@@ -15,7 +16,7 @@ function excludes(source: string, pattern: string, label: string): void {
   assert.ok(!source.includes(pattern), `Unexpected ${label}: ${pattern}`)
 }
 
-const repoRoot = resolve(new URL('../..', import.meta.url).pathname)
+const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const batchConfigSource = readFileSync(resolve(repoRoot, 'server/src/routes/batch-config.ts'), 'utf8')
 const packagesSource = readFileSync(resolve(repoRoot, 'server/src/routes/packages.ts'), 'utf8')
 const instancesSource = readFileSync(resolve(repoRoot, 'server/src/routes/instances.ts'), 'utf8')

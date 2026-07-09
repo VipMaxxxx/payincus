@@ -31,8 +31,8 @@ assert.ok(
   'Telegram webhook base URL must require HTTPS in production'
 )
 assert.ok(
-  telegramSource.includes("if (process.env.NODE_ENV === 'production')"),
-  'Telegram webhook URL builder must not derive request host fallback in production'
+  !telegramSource.includes('x-forwarded-host') && !telegramSource.includes('x-forwarded-proto'),
+  'Telegram webhook URL builder must not derive the webhook host from client-controlled forwarded headers in any environment'
 )
 assert.ok(
   telegramSource.includes("code: 'INVALID_TELEGRAM_WEBHOOK_BASE_URL'"),

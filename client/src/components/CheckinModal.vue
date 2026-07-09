@@ -529,8 +529,10 @@ const close = () => {
                     >
                       <!-- 礼盒本体 -->
                       <div v-if="lotteryPhase !== 'revealing' && lotteryPhase !== 'done'" class="relative">
-                        <div class="text-6xl sm:text-7xl transition-transform duration-300">
-                          🎁
+                        <div class="transition-transform duration-300 text-blue-600 dark:text-blue-400">
+                          <svg class="w-16 h-16 sm:w-20 sm:h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 11.25v8.25a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 1 0 9.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1 1 14.625 7.5H12m0 0V21m-8.625-9.75h18.75a.75.75 0 0 0 .75-.75V9a.75.75 0 0 0-.75-.75H3.375A.75.75 0 0 0 2.625 9v1.5c0 .414.336.75.75.75Z" />
+                          </svg>
                         </div>
                         <!-- 闪光效果 -->
                         <div v-if="lotteryPhase === 'idle'" class="absolute -top-1 -right-1">

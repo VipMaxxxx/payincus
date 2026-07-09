@@ -1,16 +1,31 @@
+---
+title: 一键安装
+description: 使用经过校验的 GitHub Release 在 Debian 或 Ubuntu 上部署 PayIncus
+---
+
 # 一键安装
 
-生产安装推荐使用 `scripts/install-panel.sh`。脚本会从 GitHub Release 下载 PayIncus 预构建包，初始化数据库和 `.env`，创建 systemd 服务，并配置用户端和管理端 Nginx 站点。
+<p class="doc-lead">使用官方安装脚本在新服务器上部署 PayIncus。脚本负责依赖、数据库、环境变量、systemd 和外部访问入口。</p>
+
+<div class="doc-meta">
+  <div><span>适用场景</span><strong>首次生产部署</strong></div>
+  <div><span>支持系统</span><strong>Debian / Ubuntu</strong></div>
+  <div><span>默认目录</span><strong>/opt/incudal</strong></div>
+</div>
+
+::: tip 完成结果
+安装完成后会得到独立的用户端、管理端和本机后端服务。Release 产物必须通过 SHA256 校验后才会解压。
+:::
 
 ## 前置要求
 
-- 一台干净的 Linux 服务器，推荐 Debian / Ubuntu。
-- root 或 sudo 权限。
-- 两个公网域名：
-  - 用户端：`panel.example.com`
-  - 管理后台：`admin.example.com`
-- 域名 A/AAAA 记录已指向服务器。
-- 服务器 80/443 端口可被公网访问。
+所有模式都需要一台干净的 Debian / Ubuntu 服务器和 root 或 sudo 权限。外部访问条件取决于安装时选择的模式：
+
+| 模式 | 域名和网络要求 |
+| --- | --- |
+| Nginx + Certbot | 准备用户端和管理后台两个域名，A/AAAA 指向服务器，并开放公网 80/443。 |
+| Cloudflare Tunnel | 两个域名由 Cloudflare 管理，准备 Tunnel 凭证；服务器不需要开放公网入站 80/443。 |
+| 仅启动服务 | 不要求脚本配置域名或 TLS；后端默认监听本机端口，由现有反向代理或内网入口接管。 |
 
 默认安装目录是 `/opt/incudal`。这是当前安装脚本、systemd、OTA 和生产 release 布局使用的真实路径。
 
@@ -32,7 +47,7 @@ sudo bash install-panel.sh
 
 - 安装 Node.js、pnpm、PostgreSQL、Redis、Nginx 和 systemd 依赖。
 - 创建数据库连接和 `/opt/incudal/.env`。
-- 下载最新 GitHub Release artifact。
+- 下载最新 GitHub Release artifact 及其 `.sha256`，校验通过后才解压。
 - 解压 PayIncus 到 `/opt/incudal`。
 - 执行 Prisma migration 和 Prisma Client 生成。
 - 创建 `incudal` 系统用户和 `incudal-backend` 服务。
@@ -47,7 +62,9 @@ sudo bash install-panel.sh --upgrade
 sudo bash install-panel.sh --uninstall
 ```
 
-升级会保留 `.env`、证书、插件、主题、运行缓存和 OTA 目录。卸载会提示确认后删除安装目录和服务。
+`--upgrade` 只用于旧版非原子目录。检测到 `/opt/incudal/current` 原子布局时，脚本会安全退出，请改用管理后台 OTA，避免覆盖 `current/releases`。
+
+旧版升级会保留 `.env`、证书、插件、主题、运行缓存和 OTA 目录。卸载会删除整个 `/opt/incudal`，包括本地插件、主题、运行资产、OTA release 和更新日志；PostgreSQL/Redis 服务及数据库不会自动删除。卸载前先完成数据库和安装目录备份。
 
 ## 安装后检查
 

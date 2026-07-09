@@ -682,7 +682,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div v-if="loadError" class="mt-6 flex items-start gap-3 rounded-2xl px-4 py-4 text-sm leading-6" :class="ui.errorBanner">
+        <div v-if="loadError" class="mt-6 flex items-start gap-3 rounded-lg px-4 py-4 text-sm leading-6" :class="ui.errorBanner">
           <svg class="mt-0.5 h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 19h14.14a2 2 0 001.73-3l-7.07-12a2 2 0 00-3.46 0L3.2 16a2 2 0 001.73 3z" />
           </svg>
@@ -694,20 +694,20 @@ onUnmounted(() => {
             <div
               v-for="index in 6"
               :key="index"
-              class="h-60 animate-pulse rounded-3xl"
+              class="h-60 animate-pulse rounded-lg"
               :class="ui.skeleton"
             ></div>
           </div>
-          <div class="h-[36rem] animate-pulse rounded-3xl" :class="ui.skeleton"></div>
+          <div class="h-[36rem] animate-pulse rounded-lg" :class="ui.skeleton"></div>
         </div>
 
-        <div v-else-if="packages.length === 0" class="mt-7 rounded-3xl border border-dashed px-6 py-16 text-center" :class="ui.emptyState">
+        <div v-else-if="packages.length === 0" class="mt-7 rounded-lg border border-dashed px-6 py-16 text-center" :class="ui.emptyState">
           {{ t('publicSite.market.noPackages') }}
         </div>
 
         <div v-else class="kawaii-market-catalog-layout mt-7 grid items-start gap-6 lg:grid-cols-[minmax(0,1.18fr)_minmax(22rem,0.82fr)]">
           <div class="min-w-0">
-            <div v-if="filteredPackages.length === 0" class="rounded-3xl border border-dashed px-6 py-16 text-center" :class="ui.emptyState">
+            <div v-if="filteredPackages.length === 0" class="rounded-lg border border-dashed px-6 py-16 text-center" :class="ui.emptyState">
               <div class="text-base font-semibold" :class="ui.emptyStateTitle">
                 {{ t('publicSite.market.noResults') }}
               </div>
@@ -725,7 +725,7 @@ onUnmounted(() => {
               <button
                 v-for="pkg in filteredPackages"
                 :key="pkg.id"
-                class="kawaii-package-card rounded-3xl p-5 text-left transition-[background-color,box-shadow,transform,border-color] duration-150"
+                class="kawaii-package-card rounded-lg p-5 text-left transition-[background-color,box-shadow,transform,border-color] duration-150"
                 :class="[
                   selectedPackage?.id === pkg.id ? 'selected' : '',
                   pkg.soldOut ? 'opacity-70' : ''
@@ -792,7 +792,7 @@ onUnmounted(() => {
           </div>
 
           <aside class="min-w-0 lg:self-start">
-            <div class="kawaii-market-detail-shell rounded-3xl border p-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto sm:p-6" :class="ui.detailCard">
+            <div class="kawaii-market-detail-shell rounded-lg border p-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto sm:p-6" :class="ui.detailCard">
               <template v-if="selectedPackage">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="rounded-lg px-2 py-0.5 text-[11px] font-semibold tracking-normal" :class="selectedPackage.sourceType === 'official' ? ui.chipOfficial : ui.chipMarket">
@@ -826,13 +826,13 @@ onUnmounted(() => {
                 </div>
 
                 <div class="mt-6 grid grid-cols-2 gap-3">
-                  <div class="kawaii-market-detail-metric rounded-2xl p-4" :class="ui.detailSummaryCard">
+                  <div class="kawaii-market-detail-metric rounded-lg p-4" :class="ui.detailSummaryCard">
                     <div class="text-xs font-semibold" :class="ui.detailSummaryLabel">
                       {{ t('publicSite.market.labels.startingPrice') }}
                     </div>
                     <div class="mt-2 text-lg font-extrabold">{{ getPackagePriceLabel(selectedPackage) }}</div>
                   </div>
-                  <div class="kawaii-market-detail-metric rounded-2xl p-4" :class="ui.detailSummaryCard">
+                  <div class="kawaii-market-detail-metric rounded-lg p-4" :class="ui.detailSummaryCard">
                     <div class="text-xs font-semibold" :class="ui.detailSummaryLabel">
                       {{ t('publicSite.market.labels.traffic') }}
                     </div>
@@ -854,7 +854,7 @@ onUnmounted(() => {
                     <button
                       v-for="plan in selectedPackage.plans"
                       :key="plan.id"
-                      class="kawaii-market-plan w-full rounded-2xl px-3 py-3 text-left transition-[background-color,border-color,transform] duration-150"
+                      class="kawaii-market-plan w-full rounded-lg px-3 py-3 text-left transition-[background-color,border-color,transform] duration-150"
                       :class="[
                         selectedPlan?.id === plan.id ? 'selected text-themed' : 'text-themed',
                         plan.isSoldOut ? 'cursor-not-allowed opacity-60 hover:bg-inherit' : ''
@@ -900,7 +900,7 @@ onUnmounted(() => {
                     </button>
                   </div>
 
-                  <div v-else class="mt-3 rounded-2xl p-4 text-sm leading-6" :class="ui.infoCard">
+                  <div v-else class="mt-3 rounded-lg p-4 text-sm leading-6" :class="ui.infoCard">
                     <div class="font-semibold" :class="ui.title">
                       {{ t('publicSite.market.customConfigTitle') }}
                     </div>
@@ -911,7 +911,7 @@ onUnmounted(() => {
                 </div>
 
                 <div v-if="selectedPlan" class="mt-5">
-                  <div class="rounded-2xl px-4 py-4" :class="ui.detailSummaryCard">
+                  <div class="rounded-lg px-4 py-4" :class="ui.detailSummaryCard">
                     <div class="flex items-start justify-between gap-4">
                       <div class="min-w-0">
                         <div class="text-xs font-semibold" :class="ui.statBlockLabel">
@@ -945,7 +945,7 @@ onUnmounted(() => {
                   </div>
                 </div>
 
-                <div v-if="selectedPackage.checkoutExtensions?.length" class="mt-5 rounded-2xl p-4 text-sm leading-6" :class="ui.infoCard">
+                <div v-if="selectedPackage.checkoutExtensions?.length" class="mt-5 rounded-lg p-4 text-sm leading-6" :class="ui.infoCard">
                   <div class="font-semibold" :class="ui.title">
                     {{ t('publicSite.market.checkoutExtensionTitle') }}
                   </div>

@@ -1,8 +1,9 @@
 import { strict as assert } from 'assert'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { fileURLToPath } from 'url'
 
-const root = resolve(new URL('../..', import.meta.url).pathname)
+const root = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const ordersRoute = readFileSync(resolve(root, 'server/src/routes/orders.ts'), 'utf8')
 const app = readFileSync(resolve(root, 'server/src/app.ts'), 'utf8')
 const userRouter = readFileSync(resolve(root, 'client/src/router/user.ts'), 'utf8')

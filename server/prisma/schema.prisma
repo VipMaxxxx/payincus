@@ -530,6 +530,7 @@ enum BalanceLogType {
   exchange_purchase // 交易所购买扣款
   exchange_refund   // 交易所退款
   exchange_transfer // 交易所余额划转到账户余额
+  gift_card_issue   // 用余额生成礼品卡扣款（保值转移，不计入可兑积分的消费额）
 }
 
 enum BalanceAdjustmentRequestType {

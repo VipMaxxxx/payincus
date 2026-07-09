@@ -464,12 +464,18 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     })
     return {
       channels: channels.map(c => {
-        const config = typeof c.config === 'string' ? JSON.parse(c.config) : c.config as Record<string, unknown>
+        // 不向普通用户暴露 chatId 等渠道配置明细，仅返回是否已配置，绑定套餐用名称/类型即可区分。
+        let config: Record<string, unknown> | null = null
+        try {
+          config = (typeof c.config === 'string' ? JSON.parse(c.config) : c.config) as Record<string, unknown> | null
+        } catch {
+          config = null
+        }
         return {
           id: c.id,
           name: c.name,
           type: c.type,
-          configPreview: `Chat ID: ${config.chatId || 'N/A'}`
+          configPreview: config && config.chatId ? '已配置' : '未配置'
         }
       })
     }

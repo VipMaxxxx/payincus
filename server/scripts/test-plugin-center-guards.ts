@@ -177,7 +177,8 @@ assert.ok(
     enLocale.includes("plugins: 'Extension Center'") &&
     enLocale.includes('Set the endpoint and key in Extension Center first') &&
     adminRouter.includes("title: '扩展设置'") &&
-    pluginSettingsView.includes('← 返回扩展中心') &&
+    pluginSettingsView.includes("router.push('/admin/plugins')") &&
+    pluginSettingsView.includes('返回扩展中心') &&
     pluginSettingsView.includes("if (!value) return '扩展设置'") &&
     pluginSettingsView.includes('加载扩展设置失败') &&
     pluginSettingsView.includes('独立扩展设置页') &&
@@ -192,10 +193,10 @@ assert.ok(
     readme.includes('高风险 capability 审核') &&
 	    docsIndex.includes('title: PayIncus') &&
 	    docsIndex.includes('扩展市场、主题系统和后台 OTA') &&
-	    docsIndex.includes('[扩展开发](/plugins/overview)：扩展中心') &&
+	    docsIndex.includes('href="/plugins/overview">扩展中心</a>') &&
 	    enDocsIndex.includes('title: PayIncus') &&
 	    enDocsIndex.includes('extension marketplace, themes, and admin OTA updates') &&
-	    enDocsIndex.includes('[Extension Development](/en/plugins/overview): Extension Center') &&
+	    enDocsIndex.includes('href="/en/plugins/overview">Extension Center</a>') &&
     adminOverviewDocs.includes('| 扩展中心 | `/admin/plugins` | 已安装扩展、扩展市场') &&
     adminOverviewDocs.includes('能力审核') &&
     adminOverviewDocs.includes('审核高风险 capability') &&

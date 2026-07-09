@@ -22,18 +22,18 @@ export default {
           900: '#171717',
           950: '#0a0a0a'
         },
-        // 樱花粉 - 主强调色
+        // 主强调色 - 克制蓝（原樱花粉已收敛为专业蓝，保留 sakura 名以兼容既有 class）
         sakura: {
-          50: '#fff0f6',
-          100: '#ffdcea',
-          200: '#ffb8d5',
-          300: '#ff8fbd',
-          400: '#ff6ba8',
-          500: '#ff4f9c',
-          600: '#f13c8c',
-          700: '#d42a76',
-          800: '#a91f5e',
-          900: '#7e1747'
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a'
         },
         // 天空蓝 - 次强调色
         sky2: {
@@ -48,18 +48,18 @@ export default {
           800: '#125a86',
           900: '#134a6c'
         },
-        // 薰衣草紫 - 点缀色
+        // 点缀色 - 已收敛为中性 slate（去掉紫色装饰感）
         lavender: {
-          50: '#f6f0ff',
-          100: '#ece0ff',
-          200: '#dac2ff',
-          300: '#c29dff',
-          400: '#a875fb',
-          500: '#9052f0',
-          600: '#7a39d6',
-          700: '#632eae',
-          800: '#4f278a',
-          900: '#3f2170'
+          50: '#f8fafc',
+          100: '#f1f5f9',
+          200: '#e2e8f0',
+          300: '#cbd5e1',
+          400: '#94a3b8',
+          500: '#64748b',
+          600: '#475569',
+          700: '#334155',
+          800: '#1e293b',
+          900: '#0f172a'
         },
         // 暖阳金 - 点缀/VIP色
         sunny: {
@@ -87,33 +87,34 @@ export default {
           800: '#0c6448',
           900: '#0d523c'
         },
-        // 强调色别名 - 指向樱花粉主色
+        // 强调色别名 - 克制蓝主色
         accent: {
-          DEFAULT: '#ff4f9c',
-          hover: '#f13c8c',
-          light: '#ff8fbd'
+          DEFAULT: '#2563eb',
+          hover: '#1d4ed8',
+          light: '#60a5fa'
         },
-        // 状态色
-        success: '#12c584',
-        warning: '#f79f05',
-        error: '#ff5470'
+        // 状态色（语义色，克制去饱和）
+        success: '#16a34a',
+        warning: '#d97706',
+        error: '#dc2626'
       },
       fontFamily: {
-        // 圆润可爱的无衬线字体，中英文皆有圆角笔画特征
+        // 专业中性无衬线字体栈（英文 Inter，中文 Noto Sans SC / 系统字体）
         sans: [
-          '"Baloo 2"',
-          '"ZCOOL KuaiLe"',
-          '"Rounded Mplus 1c"',
+          'Inter',
           '-apple-system',
           'BlinkMacSystemFont',
-          'Segoe UI',
+          '"Segoe UI"',
           '"Noto Sans SC"',
+          '"PingFang SC"',
+          '"Microsoft YaHei"',
           'sans-serif'
         ],
         display: [
-          '"Baloo 2"',
-          '"ZCOOL KuaiLe"',
+          'Inter',
           '-apple-system',
+          '"Segoe UI"',
+          '"Noto Sans SC"',
           'sans-serif'
         ],
         mono: [
@@ -128,38 +129,38 @@ export default {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },
       borderRadius: {
-        DEFAULT: '10px',
-        'lg': '16px',
-        'xl': '20px',
-        '2xl': '28px',
-        '3xl': '36px'
+        DEFAULT: '6px',
+        'lg': '8px',
+        'xl': '10px',
+        '2xl': '12px',
+        '3xl': '16px'
       },
       boxShadow: {
-        'sm': '0 2px 8px 0 rgb(255 79 156 / 0.06)',
-        'DEFAULT': '0 4px 16px 0 rgb(255 79 156 / 0.10)',
-        'border': '0 0 0 1px rgb(255 255 255 / 0.1)',
-        // 二次元发光阴影系列
-        'glow-sakura': '0 0 0 1px rgb(255 79 156 / 0.25), 0 4px 20px -2px rgb(255 79 156 / 0.35)',
-        'glow-sky': '0 0 0 1px rgb(42 176 245 / 0.25), 0 4px 20px -2px rgb(42 176 245 / 0.35)',
-        'glow-lavender': '0 0 0 1px rgb(144 82 240 / 0.25), 0 4px 20px -2px rgb(144 82 240 / 0.35)',
-        'glow-sunny': '0 0 0 1px rgb(247 159 5 / 0.3), 0 4px 20px -2px rgb(247 159 5 / 0.4)',
-        'glow-mint': '0 0 0 1px rgb(18 197 132 / 0.25), 0 4px 20px -2px rgb(18 197 132 / 0.35)',
-        'pop': '0 8px 24px -4px rgb(255 79 156 / 0.25), 0 2px 8px -2px rgb(0 0 0 / 0.08)'
+        'sm': '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        'DEFAULT': '0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10)',
+        'border': '0 0 0 1px rgb(0 0 0 / 0.06)',
+        // 发光阴影已统一收敛为细微中性阴影（保留别名以兼容既有 class）
+        'glow-sakura': '0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10)',
+        'glow-sky': '0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10)',
+        'glow-lavender': '0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10)',
+        'glow-sunny': '0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10)',
+        'glow-mint': '0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10)',
+        'pop': '0 4px 12px -2px rgb(0 0 0 / 0.12), 0 2px 6px -2px rgb(0 0 0 / 0.08)'
       },
       animation: {
         'fade-in': 'fadeIn 0.15s ease-out',
         'slide-up': 'slideUp 0.2s ease-out',
-        // 二次元动效系列
-        'pop-in': 'popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
-        'bounce-in': 'bounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
-        'wiggle': 'wiggle 0.5s ease-in-out',
-        'float': 'float 3.5s ease-in-out infinite',
-        'float-delay': 'float 3.5s ease-in-out 1.2s infinite',
-        'sparkle': 'sparkle 1.8s ease-in-out infinite',
-        'heart-beat': 'heartBeat 1.2s ease-in-out infinite',
-        'glow-pulse': 'glowPulse 2.4s ease-in-out infinite',
-        'shimmer': 'shimmer 2.5s linear infinite',
-        'petal-fall': 'petalFall 6s linear infinite'
+        // 装饰性动效已收敛：pop-in/bounce-in 退化为普通淡入，其余花哨动效禁用
+        'pop-in': 'fadeIn 0.2s ease-out',
+        'bounce-in': 'fadeIn 0.2s ease-out',
+        'wiggle': 'none',
+        'float': 'none',
+        'float-delay': 'none',
+        'sparkle': 'none',
+        'heart-beat': 'none',
+        'glow-pulse': 'none',
+        'shimmer': 'none',
+        'petal-fall': 'none'
       },
       keyframes: {
         fadeIn: {

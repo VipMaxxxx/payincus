@@ -26,7 +26,7 @@ User=incudal
 Group=incudal
 WorkingDirectory=/opt/incudal/current
 EnvironmentFile=/opt/incudal/.env
-ExecStartPre=cd /opt/incudal/current/server && pnpm exec prisma migrate deploy
+ExecStartPre=/usr/bin/bash -lc 'cd /opt/incudal/current/server && pnpm exec prisma migrate deploy'
 ExecStart=/usr/bin/node /opt/incudal/current/server/dist/app.js
 ```
 
@@ -45,6 +45,9 @@ The backend template uses `ProtectSystem=strict` and `ProtectHome=true`, with wr
 /opt/incudal/plugin-data
 /opt/incudal/plugin-logs
 /opt/incudal/plugin-staging
+/opt/incudal/themes
+/opt/incudal/theme-data
+/opt/incudal/theme-staging
 ```
 
 Do not add `/`, `/etc` or database directories to `ReadWritePaths`. Payment secrets, database URLs, OAuth secrets, SMTP passwords and install tokens should live only in `/opt/incudal/.env` or encrypted admin configuration.

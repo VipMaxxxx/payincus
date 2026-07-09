@@ -12,6 +12,7 @@ import {
   getCurrentVersionMetadata,
   getOtaReleaseInfo,
   getReleaseToken,
+  isTrustedReleaseHost,
   isValidReleaseTag,
   type OtaArtifactInfo
 } from '../lib/system-version.js'
@@ -414,7 +415,8 @@ async function downloadArtifact(artifact: OtaArtifactInfo): Promise<string> {
     'user-agent': 'payincus-online-update'
   }
   const token = getReleaseToken()
-  if (token) headers.authorization = `Bearer ${token}`
+  // 仅对可信 GitHub 主机附带 release token，避免被构造的 artifact.url 把凭证泄露到攻击者主机
+  if (token && isTrustedReleaseHost(artifact.url)) headers.authorization = `Bearer ${token}`
 
   const response = await fetch(artifact.url, { headers })
   if (!response.ok || !response.body) {

@@ -95,7 +95,6 @@ const callbackHandler = routeSectionBetween(
 )
 const completedCallbackCheckIndex = callbackHandler.indexOf("record.status === 'completed'")
 const paidAmountValidationIndex = callbackHandler.indexOf('const shouldValidatePaidAmount')
-const expiredCallbackCheckIndex = callbackHandler.indexOf('订单已过期，拒绝处理回调')
 assert.ok(
   completedCallbackCheckIndex !== -1,
   'payment callback handler must explicitly handle already-completed orders'
@@ -104,14 +103,11 @@ assert.ok(
   completedCallbackCheckIndex < paidAmountValidationIndex,
   'payment callback handler must idempotently accept completed orders before validating callback amount'
 )
+// 迟到但已验签验额的回调不再因本地过期被静默丢弃，而是继续走幂等入账（completeRecharge 只对 pending/paid 入账一次）。
 assert.ok(
-  completedCallbackCheckIndex < expiredCallbackCheckIndex,
-  'payment callback handler must idempotently accept completed orders before rejecting expired orders'
-)
-const expiredCallbackSection = callbackHandler.slice(expiredCallbackCheckIndex, callbackHandler.indexOf('// 10. 检查订单状态', expiredCallbackCheckIndex))
-assert.ok(
-  expiredCallbackSection.includes('await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)'),
-  'expired but signed payment callbacks must be recorded before returning success to prevent retry loops'
+  callbackHandler.includes('按真实到账继续入账') &&
+    !callbackHandler.includes('订单已过期，拒绝处理回调'),
+  'expired but signature/amount-verified callbacks must not be silently dropped; they must fall through to idempotent crediting'
 )
 
 console.log('recharge state transition tests passed')

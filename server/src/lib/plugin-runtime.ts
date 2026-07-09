@@ -2,7 +2,7 @@ import { createHmac, randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
 import { createPluginEvent } from '../db/plugins.js'
 import { prisma } from '../db/prisma.js'
-import { assertSafeWebhookUrl } from './outbound-security.js'
+import { assertSafeWebhookUrl, safeOutboundDispatcher } from './outbound-security.js'
 import { PLUGIN_EVENT_NAMES, type PayIncusPluginManifest, type PluginActionManifest } from './plugin-manifest.js'
 
 const PLUGIN_ACTION_PAYLOAD_MAX_BYTES = 64 * 1024
@@ -275,8 +275,10 @@ export async function executePluginAction(input: PluginActionExecutionInput): Pr
     },
     body: action.method === 'GET' ? undefined : serializedBody,
     redirect: 'manual',
+    // 连接期再校验，消除 assertSafeWebhookUrl 之后的 DNS rebinding 窗口
+    dispatcher: safeOutboundDispatcher,
     signal: AbortSignal.timeout(getPluginWebhookTimeoutMs(action))
-  })
+  } as RequestInit)
 
   const result = await readBoundedResponse(response)
   if (!response.ok) {

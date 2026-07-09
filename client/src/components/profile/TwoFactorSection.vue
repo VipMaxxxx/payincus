@@ -210,7 +210,7 @@ onMounted(loadStatus)
           </span>
         </div>
         <p v-if="recoveryCodesStatus.remaining <= 2" class="text-xs text-red-400 mt-2">
-          ⚠️ {{ $t('profile.twoFactorAuth.lowCodesWarning') }}
+          {{ $t('profile.twoFactorAuth.lowCodesWarning') }}
         </p>
       </div>
     </div>
@@ -230,7 +230,7 @@ onMounted(loadStatus)
       </div>
 
       <div v-if="recoveryCodes.length" class="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded">
-        <p class="text-xs text-yellow-400 mb-2">⚠️ {{ $t('profile.twoFactorAuth.saveRecoveryCodes') }}：</p>
+        <p class="text-xs text-yellow-400 mb-2">{{ $t('profile.twoFactorAuth.saveRecoveryCodes') }}：</p>
         <div class="grid grid-cols-2 gap-1">
           <code v-for="code in recoveryCodes" :key="code" class="text-xs text-themed-primary bg-themed-tertiary px-2 py-1 rounded">
             {{ code }}

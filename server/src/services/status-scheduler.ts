@@ -82,6 +82,29 @@ async function withTimeout<T>(
 // ==================== 核心同步逻辑 ====================
 
 /**
+ * 是否存在进行中的实例操作（创建/重建/迁移/恢复/备份上传等）。
+ * 这些操作期间 Incus 侧会短暂删除并重建实例，incusId 可能暂时查不到，
+ * 状态同步必须避免据此把实例误判为已删除，或误报意外停机。
+ */
+async function hasActiveInstanceOperation(instanceId: number): Promise<boolean> {
+    const [instanceTask, restoreTask, uploadTask] = await Promise.all([
+        prisma.instanceTask.findFirst({
+            where: { instanceId, status: { in: ['PENDING', 'PROCESSING'] } },
+            select: { id: true }
+        }),
+        prisma.restoreTask.findFirst({
+            where: { instanceId, status: { in: ['PENDING', 'PROCESSING'] } },
+            select: { id: true }
+        }),
+        prisma.backupUploadTask.findFirst({
+            where: { instanceId, status: { in: ['PENDING', 'PROCESSING'] } },
+            select: { id: true }
+        })
+    ])
+    return Boolean(instanceTask || restoreTask || uploadTask)
+}
+
+/**
  * 获取需要同步的实例（优化版：增量 + 优先级）
  */
 async function getInstancesToSync(batchSize: number) {
@@ -212,14 +235,19 @@ async function syncInstanceStatus(
             })
 
             // 如果是从 running 变为 stopped，发送意外停机通知
+            // 但重建/迁移/恢复/备份上传等操作会主动停机，属正常过程，不应误报
             if (instance.status === 'running' && incusStatus === 'stopped') {
-                try {
-                    await sendNotification(instance.user.id, 'instance_unexpected_stop', {
-                        instanceName: instance.name,
-                        hostName: instance.host.name
-                    })
-                } catch (notifyError) {
-                    console.error(`[StatusSync] Failed to send notification:`, notifyError)
+                if (await hasActiveInstanceOperation(instance.id)) {
+                    console.log(`[StatusSync] Instance ${instance.id} stopped during an active operation, skip unexpected-stop notification`)
+                } else {
+                    try {
+                        await sendNotification(instance.user.id, 'instance_unexpected_stop', {
+                            instanceName: instance.name,
+                            hostName: instance.host.name
+                        })
+                    } catch (notifyError) {
+                        console.error(`[StatusSync] Failed to send notification:`, notifyError)
+                    }
                 }
             }
 
@@ -247,6 +275,12 @@ async function syncInstanceStatus(
 
         // 如果实例不存在于 Incus，标记为已删除
         if (errorMessage.includes('not found') || errorMessage.includes('Instance not found')) {
+            // 重建/迁移/恢复等操作过程中，Incus 会短暂删除并重建实例，此时 incusId 查不到属正常，
+            // 不能据此误判为已删除，否则会导致 restore 终写被 status:'deleted' 拦截、实例记账错乱。
+            if (await hasActiveInstanceOperation(instance.id)) {
+                console.log(`[StatusSync] Instance ${instance.id} not found in Incus but has an active operation, skip deleted downgrade`)
+                return { changed: false, error: 'Active operation in progress, delete downgrade skipped' }
+            }
             console.log(`[StatusSync] Instance ${instance.id} not found in Incus, marking as deleted`)
             await db.updateInstanceStatus(instance.id, 'deleted')
             return {

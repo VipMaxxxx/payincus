@@ -1,6 +1,23 @@
+---
+title: 后台 OTA
+description: 使用 GitHub Release、安全校验和原子目录切换更新 PayIncus
+---
+
 # 后台 OTA
 
-管理后台提供“版本更新”页面，用于查看当前版本、Git tag、commit、构建时间、部署时间、更新内容、最新版本、可更新版本、任务日志和回滚入口。
+<p class="doc-lead">在管理后台查看版本、校验 Release、执行原子切换并保留受控回滚入口。每次更新都有任务日志和明确状态。</p>
+
+<div class="doc-meta">
+  <div><span>默认模式</span><strong>auto</strong></div>
+  <div><span>权限</span><strong>超级管理员</strong></div>
+  <div><span>健康检查</span><strong>/api/health</strong></div>
+</div>
+
+::: warning 更新前
+先确认数据库备份、可用磁盘空间和回滚 release。生产环境优先使用经过 SHA256 校验的 artifact，避免服务器临时构建。
+:::
+
+管理后台“版本更新”页面展示当前版本、Git tag、commit、构建时间、部署时间、更新内容、可更新版本、任务日志和回滚入口。
 
 后台页面：
 

@@ -82,7 +82,7 @@ LimitNOFILE=65536
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
+ReadWritePaths=${INSTALL_DIR} ${INSTALL_DIR}/current ${INSTALL_DIR}/releases ${INSTALL_DIR}/server/certs ${INSTALL_DIR}/plugins ${INSTALL_DIR}/plugin-data ${INSTALL_DIR}/plugin-logs ${INSTALL_DIR}/plugin-staging ${INSTALL_DIR}/themes ${INSTALL_DIR}/theme-data ${INSTALL_DIR}/theme-staging ${INSTALL_DIR}/.npm ${INSTALL_DIR}/.cache ${INSTALL_DIR}/.git ${INSTALL_DIR}/update-logs
 PrivateTmp=true
 
 StandardOutput=journal
@@ -179,6 +179,8 @@ main() {
   fi
 
   mkdir -p "$INSTALL_DIR/update-logs" "$INSTALL_DIR/.npm" "$INSTALL_DIR/.cache"
+  mkdir -p "$INSTALL_DIR/plugins" "$INSTALL_DIR/plugin-data" "$INSTALL_DIR/plugin-logs" "$INSTALL_DIR/plugin-staging"
+  mkdir -p "$INSTALL_DIR/themes" "$INSTALL_DIR/theme-data" "$INSTALL_DIR/theme-staging"
   if id "$RUN_USER" >/dev/null 2>&1; then
     chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
   fi

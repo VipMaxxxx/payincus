@@ -723,10 +723,13 @@ async function cleanExpiredRechargeOrders(): Promise<void> {
   const startTime = Date.now()
 
   try {
+    // 过期后再保留一段宽限期才取消，避免把“网关侧已付款、但回调迟到”的订单提前取消导致无法入账。
+    // 回调侧已不再因本地过期而丢弃，只要订单仍处于可入账状态，迟到的有效回调即可完成入账。
+    const CANCEL_GRACE_MS = 6 * 60 * 60 * 1000 // 6 小时
     const result = await prisma.rechargeRecord.updateMany({
       where: {
         status: 'pending',
-        expiredAt: { lt: new Date() }
+        expiredAt: { lt: new Date(Date.now() - CANCEL_GRACE_MS) }
       },
       data: {
         status: 'cancelled'

@@ -3,7 +3,16 @@
  * 提升二次加载速度，支持离线访问静态资源
  */
 
-const CACHE_NAME = 'incudal-cache-v1.3.4'
+// 从 SW 注册 URL 的 ?v= 版本参数推导缓存名（前端以 /sw.js?v=<version> 注册），
+// 发版时缓存名自动随版本变化，无需再手动 bump；缺参数时回退到内置字面量。
+const SW_VERSION = (() => {
+  try {
+    return new URL(self.location.href).searchParams.get('v') || '1.3.5'
+  } catch {
+    return '1.3.5'
+  }
+})()
+const CACHE_NAME = `incudal-cache-v${SW_VERSION}`
 
 // 需要缓存的静态资源类型
 const CACHEABLE_EXTENSIONS = ['.js', '.css', '.woff', '.woff2', '.ttf', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico']

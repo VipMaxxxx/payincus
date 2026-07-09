@@ -158,7 +158,7 @@ function close(): void {
         <div class="p-5 space-y-4">
           <!-- Warning -->
           <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-            <p class="text-sm text-red-500 font-medium mb-1">⚠️ {{ t('recreateModal.dangerWarning') }}</p>
+            <p class="text-sm text-red-500 font-medium mb-1">{{ t('recreateModal.dangerWarning') }}</p>
             <ul class="text-xs text-red-400 space-y-1">
               <li>{{ t('recreateModal.warningList.dataLoss') }}</li>
               <li>{{ t('recreateModal.warningList.snapshotLoss') }}</li>

@@ -1306,12 +1306,30 @@ export async function generateOAuthState(
     return `${payload}.${signature}`
 }
 
-// 已使用的 nonce 集合（防止重放攻击）
-const usedNonces = new Set<string>()
+/**
+ * 常量时间比较两个字符串，避免通过响应时间侧信道逐字节恢复 HMAC 签名。
+ */
+function timingSafeStringEqual(a: string, b: string): boolean {
+    const bufA = Buffer.from(a)
+    const bufB = Buffer.from(b)
+    if (bufA.length !== bufB.length) {
+        return false
+    }
+    return crypto.timingSafeEqual(bufA, bufB)
+}
 
-// 定期清理过期 nonce（每10分钟）
+// 已使用的 nonce（防止重放攻击）：记录每个 nonce 的过期时间，按条目逐个过期，
+// 避免整体 clear() 在 token TTL 内清空集合而重新打开重放窗口。
+const usedNonces = new Map<string, number>()
+
+// 定期清理已过期 nonce（每10分钟仅删除到期条目）
 setInterval(() => {
-    usedNonces.clear()
+    const now = Date.now()
+    for (const [nonce, expiresAt] of usedNonces) {
+        if (expiresAt <= now) {
+            usedNonces.delete(nonce)
+        }
+    }
 }, 10 * 60 * 1000)
 
 /**
@@ -1333,7 +1351,7 @@ export async function verifyAndConsumeOAuthState(stateToken: string): Promise<OA
             .update(payload)
             .digest('base64url')
 
-        if (signature !== expectedSignature) {
+        if (!timingSafeStringEqual(signature, expectedSignature)) {
             return null
         }
 
@@ -1350,8 +1368,8 @@ export async function verifyAndConsumeOAuthState(stateToken: string): Promise<OA
             return null
         }
 
-        // 标记 nonce 已使用
-        usedNonces.add(data.nonce)
+        // 标记 nonce 已使用（记住到该 state 自然过期为止）
+        usedNonces.set(data.nonce, data.timestamp + OAUTH_STATE_TTL_MS)
 
         return data
     } catch {
@@ -1550,12 +1568,17 @@ export interface OAuthLoginCodeData {
 // OAuth 登录码有效期（60秒）
 const OAUTH_LOGIN_CODE_TTL_MS = 60 * 1000
 
-// 已使用的登录码 nonce 集合（防止重放攻击）
-const usedLoginCodeNonces = new Set<string>()
+// 已使用的登录码 nonce（防止重放攻击）：按条目过期，避免整体 clear() 打开重放窗口
+const usedLoginCodeNonces = new Map<string, number>()
 
-// 定期清理过期 nonce（每2分钟）
+// 定期清理已过期 nonce（每2分钟仅删除到期条目）
 setInterval(() => {
-    usedLoginCodeNonces.clear()
+    const now = Date.now()
+    for (const [nonce, expiresAt] of usedLoginCodeNonces) {
+        if (expiresAt <= now) {
+            usedLoginCodeNonces.delete(nonce)
+        }
+    }
 }, 2 * 60 * 1000)
 
 /**
@@ -1604,7 +1627,7 @@ export function verifyAndConsumeOAuthLoginCode(code: string): OAuthLoginCodeData
             .update(payload)
             .digest('base64url')
 
-        if (signature !== expectedSignature) {
+        if (!timingSafeStringEqual(signature, expectedSignature)) {
             return null
         }
 
@@ -1621,8 +1644,8 @@ export function verifyAndConsumeOAuthLoginCode(code: string): OAuthLoginCodeData
             return null
         }
 
-        // 标记 nonce 已使用
-        usedLoginCodeNonces.add(data.nonce)
+        // 标记 nonce 已使用（记住到该登录码自然过期为止）
+        usedLoginCodeNonces.set(data.nonce, data.timestamp + OAUTH_LOGIN_CODE_TTL_MS)
 
         return data
     } catch {

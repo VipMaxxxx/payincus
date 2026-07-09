@@ -2527,7 +2527,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
         <div class="flex items-center gap-3 sm:gap-4 min-w-0">
           <RouterLink
             :to="getReturnPath()"
-            class="flex h-11 w-11 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-2xl border transition-all duration-200"
+            class="flex h-11 w-11 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-lg border transition-all duration-200"
             :class="themeStore.isDark
               ? 'border-gray-800 bg-gray-950 text-gray-500 hover:border-gray-700 hover:bg-gray-900 hover:text-gray-200'
               : 'border-gray-200 bg-white text-gray-400 shadow-sm hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700'"
@@ -2547,8 +2547,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
               type="button"
               class="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[1.4rem] border shadow-sm transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
               :class="themeStore.isDark
-                ? 'border-gray-800 bg-gradient-to-br from-gray-900 via-gray-950 to-black hover:border-gray-700 hover:shadow-[0_0_0_1px_rgba(59,130,246,0.2)]'
-                : 'border-gray-200 bg-gradient-to-br from-white via-gray-50 to-slate-100 hover:border-gray-300 hover:shadow-md'"
+                ? 'border-gray-800 bg-gray-900 hover:border-gray-700'
+                : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'"
               :aria-label="$t('instance.badgeModal.open')"
               :title="$t('instance.badgeModal.open')"
               @click="showInstanceBadgeModal = true"
@@ -2564,8 +2564,8 @@ function formatShortDate(dateStr: string | null | undefined): string {
               v-else
               class="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[1.4rem] border shadow-sm"
               :class="themeStore.isDark
-                ? 'border-gray-800 bg-gradient-to-br from-gray-900 via-gray-950 to-black'
-                : 'border-gray-200 bg-gradient-to-br from-white via-gray-50 to-slate-100'"
+                ? 'border-gray-800 bg-gray-900'
+                : 'border-gray-200 bg-white'"
             >
               <InstanceDisplayIcon
                 :badge-id="instance.iconBadgeId"
@@ -2943,30 +2943,19 @@ function formatShortDate(dateStr: string | null | undefined): string {
             <!-- Host Announcement Banner -->
             <div
               v-if="(instance as any).hostAnnouncement"
-              class="relative overflow-hidden rounded-[1.4rem] border px-4 py-3.5 sm:px-5 sm:py-4"
+              class="relative overflow-hidden rounded-lg border px-4 py-3.5 sm:px-5 sm:py-4"
               :class="themeStore.isDark
-                ? 'border-slate-700/80 bg-gradient-to-br from-slate-900 via-[#0f141b] to-[#0a0a0a]'
-                : 'border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100 shadow-sm'"
+                ? 'border-slate-700/80 bg-gray-900'
+                : 'border-slate-200 bg-white shadow-sm'"
             >
-              <div class="pointer-events-none absolute inset-0 overflow-hidden">
-                <div
-                  class="absolute right-0 top-0 h-20 w-20 rounded-full blur-3xl"
-                  :class="themeStore.isDark ? 'bg-sky-500/10' : 'bg-sky-100/70'"
-                />
-                <div
-                  class="absolute left-8 bottom-0 h-16 w-16 rounded-full blur-3xl"
-                  :class="themeStore.isDark ? 'bg-slate-400/8' : 'bg-slate-200/80'"
-                />
-              </div>
-
               <div class="relative flex flex-col gap-3">
                 <div class="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
                   <div class="flex items-start gap-3 min-w-0">
                     <div
-                      class="flex h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 items-center justify-center rounded-xl border shadow-sm"
+                      class="flex h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 items-center justify-center rounded-lg border shadow-sm"
                       :class="themeStore.isDark
-                        ? 'border-slate-700 bg-gradient-to-br from-slate-800 via-slate-900 to-[#101722] text-sky-300'
-                        : 'border-slate-200 bg-gradient-to-br from-white via-slate-50 to-slate-100 text-sky-600'"
+                        ? 'border-slate-700 bg-gray-800 text-sky-300'
+                        : 'border-slate-200 bg-white text-sky-600'"
                     >
                       <AnnouncementIcon class="h-7 w-7 sm:h-[30px] sm:w-[30px]" />
                     </div>

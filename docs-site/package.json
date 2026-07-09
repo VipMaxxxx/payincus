@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "changelog": "node scripts/generate-changelog.mjs",
+    "check:deployment": "node scripts/check-deployment-docs.mjs",
     "dev": "pnpm changelog && vitepress dev docs --host 127.0.0.1",
     "build": "pnpm changelog && vitepress build docs",
     "preview": "vitepress preview docs --host 127.0.0.1"

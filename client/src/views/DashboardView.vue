@@ -417,7 +417,7 @@ function getInstanceRowClass(): string {
 <template>
   <div class="kawaii-page kawaii-dashboard-page space-y-6 animate-fade-in">
     <!-- 欢迎区域 -->
-    <div class="kawaii-dashboard-hero kawaii-dashboard-command-center rounded-2xl p-5 page-header flex-col gap-4 sm:flex-row sm:gap-0">
+    <div class="kawaii-dashboard-hero kawaii-dashboard-command-center rounded-lg p-5 page-header flex-col gap-4 sm:flex-row sm:gap-0">
       <div class="kawaii-dashboard-hero-main flex w-full items-start justify-between gap-3 sm:w-auto sm:items-center sm:justify-start">
         <div class="min-w-0 flex-1 sm:flex-none">
           <h1 class="page-title text-lg sm:text-xl">{{ greetingText }}</h1>
@@ -483,7 +483,7 @@ function getInstanceRowClass(): string {
 
     <!-- 总览面板 -->
     <div class="grid gap-4">
-      <section class="kawaii-card dashboard-overview-card kawaii-dashboard-orbit-card relative overflow-hidden rounded-2xl border p-5 shadow-sm sm:p-6" :class="overviewShellClass">
+      <section class="kawaii-card dashboard-overview-card kawaii-dashboard-orbit-card relative overflow-hidden rounded-lg border p-5 shadow-sm sm:p-6" :class="overviewShellClass">
         <div class="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-br from-sky-500/12 via-emerald-400/8 to-transparent"></div>
         <div class="relative flex flex-col gap-4">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -541,7 +541,7 @@ function getInstanceRowClass(): string {
         </div>
       </section>
 
-      <section class="kawaii-card dashboard-overview-card kawaii-dashboard-orbit-card relative overflow-hidden rounded-2xl border p-5 shadow-sm sm:p-6" :class="overviewShellClass">
+      <section class="kawaii-card dashboard-overview-card kawaii-dashboard-orbit-card relative overflow-hidden rounded-lg border p-5 shadow-sm sm:p-6" :class="overviewShellClass">
         <div class="relative flex h-full flex-col gap-5">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -587,7 +587,7 @@ function getInstanceRowClass(): string {
             </div>
 
             <div class="mt-4 h-2.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
-              <div class="h-full rounded-full bg-gradient-to-r from-blue-500 via-cyan-500 to-emerald-500 transition-all duration-500" :style="vipProgressStyle"></div>
+              <div class="h-full rounded-full bg-blue-600 transition-all duration-500" :style="vipProgressStyle"></div>
             </div>
             <div class="mt-2 text-xs text-themed-muted">{{ vipProgressHint }}</div>
 
@@ -670,7 +670,7 @@ function getInstanceRowClass(): string {
     <PluginFrameSlot slot-name="user.dashboard.cards" surface="user" frame-class="min-h-[220px]" />
 
     <!-- 实例列表 -->
-    <div class="kawaii-card kawaii-dashboard-instance-panel card overflow-hidden rounded-2xl">
+    <div class="kawaii-card kawaii-dashboard-instance-panel card overflow-hidden rounded-lg">
       <div 
         class="px-4 py-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
         :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"

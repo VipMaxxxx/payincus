@@ -2164,7 +2164,7 @@ function copyToClipboard(text: string) {
       </div>
 
       <div v-else class="card p-10 text-center">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+        <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
           <BillingOverviewIcon name="server" class="h-7 w-7" />
         </div>
         <div class="mt-4 text-base font-medium text-themed">{{ $t('admin.billing.noInstances') }}</div>
@@ -2283,7 +2283,7 @@ function copyToClipboard(text: string) {
       </div>
 
       <div v-else class="card p-10 text-center">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-sky-500/10 text-sky-600 dark:text-sky-300">
+        <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-300">
           <BillingOverviewIcon name="chart" class="h-7 w-7" />
         </div>
         <div class="mt-4 text-base font-medium text-themed">{{ $t('admin.billing.noRecords') }}</div>
@@ -2501,7 +2501,7 @@ function copyToClipboard(text: string) {
       </div>
 
       <div v-else class="card p-10 text-center">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-300">
+        <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-300">
           <BillingOverviewIcon name="wallet" class="h-7 w-7" />
         </div>
         <div class="mt-4 text-base font-medium text-themed">{{ $t('admin.billing.noRechargeRecords') }}</div>
@@ -2699,7 +2699,7 @@ function copyToClipboard(text: string) {
       </div>
 
       <div v-else class="card p-10 text-center">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-rose-500/10 text-rose-600 dark:text-rose-300">
+        <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-300">
           <BillingOverviewIcon name="ban" class="h-7 w-7" />
         </div>
         <div class="mt-4 text-base font-medium text-themed">{{ $t('admin.billing.noRefundRequests') }}</div>
@@ -3339,7 +3339,7 @@ function copyToClipboard(text: string) {
             <!-- 优惠码提示 -->
             <div v-if="priceTarget?.hasAffBinding && priceTarget?.affDiscountRate > 0" class="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
               <p class="text-sm text-green-700 dark:text-green-300">
-                🎁 {{ $t('admin.billing.affAppliedHint', { discount: (priceTarget.affDiscountRate * 100).toFixed(0) }) }}
+                {{ $t('admin.billing.affAppliedHint', { discount: (priceTarget.affDiscountRate * 100).toFixed(0) }) }}
               </p>
             </div>
             
@@ -3392,7 +3392,7 @@ function copyToClipboard(text: string) {
                 </span>
               </div>
               <p v-if="priceDiff > 0 && priceDiff > (pricePreview?.userBalance || priceTarget?.user?.balance || 0)" class="text-xs text-red-600 dark:text-red-400 mt-2 font-medium">
-                ⚠️ {{ $t('admin.billing.insufficientBalance') }}
+                {{ $t('admin.billing.insufficientBalance') }}
               </p>
               <p v-else class="text-xs mt-1" :class="priceDiff > 0 && priceDiff > (pricePreview?.userBalance || priceTarget?.user?.balance || 0) ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'">
                 {{ $t('admin.billing.priceDiffHint', { days: Math.ceil(pricePreview?.remainingDays || 0) }) }}
@@ -3402,7 +3402,7 @@ function copyToClipboard(text: string) {
             <!-- 不结算差价提示 -->
             <div v-if="!priceForm.settleBalance" class="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
               <p class="text-sm text-yellow-700 dark:text-yellow-300">
-                ⚠️ {{ $t('admin.billing.noSettleHint') }}
+                {{ $t('admin.billing.noSettleHint') }}
               </p>
             </div>
           </div>
@@ -3508,10 +3508,10 @@ function copyToClipboard(text: string) {
                   <span class="font-medium" :class="upgradePriceDiff > upgradeData.userBalance ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'">¥{{ upgradeData.userBalance.toFixed(2) }}</span>
                 </div>
                 <p v-if="upgradePriceDiff > upgradeData.userBalance" class="text-xs text-red-600 dark:text-red-400 mt-2 font-medium">
-                  ⚠️ {{ $t('admin.billing.insufficientBalance') }}
+                  {{ $t('admin.billing.insufficientBalance') }}
                 </p>
                 <p v-else-if="selectedUpgradePlanBlocked" class="text-xs text-red-600 dark:text-red-400 mt-2 font-medium">
-                  ⚠️ {{ selectedUpgradePlan?.resourceWarnings?.[0] || '实例所在节点资源不足，无法升级方案' }}
+                  {{ selectedUpgradePlan?.resourceWarnings?.[0] || '实例所在节点资源不足，无法升级方案' }}
                 </p>
                 <p v-else class="text-xs mt-1" :class="upgradePriceDiff > upgradeData.userBalance ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'">
                   {{ $t('admin.billing.priceDifferenceHint') }}

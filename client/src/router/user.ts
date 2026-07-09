@@ -392,8 +392,10 @@ router.beforeEach(async (to: RouteLocationNormalized, _from: RouteLocationNormal
   }
 
   // Pages requiring user (non-admin) permission
+  // 管理员误入用户端：只清本标签页内存态并跳转，不调用后端登出/不清共享 token，
+  // 否则会通过 storage 事件把管理端的合法会话一起登出（跨端 ping-pong）。
   if ((to.meta.requiresAuth || to.meta.requiresUser) && authStore.isAdmin) {
-    await authStore.logout()
+    authStore.clearInMemoryAuth()
     next({ name: 'login', query: { adminOnly: '1' } })
     return
   }
@@ -413,7 +415,8 @@ router.beforeEach(async (to: RouteLocationNormalized, _from: RouteLocationNormal
   // Authenticated users accessing login/register pages
   if (to.meta.guest && authStore.isAuthenticated) {
     if (authStore.isAdmin) {
-      await authStore.logout()
+      // 同上：不清共享 token，避免把管理端会话一起登出
+      authStore.clearInMemoryAuth()
       next({ name: 'login', query: { adminOnly: '1' } })
       return
     }

@@ -870,19 +870,17 @@ async function openLeaderboardModal() {
   }
 }
 
-// 获取榜单排名样式
+// 获取榜单排名样式（收敛为纯色状态底，去掉渐变奖牌观感）
 function getRankStyle(rank: number): string {
-  if (rank === 1) return 'bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-900'
-  if (rank === 2) return 'bg-gradient-to-r from-gray-300 to-gray-200 text-gray-700'
-  if (rank === 3) return 'bg-gradient-to-r from-amber-600 to-amber-500 text-amber-100'
+  if (rank === 1) return 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300'
+  if (rank === 2) return 'bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-300'
+  if (rank === 3) return 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300'
   return 'bg-themed-secondary text-themed'
 }
 
-// 获取榜单排名 emoji
+// 获取榜单排名标记（去掉奖牌 emoji，用纯数字名次）
 function getRankEmoji(rank: number): string {
-  if (rank === 1) return '🥇'
-  if (rank === 2) return '🥈'
-  if (rank === 3) return '🥉'
+  if (rank <= 3) return String(rank)
   return ''
 }
 
@@ -1016,7 +1014,7 @@ function formatAmount() {
           <div class="h-3 w-24 rounded bg-themed-secondary"></div>
           <div class="h-16 w-64 rounded bg-themed-secondary"></div>
           <div class="grid gap-3 sm:grid-cols-3">
-            <div v-for="i in 3" :key="i" class="h-32 rounded-3xl bg-themed-secondary"></div>
+            <div v-for="i in 3" :key="i" class="h-32 rounded-lg bg-themed-secondary"></div>
           </div>
         </div>
         <div v-else>
@@ -1038,7 +1036,7 @@ function formatAmount() {
             <div
               v-for="metric in balanceMetrics"
               :key="metric.label"
-              class="rounded-3xl border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+              class="rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
             >
               <div class="flex items-center gap-2">
                 <span class="h-2 w-2 rounded-full" :class="getMetricDotClass(metric.tone)"></span>
@@ -1090,7 +1088,7 @@ function formatAmount() {
             <div
               v-for="metric in logMetrics"
               :key="metric.label"
-              class="rounded-3xl border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+              class="rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
             >
               <div class="flex items-center gap-2">
                 <span class="h-2 w-2 rounded-full" :class="getMetricDotClass(metric.tone)"></span>
@@ -1259,7 +1257,7 @@ function formatAmount() {
             <div
               v-for="metric in recordMetrics"
               :key="metric.label"
-              class="rounded-3xl border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+              class="rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
             >
               <div class="flex items-center gap-2">
                 <span class="h-2 w-2 rounded-full" :class="getMetricDotClass(metric.tone)"></span>
@@ -1497,7 +1495,7 @@ function formatAmount() {
               <div
                 v-for="metric in affMetrics"
                 :key="metric.label"
-                class="rounded-3xl border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+                class="rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
               >
                 <div class="flex items-center gap-2">
                   <span class="h-2 w-2 rounded-full" :class="getMetricDotClass(metric.tone)"></span>
@@ -2303,7 +2301,6 @@ function formatAmount() {
         <div class="modal-content max-w-md">
           <div class="modal-header">
             <div class="flex items-center gap-2">
-              <span class="text-xl">🏆</span>
               <h3 class="modal-title">{{ $t('aff.leaderboard.title') }}</h3>
             </div>
             <button class="btn btn-ghost btn-sm rounded-full" @click="showLeaderboardModal = false">

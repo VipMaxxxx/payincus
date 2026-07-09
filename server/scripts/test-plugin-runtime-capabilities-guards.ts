@@ -292,7 +292,8 @@ assert.ok(
 )
 
 assert.ok(
-  runtime.includes("import { assertSafeWebhookUrl } from './outbound-security.js'") &&
+  runtime.includes("import { assertSafeWebhookUrl, safeOutboundDispatcher } from './outbound-security.js'") &&
+    runtime.includes('dispatcher: safeOutboundDispatcher') &&
     runtime.includes('PLUGIN_ACTION_PAYLOAD_MAX_BYTES') &&
     runtime.includes('PLUGIN_ACTION_RESPONSE_MAX_BYTES') &&
     runtime.includes('PLUGIN_WEBHOOK_SIGNING_SECRET') &&

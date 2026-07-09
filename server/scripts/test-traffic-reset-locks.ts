@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { fileURLToPath } from 'url'
 
 function assert(condition: unknown, message: string): void {
   if (!condition) {
@@ -19,7 +20,7 @@ function section(source: string, startPattern: string, endPattern: string): stri
   return source.slice(start, start + end)
 }
 
-const repoRoot = resolve(new URL('../..', import.meta.url).pathname)
+const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const trafficDbSource = readFileSync(resolve(repoRoot, 'server/src/db/traffic.ts'), 'utf8')
 const trafficRoutesSource = readFileSync(resolve(repoRoot, 'server/src/routes/traffic.ts'), 'utf8')
 const collectorSource = readFileSync(resolve(repoRoot, 'server/src/services/instance-traffic-collector.ts'), 'utf8')
