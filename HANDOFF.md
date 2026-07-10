@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-07-10 05:02 CST
+Last updated: 2026-07-10 14:50 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -9,14 +9,41 @@ This file is a handoff note for a new Codex conversation. Do not include server 
 Give the next Codex session this file first. The active working directory is:
 
 ```text
-/Users/max/.codex/worktrees/payincus-release-v133
+C:\Users\Administrator\Desktop\payinces
 ```
 
-Production is currently on `v1.3.5`. This release contains the audited security, payment, OTA, task-scheduler, authentication, UI, installer, and documentation fixes completed after `v1.3.4`.
+Production is currently on `v1.3.6`. This release contains the audited UI refinement and the new, disabled-by-default Antom Hosted Checkout integration completed after `v1.3.5`.
 
-The Service Worker now derives its cache name from the registered client version, the documentation site has a task-oriented responsive layout, and the production artifact includes the v1.3.5 security and accounting fixes.
+The Service Worker derives its cache name from the registered client version. Antom code and its database enum are deployed, but no Antom provider record exists in production; keep it disabled until merchant credentials and a sandbox payment have been verified.
 
-The release commit/tag and OTA evidence below are production proof for `v1.3.5`. Local `.codex-run/` screenshots and logs are local-only evidence and are not tracked release content.
+The release commit/tag and OTA evidence below are production proof for `v1.3.6`. Local UI audit screenshots and tool metadata are local-only evidence and are not tracked release content.
+
+### Current v1.3.6 Production / OTA Status
+
+- `v1.3.6` release commit/tag: `1f4008cc2122` (`Release v1.3.6 Antom payments and UI refinement`).
+- GitHub Actions:
+  - CI run `29074506885` -> success.
+  - Build & Release run `29074506868` -> success.
+  - Docs Pages run `29074506955` -> success.
+- GitHub Release `v1.3.6` contains amd64/arm64 tarballs, both SHA256 files, versioned and generic OTA manifests, plugin assets, and `plugin-market-index.json`.
+- OTA manifest proof: version/tag `v1.3.6`, gitCommit `1f4008cc2122`, buildTime `2026-07-10T06:44:50.539Z`, amd64 sha256 `c50587890a57d297395514d6eafe4edece769b41d092c784c7b668766a905c36`, arm64 sha256 `aaadf8fc242bedd05d2947fa1d42a3828a7fcfe8c435d308b3a83aeb45aee91c`.
+- Final OTA task `#145`: `v1.3.5 -> v1.3.6`, status `success`, log `/opt/incudal/update-logs/system-update-145.log`, backup `/opt/incudal/releases/v1.3.5-20260709205805`.
+  - Ran with the standing owner directive `RUN_DB_CHECKS=0`.
+  - Artifact SHA256, dependency install, Prisma migration `20260710000000_add_antom_payment_provider_type`, atomic switch, backend health, split-host assets/API/WebSocket, Agent manifest, static production readiness, and log/header secret scan passed.
+  - Log contains `System update completed successfully` at `2026-07-10T06:49:30.530Z`.
+- Current production state:
+  - `/opt/incudal/current -> /opt/incudal/releases/v1.3.6-20260710064758`
+  - `version.json`: v1.3.6, commit `1f4008cc2122`, buildTime `2026-07-10T06:44:03.885Z`, deployedAt `2026-07-10T06:48:25.648Z`.
+  - `incudal-backend` is enabled and active.
+  - local, public user, and public admin `/api/health` returned HTTP 200; user/admin `/healthz` returned HTTP 200.
+  - Chinese/English docs version logs return HTTP 200 and contain v1.3.6.
+  - The live user bundle registers `/sw.js?v=1.3.6`; the Service Worker derives `incudal-cache-v1.3.6` from that URL.
+- Sanitized production configuration audit:
+  - all five secret-type system settings remain configured; registration, invitation, tickets, SMTP, Turnstile, hosting features, plugin market, and theme market settings retained their pre-update values.
+  - one plugin is installed and enabled; zero themes are installed; one notification channel is enabled; no OAuth providers are configured.
+  - Antom has zero provider records and zero active providers. Create and enable one only after merchant credentials and a sandbox payment are verified; original-route Antom refunds remain a manual process.
+  - the existing Epay provider remains active. Database/payment readiness checks remain skipped by standing owner directive.
+- Standing owner directive from 2026-07-10 remains active: all future PayIncus OTA runs should use `RUN_DB_CHECKS=0`; do not ask again for the DB/payment readiness waiver. Continue running artifact, migration, static config, split-host, Agent, service health, and log/header checks.
 
 ### Current v1.3.5 Production / OTA Status
 

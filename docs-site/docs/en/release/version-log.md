@@ -8,16 +8,89 @@ This page is generated from Git tags and commits to show system version history.
 
 ## Latest Release State / 最新发布状态
 
-- Latest Release Commit / 最新发布提交: `bd0a36c69`
-- Commit date / 提交日期: 2026-07-09
-- Commit subject / 提交说明: Release v1.3.4 reload loop guard
-- Latest tag / 最新 tag: `v1.3.4`
+- Latest Release Commit / 最新发布提交: `1f4008cc2`
+- Commit date / 提交日期: 2026-07-10
+- Commit subject / 提交说明: Release v1.3.6 Antom payments and UI refinement
+- Latest tag / 最新 tag: `v1.3.6`
 
 ## Unreleased Changes / 未发布变更
 
 - This tag points to the same commit as the adjacent tag, so there are no additional Git commits.
 
 ## Historical Versions / 历史版本
+
+## v1.3.6
+
+- Release commit / 发布提交: `1f4008cc2`
+- Commit date / 提交日期: 2026-07-10
+- Commit subject / 提交说明: Release v1.3.6 Antom payments and UI refinement
+
+
+### 界面体验
+
+- 统一用户端与管理端的页面密度、导航、表单、列表、空状态和响应式布局，减少模板化装饰，提升长时间操作时的可读性。
+- 重构首页、市场、登录、用户仪表盘及管理端核心页面的视觉层级，并补齐桌面端与 390px 移动端适配。
+- 使用语义状态色区分成功、处理中、警告与失败状态，避免中性色主题削弱业务反馈。
+- 引入轻量滚动揭示动效，并遵循系统的减少动态效果设置；空状态图标统一使用 Lucide 图标。
+
+### Antom 支付
+
+- 新增 Antom Checkout Payment 托管收银台支付方式，支持支付会话创建、结果查询、异步通知与幂等入账。
+- 管理端支付方式页面新增 Antom 配置表单、字段说明、密钥脱敏和生产就绪检查。
+- Antom 回调继续复用现有订单金额校验、状态流转和重复通知保护；新增 Prisma 枚举迁移与定向 guard。
+- Antom 默认保持未配置和停用状态，正式启用前仍需完成商户凭证配置及沙箱实付验证；原路退款暂按人工流程处理。
+
+### 文档与验证
+
+- 补充中英文 Antom 配置、回调和上线前核对说明。
+- 前后端 TypeScript 类型检查、前端国际化检查、Prisma 校验、183 项测试命令、用户端与管理端生产构建、文档构建全部通过。
+- 首页、市场、登录、用户仪表盘、支付方式管理及 Antom 表单已完成桌面端和移动端实屏验收。
+
+## v1.3.5
+
+- Release commit / 发布提交: `7f6f6b8c1`
+- Commit date / 提交日期: 2026-07-09
+- Commit subject / 提交说明: Release v1.3.5 security hardening and UI refresh
+
+
+### 安全与稳定性
+
+- 修复重建、迁移和恢复期间 Incus 实例短暂不可见时被状态调度器误标为删除的问题，并避免操作期间误发意外停机通知。
+- 修复插件受保护资源可通过 `./` 路径归一化差异绕过鉴权的问题；鉴权策略与文件读取现在使用同一规范路径。
+- 强化主题资源响应的 CSP 与 sandbox，降低可执行 SVG/HTML 资源造成存储型 XSS 的风险。
+- OAuth state 与登录码改用常量时间签名比较，并按各自有效期逐条清理防重放 nonce。
+- 插件 webhook 和集成健康探测增加连接期 DNS 复核，阻断 DNS rebinding 与内网 SSRF。
+- OTA manifest 和 artifact 仅向可信 GitHub 主机附带 Release Token；回滚拒绝删除包含原子备份的安装目录。
+- Restore 与 Backup Upload Worker 只清理确实超时的 PROCESSING 任务，避免多节点部署误杀其他节点任务。
+- Telegram webhook URL 不再从客户端可控的转发头推导；普通用户不再看到通知渠道 Chat ID 预览。
+
+### 账务与支付
+
+- 用余额生成礼品卡改用独立 `gift_card_issue` 余额日志类型，不再计入可兑换积分的真实消费额。
+- 新增历史日志重分类迁移，使用礼品卡关联、金额与事务时间窗口识别历史发行扣款。
+- 已验签且金额一致的迟到支付回调不再因本地过期时间被静默丢弃，继续进入幂等入账；待支付订单增加六小时取消宽限期。
+- SLA 阈值参数增加安全整数和范围校验，非法输入返回 400 而不是 Prisma 500。
+
+### 会话与前端可靠性
+
+- 用户端和管理端 Token 刷新增加 15 秒超时，刷新端点挂起时不再长期阻塞请求队列。
+- 管理端 `/auth/me` 瞬时失败不再触发管理员整段登出。
+- 用户端与管理端跨域误入时只清当前标签页内存状态，保留另一端合法共享会话。
+- Service Worker 缓存名从注册 URL 的版本参数生成，后续发版无需重复手工维护缓存字面量。
+
+### 界面与文档
+
+- 用户端与管理端视觉调整为更克制、清晰的产品界面，统一页面密度、表单、导航、卡片和响应式细节。
+- 文档站改为任务导向的信息架构，统一浅色/暗色主题、侧栏、正文、代码块、表格和风险提示，并完成中英文移动端适配。
+- 修复一键升级的原子布局识别和版本输出，安装包增加 SHA256 与归档路径校验。
+- 重写中英文手工部署与 systemd 指南，补齐 GitHub Pages sitemap、robots、canonical 和多语言 alternate。
+
+### 验证
+
+- 前后端 TypeScript 类型检查。
+- 安全、支付、插件、主题、OTA、通知、Telegram、SLA 和状态调度定向 guard。
+- 全量 `pnpm build`、`pnpm test`、文档构建和部署文档 guard。
+- 文档站 70 个路由的桌面与 390px 移动端宽度、标题和链接检查。
 
 ## v1.3.4
 
