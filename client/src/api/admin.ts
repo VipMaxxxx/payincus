@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { buildApiUrl } from '@/utils/api-url'
-import type { LoginRequest, LoginResponse, UpdateUserResponse, GenerateInviteRequest, InviteListResponse, User, BadgeCatalogItem, BadgeSeriesItem, UserQuota, UpdateUserRequest, Instance, InstanceWithDetails, InstanceStats, CreateInstanceRequest, CreateInstanceResponse, UpdateInstanceRequest, ChangeHostOptionsResponse, PortMapping, CreatePortMappingRequest, IpAddress, Ipv6Subnet, HostAgentStatusResponse, HostAgentInstallCommandResponse, HostAgentUpgradeRequestResponse, Snapshot, Backup, CreateSnapshotRequest, CreateBackupRequest, SnapshotPolicy, BackupPolicy, UpdateSnapshotPolicyRequest, UpdateBackupPolicyRequest, Host, HostWithDetails, AvailableHost, CreateHostRequest, UpdateHostRequest, Package, CreatePackageRequest, UpdatePackageRequest, SshKey, CreateSshKeyRequest, NotificationChannel, CreateNotificationChannelRequest, UpdateNotificationChannelRequest, OAuthConfig, UserOAuthBinding, UpdateOAuthConfigRequest, OAuthClientApp, AdminOAuthAuthorization, UpsertOAuthClientAppRequest, HelpArticle, CreateHelpArticleRequest, UpdateHelpArticleRequest, HostImagePolicy, SystemImage, CreateSystemImageRequest, UpdateSystemImageRequest, Log, PaginatedResponse, Ticket, TicketMessage, TicketStatus, TicketObjectLink, TicketObjectLinkType, TicketSupportContext, TicketInternalNote, CreateTicketRequest, PaginatedTickets, PaginatedTicketMessages, TerminalSavedCommand, CreateTerminalSavedCommandRequest, UpdateTerminalSavedCommandRequest, TelegramBindingStatus, TelegramBindTokenResponse, TelegramAdminBindingsResponse, TelegramWebhookDeleteResponse, TelegramWebhookInfoResponse, TelegramWebhookSetupResponse, VersionMetadata, SystemUpdateCheckResult, SystemUpdateTask, PublicApiScopeMetadata, ExchangeDispute, ExchangeListing, ExchangeOrder, ExchangeWallet, ExchangeWithdrawal, SlaAlertEvent, SlaAlertListResponse, SlaAlertOverview, SlaAlertRule, SlaAlertScanResponse, SlaAlertSeverity, CreateGiftCardBatchRequest, CreateGiftCardRequest, GiftCardListResponse, GiftCardRecord, GiftCardStats } from '@/types/api.js'
+import type { LoginRequest, LoginResponse, UpdateUserResponse, GenerateInviteRequest, InviteListResponse, User, BadgeCatalogItem, BadgeSeriesItem, UserQuota, UpdateUserRequest, Instance, InstanceWithDetails, InstanceStats, CreateInstanceRequest, CreateInstanceResponse, UpdateInstanceRequest, ChangeHostOptionsResponse, PortMapping, CreatePortMappingRequest, IpAddress, Ipv6Subnet, HostAgentStatusResponse, HostAgentInstallCommandResponse, HostAgentUpgradeRequestResponse, Snapshot, Backup, CreateSnapshotRequest, CreateBackupRequest, SnapshotPolicy, BackupPolicy, UpdateSnapshotPolicyRequest, UpdateBackupPolicyRequest, Host, HostWithDetails, AvailableHost, CreateHostRequest, UpdateHostRequest, Package, CreatePackageRequest, UpdatePackageRequest, SshKey, CreateSshKeyRequest, NotificationChannel, CreateNotificationChannelRequest, UpdateNotificationChannelRequest, OAuthConfig, UserOAuthBinding, UpdateOAuthConfigRequest, OAuthClientApp, AdminOAuthAuthorization, UpsertOAuthClientAppRequest, HelpArticle, CreateHelpArticleRequest, UpdateHelpArticleRequest, HostImagePolicy, SystemImage, CreateSystemImageRequest, UpdateSystemImageRequest, Log, PaginatedResponse, Ticket, TicketMessage, TicketStatus, TicketObjectLink, TicketObjectLinkType, TicketSupportContext, TicketInternalNote, CreateTicketRequest, PaginatedTickets, PaginatedTicketMessages, TerminalSavedCommand, CreateTerminalSavedCommandRequest, UpdateTerminalSavedCommandRequest, TelegramBindingStatus, TelegramBindTokenResponse, TelegramAdminBindingsResponse, TelegramWebhookDeleteResponse, TelegramWebhookInfoResponse, TelegramWebhookSetupResponse, VersionMetadata, SystemUpdateCheckResult, SystemUpdateTask, PublicApiScopeMetadata, CreateGiftCardBatchRequest, CreateGiftCardRequest, GiftCardListResponse, GiftCardRecord, GiftCardStats } from '@/types/api.js'
 
 export type VipRuleType = 'user' | 'hosting'
 export type VipConditionMode = 'any' | 'all'
@@ -77,6 +77,34 @@ export interface FinancialReconciliationRun {
   createdAt: string | null
   updatedAt: string | null
   items: FinancialReconciliationItem[]
+}
+
+export type RechargeRefundStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+
+export interface RechargeRefundRequest {
+  id: number
+  rechargeRecordId: number
+  orderNo: string
+  userId: number
+  user: { id: number; username: string } | null
+  providerId: number
+  provider: { id: number; name: string; type: string } | null
+  requestedBy: { id: number; username: string } | null
+  processedBy: { id: number; username: string } | null
+  amount: number
+  status: RechargeRefundStatus
+  reason: string
+  idempotencyKey: string
+  providerRequestId: string | null
+  providerRefundId: string | null
+  providerStatus: string | null
+  providerMessage: string | null
+  providerMetadata: Record<string, unknown> | null
+  failureReason: string | null
+  createdAt: string
+  updatedAt: string
+  processedAt: string | null
+  completedAt: string | null
 }
 
 export interface VipLevelRule {
@@ -2131,135 +2159,6 @@ const api = {
       http.post(`/admin/system-update/tasks/${id}/rollback`, {}, { timeout: TIMEOUT.LONG })
   },
 
-  exchange: {
-    overview: (): Promise<{
-      counters: {
-        activeListings: number
-        lockedListings: number
-        deliveringOrders: number
-        disputedOrders: number
-        pendingWithdrawals: number
-        openDisputes: number
-        pendingDeliveryTasks: number
-      }
-    }> => http.get('/admin/exchange/overview'),
-    getConfig: (): Promise<{ policy: Record<string, any> }> =>
-      http.get('/admin/exchange/config'),
-    updateConfig: (data: Record<string, any>): Promise<{ policy: Record<string, any> }> =>
-      http.put('/admin/exchange/config', data),
-    listListings: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
-      items: Array<ExchangeListing & { seller?: Pick<User, 'id' | 'username' | 'email' | 'status'>; instance?: any }>
-      total: number
-      page: number
-      pageSize: number
-    }> => http.get('/admin/exchange/listings', { params }),
-    forceDelist: (id: number, reason: string): Promise<{ listing: ExchangeListing }> =>
-      http.post(`/admin/exchange/listings/${id}/force-delist`, { reason }),
-    listOrders: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
-      items: Array<ExchangeOrder & { buyer?: Pick<User, 'id' | 'username' | 'email' | 'status'>; seller?: Pick<User, 'id' | 'username' | 'email' | 'status'>; instance?: any; deliveryTasks?: any[] }>
-      total: number
-      page: number
-      pageSize: number
-    }> => http.get('/admin/exchange/orders', { params }),
-    refundOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
-      http.post(`/admin/exchange/orders/${id}/refund`, { reason }),
-    freezeOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
-      http.post(`/admin/exchange/orders/${id}/freeze`, { reason }),
-    releaseOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
-      http.post(`/admin/exchange/orders/${id}/release`, { reason }),
-    cancelOrder: (id: number, reason: string): Promise<{ order: ExchangeOrder }> =>
-      http.post(`/admin/exchange/orders/${id}/cancel`, { reason }),
-	    listDeliveryTasks: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
-	      items: any[]
-	      total: number
-	      page: number
-	      pageSize: number
-	    }> => http.get('/admin/exchange/delivery-tasks', { params }),
-	    retryDeliveryTask: (id: number): Promise<{ task: any }> =>
-	      http.post(`/admin/exchange/delivery-tasks/${id}/retry`),
-	    manualTakeoverDeliveryTask: (id: number, reason: string): Promise<{ task: any }> =>
-	      http.post(`/admin/exchange/delivery-tasks/${id}/manual-takeover`, { reason }),
-	    rollbackDeliveryTask: (id: number, reason: string): Promise<{ task: any }> =>
-	      http.post(`/admin/exchange/delivery-tasks/${id}/rollback`, { reason }),
-	    completeDeliveryTask: (id: number, reason: string): Promise<{ task: any }> =>
-	      http.post(`/admin/exchange/delivery-tasks/${id}/complete`, { reason }),
-	    listWithdrawals: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
-      items: Array<ExchangeWithdrawal & { user?: Pick<User, 'id' | 'username' | 'email' | 'status'> }>
-      total: number
-      page: number
-      pageSize: number
-    }> => http.get('/admin/exchange/withdrawals', { params }),
-    approveWithdrawal: (id: number, remark?: string): Promise<{ withdrawal: ExchangeWithdrawal }> =>
-      http.post(`/admin/exchange/withdrawals/${id}/approve`, { remark }),
-    completeWithdrawal: (id: number, data: { proofUrl?: string; remark?: string }): Promise<{ withdrawal: ExchangeWithdrawal }> =>
-      http.post(`/admin/exchange/withdrawals/${id}/complete`, data),
-    rejectWithdrawal: (id: number, reason: string): Promise<{ withdrawal: ExchangeWithdrawal }> =>
-      http.post(`/admin/exchange/withdrawals/${id}/reject`, { reason }),
-    listWallets: (params?: { page?: number; pageSize?: number; userId?: number }): Promise<{
-      items: Array<ExchangeWallet & { user?: Pick<User, 'id' | 'username' | 'email' | 'status'> }>
-      total: number
-      page: number
-      pageSize: number
-    }> => http.get('/admin/exchange/wallets', { params }),
-    freezeWallet: (userId: number, data: { amount: number; remark?: string }): Promise<{ wallet: ExchangeWallet }> =>
-      http.post(`/admin/exchange/wallets/${userId}/freeze`, data),
-    unfreezeWallet: (userId: number, data: { amount: number; remark?: string }): Promise<{ wallet: ExchangeWallet }> =>
-      http.post(`/admin/exchange/wallets/${userId}/unfreeze`, data),
-    adjustWallet: (userId: number, data: { amount: number; remark?: string }): Promise<{ wallet: ExchangeWallet }> =>
-      http.post(`/admin/exchange/wallets/${userId}/adjust`, data),
-    listDisputes: (params?: { page?: number; pageSize?: number; status?: string }): Promise<{
-      items: Array<ExchangeDispute & { creator?: Pick<User, 'id' | 'username' | 'email'>; order?: any }>
-      total: number
-      page: number
-      pageSize: number
-    }> => http.get('/admin/exchange/disputes', { params }),
-    rejectDispute: (id: number, resolution: string): Promise<{ dispute: ExchangeDispute }> =>
-      http.post(`/admin/exchange/disputes/${id}/reject`, { resolution }),
-    refundDispute: (id: number, resolution: string): Promise<{ dispute: ExchangeDispute }> =>
-      http.post(`/admin/exchange/disputes/${id}/refund`, { resolution }),
-    releaseDispute: (id: number, resolution: string): Promise<{ dispute: ExchangeDispute }> =>
-      http.post(`/admin/exchange/disputes/${id}/release`, { resolution }),
-    listAuditLogs: (params?: { page?: number; pageSize?: number }): Promise<{
-      items: Array<{ id: number; actorUserId: number | null; action: string; targetType: string; targetId: number | null; detail: unknown; createdAt: string; actor?: Pick<User, 'id' | 'username'> | null }>
-      total: number
-      page: number
-      pageSize: number
-    }> => http.get('/admin/exchange/audit-logs', { params })
-  },
-
-  slaAlerts: {
-    overview: (): Promise<SlaAlertOverview> =>
-      http.get('/admin/sla-alerts/overview'),
-    alerts: (params: {
-      page?: number
-      pageSize?: number
-      status?: string
-      severity?: string
-      module?: string
-      search?: string
-    } = {}): Promise<SlaAlertListResponse> =>
-      http.get('/admin/sla-alerts/alerts', { params }),
-    rules: (): Promise<{ rules: SlaAlertRule[] }> =>
-      http.get('/admin/sla-alerts/rules'),
-    scan: (): Promise<SlaAlertScanResponse> =>
-      http.post('/admin/sla-alerts/scan', {}, { timeout: TIMEOUT.LONG }),
-    acknowledge: (id: number, note?: string | null): Promise<{ alert: SlaAlertEvent }> =>
-      http.post(`/admin/sla-alerts/alerts/${id}/acknowledge`, { note }),
-    resolve: (id: number, status: 'recovered' | 'ignored', note?: string | null): Promise<{ alert: SlaAlertEvent }> =>
-      http.post(`/admin/sla-alerts/alerts/${id}/resolve`, { status, note }),
-    silence: (id: number, minutes: number, note?: string | null): Promise<{ alert: SlaAlertEvent }> =>
-      http.post(`/admin/sla-alerts/alerts/${id}/silence`, { minutes, note }),
-    updateRule: (code: string, data: {
-      enabled?: boolean
-      severity?: SlaAlertSeverity
-      thresholdMinutes?: number | null
-      thresholdCount?: number | null
-      dedupeMinutes?: number
-      silenceMinutes?: number | null
-    }): Promise<{ rule: SlaAlertRule }> =>
-      http.patch(`/admin/sla-alerts/rules/${encodeURIComponent(code)}`, data)
-  },
-
   // Storage Configs (远程存储配置)
   storageConfigs: {
     list: (): Promise<Array<{
@@ -2858,110 +2757,6 @@ const api = {
       }
     }> => http.get('/admin/statistics/overview'),
 
-    getCapacityCostOverview: (): Promise<{
-      totals: {
-        cpuTotal: number
-        cpuUsed: number
-        cpuAvailable: number
-        cpuUsageRatio: number
-        memoryTotal: number
-        memoryUsed: number
-        memoryAvailable: number
-        memoryUsageRatio: number
-        diskTotal: number
-        diskUsed: number
-        diskAvailable: number
-        diskUsageRatio: number
-        natPortTotal: number
-        natPortUsed: number
-        natPortAvailable: number
-        natPortUsageRatio: number
-        instanceCount: number
-        monthlyCost: number
-      }
-      hosts: Array<{
-        id: number
-        name: string
-        location: string | null
-        countryCode: string
-        status: string
-        instanceType: string
-        capacity: {
-          cpuTotal: number
-          cpuUsed: number
-          cpuAvailable: number
-          cpuUsageRatio: number
-          memoryTotal: number
-          memoryUsed: number
-          memoryAvailable: number
-          memoryUsageRatio: number
-          diskTotal: number
-          diskUsed: number
-          diskAvailable: number
-          diskUsageRatio: number
-          natPortTotal: number
-          natPortUsed: number
-          natPortAvailable: number
-          natPortUsageRatio: number
-          instanceCount: number
-          trafficUsedBytes: string
-        }
-        costProfile: {
-          monthlyCost: number
-          ipv4MonthlyCost: number
-          trafficTbCost: number
-          currency: string
-          notes: string | null
-          updatedAt: string | null
-        }
-      }>
-      plans: Array<{
-        packageId: number
-        packageName: string
-        planId: number
-        planName: string
-        price: number
-        billingCycle: number
-        revenueMonthly: number
-        estimatedCostMonthly: number
-        estimatedMarginMonthly: number
-        marginRatio: number
-        availableSlots: number
-        soldCount: number
-      }>
-      alerts: Array<{
-        key: string
-        severity: 'warning' | 'critical'
-        objectType: 'host' | 'package_plan'
-        objectId: number
-        title: string
-        message: string
-      }>
-      trends: Array<{
-        label: string
-        instanceCount: number
-        cpuUsed: number
-        memoryUsed: number
-        diskUsed: number
-        trafficUsedBytes: string
-      }>
-    }> => http.get('/admin/capacity-cost/overview'),
-
-    updateHostCostProfile: (hostId: number, data: {
-      monthlyCost?: number
-      ipv4MonthlyCost?: number
-      trafficTbCost?: number
-      notes?: string | null
-    }): Promise<{
-      hostId: number
-      monthlyCost: number
-      ipv4MonthlyCost: number
-      trafficTbCost: number
-      currency: string
-      notes: string | null
-      updatedAt: string
-    }> => http.patch(`/admin/capacity-cost/hosts/${hostId}/cost-profile`, data),
-
     // ==================== VIP 等级规则 ====================
 
     getVipLevelRules: (type: VipRuleType): Promise<VipLevelRulesResponse> =>
@@ -3415,6 +3210,38 @@ const api = {
     }> => http.get('/admin/billing/recharge-records', { params }),
 
                 // 同步充值订单状态
+    getRechargeRefundRequests: (params?: {
+      page?: number
+      pageSize?: number
+      status?: RechargeRefundStatus
+      userId?: number
+      providerId?: number
+      rechargeRecordId?: number
+      search?: string
+    }): Promise<{
+      refunds: RechargeRefundRequest[]
+      total: number
+      page: number
+      pageSize: number
+    }> => http.get('/admin/billing/recharge-refunds', { params }),
+
+    createRechargeRefund: (
+      rechargeRecordId: number,
+      data: { amount: number; reason: string }
+    ): Promise<{
+      success: boolean
+      status: RechargeRefundStatus
+      message: string
+      refundRequest: RechargeRefundRequest
+    }> => http.post(`/admin/billing/recharge-records/${rechargeRecordId}/refunds`, data),
+
+    retryRechargeRefund: (id: number): Promise<{
+      success: boolean
+      status: RechargeRefundStatus
+      message: string
+      refundRequest: RechargeRefundRequest
+    }> => http.post(`/admin/billing/recharge-refunds/${id}/retry`),
+
     syncRechargeRecord: (id: number): Promise<{
       success: boolean
       synced: boolean

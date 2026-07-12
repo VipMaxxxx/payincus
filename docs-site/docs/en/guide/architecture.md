@@ -19,7 +19,7 @@ Backend Node API
   -> PostgreSQL
   -> Incus hosts / Agent
   -> Payment, SMTP, Telegram, Lsky, Turnstile
-  -> Extension Center, Theme System, Admin OTA
+  -> Admin OTA
 ```
 
 The installer keeps Redis for deployment compatibility and future distributed state expansion. Current core persistent state is PostgreSQL-backed.
@@ -29,11 +29,10 @@ The installer keeps Redis for deployment compatibility and future distributed st
 | Module | Directory | Responsibility |
 | --- | --- | --- |
 | User portal | `client/src` + `VITE_APP_ENTRY=user` | Login, instances, terminal, wallet, tickets, notifications, gift cards and self-service pages |
-| Admin console | `client/src/admin` + `VITE_APP_ENTRY=admin` | Operations, configuration, resources, billing, delivery, alerts, extensions, themes and OTA |
+| Admin console | `client/src/admin` + `VITE_APP_ENTRY=admin` | Operations, configuration, resources, billing, delivery, and OTA |
 | Backend | `server/src` | Fastify APIs, auth, database, jobs, payment, delivery and audit |
 | Agent | `agent` | Host install, heartbeat, resources, instance and traffic reporting |
-| Docs site | `docs-site/docs` | Public docs, API reference, extension/theme market index and SDK examples |
-| Extension templates | `plugin-templates` | Official extension templates and third-party development examples |
+| Docs site | `docs-site/docs` | Public docs, API reference, and SDK examples |
 
 ## Build Outputs
 
@@ -47,10 +46,10 @@ The installer keeps Redis for deployment compatibility and future distributed st
 
 ## Data and Jobs
 
-- PostgreSQL stores users, instances, plans, billing, payments, gift cards, tickets, notifications, logs, extensions, themes, Public API/OAuth data and system update tasks.
-- Backend workers process instance tasks, restore tasks, backup uploads, notification email jobs, extension events, AI ticket auto-replies, traffic collection and maintenance tasks.
-- High-risk state transitions must go through PayIncus internal state machines, transactions, permissions, audit and compensation logic. Extensions and Public API can only use controlled entrypoints.
-- Admin OTA uses release artifacts or Git tags to build a new release, switches `/opt/incudal/current`, and preserves extension/theme runtime directories.
+- PostgreSQL stores users, instances, plans, billing, payments, gift cards, tickets, notifications, logs, Public API/OAuth data and system update tasks.
+- Backend workers process instance tasks, restore tasks, backup uploads, notification email jobs, traffic collection and maintenance tasks.
+- High-risk state transitions must go through PayIncus internal state machines, transactions, permissions, audit and compensation logic. Public API can only use controlled entrypoints.
+- Admin OTA uses release artifacts or Git tags to build a new release and switches `/opt/incudal/current` atomically.
 
 ## External Integrations
 
@@ -58,11 +57,9 @@ The installer keeps Redis for deployment compatibility and future distributed st
 | --- | --- | --- |
 | Incus/Agent | Instance delivery, resource and traffic state | Host certificates, install tokens and root passwords must not appear in the user portal or Public API |
 | Payment providers | Recharge, callbacks, reconciliation, refund/adjustment review | Raw callbacks, secrets and provider config are admin-only and redacted |
-| SMTP/Telegram | Mail, notifications and alerts | Channel secrets must not leak through responses or logs |
+| SMTP/Telegram | Mail and notifications | Channel secrets must not leak through responses or logs |
 | Turnstile | Login, human verification and sensitive operation protection | Test tokens must not be used in production |
 | Lsky | Ticket attachments and image storage | Upload tokens and raw provider payloads are not returned publicly |
-| Extension Center | Third-party extensions, events, actions and SDKs | No arbitrary shell execution and no bypass of payment/resource/permission state machines |
-| Theme System | Controlled CSS, assets, configuration forms and visual overrides | No unauthorized remote scripts or backend business rule changes |
 
 ## Production Constraints
 
@@ -81,8 +78,6 @@ The installer keeps Redis for deployment compatibility and future distributed st
 pnpm --filter server test:frontend-route-guards
 pnpm --filter server test:frontend-dist-boundary-guards
 pnpm --filter server test:system-update-guards
-pnpm --filter server test:plugin-runtime-capabilities-guards
-pnpm --filter server test:theme-system-guards
 pnpm --filter server test:public-api-openapi-guards
 ```
 

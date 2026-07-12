@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS "exchange_delivery_tasks" CASCADE;
+DROP TABLE IF EXISTS "exchange_disputes" CASCADE;
+DROP TABLE IF EXISTS "exchange_wallet_logs" CASCADE;
+DROP TABLE IF EXISTS "exchange_withdrawals" CASCADE;
+DROP TABLE IF EXISTS "exchange_orders" CASCADE;
+DROP TABLE IF EXISTS "exchange_listings" CASCADE;
+DROP TABLE IF EXISTS "exchange_wallets" CASCADE;
+DROP TABLE IF EXISTS "exchange_audit_logs" CASCADE;
+DROP TABLE IF EXISTS "exchange_policy_configs" CASCADE;

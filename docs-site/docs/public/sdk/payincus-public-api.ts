@@ -245,7 +245,7 @@ export interface PayIncusNotificationListOptions extends PayIncusListOptions {
   isRead?: boolean
 }
 
-export type PayIncusNotificationTemplateId = 'flash_sale_reminder' | 'service_action_update' | 'billing_notice'
+export type PayIncusNotificationTemplateId = 'service_action_update' | 'billing_notice'
 
 export interface PayIncusNotificationInput {
   title?: string

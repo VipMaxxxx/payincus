@@ -20,10 +20,7 @@ const ACCOUNT_OPERATIONS: OperationType[] = [
     'change_password',
     'disable_2fa',
     'change_email',
-    'delete_account',
-    'exchange_purchase',
-    'exchange_withdrawal',
-    'exchange_balance_transfer'
+    'delete_account'
 ]
 
 const RESOURCE_OPERATIONS: OperationType[] = [
@@ -48,9 +45,6 @@ const OPERATION_NAMES: Record<OperationType, { zh: string; en: string }> = {
     disable_2fa: { zh: '禁用双因素认证', en: 'Disable 2FA' },
     change_email: { zh: '修改邮箱地址', en: 'Change Email' },
     delete_account: { zh: '删除账户', en: 'Delete Account' },
-    exchange_purchase: { zh: '交易所购买', en: 'Exchange Purchase' },
-    exchange_withdrawal: { zh: '交易所提现', en: 'Exchange Withdrawal' },
-    exchange_balance_transfer: { zh: '交易所余额划转', en: 'Exchange Balance Transfer' },
     delete_instance: { zh: '删除实例', en: 'Delete Instance' },
     reinstall_instance: { zh: '重装实例', en: 'Reinstall Instance' },
     recreate_instance: { zh: '重建实例', en: 'Recreate Instance' },

@@ -2711,7 +2711,6 @@
   .kawaii-route-profile .kawaii-workspace::after,
   .kawaii-route-market .kawaii-workspace::after,
   .kawaii-route-flash-sales .kawaii-workspace::after,
-  .kawaii-route-exchange .kawaii-workspace::after,
   .kawaii-route-wallet .kawaii-workspace::after,
   .kawaii-route-orders .kawaii-workspace::after,
   .kawaii-route-invites .kawaii-workspace::after,
@@ -2744,8 +2743,7 @@
   .kawaii-route-hosting-wallet .kawaii-workspace::after,
   .kawaii-route-orders .kawaii-workspace::after,
   .kawaii-route-gift-cards .kawaii-workspace::after,
-  .kawaii-route-flash-sales .kawaii-workspace::after,
-  .kawaii-route-exchange .kawaii-workspace::after {
+  .kawaii-route-flash-sales .kawaii-workspace::after {
     opacity: 0.15;
     right: -5rem;
   }
@@ -2770,7 +2768,6 @@
   .kawaii-route-profile .kawaii-dashboard-hero::before,
   .kawaii-route-market .kawaii-dashboard-hero::before,
   .kawaii-route-flash-sales .kawaii-dashboard-hero::before,
-  .kawaii-route-exchange .kawaii-dashboard-hero::before,
   .kawaii-route-wallet .kawaii-dashboard-hero::before,
   .kawaii-route-orders .kawaii-dashboard-hero::before,
   .kawaii-route-invites .kawaii-dashboard-hero::before,
@@ -2805,7 +2802,6 @@
     filter: saturate(1.08);
   }
 
-  .kawaii-route-exchange .kawaii-dashboard-hero::before,
   .kawaii-route-wallet .kawaii-dashboard-hero::before,
   .kawaii-route-hosting-wallet .kawaii-dashboard-hero::before,
   .kawaii-route-gift-cards .kawaii-dashboard-hero::before,
@@ -2826,7 +2822,6 @@
     .kawaii-route-profile .kawaii-dashboard-hero::before,
     .kawaii-route-market .kawaii-dashboard-hero::before,
     .kawaii-route-flash-sales .kawaii-dashboard-hero::before,
-    .kawaii-route-exchange .kawaii-dashboard-hero::before,
     .kawaii-route-wallet .kawaii-dashboard-hero::before,
     .kawaii-route-orders .kawaii-dashboard-hero::before,
     .kawaii-route-invites .kawaii-dashboard-hero::before,
@@ -3088,7 +3083,6 @@
     filter: drop-shadow(0 0 0.45rem color-mix(in srgb, var(--kawaii-primary) 28%, transparent));
   }
 
-  .kawaii-route-exchange :where(article.kawaii-card, .kawaii-card.card),
   .kawaii-route-market :where(.kawaii-package-card, .kawaii-market-detail),
   .kawaii-route-instances :where(.kawaii-instance-card),
   .kawaii-route-instance-detail :where(.card, .kawaii-card),
@@ -3096,7 +3090,6 @@
     box-shadow: 0 18px 48px rgb(17 17 26 / 0.11);
   }
 
-  .kawaii-route-exchange :where(article.kawaii-card, .kawaii-card.card):hover,
   .kawaii-route-market :where(.kawaii-package-card):hover,
   .kawaii-route-instances :where(.kawaii-instance-card):hover {
     transform: translateY(-2px);

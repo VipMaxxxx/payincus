@@ -66,6 +66,60 @@ const locales = [
   }
 ]
 
+const removedFeatureOnlyTags = new Set([
+  'v1.4.1',
+  'v1.2.6', 'v1.2.5', 'v1.2.4', 'v1.2.3', 'v1.2.2', 'v1.2.1', 'v1.2.0',
+  'v1.1.8', 'v1.1.7', 'v1.1.6', 'v1.1.5', 'v1.1.4', 'v1.1.3', 'v1.1.2', 'v1.1.0',
+  'v1.0.6', 'v1.0.5', 'v1.0.4',
+  'v0.9.8', 'v0.9.7', 'v0.9.5', 'v0.8.6', 'v0.8.4',
+  'v0.6.8', 'v0.6.7', 'v0.6.6', 'v0.6.5', 'v0.6.4',
+  'v0.4.8', 'v0.4.7', 'v0.4.6', 'v0.4.5', 'v0.4.4', 'v0.4.3', 'v0.4.2', 'v0.4.1', 'v0.4.0',
+  'v0.3.9', 'v0.3.8', 'v0.3.4', 'v0.3.3', 'v0.3.2', 'v0.3.0',
+  'v0.2.9', 'v0.1.8', 'v0.0.22'
+])
+
+const removedFeaturePattern = new RegExp([
+  '集成中心', 'Integration Center',
+  '生产验收', 'production acceptance', 'production readiness', 'production proof workspace', 'production proof output', 'live acceptance report',
+  '用户生命周期', 'user lifecycle',
+  '秒杀', 'flash[ -]?sales?',
+  '资源风控', 'resource[ -]?risk', '风控',
+  '交付保障', 'delivery[ -]?assurance',
+  '主题中心', '主题市场', '主题系统', 'theme[ -]?(center|market|system|package|manifest)',
+  '扩展中心', '扩展市场', '扩展平台', '插件', '\\bplugins?\\b', '\\bextensions?\\b',
+  'AI\\s*工单', '工单\\s*AI', 'AI ticket', 'ticket AI',
+  '\\bSLA\\b', '告警中心', 'alert center',
+  '容量与成本', 'capacity[ -]?(and[ -])?cost',
+  '交易所', '兑换市场'
+].join('|'), 'i')
+
+function isRemovedFeatureLine(value) {
+  if (removedFeaturePattern.test(value)) return true
+  if (/\bexchange\b/i.test(value) && !/(OAuth|authorization|token|currency)/i.test(value)) return true
+  if (/(争议|交割|挂牌|买家|卖家)/.test(value)) return true
+  if (/(buyer|seller|listing|escrow|dispute).*(instance|order|delivery|market|refund)|delivery model.*buyers/i.test(value)) return true
+  if (/theme (asset|resource).*(CSP|sandbox|XSS)/i.test(value)) return true
+  return false
+}
+
+function removeEmptyHeadings(lines) {
+  let changed = true
+  while (changed) {
+    changed = false
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!/^#{3,6} /.test(lines[index])) continue
+      let next = index + 1
+      while (next < lines.length && !lines[next].trim()) next += 1
+      if (next >= lines.length || /^#{2,6} /.test(lines[next])) {
+        lines.splice(index, 1)
+        changed = true
+        break
+      }
+    }
+  }
+  return lines
+}
+
 function git(args) {
   return execFileSync('git', args, {
     cwd: repoRoot,
@@ -154,6 +208,7 @@ function tagBodyLines(tag) {
   const lines = []
   for (const rawLine of note.split(/\r?\n/)) {
     const line = normalizeProductWording(rawLine.trim())
+    if (isRemovedFeatureLine(line)) continue
     if (!line) {
       if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
       continue
@@ -166,6 +221,7 @@ function tagBodyLines(tag) {
     }
   }
 
+  removeEmptyHeadings(lines)
   while (lines[lines.length - 1] === '') lines.pop()
   return lines.length > 0 ? [...lines, ''] : []
 }
@@ -178,6 +234,7 @@ function releaseNoteOverrideLines(tag) {
   const lines = []
   for (const rawLine of content.split(/\r?\n/)) {
     const line = normalizeProductWording(rawLine.trimEnd())
+    if (isRemovedFeatureLine(line)) continue
     if (!line.trim()) {
       if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
       continue
@@ -185,6 +242,7 @@ function releaseNoteOverrideLines(tag) {
     lines.push(line)
   }
 
+  removeEmptyHeadings(lines)
   while (lines[lines.length - 1] === '') lines.pop()
   return lines.length > 0 ? [...lines, ''] : []
 }
@@ -202,6 +260,7 @@ function groupedCommitLines(commits, locale) {
 
   const groups = new Map()
   for (const commit of commits) {
+    if (isRemovedFeatureLine(commit.subject)) continue
     const key = classify(commit.subject, locale)
     const items = groups.get(key) ?? []
     items.push(commit)
@@ -237,7 +296,7 @@ function render() {
     '',
     `- ${locale.currentHead}: \`${latestRelease.shortHash}\``,
     `- ${locale.commitDate}: ${latestRelease.date}`,
-    `- ${locale.commitSubject}: ${latestRelease.subject}`,
+    ...(!isRemovedFeatureLine(latestRelease.subject) ? [`- ${locale.commitSubject}: ${latestRelease.subject}`] : []),
     `- ${locale.latestTag}: ${latestTag ? `\`${latestTag}\`` : locale.noTag}`,
     '',
     `## ${locale.unreleased}`,
@@ -257,6 +316,7 @@ function render() {
 
   for (let index = 0; index < tags.length; index += 1) {
     const tag = tags[index]
+    if (removedFeatureOnlyTags.has(tag)) continue
     const nextTag = tags[index + 1]
     const meta = commitMeta(tag)
     const commits = commitsBetween(nextTag, tag).filter((commit) => !isDocumentationSyncCommit(commit.subject))
@@ -264,7 +324,7 @@ function render() {
     lines.push(`## ${tag}`, '')
     lines.push(`- ${locale.releaseCommit}: \`${meta.shortHash}\``)
     lines.push(`- ${locale.commitDate}: ${meta.date}`)
-    lines.push(`- ${locale.commitSubject}: ${meta.subject}`)
+    if (!isRemovedFeatureLine(meta.subject)) lines.push(`- ${locale.commitSubject}: ${meta.subject}`)
     lines.push('')
     const releaseNotes = releaseNoteOverrideLines(tag)
     const fallbackReleaseNotes = tagBodyLines(tag)

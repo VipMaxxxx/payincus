@@ -47,23 +47,12 @@ import { checkInstancePermission } from '../lib/permission.js'
 import {
   claimOperationVerificationRequirement
 } from '../lib/operation-verification.js'
-import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 
-// 检查实例是否被转移/交易所锁定
+// 检查实例是否被转移锁定
 async function checkTransferLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
   const hasPending = await db.hasPendingTransfer(instanceId)
   if (hasPending) {
     reply.code(400).send(apiError(ErrorCode.TRANSFER_INSTANCE_LOCKED))
-    return true
-  }
-  const exchangeLock = await getExchangeOperationLock(instanceId)
-  if (exchangeLock.locked) {
-    reply.code(409).send({
-      error: exchangeLock.message,
-      code: exchangeLock.code,
-      listingId: exchangeLock.listingId,
-      orderId: exchangeLock.orderId
-    })
     return true
   }
   return false

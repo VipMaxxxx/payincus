@@ -163,7 +163,7 @@ const slaStatusColors = {
   closed: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
 }
 
-const ticketLinkTypes: TicketObjectLinkType[] = ['recharge_record', 'order_operation_case', 'instance', 'host', 'sla_alert']
+const ticketLinkTypes: TicketObjectLinkType[] = ['recharge_record', 'order_operation_case', 'instance', 'host']
 
 const lightboxImages = computed(() => {
   return messages.value.flatMap(message =>

@@ -132,7 +132,7 @@ onUnmounted(() => {
         <div class="flex items-center gap-2 md:gap-4">
           <!-- Mobile: Hamburger menu -->
           <button 
-            class="kawaii-header-icon md:hidden p-1.5 rounded transition-colors touch-target"
+            class="kawaii-header-icon md:!hidden p-1.5 rounded transition-colors touch-target"
             :aria-label="t('nav.openMenu')"
             @click="toggleMobileMenu"
           >
@@ -143,7 +143,7 @@ onUnmounted(() => {
 
           <!-- Desktop: Toggle sidebar -->
           <button 
-            class="kawaii-header-icon hidden md:block p-1.5 rounded transition-colors"
+            class="kawaii-header-icon !hidden md:!block p-1.5 rounded transition-colors"
             :aria-label="t('nav.collapseSidebar')"
             @click="sidebarCollapsed = !sidebarCollapsed"
           >
@@ -165,14 +165,6 @@ onUnmounted(() => {
             >{{ brand.brandName }}</span>
           </div>
 
-          <!-- Desktop: ⌘K search hint (decorative) -->
-          <div class="nimbus-cmdk hidden md:flex items-center gap-2" aria-hidden="true">
-            <svg class="nimbus-cmdk-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-            </svg>
-            <span class="nimbus-cmdk-text">{{ $t('common.searchPlaceholder') }}</span>
-            <kbd class="nimbus-cmdk-kbd">⌘K</kbd>
-          </div>
         </div>
 
         <!-- 右侧菜单 -->
@@ -373,52 +365,6 @@ onUnmounted(() => {
   border-color: var(--kawaii-line) !important;
 }
 
-/* ⌘K search hint — decorative hairline pill matching the console header */
-.nimbus-cmdk {
-  height: 32px;
-  padding: 0 8px 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--kawaii-line);
-  background: color-mix(in srgb, var(--kawaii-surface) 60%, transparent);
-  color: var(--kawaii-faint);
-  min-width: 216px;
-  user-select: none;
-  transition: border-color 160ms ease, color 160ms ease;
-}
-
-.nimbus-cmdk:hover {
-  border-color: var(--kawaii-line-strong);
-  color: var(--kawaii-muted);
-}
-
-.nimbus-cmdk-icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  opacity: 0.9;
-}
-
-.nimbus-cmdk-text {
-  font-size: 0.78125rem;
-  line-height: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nimbus-cmdk-kbd {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
-  font-size: 0.6875rem;
-  line-height: 1;
-  padding: 3px 5px;
-  border-radius: 5px;
-  border: 1px solid var(--kawaii-line);
-  background: color-mix(in srgb, var(--kawaii-surface-soft) 70%, transparent);
-  color: var(--kawaii-muted);
-}
-
 /* Icon buttons — covers direct topbar buttons + child components
    (e.g. NotificationBell) that carry the shared .kawaii-header-icon class */
 .kawaii-topbar :deep(.kawaii-header-icon) {
@@ -459,7 +405,6 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nimbus-cmdk,
   .kawaii-topbar :deep(.kawaii-header-icon),
   .kawaii-topbar :deep(.nimbus-userpill) {
     transition: none;

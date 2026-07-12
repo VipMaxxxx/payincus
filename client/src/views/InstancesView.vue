@@ -11,13 +11,13 @@ import { useToast } from '@/stores/toast'
 import { getLocalizedCountryName } from '@/utils/countryDisplay'
 import { formatMemory, formatDisk, formatBytes, getStatusInfo } from '@/utils/formatters'
 import { translateError } from '@/utils/errorHandler'
-import type { ExchangeListing, Instance, UserBalance } from '@/types/api'
+import type { Instance, UserBalance } from '@/types/api'
 import FlagIcon from '@/components/FlagIcon.vue'
 import DistroIcon from '@/components/icons/DistroIcon.vue'
 import InstanceDisplayIcon from '@/components/InstanceDisplayIcon.vue'
 import InstanceOrderMenu from '@/components/instance/InstanceOrderMenu.vue'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel } from '@/utils/freeSiteFun'
-import { exchangePath, instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'
+import { instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'
 
 // 为 KeepAlive include 匹配定义组件名称（必须在所有 import 之后）
 defineOptions({ name: 'InstancesView' })
@@ -69,7 +69,6 @@ const actionLoading = ref<Record<number, string>>({})
 const orderLoading = ref<boolean>(false)
 const recentlyOrderedInstanceId = ref<number | null>(null)
 const batchActionLoading = ref<string>('')
-const exchangeListingsByInstanceId = ref<Record<number, ExchangeListing>>({})
 
 // 搜索和分页
 const search = ref<string>('')
@@ -154,7 +153,7 @@ const selectedRunningCount = computed(() => selectedInstances.value.filter(insta
 const selectedStoppedCount = computed(() => selectedInstances.value.filter(instance => instance.status?.toLowerCase() === 'stopped').length)
 const selectedBillingActionIds = computed(() =>
   selectedInstances.value
-    .filter(instance => !!instance.packagePlanId && !isInstanceExchangeLocked(instance))
+    .filter(instance => !!instance.packagePlanId)
     .map(instance => instance.id)
 )
 const hasSelectedInstances = computed(() => selectedCount.value > 0)
@@ -446,46 +445,11 @@ async function loadInstances(force = false): Promise<void> {
 
     const visibleIds = new Set(nextInstances.map(instance => instance.id))
     selectedIds.value = new Set([...selectedIds.value].filter(id => visibleIds.has(id)))
-    if (!isAdminEntry) {
-      await loadExchangeListingStates()
-    }
   } catch (error) {
     console.error('Failed to load instances:', error)
     listError.value = translateError(error) || t('common.loadFailed')
   } finally {
     loading.value = false
-  }
-}
-
-async function loadExchangeListingStates(): Promise<void> {
-  const visibleInstanceIds = instances.value.map(instance => instance.id).filter(id => Number.isFinite(id))
-  if (visibleInstanceIds.length === 0) {
-    exchangeListingsByInstanceId.value = {}
-    return
-  }
-
-  try {
-    const entries = await Promise.all(visibleInstanceIds.map(async instanceId => {
-      try {
-        const response = await api.exchange.getInstanceListing(instanceId)
-        const listing = response.listing
-        if (listing && ['active', 'paused', 'locked', 'delivery_failed'].includes(listing.status)) {
-          return [instanceId, listing] as const
-        }
-      } catch {
-        // 单个实例状态读取失败时不影响其他可见实例的交易锁定标识。
-      }
-      return null
-    }))
-
-    exchangeListingsByInstanceId.value = entries.reduce<Record<number, ExchangeListing>>((acc, entry) => {
-      if (entry) {
-        acc[entry[0]] = entry[1]
-      }
-      return acc
-    }, {})
-  } catch {
-    exchangeListingsByInstanceId.value = {}
   }
 }
 
@@ -741,55 +705,8 @@ function getInstanceResetTrafficPrice(instance: Instance): string {
   return value > 0 ? formatCurrency(value) : '-'
 }
 
-function getInstanceExchangeListing(instance: Instance): ExchangeListing | null {
-  return exchangeListingsByInstanceId.value[instance.id] || null
-}
-
-function isInstanceExchangeLocked(instance: Instance): boolean {
-  const listing = getInstanceExchangeListing(instance)
-  return !!listing && ['active', 'paused', 'locked', 'delivery_failed'].includes(listing.status)
-}
-
-function getInstanceExchangeState(instance: Instance): { label: string; hint: string; className: string } | null {
-  const listing = getInstanceExchangeListing(instance)
-  if (listing?.status === 'active') {
-    return {
-      label: '交易所挂牌中',
-      hint: `暂停锁定 · 挂牌价 ${formatCurrency(listing.price)}`,
-      className: themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'
-    }
-  }
-  if (listing?.status === 'paused') {
-    return {
-      label: '交易所暂停中',
-      hint: '挂牌已暂停，实例仍保持交易锁定',
-      className: themeStore.isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
-    }
-  }
-  if (listing?.status === 'locked') {
-    return {
-      label: '交易锁定中',
-      hint: '订单交割中，禁止实例操作',
-      className: themeStore.isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-700'
-    }
-  }
-  if (listing?.status === 'delivery_failed') {
-    return {
-      label: '交割异常',
-      hint: '等待平台重试、退款或人工接管',
-      className: themeStore.isDark ? 'bg-rose-500/15 text-rose-300' : 'bg-rose-50 text-rose-700'
-    }
-  }
-  return null
-}
-
-function openInstanceExchange(instance: Instance): void {
-  void router.push({ path: exchangePath(), query: { instanceId: String(instance.id) } })
-}
-
 function canResetInstanceTraffic(instance: Instance): boolean {
   if (isAdminEntry) return false
-  if (isInstanceExchangeLocked(instance)) return false
   if (instance.status?.toLowerCase() === 'deleted') return false
   return Number((instance as any).monthlyTrafficUsed || 0) > 0
 }
@@ -834,19 +751,15 @@ function getInstanceMonthlyPrice(instance: Instance): string {
 }
 
 function canUseInstanceBillingAction(instance: Instance): boolean {
-  return canUseCustomerBillingActions.value && !!instance.packagePlanId && !isInstanceExchangeLocked(instance)
+  return canUseCustomerBillingActions.value && !!instance.packagePlanId
 }
 
 function canStartInstance(instance: Instance): boolean {
-  return instance.status?.toLowerCase() === 'stopped' && !isInstanceExchangeLocked(instance)
+  return instance.status?.toLowerCase() === 'stopped'
 }
 
 function canDeleteInstance(instance: Instance): boolean {
-  return !isInstanceExchangeLocked(instance) && !instance.packagePlanId && (instance as any).allow_instance_deletion !== false
-}
-
-function canTransferInstance(instance: Instance): boolean {
-  return !isInstanceExchangeLocked(instance)
+  return !instance.packagePlanId && (instance as any).allow_instance_deletion !== false
 }
 
 function getInstanceStatusTextClass(instance: Instance): string {
@@ -1086,10 +999,6 @@ async function reorderInstance(instance: Instance, action: InstanceOrderAction):
 }
 
 async function handleAction(instance: Instance, action: InstanceAction): Promise<void> {
-  if (isInstanceExchangeLocked(instance) && ['start', 'restart', 'delete'].includes(action)) {
-    toast.warning('实例已上架交易所或处于交割中，不能执行该操作')
-    return
-  }
   actionLoading.value[instance.id] = action
   
   try {
@@ -1341,10 +1250,6 @@ async function openSingleRenewModal(instance: Instance): Promise<void> {
 }
 
 function openInstanceTransfer(instance: Instance): void {
-  if (!canTransferInstance(instance)) {
-    toast.warning('实例已上架交易所或处于交割中，不能 PUSH')
-    return
-  }
   void router.push({ path: transfersPath(), query: { instanceId: String(instance.id) } })
 }
 
@@ -1908,23 +1813,6 @@ async function confirmBatchDestroy(): Promise<void> {
                     >
                       {{ formatImageName(instance.image, (instance as any).imageName) }}
                     </div>
-                    <div v-if="!isAdminEntry" class="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span
-                        v-if="getInstanceExchangeState(instance)"
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
-                        :class="getInstanceExchangeState(instance)?.className"
-                        :title="getInstanceExchangeState(instance)?.hint"
-                      >
-                        {{ getInstanceExchangeState(instance)?.label }}
-                      </span>
-                      <span
-                        v-if="isInstanceExchangeLocked(instance)"
-                        class="text-[10px]"
-                        :class="'text-themed-faint'"
-                      >
-                        {{ getInstanceExchangeState(instance)?.hint }}
-                      </span>
-                    </div>
 	                  </div>
 	                </div>
 	              </td>
@@ -2375,14 +2263,6 @@ async function confirmBatchDestroy(): Promise<void> {
                   >
                     {{ $t('common.networkMode.' + getInstanceNetworkMode(instance)) }}
                   </span>
-	                  <span
-	                    v-if="!isAdminEntry && getInstanceExchangeState(instance)"
-	                    class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
-	                    :class="getInstanceExchangeState(instance)?.className"
-	                    :title="getInstanceExchangeState(instance)?.hint"
-	                  >
-	                    {{ getInstanceExchangeState(instance)?.label }}
-	                  </span>
                 </div>
               </button>
 
@@ -2487,15 +2367,6 @@ async function confirmBatchDestroy(): Promise<void> {
                   @reorder="reorderInstance(instance, $event)"
                 />
                 <button
-                  v-if="!isAdminEntry"
-                  type="button"
-                  class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
-                  :class="'bg-themed-secondary text-themed'"
-                  @click.stop="openInstanceExchange(instance)"
-                >
-                  交易所
-                </button>
-                <button
                   type="button"
                   class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
                   :class="'bg-themed-secondary text-themed'"
@@ -2507,7 +2378,6 @@ async function confirmBatchDestroy(): Promise<void> {
                   type="button"
                   class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
                   :class="'bg-themed-secondary text-themed'"
-                  :disabled="!canTransferInstance(instance)"
                   @click.stop="openInstanceTransfer(instance)"
                 >
                   {{ $t('instance.card.push') }}

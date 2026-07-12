@@ -41,13 +41,6 @@ The backend template uses `ProtectSystem=strict` and `ProtectHome=true`, with wr
 /opt/incudal/current
 /opt/incudal/releases
 /opt/incudal/update-logs
-/opt/incudal/plugins
-/opt/incudal/plugin-data
-/opt/incudal/plugin-logs
-/opt/incudal/plugin-staging
-/opt/incudal/themes
-/opt/incudal/theme-data
-/opt/incudal/theme-staging
 ```
 
 Do not add `/`, `/etc` or database directories to `ReadWritePaths`. Payment secrets, database URLs, OAuth secrets, SMTP passwords and install tokens should live only in `/opt/incudal/.env` or encrypted admin configuration.

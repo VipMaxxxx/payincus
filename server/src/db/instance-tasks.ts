@@ -17,7 +17,6 @@ export interface CreateInstanceTaskData {
   targetName?: string       // 克隆的目标名称
   targetHostId?: number     // 克隆的目标宿主机
   snapshotName?: string     // 克隆时的快照名称
-  allowExchangeLocked?: boolean // 交易所内部交割任务可显式绕过挂牌锁
 }
 
 export interface InstanceTaskWithDetails {
@@ -102,30 +101,6 @@ export async function createInstanceTask(data: CreateInstanceTaskData): Promise<
     })
     if (activeTask) {
       throw new InstanceTaskConflictError(activeTask as unknown as InstanceTaskWithDetails)
-    }
-
-    if (!data.allowExchangeLocked) {
-      const exchangeLocked = await tx.exchangeListing.findFirst({
-        where: {
-          instanceId: data.instanceId,
-          status: { in: ['active', 'locked', 'delivery_failed'] }
-        },
-        select: { id: true, status: true }
-      })
-      if (exchangeLocked) {
-        throw new Error('实例已上架交易所或处于交易锁定中，不能执行该操作')
-      }
-
-      const exchangeOrder = await tx.exchangeOrder.findFirst({
-        where: {
-          instanceId: data.instanceId,
-          status: { in: ['delivering', 'confirming', 'disputed', 'manual_review', 'failed'] }
-        },
-        select: { id: true, status: true }
-      })
-      if (exchangeOrder) {
-        throw new Error('实例存在未完成的交易所订单，不能执行该操作')
-      }
     }
 
     // 注：使用 as any 绕过 Prisma 类型检查，因为 customInitCommandIds 字段在迁移后才会生成类型

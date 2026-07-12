@@ -23,7 +23,7 @@ import SnapshotManager from '@/components/SnapshotManager.vue'
 import TrafficStats from '@/components/instance/TrafficStats.vue'
 import AddPortModal from '@/components/instance/modals/AddPortModal.vue'
 import PortConflictModal from '@/components/instance/modals/PortConflictModal.vue'
-import { exchangePath, helpPath, hostDetailPath, instancesPath, isAdminEntry } from '@/utils/app-paths'
+import { helpPath, hostDetailPath, instancesPath, isAdminEntry } from '@/utils/app-paths'
 import RebuildModal from '@/components/instance/modals/RebuildModal.vue'
 import RecreateModal from '@/components/instance/modals/RecreateModal.vue'
 import TransferModal from '@/components/instance/modals/TransferModal.vue'
@@ -39,7 +39,7 @@ import AnnouncementIcon from '@/components/icons/AnnouncementIcon.vue'
 import { getStatusInfo } from '@/utils/formatters'
 import { translateError } from '@/utils/errorHandler'
 import { freeSiteCopy, getFreeSiteBillingCycleLabel, getFreeSiteBillingCycleShort } from '@/utils/freeSiteFun'
-import type { Instance, InstanceWithDetails, Snapshot, UserQuota, UpdateInstanceRequest, Package, CloudInitState, CloudInitStatusResponse, ExchangeEligibilityResult, ExchangeListing } from '@/types/api'
+import type { Instance, InstanceWithDetails, Snapshot, UserQuota, UpdateInstanceRequest, Package, CloudInitState, CloudInitStatusResponse } from '@/types/api'
 
 // 格式化镜像名称：优先使用 imageName，否则去掉 images: 前缀
 function formatImageName(image: string, imageName?: string | null): string {
@@ -281,12 +281,6 @@ const showRedeemModal = ref<boolean>(false)
 const redeemCodeInput = ref<string>('')
 const redeemLoading = ref<boolean>(false)
 
-const exchangeEligibility = ref<ExchangeEligibilityResult | null>(null)
-const exchangeEligibilityLoading = ref<boolean>(false)
-const exchangeStopLoading = ref<boolean>(false)
-const showExchangeStopConfirm = ref<boolean>(false)
-const instanceExchangeListing = ref<ExchangeListing | null>(null)
-const exchangeListingLoading = ref<boolean>(false)
 
 // 检查是否可以删除实例（根据套餐设置和付费状态）
 // 注意：宿主机拥有者不受套餐限制，可以删除其宿主机上的所有实例
@@ -501,9 +495,9 @@ const isHostOwnerOnly = computed<boolean>(() => {
 })
 
 // 节点所有者禁止的操作：转移、重建、端口映射
-const canTransfer = computed<boolean>(() => !isHostOwnerOnly.value && !isExchangeLocked.value)
-const canRebuild = computed<boolean>(() => !isHostOwnerOnly.value && !isExchangeLocked.value)
-const hasCloudInitManualPermission = computed<boolean>(() => !isHostOwnerOnly.value && !isExchangeLocked.value)
+const canTransfer = computed<boolean>(() => !isHostOwnerOnly.value)
+const canRebuild = computed<boolean>(() => !isHostOwnerOnly.value)
+const hasCloudInitManualPermission = computed<boolean>(() => !isHostOwnerOnly.value)
 // 复制功能仅限宿主机所有者
 const canClone = computed<boolean>(() => {
   const inst = instance.value as { isHostOwner?: boolean } | null
@@ -518,7 +512,7 @@ const canSyncStatus = computed<boolean>(() => {
   const inst = instance.value
   return !!inst && (inst.isHostOwner === true || inst.isInstanceOwner === true)
 })
-const canManagePorts = computed<boolean>(() => !isHostOwnerOnly.value && !isExchangeLocked.value)
+const canManagePorts = computed<boolean>(() => !isHostOwnerOnly.value)
 
 const instanceHostName = computed<string>(() => {
   const host = (instance.value as any)?.host
@@ -576,12 +570,6 @@ watch(() => route.params.id, async (newId, oldId) => {
       snapshots.value = []
       hasPendingTransfer.value = false
       destroyInfo.value = null
-      exchangeEligibility.value = null
-      instanceExchangeListing.value = null
-      exchangeEligibilityLoading.value = false
-      exchangeStopLoading.value = false
-      showExchangeStopConfirm.value = false
-      exchangeListingLoading.value = false
 
       // 重置配额相关状态
       instanceQuotaForm.value = { portLimit: null, snapshotLimit: null }
@@ -916,7 +904,6 @@ async function loadInstance(): Promise<void> {
         // 并行执行独立的检查请求，加快首次加载速度
         await Promise.all([
           isAdminEntry ? Promise.resolve() : checkPendingTransfer(),
-          isAdminEntry ? Promise.resolve() : loadInstanceExchangeListing(),
           checkActiveTask()
         ])
         // 实例加载成功后，并行加载统计信息和流量数据
@@ -1229,148 +1216,6 @@ async function handleRedeem(): Promise<void> {
   }
 }
 
-const exchangeListingBlockingStatuses = ['active', 'paused', 'locked', 'delivery_failed'] as const
-
-const isExchangeLocked = computed<boolean>(() =>
-  !!instanceExchangeListing.value && exchangeListingBlockingStatuses.includes(instanceExchangeListing.value.status as any)
-)
-
-function warnExchangeLockedOperation(): boolean {
-  if (!isExchangeLocked.value) return false
-  toast.warning('实例已上架交易所或处于交割中，不能执行实例操作；如需操作请先下架或等待交割处理完成')
-  return true
-}
-
-const exchangeStatusBadge = computed<{ label: string; hint: string; className: string }>(() => {
-  const listing = instanceExchangeListing.value
-  if (listing?.status === 'active') {
-    return {
-      label: '交易所挂牌中',
-      hint: `实例已暂停并锁定，挂牌价 ¥${Number(listing.price || 0).toFixed(2)}`,
-      className: themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'
-    }
-  }
-  if (listing?.status === 'paused') {
-    return {
-      label: '交易所暂停中',
-      hint: '挂牌已暂停，实例仍保持交易锁定',
-      className: themeStore.isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
-    }
-  }
-  if (listing?.status === 'locked') {
-    return {
-      label: '交易锁定中',
-      hint: '订单交割中，实例操作已锁定',
-      className: themeStore.isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-700'
-    }
-  }
-  if (listing?.status === 'delivery_failed') {
-    return {
-      label: '交割异常',
-      hint: '等待平台重试、退款、回滚或人工接管',
-      className: themeStore.isDark ? 'bg-red-900/50 text-red-300' : 'bg-red-100 text-red-700'
-    }
-  }
-  if (exchangeEligibility.value?.status === 'can_list') {
-    return {
-      label: '可上架',
-      hint: '实例已暂停并通过检测，可前往交易所填写售价',
-      className: themeStore.isDark ? 'bg-emerald-900/50 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
-    }
-  }
-  if (exchangeEligibility.value?.status === 'must_stop_first' || isRunning.value) {
-    return {
-      label: '需先暂停',
-      hint: '上架交易所前必须先暂停实例',
-      className: themeStore.isDark ? 'bg-yellow-900/40 text-yellow-300' : 'bg-yellow-100 text-yellow-700'
-    }
-  }
-  if (exchangeEligibility.value?.status === 'cannot_list') {
-    return {
-      label: '不可上架',
-      hint: exchangeEligibility.value.reasons[0] || '实例未通过交易所检测',
-      className: themeStore.isDark ? 'bg-red-900/40 text-red-300' : 'bg-red-100 text-red-700'
-    }
-  }
-  if (isStopped.value) {
-    return {
-      label: '待检测',
-      hint: '已暂停，检测通过后可上架交易所',
-      className: themeStore.isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
-    }
-  }
-  return {
-    label: '不可直接上架',
-    hint: '只有暂停且通过检测的实例可以挂牌',
-    className: themeStore.isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'
-  }
-})
-
-function canGoToExchangeListing(): boolean {
-  return exchangeEligibility.value?.status === 'can_list' && !isExchangeLocked.value
-}
-
-function showExchangeStopAction(): boolean {
-  return !isExchangeLocked.value && (isRunning.value || exchangeEligibility.value?.status === 'must_stop_first')
-}
-
-async function loadInstanceExchangeListing(): Promise<void> {
-  if (isAdminEntry || !instance.value?.id || exchangeListingLoading.value) return
-  exchangeListingLoading.value = true
-  try {
-    const res = await api.exchange.getInstanceListing(instance.value.id)
-    instanceExchangeListing.value = res.listing || null
-  } catch (err) {
-    console.error('Failed to load exchange listing state:', err)
-  } finally {
-    exchangeListingLoading.value = false
-  }
-}
-
-async function checkExchangeEligibility(): Promise<void> {
-  if (isAdminEntry || !instance.value?.id || exchangeEligibilityLoading.value) return
-  exchangeEligibilityLoading.value = true
-  try {
-    exchangeEligibility.value = await api.exchange.checkEligibility(instance.value.id)
-    await loadInstanceExchangeListing()
-    if (exchangeEligibility.value.status === 'can_list') {
-      toast.success('实例已通过交易所检测，可以前往上架')
-    } else if (exchangeEligibility.value.status === 'must_stop_first') {
-      toast.warning('上架交易所前必须先暂停实例')
-    } else {
-      toast.warning(exchangeEligibility.value.reasons[0] || '实例暂时不能上架交易所')
-    }
-  } catch (err: any) {
-    toast.error(err?.message || '检测交易所资格失败')
-  } finally {
-    exchangeEligibilityLoading.value = false
-  }
-}
-
-async function stopInstanceForExchangeListing(): Promise<void> {
-  if (isAdminEntry || !instance.value?.id || exchangeStopLoading.value) return
-  exchangeStopLoading.value = true
-  try {
-    const result = await api.exchange.stopForListing(instance.value.id)
-    toast.success(result.message || '暂停任务已提交，完成后请重新检测并挂牌')
-    showExchangeStopConfirm.value = false
-    if (result.taskId) {
-      startTaskPolling(result.taskId)
-    }
-    await loadInstance()
-    exchangeEligibility.value = result.eligibility || null
-  } catch (err: any) {
-    toast.error(err?.message || '暂停实例失败')
-  } finally {
-    exchangeStopLoading.value = false
-  }
-}
-
-function openInstanceExchangeListing(): void {
-  if (!instance.value?.id) return
-  void router.push({ path: exchangePath(), query: { instanceId: String(instance.value.id) } })
-}
-
 // 续费成功处理
 async function handleRenewSuccess(): Promise<void> {
   toast.success(t('instance.subscription.renewSuccess'))
@@ -1392,7 +1237,6 @@ async function handleChangePlanSuccess(): Promise<void> {
 // 设置自动续费
 async function handleSetAutoRenew(autoRenew: boolean): Promise<void> {
   if (isAdminEntry || !instance.value) return
-  if (warnExchangeLockedOperation()) return
   autoRenewLoading.value = true
   try {
     await customerSelfServiceApi.billing.setAutoRenew(instance.value.id, autoRenew)
@@ -1412,10 +1256,6 @@ async function handleSetAutoRenew(autoRenew: boolean): Promise<void> {
 // 加载销毁信息
 async function loadDestroyInfo(): Promise<void> {
   if (isAdminEntry || !instance.value) return
-  if (warnExchangeLockedOperation()) {
-    showDestroyModal.value = false
-    return
-  }
   destroyInfo.value = null
   try {
     destroyInfo.value = await customerSelfServiceApi.billing.getDestroyInfo(instance.value.id) as any
@@ -1428,7 +1268,6 @@ async function loadDestroyInfo(): Promise<void> {
 // 执行销毁
 async function handleDestroy(): Promise<void> {
   if (isAdminEntry || !instance.value || !destroyInfo.value?.canDestroy) return
-  if (warnExchangeLockedOperation()) return
   destroyLoading.value = true
   try {
     const result = await customerSelfServiceApi.billing.destroyInstance(instance.value.id)
@@ -1501,7 +1340,7 @@ const isOperationDisabled = computed<boolean>(() => {
   if (isSuspended.value && !isHostOwner) {
     return true
   }
-  return !!actionLoading.value || !!activeTask.value || hasPendingTransfer.value || isExchangeLocked.value
+  return !!actionLoading.value || !!activeTask.value || hasPendingTransfer.value
 })
 
 // 操作
@@ -1556,7 +1395,6 @@ function stopTaskPolling(): void {
 
 async function handleAction(action: InstanceAction): Promise<void> {
   if (!instance.value) return
-  if (warnExchangeLockedOperation()) return
   actionLoading.value = action
   try {
     if (action === 'start') {
@@ -1611,7 +1449,6 @@ async function handleAction(action: InstanceAction): Promise<void> {
 // 重建系统
 // 点击重建按钮时的处理：运行中提示需要先关机
 function handleRebuildClick(): void {
-  if (warnExchangeLockedOperation()) return
   if (isRunning.value) {
     toast.warning(t('instance.detail.actions.stopRequired'))
     return
@@ -1620,7 +1457,6 @@ function handleRebuildClick(): void {
 }
 
 async function openRebuildModal(): Promise<void> {
-  if (warnExchangeLockedOperation()) return
   await Promise.all([loadAvailableImages(), loadSshKeys()])
   showRebuildModal.value = true
 }
@@ -1641,8 +1477,6 @@ async function doRebuild(data: { image: string; sshKeyId: number; customInitComm
     toast.error(t('instance.detail.actions.selectImageAndKey'))
     return
   }
-  if (warnExchangeLockedOperation()) return
-
   rebuildLoading.value = true
   try {
     const response = await api.instances.rebuild(instance.value.id, {
@@ -1665,8 +1499,6 @@ async function doRecreate(data: { image: string; sshKeyId: number; customInitCom
     toast.error(t('instance.detail.actions.selectImageAndKey'))
     return
   }
-  if (warnExchangeLockedOperation()) return
-
   recreateLoading.value = true
   try {
     const response = await api.instances.recreate(instance.value.id, {
@@ -1688,7 +1520,6 @@ async function doRecreate(data: { image: string; sshKeyId: number; customInitCom
 
 async function deletePort(portId: number): Promise<void> {
   if (!instance.value || !confirm(t('instance.detail.port.confirmDelete'))) return
-  if (warnExchangeLockedOperation()) return
 
   try {
     await api.instances.deletePort(instance.value.id, portId)
@@ -1711,7 +1542,6 @@ const deletePortsLoading = ref<boolean>(false)
 
 async function deletePorts(portIds: number[]): Promise<void> {
   if (!instance.value || portIds.length === 0) return
-  if (warnExchangeLockedOperation()) return
   if (!confirm(t('instance.detail.port.confirmBatchDelete', { count: portIds.length }))) return
 
   deletePortsLoading.value = true
@@ -2001,7 +1831,6 @@ async function calculateRemainingQuota(): Promise<void> {
 // 实例配额
 async function saveInstanceQuota(): Promise<void> {
   if (!instance.value) return
-  if (warnExchangeLockedOperation()) return
   quotaSaving.value = true
   quotaError.value = ''
 
@@ -2107,8 +1936,6 @@ async function handleAddPort(form: {
     portError.value = t('instance.detail.port.fillPrivatePort')
     return
   }
-  if (warnExchangeLockedOperation()) return
-
   portLoading.value = true
   portError.value = ''
 
@@ -2283,7 +2110,6 @@ async function handleAddPort(form: {
 // 端口冲突解决后重新提交
 async function handlePortConflictConfirm(resolvedPorts: Array<{ original: number; resolved: number }>): Promise<void> {
   if (!instance.value || !pendingBatchPortData.value) return
-  if (warnExchangeLockedOperation()) return
 
   portLoading.value = true
 
@@ -2350,12 +2176,10 @@ function handlePortConflictCancel(): void {
 }
 
 function requestAddPort(): void {
-  if (warnExchangeLockedOperation()) return
   showAddPortModal.value = true
 }
 
 function requestReassignIpv6(): void {
-  if (warnExchangeLockedOperation()) return
   void handleReassignIpv6()
 }
 
@@ -2987,79 +2811,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
               </div>
             </div>
 
-            <div
-              v-if="!isAdminEntry && !isHostOwnerOnly"
-              class="card p-4 sm:p-5"
-            >
-              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div class="min-w-0">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <h3 class="text-base font-semibold text-themed">交易所上架</h3>
-                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="exchangeStatusBadge.className">
-                      {{ exchangeStatusBadge.label }}
-                    </span>
-                  </div>
-                  <p class="mt-1 text-sm text-themed-muted">{{ exchangeStatusBadge.hint }}</p>
-                  <p class="mt-2 text-xs text-themed-muted">
-                    实例必须处于暂停状态才能挂牌。成交后平台会强制重装交割给买家，并清理 SSH key、控制台 token、端口映射、代理站点、快照和备份策略；流量用量和剩余额度按挂牌实例当前状态交割。
-                  </p>
-                </div>
-
-                <div class="flex flex-wrap gap-2 lg:justify-end">
-                  <button
-                    class="btn-secondary btn-sm"
-                    type="button"
-                    :disabled="exchangeEligibilityLoading || isExchangeLocked"
-                    @click="checkExchangeEligibility"
-                  >
-                    {{ exchangeEligibilityLoading ? '检测中...' : '检测资格' }}
-                  </button>
-                  <button
-                    v-if="showExchangeStopAction()"
-                    class="btn-secondary btn-sm"
-                    type="button"
-                    :disabled="exchangeStopLoading || isOperationDisabled"
-                    @click="showExchangeStopConfirm = true"
-                  >
-                    {{ exchangeStopLoading ? '提交中...' : '先暂停实例' }}
-                  </button>
-                  <button
-                    v-if="isExchangeLocked"
-                    class="btn-secondary btn-sm"
-                    type="button"
-                    @click="openInstanceExchangeListing"
-                  >
-                    查看交易所
-                  </button>
-                  <button
-                    v-else
-                    class="btn-primary btn-sm"
-                    type="button"
-                    :disabled="!canGoToExchangeListing()"
-                    @click="openInstanceExchangeListing"
-                  >
-                    上架交易所
-                  </button>
-                </div>
-              </div>
-
-              <div
-                v-if="exchangeEligibility"
-                class="mt-4 grid gap-2 md:grid-cols-2"
-              >
-                <div
-                  v-for="check in exchangeEligibility.checks"
-                  :key="check.key"
-                  class="rounded border px-3 py-2 text-xs"
-                  :class="check.passed
-                    ? (themeStore.isDark ? 'border-emerald-800 bg-emerald-950/30 text-emerald-200' : 'border-emerald-200 bg-emerald-50 text-emerald-700')
-                    : (themeStore.isDark ? 'border-red-800 bg-red-950/30 text-red-200' : 'border-red-200 bg-red-50 text-red-700')"
-                >
-                  <span class="font-medium">{{ check.label }}</span>：{{ check.message }}
-                </div>
-              </div>
-            </div>
-
             <!-- Paid Subscription Card (only for paid instances) -->
             <div
               v-if="showPaidSubscriptionCard"
@@ -3226,7 +2977,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
 	                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
 	                        :disabled="isOperationDisabled"
 	                        :class="isOperationDisabled ? 'opacity-50 cursor-not-allowed' : ''"
-	                        :title="isExchangeLocked ? '交易所挂牌或交割期间不能续费，请先下架或等待交割完成' : undefined"
 	                        @click="showRenewModal = true"
 	                      >
 	                        {{ $t('instance.subscription.renew') }}
@@ -3236,7 +2986,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
 	                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
 	                        :disabled="isOperationDisabled"
 	                        :class="isOperationDisabled ? 'opacity-50 cursor-not-allowed' : ''"
-	                        :title="isExchangeLocked ? '交易所挂牌或交割期间不能修改自动续费策略' : undefined"
 	                        @click="showAutoRenewModal = true"
 	                      >
 	                        {{ $t('instance.subscription.autoRenew') }}
@@ -3247,7 +2996,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
 	                        class="btn-secondary btn-sm w-full justify-center sm:w-auto sm:min-w-[110px]"
 	                        :disabled="isOperationDisabled"
 	                        :class="isOperationDisabled ? 'opacity-50 cursor-not-allowed' : ''"
-	                        :title="isExchangeLocked ? '交易所挂牌或交割期间不能升级配置' : undefined"
 	                        @click="showChangePlanModal = true"
 	                      >
 	                        {{ $t('billing.changePlan') }}
@@ -3267,7 +3015,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
 	                      :disabled="destroyButtonDisabled || isOperationDisabled"
 	                      class="btn-danger btn-sm w-full lg:w-auto lg:min-w-[110px]"
 	                      :class="(destroyButtonDisabled || isOperationDisabled) ? 'opacity-50 cursor-not-allowed' : ''"
-	                      :title="isExchangeLocked ? '交易所挂牌或交割期间不能销毁实例' : undefined"
 	                      @click="showDestroyModal = true"
 	                    >
                       {{ $t('instance.destroy.button') }}
@@ -3305,8 +3052,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
             :reassign-ipv6-loading="reassignIpv6Loading"
             :last-ipv6-reassign-at="(instance as any).last_ipv6_reassign_at"
 	            :delete-ports-loading="deletePortsLoading"
-	            :exchange-locked="isExchangeLocked"
-	            exchange-lock-reason="实例已上架交易所或处于交割中，端口和网络配置已锁定"
 	            @copy="copyToClipboard"
 	            @add-port="requestAddPort"
 	            @delete-port="deletePort"
@@ -3318,8 +3063,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
 	          <InstanceSitesTab
 	            v-if="activeTab === 'sites' && instance"
 	            :instance-id="instance.id"
-	            :exchange-locked="isExchangeLocked"
-	            exchange-lock-reason="实例已上架交易所或处于交割中，代理站点配置已锁定"
 	          />
 
           <!-- Traffic Tab -->
@@ -3335,8 +3078,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
 	            :instance-name="instance.name"
 	            :instance-status="instance.status"
 	            :snapshot-limit="(instance as any).snapshot_limit"
-	            :exchange-locked="isExchangeLocked"
-	            exchange-lock-reason="实例已上架交易所或处于交割中，快照和自动策略已锁定"
 	          />
 
           <!-- Quota Tab -->
@@ -3362,7 +3103,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
             :instance-type="(instance as any).instanceType || 'container'"
             :instance-status="instance.status"
             :is-instance-owner="(instance as any).isInstanceOwner === true || authStore.isAdmin"
-            :exchange-locked="isExchangeLocked"
             @change-host-task="startTaskPolling"
           />
 
@@ -3846,13 +3586,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
                     : $t('instance.subscription.autoRenewDisabled') }}
                 </span>
               </div>
-              <div
-                v-if="isExchangeLocked"
-                class="mb-4 rounded-lg border px-3 py-2 text-sm"
-                :class="themeStore.isDark ? 'border-amber-500/40 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
-              >
-                交易所挂牌或交割期间不能修改自动续费策略，请先下架或等待交割完成。
-              </div>
               <!-- 说明 -->
               <p
                 class="text-sm mb-4"
@@ -3894,8 +3627,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
                 :class="themeStore.isDark
                   ? 'bg-red-600 hover:bg-red-700 text-white'
                   : 'bg-red-500 hover:bg-red-600 text-white'"
-                :disabled="autoRenewLoading || isExchangeLocked"
-                :title="isExchangeLocked ? '交易所挂牌或交割期间不能修改自动续费策略' : undefined"
+                :disabled="autoRenewLoading"
                 @click="handleSetAutoRenew(false)"
               >
                 <span v-if="autoRenewLoading" class="flex items-center justify-center gap-2">
@@ -3913,8 +3645,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
                 :class="themeStore.isDark
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                   : 'bg-emerald-500 hover:bg-emerald-600 text-white'"
-                :disabled="autoRenewLoading || isExchangeLocked"
-                :title="isExchangeLocked ? '交易所挂牌或交割期间不能修改自动续费策略' : undefined"
+                :disabled="autoRenewLoading"
                 @click="handleSetAutoRenew(true)"
               >
                 <span v-if="autoRenewLoading" class="flex items-center justify-center gap-2">
@@ -3931,36 +3662,6 @@ function formatShortDate(dateStr: string | null | undefined): string {
         </div>
       </Transition>
     </Teleport>
-
-    <div
-      v-if="showExchangeStopConfirm && instance"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
-      @click.self="!exchangeStopLoading && (showExchangeStopConfirm = false)"
-    >
-      <section
-        class="w-full max-w-lg rounded-lg border p-5 shadow-xl"
-        :class="themeStore.isDark ? 'border-neutral-800 bg-neutral-900' : 'border-gray-200 bg-white'"
-      >
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">先暂停实例</h2>
-            <p class="mt-1 text-sm text-themed-muted">
-              {{ instance.name }} 需要先暂停后才能上架交易所。
-            </p>
-          </div>
-          <button class="btn-secondary btn-sm" type="button" :disabled="exchangeStopLoading" @click="showExchangeStopConfirm = false">取消</button>
-        </div>
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
-          上架交易所前必须先暂停实例。暂停后实例将停止运行，挂牌期间保持暂停/交易锁定；成交后系统会强制重装并交割给买家，原系统和数据不可恢复。
-        </div>
-        <div class="mt-5 flex justify-end gap-2">
-          <button class="btn-secondary" type="button" :disabled="exchangeStopLoading" @click="showExchangeStopConfirm = false">取消</button>
-          <button class="btn-primary" type="button" :disabled="exchangeStopLoading" @click="stopInstanceForExchangeListing">
-            {{ exchangeStopLoading ? '提交中...' : '先暂停实例' }}
-          </button>
-        </div>
-      </section>
-    </div>
 
     <InstanceBadgeModal
       v-if="!isAdminEntry && instance"

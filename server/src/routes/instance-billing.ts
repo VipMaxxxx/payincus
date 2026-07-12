@@ -14,7 +14,6 @@ import { restoreBandwidth } from '../lib/incus/incus-traffic.js'
 import { sendRenewSuccessEmail } from '../lib/mailer.js'
 import { calculateDailyPrice } from '../lib/billing-calc.js'
 import type { BillingRecordType } from '@prisma/client'
-import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 
 interface BatchRenewPreviewItem {
   id: number
@@ -107,18 +106,6 @@ function serializeInstanceBillingPriceYuan(price: unknown, fallbackPlanPrice: un
   return Number.isFinite(value) && value > 0 ? value : serializePlanPriceYuan(fallbackPlanPrice)
 }
 
-async function checkExchangeBillingLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
-  const exchangeLock = await getExchangeOperationLock(instanceId)
-  if (!exchangeLock.locked) return false
-  reply.code(409).send({
-    error: exchangeLock.message,
-    code: exchangeLock.code,
-    listingId: exchangeLock.listingId,
-    orderId: exchangeLock.orderId
-  })
-  return true
-}
-
 async function buildBatchRenewPreviewItem(userId: number, instanceId: number): Promise<BatchRenewPreviewItem> {
   const instance = await prisma.instance.findUnique({
     where: { id: instanceId },
@@ -177,20 +164,6 @@ async function buildBatchRenewPreviewItem(userId: number, instanceId: number): P
       canRenew: false,
       autoRenew: false,
       reason: '免费实例无需续费',
-      isHostedInstance: false,
-      daysUntilExpire: null,
-      options: []
-    }
-  }
-
-  const exchangeLock = await getExchangeOperationLock(instance.id)
-  if (exchangeLock.locked) {
-    return {
-      id: instance.id,
-      name: instance.name,
-      canRenew: false,
-      autoRenew: false,
-      reason: exchangeLock.message || '实例已上架交易所或处于交易锁定中',
       isHostedInstance: false,
       daysUntilExpire: null,
       options: []
@@ -500,8 +473,6 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '免费实例无需续费', code: 'FREE_INSTANCE' })
     }
 
-    if (await checkExchangeBillingLock(instanceId, reply)) return
-
     // 检查是否为用户托管节点的续费限制
     const host = await prisma.host.findUnique({
       where: { id: instance.hostId },
@@ -727,8 +698,6 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '免费实例不支持升降级', code: 'FREE_INSTANCE' })
     }
 
-    if (await checkExchangeBillingLock(instanceId, reply)) return
-
     // 获取新方案
     const newPlan = await db.getPlanById(newPlanId)
     if (!newPlan) {
@@ -862,8 +831,6 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     if (!instance.packagePlanId) {
       return reply.code(400).send({ error: '免费实例不支持升降级', code: 'FREE_INSTANCE' })
     }
-
-    if (await checkExchangeBillingLock(instanceId, reply)) return
 
     // 获取新方案
     const newPlan = await db.getPlanById(newPlanId)
@@ -1029,8 +996,6 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '免费实例不支持自动续费', code: 'FREE_INSTANCE' })
     }
 
-    if (await checkExchangeBillingLock(instanceId, reply)) return
-
     await db.updateAutoRenew(instanceId, autoRenew)
 
     await createLog(
@@ -1101,18 +1066,6 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
 
       if (!instance.packagePlanId) {
         results.push({ id: instance.id, name: instance.name, success: false, skipped: true, reason: '免费实例不支持自动续费' })
-        continue
-      }
-
-      const exchangeLock = await getExchangeOperationLock(instance.id)
-      if (exchangeLock.locked) {
-        results.push({
-          id: instance.id,
-          name: instance.name,
-          success: false,
-          skipped: true,
-          reason: exchangeLock.message || '实例已上架交易所或处于交易锁定中'
-        })
         continue
       }
 

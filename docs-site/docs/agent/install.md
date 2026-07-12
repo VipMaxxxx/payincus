@@ -51,13 +51,3 @@ go test ./...
 cd ..
 bash agent/scripts/build-release.sh
 ```
-
-## 生产 proof
-
-最终验收需要在真实生产 Incus 宿主机安装 Agent，并确认：
-
-- 心跳上报。
-- 资源上报。
-- 实例状态上报。
-- 流量上报。
-- 错误签名和重放请求被拒绝。

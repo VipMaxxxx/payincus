@@ -13,8 +13,7 @@ const TICKET_LINK_TYPES = new Set<TicketObjectLinkType>([
   'recharge_record',
   'order_operation_case',
   'instance',
-  'host',
-  'sla_alert'
+  'host'
 ])
 
 export type TicketSlaStatus = 'waiting_first_response' | 'waiting_user' | 'waiting_internal' | 'due_soon' | 'overdue' | 'met' | 'closed'
@@ -1563,24 +1562,6 @@ async function validateTicketObjectLink(ticket: { userId: number; hostId: number
       })
       return host ? `节点 ${host.name} · ${host.status}` : null
     }
-    case 'sla_alert': {
-      const alertOr: Array<Record<string, unknown>> = []
-      if (ticket.hostId) {
-        alertOr.push({ objectType: 'host', objectId: ticket.hostId })
-      }
-      if (ticket.instanceId) {
-        alertOr.push({ objectType: 'instance', objectId: ticket.instanceId })
-      }
-      if (alertOr.length === 0) return null
-      const event = await prisma.slaAlertEvent.findFirst({
-        where: {
-          id: objectId,
-          OR: alertOr
-        },
-        select: { title: true, status: true, severity: true }
-      })
-      return event ? `告警 ${event.title} · ${event.severity}/${event.status}` : null
-    }
     default:
       return null
   }
@@ -1686,36 +1667,6 @@ export async function getAdminTicketSuccessContext(ticketId: number): Promise<an
     })
   ])
 
-  const instanceIds = recentInstances.map(instance => instance.id)
-  const hostIds = [...new Set(recentInstances.map(instance => instance.hostId).filter((id): id is number => Number.isInteger(id)))]
-  const alertOr: Array<Record<string, unknown>> = []
-  if (instanceIds.length > 0) {
-    alertOr.push({ objectType: 'instance', objectId: { in: instanceIds } })
-  }
-  if (hostIds.length > 0) {
-    alertOr.push({ objectType: 'host', objectId: { in: hostIds } })
-  }
-  const recentAlerts = alertOr.length > 0
-    ? await prisma.slaAlertEvent.findMany({
-        where: { OR: alertOr },
-        orderBy: { lastTriggeredAt: 'desc' },
-        take: 5,
-        select: {
-          id: true,
-          ruleCode: true,
-          module: true,
-          severity: true,
-          status: true,
-          objectType: true,
-          objectId: true,
-          objectLabel: true,
-          title: true,
-          message: true,
-          lastTriggeredAt: true
-        }
-      })
-    : []
-
   const timeline = [
     ...messages.map(message => ({
       type: 'message',
@@ -1774,10 +1725,6 @@ export async function getAdminTicketSuccessContext(ticketId: number): Promise<an
       ...instance,
       createdAt: instance.createdAt.toISOString(),
       expiresAt: toIso(instance.expiresAt)
-    })),
-    recentAlerts: recentAlerts.map(alert => ({
-      ...alert,
-      lastTriggeredAt: alert.lastTriggeredAt.toISOString()
     })),
     links: links.map(link => ({
       id: link.id,

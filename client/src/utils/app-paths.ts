@@ -32,10 +32,6 @@ export function walletPath(): string {
   return '/wallet'
 }
 
-export function exchangePath(): string {
-  return '/exchange'
-}
-
 export function entertainmentPath(): string {
   return '/entertainment'
 }

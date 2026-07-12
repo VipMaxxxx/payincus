@@ -24,7 +24,6 @@
     "smoke:recharge-callback": "node --import tsx scripts/smoke-recharge-callback.ts",
     "smoke:agent-heartbeat": "node --import tsx scripts/smoke-agent-heartbeat.ts",
     "smoke:agent-release": "node --import tsx scripts/smoke-agent-release.ts",
-    "smoke:exchange-marketplace": "node --import tsx scripts/smoke-exchange-marketplace-e2e.ts",
     "verify:production-db": "node dist/scripts/verify-production-db-readiness.js",
     "test:accounting-route-id-guards": "node --import tsx scripts/test-accounting-route-id-guards.ts",
     "test:agent-auth": "node --import tsx scripts/test-agent-auth.ts",
@@ -47,7 +46,6 @@
     "test:backup-task-race-guards": "node --import tsx scripts/test-backup-task-race-guards.ts",
     "test:batch-config-route-guards": "node --import tsx scripts/test-batch-config-route-guards.ts",
     "test:commercial-operations-overview-guards": "node --import tsx scripts/test-commercial-operations-overview-guards.ts",
-    "test:capacity-cost-guards": "node --import tsx scripts/test-capacity-cost-guards.ts",
     "test:content-route-guards": "node --import tsx scripts/test-content-route-guards.ts",
     "test:cookie-config": "node --import tsx scripts/test-cookie-config.ts",
     "test:cors-origin-config": "node --import tsx scripts/test-cors-origin-config.ts",
@@ -150,7 +148,6 @@
     "test:security-config": "node --import tsx scripts/test-security-config.ts",
     "test:security-headers": "node --import tsx scripts/test-security-headers.ts",
     "test:scheduler-startup-idempotency": "node --import tsx scripts/test-scheduler-startup-idempotency.ts",
-    "test:sla-alert-guards": "node --import tsx scripts/test-sla-alert-guards.ts",
     "test:startup-database-safety": "node --import tsx scripts/test-startup-database-safety.ts",
     "test:snapshot-route-guards": "node --import tsx scripts/test-snapshot-route-guards.ts",
     "test:ssh-key-route-id-guards": "node --import tsx scripts/test-ssh-key-route-id-guards.ts",
@@ -187,8 +184,6 @@
     "test:traffic-reset-locks": "node --import tsx scripts/test-traffic-reset-locks.ts",
     "test:instance-create-failure-compensation": "node --import tsx scripts/test-instance-create-failure-compensation.ts",
     "test:instance-create-turnstile-guards": "node --import tsx scripts/test-instance-create-turnstile-guards.ts",
-    "test:exchange-marketplace-guards": "node --import tsx scripts/test-exchange-marketplace-guards.ts",
-    "test:exchange-lifecycle-guards": "node --import tsx scripts/test-exchange-lifecycle-guards.ts",
     "test:websocket-origin-guard": "node --import tsx scripts/test-websocket-origin-guard.ts"
   },
   "dependencies": {

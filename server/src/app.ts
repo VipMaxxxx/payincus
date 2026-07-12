@@ -81,8 +81,6 @@ import rechargeRoutes from './routes/recharge.js'
 import adminBillingRoutes from './routes/admin-billing.js'
 import adminStatisticsRoutes from './routes/admin-statistics.js'
 import adminHostingRoutes from './routes/admin-hosting.js'
-import adminSlaAlertsRoutes from './routes/admin-sla-alerts.js'
-import adminCapacityCostRoutes from './routes/admin-capacity-cost.js'
 import affRoutes from './routes/aff.js'
 import entertainmentRoutes from './routes/entertainment.js'
 import adminEntertainmentRoutes from './routes/admin-entertainment.js'
@@ -100,8 +98,6 @@ import adminOAuthAppRoutes from './routes/admin-oauth-apps.js'
 import oauthProviderRoutes from './routes/oauth-provider.js'
 import orderRoutes from './routes/orders.js'
 import giftCardsRoutes from './routes/gift-cards.js'
-import exchangeRoutes from './routes/exchange.js'
-import adminExchangeRoutes from './routes/admin-exchange.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -540,8 +536,6 @@ await fastify.register(rechargeRoutes)
 await fastify.register(adminBillingRoutes)
 await fastify.register(adminStatisticsRoutes)
 await fastify.register(adminHostingRoutes)
-await fastify.register(adminSlaAlertsRoutes, { prefix: '/api/admin/sla-alerts' })
-await fastify.register(adminCapacityCostRoutes, { prefix: '/api/admin/capacity-cost' })
 await fastify.register(affRoutes, { prefix: '/api/aff' })
 await fastify.register(entertainmentRoutes, { prefix: '/api/entertainment' })
 await fastify.register(adminEntertainmentRoutes, { prefix: '/api/admin/entertainment' })
@@ -559,8 +553,6 @@ await fastify.register(adminOAuthAppRoutes, { prefix: '/api/admin/oauth-apps' })
 await fastify.register(oauthProviderRoutes, { prefix: '/api/oauth-provider' })
 await fastify.register(orderRoutes)
 await fastify.register(giftCardsRoutes, { prefix: '/api/gift-cards' })
-await fastify.register(exchangeRoutes, { prefix: '/api/exchange' })
-await fastify.register(adminExchangeRoutes, { prefix: '/api/admin/exchange' })
 
 const shouldServeStaticClient = process.env.NODE_ENV === 'production' && process.env.SERVE_STATIC_CLIENT !== 'false'
 
@@ -782,11 +774,6 @@ const start = async (): Promise<void> => {
     startInstanceTaskWorker()
     console.log('⚙️ 实例操作任务调度器已启动')
 
-    // 启动交易所交割 Worker
-    const { startExchangeDeliveryWorker, stopExchangeDeliveryWorker } = await import('./workers/exchangeDeliveryWorker.js')
-    startExchangeDeliveryWorker()
-    console.log('🏦 交易所交割队列已启动')
-
     // 启动备份恢复和远程上传队列 Worker
     const {
       cleanupStaleTasks: cleanupStaleRestoreTasks,
@@ -831,7 +818,6 @@ const start = async (): Promise<void> => {
       stopHostNotificationEmailWorker()
       stopRestoreWorker()
       stopBackupUploadWorker()
-      stopExchangeDeliveryWorker()
       
       // 清理所有活跃终端会话
       const { closeAllSessions } = await import('./lib/terminal-proxy.js')

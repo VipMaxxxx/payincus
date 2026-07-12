@@ -51,13 +51,3 @@ go test ./...
 cd ..
 bash agent/scripts/build-release.sh
 ```
-
-## Production Proof
-
-Production acceptance must verify:
-
-- Heartbeat reporting.
-- Resource reporting.
-- Instance state reporting.
-- Traffic reporting.
-- Invalid signatures and replayed requests are rejected.

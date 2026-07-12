@@ -33,8 +33,6 @@ interface Props {
   reassignIpv6Loading?: boolean  // 重新分配 IPv6 加载状态
   lastIpv6ReassignAt?: string | null  // 上次重新分配 IPv6 时间
   deletePortsLoading?: boolean  // 批量删除加载状态
-  exchangeLocked?: boolean
-  exchangeLockReason?: string
 }
 
 interface Emits {
@@ -106,8 +104,7 @@ const portQuotaRemaining = computed<number>(() => {
   return Math.max(0, portLimit.value - portQuotaUsed.value)
 })
 const isPortQuotaFull = computed<boolean>(() => portLimit.value !== null && portQuotaRemaining.value <= 0)
-const exchangeLockText = computed<string>(() => props.exchangeLockReason || '实例已上架交易所或处于交割中，网络配置已锁定')
-const canMutateNetwork = computed<boolean>(() => props.canManagePorts !== false && props.exchangeLocked !== true)
+const canMutateNetwork = computed<boolean>(() => props.canManagePorts !== false)
 const canAddPorts = computed<boolean>(() => {
   if (!canMutateNetwork.value) return false
   if (isIpv6OnlyInstance.value) return false
@@ -237,7 +234,6 @@ const ipv6ReassignCooldown = computed(() => {
 
 // 是否可以重新分配 IPv6
 const canReassignIpv6 = computed(() => {
-  if (props.exchangeLocked) return false
   return props.instance.status === 'stopped' && !ipv6ReassignCooldown.value.inCooldown
 })
 
@@ -319,13 +315,11 @@ const canReassignIpv6 = computed(() => {
                       : 'bg-gray-100 text-gray-400 cursor-not-allowed')
                 ]"
                 :disabled="!canReassignIpv6 || props.reassignIpv6Loading"
-	                :title="props.exchangeLocked
-	                  ? exchangeLockText
-	                  : (ipv6ReassignCooldown.inCooldown
-	                    ? t('instance.detail.network.reassignIpv6Cooldown', { hours: ipv6ReassignCooldown.remainingHours })
-	                    : (instance.status !== 'stopped'
-	                      ? t('instance.detail.network.reassignIpv6StopRequired')
-	                      : t('instance.detail.network.reassignIpv6')))"
+	                :title="ipv6ReassignCooldown.inCooldown
+	                  ? t('instance.detail.network.reassignIpv6Cooldown', { hours: ipv6ReassignCooldown.remainingHours })
+	                  : (instance.status !== 'stopped'
+	                    ? t('instance.detail.network.reassignIpv6StopRequired')
+	                    : t('instance.detail.network.reassignIpv6'))"
                 @click="emit('reassign-ipv6')"
               >
                 <span v-if="props.reassignIpv6Loading" class="flex items-center gap-1">
@@ -477,14 +471,6 @@ const canReassignIpv6 = computed(() => {
             </div>
           </button>
         </div>
-      </div>
-
-      <div
-        v-if="props.exchangeLocked"
-        class="mb-3 rounded-lg border px-3 py-2 text-xs"
-        :class="themeStore.isDark ? 'border-amber-900/60 bg-amber-950/30 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
-      >
-        {{ exchangeLockText }}
       </div>
 
       <!-- 批量操作栏 -->

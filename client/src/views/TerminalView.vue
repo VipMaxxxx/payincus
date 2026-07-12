@@ -633,7 +633,6 @@ function terminalControlError(code?: string): string {
         WS_LIMIT_EXCEEDED: 'connectionLimitExceeded',
         INSTANCE_NOT_FOUND: 'instanceNotFound',
         FORBIDDEN: 'forbidden',
-        EXCHANGE_INSTANCE_LOCKED: 'instanceLocked',
         INSTANCE_NOT_RUNNING: 'instanceNotRunning',
         INSTANCE_LIMIT_EXCEEDED: 'instanceLimitExceeded',
         HOST_NOT_FOUND: 'hostNotFound',

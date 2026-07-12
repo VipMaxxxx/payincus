@@ -45,10 +45,7 @@ const operationName = computed(() => {
     change_password: t('sensitiveVerification.operationTypes.change_password'),
     disable_2fa: t('sensitiveVerification.operationTypes.disable_2fa'),
     change_email: t('sensitiveVerification.operationTypes.change_email'),
-    delete_account: t('sensitiveVerification.operationTypes.delete_account'),
-    exchange_purchase: t('sensitiveVerification.operationTypes.exchange_purchase'),
-    exchange_withdrawal: t('sensitiveVerification.operationTypes.exchange_withdrawal'),
-    exchange_balance_transfer: t('sensitiveVerification.operationTypes.exchange_balance_transfer')
+    delete_account: t('sensitiveVerification.operationTypes.delete_account')
   }
   return names[props.operationType] || props.operationType
 })

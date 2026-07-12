@@ -1,13 +1,13 @@
 # Communication, Tickets and Help
 
-Communication features cover customer support, operational announcements, system alerts and delivery status.
+Communication features cover customer support, operational announcements, system notifications and delivery status.
 
 ## User Features
 
 | Feature | Description |
 | --- | --- |
 | Tickets | Submit issues, upload attachments, read replies and close tickets. |
-| Inbox | Read system messages, billing reminders and resource alerts. |
+| Inbox | Read system messages, billing reminders and resource notifications. |
 | Help center | Read help articles maintained by administrators. |
 | Popup announcements | Receive maintenance and important operation notices. |
 
@@ -23,7 +23,7 @@ Communication features cover customer support, operational announcements, system
 
 - Inbox messages for default in-app notifications.
 - SMTP for email verification, ticket reminders and system mail.
-- Telegram for admin alerts, user binding and critical events.
+- Telegram for admin notifications, user binding and critical events.
 - Lsky for ticket images or attachment workflows.
 
 ## Risks

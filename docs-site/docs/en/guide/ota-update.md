@@ -86,4 +86,4 @@ When disk space is insufficient, the update fails before download or migration a
 - Only super administrators can start updates and rollbacks.
 - Update APIs stay under `/api/admin/system-update/*`.
 - The user portal does not include update controls or update APIs.
-- Updates and rollbacks preserve `.env`, `server/certs`, `agent-release`, `plugins`, `plugin-data`, `plugin-logs`, `plugin-staging`, `.npm` and `.cache`.
+- Updates and rollbacks preserve `.env`, `server/certs`, `agent-release`, `.npm` and `.cache`.

@@ -13,7 +13,7 @@ Backend: 127.0.0.1:3001
 
 ## Runtime Dependencies
 
-The server needs Node.js 22, pnpm 9.14.2, PostgreSQL 16, Redis, Nginx, and systemd. Redis 7 is recommended; use the production readiness checks as the authoritative minimum.
+The server needs Node.js 22, pnpm 9.14.2, PostgreSQL 16, Redis, Nginx, and systemd. Redis 7 is recommended.
 
 ```bash
 corepack enable
@@ -27,8 +27,6 @@ pnpm -v
 ```bash
 sudo useradd --system --home /opt/incudal --shell /usr/sbin/nologin incudal 2>/dev/null || true
 sudo install -d -o incudal -g incudal /opt/incudal /opt/incudal/releases /opt/incudal/update-logs
-sudo install -d -o incudal -g incudal /opt/incudal/plugins /opt/incudal/plugin-data /opt/incudal/plugin-logs /opt/incudal/plugin-staging
-sudo install -d -o incudal -g incudal /opt/incudal/themes /opt/incudal/theme-data /opt/incudal/theme-staging
 ```
 
 Do not create `/opt/incudal/current` as a regular directory. It must be a symlink to the active release.
@@ -95,7 +93,7 @@ SITE_URL=https://panel.example.com
 PAYMENT_CALLBACK_BASE_URL=https://panel.example.com
 ```
 
-Never set `RESET_DATABASE` in production. Enable payment, SMTP, Telegram, Turnstile, object storage, extension market, theme market, and OTA variables only after configuring their providers.
+Never set `RESET_DATABASE` in production. Enable payment, SMTP, Telegram, Turnstile, object storage, and OTA variables only after configuring their providers.
 
 ## Database Migration
 
@@ -133,5 +131,3 @@ ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
-
-Final production acceptance still requires real payment, Incus/Agent, SMTP/notifications, Turnstile, backup/restore, and response-header evidence. See the [Production Checklist](/en/deployment/production-checklist).

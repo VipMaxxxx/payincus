@@ -22,14 +22,12 @@ const sensitiveOperationRouteSources = sensitiveOperationRouteFiles.map(file => 
 
 assert.ok(
   source.includes('const POSITIVE_RESOURCE_ID_PATTERN = /^[1-9]\\d*$/') &&
-    source.includes('const RESOURCE_SCOPED_ACCOUNT_OPERATIONS = new Set<OperationType>') &&
-    source.includes("'exchange_purchase'") &&
     source.includes('function parsePositiveResourceIdString(value: string): number | null') &&
     source.includes('function parsePositiveResourceIdNumber(value: unknown): number | null') &&
     source.includes('function normalizeResourceIdForOperation(') &&
-    source.includes('RESOURCE_SCOPED_ACCOUNT_OPERATIONS.has(operationType)') &&
+    source.includes('return isResourceOperation(operationType)') &&
     source.includes('Number.isSafeInteger(value)'),
-  'operation verification routes must use strict positive safe-integer resource ID parsing and allow scoped account operations such as exchange purchase'
+  'operation verification routes must use strict positive safe-integer resource ID parsing and preserve resource/account operation contracts'
 )
 
 assert.equal(

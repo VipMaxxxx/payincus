@@ -11,7 +11,7 @@ description: PayIncus 部署、运营、开发与 OTA 文档
       <div>
         <p class="docs-home-eyebrow">PayIncus Documentation</p>
         <h1>PayIncus 文档</h1>
-        <p class="docs-home-summary">面向 Incus 商业化交付平台的部署、运营、扩展开发和生产维护手册，覆盖扩展市场、主题系统和后台 OTA。按工作目标查找步骤，不需要先了解整个系统。</p>
+        <p class="docs-home-summary">面向 Incus 商业化交付平台的部署、运营、API 接入和生产维护手册，覆盖用户端、管理后台和后台 OTA。按工作目标查找步骤，不需要先了解整个系统。</p>
         <div class="docs-home-actions">
           <a class="docs-home-button primary" href="/deployment/one-click-install">部署 PayIncus</a>
           <a class="docs-home-button" href="/guide/introduction">了解系统</a>
@@ -21,10 +21,9 @@ description: PayIncus 部署、运营、开发与 OTA 文档
     </div>
     <aside class="docs-home-release">
       <span>Production Operations</span>
-      <strong>发布、更新与生产验收</strong>
+      <strong>发布与更新</strong>
       <p>安装包、OTA 和回滚均以 GitHub Release 与 SHA256 校验结果为准。</p>
       <a href="/release/version-log">查看版本日志</a>
-      <a href="/deployment/production-checklist">打开生产验收清单</a>
     </aside>
   </section>
 
@@ -62,11 +61,9 @@ description: PayIncus 部署、运营、开发与 OTA 文档
         <a href="/features/instances">实例与资源交付</a>
       </div>
       <div class="docs-home-column">
-        <h3>开发与扩展</h3>
-        <a href="/plugins/overview">扩展中心</a>
-        <a href="/plugins/development">扩展开发</a>
-        <a href="/plugins/sdk">TypeScript SDK</a>
+        <h3>API 与接入</h3>
         <a href="/api/overview">Public API</a>
+        <a href="/api/overview#oauth">OAuth Provider</a>
       </div>
     </div>
   </section>
@@ -74,12 +71,11 @@ description: PayIncus 部署、运营、开发与 OTA 文档
   <section class="docs-home-section">
     <div class="docs-home-section-label">
       <h2>项目入口</h2>
-      <p>源码、交流、市场与在线环境。</p>
+      <p>源码、交流与在线环境。</p>
     </div>
     <div class="docs-home-links">
       <a class="docs-home-link" href="https://github.com/VipMaxxxx/payincus"><span class="docs-home-link-index">GH</span><span><strong>GitHub</strong><small>查看源码、Release 和问题记录。</small></span></a>
       <a class="docs-home-link" href="https://t.me/Payincus"><span class="docs-home-link-index">TG</span><span><strong>Telegram</strong><small>加入 PayIncus 项目交流群。</small></span></a>
-      <a class="docs-home-link" href="/plugins/market"><span class="docs-home-link-index">EX</span><span><strong>扩展市场</strong><small>查看经过治理的扩展目录和安装边界。</small></span></a>
       <a class="docs-home-link" href="/demo"><span class="docs-home-link-index">DE</span><span><strong>在线 Demo</strong><small>了解演示环境的账号和只读限制。</small></span></a>
     </div>
   </section>

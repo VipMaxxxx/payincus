@@ -2,7 +2,7 @@
 "info":
   "title": "PayIncus Public API"
   "version": "0.1.0"
-  "description": "Stable public API surface for PayIncus extensions and third-party integrations."
+  "description": "Stable public API surface for PayIncus third-party integrations."
 "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema"
 "servers":
   -
@@ -36,10 +36,7 @@
     "description": "Support ticket APIs scoped to the authenticated user."
   -
     "name": "Notifications"
-    "description": "User-scoped notification APIs for extensions and third-party integrations."
-  -
-    "name": "Plugin Actions"
-    "description": "Public API bridge for invoking enabled plugin webhook actions."
+    "description": "User-scoped notification APIs for third-party integrations."
   -
     "name": "API Tokens"
     "description": "User-authenticated token management APIs under /api/api-tokens."
@@ -1364,7 +1361,7 @@
       "tags":
         - "Notifications"
       "summary": "Send a self notification"
-      "description": "Requires notifications:send scope. Sends a short notification only to the authenticated token user. This write endpoint has a stricter public API rate limit. Requests may either provide title/message, use a controlled platform template, or use an enabled plugin-declared template in the form plugin:<pluginId>:<templateId> with scalar variables. User overrides, broadcast, channel selection, HTML, and arbitrary internal event types are not accepted."
+      "description": "Requires notifications:send scope. Sends a short notification only to the authenticated token user. This write endpoint has a stricter public API rate limit. Requests may either provide title/message or use a controlled platform template with scalar variables. User overrides, broadcast, channel selection, HTML, and arbitrary internal event types are not accepted."
       "operationId": "sendPublicNotification"
       "security":
         -
@@ -1429,166 +1426,6 @@
           "$ref": "#/components/responses/Unauthorized"
         "403":
           "$ref": "#/components/responses/Forbidden"
-  "/plugins":
-    "get":
-      "tags":
-        - "Plugin Actions"
-      "summary": "List enabled public plugin actions"
-      "description": "Requires plugins:action scope. Lists enabled plugin webhook actions that are public API callable. Webhook URLs, secrets, configuration values, service-extension hooks, and gateway-extension hooks are not exposed."
-      "operationId": "listPublicPluginActions"
-      "security":
-        -
-          "publicApiToken":
-            - "plugins:action"
-        -
-          "oauthAccessToken":
-            - "plugins:action"
-      "parameters":
-        -
-          "name": "page"
-          "in": "query"
-          "schema":
-            "type": "integer"
-            "minimum": 1
-        -
-          "name": "pageSize"
-          "in": "query"
-          "schema":
-            "type": "integer"
-            "minimum": 1
-            "maximum": 100
-        -
-          "name": "sort"
-          "in": "query"
-          "schema":
-            "type": "string"
-            "enum":
-              - "pluginId"
-              - "-pluginId"
-              - "createdAt"
-              - "-createdAt"
-            "default": "pluginId"
-      "responses":
-        "200":
-          "description": "Enabled public plugin action catalog."
-          "content":
-            "application/json":
-              "schema":
-                "type": "object"
-                "required":
-                  - "data"
-                  - "meta"
-                "properties":
-                  "data":
-                    "type": "array"
-                    "items":
-                      "$ref": "#/components/schemas/PublicPluginActionCatalogItem"
-                  "meta":
-                    "$ref": "#/components/schemas/PublicApiPaginationMeta"
-        "401":
-          "$ref": "#/components/responses/Unauthorized"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-  "/plugins/{pluginId}/actions":
-    "get":
-      "tags":
-        - "Plugin Actions"
-      "summary": "List actions for an enabled plugin"
-      "description": "Requires plugins:action scope. Returns only public API callable webhook action contracts for the enabled plugin."
-      "operationId": "getPublicPluginActions"
-      "security":
-        -
-          "publicApiToken":
-            - "plugins:action"
-        -
-          "oauthAccessToken":
-            - "plugins:action"
-      "parameters":
-        -
-          "name": "pluginId"
-          "in": "path"
-          "required": true
-          "schema":
-            "type": "string"
-            "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9-]*){2,}$"
-      "responses":
-        "200":
-          "description": "Enabled plugin public action catalog."
-          "content":
-            "application/json":
-              "schema":
-                "type": "object"
-                "required":
-                  - "data"
-                "properties":
-                  "data":
-                    "$ref": "#/components/schemas/PublicPluginActionCatalog"
-        "400":
-          "$ref": "#/components/responses/BadRequest"
-        "401":
-          "$ref": "#/components/responses/Unauthorized"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-  "/plugins/{pluginId}/actions/{action}":
-    "post":
-      "tags":
-        - "Plugin Actions"
-      "summary": "Dispatch an enabled plugin action"
-      "description": "Requires plugins:action scope. Invokes a declared enabled public webhook action as the authenticated token user. This dispatch endpoint has a stricter public API route rate limit plus a database-backed token/plugin/action dynamic quota derived from the action rateLimit policy: normal actions allow 30 dispatches per minute by default and strict actions allow 10 dispatches per minute by default for the same token, plugin, and action across backend instances. Administrators can override the quota globally, per plugin, or per plugin action. The plugin manifest must grant plugin-action:run and every action scope required by the action. Service-extension and gateway-extension lifecycle actions cannot be dispatched through this public endpoint."
-      "operationId": "dispatchPublicPluginAction"
-      "security":
-        -
-          "publicApiToken":
-            - "plugins:action"
-        -
-          "oauthAccessToken":
-            - "plugins:action"
-      "parameters":
-        -
-          "name": "pluginId"
-          "in": "path"
-          "required": true
-          "schema":
-            "type": "string"
-            "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9-]*){2,}$"
-        -
-          "name": "action"
-          "in": "path"
-          "required": true
-          "schema":
-            "type": "string"
-            "minLength": 1
-            "maxLength": 80
-      "requestBody":
-        "required": false
-        "content":
-          "application/json":
-            "schema":
-              "$ref": "#/components/schemas/DispatchPublicPluginActionRequest"
-      "responses":
-        "200":
-          "description": "Plugin action dispatch result."
-          "content":
-            "application/json":
-              "schema":
-                "type": "object"
-                "required":
-                  - "data"
-                "properties":
-                  "data":
-                    "$ref": "#/components/schemas/PublicPluginActionResult"
-        "400":
-          "$ref": "#/components/responses/BadRequest"
-        "401":
-          "$ref": "#/components/responses/Unauthorized"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "429":
-          "$ref": "#/components/responses/TooManyRequests"
   "/api-tokens":
     "get":
       "tags":
@@ -1882,7 +1719,6 @@
         - "tickets:write"
         - "notifications:read"
         - "notifications:send"
-        - "plugins:action"
     "OAuthScopeMetadata":
       "type": "object"
       "required":
@@ -2258,10 +2094,6 @@
         "trafficLimitSpeed":
           "type":
             - "integer"
-            - "null"
-        "slaGuarantee":
-          "type":
-            - "number"
             - "null"
     "PublicApiService":
       "type": "object"
@@ -3159,11 +2991,11 @@
         "source":
           "type": "string"
           "maxLength": 80
-          "description": "Optional extension or integration display name."
+          "description": "Optional integration display name."
         "template":
           "type": "string"
-          "pattern": "^(flash_sale_reminder|service_action_update|billing_notice|plugin:[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9-]*){2,}:[a-z][a-z0-9_.:-]{0,79})$"
-          "description": "Optional controlled template ID. Use a platform template or plugin:<pluginId>:<templateId> for an enabled plugin-declared template. When provided, title/message are generated from scalar variables."
+          "pattern": "^(service_action_update|billing_notice)$"
+          "description": "Optional controlled platform template ID. When provided, title/message are generated from scalar variables."
         "variables":
           "type": "object"
           "additionalProperties":
@@ -3227,7 +3059,6 @@
             - "string"
             - "null"
           "enum":
-            - "flash_sale_reminder"
             - "service_action_update"
             - "billing_notice"
             - null
@@ -3239,156 +3070,6 @@
         "failed":
           "type": "integer"
           "minimum": 0
-    "PublicPluginActionDescriptor":
-      "type": "object"
-      "required":
-        - "name"
-        - "method"
-        - "path"
-        - "runtime"
-        - "scopes"
-        - "idempotency"
-        - "rateLimit"
-        - "requestSchema"
-        - "responseSchema"
-      "properties":
-        "name":
-          "type": "string"
-        "method":
-          "type": "string"
-          "enum":
-            - "GET"
-            - "POST"
-            - "PUT"
-            - "PATCH"
-            - "DELETE"
-        "path":
-          "type": "string"
-        "runtime":
-          "type": "string"
-          "enum":
-            - "webhook"
-        "scopes":
-          "type": "array"
-          "items":
-            "type": "string"
-        "idempotency":
-          "type": "string"
-          "enum":
-            - "none"
-            - "optional"
-            - "required"
-        "rateLimit":
-          "type": "string"
-          "enum":
-            - "normal"
-            - "strict"
-        "requestSchema":
-          "type":
-            - "object"
-            - "null"
-        "responseSchema":
-          "type":
-            - "object"
-            - "null"
-    "PublicPluginActionCatalogItem":
-      "type": "object"
-      "required":
-        - "pluginId"
-        - "name"
-        - "version"
-        - "description"
-        - "author"
-        - "homepage"
-        - "actionCount"
-        - "actions"
-      "properties":
-        "pluginId":
-          "type": "string"
-        "name":
-          "type": "string"
-        "version":
-          "type": "string"
-        "description":
-          "type":
-            - "string"
-            - "null"
-        "author":
-          "type":
-            - "string"
-            - "null"
-        "homepage":
-          "type":
-            - "string"
-            - "null"
-        "actionCount":
-          "type": "integer"
-          "minimum": 1
-        "actions":
-          "type": "array"
-          "items":
-            "$ref": "#/components/schemas/PublicPluginActionDescriptor"
-    "PublicPluginActionCatalog":
-      "type": "object"
-      "required":
-        - "pluginId"
-        - "name"
-        - "version"
-        - "description"
-        - "actions"
-      "properties":
-        "pluginId":
-          "type": "string"
-        "name":
-          "type": "string"
-        "version":
-          "type": "string"
-        "description":
-          "type":
-            - "string"
-            - "null"
-        "actions":
-          "type": "array"
-          "items":
-            "$ref": "#/components/schemas/PublicPluginActionDescriptor"
-    "DispatchPublicPluginActionRequest":
-      "type": "object"
-      "additionalProperties": true
-      "properties":
-        "idempotencyKey":
-          "type": "string"
-          "description": "Optional idempotency key passed to the plugin webhook runtime."
-        "payload":
-          "description": "JSON payload forwarded to the plugin action. If omitted, the whole request body is forwarded."
-    "PublicPluginActionResult":
-      "type": "object"
-      "required":
-        - "pluginId"
-        - "action"
-        - "runtime"
-        - "status"
-        - "statusCode"
-        - "requestId"
-        - "result"
-      "properties":
-        "pluginId":
-          "type": "string"
-        "action":
-          "type": "string"
-        "runtime":
-          "type": "string"
-          "enum":
-            - "webhook"
-        "status":
-          "type": "string"
-          "enum":
-            - "success"
-        "statusCode":
-          "type": "integer"
-        "requestId":
-          "type": "string"
-        "result":
-          {}
     "PublicApiToken":
       "type": "object"
       "required":

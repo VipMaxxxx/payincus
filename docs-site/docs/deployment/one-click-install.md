@@ -51,7 +51,7 @@ sudo bash install-panel.sh
 - 解压 PayIncus 到 `/opt/incudal`。
 - 执行 Prisma migration 和 Prisma Client 生成。
 - 创建 `incudal` 系统用户和 `incudal-backend` 服务。
-- 创建插件、主题、OTA、证书、缓存和日志目录。
+- 创建 OTA、证书、缓存和日志目录。
 - 写入用户端和管理端 Nginx 配置。
 - 设置 `FRONTEND_URL`、`ADMIN_FRONTEND_URL`、`SITE_URL` 和 `PAYMENT_CALLBACK_BASE_URL`。
 
@@ -64,7 +64,7 @@ sudo bash install-panel.sh --uninstall
 
 `--upgrade` 只用于旧版非原子目录。检测到 `/opt/incudal/current` 原子布局时，脚本会安全退出，请改用管理后台 OTA，避免覆盖 `current/releases`。
 
-旧版升级会保留 `.env`、证书、插件、主题、运行缓存和 OTA 目录。卸载会删除整个 `/opt/incudal`，包括本地插件、主题、运行资产、OTA release 和更新日志；PostgreSQL/Redis 服务及数据库不会自动删除。卸载前先完成数据库和安装目录备份。
+旧版升级会保留 `.env`、证书、运行缓存和 OTA 目录。卸载会删除整个 `/opt/incudal`，包括运行资产、OTA release 和更新日志；PostgreSQL/Redis 服务及数据库不会自动删除。卸载前先完成数据库和安装目录备份。
 
 ## 安装后检查
 

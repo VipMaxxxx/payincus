@@ -1,17 +1,17 @@
 -- DropTable
-DROP TABLE "delivery_assurance_actions";
+DROP TABLE IF EXISTS "delivery_assurance_actions" CASCADE;
 
 -- DropTable
-DROP TABLE "delivery_assurance_cases";
+DROP TABLE IF EXISTS "delivery_assurance_cases" CASCADE;
 
 -- DropEnum
-DROP TYPE "DeliveryAssuranceActionType";
+DROP TYPE IF EXISTS "DeliveryAssuranceActionType";
 
 -- DropEnum
-DROP TYPE "DeliveryAssuranceIssueType";
+DROP TYPE IF EXISTS "DeliveryAssuranceIssueType";
 
 -- DropEnum
-DROP TYPE "DeliveryAssuranceCaseStatus";
+DROP TYPE IF EXISTS "DeliveryAssuranceCaseStatus";
 
 -- Remove delivery-case ticket links before narrowing the enum.
 DELETE FROM "ticket_object_links" WHERE "object_type" = 'delivery_case';
@@ -29,4 +29,4 @@ CREATE TYPE "TicketObjectLinkType" AS ENUM (
 ALTER TABLE "ticket_object_links"
   ALTER COLUMN "object_type" TYPE "TicketObjectLinkType"
   USING ("object_type"::text::"TicketObjectLinkType");
-DROP TYPE "TicketObjectLinkType_old";
+DROP TYPE IF EXISTS "TicketObjectLinkType_old";

@@ -43,20 +43,8 @@ Dedicated IPv4 plans require a public IPv4 pool on the host first. Configure it 
 
 - Review hosted hosts and resource providers.
 - View capacity, online state and Agent heartbeat.
-- Use `/admin/capacity-cost` to inspect sellable inventory, Host pressure, capacity trends, cost profiles and plan margin estimates.
 - Manage plans, images, pools and supply state.
 - Handle revenue, settlement and abnormal resources.
-
-## Capacity and Cost Operations
-
-The capacity and cost center is admin-only:
-
-- Sellable inventory is derived from Host configuration, Agent resource reports, non-deleted instance usage and NAT port ranges.
-- Dedicated IPv4 sellable inventory is derived from `free` addresses in the host public IPv4 pools.
-- Cost profiles include monthly Host cost, monthly IPv4 cost, traffic cost per TB and internal notes. They are used only for backend estimates.
-- Plan margin estimates do not participate in real billing and do not change plan sales, instance creation or renewal behavior.
-- High Host CPU, memory, disk or NAT port usage creates capacity warnings and syncs them into the SLA alert center.
-- User package APIs do not return costs, margins, capacity snapshots or internal alert fields.
 
 ## Agent Relationship
 
@@ -71,7 +59,6 @@ Agent provides runtime truth:
 ## Risks
 
 - Host capacity must be checked against both Agent reports and admin configuration.
-- Capacity and cost data is an operations view only and must not be treated as the sole source of truth for delivery.
 - Resource providers must not access other users' resources.
 - Plan availability changes must not break renewal or billing for existing instances.
 - Do not keep allocating resources blindly when the Agent is offline.
@@ -86,7 +73,6 @@ Agent provides runtime truth:
 - The admin console can read host storage pools and create or link a storage pool.
 - Dedicated IPv4 hosts have public IPv4 pools configured, and free address capacity is reflected in plan delivery checks.
 - Capacity changes are reflected in the admin console.
-- The capacity and cost page shows Host sellable inventory, cost profiles and plan margin estimates, while users cannot see those internal fields.
 - User hosting entry points follow the system configuration.
 - Admins can review and manage hosted resources.
 - Instance delivery does not allocate to unavailable hosts.

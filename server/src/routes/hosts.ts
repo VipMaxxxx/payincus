@@ -82,7 +82,6 @@ import {
   parseStartupItems
 } from '../lib/instance-audit.js'
 import { provisionManagedInstanceAsync } from '../lib/managed-instance-provision.js'
-import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 import crypto from 'crypto'
 import type { InstanceStatus } from '@prisma/client'
 
@@ -327,18 +326,6 @@ async function rejectActiveHostInstanceWorkflowConflict(reply: FastifyReply, ins
   }
 
   return false
-}
-
-async function rejectHostExchangeLock(reply: FastifyReply, instanceId: number): Promise<boolean> {
-  const exchangeLock = await getExchangeOperationLock(instanceId)
-  if (!exchangeLock.locked) return false
-  reply.code(409).send({
-    error: exchangeLock.message || '实例已上架交易所或处于交易锁定中，不能执行宿主机运维操作',
-    code: exchangeLock.code,
-    listingId: exchangeLock.listingId,
-    orderId: exchangeLock.orderId
-  })
-  return true
 }
 
 async function createHostInstanceTaskOrConflict(
@@ -2986,17 +2973,6 @@ export default async function hostRoutes(fastify: FastifyInstance) {
         const hasPendingTransfer = await db.hasPendingTransfer(instance.id)
         if (hasPendingTransfer) {
           results.push({ id: instance.id, name: instance.name, success: false, error: '实例有待处理的转移请求' })
-          continue
-        }
-
-        const exchangeLock = await getExchangeOperationLock(instance.id)
-        if (exchangeLock.locked) {
-          results.push({
-            id: instance.id,
-            name: instance.name,
-            success: false,
-            error: exchangeLock.message || '实例已上架交易所或处于交易锁定中，不能批量删除'
-          })
           continue
         }
 
@@ -5713,17 +5689,6 @@ export default async function hostRoutes(fastify: FastifyInstance) {
         const hasPendingTransfer = await db.hasPendingTransfer(instance.id)
         if (hasPendingTransfer) {
           results.push({ id: instance.id, name: instance.name, success: false, error: '实例有待处理的转移请求' })
-          continue
-        }
-
-        const exchangeLock = await getExchangeOperationLock(instance.id)
-        if (exchangeLock.locked) {
-          results.push({
-            id: instance.id,
-            name: instance.name,
-            success: false,
-            error: exchangeLock.message || '实例已上架交易所或处于交易锁定中，不能迁移节点'
-          })
           continue
         }
 
@@ -8592,7 +8557,6 @@ export default async function hostRoutes(fastify: FastifyInstance) {
     }
 
     if (await rejectActiveHostInstanceWorkflowConflict(reply, instanceId)) return
-    if (await rejectHostExchangeLock(reply, instanceId)) return
 
     try {
       const client = await getIncusClient(host as Host)
@@ -8682,7 +8646,6 @@ export default async function hostRoutes(fastify: FastifyInstance) {
     }
 
     if (await rejectActiveHostInstanceWorkflowConflict(reply, instanceId)) return
-    if (await rejectHostExchangeLock(reply, instanceId)) return
 
     if (!await isValidSystemImage(imageAlias)) {
       return reply.code(400).send(apiError(ErrorCode.IMAGE_NOT_FOUND))

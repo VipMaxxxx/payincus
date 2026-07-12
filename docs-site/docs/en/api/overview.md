@@ -1,6 +1,6 @@
 # API Reference
 
-PayIncus separates same-origin internal APIs, the stable Public API, Agent APIs, OAuth Provider endpoints and WebSocket routes. Third-party developers, extension backends and automation jobs should use the `/api/v1` Public API instead of relying on user/admin internal browser APIs.
+PayIncus separates same-origin internal APIs, the stable Public API, Agent APIs, OAuth Provider endpoints and WebSocket routes. Third-party developers and automation jobs should use the `/api/v1` Public API instead of relying on user/admin internal browser APIs.
 
 <div class="api-reference-hero">
   <div>
@@ -21,7 +21,7 @@ https://panel.example.com/api/v1
 
 | Token | Source | Purpose |
 | --- | --- | --- |
-| `pat_` | User-created API token | Server integrations, automation and extension backends |
+| `pat_` | User-created API token | Server integrations and automation |
 | `poa_` | OAuth Provider authorization-code flow | Third-party apps acting for the authorized user |
 | Session JWT | Browser login session | User portal, admin console and OAuth consent pages |
 
@@ -36,9 +36,9 @@ Public API uses `Authorization: Bearer <token>` and checks scope, expiry, revoca
 | Sorting | Common sorts include `createdAt`, `-createdAt`; some resources support `updatedAt` and `displayOrder` |
 | Response | Success responses use `data`; lists also include `meta` |
 | Errors | `400`, `401`, `403`, `404`, `409`, `429` |
-| High-risk writes | Service operations, renewal, ticket writes, notification sends and plugin actions have stricter limits |
+| High-risk writes | Service operations, renewal, ticket writes and notification sends have stricter limits |
 
-Public API does not expose direct payment creation, payment callbacks, refunds, direct balance writes, service creation/deletion/migration, sensitive profile changes, admin operations or extension/theme administration. Those flows must go through PayIncus internal state machines, admin review or the controlled extension platform.
+Public API does not expose direct payment creation, payment callbacks, refunds, direct balance writes, service creation/deletion/migration, sensitive profile changes or admin operations. Those flows must go through PayIncus internal state machines or admin review.
 
 ## Profile
 
@@ -341,7 +341,7 @@ Public API does not expose direct payment creation, payment callbacks, refunds, 
   <p>Send a short controlled notification to the token owner.</p>
   <table><tbody>
     <tr><th>Scope</th><td><code>notifications:send</code></td></tr>
-    <tr><th>Body</th><td><code>title</code>/<code>message</code>, a platform template or an enabled plugin template such as <code>plugin:&lt;pluginId&gt;:&lt;templateId&gt;</code>.</td></tr>
+    <tr><th>Body</th><td><code>title</code>/<code>message</code> or a platform template.</td></tr>
     <tr><th>Boundary</th><td>No broadcast, HTML, arbitrary channel selection or internal event override.</td></tr>
   </tbody></table>
 </div>
@@ -353,42 +353,6 @@ Public API does not expose direct payment creation, payment callbacks, refunds, 
   <p>Read the current user's unread notification count.</p>
   <table><tbody>
     <tr><th>Scope</th><td><code>notifications:read</code></td></tr>
-  </tbody></table>
-</div>
-
-## Plugin Actions
-
-### GET /api/v1/plugins {#get-api-v1-plugins}
-
-<div class="api-endpoint">
-  <div class="api-endpoint-title"><span class="api-method get">GET</span><code>/api/v1/plugins</code></div>
-  <p>List enabled plugin actions callable through Public API.</p>
-  <table><tbody>
-    <tr><th>Scope</th><td><code>plugins:action</code></td></tr>
-    <tr><th>Boundary</th><td>Webhook URLs, secrets, config values, service hooks and gateway hooks are not exposed.</td></tr>
-  </tbody></table>
-</div>
-
-### GET /api/v1/plugins/:pluginId/actions {#get-api-v1-plugins-pluginid-actions}
-
-<div class="api-endpoint">
-  <div class="api-endpoint-title"><span class="api-method get">GET</span><code>/api/v1/plugins/:pluginId/actions</code></div>
-  <p>Read callable action contracts for one enabled plugin.</p>
-  <table><tbody>
-    <tr><th>Scope</th><td><code>plugins:action</code></td></tr>
-  </tbody></table>
-</div>
-
-### POST /api/v1/plugins/:pluginId/actions/:action {#post-api-v1-plugins-pluginid-actions-action}
-
-<div class="api-endpoint">
-  <div class="api-endpoint-title"><span class="api-method post">POST</span><code>/api/v1/plugins/:pluginId/actions/:action</code></div>
-  <p>Invoke an enabled public plugin action as the token owner.</p>
-  <table><tbody>
-    <tr><th>Scope</th><td><code>plugins:action</code> plus any action-required scopes.</td></tr>
-    <tr><th>Body</th><td>JSON payload and optional idempotency key.</td></tr>
-    <tr><th>Rate limit</th><td>Normal actions default to 30 dispatches per minute; strict actions default to 10 per minute for the same token, plugin and action.</td></tr>
-    <tr><th>Boundary</th><td>Service-extension and gateway lifecycle actions cannot be dispatched through this endpoint.</td></tr>
   </tbody></table>
 </div>
 
@@ -469,7 +433,7 @@ These routes are called by the user portal session rather than `/api/v1` Bearer 
 
 ## WebSocket and Internal APIs
 
-Terminal WebSocket uses same-origin `/api/ws`. User internal APIs, admin APIs, Agent APIs and payment callbacks have separate authentication models and should not be bypassed by third-party extensions.
+Terminal WebSocket uses same-origin `/api/ws`. User internal APIs, admin APIs, Agent APIs and payment callbacks have separate authentication models and should not be bypassed by third-party applications.
 
 ```text
 wss://panel.example.com/api/ws/...

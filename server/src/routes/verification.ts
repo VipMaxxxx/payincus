@@ -20,9 +20,6 @@ const VALID_OPERATION_TYPES: OperationType[] = [
     'disable_2fa',
     'change_email',
     'delete_account',
-    'exchange_purchase',
-    'exchange_withdrawal',
-    'exchange_balance_transfer',
     'delete_instance',
     'reinstall_instance',
     'recreate_instance',
@@ -32,12 +29,8 @@ const VALID_OPERATION_TYPES: OperationType[] = [
 ]
 
 const POSITIVE_RESOURCE_ID_PATTERN = /^[1-9]\d*$/
-const RESOURCE_SCOPED_ACCOUNT_OPERATIONS = new Set<OperationType>([
-    'exchange_purchase'
-])
-
 function operationRequiresResourceId(operationType: OperationType): boolean {
-    return isResourceOperation(operationType) || RESOURCE_SCOPED_ACCOUNT_OPERATIONS.has(operationType)
+    return isResourceOperation(operationType)
 }
 
 function parsePositiveResourceIdString(value: string): number | null {

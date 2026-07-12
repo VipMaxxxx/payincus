@@ -108,12 +108,6 @@ const routes: RouteRecordRaw[] = [
     meta: { titleKey: 'publicSite.market.title', title: '产品市场' }
   },
   {
-    path: '/exchange',
-    name: 'exchange',
-    component: () => import('@/views/ExchangeView.vue'),
-    meta: { requiresAuth: true, requiresUser: true, titleKey: 'nav.exchange', title: '交易所' }
-  },
-  {
     path: '/instances',
     name: 'instances',
     component: () => import('@/views/InstancesView.vue'),

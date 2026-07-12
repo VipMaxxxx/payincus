@@ -94,71 +94,6 @@ enum InstanceStatus {
   deleted
 }
 
-enum ExchangeListingStatus {
-  active
-  paused
-  delisted
-  locked
-  sold
-  delivery_failed
-  force_delisted
-}
-
-enum ExchangeOrderStatus {
-  escrowed
-  delivering
-  delivered
-  confirming
-  completed
-  cancelled
-  refunded
-  disputed
-  manual_review
-  failed
-}
-
-enum ExchangeDeliveryTaskStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-enum ExchangeWalletLogType {
-  escrow_hold
-  escrow_refund
-  fee_charge
-  escrow_release
-  withdrawal_freeze
-  withdrawal_complete
-  withdrawal_reject
-  balance_transfer
-  dispute_freeze
-  dispute_release
-  admin_adjust
-}
-
-enum ExchangeWithdrawalStatus {
-  pending
-  approved
-  paying
-  completed
-  rejected
-  cancelled
-  failed_returned
-}
-
-enum ExchangeDisputeStatus {
-  open
-  processing
-  rejected
-  refunded
-  redelivering
-  released
-  closed
-}
-
 enum Protocol {
   tcp
   udp
@@ -211,44 +146,6 @@ enum InstanceTaskStatus {
   PROCESSING
   COMPLETED
   FAILED
-}
-
-enum SlaAlertSeverity {
-  info
-  warning
-  critical
-}
-
-enum SlaAlertStatus {
-  open
-  investigating
-  recovered
-  ignored
-}
-
-enum SlaAlertObjectType {
-  host
-  agent
-  instance
-  order
-  task
-  notification_channel
-  system_update
-  smtp
-  telegram
-  disk
-  system
-}
-
-enum SlaAlertActionType {
-  detected
-  merged
-  notified
-  acknowledge
-  mark_recovered
-  ignore
-  silence
-  rule_update
 }
 
 enum HostNotificationEmailTaskStatus {
@@ -317,85 +214,11 @@ model InstanceTask {
   finishedAt DateTime? @map("finished_at")
 
   instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
-  exchangeDeliveryTask ExchangeDeliveryTask?
 
   @@index([hostId, status])
   @@index([instanceId])
   @@index([userId])
   @@map("instance_tasks")
-}
-
-model SlaAlertRule {
-  id                   Int              @id @default(autoincrement())
-  code                 String           @unique
-  module               String
-  title                String
-  description          String?
-  severity             SlaAlertSeverity @default(warning)
-  enabled              Boolean          @default(true)
-  thresholdMinutes     Int?             @map("threshold_minutes")
-  thresholdCount       Int?             @map("threshold_count")
-  dedupeMinutes        Int              @default(30) @map("dedupe_minutes")
-  notificationChannels Json             @default("[]") @map("notification_channels")
-  silenceUntil         DateTime?        @map("silence_until")
-  createdAt            DateTime         @default(now()) @map("created_at")
-  updatedAt            DateTime         @updatedAt @map("updated_at")
-
-  @@index([enabled, module])
-  @@index([severity])
-  @@map("sla_alert_rules")
-}
-
-model SlaAlertEvent {
-  id               Int                @id @default(autoincrement())
-  ruleCode         String             @map("rule_code")
-  module           String
-  severity         SlaAlertSeverity
-  status           SlaAlertStatus     @default(open)
-  objectType       SlaAlertObjectType @map("object_type")
-  objectId         Int?               @map("object_id")
-  objectLabel      String?            @map("object_label")
-  fingerprint      String
-  title            String
-  message          String
-  detail           Json?
-  triggerCount     Int                @default(1) @map("trigger_count")
-  firstTriggeredAt DateTime           @default(now()) @map("first_triggered_at")
-  lastTriggeredAt  DateTime           @default(now()) @map("last_triggered_at")
-  recoveredAt      DateTime?          @map("recovered_at")
-  silencedUntil    DateTime?          @map("silenced_until")
-  handledByUserId  Int?               @map("handled_by_user_id")
-  handledByUsername String?           @map("handled_by_username")
-  handledAt        DateTime?          @map("handled_at")
-  note             String?
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
-
-  actions          SlaAlertAction[]
-
-  @@unique([ruleCode, fingerprint])
-  @@index([status, severity, lastTriggeredAt(sort: Desc)])
-  @@index([module, status])
-  @@index([objectType, objectId])
-  @@index([ruleCode])
-  @@map("sla_alert_events")
-}
-
-model SlaAlertAction {
-  id            Int                @id @default(autoincrement())
-  eventId       Int                @map("event_id")
-  actionType    SlaAlertActionType @map("action_type")
-  actorUserId   Int?               @map("actor_user_id")
-  actorUsername String?            @map("actor_username")
-  note          String?
-  detail        Json?
-  createdAt     DateTime           @default(now()) @map("created_at")
-
-  event          SlaAlertEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@index([eventId, createdAt(sort: Desc)])
-  @@index([actionType, createdAt(sort: Desc)])
-  @@map("sla_alert_actions")
 }
 
 enum NotificationChannelType {
@@ -604,14 +427,6 @@ model User {
   logs                 Log[]
   transfersSent        InstanceTransfer[]    @relation("TransferFrom")
   transfersReceived    InstanceTransfer[]    @relation("TransferTo")
-  exchangeWallet       ExchangeWallet?
-  exchangeListings     ExchangeListing[]     @relation("ExchangeListingSeller")
-  exchangePurchases    ExchangeOrder[]       @relation("ExchangeOrderBuyer")
-  exchangeSales        ExchangeOrder[]       @relation("ExchangeOrderSeller")
-  exchangeWalletLogs   ExchangeWalletLog[]
-  exchangeWithdrawals  ExchangeWithdrawal[]
-  exchangeDisputes     ExchangeDispute[]     @relation("ExchangeDisputeCreator")
-  exchangeAuditLogs    ExchangeAuditLog[]
   refreshTokens        RefreshToken[]
   tokenInvalidations   TokenInvalidation[]
 
@@ -953,55 +768,10 @@ model Host {
   instanceAuditIgnores   InstanceAuditIgnore[]
   instanceAuditScans     InstanceAuditScan[]
   instanceAuditActions   InstanceAuditAction[]
-  costProfile            HostCostProfile?
-  capacitySnapshots      CapacitySnapshot[]
 
   @@unique([userId, name]) // 同一用户下名称唯一
   @@index([userId])
   @@map("hosts")
-}
-
-model HostCostProfile {
-  id                 Int      @id @default(autoincrement())
-  hostId             Int      @unique @map("host_id")
-  monthlyCost        Decimal  @default(0) @map("monthly_cost") @db.Decimal(10, 2)
-  ipv4MonthlyCost    Decimal  @default(0) @map("ipv4_monthly_cost") @db.Decimal(10, 2)
-  trafficTbCost      Decimal  @default(0) @map("traffic_tb_cost") @db.Decimal(10, 2)
-  currency           String   @default("CNY")
-  notes              String?
-  updatedByUserId    Int?     @map("updated_by_user_id")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
-
-  host Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
-
-  @@index([updatedByUserId])
-  @@map("host_cost_profiles")
-}
-
-model CapacitySnapshot {
-  id               Int      @id @default(autoincrement())
-  hostId           Int      @map("host_id")
-  capturedDate     DateTime @map("captured_date") @db.Date
-  cpuTotal         Int      @map("cpu_total")
-  cpuUsed          Int      @map("cpu_used")
-  memoryTotal      Int      @map("memory_total")
-  memoryUsed       Int      @map("memory_used")
-  diskTotal        Int      @map("disk_total")
-  diskUsed         Int      @map("disk_used")
-  natPortTotal     Int      @map("nat_port_total")
-  natPortUsed      Int      @map("nat_port_used")
-  instanceCount    Int      @map("instance_count")
-  trafficUsedBytes BigInt   @default(0) @map("traffic_used_bytes")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  host Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
-
-  @@unique([hostId, capturedDate])
-  @@index([capturedDate])
-  @@index([hostId, capturedDate])
-  @@map("capacity_snapshots")
 }
 
 model HostAgent {
@@ -1344,9 +1114,6 @@ model Instance {
   auditIgnores     InstanceAuditIgnore[]
   auditScans       InstanceAuditScan[]
   auditActions     InstanceAuditAction[]
-  exchangeListings ExchangeListing[]
-  exchangeOrders   ExchangeOrder[]
-  exchangeDeliveryTasks ExchangeDeliveryTask[]
 
   @@index([userId])
   @@index([hostId])
@@ -1852,244 +1619,6 @@ model DailyTraffic {
   @@map("daily_traffic")
 }
 
-// ==================== 交易所模型 ====================
-
-model ExchangeListing {
-  id                    Int                   @id @default(autoincrement())
-  instanceId            Int                   @map("instance_id")
-  sellerUserId          Int                   @map("seller_user_id")
-  status                ExchangeListingStatus @default(active)
-  price                 Decimal               @db.Decimal(10, 2)
-  feeAmount             Decimal               @default(0) @map("fee_amount") @db.Decimal(10, 2)
-  sellerReceivesAmount  Decimal               @default(0) @map("seller_receives_amount") @db.Decimal(10, 2)
-  description           String?
-  autoDelistAt          DateTime?             @map("auto_delist_at")
-  lockedOrderId         Int?                  @map("locked_order_id")
-  idempotencyKey        String?               @unique @map("idempotency_key")
-
-  // 匿名展示快照：前台只读这些资产字段，不暴露卖家/买家身份。
-  snapshot              Json                  @default("{}")
-  eligibilitySnapshot   Json                  @default("{}") @map("eligibility_snapshot")
-
-  createdAt             DateTime              @default(now()) @map("created_at")
-  updatedAt             DateTime              @updatedAt @map("updated_at")
-  delistedAt            DateTime?             @map("delisted_at")
-
-  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
-  seller   User     @relation("ExchangeListingSeller", fields: [sellerUserId], references: [id], onDelete: Cascade)
-  orders   ExchangeOrder[]
-
-  @@index([sellerUserId, status])
-  @@index([instanceId, status])
-  @@index([status, createdAt(sort: Desc)])
-  @@index([autoDelistAt])
-  @@map("exchange_listings")
-}
-
-model ExchangeOrder {
-  id                   Int                 @id @default(autoincrement())
-  orderNo              String              @unique @map("order_no")
-  listingId            Int                 @map("listing_id")
-  instanceId           Int                 @map("instance_id")
-  buyerUserId          Int                 @map("buyer_user_id")
-  sellerUserId         Int                 @map("seller_user_id")
-  status               ExchangeOrderStatus @default(escrowed)
-  price                Decimal             @db.Decimal(10, 2)
-  feeAmount            Decimal             @default(0) @map("fee_amount") @db.Decimal(10, 2)
-  sellerReceivesAmount Decimal             @default(0) @map("seller_receives_amount") @db.Decimal(10, 2)
-  escrowAmount         Decimal             @default(0) @map("escrow_amount") @db.Decimal(10, 2)
-  buyerBalanceLogId    Int?                @map("buyer_balance_log_id")
-  refundBalanceLogId   Int?                @map("refund_balance_log_id")
-  walletLogId          Int?                @map("wallet_log_id")
-  confirmationDueAt    DateTime?           @map("confirmation_due_at")
-  completedAt          DateTime?           @map("completed_at")
-  cancelledAt          DateTime?           @map("cancelled_at")
-  failureReason        String?             @map("failure_reason")
-  idempotencyKey       String?             @unique @map("idempotency_key")
-  snapshot             Json                @default("{}")
-  createdAt            DateTime            @default(now()) @map("created_at")
-  updatedAt            DateTime            @updatedAt @map("updated_at")
-
-  listing ExchangeListing @relation(fields: [listingId], references: [id], onDelete: Restrict)
-  instance Instance       @relation(fields: [instanceId], references: [id], onDelete: Restrict)
-  buyer   User            @relation("ExchangeOrderBuyer", fields: [buyerUserId], references: [id], onDelete: Restrict)
-  seller  User            @relation("ExchangeOrderSeller", fields: [sellerUserId], references: [id], onDelete: Restrict)
-  deliveryTasks ExchangeDeliveryTask[]
-  disputes ExchangeDispute[]
-
-  @@index([listingId])
-  @@index([instanceId])
-  @@index([buyerUserId, status])
-  @@index([sellerUserId, status])
-  @@index([status, createdAt(sort: Desc)])
-  @@map("exchange_orders")
-}
-
-model ExchangeDeliveryTask {
-  id                 Int                        @id @default(autoincrement())
-  orderId            Int                        @map("order_id")
-  instanceId         Int                        @map("instance_id")
-  instanceTaskId     Int?                       @unique @map("instance_task_id")
-  buyerUserId        Int                        @map("buyer_user_id")
-  sellerUserId       Int                        @map("seller_user_id")
-  status             ExchangeDeliveryTaskStatus @default(PENDING)
-  step               String?
-  progress           Json                       @default("{}")
-  retryCount         Int                        @default(0) @map("retry_count")
-  imageAlias         String?                    @map("image_alias")
-  sshKeyId           Int?                       @map("ssh_key_id")
-  error              String?
-  createdAt          DateTime                   @default(now()) @map("created_at")
-  startedAt          DateTime?                  @map("started_at")
-  finishedAt         DateTime?                  @map("finished_at")
-
-  order    ExchangeOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  instance Instance      @relation(fields: [instanceId], references: [id], onDelete: Restrict)
-  instanceTask InstanceTask? @relation(fields: [instanceTaskId], references: [id], onDelete: SetNull)
-
-  @@index([orderId])
-  @@index([instanceId, status])
-  @@index([instanceTaskId])
-  @@index([status, createdAt])
-  @@map("exchange_delivery_tasks")
-}
-
-model ExchangeWallet {
-  id              Int      @id @default(autoincrement())
-  userId          Int      @unique @map("user_id")
-  availableAmount Decimal  @default(0) @map("available_amount") @db.Decimal(10, 2)
-  frozenAmount    Decimal  @default(0) @map("frozen_amount") @db.Decimal(10, 2)
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  logs ExchangeWalletLog[]
-  withdrawals ExchangeWithdrawal[]
-
-  @@map("exchange_wallets")
-}
-
-model ExchangeWalletLog {
-  id             Int                   @id @default(autoincrement())
-  walletId       Int                   @map("wallet_id")
-  userId         Int                   @map("user_id")
-  type           ExchangeWalletLogType
-  amount         Decimal               @db.Decimal(10, 2)
-  availableBefore Decimal              @map("available_before") @db.Decimal(10, 2)
-  availableAfter  Decimal              @map("available_after") @db.Decimal(10, 2)
-  frozenBefore    Decimal              @map("frozen_before") @db.Decimal(10, 2)
-  frozenAfter     Decimal              @map("frozen_after") @db.Decimal(10, 2)
-  orderId        Int?                  @map("order_id")
-  withdrawalId   Int?                  @map("withdrawal_id")
-  balanceLogId   Int?                  @map("balance_log_id")
-  idempotencyKey String?                @unique @map("idempotency_key")
-  remark         String?
-  createdAt      DateTime              @default(now()) @map("created_at")
-
-  wallet ExchangeWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt(sort: Desc)])
-  @@index([orderId])
-  @@index([withdrawalId])
-  @@map("exchange_wallet_logs")
-}
-
-model ExchangeWithdrawal {
-  id              Int                      @id @default(autoincrement())
-  withdrawalNo    String                   @unique @map("withdrawal_no")
-  walletId        Int                      @map("wallet_id")
-  userId          Int                      @map("user_id")
-  amount          Decimal                  @db.Decimal(10, 2)
-  status          ExchangeWithdrawalStatus @default(pending)
-  method          String?
-  accountSnapshot Json                     @default("{}") @map("account_snapshot")
-  applicantRemark String?                  @map("applicant_remark")
-  idempotencyKey  String?                  @unique @map("idempotency_key")
-  reviewerUserId  Int?                     @map("reviewer_user_id")
-  reviewRemark    String?                  @map("review_remark")
-  proofUrl         String?                 @map("proof_url")
-  createdAt       DateTime                 @default(now()) @map("created_at")
-  updatedAt       DateTime                 @updatedAt @map("updated_at")
-  reviewedAt      DateTime?                @map("reviewed_at")
-  completedAt     DateTime?                @map("completed_at")
-
-  wallet ExchangeWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, status])
-  @@index([status, createdAt])
-  @@map("exchange_withdrawals")
-}
-
-model ExchangeDispute {
-  id              Int                   @id @default(autoincrement())
-  orderId          Int                   @map("order_id")
-  creatorUserId    Int                   @map("creator_user_id")
-  status           ExchangeDisputeStatus @default(open)
-  reason           String
-  detail           String?
-  idempotencyKey   String?               @unique @map("idempotency_key")
-  resolution       String?
-  handledByUserId  Int?                  @map("handled_by_user_id")
-  createdAt        DateTime              @default(now()) @map("created_at")
-  updatedAt        DateTime              @updatedAt @map("updated_at")
-  resolvedAt       DateTime?             @map("resolved_at")
-
-  order   ExchangeOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  creator User          @relation("ExchangeDisputeCreator", fields: [creatorUserId], references: [id], onDelete: Cascade)
-
-  @@index([orderId, status])
-  @@index([creatorUserId, status])
-  @@map("exchange_disputes")
-}
-
-model ExchangeAuditLog {
-  id          Int      @id @default(autoincrement())
-  actorUserId Int?     @map("actor_user_id")
-  action      String
-  targetType  String   @map("target_type")
-  targetId    Int?     @map("target_id")
-  detail      Json     @default("{}")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
-
-  @@index([actorUserId, createdAt(sort: Desc)])
-  @@index([targetType, targetId])
-  @@map("exchange_audit_logs")
-}
-
-model ExchangePolicyConfig {
-  id                           Int      @id @default(autoincrement())
-  enabled                      Boolean  @default(false)
-  minRemainingDays             Int      @default(7) @map("min_remaining_days")
-  expiringSoonDays             Int      @default(7) @map("expiring_soon_days")
-  minPrice                     Decimal  @default(1) @map("min_price") @db.Decimal(10, 2)
-  maxPrice                     Decimal? @map("max_price") @db.Decimal(10, 2)
-  maxMarkupPercent             Int      @default(150) @map("max_markup_percent")
-  feePercent                   Decimal  @default(5) @map("fee_percent") @db.Decimal(5, 2)
-  minFee                       Decimal  @default(0) @map("min_fee") @db.Decimal(10, 2)
-  maxFee                       Decimal? @map("max_fee") @db.Decimal(10, 2)
-  confirmationHours            Int      @default(24) @map("confirmation_hours")
-  autoConfirmEnabled           Boolean  @default(true) @map("auto_confirm_enabled")
-  minWithdrawalAmount          Decimal  @default(10) @map("min_withdrawal_amount") @db.Decimal(10, 2)
-  dailyWithdrawalLimit         Decimal? @map("daily_withdrawal_limit") @db.Decimal(10, 2)
-  dailyWithdrawalCountLimit    Int      @default(3) @map("daily_withdrawal_count_limit")
-  allowBalanceTransfer         Boolean  @default(true) @map("allow_balance_transfer")
-  allowPublicIpTransfer        Boolean  @default(true) @map("allow_public_ip_transfer")
-  allowBuyerImageSelection     Boolean  @default(false) @map("allow_buyer_image_selection")
-  maxActiveListingsPerUser     Int      @default(5) @map("max_active_listings_per_user")
-  maxPurchasesPerUserPerDay    Int      @default(5) @map("max_purchases_per_user_per_day")
-  disputeTimeoutHours          Int      @default(72) @map("dispute_timeout_hours")
-  packageAllowlist             Json     @default("[]") @map("package_allowlist")
-  hostAllowlist                Json     @default("[]") @map("host_allowlist")
-  createdAt                    DateTime @default(now()) @map("created_at")
-  updatedAt                    DateTime @updatedAt @map("updated_at")
-
-  @@map("exchange_policy_configs")
-}
-
 // ==================== 远程存储配置模型 ====================
 
 model StorageConfig {
@@ -2407,9 +1936,6 @@ enum OperationType {
   disable_2fa
   change_email
   delete_account
-  exchange_purchase
-  exchange_withdrawal
-  exchange_balance_transfer
   // 资源相关操作（通知渠道验证）
   delete_instance
   reinstall_instance
@@ -2680,7 +2206,6 @@ enum TicketObjectLinkType {
   order_operation_case
   instance
   host
-  sla_alert
 }
 
 model TicketInternalNote {

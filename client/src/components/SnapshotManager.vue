@@ -14,16 +14,12 @@ interface Props {
   instanceName?: string
   instanceStatus?: string
   snapshotLimit?: number | null
-  exchangeLocked?: boolean
-  exchangeLockReason?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   instanceName: '',
   instanceStatus: '',
-  snapshotLimit: null,
-  exchangeLocked: false,
-  exchangeLockReason: '实例已上架交易所或处于交割中，快照和自动策略已锁定'
+  snapshotLimit: null
 })
 
 // 配额状态
@@ -57,13 +53,9 @@ const policyLoading = ref<boolean>(false)
 
 
 const canRestore = computed<boolean>(() => {
-  if (props.exchangeLocked) return false
   const s = props.instanceStatus?.toLowerCase()
   return s === 'stopped'
 })
-
-const mutationLocked = computed<boolean>(() => props.exchangeLocked === true)
-const exchangeLockText = computed<string>(() => props.exchangeLockReason || '实例已上架交易所或处于交割中，快照和自动策略已锁定')
 
 onMounted(async () => {
   await Promise.all([loadSnapshots(), loadPolicy()])
@@ -99,10 +91,6 @@ async function loadPolicy(): Promise<void> {
 }
 
 async function createSnapshot(): Promise<void> {
-  if (mutationLocked.value) {
-    toast.warning(exchangeLockText.value)
-    return
-  }
   if (!createForm.value.name) return
 
   createLoading.value = true
@@ -124,10 +112,6 @@ async function createSnapshot(): Promise<void> {
 }
 
 async function deleteSnapshot(snapshot: Snapshot): Promise<void> {
-  if (mutationLocked.value) {
-    toast.warning(exchangeLockText.value)
-    return
-  }
   if (!confirm(t('snapshot.messages.deleteConfirm', { name: snapshot.name }))) return
 
   try {
@@ -142,10 +126,6 @@ async function deleteSnapshot(snapshot: Snapshot): Promise<void> {
 
 
 async function restoreSnapshot(snapshot: Snapshot): Promise<void> {
-  if (mutationLocked.value) {
-    toast.warning(exchangeLockText.value)
-    return
-  }
   if (!canRestore.value) {
     toast.warning(t('snapshot.messages.stopInstanceFirst'))
     return
@@ -162,10 +142,6 @@ async function restoreSnapshot(snapshot: Snapshot): Promise<void> {
 }
 
 async function savePolicy(): Promise<void> {
-  if (mutationLocked.value) {
-    toast.warning(exchangeLockText.value)
-    return
-  }
   policyLoading.value = true
   try {
     await api.instances.updateSnapshotPolicy(instanceIdNum.value, policyForm.value)
@@ -181,10 +157,6 @@ async function savePolicy(): Promise<void> {
 
 // 取消自动快照策略
 async function disableAutoPolicy(): Promise<void> {
-  if (mutationLocked.value) {
-    toast.warning(exchangeLockText.value)
-    return
-  }
   policyLoading.value = true
   try {
     await api.instances.updateSnapshotPolicy(instanceIdNum.value, { enabled: false, intervalMinutes: policyForm.value.intervalMinutes })
@@ -235,9 +207,7 @@ function getIntervalLabel(minutes: number): string {
         </span>
         <button
           class="btn-ghost btn-sm"
-          :disabled="mutationLocked"
-          :class="mutationLocked && 'opacity-50 cursor-not-allowed'"
-          :title="mutationLocked ? exchangeLockText : t('snapshot.autoSettings')"
+          :title="t('snapshot.autoSettings')"
           @click="showPolicyModal = true"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,9 +215,9 @@ function getIntervalLabel(minutes: number): string {
           </svg>
         </button>
         <button
-          :disabled="mutationLocked || !hasQuota || isQuotaFull"
-          :class="['btn-ghost btn-sm', (mutationLocked || !hasQuota || isQuotaFull) && 'opacity-50 cursor-not-allowed']"
-          :title="mutationLocked ? exchangeLockText : !hasQuota ? t('snapshot.noQuota') : isQuotaFull ? t('snapshot.quotaFull') : t('snapshot.createSnapshot')"
+          :disabled="!hasQuota || isQuotaFull"
+          :class="['btn-ghost btn-sm', (!hasQuota || isQuotaFull) && 'opacity-50 cursor-not-allowed']"
+          :title="!hasQuota ? t('snapshot.noQuota') : isQuotaFull ? t('snapshot.quotaFull') : t('snapshot.createSnapshot')"
           @click="showCreateModal = true"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -256,14 +226,6 @@ function getIntervalLabel(minutes: number): string {
           {{ t('snapshot.create') }}
         </button>
       </div>
-    </div>
-
-    <div
-      v-if="mutationLocked"
-      class="mx-4 mt-4 rounded-lg border px-3 py-2 text-xs"
-      :class="themeStore.isDark ? 'border-amber-900/60 bg-amber-950/30 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
-    >
-      {{ exchangeLockText }}
     </div>
 
     <!-- 自动快照策略提醒横幅 -->
@@ -293,7 +255,7 @@ function getIntervalLabel(minutes: number): string {
       <button
         class="btn-ghost btn-sm flex-shrink-0"
         :class="themeStore.isDark ? 'text-green-400 hover:bg-green-500/20' : 'text-green-600 hover:bg-green-100'"
-        :disabled="mutationLocked || policyLoading"
+        :disabled="policyLoading"
         @click="disableAutoPolicy"
       >
         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -382,16 +344,14 @@ function getIntervalLabel(minutes: number): string {
           <button
             :disabled="!canRestore"
             :class="['btn-ghost btn-sm', !canRestore && 'opacity-50 cursor-not-allowed']"
-            :title="mutationLocked ? exchangeLockText : canRestore ? t('snapshot.restore') : t('snapshot.stopInstanceFirst')"
+            :title="canRestore ? t('snapshot.restore') : t('snapshot.stopInstanceFirst')"
             @click="restoreSnapshot(snapshot)"
           >
             {{ t('snapshot.restore') }}
           </button>
           <button
             class="btn-ghost btn-sm text-error"
-            :disabled="mutationLocked"
-            :class="mutationLocked && 'opacity-50 cursor-not-allowed'"
-            :title="mutationLocked ? exchangeLockText : t('snapshot.delete')"
+            :title="t('snapshot.delete')"
             @click="deleteSnapshot(snapshot)"
           >
             {{ t('snapshot.delete') }}
@@ -426,7 +386,7 @@ function getIntervalLabel(minutes: number): string {
             </form>
             <div class="modal-footer">
               <button class="btn-secondary" @click="showCreateModal = false">{{ t('snapshot.createModal.cancel') }}</button>
-	              <button :disabled="mutationLocked || createLoading || !createForm.name" class="btn-primary" @click="createSnapshot">
+	              <button :disabled="createLoading || !createForm.name" class="btn-primary" @click="createSnapshot">
                 {{ createLoading ? t('snapshot.createModal.creating') : t('snapshot.createModal.create') }}
               </button>
             </div>
@@ -455,7 +415,6 @@ function getIntervalLabel(minutes: number): string {
 	                  v-model="policyForm.enabled"
 	                  type="checkbox"
 	                  class="w-4 h-4 rounded"
-	                  :disabled="mutationLocked"
 	                  :class="themeStore.isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'"
                 />
                 <span class="text-sm text-themed">{{ t('snapshot.policyModal.enable') }}</span>
@@ -464,7 +423,7 @@ function getIntervalLabel(minutes: number): string {
               <div v-if="policyForm.enabled" class="space-y-4 pt-2">
                 <div>
                   <label class="block text-xs text-themed-muted mb-1.5">{{ t('snapshot.policyModal.interval') }}</label>
-	                  <select v-model="policyForm.intervalMinutes" class="input" :disabled="mutationLocked">
+	                  <select v-model="policyForm.intervalMinutes" class="input">
                     <option :value="10">{{ t('snapshot.policyModal.intervalOptions.min10') }}</option>
                     <option :value="60">{{ t('snapshot.policyModal.intervalOptions.hour1') }}</option>
                     <option :value="360">{{ t('snapshot.policyModal.intervalOptions.hour6') }}</option>
@@ -478,7 +437,7 @@ function getIntervalLabel(minutes: number): string {
             </form>
             <div class="modal-footer">
               <button class="btn-secondary" @click="showPolicyModal = false">{{ t('snapshot.policyModal.cancel') }}</button>
-	              <button :disabled="mutationLocked || policyLoading" class="btn-primary" @click="savePolicy">
+	              <button :disabled="policyLoading" class="btn-primary" @click="savePolicy">
                 {{ policyLoading ? t('snapshot.policyModal.saving') : t('snapshot.policyModal.save') }}
               </button>
             </div>

@@ -11,14 +11,9 @@ function read(path: string): string {
 const sdk = read('docs-site/docs/public/sdk/payincus-public-api.ts')
 const serviceTaskExample = read('docs-site/docs/public/sdk/examples/service-power-task.ts')
 const serviceRenewExample = read('docs-site/docs/public/sdk/examples/service-renew.ts')
-const flashSaleExample = read('docs-site/docs/public/sdk/examples/flash-sale-action.ts')
 const balanceAdjustmentExample = read('docs-site/docs/public/sdk/examples/balance-adjustment-request.ts')
 const billingRecordsExample = read('docs-site/docs/public/sdk/examples/billing-records.ts')
 const oauthAuthorizationCodeExample = read('docs-site/docs/public/sdk/examples/oauth-authorization-code.ts')
-const sdkDocs = read('docs-site/docs/plugins/sdk.md')
-const developmentDocs = read('docs-site/docs/plugins/development.md')
-const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
-const vitepressConfig = read('docs-site/docs/.vitepress/config.ts')
 const serverPackage = read('server/package.json')
 const rootPackage = read('package.json')
 
@@ -150,7 +145,6 @@ assert.ok(
     sdk.includes('listNotifications(options: PayIncusNotificationListOptions = {})') &&
     sdk.includes('getUnreadNotificationCount()') &&
     sdk.includes('PayIncusNotificationTemplateId') &&
-    sdk.includes("type PayIncusNotificationTemplateId = 'flash_sale_reminder' | 'service_action_update' | 'billing_notice'") &&
     sdk.includes('variables?: Record<string, string | number | boolean>') &&
     sdk.includes('template: PayIncusNotificationTemplateId | null') &&
     sdk.includes('sendNotification(input: PayIncusNotificationInput)') &&
@@ -210,11 +204,6 @@ assert.ok(
     serviceRenewExample.includes('PAYINCUS_RENEW_MONTHS') &&
     serviceRenewExample.includes('renewService(serviceId, months)') &&
     serviceRenewExample.includes('PayIncusPublicApiError') &&
-    flashSaleExample.includes('PayIncusPublicApiClient') &&
-    flashSaleExample.includes('getProfile()') &&
-    flashSaleExample.includes('sendNotification({') &&
-    flashSaleExample.includes('createTicket({') &&
-    flashSaleExample.includes('PayIncusPublicApiError') &&
     balanceAdjustmentExample.includes('createBalanceAdjustmentRequest({') &&
     balanceAdjustmentExample.includes('listBalanceAdjustmentRequests({ status: \'pending\'') &&
     balanceAdjustmentExample.includes('PAYINCUS_ADJUSTMENT_AMOUNT') &&
@@ -238,125 +227,18 @@ assert.ok(
     oauthAuthorizationCodeExample.includes('getProfile()') &&
     !serviceTaskExample.includes('/api/admin') &&
     !serviceRenewExample.includes('/api/admin') &&
-    !flashSaleExample.includes('/api/admin') &&
     !balanceAdjustmentExample.includes('/api/admin') &&
     !billingRecordsExample.includes('/api/admin') &&
     !oauthAuthorizationCodeExample.includes('/api/admin') &&
     !serviceTaskExample.includes('/api/api-tokens') &&
     !serviceRenewExample.includes('/api/api-tokens') &&
-    !flashSaleExample.includes('/api/api-tokens') &&
     !balanceAdjustmentExample.includes('/api/api-tokens') &&
     !billingRecordsExample.includes('/api/api-tokens') &&
     !oauthAuthorizationCodeExample.includes('/api/api-tokens'),
-  'public API SDK examples must demonstrate service task polling, service renewal, flash-sale notifications, balance adjustment review requests, billing record reads, and OAuth authorization code exchange without admin or session APIs'
+  'public API SDK examples must demonstrate service task polling, service renewal, balance adjustment review requests, billing record reads, and OAuth authorization code exchange without admin or session APIs'
 )
 
-assert.ok(
-    sdkDocs.includes('# Public API SDK') &&
-    sdkDocs.includes('https://payincus.com/sdk/payincus-public-api.ts') &&
-    sdkDocs.includes('https://payincus.com/sdk/examples/service-power-task.ts') &&
-    sdkDocs.includes('https://payincus.com/sdk/examples/service-renew.ts') &&
-    sdkDocs.includes('https://payincus.com/sdk/examples/flash-sale-action.ts') &&
-    sdkDocs.includes('https://payincus.com/sdk/examples/balance-adjustment-request.ts') &&
-    sdkDocs.includes('https://payincus.com/sdk/examples/billing-records.ts') &&
-    sdkDocs.includes('https://payincus.com/sdk/examples/oauth-authorization-code.ts') &&
-    sdkDocs.includes('PayIncusPublicApiClient') &&
-    sdkDocs.includes('listOAuthScopes()') &&
-    sdkDocs.includes('GET /api/oauth-provider/scopes') &&
-    sdkDocs.includes('不需要在客户端硬编码 scope 描述') &&
-    sdkDocs.includes('pat_') &&
-    sdkDocs.includes('poa_') &&
-    sdkDocs.includes('getBalance()') &&
-    sdkDocs.includes('listBalanceLogs()') &&
-    sdkDocs.includes('listBalanceAdjustmentRequests()') &&
-    sdkDocs.includes('createBalanceAdjustmentRequest(input)') &&
-    sdkDocs.includes('listBillingRecords()') &&
-    sdkDocs.includes('getBillingRecord(id)') &&
-    sdkDocs.includes('当前 token 用户自己的账户余额和余额流水') &&
-    sdkDocs.includes('只提交当前 token 用户自己的待审批余额调整申请') &&
-    sdkDocs.includes('不会直接写余额、余额流水、支付或充值订单') &&
-    sdkDocs.includes('只读取当前 token 用户自己的实例计费记录') &&
-    sdkDocs.includes('不返回余额流水对象、支付回调、provider payload、内部对账数据或其他用户账单') &&
-    sdkDocs.includes("listServices({ status, include: ['product', 'plan'], sort: 'displayOrder' })") &&
-    sdkDocs.includes("getService(id, { include: 'product' })") &&
-    sdkDocs.includes('include 只返回当前用户服务已关联的产品/套餐摘要') &&
-    sdkDocs.includes("listOrders({ status, sort: '-createdAt' })") &&
-    sdkDocs.includes('getOrder(id)') &&
-    sdkDocs.includes('只读取当前 token 用户自己的单条公共订单') &&
-    sdkDocs.includes('订单 ID 形如 `recharge:123` 或 `instance_billing:456`') &&
-    sdkDocs.includes('不返回支付回调数据、provider 配置快照、原始查询结果或完整交易号') &&
-    sdkDocs.includes("listTickets({ status, category, priority, sort: '-updatedAt' })") &&
-    sdkDocs.includes('只传递平台白名单过滤参数') &&
-    sdkDocs.includes('所有列表方法都支持统一 `page`、`pageSize` 和白名单 `sort`') &&
-    sdkDocs.includes('响应的 `meta.sort` 会返回实际采用的排序') &&
-    sdkDocs.includes('服务列表额外支持 `displayOrder` / `-displayOrder`') &&
-    sdkDocs.includes('listNotifications()') &&
-    sdkDocs.includes('getUnreadNotificationCount()') &&
-    sdkDocs.includes('queueServiceAction(id, action)') &&
-    sdkDocs.includes('getServiceTask(id, taskId)') &&
-    sdkDocs.includes('cancelServiceTask(id, taskId)') &&
-    sdkDocs.includes('renewService(id, months)') &&
-    sdkDocs.includes('service-renew.ts') &&
-    sdkDocs.includes('会触发真实余额扣款和续费账单') &&
-    sdkDocs.includes('只允许为当前 token 用户自己的服务排队') &&
-    sdkDocs.includes('只读取这些公开电源任务的状态') &&
-    sdkDocs.includes('只取消仍处于 `PENDING` 的公开电源任务') &&
-    sdkDocs.includes('响应不返回余额流水 ID、支付回调或 provider payload') &&
-    sdkDocs.includes('当前 token 用户自己的站内信展示字段和未读数量') &&
-    sdkDocs.includes('写入型 SDK 方法会受到平台 Public API 独立限流保护') &&
-    sdkDocs.includes('`status = 429`') &&
-    sdkDocs.includes('error.details') &&
-    sdkDocs.includes('createTicket(input)') &&
-    sdkDocs.includes('updateTicketStatus(id, action)') &&
-    sdkDocs.includes("updateTicketStatus(ticket.data.id, 'close')") &&
-    sdkDocs.includes('只允许当前 token 用户关闭自己的工单或重新打开自己的已关闭工单') &&
-    sdkDocs.includes('service-power-task.ts') &&
-    sdkDocs.includes('service-renew.ts') &&
-    sdkDocs.includes('flash-sale-action.ts') &&
-    sdkDocs.includes('balance-adjustment-request.ts') &&
-    sdkDocs.includes('billing-records.ts') &&
-    sdkDocs.includes('oauth-authorization-code.ts') &&
-    sdkDocs.includes('生成稳定 `idempotencyKey`') &&
-    sdkDocs.includes('生成 OAuth 授权 URL、校验 `state`、用 authorization code 换取 `poa_` access token 和 `por_` refresh token') &&
-    sdkDocs.includes('`PAYINCUS_OAUTH_CLIENT_SECRET` 不应放进浏览器、移动端或扩展 iframe') &&
-    sdkDocs.includes('示例不会指定其他用户、不会调用 `/api/admin/*`') &&
-    sdkDocs.includes('SDK 不会调用 `/api/admin/*`') &&
-    sdkDocs.includes('这些不是 SDK 的遗漏，而是 Public API 的高风险准入边界') &&
-    sdkDocs.includes('新增前必须先有公开资源设计、独立 scope、OpenAPI 契约、审计日志、限流、幂等、防跨用户校验、状态机回滚和生产 proof') &&
-    vitepressConfig.includes("{ text: 'Public API SDK', link: '/plugins/sdk' }"),
-  'docs site must expose the Public API SDK download, usage, token sources, method list, and sidebar entry'
-)
 
-assert.ok(
-  developmentDocs.includes('GET https://payincus.com/sdk/payincus-public-api.ts') &&
-    developmentDocs.includes('GET /api/oauth-provider/scopes') &&
-    developmentDocs.includes('scopeMetadata') &&
-    developmentDocs.includes('GET https://payincus.com/sdk/examples/service-power-task.ts') &&
-    developmentDocs.includes('GET https://payincus.com/sdk/examples/service-renew.ts') &&
-    developmentDocs.includes('GET https://payincus.com/sdk/examples/flash-sale-action.ts') &&
-    developmentDocs.includes('GET https://payincus.com/sdk/examples/balance-adjustment-request.ts') &&
-    developmentDocs.includes('GET https://payincus.com/sdk/examples/billing-records.ts') &&
-    developmentDocs.includes('GET https://payincus.com/sdk/examples/oauth-authorization-code.ts') &&
-    developmentDocs.includes('https://payincus.com/plugins/sdk') &&
-    platformPlan.includes('Public API TypeScript SDK 和示例首版') &&
-    platformPlan.includes('scope 元数据目录') &&
-    platformPlan.includes('sdk/payincus-public-api.ts') &&
-    platformPlan.includes('sdk/examples/service-power-task.ts') &&
-    platformPlan.includes('sdk/examples/service-renew.ts') &&
-    platformPlan.includes('sdk/examples/flash-sale-action.ts') &&
-    platformPlan.includes('sdk/examples/balance-adjustment-request.ts') &&
-    platformPlan.includes('sdk/examples/billing-records.ts') &&
-    platformPlan.includes('sdk/examples/oauth-authorization-code.ts') &&
-    platformPlan.includes('订单列表/详情') &&
-    platformPlan.includes('OAuth authorization code 换 token 和 refresh token 轮换示例') &&
-    platformPlan.includes('受控续费') &&
-    platformPlan.includes('扩展 action 发现/触发能力') &&
-    platformPlan.includes('服务/订单/账单/工单白名单过滤和列表排序') &&
-    platformPlan.includes('统一分页、白名单排序、服务/订单/账单/工单列表白名单过滤') &&
-    platformPlan.includes('OAuth authorization code 示例') &&
-    platformPlan.includes('文档站已提供 Public API TypeScript SDK、服务电源任务轮询示例、服务续费示例、秒杀扩展 action 示例、余额调整申请示例和账单读取示例首版'),
-  'extension platform docs must describe the first Public API SDK release and stable docs-site download path'
-)
 
 assert.ok(
   serverPackage.includes('"test:public-api-sdk-guards"') &&

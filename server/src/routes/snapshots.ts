@@ -17,7 +17,6 @@ import { checkInstancePermission } from '../lib/permission.js'
 import {
   claimOperationVerificationRequirement
 } from '../lib/operation-verification.js'
-import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 
 const POSITIVE_INTEGER_ID_RE = /^[1-9]\d*$/
 const SNAPSHOT_CREATE_LOCK_EXPIRE_MS = 30 * 60 * 1000
@@ -40,21 +39,11 @@ function parsePositiveId(value: unknown): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null
 }
 
-// 检查实例是否被转移/交易所锁定
+// 检查实例是否被转移锁定
 async function checkTransferLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
   const hasPending = await db.hasPendingTransfer(instanceId)
   if (hasPending) {
     reply.code(400).send(apiError(ErrorCode.TRANSFER_INSTANCE_LOCKED))
-    return true
-  }
-  const exchangeLock = await getExchangeOperationLock(instanceId)
-  if (exchangeLock.locked) {
-    reply.code(409).send({
-      error: exchangeLock.message,
-      code: exchangeLock.code,
-      listingId: exchangeLock.listingId,
-      orderId: exchangeLock.orderId
-    })
     return true
   }
   return false
@@ -481,7 +470,6 @@ export default async function snapshotRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 交易所挂牌/交割期间禁止修改自动快照策略，避免交割清理和后台计划任务竞态。
     if (await checkTransferLock(instanceIdNum, reply)) return
 
     // 如果启用自动快照，检查配额

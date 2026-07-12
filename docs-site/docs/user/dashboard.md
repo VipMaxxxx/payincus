@@ -20,7 +20,6 @@ https://panel.example.com
 | 功能 | 路由 | 说明 |
 | --- | --- | --- |
 | 首页与产品市场 | `/`, `/market` | 展示产品、套餐和站点公开内容。 |
-| 秒杀 | `/flash-sales` | 查看限时活动、活动库存、秒杀价和自己的抢购记录，并跳转到实例创建链路完成扣费和交付。 |
 | 控制台 | `/dashboard` | 查看账号概览、实例概览、余额、通知和常用入口。 |
 | 实例列表 | `/instances` | 查看名下 LXC / KVM 实例、状态、资源和操作入口。 |
 | 创建实例 | `/instances/create` | 按套餐、镜像、节点、资源限制创建实例。 |
@@ -45,30 +44,20 @@ https://panel.example.com
 - 托管节点：`/resources/hosts`，允许满足条件的用户提交和管理托管节点。
 - 托管套餐：`/resources/packages`，用于托管方维护自己的套餐。
 - 托管收益：`/hosting-wallet`，用于查看托管收益和结算记录。
-- 娱乐系统：`/entertainment`，用于积分、会员或扩展玩法。
+- 娱乐系统：`/entertainment`，用于积分、会员或其它玩法。
 
 ## 关联后端能力
 
 - 实例交付：`instances`、`instance-billing`、`terminal`、`traffic`、`snapshots`。
-- 账务支付：`orders`、`balance`、`recharge`、`gift-cards`、`redeem-codes`、`aff`、`flash-sales`、`vip-levels`、`user-lifecycle`。
+- 账务支付：`orders`、`balance`、`recharge`、`gift-cards`、`redeem-codes`、`aff`、`vip-levels`。
 - 工单通知：`tickets`、`inbox`、`notifications`、`help`。
 - 邮箱服务：`mail`。
 - 托管资源：`hosting`、`resource-pool`、`packages`。
-
-## 生命周期优惠
-
-用户仪表盘会展示管理员定向发放给当前用户的可用资源兑换码：
-
-- 只展示当前登录用户自己的兑换码。
-- 展示兑换码、节点、资源类型、资源数值和有效期。
-- 兑换仍通过原有兑换入口执行，资源变更仍走现有兑换码和实例资源流程。
-- 不展示后台运营标签、用户分群、内部生命周期事件或运营动作记录。
 
 ## 验证重点
 
 - 普通用户可以登录用户端并完成常规自助操作。
 - 用户端页面不出现 `/admin` 导航、后台 API 入口或后台文案。
-- 用户端只能读取自己的生命周期优惠，不能读取其他用户优惠或后台生命周期数据。
 - 管理员账号不能进入用户端业务页面。
 - `/api/health` 和 `/api/ws` 在用户端域名下可用。
 - 支付回调、实例创建、终端连接、通知投递需要做真实线上 proof。

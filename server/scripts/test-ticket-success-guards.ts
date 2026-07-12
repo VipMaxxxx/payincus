@@ -70,7 +70,6 @@ assert.ok(
   dbSource.includes('maskEmail') &&
     dbSource.includes('emailMasked') &&
     dbSource.includes('recentOrders') &&
-    dbSource.includes('recentAlerts') &&
     dbSource.includes('knowledgeSuggestions') &&
     !dbSource.includes('callbackData') &&
     !dbSource.includes('providerConfigSnapshot') &&

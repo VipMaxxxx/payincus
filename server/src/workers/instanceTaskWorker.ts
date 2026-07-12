@@ -1187,13 +1187,7 @@ async function executeRebuildTask(
     busyUpdateCancelAfterMs: allowCancelBusyUpdate ? ALPINE_BUSY_UPDATE_CANCEL_AFTER_MS : undefined
   })
 
-  const exchangeDeliveryTask = await prisma.exchangeDeliveryTask.findUnique({
-    where: { instanceTaskId: task.id },
-    select: { id: true }
-  })
-  if (!exchangeDeliveryTask) {
-    await prisma.trafficSnapshot.deleteMany({ where: { instanceId: task.instanceId } })
-  }
+  await prisma.trafficSnapshot.deleteMany({ where: { instanceId: task.instanceId } })
 
   // 更新数据库记录
   await prisma.instance.update({

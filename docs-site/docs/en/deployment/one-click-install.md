@@ -51,7 +51,7 @@ During installation, provide:
 - Extracts PayIncus into `/opt/incudal`.
 - Runs Prisma migrations and Prisma Client generation.
 - Creates the `incudal` system user and `incudal-backend` service.
-- Creates plugin, theme, OTA, certificate, cache, and log directories.
+- Creates OTA, certificate, cache, and log directories.
 - Writes Nginx configuration for both domains.
 - Sets `FRONTEND_URL`, `ADMIN_FRONTEND_URL`, `SITE_URL`, and `PAYMENT_CALLBACK_BASE_URL`.
 
@@ -64,7 +64,7 @@ sudo bash install-panel.sh --uninstall
 
 `--upgrade` is only for the legacy non-atomic layout. If `/opt/incudal/current` is an atomic symlink, the script exits safely; use admin OTA instead so `current/releases` is not overwritten.
 
-Legacy upgrades preserve `.env`, certificates, plugins, themes, runtime caches, and OTA directories. Uninstall removes all of `/opt/incudal`, including local plugins, themes, runtime assets, OTA releases, and update logs. PostgreSQL/Redis services and database data are not removed automatically. Back up the database and installation directory first.
+Legacy upgrades preserve `.env`, certificates, runtime caches, and OTA directories. Uninstall removes all of `/opt/incudal`, including runtime assets, OTA releases, and update logs. PostgreSQL/Redis services and database data are not removed automatically. Back up the database and installation directory first.
 
 ## Post-install Checks
 

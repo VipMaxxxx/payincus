@@ -19,7 +19,6 @@ https://panel.example.com
 | Feature | Route | Description |
 | --- | --- | --- |
 | Home and market | `/`, `/market` | Public content, products and plans. |
-| Flash Sales | `/flash-sales` | Shows limited-time campaigns, stock, flash prices and the current user's purchase records, then routes eligible purchases into the normal instance creation, billing and delivery chain. |
 | Dashboard | `/dashboard` | Account, instances, balance, notifications and shortcuts. |
 | Instances | `/instances` | Customer-owned LXC / KVM instances. |
 | Create instance | `/instances/create` | Create an instance by plan, image, host and limits. |
@@ -47,19 +46,9 @@ https://panel.example.com
 
 Users can generate gift cards from their own balance and redeem cards issued by other users or administrators. Self-redemption is blocked, and balance deduction, card creation, redemption and ledger writes are handled transactionally by the backend.
 
-## Lifecycle Offers
-
-The user dashboard can show targeted resource redeem codes issued by administrators:
-
-- Only offers assigned to the current signed-in user are shown.
-- The card shows the redeem code, host, resource type, resource value and expiry.
-- Redemption still uses the existing redeem-code flow, so resource changes go through the existing instance resource path.
-- Admin lifecycle tags, segments, internal lifecycle events and action records are not shown in the user portal.
-
 ## Verification
 
 - Regular user login works.
 - Admin user cannot use user-only pages.
 - The user portal contains no admin navigation or admin API entry.
-- Users can only read their own lifecycle offers and cannot read admin lifecycle data.
 - Real payment, instance delivery, terminal and notification proof are completed.

@@ -28,18 +28,7 @@ The primary delivery object in PayIncus is an Incus-backed LXC / KVM instance. T
 - View and manage all customer instances.
 - Create instances manually for delivery correction or migration.
 - Manage hosts, images, initialization commands and storage settings.
-- Use Delivery Assurance to inspect queued, processing, failed and stale delivery tasks with user, host, Agent, resource, billing and notification context.
 - Troubleshoot failed delivery through logs, Agent reports and task state.
-
-## Delivery Assurance Handling
-
-Delivery Assurance turns failed or stale instance tasks into operational cases:
-
-- Statuses: pending manual handling, auto retryable, in progress, recovered and closed.
-- Idempotent retry: only start, stop and restart tasks can be requeued automatically. Rebuild, recreate, clone and host-change tasks require manual confirmation.
-- Manual takeover records the handler, note, handling time and state change.
-- User notifications cover delivery delayed, recovered and contact support states.
-- Context on the same page includes user, instance, host, Agent heartbeat, host resources and latest billing record, so operators can decide whether refund, compensation or migration is needed.
 
 ## Backend Modules
 

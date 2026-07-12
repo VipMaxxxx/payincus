@@ -16,8 +16,6 @@ const publicApiRoutes = read('server/src/routes/public-api.ts')
 const app = read('server/src/app.ts')
 const clientApi = read('client/src/api/index.ts')
 const clientTypes = read('client/src/types/api.ts')
-const developmentDocs = read('docs-site/docs/plugins/development.md')
-const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
 const rootPackage = read('package.json')
 const serverPackage = read('server/package.json')
 
@@ -110,20 +108,6 @@ assert.ok(
   'client API types and wrappers must expose public API token management'
 )
 
-assert.ok(
-  developmentDocs.includes('## 公共 API 与 API Token') &&
-    developmentDocs.includes('POST /api/api-tokens') &&
-    developmentDocs.includes('Authorization: Bearer pat_') &&
-    developmentDocs.includes('GET /api/v1/me') &&
-    developmentDocs.includes('PATCH /api/v1/me') &&
-    developmentDocs.includes('profile:read') &&
-    developmentDocs.includes('profile:write') &&
-    platformPlan.includes('/api/v1 公共 API 首版') &&
-    platformPlan.includes('API token/scope 基础能力首版') &&
-    platformPlan.includes('OpenAPI 3.1 基础契约首版') &&
-    platformPlan.includes('资源 API 只读首版'),
-  'extension platform docs must document the public API token foundation and remaining API work'
-)
 
 assert.ok(
   serverPackage.includes('"test:public-api-token-guards"') &&

@@ -248,8 +248,8 @@ assert(
 	    !userView.includes('class="w-full min-w-[860px] table-fixed text-sm"') &&
 	    zhLocale.includes("redeemTitle: '兑换礼品卡'") &&
 	    adminView.includes("t('giftCardsAdmin.description')") &&
-	    adminView.includes('class="mt-5 space-y-3 lg:hidden"') &&
-	    adminView.includes('class="mt-5 hidden overflow-hidden lg:block"') &&
+	    adminView.includes('class="space-y-3 p-4 lg:hidden"') &&
+	    adminView.includes('class="hidden overflow-hidden lg:block"') &&
 	    adminView.includes('class="w-full table-fixed text-sm"') &&
 	    adminView.includes('@change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)"') &&
 	    adminView.includes('@click="updateCardStatus(card)"') &&

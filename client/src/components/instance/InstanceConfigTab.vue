@@ -13,7 +13,6 @@ const props = defineProps<{
   instanceType?: 'container' | 'vm'
   instanceStatus?: string
   isInstanceOwner?: boolean  // 是否是实例所有者
-  exchangeLocked?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -35,14 +34,11 @@ const boostLoading = ref(false)
 
 // 进程数上限：LXC=1000, KVM=2000
 const processLimit = computed(() => props.instanceType === 'vm' ? 2000 : 1000)
-const exchangeLockText = '实例已上架交易所或处于交割中，运行配置已锁定'
-const canMutateConfig = computed<boolean>(() => !props.exchangeLocked)
-const canChangeHost = computed(() => canMutateConfig.value && (props.isInstanceOwner === true || props.canEditConfig === true))
+const canChangeHost = computed(() => props.isInstanceOwner === true || props.canEditConfig === true)
 
 // 是否可以显示提升按钮（实例所有者且未达上限）
 const canBoostProcesses = computed(() => {
   if (!config.value) return false
-  if (!canMutateConfig.value) return false
   if (!props.isInstanceOwner) return false  // 只有实例所有者可以提升
   const currentLimit = config.value.config.limits_processes ?? 500
   return currentLimit < processLimit.value
@@ -156,7 +152,6 @@ const ioLimitMode = computed<'throughput' | 'iops'>(() => config.value?.ioLimitM
 const normalizedInstanceStatus = computed<string>(() => props.instanceStatus?.toLowerCase() || '')
 const canEnableSwap = computed<boolean>(() => {
   if (!config.value?.swap.available || config.value.swap.enabled) return false
-  if (!canMutateConfig.value) return false
   if (!props.isInstanceOwner) return false
   if (!['running', 'stopped'].includes(normalizedInstanceStatus.value)) return false
   if (config.value.swap.requiresRunning && normalizedInstanceStatus.value !== 'running') return false
@@ -164,7 +159,6 @@ const canEnableSwap = computed<boolean>(() => {
 })
 const canDisableSwap = computed<boolean>(() => {
   if (!config.value?.swap.enabled) return false
-  if (!canMutateConfig.value) return false
   if (!props.isInstanceOwner) return false
   if (config.value.swap.kind !== 'container') return false
   if (!['running', 'stopped'].includes(normalizedInstanceStatus.value)) return false
@@ -182,12 +176,6 @@ function formatSwapSize(sizeMb: number): string {
 
 async function submitSwapAction(): Promise<void> {
   if (!config.value) return
-  if (!canMutateConfig.value) {
-    toast.warning(exchangeLockText)
-    showSwapModal.value = false
-    return
-  }
-
   swapActionLoading.value = true
   try {
     if (config.value.swap.enabled) {
@@ -208,11 +196,6 @@ async function submitSwapAction(): Promise<void> {
 
 // 提升进程数限制
 async function boostProcesses(): Promise<void> {
-  if (!canMutateConfig.value) {
-    toast.warning(exchangeLockText)
-    showBoostModal.value = false
-    return
-  }
   boostLoading.value = true
   try {
     await api.instances.boostProcesses(props.instanceId)
@@ -241,13 +224,6 @@ async function boostProcesses(): Promise<void> {
         <h2 class="text-lg font-semibold text-themed">
           {{ t('instanceConfig.title') }}
         </h2>
-      </div>
-
-      <div
-        v-if="props.exchangeLocked"
-        class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200"
-      >
-        {{ exchangeLockText }}。请先下架交易所，或等待交割/争议处理完成后再修改。
       </div>
 
       <ChangeHostCard

@@ -23,8 +23,6 @@ interface ProxySite {
 
 interface Props {
   instanceId: number
-  exchangeLocked?: boolean
-  exchangeLockReason?: string
 }
 
 const props = defineProps<Props>()
@@ -44,8 +42,7 @@ const dnsRecordType = ref<string | null>(null)
 const dnsRecordValue = ref<string | null>(null)
 const siteQuota = ref<{ used: number; limit: number } | null>(null)
 const canManageSites = ref(true)
-const exchangeLockText = computed<string>(() => props.exchangeLockReason || '实例已上架交易所或处于交割中，代理站点配置已锁定')
-const canMutateSites = computed<boolean>(() => canManageSites.value && props.exchangeLocked !== true)
+const canMutateSites = computed<boolean>(() => canManageSites.value)
 
 // 添加表单
 const showAddModal = ref(false)
@@ -117,7 +114,6 @@ async function loadSites() {
 
 function openAddModal() {
   if (!canMutateSites.value) {
-    toast.warning(exchangeLockText.value)
     return
   }
   form.value = { domain: '', targetPort: 80, httpsEnabled: true, remark: '' }
@@ -126,7 +122,6 @@ function openAddModal() {
 
 async function addSite() {
   if (!canMutateSites.value) {
-    toast.warning(exchangeLockText.value)
     return
   }
   if (!form.value.domain) {
@@ -169,7 +164,6 @@ async function addSite() {
 
 async function deleteSite(siteId: number, domain: string) {
   if (!canMutateSites.value) {
-    toast.warning(exchangeLockText.value)
     return
   }
   if (!confirm(t('instance.sites.deleteConfirm', { domain }))) {
@@ -191,7 +185,6 @@ async function deleteSite(siteId: number, domain: string) {
 
 async function refreshSite(siteId: number) {
   if (!canMutateSites.value) {
-    toast.warning(exchangeLockText.value)
     return
   }
   refreshing.value = siteId
@@ -209,7 +202,6 @@ async function refreshSite(siteId: number) {
 
 async function toggleSite(siteId: number) {
   if (!canMutateSites.value) {
-    toast.warning(exchangeLockText.value)
     return
   }
   toggling.value = siteId
@@ -227,7 +219,6 @@ async function toggleSite(siteId: number) {
 
 function openEditModal(site: ProxySite) {
   if (!canMutateSites.value) {
-    toast.warning(exchangeLockText.value)
     return
   }
   editForm.value = {
@@ -242,7 +233,6 @@ function openEditModal(site: ProxySite) {
 
 async function updateSite() {
   if (!canMutateSites.value) {
-    toast.warning(exchangeLockText.value)
     return
   }
   editing.value = true
@@ -282,7 +272,6 @@ async function checkCertificate(site: ProxySite) {
 
 async function checkDns(siteId: number) {
   if (!canMutateSites.value) {
-    toast.warning(exchangeLockText.value)
     return
   }
   checkingDns.value = siteId
@@ -435,8 +424,7 @@ const quotaLimitDisplay = computed(() => {
 	        <button
 	          v-if="canManageSites"
 	          class="btn-primary w-full sm:w-auto"
-	          :disabled="props.exchangeLocked || isQuotaFull"
-	          :title="props.exchangeLocked ? exchangeLockText : undefined"
+	          :disabled="isQuotaFull"
 	          @click="openAddModal"
 	        >
           <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -444,14 +432,6 @@ const quotaLimitDisplay = computed(() => {
           </svg>
 	          {{ t('instance.sites.addSite') }}
 	        </button>
-	      </div>
-
-	      <div
-	        v-if="props.exchangeLocked"
-	        class="rounded-lg border px-3 py-2 text-xs"
-	        :class="themeStore.isDark ? 'border-amber-900/60 bg-amber-950/30 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
-	      >
-	        {{ exchangeLockText }}
 	      </div>
 
 	      <!-- 站点列表 -->
@@ -636,18 +616,9 @@ const quotaLimitDisplay = computed(() => {
           {{ t('instance.sites.empty') }}
         </p>
 	        <button
-	          v-if="props.exchangeLocked"
-	          type="button"
-	          class="rounded-lg border px-3 py-2 text-left text-xs"
-	          :class="themeStore.isDark ? 'border-amber-900/60 bg-amber-950/30 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-700'"
-	        >
-	          {{ exchangeLockText }}
-	        </button>
-	        <button
 	          v-if="canManageSites"
 	          class="btn-primary"
-	          :disabled="props.exchangeLocked || isQuotaFull"
-	          :title="props.exchangeLocked ? exchangeLockText : undefined"
+	          :disabled="isQuotaFull"
 	          @click="openAddModal"
 	        >
           {{ t('instance.sites.addFirstSite') }}
@@ -745,7 +716,7 @@ const quotaLimitDisplay = computed(() => {
                 <button class="btn-ghost" @click="showAddModal = false">
                   {{ t('common.cancel') }}
                 </button>
-	                <button :disabled="props.exchangeLocked || adding" class="btn-primary" @click="addSite">
+	                <button :disabled="adding" class="btn-primary" @click="addSite">
                   <span v-if="adding" class="flex items-center gap-2">
                     <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -849,7 +820,7 @@ const quotaLimitDisplay = computed(() => {
                 <button class="btn-ghost" @click="showEditModal = false">
                   {{ t('common.cancel') }}
                 </button>
-	                <button :disabled="props.exchangeLocked || editing" class="btn-primary" @click="updateSite">
+	                <button :disabled="editing" class="btn-primary" @click="updateSite">
                   <span v-if="editing" class="flex items-center gap-2">
                     <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

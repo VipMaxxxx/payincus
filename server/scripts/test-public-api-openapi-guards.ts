@@ -11,8 +11,6 @@ function read(path: string): string {
 
 const route = read('server/src/routes/public-api.ts')
 const openapiSource = read('server/src/lib/public-api-openapi.ts')
-const developmentDocs = read('docs-site/docs/plugins/development.md')
-const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
 const serverPackage = read('server/package.json')
 const rootPackage = read('package.json')
 
@@ -159,40 +157,6 @@ assert.deepEqual(queryParamEnum('/tickets', 'sort'), ['updatedAt', '-updatedAt',
 assert.ok(
   ['status', 'category', 'priority'].every(name => queryParamNames('/tickets').includes(name)),
   'ticket list OpenAPI must document status, category, and priority filters'
-)
-assert.ok(
-    developmentDocs.includes('GET /api/v1/openapi.json') &&
-    developmentDocs.includes('GET /api/oauth-provider/scopes') &&
-    developmentDocs.includes('scopeMetadata') &&
-    developmentDocs.includes('GET /api/v1/openapi.yaml') &&
-    developmentDocs.includes('同时提供 JSON 和 YAML 两种格式') &&
-    developmentDocs.includes('OpenAPI 3.1') &&
-    developmentDocs.includes('PATCH /api/v1/me') &&
-    developmentDocs.includes('GET /api/v1/balance') &&
-    developmentDocs.includes('GET /api/v1/balance/logs') &&
-    developmentDocs.includes('GET /api/v1/balance/adjustment-requests') &&
-    developmentDocs.includes('POST /api/v1/balance/adjustment-requests') &&
-    developmentDocs.includes('GET /api/v1/billing-records') &&
-    developmentDocs.includes('GET /api/v1/billing-records/:id') &&
-    developmentDocs.includes('状态固定进入后台审批') &&
-    developmentDocs.includes('服务接口已经支持白名单 `include=product,plan`') &&
-    developmentDocs.includes('受控 `include = product,plan`') &&
-    developmentDocs.includes('POST /api/v1/services/:id/actions') &&
-    developmentDocs.includes('POST /api/v1/services/:id/renew') &&
-    developmentDocs.includes('GET /api/v1/services/:id/tasks/:taskId') &&
-    developmentDocs.includes('DELETE /api/v1/services/:id/tasks/:taskId') &&
-    developmentDocs.includes('GET /api/v1/orders/:id') &&
-    developmentDocs.includes('订单 ID 形如 `recharge:123` 或 `instance_billing:456`') &&
-    developmentDocs.includes('POST /api/v1/tickets/:id/replies') &&
-    developmentDocs.includes('PATCH /api/v1/tickets/:id/status') &&
-    developmentDocs.includes('GET /api/v1/notifications') &&
-    developmentDocs.includes('GET /api/v1/notifications/unread-count') &&
-    developmentDocs.includes('API Token 管理接口实际路径是 `/api/api-tokens`') &&
-    platformPlan.includes('GET /api/v1/openapi.yaml') &&
-    platformPlan.includes('scope 元数据目录') &&
-    platformPlan.includes('订单/账单详情读取、服务 `include=product,plan`、受控服务续费已完成首版') &&
-    platformPlan.includes('写入型资源 API 首版'),
-  'docs must describe the OpenAPI endpoint and distinguish the current contract from remaining resource APIs'
 )
 
 assert.ok(

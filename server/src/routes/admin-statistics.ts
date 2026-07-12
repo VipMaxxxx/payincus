@@ -232,18 +232,9 @@ export default async function adminStatisticsRoutes(app: FastifyInstance): Promi
           WHERE status = 'completed'
         `),
         prisma.$queryRaw<ScalarRow[]>(Prisma.sql`
-          SELECT COALESCE(SUM(value), 0)::numeric AS value
-          FROM (
-            SELECT ABS(amount)::numeric AS value
-            FROM balance_logs
-            WHERE type IN ('consume', 'transfer_fee')
-            UNION ALL
-            SELECT fee_amount::numeric AS value
-            FROM exchange_orders
-            WHERE status = 'completed'
-              AND completed_at IS NOT NULL
-              AND wallet_log_id IS NOT NULL
-          ) AS official_income
+          SELECT COALESCE(SUM(ABS(amount)), 0)::numeric AS value
+          FROM balance_logs
+          WHERE type IN ('consume', 'transfer_fee')
         `),
         prisma.$queryRaw<ScalarRow[]>(Prisma.sql`
           SELECT COALESCE(SUM(amount), 0)::numeric AS value
@@ -303,47 +294,23 @@ export default async function adminStatisticsRoutes(app: FastifyInstance): Promi
           ORDER BY bucket
         `),
         prisma.$queryRaw<BucketRow[]>(Prisma.sql`
-          SELECT bucket, COALESCE(SUM(value), 0)::numeric AS value
-          FROM (
-            SELECT to_char(created_at + interval '8 hours', 'YYYY-MM-DD') AS bucket,
-                   ABS(amount)::numeric AS value
-            FROM balance_logs
-            WHERE type IN ('consume', 'transfer_fee')
-              AND created_at >= ${dailyWindow.start}
-              AND created_at < ${dailyWindow.end}
-            UNION ALL
-            SELECT to_char(completed_at + interval '8 hours', 'YYYY-MM-DD') AS bucket,
-                   fee_amount::numeric AS value
-            FROM exchange_orders
-            WHERE status = 'completed'
-              AND completed_at IS NOT NULL
-              AND wallet_log_id IS NOT NULL
-              AND completed_at >= ${dailyWindow.start}
-              AND completed_at < ${dailyWindow.end}
-          ) AS official_income
-          GROUP BY bucket
+          SELECT to_char(created_at + interval '8 hours', 'YYYY-MM-DD') AS bucket,
+                 COALESCE(SUM(ABS(amount)), 0)::numeric AS value
+          FROM balance_logs
+          WHERE type IN ('consume', 'transfer_fee')
+            AND created_at >= ${dailyWindow.start}
+            AND created_at < ${dailyWindow.end}
+          GROUP BY to_char(created_at + interval '8 hours', 'YYYY-MM-DD')
           ORDER BY bucket
         `),
         prisma.$queryRaw<BucketRow[]>(Prisma.sql`
-          SELECT bucket, COALESCE(SUM(value), 0)::numeric AS value
-          FROM (
-            SELECT to_char(created_at + interval '8 hours', 'YYYY-MM') AS bucket,
-                   ABS(amount)::numeric AS value
-            FROM balance_logs
-            WHERE type IN ('consume', 'transfer_fee')
-              AND created_at >= ${monthlyWindow.start}
-              AND created_at < ${monthlyWindow.end}
-            UNION ALL
-            SELECT to_char(completed_at + interval '8 hours', 'YYYY-MM') AS bucket,
-                   fee_amount::numeric AS value
-            FROM exchange_orders
-            WHERE status = 'completed'
-              AND completed_at IS NOT NULL
-              AND wallet_log_id IS NOT NULL
-              AND completed_at >= ${monthlyWindow.start}
-              AND completed_at < ${monthlyWindow.end}
-          ) AS official_income
-          GROUP BY bucket
+          SELECT to_char(created_at + interval '8 hours', 'YYYY-MM') AS bucket,
+                 COALESCE(SUM(ABS(amount)), 0)::numeric AS value
+          FROM balance_logs
+          WHERE type IN ('consume', 'transfer_fee')
+            AND created_at >= ${monthlyWindow.start}
+            AND created_at < ${monthlyWindow.end}
+          GROUP BY to_char(created_at + interval '8 hours', 'YYYY-MM')
           ORDER BY bucket
         `),
         prisma.$queryRaw<BucketRow[]>(Prisma.sql`
@@ -385,76 +352,32 @@ export default async function adminStatisticsRoutes(app: FastifyInstance): Promi
           ORDER BY bucket
         `),
         prisma.$queryRaw<ScalarRow[]>(Prisma.sql`
-          SELECT COALESCE(SUM(value), 0)::numeric AS value
-          FROM (
-            SELECT COALESCE(actual_amount, amount)::numeric AS value
-            FROM recharge_records
-            WHERE status = 'completed'
-              AND COALESCE(completed_at, created_at) >= ${todayRange.start}
-              AND COALESCE(completed_at, created_at) < ${todayRange.end}
-            UNION ALL
-            SELECT fee_amount::numeric AS value
-            FROM exchange_orders
-            WHERE status = 'completed'
-              AND completed_at IS NOT NULL
-              AND wallet_log_id IS NOT NULL
-              AND completed_at >= ${todayRange.start}
-              AND completed_at < ${todayRange.end}
-          ) AS official_revenue
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+          FROM recharge_records
+          WHERE status = 'completed'
+            AND COALESCE(completed_at, created_at) >= ${todayRange.start}
+            AND COALESCE(completed_at, created_at) < ${todayRange.end}
         `),
         prisma.$queryRaw<ScalarRow[]>(Prisma.sql`
-          SELECT COALESCE(SUM(value), 0)::numeric AS value
-          FROM (
-            SELECT COALESCE(actual_amount, amount)::numeric AS value
-            FROM recharge_records
-            WHERE status = 'completed'
-              AND COALESCE(completed_at, created_at) >= ${yesterdayRange.start}
-              AND COALESCE(completed_at, created_at) < ${yesterdayRange.end}
-            UNION ALL
-            SELECT fee_amount::numeric AS value
-            FROM exchange_orders
-            WHERE status = 'completed'
-              AND completed_at IS NOT NULL
-              AND wallet_log_id IS NOT NULL
-              AND completed_at >= ${yesterdayRange.start}
-              AND completed_at < ${yesterdayRange.end}
-          ) AS official_revenue
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+          FROM recharge_records
+          WHERE status = 'completed'
+            AND COALESCE(completed_at, created_at) >= ${yesterdayRange.start}
+            AND COALESCE(completed_at, created_at) < ${yesterdayRange.end}
         `),
         prisma.$queryRaw<ScalarRow[]>(Prisma.sql`
-          SELECT COALESCE(SUM(value), 0)::numeric AS value
-          FROM (
-            SELECT COALESCE(actual_amount, amount)::numeric AS value
-            FROM recharge_records
-            WHERE status = 'completed'
-              AND COALESCE(completed_at, created_at) >= ${last7DaysRange.start}
-              AND COALESCE(completed_at, created_at) < ${last7DaysRange.end}
-            UNION ALL
-            SELECT fee_amount::numeric AS value
-            FROM exchange_orders
-            WHERE status = 'completed'
-              AND completed_at IS NOT NULL
-              AND wallet_log_id IS NOT NULL
-              AND completed_at >= ${last7DaysRange.start}
-              AND completed_at < ${last7DaysRange.end}
-          ) AS official_revenue
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+          FROM recharge_records
+          WHERE status = 'completed'
+            AND COALESCE(completed_at, created_at) >= ${last7DaysRange.start}
+            AND COALESCE(completed_at, created_at) < ${last7DaysRange.end}
         `),
         prisma.$queryRaw<ScalarRow[]>(Prisma.sql`
-          SELECT COALESCE(SUM(value), 0)::numeric AS value
-          FROM (
-            SELECT COALESCE(actual_amount, amount)::numeric AS value
-            FROM recharge_records
-            WHERE status = 'completed'
-              AND COALESCE(completed_at, created_at) >= ${last30DaysRange.start}
-              AND COALESCE(completed_at, created_at) < ${last30DaysRange.end}
-            UNION ALL
-            SELECT fee_amount::numeric AS value
-            FROM exchange_orders
-            WHERE status = 'completed'
-              AND completed_at IS NOT NULL
-              AND wallet_log_id IS NOT NULL
-              AND completed_at >= ${last30DaysRange.start}
-              AND completed_at < ${last30DaysRange.end}
-          ) AS official_revenue
+          SELECT COALESCE(SUM(COALESCE(actual_amount, amount)), 0)::numeric AS value
+          FROM recharge_records
+          WHERE status = 'completed'
+            AND COALESCE(completed_at, created_at) >= ${last30DaysRange.start}
+            AND COALESCE(completed_at, created_at) < ${last30DaysRange.end}
         `),
         prisma.rechargeRecord.count({ where: { createdAt: { gte: todayRange.start, lt: todayRange.end } } }),
         prisma.rechargeRecord.count({ where: { status: 'completed', createdAt: { gte: todayRange.start, lt: todayRange.end } } }),

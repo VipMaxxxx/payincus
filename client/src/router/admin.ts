@@ -187,24 +187,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.systemUpdate', title: '版本更新' }
   },
   {
-    path: '/admin/sla-alerts',
-    name: 'admin-sla-alerts',
-    component: () => import('@/views/admin/SlaAlertsView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.slaAlerts', title: 'SLA 与告警' }
-  },
-  {
-    path: '/admin/exchange',
-    name: 'admin-exchange',
-    component: () => import('@/views/admin/ExchangeManageView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.exchangeManage', title: '交易所管理' }
-  },
-  {
-    path: '/admin/capacity-cost',
-    name: 'admin-capacity-cost',
-    component: () => import('@/views/admin/CapacityCostView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'nav.capacityCost', title: '容量与成本' }
-  },
-  {
     path: '/admin/images',
     name: 'admin-images',
     component: () => import('@/views/admin/ImagesView.vue'),

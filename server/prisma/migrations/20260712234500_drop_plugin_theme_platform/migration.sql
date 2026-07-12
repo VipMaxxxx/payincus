@@ -1,15 +1,9 @@
--- ⚠️ 部署前须先迁移/停用 prod 中 type='plugin_gateway' 的支付渠道行,否则充值/退款校验失败
-
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM "payment_providers"
-    WHERE "type"::text = 'plugin_gateway'
-  ) THEN
-    RAISE EXCEPTION 'plugin_gateway payment provider rows must be migrated or removed before this migration';
-  END IF;
-END $$;
+-- plugin_gateway payment providers are dead after the plugin platform is removed (nothing can process them).
+-- payment_providers is FK-restricted (recharge/method rows reference it) so we cannot DELETE it safely.
+-- Instead disable any such rows and reassign them to 'manual' below, so this upgrade migration ALWAYS
+-- succeeds for open-source users (no abort, no data loss, no FK violation). Admins can remove the
+-- now-disabled leftover providers afterwards.
+UPDATE "payment_providers" SET "status" = 'disabled' WHERE "type"::text = 'plugin_gateway';
 
 DELETE FROM "ticket_object_links"
 WHERE "object_type"::text = 'plugin_task';
@@ -51,8 +45,8 @@ CREATE TYPE "PaymentProviderType" AS ENUM (
 );
 ALTER TABLE "payment_providers"
   ALTER COLUMN "type" TYPE "PaymentProviderType"
-  USING ("type"::text::"PaymentProviderType");
-DROP TYPE "PaymentProviderType_old";
+  USING (CASE WHEN "type"::text = 'plugin_gateway' THEN 'manual'::"PaymentProviderType" ELSE "type"::text::"PaymentProviderType" END);
+DROP TYPE IF EXISTS "PaymentProviderType_old";
 
 ALTER TYPE "TicketObjectLinkType" RENAME TO "TicketObjectLinkType_old";
 CREATE TYPE "TicketObjectLinkType" AS ENUM (
@@ -65,7 +59,7 @@ CREATE TYPE "TicketObjectLinkType" AS ENUM (
 ALTER TABLE "ticket_object_links"
   ALTER COLUMN "object_type" TYPE "TicketObjectLinkType"
   USING ("object_type"::text::"TicketObjectLinkType");
-DROP TYPE "TicketObjectLinkType_old";
+DROP TYPE IF EXISTS "TicketObjectLinkType_old";
 
 DROP TYPE IF EXISTS "PluginStatus";
 DROP TYPE IF EXISTS "PluginInstallTaskStatus";

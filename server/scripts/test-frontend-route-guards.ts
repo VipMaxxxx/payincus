@@ -601,15 +601,6 @@ assert.ok(
   'TurnstileWidget must show a fixed verification status row so users can distinguish unverified and verified states'
 )
 assert.ok(
-  appPathsSource.includes("export function exchangePath(): string") &&
-    appPathsSource.includes("return '/exchange'") &&
-    userAppPathsSource.includes("export function exchangePath(): string") &&
-    userAppPathsSource.includes("return '/exchange'") &&
-    adminAppPathsSource.includes("export function exchangePath(): string") &&
-    adminAppPathsSource.includes("return '/admin/exchange'"),
-  'app path helpers must provide user/admin exchange routes for shared instance screens'
-)
-assert.ok(
   adminUsersViewSource.includes('import.meta.env.VITE_CUSTOMER_BASE_URL') &&
     adminUsersViewSource.includes('window.location.origin') &&
     adminUsersViewSource.includes('return `${customerBaseUrl.value}/register/${newInviteCode.value}`') &&
@@ -812,12 +803,6 @@ assert.ok(
     !instancesViewSource.includes('to="/wallet"') &&
     instanceDetailViewSource.includes('helpPath()') &&
     !instanceDetailViewSource.includes('to="/help"') &&
-    instanceDetailViewSource.includes('exchangePath()') &&
-    !instanceDetailViewSource.includes("path: '/exchange'") &&
-    !instanceDetailViewSource.includes('path: "/exchange"') &&
-    instancesViewSource.includes('exchangePath()') &&
-    !instancesViewSource.includes("path: '/exchange'") &&
-    !instancesViewSource.includes('path: "/exchange"') &&
     instanceCreateViewSource.includes('profilePath()') &&
     !instanceCreateViewSource.includes('to="/profile"') &&
     helpViewSource.includes("import { helpPath } from '@/utils/app-paths'") &&
@@ -999,7 +984,7 @@ assert.ok(
   'HostingWalletView must keep mobile wallet cards until lg and render fixed-layout desktop log/withdrawal tables without PC horizontal overflow'
 )
 assert.ok(
-  instanceDetailViewSource.includes("import { exchangePath, helpPath, hostDetailPath, instancesPath, isAdminEntry } from '@/utils/app-paths'") &&
+  instanceDetailViewSource.includes("import { helpPath, hostDetailPath, instancesPath, isAdminEntry } from '@/utils/app-paths'") &&
     instanceDetailViewSource.includes('interface CustomerSelfServiceApi') &&
     instanceDetailViewSource.includes('const customerSelfServiceApi = api as typeof api & CustomerSelfServiceApi') &&
     instanceDetailViewSource.includes('isAdminEntry ? Promise.resolve() : checkPendingTransfer()') &&
@@ -1024,7 +1009,7 @@ assert.ok(
   'InstanceDetailView must not render an unavailable instance failure reason'
 )
 assert.ok(
-  instancesViewSource.includes("import { exchangePath, instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'") &&
+  instancesViewSource.includes("import { instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'") &&
     instancesViewSource.includes('interface CustomerBillingApi') &&
     instancesViewSource.includes('const customerBillingApi = api as typeof api & CustomerBillingApi') &&
     instancesViewSource.includes('const canUseCustomerBillingActions = computed<boolean>(() => !isAdminEntry && !isViewingAnotherUsersInstances.value)') &&

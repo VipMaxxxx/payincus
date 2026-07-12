@@ -14,7 +14,7 @@ The demo environment is for quickly trying the PayIncus user portal and admin co
 - Demo data may be reset at any time.
 - Do not enter real payment details, API keys, SMTP passwords, Telegram tokens, Lsky tokens or other sensitive configuration in the demo environment.
 - For production deployments, use your own user portal and admin domains. See [One-click Install](/en/deployment/one-click-install) and [Environment Variables](/en/deployment/environment).
-- The demo is only for reviewing the UI, feature layout and basic workflows. Production readiness must be verified on your own deployment.
+- The demo is only for reviewing the UI, feature layout and basic workflows. Do not use it as a production environment.
 
 ## Difference From Production
 

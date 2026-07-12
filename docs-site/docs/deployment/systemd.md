@@ -56,13 +56,6 @@ ExecStart=/usr/bin/node /opt/incudal/current/server/dist/app.js
 /opt/incudal/current
 /opt/incudal/releases
 /opt/incudal/update-logs
-/opt/incudal/plugins
-/opt/incudal/plugin-data
-/opt/incudal/plugin-logs
-/opt/incudal/plugin-staging
-/opt/incudal/themes
-/opt/incudal/theme-data
-/opt/incudal/theme-staging
 ```
 
 不要把 `/`、`/etc` 或数据库目录加入 `ReadWritePaths`。支付密钥、数据库地址、OAuth secret、SMTP 密码和安装 token 只应放在 `/opt/incudal/.env` 或后台加密配置里。

@@ -141,7 +141,6 @@ try {
 
   const securitySource = readFileSync(resolve(__dirname, '../src/lib/security.ts'), 'utf8')
   const configCacheSource = readFileSync(resolve(__dirname, '../src/lib/config-cache.ts'), 'utf8')
-  const exchangeDeliveryWorkerSource = readFileSync(resolve(__dirname, '../src/workers/exchangeDeliveryWorker.ts'), 'utf8')
   const hostRouteSource = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'utf8')
   const envExampleSource = readFileSync(resolve(__dirname, '../../.env.example'), 'utf8')
   const readmeSource = readFileSync(resolve(__dirname, '../../README.md'), 'utf8')
@@ -162,13 +161,6 @@ try {
       configCacheSource.includes('未来扩容前必须下沉到 PostgreSQL 或其它共享存储/失效通知机制') &&
       configCacheSource.includes('const configCache = new Map'),
     'configuration cache must document the single-backend-process invariant and shared-store migration requirement'
-  )
-
-  assert.ok(
-    exchangeDeliveryWorkerSource.includes('交割 finalize 重入去重是进程内状态') &&
-      exchangeDeliveryWorkerSource.includes('依赖私有后端仅运行单个进程实例') &&
-      exchangeDeliveryWorkerSource.includes('const runningTaskIds = new Set<number>()'),
-    'exchange delivery finalize deduplication must document the single-backend-process invariant'
   )
 
   assert.ok(

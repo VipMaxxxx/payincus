@@ -22,10 +22,6 @@ const apiTypes = read('client/src/types/api.ts')
 const oauthView = read('client/src/views/admin/OAuthConfigView.vue')
 const oauthAuthorizeView = read('client/src/views/OAuthAuthorizeView.vue')
 const userRouter = read('client/src/router/user.ts')
-const developmentDocs = read('docs-site/docs/plugins/development.md')
-const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
-const overview = read('docs-site/docs/plugins/overview.md')
-const enOverview = read('docs-site/docs/en/plugins/overview.md')
 const serverPackage = read('server/package.json')
 const rootPackage = read('package.json')
 
@@ -199,36 +195,6 @@ assert(
   'OAuth responsive admin UI must preserve app management, authorization revoke, and pagination actions'
 )
 
-assert(
-  developmentDocs.includes('GET /oauth/authorize') &&
-    developmentDocs.includes('GET /api/oauth-provider/scopes') &&
-    developmentDocs.includes('scopeMetadata') &&
-    developmentDocs.includes('risk = low | medium | high') &&
-    developmentDocs.includes('access = read | write | operate') &&
-    developmentDocs.includes('resources') &&
-    developmentDocs.includes('GET /api/oauth-provider/authorize/consent') &&
-  developmentDocs.includes('POST /api/oauth-provider/authorize') &&
-    developmentDocs.includes('POST /api/oauth-provider/token') &&
-    developmentDocs.includes('GET /api/oauth-provider/authorizations') &&
-    developmentDocs.includes('DELETE /api/oauth-provider/authorizations/:id') &&
-    developmentDocs.includes('GET /api/admin/oauth-apps/authorizations') &&
-    developmentDocs.includes('DELETE /api/admin/oauth-apps/authorizations/:id') &&
-    developmentDocs.includes('后台授权审计接口只允许管理员访问') &&
-    developmentDocs.includes('Authorization: Bearer poa_') &&
-    developmentDocs.includes('por_') &&
-    developmentDocs.includes('轮换 refresh token') &&
-    platformPlan.includes('OAuth Provider 首版') &&
-    platformPlan.includes('OAuth/Public API scope 元数据目录') &&
-    platformPlan.includes('scope/resource 映射') &&
-    platformPlan.includes('浏览器授权确认页') &&
-    platformPlan.includes('后台授权审计筛选') &&
-    platformPlan.includes('refresh token 轮换') &&
-    overview.includes('PayIncus 已提供 OAuth Provider 首版') &&
-    overview.includes('授权记录管理') &&
-    enOverview.includes('PayIncus already provides the first OAuth Provider version') &&
-    enOverview.includes('authorization record management'),
-  'Docs must describe the implemented OAuth Provider lifecycle and remaining OAuth work'
-)
 
 assert(
   serverPackage.includes('"test:oauth-provider-guards"') &&

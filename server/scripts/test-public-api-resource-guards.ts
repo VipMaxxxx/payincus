@@ -15,10 +15,6 @@ const rateLimitConfig = read('server/src/config/rate-limit.ts')
 const ticketAttachments = read('server/src/lib/ticket-attachments.ts')
 const openapiSource = read('server/src/lib/public-api-openapi.ts')
 const clientTypes = read('client/src/types/api.ts')
-const developmentDocs = read('docs-site/docs/plugins/development.md')
-const overviewDocs = read('docs-site/docs/plugins/overview.md')
-const enOverviewDocs = read('docs-site/docs/en/plugins/overview.md')
-const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
 const serverPackage = read('server/package.json')
 const rootPackage = read('package.json')
 
@@ -531,16 +527,6 @@ for (const path of forbiddenOpenApiPaths) {
   )
 }
 
-assert.ok(
-  developmentDocs.includes('## 高风险 Public API 边界') &&
-    developmentDocs.includes('直接余额充值、扣款、退款、审批通过或绕过审批的调账') &&
-    developmentDocs.includes('支付建单、支付回调处理、主动验单、退款执行或 provider payload 读取') &&
-    developmentDocs.includes('服务创建、暂停、恢复、重装、删除、迁移、资源交付或宿主机操作') &&
-    platformPlan.includes('这些项目是有意保留在 PayIncus 内部状态机或后台审核流里的高风险边界') &&
-    platformPlan.includes('不是当前 Public API 首版未完成的阻塞项') &&
-    platformPlan.includes('新增前必须先补 scope 元数据、OpenAPI、SDK、审计日志、限流、幂等、状态机回滚和生产 proof'),
-  'public API docs must define the high-risk boundary as an intentional guardrail, not an accidental gap'
-)
 
 assert.ok(
     serializedOpenApi.includes('listPublicProducts') &&
@@ -605,100 +591,6 @@ assert.ok(
   'OpenAPI must document the products, orders, tickets, profile update, public ticket create/reply and self notification resource operations and schemas'
 )
 
-assert.ok(
-    developmentDocs.includes('GET /api/v1/products') &&
-    developmentDocs.includes('PATCH /api/v1/me') &&
-    developmentDocs.includes('GET /api/v1/balance') &&
-    developmentDocs.includes('GET /api/v1/balance/logs') &&
-    developmentDocs.includes('GET /api/v1/balance/adjustment-requests') &&
-    developmentDocs.includes('POST /api/v1/balance/adjustment-requests') &&
-    developmentDocs.includes('GET /api/v1/billing-records') &&
-    developmentDocs.includes('GET /api/v1/billing-records/:id') &&
-    developmentDocs.includes('`balance:read` 已对应当前用户账户余额和余额流水只读接口') &&
-    developmentDocs.includes('余额流水只读接口') &&
-    developmentDocs.includes('`balance:write` 已对应当前用户自己的余额调整申请提交和申请列表读取') &&
-    developmentDocs.includes('不会直接写余额、余额流水、支付或充值订单') &&
-    developmentDocs.includes('`billing:read` 已对应当前用户自己的实例计费记录列表和详情读取') &&
-    developmentDocs.includes('不返回余额流水对象、支付回调、provider payload、内部对账数据或其他用户账单') &&
-    developmentDocs.includes('服务、订单和工单列表已经支持白名单安全过滤') &&
-    developmentDocs.includes('服务接口已经支持白名单 `include=product,plan`') &&
-    developmentDocs.includes('受控 `include = product,plan`') &&
-    developmentDocs.includes('`included.products` 和 `included.plans`') &&
-    developmentDocs.includes('GET /api/v1/services') &&
-    developmentDocs.includes('POST /api/v1/services/:id/actions') &&
-    developmentDocs.includes('POST /api/v1/services/:id/renew') &&
-    developmentDocs.includes('GET /api/v1/services/:id/tasks/:taskId') &&
-    developmentDocs.includes('DELETE /api/v1/services/:id/tasks/:taskId') &&
-    developmentDocs.includes('GET /api/v1/orders') &&
-    developmentDocs.includes('GET /api/v1/orders/:id') &&
-    developmentDocs.includes('订单已支持当前用户单条详情读取') &&
-    developmentDocs.includes('订单 ID 形如 `recharge:123` 或 `instance_billing:456`') &&
-    developmentDocs.includes('GET /api/v1/tickets') &&
-    developmentDocs.includes('POST /api/v1/tickets') &&
-    developmentDocs.includes('POST /api/v1/tickets/:id/replies') &&
-    developmentDocs.includes('PATCH /api/v1/tickets/:id/status') &&
-    developmentDocs.includes('GET /api/v1/notifications') &&
-    developmentDocs.includes('GET /api/v1/notifications/unread-count') &&
-    developmentDocs.includes('POST /api/v1/notifications') &&
-    developmentDocs.includes('`tickets:write` 已对应受控工单创建、公开回复、图片附件、关闭自己的工单和重新打开自己的已关闭工单接口') &&
-    developmentDocs.includes('`multipart/form-data` 可通过 `images` 字段上传最多 6 张图片附件') &&
-    developmentDocs.includes('`services:operate` 已对应受控服务电源任务入队') &&
-    developmentDocs.includes('`services:billing` 已对应受控服务续费接口') &&
-    developmentDocs.includes('复用内部续费事务，不接受任意金额或直接余额扣款') &&
-    developmentDocs.includes('任务状态轮询和等待中任务取消接口') &&
-    developmentDocs.includes('只允许 `start`、`stop`、`restart` 当前用户自己的服务') &&
-    developmentDocs.includes('`profile:write`') &&
-    developmentDocs.includes('只允许更新低风险资料字段 `avatarStyle`') &&
-    developmentDocs.includes('受控工单创建、公开回复、图片附件、关闭自己的工单和重新打开自己的已关闭工单接口') &&
-    developmentDocs.includes('接口不接受内部备注、状态覆盖、目标用户覆盖、管理员字段、任意文件或存储 provider 文件 ID') &&
-    developmentDocs.includes('`notifications:read` 已对应当前用户站内信和未读数量只读接口') &&
-    developmentDocs.includes('不返回渠道配置、发送日志或原始事件 payload') &&
-    developmentDocs.includes('平台白名单模板 `flash_sale_reminder`、`service_action_update`、`billing_notice`') &&
-    !developmentDocs.includes('API token/scope 只允许按已开放 scope 访问只读资源') &&
-    developmentDocs.includes('Public API 写入型接口已经挂载独立限流') &&
-    developmentDocs.includes('触发限流会返回 `429 TooManyRequests`') &&
-    developmentDocs.includes('不接受 `userId`、群发、任意渠道选择') &&
-    developmentDocs.includes('不会返回 root 密码、Incus ID、宿主机内部配置或特权连接密钥') &&
-    developmentDocs.includes('不会返回支付回调数据') &&
-    developmentDocs.includes('不会返回内部备注') &&
-    overviewDocs.includes('公共资源 API') &&
-    overviewDocs.includes('/api/v1/balance') &&
-    overviewDocs.includes('/api/v1/balance/logs') &&
-    overviewDocs.includes('/api/v1/balance/adjustment-requests') &&
-    overviewDocs.includes('/api/v1/billing-records') &&
-    overviewDocs.includes('/api/v1/notifications') &&
-    overviewDocs.includes('`profile:write` 只允许更新 `avatarStyle`') &&
-    overviewDocs.includes('`balance:write` 只允许提交当前 token 用户自己的待审批余额调整申请') &&
-    overviewDocs.includes('services:operate') &&
-    overviewDocs.includes('services:billing') &&
-    overviewDocs.includes('`notifications:send` 只允许给当前 token 用户自己发送短文本通知') &&
-    overviewDocs.includes('再轮询公开任务状态') &&
-    overviewDocs.includes('取消仍在等待中的公开电源任务') &&
-    overviewDocs.includes('服务操作首版不开放创建、暂停、恢复、重装、删除、迁移或宿主机操作') &&
-    enOverviewDocs.includes('## Public Resource API') &&
-    enOverviewDocs.includes('/api/v1/balance') &&
-    enOverviewDocs.includes('/api/v1/balance/logs') &&
-    enOverviewDocs.includes('/api/v1/balance/adjustment-requests') &&
-    enOverviewDocs.includes('/api/v1/billing-records') &&
-    enOverviewDocs.includes('/api/v1/notifications') &&
-    enOverviewDocs.includes('`profile:write` only allows updating `avatarStyle`') &&
-    enOverviewDocs.includes('`balance:write` only allows submitting the current token user') &&
-    enOverviewDocs.includes('services:operate') &&
-    enOverviewDocs.includes('services:billing') &&
-    enOverviewDocs.includes('`notifications:send` only allows sending short text notifications') &&
-    enOverviewDocs.includes('polling public task state') &&
-    enOverviewDocs.includes('canceling still-pending public power tasks') &&
-    enOverviewDocs.includes('does not expose service creation, suspend, resume, reinstall, delete, migration, or host operations') &&
-    platformPlan.includes('资源 API 只读首版') &&
-    platformPlan.includes('所有公开列表已支持统一 `page`、`pageSize` 和白名单 `sort`') &&
-    platformPlan.includes('统一分页、白名单排序、服务/订单/账单/工单列表白名单过滤') &&
-    platformPlan.includes('写入型资源 API 首版') &&
-    platformPlan.includes('服务 `start`/`stop`/`restart` 任务入队、状态轮询和等待中任务取消') &&
-    platformPlan.includes('受控服务续费') &&
-    platformPlan.includes('Public API 写入面已按操作类型挂载独立限流') &&
-    platformPlan.includes('直接余额充值/扣款/退款或绕过审批的调账'),
-  'public API docs must describe the resource API, public profile update, public ticket create/reply, self notification, and remaining high-risk write APIs'
-)
 
 assert.ok(
   serverPackage.includes('"test:public-api-resource-guards"') &&

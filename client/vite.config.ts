@@ -308,8 +308,7 @@ function stripUserOnlyLocaleMessages(source: string): string {
     'billing',
     'withdrawals',
     'telegramSettings',
-    'adminCreateInstance',
-    'capacityCost'
+    'adminCreateInstance'
   ]
 
   for (const key of adminOnlyTopLevelKeys) {

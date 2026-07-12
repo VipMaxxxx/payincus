@@ -2,7 +2,7 @@
  * 管理员计费相关路由
  */
 
-import type { FastifyInstance, FastifyReply } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { Prisma, type FinancialReconciliationItemType, type FinancialReconciliationStatus, type InstanceStatus } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import * as db from '../db/index.js'
@@ -56,7 +56,6 @@ import {
   networkModeNeedsRoutedIpv6,
   normalizeNetworkMode
 } from '../lib/network-modes.js'
-import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 import { calculateDailyPrice } from '../lib/billing-calc.js'
 import { reverseInstanceAffCommissionForRefund } from './instance-destroy.js'
 
@@ -69,8 +68,12 @@ const RECONCILIATION_ITEM_STATUSES = new Set<FinancialReconciliationStatus>(['di
 const RECONCILIATION_EXPORT_TYPES = new Set(['orders', 'balance_logs', 'hosting_income', 'adjustments'])
 const BUSINESS_TIMEZONE_OFFSET_MINUTES = 8 * 60
 const FINANCIAL_NOTE_MAX_LENGTH = 500
-const EXCHANGE_ADMIN_DELETE_LOCK_REASON = '实例已上架交易所或处于交易锁定中，请先在交易所管理中处理订单、退款或下架'
-const EXCHANGE_ADMIN_BILLING_LOCK_REASON = '实例已上架交易所或处于交易锁定中，不能执行普通计费/状态变更；请先在交易所管理中处理'
+const PLUGIN_GATEWAY_PROVIDER_TYPE = 'plugin_gateway'
+
+interface RechargeRefundInput {
+  amount: number
+  reason: string
+}
 
 interface RechargeAggregateRow {
   amount: unknown
@@ -317,6 +320,89 @@ function resolveRechargeProviderConfig(
   return resolveRechargeProviderConfigSnapshot(providerType, currentConfig, snapshotValue)
 }
 
+function normalizeRechargeRefundInput(input: unknown): RechargeRefundInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw { error: '请求参数无效' }
+  }
+
+  const record = input as Record<string, unknown>
+  const amount = record.amount
+  if (
+    typeof amount !== 'number' ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    !/^\d+(\.\d{1,2})?$/.test(String(amount))
+  ) {
+    throw { error: '退款金额必须大于 0，最多两位小数' }
+  }
+
+  const reason = typeof record.reason === 'string' ? record.reason.trim() : ''
+  if (!reason) {
+    throw { error: '必须填写退款原因' }
+  }
+  if (reason.length > FINANCIAL_NOTE_MAX_LENGTH) {
+    throw { error: `退款原因不能超过 ${FINANCIAL_NOTE_MAX_LENGTH} 字符` }
+  }
+
+  return { amount: Number(amount.toFixed(2)), reason }
+}
+
+function serializeRechargeRefundRequest(request: db.RechargeRefundRequestWithRelations) {
+  return {
+    id: request.id,
+    rechargeRecordId: request.rechargeRecordId,
+    orderNo: request.rechargeRecord.orderNo,
+    userId: request.userId,
+    user: request.user,
+    providerId: request.providerId,
+    provider: request.provider,
+    requestedBy: request.requestedBy,
+    processedBy: request.processedBy || null,
+    amount: Number(request.amount),
+    status: request.status,
+    reason: request.reason,
+    idempotencyKey: request.idempotencyKey,
+    providerRequestId: request.providerRequestId,
+    providerRefundId: request.providerRefundId,
+    providerStatus: request.providerStatus,
+    providerMessage: request.providerMessage,
+    providerMetadata: request.providerMetadata,
+    failureReason: request.failureReason,
+    createdAt: request.createdAt.toISOString(),
+    updatedAt: request.updatedAt.toISOString(),
+    processedAt: request.processedAt?.toISOString() || null,
+    completedAt: request.completedAt?.toISOString() || null
+  }
+}
+
+async function assertRechargeRefundProviderSupported(recordId: number): Promise<void> {
+  const record = await prisma.rechargeRecord.findUnique({
+    where: { id: recordId },
+    select: {
+      id: true,
+      status: true,
+      providerId: true
+    }
+  })
+  if (!record) {
+    throw new Error('充值记录不存在')
+  }
+  if (record.status !== 'completed') {
+    throw new Error('仅已完成充值支持原路退款')
+  }
+
+  const paymentProvider = await db.getPaymentProviderById(record.providerId)
+  if (!paymentProvider) {
+    throw new Error('支付渠道不存在')
+  }
+  const provider: { type: string } = paymentProvider
+  if (provider.type !== PLUGIN_GATEWAY_PROVIDER_TYPE) {
+    throw new Error('当前充值支付渠道不支持自动原路退款；请改用订单退款审批或人工调账')
+  }
+
+  throw new Error('插件支付网关已下线，当前渠道无法执行自动原路退款')
+}
+
 // ==================== 辅助函数 ====================
 
 /**
@@ -388,18 +474,6 @@ class BatchPriceUpdateError extends Error {
     this.statusCode = statusCode
     this.preview = preview
   }
-}
-
-async function rejectAdminBillingExchangeLock(reply: FastifyReply, instanceId: number): Promise<boolean> {
-  const exchangeLock = await getExchangeOperationLock(instanceId)
-  if (!exchangeLock.locked) return false
-  reply.status(409).send({
-    error: exchangeLock.message || EXCHANGE_ADMIN_BILLING_LOCK_REASON,
-    code: exchangeLock.code,
-    listingId: exchangeLock.listingId,
-    orderId: exchangeLock.orderId
-  })
-  return true
 }
 
 function roundMoney(value: number): number {
@@ -645,24 +719,6 @@ async function buildBatchPriceUpdatePreview(
         discountRate: 0,
         status: 'failed',
         error: '免费实例不支持修改价格'
-      })
-      continue
-    }
-
-    const exchangeLock = await getExchangeOperationLock(instance.id)
-    if (exchangeLock.locked) {
-      items.push({
-        id: instance.id,
-        name: instance.name,
-        user,
-        oldPrice,
-        newPrice,
-        billingCycle: instance.billingCycle,
-        remainingDays: 0,
-        priceDiff: 0,
-        discountRate: 0,
-        status: 'failed',
-        error: exchangeLock.message || EXCHANGE_ADMIN_BILLING_LOCK_REASON
       })
       continue
     }
@@ -1774,7 +1830,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已被封停' })
       }
 
-      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       // 如果正在运行，先停止
       if (instance.status === 'running') {
@@ -1842,7 +1897,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例未被封停' })
       }
 
-      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       // 解除封停
       await db.unsuspendInstance(instanceId)
@@ -1902,7 +1956,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已删除' })
       }
 
-      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       // 只有付费实例可以延期
       if (!instance.packagePlanId || !instance.billingPrice) {
@@ -2261,16 +2314,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已删除' })
       }
 
-      const exchangeLock = await getExchangeOperationLock(instanceId)
-      if (exchangeLock.locked) {
-        return reply.status(409).send({
-          error: exchangeLock.message || EXCHANGE_ADMIN_DELETE_LOCK_REASON,
-          code: exchangeLock.code,
-          listingId: exchangeLock.listingId,
-          orderId: exchangeLock.orderId
-        })
-      }
-
       // 3. 计算可退款金额（仅用于全额退款模式）
       const { maxRefundable } = await getMaxRefundable(instanceId)
 
@@ -2539,7 +2582,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已删除' })
       }
 
-      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       if (!instance.packagePlanId) {
         return reply.status(400).send({ error: '免费实例不支持应用优惠码' })
@@ -2654,7 +2696,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已删除' })
       }
 
-      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       if (!instance.packagePlanId) {
         return reply.status(400).send({ error: '免费实例不支持修改价格' })
@@ -2888,7 +2929,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '实例已删除' })
       }
 
-      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       if (!instance.packagePlanId) {
         return reply.status(400).send({ error: '免费实例不支持修改价格' })
@@ -3390,6 +3430,138 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
   })
 
   // POST /api/admin/billing/recharge-records/:id/sync - 同步充值订单状态
+  app.get('/api/admin/billing/recharge-refunds', {
+    onRequest: [app.authenticate, app.requireAdmin]
+  }, async (request, reply) => {
+    try {
+      const { page, pageSize, status, userId, providerId, rechargeRecordId, search } = request.query as {
+        page?: string
+        pageSize?: string
+        status?: string
+        userId?: string
+        providerId?: string
+        rechargeRecordId?: string
+        search?: string
+      }
+
+      const result = await db.listRechargeRefundRequests({
+        page: parsePositiveInteger(page, 1),
+        pageSize: parsePositiveInteger(pageSize, 20, 100),
+        status,
+        userId: parseOptionalPositiveInteger(userId),
+        providerId: parseOptionalPositiveInteger(providerId),
+        rechargeRecordId: parseOptionalPositiveInteger(rechargeRecordId),
+        search
+      })
+
+      return {
+        refunds: result.requests.map(serializeRechargeRefundRequest),
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize
+      }
+    } catch (error) {
+      request.log.error(error, '获取原路退款请求列表失败')
+      return reply.status(500).send({ error: '获取原路退款请求列表失败' })
+    }
+  })
+
+  app.get('/api/admin/billing/recharge-records/:id/refunds', {
+    onRequest: [app.authenticate, app.requireAdmin]
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const recordId = parsePositiveRouteId(id)
+    if (!recordId) {
+      return reply.status(400).send({ error: '无效的充值记录 ID' })
+    }
+
+    const record = await prisma.rechargeRecord.findUnique({
+      where: { id: recordId },
+      select: { id: true }
+    })
+    if (!record) {
+      return reply.status(404).send({ error: '充值记录不存在' })
+    }
+
+    const result = await db.listRechargeRefundRequests({
+      rechargeRecordId: recordId,
+      page: 1,
+      pageSize: 100
+    })
+
+    return {
+      refunds: result.requests.map(serializeRechargeRefundRequest)
+    }
+  })
+
+  app.post('/api/admin/billing/recharge-records/:id/refunds', {
+    onRequest: [app.authenticate, app.requireAdmin],
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+  }, async (request, reply) => {
+    const admin = request.user!
+    const { id } = request.params as { id: string }
+    const recordId = parsePositiveRouteId(id)
+    if (!recordId) {
+      return reply.status(400).send({ error: '无效的充值记录 ID' })
+    }
+
+    let refundInput: RechargeRefundInput
+    try {
+      refundInput = normalizeRechargeRefundInput(request.body)
+    } catch (error) {
+      return reply.status(400).send(error)
+    }
+
+    try {
+      await assertRechargeRefundProviderSupported(recordId)
+
+      const refundRequest = await db.createRechargeRefundRequest({
+        rechargeRecordId: recordId,
+        requestedByUserId: admin.id,
+        amount: refundInput.amount,
+        reason: refundInput.reason
+      })
+
+      return reply.status(201).send({
+        success: false,
+        status: refundRequest.status,
+        message: '退款申请已创建，等待支付渠道处理',
+        refundRequest: serializeRechargeRefundRequest(refundRequest)
+      })
+    } catch (error) {
+      return reply.status(400).send({ error: error instanceof Error ? error.message : '原路退款失败' })
+    }
+  })
+
+  app.post('/api/admin/billing/recharge-refunds/:id/retry', {
+    onRequest: [app.authenticate, app.requireAdmin],
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const refundRequestId = parsePositiveRouteId(id)
+    if (!refundRequestId) {
+      return reply.status(400).send({ error: '无效的退款申请 ID' })
+    }
+
+    const refundRequest = await db.getRechargeRefundRequestById(refundRequestId)
+    if (!refundRequest) {
+      return reply.status(404).send({ error: '退款申请不存在' })
+    }
+    if (refundRequest.status === 'completed') {
+      return {
+        success: true,
+        status: refundRequest.status,
+        message: '退款申请已完成',
+        refundRequest: serializeRechargeRefundRequest(refundRequest)
+      }
+    }
+
+    return reply.status(409).send({
+      error: '原支付渠道的自动退款执行器不可用，无法重试',
+      refundRequest: serializeRechargeRefundRequest(refundRequest)
+    })
+  })
+
   app.post('/api/admin/billing/recharge-records/:id/sync', {
     onRequest: [app.authenticate, app.requireAdmin],
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
@@ -4619,7 +4791,6 @@ if (provider.type === 'yipay') {
         return reply.status(400).send({ error: '实例已删除' })
       }
 
-      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
 
       // 2. 获取新方案信息
       const newPlan = await prisma.packagePlan.findUnique({

@@ -21,7 +21,6 @@ import { prisma } from '../db/prisma.js'
 import {
     claimOperationVerificationRequirement
 } from '../lib/operation-verification.js'
-import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 
 // 自定义 nanoid，只使用小写字母和数字（Incus 不允许下划线）
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
@@ -93,18 +92,6 @@ function parsePositiveInteger(value: string | undefined, fallback?: number, max 
     }
 
     return parsed
-}
-
-async function checkExchangeLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
-    const exchangeLock = await getExchangeOperationLock(instanceId)
-    if (!exchangeLock.locked) return false
-    reply.code(409).send({
-        error: exchangeLock.message || '实例已上架交易所或处于交易锁定中，不能发起普通转移',
-        code: exchangeLock.code,
-        listingId: exchangeLock.listingId,
-        orderId: exchangeLock.orderId
-    })
-    return true
 }
 
 export default async function transferRoutes(fastify: FastifyInstance) {
@@ -218,8 +205,6 @@ export default async function transferRoutes(fastify: FastifyInstance) {
         if (hasPending) {
             return reply.code(400).send(apiError(ErrorCode.TRANSFER_ALREADY_PENDING))
         }
-
-        if (await checkExchangeLock(instanceId, reply)) return
 
         if (!await requireVerifiedOperation(reply, user.id, instanceId)) return
 
@@ -506,11 +491,6 @@ export default async function transferRoutes(fastify: FastifyInstance) {
         if (!instance || instance.status === 'deleted') {
             await db.cancelTransfer(transferId)
             return reply.code(400).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
-        }
-
-        if (await checkExchangeLock(transfer.instanceId, reply)) {
-            await rollbackToPending()
-            return
         }
 
         // ===== 检查实例状态：必须是停止状态才能重命名 =====
@@ -970,11 +950,6 @@ export default async function transferRoutes(fastify: FastifyInstance) {
         if (!instance || instance.status === 'deleted') {
             await db.cancelTransfer(transferId)
             return reply.code(400).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
-        }
-
-        if (await checkExchangeLock(transfer.instanceId, reply)) {
-            await rollbackToPending()
-            return
         }
 
         const host = await db.getHostById(instance.host_id)

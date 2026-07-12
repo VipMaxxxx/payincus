@@ -1,5 +1,5 @@
-DROP TABLE "user_order_restrictions";
-DROP TABLE "instance_risk_events";
-DROP TABLE "instance_resource_samples";
-DROP TABLE "instance_risk_states";
-DROP TABLE "resource_risk_policies";
+DROP TABLE IF EXISTS "user_order_restrictions" CASCADE;
+DROP TABLE IF EXISTS "instance_risk_events" CASCADE;
+DROP TABLE IF EXISTS "instance_resource_samples" CASCADE;
+DROP TABLE IF EXISTS "instance_risk_states" CASCADE;
+DROP TABLE IF EXISTS "resource_risk_policies" CASCADE;

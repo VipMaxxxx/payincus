@@ -101,38 +101,6 @@ SYSTEM_UPDATE_BACKUP_TASKS_KEEP=3
 - `artifact`：只允许校验过的 OTA artifact。
 - `git`：强制 checkout tag 并在服务器构建。
 
-## 扩展中心
-
-```dotenv
-PLUGIN_MANAGER_ALLOWED_ADMIN_IDS=
-PLUGIN_MARKET_INDEX_URL=https://payincus.com/plugin-market/index.json
-PLUGIN_MARKET_TRUSTED_HOSTS=payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
-PLUGIN_MARKET_PUBLISH_DIR=/opt/incudal/plugin-market
-PLUGIN_MARKET_PUBLIC_BASE_URL=https://payincus.com/plugin-market
-PLUGIN_SUBMISSION_PUBLIC_BASE_URL=
-PLUGIN_WEBHOOK_SIGNING_SECRET=change_me
-PLUGIN_WEBHOOK_TIMEOUT_MS=10000
-PLUGIN_INSTALL_DIR=/opt/incudal/plugins
-PLUGIN_DATA_DIR=/opt/incudal/plugin-data
-PLUGIN_LOG_DIR=/opt/incudal/plugin-logs
-PLUGIN_STAGING_DIR=/opt/incudal/plugin-staging
-PLUGIN_MAX_PACKAGE_SIZE_MB=20
-```
-
-## 主题系统
-
-```dotenv
-THEME_MANAGER_ALLOWED_ADMIN_IDS=
-THEME_MARKET_INDEX_URL=https://payincus.com/theme-market/index.json
-THEME_MARKET_TRUSTED_HOSTS=payincus.com,payincus.github.io,github.com,objects.githubusercontent.com,raw.githubusercontent.com
-THEME_MARKET_PUBLISH_DIR=/opt/incudal/theme-market
-THEME_MARKET_PUBLIC_BASE_URL=https://payincus.com/theme-market
-THEME_INSTALL_DIR=/opt/incudal/themes
-THEME_DATA_DIR=/opt/incudal/theme-data
-THEME_STAGING_DIR=/opt/incudal/theme-staging
-THEME_MAX_PACKAGE_SIZE_MB=10
-```
-
 ## 验证
 
 ```bash

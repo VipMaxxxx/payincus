@@ -36,7 +36,6 @@ import {
 } from '../lib/cloud-init-status.js'
 import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'
 import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
-import { getExchangeOperationLock, getExchangeSensitiveAccessLock } from '../services/exchange-operation-lock.js'
 import { turnstileVerifier } from '../lib/turnstile.js'
 import { customAlphabet } from 'nanoid'
 
@@ -212,21 +211,11 @@ function parseOptionalInstanceStatus(value: string | undefined): InstanceStatus 
   return INSTANCE_LIST_STATUSES.has(value as InstanceStatus) ? value as InstanceStatus : null
 }
 
-// 检查实例是否被转移/交易所锁定
+// 检查实例是否被转移锁定
 async function checkTransferLock(instanceId: number, reply: FastifyReply): Promise<boolean> {
   const hasPending = await db.hasPendingTransfer(instanceId)
   if (hasPending) {
     reply.code(400).send(apiError(ErrorCode.TRANSFER_INSTANCE_LOCKED))
-    return true
-  }
-  const exchangeLock = await getExchangeOperationLock(instanceId)
-  if (exchangeLock.locked) {
-    reply.code(409).send({
-      error: exchangeLock.message,
-      code: exchangeLock.code,
-      listingId: exchangeLock.listingId,
-      orderId: exchangeLock.orderId
-    })
     return true
   }
   return false
@@ -2701,20 +2690,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    const exchangeLock = await getExchangeSensitiveAccessLock(
-      instanceId,
-      { id: user.id, role: user.role },
-      instance.user_id
-    )
-    if (exchangeLock.locked) {
-      return reply.code(409).send({
-        error: exchangeLock.message || '实例处于交易所锁定中，不能查看密码',
-        code: exchangeLock.code || 'EXCHANGE_INSTANCE_LOCKED',
-        listingId: exchangeLock.listingId,
-        orderId: exchangeLock.orderId
-      })
-    }
-
     // 解密并返回密码
     if (instance.root_password) {
       const decryptedPassword = decryptSensitiveData(instance.root_password)
@@ -3353,7 +3328,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 交易所挂牌/交割期间禁止迁移节点，避免挂牌资产或交割对象被替换。
     if (await checkTransferLock(instanceId, reply)) return
 
     return buildChangeHostOptions(instance)
@@ -3397,7 +3371,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 交易所挂牌/交割期间禁止迁移节点，避免绕过上架锁定和强制重装交割。
     if (await checkTransferLock(instanceId, reply)) return
 
     if (instance.status === 'suspended') {
@@ -4936,7 +4909,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 交易所挂牌/交割期间禁止调整实例配额，避免挂牌快照和交割清理范围发生变化。
     if (await checkTransferLock(instanceId, reply)) return
 
     // 新配额系统：实例级别的端口/快照/备份/站点限制独立存储，不再与用户配额关联。
@@ -5412,7 +5384,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.INSTANCE_SUSPENDED))
     }
 
-    // 交易所挂牌/交割期间只允许通过交易所入口改价、改说明、下架或查看交易状态。
     if (await checkTransferLock(instanceId, reply)) return
 
     const { name } = request.body
@@ -5585,7 +5556,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 交易所挂牌/交割期间禁止修改实例运行配置。
     if (await checkTransferLock(instanceId, reply)) return
 
     if (instance.status !== 'running' && instance.status !== 'stopped') {
@@ -5694,7 +5664,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 交易所挂牌/交割期间禁止修改实例运行配置。
     if (await checkTransferLock(instanceId, reply)) return
 
     if (instance.status !== 'running' && instance.status !== 'stopped') {
@@ -6246,7 +6215,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
-    // 交易所挂牌/交割期间禁止修改实例交付状态标记。
     if (await checkTransferLock(instanceId, reply)) return
 
     if (instance.status !== 'running') {

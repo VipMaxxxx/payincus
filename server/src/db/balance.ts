@@ -25,10 +25,7 @@ const BALANCE_LOG_TYPES = new Set<BalanceLogType>([
   'transfer_refund',
   'hosting_withdraw',
   'hosting_deduction',
-  'invite_generate',
-  'exchange_purchase',
-  'exchange_refund',
-  'exchange_transfer'
+  'invite_generate'
 ])
 const MAX_BALANCE_AMOUNT = 99999999.99
 

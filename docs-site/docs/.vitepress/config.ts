@@ -22,8 +22,6 @@ function localeRoutes(route: string) {
 const zhNav = [
   { text: '首页', link: '/' },
   { text: '文档', link: '/guide/introduction' },
-  { text: '开发', link: '/plugins/overview' },
-  { text: '扩展市场', link: '/plugins/market' },
   { text: 'API', link: '/api/overview' },
   {
     text: '关于',
@@ -39,8 +37,6 @@ const zhNav = [
 const enNav = [
   { text: 'Home', link: '/en/' },
   { text: 'Docs', link: '/en/guide/introduction' },
-  { text: 'Development', link: '/en/plugins/overview' },
-  { text: 'Extension Market', link: '/en/plugins/market' },
   { text: 'API', link: '/en/api/overview' },
   {
     text: 'About',
@@ -74,8 +70,7 @@ const zhSidebar = [
       { text: '手动部署', link: '/deployment/manual-install' },
       { text: 'Nginx 分离部署', link: '/deployment/nginx' },
       { text: 'systemd 服务', link: '/deployment/systemd' },
-      { text: '环境变量', link: '/deployment/environment' },
-      { text: '生产验收', link: '/deployment/production-checklist' }
+      { text: '环境变量', link: '/deployment/environment' }
     ]
   },
   {
@@ -87,22 +82,8 @@ const zhSidebar = [
       { text: '支付与账务', link: '/features/billing' },
       { text: '通知、工单与帮助', link: '/features/communication' },
       { text: '托管与资源池', link: '/features/resource-hosting' },
-      { text: '资源风控', link: '/features/resource-risk' },
       { text: 'Agent', link: '/agent/install' },
       { text: 'API 概览', link: '/api/overview' }
-    ]
-  },
-  {
-    text: '扩展开发',
-    items: [
-      { text: '扩展中心', link: '/plugins/overview' },
-      { text: '扩展中心方案', link: '/plugins/platform-plan' },
-      { text: '扩展市场', link: '/plugins/market' },
-      { text: '开发指南', link: '/plugins/development' },
-      { text: 'Public API SDK', link: '/plugins/sdk' },
-      { text: 'Manifest', link: '/plugins/manifest' },
-      { text: '客户端扩展点', link: '/plugins/client-extensions' },
-      { text: '扩展模板', link: '/plugins/templates' }
     ]
   },
   {
@@ -111,45 +92,6 @@ const zhSidebar = [
       { text: '发布说明', link: '/release/changelog' },
       { text: '系统版本更新日志', link: '/release/version-log' },
       { text: '常见问题', link: '/troubleshooting/common-errors' }
-    ]
-  }
-]
-
-const zhDevelopmentSidebar = [
-  {
-    text: '扩展中心',
-    items: [
-      { text: '扩展总览', link: '/plugins/overview' },
-      { text: '扩展配置', link: '/plugins/development#配置' },
-      { text: '事件列表', link: '/plugins/development#业务事件' },
-      { text: 'Manifest', link: '/plugins/manifest' },
-      { text: '扩展市场', link: '/plugins/market' },
-      { text: 'SDK', link: '/plugins/sdk' }
-    ]
-  },
-  {
-    text: '扩展类型',
-    items: [
-      { text: '服务扩展', link: '/plugins/development#服务扩展类型' },
-      { text: '支付网关扩展', link: '/plugins/development#支付网关扩展类型' },
-      { text: 'Webhook Action', link: '/plugins/development#webhook-action-runtime' },
-      { text: '扩展存储', link: '/plugins/development#扩展-kv-存储' }
-    ]
-  },
-  {
-    text: '主题系统',
-    items: [
-      { text: '创建主题', link: '/plugins/development#主题开发标准' },
-      { text: 'Theme Manifest', link: '/plugins/manifest#主题-manifest' },
-      { text: '主题模板', link: '/plugins/templates#主题模板' }
-    ]
-  },
-  {
-    text: 'OAuth',
-    items: [
-      { text: 'OAuth Provider', link: '/plugins/development#oauth-provider' },
-      { text: 'API 参考', link: '/api/overview' },
-      { text: '公共 API SDK', link: '/plugins/sdk' }
     ]
   }
 ]
@@ -225,14 +167,6 @@ const zhApiSidebar = [
     ]
   },
   {
-    text: '扩展 Action',
-    items: [
-      { text: 'GET 扩展列表', link: '/api/overview#get-api-v1-plugins' },
-      { text: 'GET Action 列表', link: '/api/overview#get-api-v1-plugins-pluginid-actions' },
-      { text: 'POST 执行 Action', link: '/api/overview#post-api-v1-plugins-pluginid-actions-action' }
-    ]
-  },
-  {
     text: 'OAuth',
     items: [
       { text: 'GET Scope 列表', link: '/api/overview#get-api-oauth-provider-scopes' },
@@ -264,8 +198,7 @@ const enSidebar = [
       { text: 'Manual Install', link: '/en/deployment/manual-install' },
       { text: 'Nginx Split Deployment', link: '/en/deployment/nginx' },
       { text: 'systemd Service', link: '/en/deployment/systemd' },
-      { text: 'Environment Variables', link: '/en/deployment/environment' },
-      { text: 'Production Checklist', link: '/en/deployment/production-checklist' }
+      { text: 'Environment Variables', link: '/en/deployment/environment' }
     ]
   },
   {
@@ -277,22 +210,8 @@ const enSidebar = [
       { text: 'Billing and Payments', link: '/en/features/billing' },
       { text: 'Communication', link: '/en/features/communication' },
       { text: 'Hosting and Resource Pools', link: '/en/features/resource-hosting' },
-      { text: 'Resource Risk Control', link: '/en/features/resource-risk' },
       { text: 'Agent', link: '/en/agent/install' },
       { text: 'API Overview', link: '/en/api/overview' }
-    ]
-  },
-  {
-    text: 'Extension Development',
-    items: [
-      { text: 'Extension Center', link: '/en/plugins/overview' },
-      { text: 'Extension Platform Plan', link: '/en/plugins/platform-plan' },
-      { text: 'Marketplace', link: '/en/plugins/market' },
-      { text: 'Development Guide', link: '/en/plugins/development' },
-      { text: 'Public API SDK', link: '/en/plugins/sdk' },
-      { text: 'Manifest', link: '/en/plugins/manifest' },
-      { text: 'Client Extensions', link: '/en/plugins/client-extensions' },
-      { text: 'Extension Templates', link: '/en/plugins/templates' }
     ]
   },
   {
@@ -301,45 +220,6 @@ const enSidebar = [
       { text: 'Release Notes', link: '/en/release/changelog' },
       { text: 'System Version Log', link: '/en/release/version-log' },
       { text: 'Common Issues', link: '/en/troubleshooting/common-errors' }
-    ]
-  }
-]
-
-const enDevelopmentSidebar = [
-  {
-    text: 'Extensions',
-    items: [
-      { text: 'Extensions', link: '/en/plugins/overview' },
-      { text: 'Configuration', link: '/en/plugins/development#configuration' },
-      { text: 'Event list', link: '/en/plugins/development#business-events' },
-      { text: 'Manifest', link: '/en/plugins/manifest' },
-      { text: 'Marketplace', link: '/en/plugins/market' },
-      { text: 'SDK', link: '/en/plugins/sdk' }
-    ]
-  },
-  {
-    text: 'Types of Extensions',
-    items: [
-      { text: 'Server Extension', link: '/en/plugins/development#service-extension-types' },
-      { text: 'Gateway Extension', link: '/en/plugins/development#gateway-extension-types' },
-      { text: 'Webhook Action', link: '/en/plugins/development#webhook-action-runtime' },
-      { text: 'Storage', link: '/en/plugins/development#extension-kv-storage' }
-    ]
-  },
-  {
-    text: 'Themes',
-    items: [
-      { text: 'Create a Theme', link: '/en/plugins/development#theme-development-standard' },
-      { text: 'Theme Manifest', link: '/en/plugins/manifest#theme-manifest' },
-      { text: 'Theme Templates', link: '/en/plugins/templates' }
-    ]
-  },
-  {
-    text: 'OAuth',
-    items: [
-      { text: 'OAuth Provider', link: '/en/plugins/development#oauth-provider' },
-      { text: 'API Reference', link: '/en/api/overview' },
-      { text: 'Public API SDK', link: '/en/plugins/sdk' }
     ]
   }
 ]
@@ -415,14 +295,6 @@ const enApiSidebar = [
     ]
   },
   {
-    text: 'Plugin Actions',
-    items: [
-      { text: 'GET Plugins', link: '/en/api/overview#get-api-v1-plugins' },
-      { text: 'GET Actions', link: '/en/api/overview#get-api-v1-plugins-pluginid-actions' },
-      { text: 'POST Dispatch Action', link: '/en/api/overview#post-api-v1-plugins-pluginid-actions-action' }
-    ]
-  },
-  {
     text: 'OAuth',
     items: [
       { text: 'GET Scopes', link: '/en/api/overview#get-api-oauth-provider-scopes' },
@@ -434,6 +306,11 @@ const enApiSidebar = [
 ]
 
 export default defineConfig({
+  vite: {
+    resolve: {
+      preserveSymlinks: true
+    }
+  },
   title: 'PayIncus',
   description: 'PayIncus 用户端、管理后台、Incus 交付、Agent 和 OTA 文档',
   lang: 'zh-CN',
@@ -481,7 +358,6 @@ export default defineConfig({
           level: [2, 3]
         },
         sidebar: {
-          '/plugins/': zhDevelopmentSidebar,
           '/api/': zhApiSidebar,
           '/': zhSidebar
         }
@@ -510,7 +386,6 @@ export default defineConfig({
           level: [2, 3]
         },
         sidebar: {
-          '/en/plugins/': enDevelopmentSidebar,
           '/en/api/': enApiSidebar,
           '/en/': enSidebar
         }

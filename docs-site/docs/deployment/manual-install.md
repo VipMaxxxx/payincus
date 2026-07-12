@@ -28,7 +28,7 @@ description: 将 PayIncus 接入既有数据库、反向代理和发布体系
 
 ## 运行依赖
 
-服务器需要 Node.js 22、pnpm 9.14.2、PostgreSQL 16、Redis、Nginx 和 systemd。Redis 建议使用 7；实际最低版本应以生产验收脚本为准。
+服务器需要 Node.js 22、pnpm 9.14.2、PostgreSQL 16、Redis、Nginx 和 systemd。Redis 建议使用 7。
 
 ```bash
 corepack enable
@@ -42,8 +42,6 @@ pnpm -v
 ```bash
 sudo useradd --system --home /opt/incudal --shell /usr/sbin/nologin incudal 2>/dev/null || true
 sudo install -d -o incudal -g incudal /opt/incudal /opt/incudal/releases /opt/incudal/update-logs
-sudo install -d -o incudal -g incudal /opt/incudal/plugins /opt/incudal/plugin-data /opt/incudal/plugin-logs /opt/incudal/plugin-staging
-sudo install -d -o incudal -g incudal /opt/incudal/themes /opt/incudal/theme-data /opt/incudal/theme-staging
 ```
 
 不要预先创建普通目录 `/opt/incudal/current`；它必须是指向当前 release 的软链接。
@@ -110,7 +108,7 @@ SITE_URL=https://panel.example.com
 PAYMENT_CALLBACK_BASE_URL=https://panel.example.com
 ```
 
-生产不要设置 `RESET_DATABASE`。支付、SMTP、Telegram、Turnstile、对象存储、扩展市场、主题市场和 OTA 变量按实际业务逐项开启。
+生产不要设置 `RESET_DATABASE`。支付、SMTP、Telegram、Turnstile、对象存储和 OTA 变量按实际业务逐项开启。
 
 ## 数据库迁移
 
@@ -148,5 +146,3 @@ ADMIN_FRONTEND_URL=https://admin.example.com \
 BACKEND_URL=http://127.0.0.1:3001 \
 pnpm verify:split:host
 ```
-
-最终生产验收还需要真实支付、Incus/Agent、SMTP/通知、Turnstile、备份恢复和响应头证据，详见 [生产验收](/deployment/production-checklist)。
