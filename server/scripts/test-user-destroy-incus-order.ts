@@ -29,7 +29,7 @@ const batchSection = section(
   "fastify.post<{\n    Body: { instanceIds: number[] }"
 )
 const batchDeleteIndex = batchSection.indexOf('await deleteIncusInstanceForUserDestroy(instance, logger)')
-const batchBillingIndex = batchSection.indexOf('await settleUserDestroyBilling({')
+const batchBillingIndex = batchSection.indexOf('await settleUserDestroyBillingWithCompensation({')
 const batchCleanupIndex = batchSection.indexOf('await prisma.snapshot.deleteMany')
 assert.ok(batchDeleteIndex !== -1, 'batch user destroy must call strict Incus delete helper')
 assert.ok(batchBillingIndex !== -1, 'batch user destroy must still settle billing')
@@ -45,7 +45,7 @@ const routeSection = section(
   "fastify.post<{ Params: { id: string }; Querystring: { feeWaiver?: string } }>('/:id/destroy'"
 )
 const routeDeleteIndex = routeSection.indexOf('await deleteIncusInstanceForUserDestroy(instance, request.log)')
-const routeBillingIndex = routeSection.indexOf('await settleUserDestroyBilling({')
+const routeBillingIndex = routeSection.indexOf('await settleUserDestroyBillingWithCompensation({')
 const routeCleanupIndex = routeSection.indexOf('await prisma.snapshot.deleteMany')
 assert.ok(routeDeleteIndex !== -1, 'single user destroy must call strict Incus delete helper')
 assert.ok(routeBillingIndex !== -1, 'single user destroy must still settle billing')

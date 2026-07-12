@@ -669,7 +669,7 @@ assert.ok(
   verifyProductionDbReadiness.includes('getAllPaymentProviders()') &&
     verifyProductionDbReadiness.includes('No active payment providers are configured') &&
     verifyProductionDbReadiness.includes('uses unsupported provider type for recharge') &&
-    verifyProductionDbReadiness.includes('apiurl is not a safe outbound HTTP(S) URL'),
+    verifyProductionDbReadiness.includes('apiurl could not be verified as a safe outbound HTTP(S) URL'),
   'production DB readiness must inspect active payment provider availability and outbound API URL safety'
 )
 assert.ok(

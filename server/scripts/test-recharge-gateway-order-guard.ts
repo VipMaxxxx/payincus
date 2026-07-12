@@ -25,11 +25,11 @@ assert.ok(
   'recharge route must import gateway order guard'
 )
 assert.ok(
-  routeSource.includes('!isRechargeGatewayOrderNoMatch(orderNo, queryResult.out_trade_no)'),
+  routeSource.includes('!isRechargeGatewayOrderNoMatch(gatewayOrderNo, queryResult.out_trade_no)'),
   'yipay verify path must reject mismatched gateway order numbers'
 )
 assert.ok(
-  routeSource.includes('!isRechargeGatewayOrderNoMatch(orderNo, queryResult.order_id)'),
+  routeSource.includes('!isRechargeGatewayOrderNoMatch(gatewayOrderNo, queryResult.order_id)'),
   'heleket verify path must reject mismatched gateway order numbers'
 )
 assert.ok(

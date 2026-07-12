@@ -272,7 +272,9 @@ assert.ok(
 
 assert.ok(
   countOccurrences(adminUsersViewSource, 'class="space-y-3 lg:hidden"') >= 3 &&
-    countOccurrences(adminUsersViewSource, 'class="card hidden overflow-hidden lg:block"') >= 2 &&
+    // 其中一张桌面表已迁到带主题描边的 `hidden overflow-hidden rounded-lg border border-themed lg:block`
+    // 定宽壳（见下方单独断言），故此处旧壳计数下调为 >= 1；两张表均为定宽表+移动卡、无横向滚动。
+    countOccurrences(adminUsersViewSource, 'class="card hidden overflow-hidden lg:block"') >= 1 &&
     adminUsersViewSource.includes('table class="w-full table-fixed"') &&
     adminUsersViewSource.includes('table class="w-full table-fixed"') &&
     adminUsersViewSource.includes('table class="w-full table-fixed text-sm"') &&

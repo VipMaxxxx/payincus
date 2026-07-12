@@ -29,7 +29,8 @@ const createAccountSection = section(
 )
 
 const upstreamCreateIndex = createAccountSection.indexOf('await smarterMailService.createAccount')
-const localCreateIndex = createAccountSection.indexOf('account = await db.createMailAccount')
+// v1.4.0 起本地落库改为事务内 tx.mailAccount.create（上游创建成功后再落库，失败则补偿删除远端账号）。
+const localCreateIndex = createAccountSection.indexOf('account = await tx.mailAccount.create')
 const compensationDeleteIndex = createAccountSection.indexOf('await smarterMailService.deleteAccount')
 const localFailureResponseIndex = createAccountSection.indexOf("'邮箱账户创建失败，已回滚远端账号，请重试'")
 const compensationFailureResponseIndex = createAccountSection.indexOf('远端补偿删除失败')

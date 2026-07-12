@@ -107,7 +107,8 @@ assert.ok(
 )
 assert.ok(rechargeSource.includes('isCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex)'))
 assert.ok(rechargeSource.includes('await markCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex, clientIp)'))
-assert.ok(rechargeSource.includes('new AntomClient(antomConfig).inquiryPayment(orderNo)'))
+// v1.4.0 起充值支持重试/repay，查询须用当前支付尝试的网关单号 gatewayOrderNo（首次==orderNo，重试为 orderNo--PA-<id>）。
+assert.ok(rechargeSource.includes('new AntomClient(antomConfig).inquiryPayment(gatewayOrderNo)'))
 
 const migration = readFileSync(
   resolve(__dirname, '../prisma/migrations/20260710000000_add_antom_payment_provider_type/migration.sql'),

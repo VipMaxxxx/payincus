@@ -20,7 +20,7 @@ const rootPackage = read('package.json')
 
 assert.ok(
   routerUser.includes("path: '/extensions'") &&
-    userExtensionsView.includes("activeTab = ref<'init-commands' | 'developer-submissions'>") &&
+    userExtensionsView.includes("activeTab = ref<'init-commands' | 'developer-submissions' | 'theme-submissions'>") &&
     userExtensionsView.includes('开发者投稿') &&
     userExtensionsView.includes('selectedSubmissionPackageFile') &&
     userExtensionsView.includes('uploadSubmissionPackage') &&

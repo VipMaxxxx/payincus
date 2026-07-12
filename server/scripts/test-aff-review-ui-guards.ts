@@ -52,14 +52,16 @@ const performRenewalSource = sectionBetween(
   'export async function performRenewal(',
   'export async function performPlanChange('
 )
+// v1.4.0 起续费改走 arbitrateVipPrice 价格仲裁：已禁用 AFF 码的折扣率强制为 0（不给折扣）。
 assert.match(
   performRenewalSource,
-  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
+  /affDiscountRate:\s*affBinding\?\.affCode\.enabled\s*\?\s*Number\(affBinding\.affCode\.discountRate\)\s*:\s*0/,
   'instance renewal must not apply discounts from disabled AFF codes'
 )
+// 佣金仅在 AFF 码启用且仲裁最终选中 AFF 价（pricingSource === 'aff'）时发放：禁用码既无折扣也无佣金。
 assert.match(
   performRenewalSource,
-  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
+  /if \(affBinding\?\.affCode\.enabled && pricingSource === 'aff'\) \{\s*await processAffCommission\(/,
   'instance renewal must not pay commission for disabled AFF codes'
 )
 
