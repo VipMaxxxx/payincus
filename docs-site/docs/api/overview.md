@@ -346,7 +346,7 @@ Public API 不开放直接支付建单、支付回调、退款、直接余额写
   <p>分页读取当前用户站内通知。</p>
   <table><tbody>
     <tr><th>Scope</th><td><code>notifications:read</code></td></tr>
-    <tr><th>Query</th><td><code>page</code>、<code>pageSize</code>、<code>status</code>、<code>sort</code></td></tr>
+    <tr><th>Query</th><td><code>page</code>、<code>pageSize</code>、<code>isRead</code>、<code>sort</code></td></tr>
     <tr><th>边界</th><td>不暴露通道配置、外部投递日志、原始事件 payload 或广播目标。</td></tr>
   </tbody></table>
 </div>

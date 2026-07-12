@@ -113,7 +113,7 @@ POST /api/tickets/:id/ai/draft
 POST /api/tickets/:id/ai/reply
 ```
 
-Both endpoints require an administrator session, the enabled `com.payincus.ai-ticket-agent` extension, and explicit extension permissions. The context is limited to a redacted summary for the ticket owner only. It does not expose internal admin notes, payment callback payloads, secrets, root passwords, or other users' data.
+These endpoints require an administrator session, the enabled `com.payincus.ai-ticket-agent` extension, and explicit extension permissions. The context is limited to a redacted summary for the ticket owner only. It does not expose internal admin notes, payment callback payloads, secrets, root passwords, or other users' data.
 
 The extension settings page also reads a safe status endpoint:
 

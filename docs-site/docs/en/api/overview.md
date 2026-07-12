@@ -329,7 +329,7 @@ Public API does not expose direct payment creation, payment callbacks, refunds, 
   <p>List inbox notifications for the current user.</p>
   <table><tbody>
     <tr><th>Scope</th><td><code>notifications:read</code></td></tr>
-    <tr><th>Query</th><td><code>page</code>, <code>pageSize</code>, <code>status</code>, <code>sort</code></td></tr>
+    <tr><th>Query</th><td><code>page</code>, <code>pageSize</code>, <code>isRead</code>, <code>sort</code></td></tr>
     <tr><th>Boundary</th><td>No channel configuration, external delivery logs, raw event payloads or broadcast targets.</td></tr>
   </tbody></table>
 </div>
