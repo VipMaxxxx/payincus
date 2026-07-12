@@ -52,6 +52,7 @@ pnpm docs:changelog
 
 ```text
 docs-site/docs/release/version-log.md
+docs-site/docs/en/release/version-log.md
 ```
 
 适合公开展示的发布说明建议继续使用清晰的 commit message 或 GitHub Release 文案。原始 Git log 可以自动收集，但如果提交信息过于工程化，用户看到的更新内容也会偏工程化。

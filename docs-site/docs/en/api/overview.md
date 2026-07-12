@@ -35,7 +35,7 @@ Public API uses `Authorization: Bearer <token>` and checks scope, expiry, revoca
 | Pagination | `page`, `pageSize`, max `pageSize = 100` |
 | Sorting | Common sorts include `createdAt`, `-createdAt`; some resources support `updatedAt` and `displayOrder` |
 | Response | Success responses use `data`; lists also include `meta` |
-| Errors | `400`, `401`, `403`, `404`, `409`, `422`, `429` |
+| Errors | `400`, `401`, `403`, `404`, `409`, `429` |
 | High-risk writes | Service operations, renewal, ticket writes, notification sends and plugin actions have stricter limits |
 
 Public API does not expose direct payment creation, payment callbacks, refunds, direct balance writes, service creation/deletion/migration, sensitive profile changes, admin operations or extension/theme administration. Those flows must go through PayIncus internal state machines, admin review or the controlled extension platform.
