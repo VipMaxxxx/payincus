@@ -53,6 +53,14 @@ assert.ok(
 )
 
 assert.ok(
+  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
+    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
+    route.includes('price: priceYuan') &&
+    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
+  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
+)
+
+assert.ok(
   route.includes('prisma.capacitySnapshot.upsert') &&
     route.includes('hostId_capturedDate') &&
     route.includes('capturedDate: today'),

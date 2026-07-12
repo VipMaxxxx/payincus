@@ -13,7 +13,7 @@ import { isIP } from 'node:net'
 import { prisma } from '../db/prisma.js'
 import { withLock } from '../lib/distributed-lock.js'
 import { mapInstanceStatus } from '../lib/incus/incus-utils.js'
-import { calculateIncrement } from './traffic-utils.js'
+import { advanceTrafficSnapshot, calculateIncrement } from './traffic-utils.js'
 
 interface NormalizedAgentInstanceItem {
   name: string
@@ -154,6 +154,15 @@ function normalizeAgentInstanceItems(payload: unknown): NormalizedAgentInstanceI
   return items
 }
 
+function normalizeReportSampledAt(payload: unknown, receivedAt: Date): Date {
+  if (!isRecord(payload) || typeof payload.reportedAt !== 'string') {
+    return receivedAt
+  }
+
+  const sampledAt = new Date(payload.reportedAt)
+  return Number.isNaN(sampledAt.getTime()) ? receivedAt : sampledAt
+}
+
 function shouldSyncStatus(currentStatus: InstanceStatus, reportedStatus: InstanceStatus | null): reportedStatus is InstanceStatus {
   if (!reportedStatus) {
     return false
@@ -205,7 +214,8 @@ function buildStatusUpdateData(item: NormalizedAgentInstanceItem, now: Date): {
 async function applyReportedTrafficCounters(
   instance: ReportedDbInstance,
   item: NormalizedAgentInstanceItem,
-  now: Date
+  now: Date,
+  sampledAt: Date
 ): Promise<{ updated: boolean; delta: bigint }> {
   if (!shouldApplyTraffic(instance.status, item)) {
     return { updated: false, delta: 0n }
@@ -227,9 +237,20 @@ async function applyReportedTrafficCounters(
         }
       }
 
-      const latestSnapshot = await tx.trafficSnapshot.findUnique({
-        where: { instanceId: instance.id }
+      const snapshotResult = await advanceTrafficSnapshot(tx, instance.id, {
+        rxRaw: item.rxBytes!,
+        txRaw: item.txBytes!,
+        sampledAt,
+        source: 'agent-report'
       })
+      if (!snapshotResult.accepted) {
+        return {
+          updated: false,
+          delta: 0n
+        }
+      }
+
+      const latestSnapshot = snapshotResult.previous
 
       const rxIncrement = latestSnapshot
         ? calculateIncrement(item.rxBytes!, latestSnapshot.rxRaw)
@@ -238,19 +259,6 @@ async function applyReportedTrafficCounters(
         ? calculateIncrement(item.txBytes!, latestSnapshot.txRaw)
         : 0n
       const totalDelta = rxIncrement + txIncrement
-
-      await tx.trafficSnapshot.upsert({
-        where: { instanceId: instance.id },
-        update: {
-          rxRaw: item.rxBytes!,
-          txRaw: item.txBytes!
-        },
-        create: {
-          instanceId: instance.id,
-          rxRaw: item.rxBytes!,
-          txRaw: item.txBytes!
-        }
-      })
 
       if (totalDelta > 0n) {
         await tx.instance.update({
@@ -310,7 +318,8 @@ async function applyReportedTrafficCounters(
 async function processOneAgentInstanceReport(
   instance: ReportedDbInstance,
   item: NormalizedAgentInstanceItem,
-  now: Date
+  now: Date,
+  sampledAt: Date
 ): Promise<Pick<AgentInstanceReportResult, 'statusUpdated' | 'trafficUpdated' | 'trafficDeltaBytes' | 'skipped' | 'errors'>> {
   let statusUpdated = 0
   let trafficUpdated = 0
@@ -342,7 +351,7 @@ async function processOneAgentInstanceReport(
       skipped += 1
     }
 
-    const trafficResult = await applyReportedTrafficCounters(trafficInstance, item, now)
+    const trafficResult = await applyReportedTrafficCounters(trafficInstance, item, now, sampledAt)
     if (trafficResult.updated) {
       trafficUpdated = 1
       trafficDelta = trafficResult.delta
@@ -366,6 +375,8 @@ async function processOneAgentInstanceReport(
 }
 
 export async function processAgentInstanceReport(hostId: number, payload: unknown): Promise<AgentInstanceReportResult> {
+  const receivedAt = new Date()
+  const sampledAt = normalizeReportSampledAt(payload, receivedAt)
   const items = normalizeAgentInstanceItems(payload)
   const result: AgentInstanceReportResult = {
     received: items.length,
@@ -411,7 +422,7 @@ export async function processAgentInstanceReport(hostId: number, payload: unknow
       }
     }
 
-    const itemResult = await processOneAgentInstanceReport(instance, item, new Date())
+    const itemResult = await processOneAgentInstanceReport(instance, item, receivedAt, sampledAt)
     return {
       matched: 1,
       ...itemResult

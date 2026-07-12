@@ -108,7 +108,7 @@ export async function createInstanceTask(data: CreateInstanceTaskData): Promise<
       const exchangeLocked = await tx.exchangeListing.findFirst({
         where: {
           instanceId: data.instanceId,
-          status: { in: ['active', 'paused', 'locked', 'delivery_failed'] }
+          status: { in: ['active', 'locked', 'delivery_failed'] }
         },
         select: { id: true, status: true }
       })
@@ -119,7 +119,7 @@ export async function createInstanceTask(data: CreateInstanceTaskData): Promise<
       const exchangeOrder = await tx.exchangeOrder.findFirst({
         where: {
           instanceId: data.instanceId,
-          status: { in: ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed'] }
+          status: { in: ['delivering', 'confirming', 'disputed', 'manual_review', 'failed'] }
         },
         select: { id: true, status: true }
       })

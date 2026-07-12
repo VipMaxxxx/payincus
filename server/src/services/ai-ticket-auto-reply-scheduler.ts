@@ -19,11 +19,42 @@ import {
 } from './ai-ticket-context.js'
 
 const AUTO_REPLY_SCAN_BATCH_SIZE = 5
-const AUTO_REPLY_CANDIDATE_LOOKAHEAD = 30
 
 let schedulerStarted = false
 let running = false
 const processingTicketIds = new Set<number>()
+
+function needsHumanTicketMarker(ticketId: number): string {
+  return `[ticketId=${ticketId}]`
+}
+
+function parseNeedsHumanTicketId(content: string): number | null {
+  const match = content.match(/\[ticketId=([1-9]\d*)\]/)
+  if (!match) return null
+  const ticketId = Number(match[1])
+  return Number.isSafeInteger(ticketId) ? ticketId : null
+}
+
+async function loadNeedsHumanTicketIds(): Promise<number[]> {
+  const logs = await prisma.log.findMany({
+    where: { action: 'ai_ticket.needs_human' },
+    select: { content: true }
+  })
+
+  return Array.from(new Set(logs
+    .map(log => parseNeedsHumanTicketId(log.content))
+    .filter((ticketId): ticketId is number => ticketId !== null)))
+}
+
+async function markTicketNeedsHuman(actorUserId: number, ticketId: number, reason: string): Promise<void> {
+  await createLog(
+    actorUserId,
+    LogModule.PLUGIN,
+    'ai_ticket.needs_human',
+    `AI ticket requires human handling ${needsHumanTicketMarker(ticketId)} (${reason})`,
+    LogResult.WARNING
+  )
+}
 
 async function getAiReplyActor(): Promise<{ id: number; username: string } | null> {
   return prisma.user.findFirst({
@@ -40,8 +71,10 @@ async function getAiReplyActor(): Promise<{ id: number; username: string } | nul
 }
 
 async function loadAutoReplyCandidates(allowedCategories: string[]): Promise<Array<{ id: number }>> {
+  const needsHumanTicketIds = await loadNeedsHumanTicketIds()
   const tickets = await prisma.ticket.findMany({
     where: {
+      id: { notIn: needsHumanTicketIds },
       status: { in: ['open', 'in_progress'] },
       category: { in: allowedCategories },
       priority: { not: 'urgent' },
@@ -54,7 +87,6 @@ async function loadAutoReplyCandidates(allowedCategories: string[]): Promise<Arr
       { updatedAt: 'asc' },
       { id: 'asc' }
     ],
-    take: AUTO_REPLY_CANDIDATE_LOOKAHEAD,
     select: {
       id: true,
       messages: {
@@ -65,6 +97,7 @@ async function loadAutoReplyCandidates(allowedCategories: string[]): Promise<Arr
     }
   })
 
+  // 最后一条公开消息决定 needsReply；必须先过滤完整候选集，再截取本轮批次。
   return tickets
     .filter(ticket => ticket.messages[0]?.isFromOwner === false)
     .slice(0, AUTO_REPLY_SCAN_BATCH_SIZE)
@@ -112,22 +145,28 @@ async function processAutoReplyTicket(ticketId: number, actor: { id: number; use
       return 'skipped'
     }
 
-    const result = await generateAiTicketReply(ticketId)
+    const result = await generateAiTicketReply(ticketId, 'scheduler')
     if (result.mode !== 'auto' || !result.canSend) {
+      const reason = result.sendBlockedReasons.length > 0 ? result.sendBlockedReasons.join(',') : 'AI_TICKET_AUTO_REPLY_BLOCKED'
+      await markTicketNeedsHuman(actor.id, ticketId, reason)
       await auditAiTicketReply({
         actorUserId: actor.id,
         ticketId,
         result: 'blocked',
-        reason: result.sendBlockedReasons.length > 0 ? result.sendBlockedReasons.join(',') : 'AI_TICKET_AUTO_REPLY_BLOCKED'
+        reason,
+        trigger: 'scheduler'
       })
       return 'blocked'
     }
     if (!result.safety.passed) {
+      const reason = result.safety.blockedReasons.join(',') || 'AI_TICKET_REPLY_BLOCKED'
+      await markTicketNeedsHuman(actor.id, ticketId, reason)
       await auditAiTicketReply({
         actorUserId: actor.id,
         ticketId,
         result: 'blocked',
-        reason: result.safety.blockedReasons.join(',')
+        reason,
+        trigger: 'scheduler'
       })
       return 'blocked'
     }
@@ -152,7 +191,8 @@ async function processAutoReplyTicket(ticketId: number, actor: { id: number; use
     await auditAiTicketReply({
       actorUserId: actor.id,
       ticketId,
-      result: 'success'
+      result: 'success',
+      trigger: 'scheduler'
     })
 
     return 'sent'
@@ -162,7 +202,8 @@ async function processAutoReplyTicket(ticketId: number, actor: { id: number; use
       actorUserId: actor.id,
       ticketId,
       result: 'failed',
-      reason: message.startsWith('AI_TICKET_') ? message : 'AI_TICKET_AUTO_REPLY_FAILED'
+      reason: message.startsWith('AI_TICKET_') ? message : 'AI_TICKET_AUTO_REPLY_FAILED',
+      trigger: 'scheduler'
     })
     return 'failed'
   } finally {

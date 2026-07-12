@@ -27,6 +27,19 @@ The Claude UI work is already merged into main and included in production:
 - `f32e44e02` - `v1.3.3` release.
 - `bd0a36c69` - `v1.3.4` reload-loop hotfix.
 
+## Private Backend Must Run As A Single Instance
+
+The private backend at `127.0.0.1:3001` must run as exactly one Node.js process. The supported production topology is the single `incudal-backend.service` process; do not use Node cluster mode, multiple systemd service replicas, process-manager worker counts above one, containers with multiple replicas, or horizontal backend scaling.
+
+This is an architecture invariant because the backend intentionally has no Redis and keeps these correctness-relevant states in process memory:
+
+- login failure locks in `server/src/lib/security.ts`;
+- OAuth state nonce and one-time login-code replay protection in `server/src/lib/security.ts`;
+- exchange delivery finalize re-entry deduplication in `server/src/workers/exchangeDeliveryWorker.ts`;
+- system configuration cache and its update invalidation in `server/src/lib/config-cache.ts`.
+
+The security module also keeps export-task state in process memory. PostgreSQL advisory locks remain the coordination mechanism for database-backed jobs, but they do not make these process-local maps shared. Before any multi-process or horizontal expansion, move the affected locks, nonce/replay records, deduplication, and cache invalidation to PostgreSQL or another shared store. Treat a second backend replica as an unsupported deployment, not as extra capacity.
+
 ## First Things To Read
 
 Before making changes, read:

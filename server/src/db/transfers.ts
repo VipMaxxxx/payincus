@@ -571,13 +571,14 @@ export async function executeTransfer(
 
         // 注意：不再更新实例配额，实例转移只更新实例的所有者、名称和 Incus ID
 
-        // 更新实例所有者、名称和 Incus ID
+        // 更新实例所有者、名称和 Incus ID；新所有者需自行确认并重新开启自动续费
         await tx.instance.update({
             where: { id: instanceId },
             data: {
                 userId: toUserId,
                 name: newInstanceName,
                 incusId: newIncusId,
+                autoRenew: false,
                 displayOrder: 0
             }
         })

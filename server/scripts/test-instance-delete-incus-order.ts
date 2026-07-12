@@ -22,7 +22,51 @@ function section(source: string, startPattern: string, endPattern: string): stri
 
 const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const instancesSource = readFileSync(resolve(repoRoot, 'server/src/routes/instances.ts'), 'utf8')
+const instanceDestroySource = readFileSync(resolve(repoRoot, 'server/src/routes/instance-destroy.ts'), 'utf8')
 const hostsSource = readFileSync(resolve(repoRoot, 'server/src/routes/hosts.ts'), 'utf8')
+
+const destroyBillingCompensationSection = section(
+  instanceDestroySource,
+  'async function recordDestroyBillingCompensation(',
+  'async function buildBatchDestroyPreviewItem('
+)
+assert(
+  destroyBillingCompensationSection.includes('await tx.deliveryAssuranceCase.create({') &&
+    destroyBillingCompensationSection.includes("status: 'pending_manual'") &&
+    destroyBillingCompensationSection.includes("severity: 'critical'") &&
+    destroyBillingCompensationSection.includes('await tx.deliveryAssuranceAction.create({') &&
+    destroyBillingCompensationSection.includes("actionType: 'detected'"),
+  'destroy billing failures must create a visible pending compensation case and detected action'
+)
+assert(
+  destroyBillingCompensationSection.includes('catch (error) {') &&
+    destroyBillingCompensationSection.includes('await recordDestroyBillingCompensation({ ...billingParams, error })') &&
+    destroyBillingCompensationSection.includes('throw error'),
+  'destroy billing settlement errors must be recorded before propagating'
+)
+assert(
+  (instanceDestroySource.match(/settleUserDestroyBillingWithCompensation\(\{/g) || []).length === 2,
+  'single and batch user destroy flows must both use compensated billing settlement'
+)
+
+const configUpdateSection = section(
+  instancesSource,
+  '// 更新宿主机资源使用量',
+  '// 记录日志'
+)
+assert(
+  configUpdateSection.includes('await db.calculateHostResourcesFromInstances(instance.host_id)') &&
+    configUpdateSection.includes('cpuUsed: usedResources.cpuUsed') &&
+    configUpdateSection.includes('memoryUsed: usedResources.memoryUsed') &&
+    configUpdateSection.includes('diskUsed: usedResources.diskUsed'),
+  'config updates must recalculate host usage from the persisted instance set'
+)
+assert(
+  !configUpdateSection.includes('host.cpu_used + cpuDelta') &&
+    !configUpdateSection.includes('host.memory_used + memoryDelta') &&
+    !configUpdateSection.includes('host.disk_used + diskDelta'),
+  'config updates must not overwrite host usage from stale host values'
+)
 
 const singleDeleteSection = section(
   instancesSource,

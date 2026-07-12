@@ -22,6 +22,7 @@ function section(source: string, startPattern: string, endPattern: string): stri
 
 const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const collectorSource = readFileSync(resolve(repoRoot, 'server/src/services/instance-traffic-collector.ts'), 'utf8')
+const trafficUtilsSource = readFileSync(resolve(repoRoot, 'server/src/services/traffic-utils.ts'), 'utf8')
 
 const applySection = section(
   collectorSource,
@@ -32,16 +33,17 @@ const applySection = section(
 const selectStatus = indexOfOrThrow(applySection, 'status: true', 'status selected in traffic transaction')
 const statusGuard = indexOfOrThrow(applySection, "if (instance.status !== 'running')", 'running-status guard')
 const skippedReturn = indexOfOrThrow(applySection, 'skipped: true', 'skipped return')
-const snapshotRead = indexOfOrThrow(applySection, 'const latestSnapshot = await tx.trafficSnapshot.findUnique', 'traffic snapshot read')
-const snapshotWrite = indexOfOrThrow(applySection, 'await tx.trafficSnapshot.upsert', 'traffic snapshot write')
+const snapshotAdvance = indexOfOrThrow(applySection, 'const snapshotResult = await advanceTrafficSnapshot', 'atomic traffic snapshot advance')
+const staleSampleReturn = indexOfOrThrow(applySection, 'if (!snapshotResult.accepted)', 'stale sample return')
 const monthlyIncrement = indexOfOrThrow(applySection, 'monthlyTrafficUsed: { increment: totalDelta }', 'monthly traffic increment')
 const userIncrement = indexOfOrThrow(applySection, 'monthlyTrafficUsed: { increment: totalDelta }', 'user traffic increment')
 const dailyWrite = indexOfOrThrow(applySection, 'await tx.dailyTraffic.upsert', 'daily traffic write')
 
 assert(selectStatus < statusGuard, 'collector must select current status before checking it')
 assert(statusGuard < skippedReturn, 'collector must return skipped for non-running current status')
-assert(statusGuard < snapshotRead, 'collector must check current status before reading traffic snapshot')
-assert(statusGuard < snapshotWrite, 'collector must check current status before writing traffic snapshot')
+assert(statusGuard < snapshotAdvance, 'collector must check current status before advancing traffic snapshot')
+assert(snapshotAdvance < staleSampleReturn, 'collector must reject a stale sample after the atomic snapshot check')
+assert(staleSampleReturn < monthlyIncrement, 'collector must reject a stale sample before incrementing traffic')
 assert(statusGuard < monthlyIncrement, 'collector must check current status before incrementing instance monthly traffic')
 assert(statusGuard < userIncrement, 'collector must check current status before incrementing user monthly traffic')
 assert(statusGuard < dailyWrite, 'collector must check current status before writing daily traffic')
@@ -55,6 +57,29 @@ const collectSection = section(
 assert(
   collectSection.includes('skipped: result.skipped'),
   'collector result must propagate skipped status from the transaction guard'
+)
+
+const atomicSnapshotAdvance = section(
+  trafficUtilsSource,
+  'export async function advanceTrafficSnapshot(',
+  '/**\n * 计算流量增量'
+)
+assert(
+  atomicSnapshotAdvance.includes('updatedAt: { lte: sample.sampledAt }') &&
+    atomicSnapshotAdvance.includes('updatedAt: sample.sampledAt'),
+  'shared snapshot advance must atomically reject samples older than the stored sample time'
+)
+assert(
+  atomicSnapshotAdvance.includes('if (updateResult.count === 0)') &&
+    atomicSnapshotAdvance.includes("console.debug('[Traffic] Dropped stale traffic sample'") &&
+    atomicSnapshotAdvance.includes('return { accepted: false, previous }'),
+  'stale samples must be logged and rejected without advancing the shared baseline'
+)
+
+assert(
+  collectorSource.includes('sampledAt: counters.sampledAt') &&
+    collectorSource.includes("source: 'active-collector'"),
+  'active collector must advance the shared snapshot with its source sample time'
 )
 
 console.log('traffic collector status guard checks passed')

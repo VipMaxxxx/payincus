@@ -19,6 +19,7 @@ import {
   getPluginStorageItem,
   getPluginTableRow,
   getPluginUserData,
+  isPluginEnabled,
   listPluginStorageScopeCounts,
   listPluginTableMigrationCounts,
   listPluginTableMigrations,
@@ -52,6 +53,7 @@ import {
 } from '../lib/plugin-manifest.js'
 import { getDefaultStorageConfig, getStorageConfigById } from '../db/storage-configs.js'
 import { StorageFactory } from '../storage/factory.js'
+import { PluginTradeError, assertPaidPluginLicense } from '../services/plugin-trade.js'
 
 interface PluginParams {
   pluginId: string
@@ -397,7 +399,7 @@ async function authenticateProtectedAsset(
 
 async function loadEnabledPluginManifest(pluginId: string) {
   const plugin = await getPlugin(pluginId)
-  if (!plugin || !plugin.enabled || plugin.status !== 'enabled') return null
+  if (!plugin || !isPluginEnabled(plugin)) return null
   const latest = latestManifest(plugin)
   return latest ? { plugin, latest } : null
 }
@@ -2341,6 +2343,11 @@ export default async function pluginRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: 'Plugin not found', code: 'PLUGIN_NOT_FOUND' })
     }
     try {
+      await assertPaidPluginLicense({
+        userId: getRequestUser(request).id,
+        pluginId,
+        version: loaded.latest.manifest.version
+      })
       const body = (request.body || {}) as PluginActionBody
       const result = await executePluginAction({
         pluginId,
@@ -2354,7 +2361,10 @@ export default async function pluginRoutes(fastify: FastifyInstance) {
       return { action: result }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return reply.code(400).send({ error: message, code: 'PLUGIN_ACTION_FAILED' })
+      return reply.code(error instanceof PluginTradeError ? error.statusCode : 400).send({
+        error: message,
+        code: error instanceof PluginTradeError ? error.code : 'PLUGIN_ACTION_FAILED'
+      })
     }
   })
 

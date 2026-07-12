@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import { prisma } from '../db/prisma.js'
@@ -96,41 +96,80 @@ function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.th
   }
 }
 
-async function readExistingMarketEntries(indexPath: string): Promise<ThemeMarketEntry[]> {
-  try {
-    const payload = JSON.parse(await readFile(indexPath, 'utf8')) as unknown
-    if (!isRecord(payload) || !Array.isArray(payload.themes)) return []
-    return payload.themes.filter((entry): entry is ThemeMarketEntry => isRecord(entry) && typeof entry.id === 'string')
-  } catch {
-    return []
+interface ParsedSemVer {
+  major: bigint
+  minor: bigint
+  patch: bigint
+  prerelease: string[]
+}
+
+function parseSemVer(version: string): ParsedSemVer | null {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(version)
+  if (!match) return null
+  const prerelease = match[4]?.split('.') ?? []
+  if (prerelease.some(identifier => /^\d+$/.test(identifier) && identifier.length > 1 && identifier.startsWith('0'))) {
+    return null
   }
+  return {
+    major: BigInt(match[1]),
+    minor: BigInt(match[2]),
+    patch: BigInt(match[3]),
+    prerelease
+  }
+}
+
+function compareSemVer(left: ParsedSemVer, right: ParsedSemVer): number {
+  for (const key of ['major', 'minor', 'patch'] as const) {
+    if (left[key] !== right[key]) return left[key] > right[key] ? 1 : -1
+  }
+  if (left.prerelease.length === 0 || right.prerelease.length === 0) {
+    return left.prerelease.length === right.prerelease.length ? 0 : left.prerelease.length === 0 ? 1 : -1
+  }
+  const length = Math.max(left.prerelease.length, right.prerelease.length)
+  for (let index = 0; index < length; index += 1) {
+    const leftIdentifier = left.prerelease[index]
+    const rightIdentifier = right.prerelease[index]
+    if (leftIdentifier === undefined || rightIdentifier === undefined) {
+      return leftIdentifier === rightIdentifier ? 0 : leftIdentifier === undefined ? -1 : 1
+    }
+    if (leftIdentifier === rightIdentifier) continue
+    const leftNumeric = /^\d+$/.test(leftIdentifier)
+    const rightNumeric = /^\d+$/.test(rightIdentifier)
+    if (leftNumeric && rightNumeric) return BigInt(leftIdentifier) > BigInt(rightIdentifier) ? 1 : -1
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1
+    return leftIdentifier > rightIdentifier ? 1 : -1
+  }
+  return 0
 }
 
 export async function publishThemeMarketIndex(): Promise<ThemeMarketPublishResult> {
   const publishDir = getThemeMarketPublishDir()
   const indexPath = join(publishDir, 'index.json')
-  const [existingEntries, listedSubmissions, publicBaseUrl] = await Promise.all([
-    readExistingMarketEntries(indexPath),
+  const [listedSubmissions, publicBaseUrl] = await Promise.all([
     prisma.themeMarketSubmission.findMany({
       where: {
         reviewStatus: 'listed',
         scanStatus: { in: ['passed', 'warning'] }
       },
-      orderBy: [{ themeId: 'asc' }, { version: 'desc' }]
+      orderBy: [{ themeId: 'asc' }, { version: 'asc' }]
     }),
     getThemeMarketPublicBaseUrl()
   ])
 
-  const entriesById = new Map<string, ThemeMarketEntry>()
-  for (const entry of existingEntries) {
-    entriesById.set(entry.id, entry)
-  }
+  const highestSubmissionById = new Map<string, { submission: typeof listedSubmissions[number]; version: ParsedSemVer }>()
   for (const submission of listedSubmissions) {
-    entriesById.set(submission.themeId, submissionToMarketEntry(submission, publicBaseUrl))
+    const version = parseSemVer(submission.version)
+    if (!version) continue
+    const current = highestSubmissionById.get(submission.themeId)
+    if (!current || compareSemVer(version, current.version) > 0) {
+      highestSubmissionById.set(submission.themeId, { submission, version })
+    }
   }
 
   const updatedAt = new Date().toISOString()
-  const themes = Array.from(entriesById.values()).sort((left, right) => left.id.localeCompare(right.id))
+  const themes = Array.from(highestSubmissionById.values())
+    .map(({ submission }) => submissionToMarketEntry(submission, publicBaseUrl))
+    .sort((left, right) => left.id.localeCompare(right.id))
   const fingerprint = createHash('sha256').update(JSON.stringify(themes.map(entry => ({
     id: entry.id,
     latest: entry.latest,
@@ -147,8 +186,8 @@ export async function publishThemeMarketIndex(): Promise<ThemeMarketPublishResul
     updatedAt,
     themes,
     governance: {
-      totalEntries: entriesById.size,
-      visibleEntries: entriesById.size,
+      totalEntries: themes.length,
+      visibleEntries: themes.length,
       hiddenEntries: 0,
       indexHost: null,
       fingerprint,
@@ -161,7 +200,7 @@ export async function publishThemeMarketIndex(): Promise<ThemeMarketPublishResul
   await writeFile(indexPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8')
   return {
     indexPath,
-    publishedEntries: listedSubmissions.length,
+    publishedEntries: themes.length,
     totalEntries: index.themes.length,
     updatedAt
   }

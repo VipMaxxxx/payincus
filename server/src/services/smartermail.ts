@@ -4,12 +4,17 @@
  */
 
 import type { MailSource } from '@prisma/client'
-import { assertSafeHttpUrl } from '../lib/outbound-security.js'
+import { assertSafeHttpUrl, safeFetch } from '../lib/outbound-security.js'
 import { readLimitedTextResponse } from '../lib/http-response.js'
 import { sanitizeTokensInString } from '../lib/log-sanitizer.js'
 
 const SMARTERMAIL_API_TIMEOUT_MS = 30_000
 const SMARTERMAIL_MAX_RESPONSE_BYTES = 1024 * 1024
+
+function parseDiskUsageMb(value: unknown): number | undefined {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : undefined
+}
 
 async function getSmarterMailBaseUrl(source: MailSource): Promise<string> {
   const safeBaseUrl = await assertSafeHttpUrl(source.smarterMailUrl, 'SmarterMail URL')
@@ -28,7 +33,7 @@ async function getAuthToken(
 ): Promise<string> {
   const email = `${adminUsername}@${domain}`
   
-  const response = await fetch(`${baseUrl}/api/v1/auth/authenticate-user`, {
+  const response = await safeFetch(`${baseUrl}/api/v1/auth/authenticate-user`, {
     method: 'POST',
     signal: AbortSignal.timeout(SMARTERMAIL_API_TIMEOUT_MS),
     headers: {
@@ -39,7 +44,7 @@ async function getAuthToken(
       password: adminPassword
     }),
     redirect: 'manual'
-  })
+  }, 'SmarterMail URL')
 
   if (!response.ok) {
     throw new Error(`SmarterMail auth error: ${response.status} ${response.statusText}`)
@@ -69,7 +74,7 @@ async function callApi(
   const baseUrl = await getSmarterMailBaseUrl(source)
   const token = await getAuthToken(domain, adminUsername, adminPassword, baseUrl)
   
-  const response = await fetch(`${baseUrl}/api/v1${endpoint}`, {
+  const response = await safeFetch(`${baseUrl}/api/v1${endpoint}`, {
     method,
     signal: AbortSignal.timeout(SMARTERMAIL_API_TIMEOUT_MS),
     headers: {
@@ -78,7 +83,7 @@ async function callApi(
     },
     body: data ? JSON.stringify(data) : undefined,
     redirect: 'manual'
-  })
+  }, 'SmarterMail URL')
 
   if (!response.ok) {
     const error = sanitizeTokensInString(
@@ -250,4 +255,34 @@ export async function listAccounts(
     diskLimitMb: user.maxMailboxSize || 0,
     diskUsedMb: user.mailboxSizeUsed || 0
   }))
+}
+
+/**
+ * 获取域下各邮箱账户的上游实际磁盘用量。
+ */
+export async function listAccountUsage(
+  source: MailSource,
+  domain: string,
+  adminUsername: string,
+  adminPassword: string
+): Promise<Array<{ username: string; diskUsedMb: number }>> {
+  const result = await callApi(
+    source,
+    domain,
+    adminUsername,
+    adminPassword,
+    'GET',
+    `/settings/domain/users/list?domain=${encodeURIComponent(domain)}`,
+    undefined
+  )
+
+  if (!Array.isArray(result.users)) {
+    return []
+  }
+
+  return result.users.flatMap((user: any) => {
+    const username = typeof user.userName === 'string' ? user.userName.trim() : ''
+    const diskUsedMb = parseDiskUsageMb(user.mailboxSizeUsed)
+    return username && diskUsedMb !== undefined ? [{ username, diskUsedMb }] : []
+  })
 }

@@ -8,6 +8,7 @@ const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/db/instance-tasks.ts'), 'utf8')
 const workerSource = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
+const instanceRoutesSource = readFileSync(resolve(__dirname, '../src/routes/instances.ts'), 'utf8')
 
 const start = source.indexOf('export async function cancelInstanceTask(')
 assert.notEqual(start, -1, 'cancelInstanceTask function not found')
@@ -91,3 +92,28 @@ assert.ok(
 )
 
 console.log('instance task worker race guard tests passed')
+
+const createTransactionStart = instanceRoutesSource.indexOf('const result = await prisma.$transaction(async (tx) => {')
+assert.notEqual(createTransactionStart, -1, 'instance create transaction not found')
+const createTransactionEnd = instanceRoutesSource.indexOf('}, {\n        isolationLevel:', createTransactionStart)
+assert.notEqual(createTransactionEnd, -1, 'instance create transaction end not found')
+const createTransaction = instanceRoutesSource.slice(createTransactionStart, createTransactionEnd)
+const idempotencyClaim = createTransaction.indexOf('const instance = await tx.instance.create({')
+const balanceLock = createTransaction.indexOf('const balanceLocked = await tryAdvisoryTransactionLock(')
+const balanceDeduction = createTransaction.indexOf('const balanceUpdateResult = await tx.user.updateMany({')
+
+assert.ok(
+  idempotencyClaim >= 0 &&
+    createTransaction.includes('idempotencyKey: selectedPlan && !flashSaleCheckout ? normalPaidIdempotencyKey : null'),
+  'normal paid instance creation must claim its unique idempotency key by inserting the instance'
+)
+assert.ok(
+  balanceLock > idempotencyClaim && balanceDeduction > balanceLock,
+  'normal paid instance balance lock and deduction must happen only after the unique idempotency claim'
+)
+assert.ok(
+  instanceRoutesSource.includes("err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'") &&
+    instanceRoutesSource.includes('findNormalPaidCreateReplay(user.id, normalPaidIdempotencyKey)') &&
+    instanceRoutesSource.includes("code: 'INSTANCE_CREATE_DUPLICATE_REQUEST'"),
+  'same-key races must return the existing instance or a duplicate response without a second charge/create'
+)

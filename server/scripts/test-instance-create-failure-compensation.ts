@@ -32,17 +32,78 @@ const failureSection = section(
   '    throw error\n  }\n}'
 )
 
+const createInstanceAsyncSection = instancesSource.slice(
+  indexOfOrThrow(instancesSource, 'async function createInstanceAsync(', 'createInstanceAsync')
+)
+
+const staticIpAllocationSection = section(
+  instancesSource,
+  '    if (networkModeNeedsNatIpv4(networkMode)) {',
+  '    console.log(`[Provisioning] IP 分配完成: IPv4=${staticIPv4}, IPv6=${staticIPv6}`)'
+)
+
+const postTransactionPreparationSection = section(
+  instancesSource,
+  '    // 事务成功后，完成 IP 分配和存储池选择',
+  '    // ==================== 阶段六: 异步执行创建 ===================='
+)
+
+const publicIpv4ReleaseHelperSection = section(
+  instancesSource,
+  'async function releaseReservedPublicIpv4ForFailedCreation(',
+  '\n}\n\nasync function compensateFailedInstanceCreation('
+)
+
+const compensationHelperSection = section(
+  instancesSource,
+  'async function compensateFailedInstanceCreation(',
+  '\n}\n\n/**\n * 异步创建实例'
+)
+
 assert.ok(
-  failureSection.includes('if (updateResult.count > 0 && userId && resources)') &&
-    failureSection.includes('await db.compensateFailedInstancePurchase(instanceId, userId, host.id)'),
-  'provisioning failure must compensate billing only after this worker wins the creating->error transition'
+  staticIpAllocationSection.includes('staticIpAllocationError = `NAT 内网 IPv4 分配失败') &&
+    staticIpAllocationSection.includes("staticIpAllocationError ||= '宿主机未配置 routed IPv6 子网'") &&
+    staticIpAllocationSection.includes('staticIpAllocationError ||= `routed IPv6 分配失败') &&
+    staticIpAllocationSection.includes('throw new Error(staticIpAllocationError)') &&
+    !staticIpAllocationSection.includes('实例将使用动态 IP') &&
+    !staticIpAllocationSection.includes('将使用动态分配'),
+  'fatal NAT IPv4 and routed IPv6 allocation failures must enter provisioning compensation and return an explicit failure'
+)
+
+assert.ok(
+  postTransactionPreparationSection.includes('try {') &&
+    postTransactionPreparationSection.includes('db.reservePublicIpv4ForInstance') &&
+    postTransactionPreparationSection.includes('await db.resolveStoragePoolForNewInstance') &&
+    postTransactionPreparationSection.includes('} catch (error) {') &&
+    postTransactionPreparationSection.includes('await compensateFailedInstanceCreation({') &&
+    postTransactionPreparationSection.includes('return reply.code(503).send(apiError(ErrorCode.HOST_RESOURCES_INSUFFICIENT, errorMessage))'),
+  'all synchronous post-transaction IP and storage preparation failures must be compensated immediately'
+)
+
+assert.ok(
+  failureSection.includes('await compensateFailedInstanceCreation({') &&
+    compensationHelperSection.includes("status: 'creating'") &&
+    compensationHelperSection.includes('if (updateResult.count === 0)') &&
+    compensationHelperSection.includes('await db.rollbackResources({') &&
+    compensationHelperSection.includes('await releaseReservedPublicIpv4ForFailedCreation(instanceId, networkMode)') &&
+    compensationHelperSection.includes('await db.compensateFailedInstancePurchase(instanceId, userId, host.id)'),
+  'sync preparation and async provisioning failures must share the idempotent creating->error compensation helper'
+)
+
+assert.ok(
+  publicIpv4ReleaseHelperSection.includes('if (!networkModeNeedsPublicIpv4(networkMode))') &&
+    publicIpv4ReleaseHelperSection.includes('db.releasePublicIpv4ForInstance(tx, instanceId)') &&
+    instancesSource.match(/db\.releasePublicIpv4ForInstance\(tx, instanceId\)/g)?.length === 1,
+  'all user-create failure branches must release reserved public IPv4 through one shared helper'
 )
 
 assert.ok(
   appSource.includes('const { getStuckCreatingInstances, getHostById, compensateFailedInstancePurchase, releasePublicIpv4ForInstance } = await import') &&
     appSource.includes("status: 'creating' // 原子条件：只有状态仍为 creating 时才更新") &&
-    appSource.includes('const compensation = await compensateFailedInstancePurchase(instance.id, instance.user_id, instance.host_id)'),
-  'create-timeout cleanup must run the same paid purchase compensation after winning creating->error transition'
+    appSource.includes('const compensation = await compensateFailedInstancePurchase(instance.id, instance.user_id, instance.host_id)') &&
+    appSource.includes("await markFlashSaleFailed(instance.id, '实例创建超时', compensation.refunded)") &&
+    appSource.includes("await markFlashSaleFailed(instance.id, '实例创建超时', false)"),
+  'create-timeout cleanup must run paid purchase and idempotent flash-sale compensation after winning creating->error transition'
 )
 
 assert.ok(
@@ -93,9 +154,10 @@ assert.ok(
 
 assert.ok(
   instancesSource.includes('宿主机 ${host.name} 没有可用独立 IPv4 地址') &&
-    instancesSource.includes('[Provisioning] 独立 IPv4 分配失败后资源回滚失败') &&
-    instancesSource.includes('[Provisioning] 独立 IPv4 分配失败后计费补偿失败'),
-  'user instance creation must rollback resources and compensate purchase when public IPv4 allocation races to empty'
+    postTransactionPreparationSection.includes('throw new Error(`宿主机 ${host.name} 没有可用独立 IPv4 地址`)') &&
+    compensationHelperSection.includes('await markFlashSaleFailed(instanceId, errorMessage, compensation.refunded)') &&
+    compensationHelperSection.includes('await markFlashSaleFailed(instanceId, errorMessage, false)'),
+  'public IPv4 allocation races must enter the same resource, billing, and flash-sale compensation path'
 )
 
 assert.ok(

@@ -3,6 +3,105 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/system-config.ts'), 'utf8')
+const packageRouteSource = readFileSync(resolve(process.cwd(), 'src/routes/packages.ts'), 'utf8')
+
+assert.ok(
+  packageRouteSource.includes('function optionalMoneyYuan(') &&
+    packageRouteSource.includes('const rounded = Math.round(value * 100) / 100') &&
+    packageRouteSource.includes('Math.abs(value - rounded) >= 1e-8') &&
+    packageRouteSource.includes("`${field} 最多支持两位小数`") &&
+    packageRouteSource.match(/trafficResetPrice: \{ type: 'number', minimum: 0, maximum: MAX_TRAFFIC_RESET_PRICE_YUAN \}/g)?.length === 2,
+  'traffic reset price API must accept non-negative yuan values with at most two decimal places'
+)
+
+assert.ok(
+  routeSource.includes("VIP_BENEFITS_CONFIG_KEY") &&
+    routeSource.includes("const jsonKeys = ['invite_generation_costs', VIP_BENEFITS_CONFIG_KEY]") &&
+    routeSource.includes('config.value = JSON.stringify(normalizeVipBenefitsConfig(parsed))') &&
+    routeSource.includes('value: DEFAULT_VIP_BENEFITS_CONFIG_JSON') &&
+    routeSource.includes('requestConfigMap.has(VIP_BENEFITS_CONFIG_KEY)'),
+  'VIP benefits config must expose defaults, validate and canonicalize its JSON, and persist without schema changes'
+)
+
+assert.ok(
+  routeSource.includes("const AFF_COMMISSION_RATE_CONFIG_KEY = 'aff_commission_rate'") &&
+    routeSource.includes("const AFF_DISCOUNT_RATE_CONFIG_KEY = 'aff_discount_rate'") &&
+    routeSource.includes('const DEFAULT_AFF_RATE = 0.05') &&
+    routeSource.includes('value: DEFAULT_AFF_RATE.toString()'),
+  'AFF commission and discount configs must expose 0.05 defaults without schema changes'
+)
+
+assert.ok(
+  routeSource.includes('const MAX_AFF_COMMISSION_RATE = 0.5') &&
+    routeSource.includes('const MAX_AFF_DISCOUNT_RATE = 0.95') &&
+    routeSource.includes('function parseRateConfig(value: string, max: number): number | null') &&
+    routeSource.includes('const rateKeys = [AFF_COMMISSION_RATE_CONFIG_KEY, AFF_DISCOUNT_RATE_CONFIG_KEY]') &&
+    routeSource.includes('const rate = parseRateConfig(config.value, max)'),
+  'AFF rate configs must strictly enforce commission 0-0.5 and discount 0-0.95 ranges'
+)
+
+assert.ok(
+  routeSource.includes("const TICKET_AUTO_CLOSE_ENABLED_CONFIG_KEY = 'ticket_auto_close_enabled'") &&
+    routeSource.includes("const TICKET_AUTO_CLOSE_HOURS_CONFIG_KEY = 'ticket_auto_close_hours'") &&
+    routeSource.includes('const DEFAULT_TICKET_AUTO_CLOSE_HOURS = 24') &&
+    routeSource.includes("value: 'true'") &&
+    routeSource.includes('value: DEFAULT_TICKET_AUTO_CLOSE_HOURS.toString()'),
+  'ticket auto-close config must expose enabled=true and hours=24 defaults without schema changes'
+)
+
+assert.ok(
+  routeSource.includes("TICKET_AUTO_CLOSE_ENABLED_CONFIG_KEY, 'free_site_mode'") &&
+    routeSource.includes("'plugin_storage_backup_retention_count', TICKET_AUTO_CLOSE_HOURS_CONFIG_KEY") &&
+    routeSource.includes('config.key === TICKET_AUTO_CLOSE_HOURS_CONFIG_KEY && num < 1'),
+  'ticket auto-close enabled must be boolean and hours must be an integer of at least 1'
+)
+
+assert.ok(
+  routeSource.includes('requestConfigMap.has(TICKET_AUTO_CLOSE_ENABLED_CONFIG_KEY)') &&
+    routeSource.includes('requestConfigMap.has(TICKET_AUTO_CLOSE_HOURS_CONFIG_KEY)') &&
+    routeSource.match(/where: \{ key: TICKET_AUTO_CLOSE_ENABLED_CONFIG_KEY \}/) &&
+    routeSource.match(/where: \{ key: TICKET_AUTO_CLOSE_HOURS_CONFIG_KEY \}/),
+  'ticket auto-close defaults must be upserted before their first persisted update'
+)
+
+assert.ok(
+  routeSource.includes("const TRAFFIC_OVERAGE_THROTTLE_CONFIG_KEY = 'traffic_overage_throttle_speed'") &&
+    routeSource.includes("const DEFAULT_TRAFFIC_OVERAGE_THROTTLE_SPEED = '1Mbit'") &&
+    routeSource.includes('TRAFFIC_OVERAGE_THROTTLE_CONFIG_KEY') &&
+    routeSource.includes('const bandwidthMatch = config.value.match(trafficBandwidthPattern)') &&
+    routeSource.includes('await db.prisma.systemConfig.upsert({'),
+  'traffic overage throttle config must be exposed, validated, and persisted without a schema column'
+)
+
+const highRiskKeysStart = routeSource.indexOf('const HIGH_RISK_ADMIN_ID_KEYS = new Set([')
+assert.notEqual(highRiskKeysStart, -1, 'system config route must define high-risk admin allowlist keys')
+const highRiskKeysEnd = routeSource.indexOf('])', highRiskKeysStart)
+assert.notEqual(highRiskKeysEnd, -1, 'system config high-risk admin allowlist keys must be closed')
+const highRiskKeysSection = routeSource.slice(highRiskKeysStart, highRiskKeysEnd)
+for (const key of [
+  'system_update_allowed_admin_ids',
+  'payincus_gift_card_admin_ids',
+  'plugin_manager_allowed_admin_ids',
+  'theme_manager_allowed_admin_ids'
+]) {
+  assert.ok(highRiskKeysSection.includes(`'${key}'`), `system config high-risk keys must include ${key}`)
+}
+
+const updateHandlerStart = routeSource.indexOf("fastify.put<{ Body: UpdateConfigsBody }>('/', {")
+const highRiskPermissionCheck = routeSource.indexOf(
+  'configs.some(config => HIGH_RISK_ADMIN_ID_KEYS.has(config.key))',
+  updateHandlerStart
+)
+const configWrite = routeSource.indexOf('await db.updateSystemConfigs(configs)', updateHandlerStart)
+assert.ok(
+  updateHandlerStart !== -1 &&
+    highRiskPermissionCheck > updateHandlerStart &&
+    highRiskPermissionCheck < configWrite &&
+    routeSource.slice(highRiskPermissionCheck, configWrite).includes("request.user.username !== 'admin'") &&
+    routeSource.slice(highRiskPermissionCheck, configWrite).includes('reply.code(403)') &&
+    routeSource.slice(highRiskPermissionCheck, configWrite).includes('apiError(ErrorCode.FORBIDDEN)'),
+  'system config PUT must reject non-owner high-risk allowlist updates with 403 before persistence'
+)
 
 assert.ok(
   routeSource.includes('const positiveIntegerConfigPattern = /^[1-9]\\d*$/') &&

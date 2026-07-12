@@ -26,6 +26,18 @@ function assertCreateBeforeAddDevice(section: string, label: string): void {
 
 const singlePortSection = sectionBetween('// 添加端口映射', '// 删除端口映射')
 assertCreateBeforeAddDevice(singlePortSection, 'single port mapping')
+const automaticAllocationIndex = singlePortSection.indexOf('await db.allocatePort(instance.host_id, protocol)')
+const unifiedPortCheckIndex = singlePortSection.indexOf('await db.checkPortInUse(instance.host_id, allocatedPort, protocol)')
+assert.notEqual(automaticAllocationIndex, -1, 'single port mapping: automatic allocation not found')
+assert.notEqual(unifiedPortCheckIndex, -1, 'single port mapping: unified checkPortInUse not found')
+assert.ok(
+  automaticAllocationIndex < unifiedPortCheckIndex,
+  'single port mapping: automatically allocated ports must pass checkPortInUse before DB reservation'
+)
+assert.ok(
+  unifiedPortCheckIndex < singlePortSection.indexOf('await db.createPortMapping'),
+  'single port mapping: checkPortInUse must run before DB reservation'
+)
 assert.ok(
   !singlePortSection.includes('await removeDevice(client, instance.incus_id, deviceName)'),
   'single port rollback must not remove a generic device name that may belong to another request'
@@ -73,6 +85,29 @@ assert.ok(
 assert.ok(
   !batchPortSection.includes("return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, proxyDeviceRes.errorMessage || '代理对象工厂拦截异常'))"),
   'batch port mapping must not return directly after partial mapping/device creation can exist'
+)
+
+assert.ok(
+  source.includes('const MAX_BATCH_PORT_MAPPINGS = 100') &&
+    batchPortSection.includes('maxItems: MAX_BATCH_PORT_MAPPINGS') &&
+    batchPortSection.includes('finalMappings.length > MAX_BATCH_PORT_MAPPINGS'),
+  'batch port mapping schema and final normalized mappings must reject oversized requests'
+)
+assert.ok(
+  batchPortSection.includes('new Set(privatePorts).size !== finalMappings.length') &&
+    batchPortSection.includes('new Set(publicPorts).size !== finalMappings.length'),
+  'batch port mapping must reject duplicate private and public ports in final mappings'
+)
+assert.ok(
+  batchPortSection.includes('mapping.privatePort < natPortStart || mapping.privatePort > natPortEnd') &&
+    batchPortSection.includes('mapping.publicPort < natPortStart || mapping.publicPort > natPortEnd') &&
+    batchPortSection.includes("apiError(ErrorCode.PORT_RANGE_INVALID, `允许范围: ${natPortStart}-${natPortEnd}`)"),
+  'batch port mapping must reject private or public ports outside the host NAT range'
+)
+assert.ok(
+  batchPortSection.includes("const quotaNeeded = finalMappings.length * (protocol === 'both' ? 2 : 1)") &&
+    batchPortSection.indexOf('const quotaNeeded = finalMappings.length') > batchPortSection.indexOf('if (portMappings && portMappings.length > 0)'),
+  'batch port quota must be calculated from the final normalized mappings'
 )
 
 console.log('port mapping safety tests passed')

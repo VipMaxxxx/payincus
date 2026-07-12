@@ -7,7 +7,7 @@
 import * as db from '../db/index.js'
 import { createInboxMessage } from '../db/inbox.js'
 import { prisma } from '../db/prisma.js'
-import { assertSafeWebhookUrl } from './outbound-security.js'
+import { assertSafeWebhookUrl, safeFetch } from './outbound-security.js'
 import { sanitizeTokensInString } from './log-sanitizer.js'
 import { emitNotificationSentPluginEvent } from './plugin-business-events.js'
 
@@ -71,6 +71,7 @@ type EventType =
   // 实例转移类
   | 'transfer_received'
   | 'transfer_accepted'
+  | 'transfer_ownership_received'
   | 'transfer_rejected'
   | 'transfer_cancelled'
   // 安全与账户类
@@ -601,6 +602,15 @@ const EVENT_TEMPLATES: Record<EventType, EventTemplate> = {
       return msg
     }
   },
+  transfer_ownership_received: {
+    title: '✅ 实例过户完成',
+    message: (data) => {
+      let msg = `实例「${data.instanceName}」已过户至您的账户`
+      msg += `\n自动续费已关闭，请根据需要自行重新开启。`
+      msg += `\n原系统未重装，请立即重置 SSH 密钥、登录密码等实例凭证。`
+      return msg
+    }
+  },
   transfer_rejected: {
     title: '❌ 实例转移被拒绝',
     message: (data) => `用户「${data.receiverUsername}」拒绝了实例「${data.instanceName}」的转移请求`
@@ -712,7 +722,7 @@ const EVENT_TEMPLATES: Record<EventType, EventTemplate> = {
   ticket_auto_closed: {
     title: '🔒 工单已自动关闭',
     message: (data) => {
-      let msg = `工单「${data.subject}」已因超过24小时无新回复而自动关闭`
+      let msg = `工单「${data.subject}」已因距最后回复超过24小时而自动关闭`
       if (data.hostName) msg += `\n节点: ${data.hostName}`
       msg += `\n如有新问题，请创建新工单`
       return msg
@@ -1325,7 +1335,7 @@ async function sendDiscord(
     }
 
     const parsedUrl = await assertSafeWebhookUrl(webhookUrl)
-    const response = await fetch(parsedUrl.toString(), {
+    const response = await safeFetch(parsedUrl.toString(), {
       method: 'POST',
       signal: AbortSignal.timeout(NOTIFICATION_FETCH_TIMEOUT_MS),
       headers: { 'Content-Type': 'application/json' },
@@ -1341,7 +1351,7 @@ async function sendDiscord(
         }]
       }),
       redirect: 'manual'
-    })
+    }, 'Webhook URL')
 
     if (!response.ok) {
       return { success: false, error: await readSafeNotificationError(response) }
@@ -1393,13 +1403,13 @@ async function sendWebhook(
       headers['X-Signature'] = signature
     }
 
-    const response = await fetch(parsedUrl.toString(), {
+    const response = await safeFetch(parsedUrl.toString(), {
       method: 'POST',
       signal: AbortSignal.timeout(NOTIFICATION_FETCH_TIMEOUT_MS),
       headers,
       body: JSON.stringify(payload),
       redirect: 'manual'
-    })
+    }, 'Webhook URL')
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` }

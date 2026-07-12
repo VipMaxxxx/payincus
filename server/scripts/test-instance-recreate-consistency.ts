@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
+const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
 const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
 
 function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
@@ -125,6 +126,38 @@ const cloneRollbackIndex = indexOfOrThrow(cloneCatchSection, 'await db.rollbackR
 assert.ok(
   cloneDbDeleteIndex < cloneRollbackIndex,
   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+)
+
+const restoreCatchSection = section(
+  restoreWorkerSource,
+  '    } catch (err) {',
+  '    } finally {'
+)
+const checkOriginalIndex = indexOfOrThrow(
+  restoreCatchSection,
+  'const originalExists = await instanceExists(client, task.originalIncusId)',
+  'original Incus existence check before restore temp cleanup'
+)
+const preserveUniqueTempIndex = indexOfOrThrow(
+  restoreCatchSection,
+  'if (!originalExists)',
+  'unique restored temp preservation branch'
+)
+const deleteRestoreTempIndex = indexOfOrThrow(
+  restoreCatchSection,
+  'await deleteInstance(client, task.tempInstanceName)',
+  'restore temp delete'
+)
+
+assert.ok(
+  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
+  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
+)
+assert.ok(
+  restoreCatchSection.includes("progress: 'manual_intervention'") &&
+    restoreCatchSection.includes('已保留临时实例') &&
+    restoreCatchSection.includes('需要人工介入'),
+  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
 )
 
 console.log('instance recreate consistency checks passed')

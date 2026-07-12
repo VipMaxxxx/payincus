@@ -66,6 +66,7 @@ const POSITIVE_ID_PATTERN = /^[1-9]\d*$/
 const RECHARGE_STATUSES = new Set(['pending', 'paid', 'completed', 'failed', 'cancelled', 'refunded'])
 const MAX_RECHARGE_TRADE_NO_LENGTH = 128
 const MAX_RECHARGE_ADMIN_REASON_LENGTH = 500
+const RECHARGE_PAYMENT_ATTEMPT_SUFFIX_PATTERN = /^(.*)--PA-([A-F0-9]{12})$/
 const PLUGIN_GATEWAY_PROVIDER_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,120}$/
 const PLUGIN_GATEWAY_EXTENSION_KEY_PATTERN = /^[a-z][a-z0-9_-]{1,79}$/
 const PLUGIN_GATEWAY_PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9-]*){2,}$/
@@ -95,6 +96,99 @@ interface PluginGatewayPaymentResult {
   message: string | null
   metadata: Record<string, unknown>
   requestId: string
+}
+
+interface RechargePaymentAttempt {
+  id: string
+  gatewayOrderNo: string
+  createdAt: string
+}
+
+interface RechargePaymentAttemptState {
+  current: RechargePaymentAttempt
+  superseded: Array<RechargePaymentAttempt & { supersededAt: string }>
+}
+
+function readRechargePaymentAttemptState(paymentDetails: unknown): RechargePaymentAttemptState | null {
+  if (!paymentDetails || typeof paymentDetails !== 'object' || Array.isArray(paymentDetails)) return null
+  const value = (paymentDetails as Record<string, unknown>).paymentAttempt
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const current = (value as Record<string, unknown>).current
+  if (!current || typeof current !== 'object' || Array.isArray(current)) return null
+  const currentRecord = current as Record<string, unknown>
+  if (
+    typeof currentRecord.id !== 'string' ||
+    typeof currentRecord.gatewayOrderNo !== 'string' ||
+    typeof currentRecord.createdAt !== 'string'
+  ) return null
+
+  const supersededValue = (value as Record<string, unknown>).superseded
+  const superseded = Array.isArray(supersededValue)
+    ? supersededValue.filter((item): item is RechargePaymentAttempt & { supersededAt: string } => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+        const record = item as Record<string, unknown>
+        return typeof record.id === 'string' &&
+          typeof record.gatewayOrderNo === 'string' &&
+          typeof record.createdAt === 'string' &&
+          typeof record.supersededAt === 'string'
+      })
+    : []
+
+  return {
+    current: {
+      id: currentRecord.id,
+      gatewayOrderNo: currentRecord.gatewayOrderNo,
+      createdAt: currentRecord.createdAt
+    },
+    superseded
+  }
+}
+
+function resolveRechargeOrderNoFromGatewayOrderNo(gatewayOrderNo: string): string {
+  return gatewayOrderNo.match(RECHARGE_PAYMENT_ATTEMPT_SUFFIX_PATTERN)?.[1] || gatewayOrderNo
+}
+
+function getCurrentRechargeGatewayOrderNo(paymentDetails: unknown, orderNo: string): string {
+  const current = readRechargePaymentAttemptState(paymentDetails)?.current.gatewayOrderNo
+  return current && resolveRechargeOrderNoFromGatewayOrderNo(current) === orderNo ? current : orderNo
+}
+
+function isCurrentRechargePaymentAttempt(paymentDetails: unknown, orderNo: string, gatewayOrderNo: string): boolean {
+  return getCurrentRechargeGatewayOrderNo(paymentDetails, orderNo) === gatewayOrderNo
+}
+
+function buildNextRechargePaymentAttempt(paymentDetails: unknown, orderNo: string): RechargePaymentAttemptState {
+  const now = new Date().toISOString()
+  const existing = readRechargePaymentAttemptState(paymentDetails)
+  const previous = existing?.current || {
+    id: 'initial',
+    gatewayOrderNo: orderNo,
+    createdAt: now
+  }
+  const id = crypto.randomBytes(6).toString('hex').toUpperCase()
+
+  return {
+    current: {
+      id,
+      gatewayOrderNo: `${orderNo}--PA-${id}`,
+      createdAt: now
+    },
+    superseded: [
+      ...(existing?.superseded || []),
+      { ...previous, supersededAt: now }
+    ]
+  }
+}
+
+function mergeRechargePaymentAttempt(
+  paymentDetails: Record<string, unknown> | null,
+  paymentAttempt: RechargePaymentAttemptState
+): Record<string, unknown> {
+  return {
+    ...(paymentDetails || {}),
+    paymentAttempt
+  }
 }
 
 function parsePositiveId(value: unknown): number | null {
@@ -1675,6 +1769,10 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         : rechargeAmount
       let paymentDetails = (record as any).paymentDetails as Record<string, unknown> | null
       const existingPaymentDetails = readRechargePaymentDetails((record as any).paymentDetails)
+      const paymentAttempt = provider.type === MANUAL_PROVIDER_TYPE
+        ? null
+        : buildNextRechargePaymentAttempt((record as any).paymentDetails, record.orderNo)
+      const gatewayOrderNo = paymentAttempt?.current.gatewayOrderNo || record.orderNo
 
       if (paymentMethodChanged) {
         const pricingProvider = {
@@ -1696,13 +1794,13 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         }
         const providerPaymentDetails = provider.type === 'heleket'
           ? buildHeleketInvoicePaymentDetails(
-              record.orderNo,
+              gatewayOrderNo,
               payableAmount,
               buildHeleketConfig(effectiveProviderConfig).heleketConfig
             )
           : provider.type === 'antom'
             ? buildAntomPaymentDetails(
-                record.orderNo,
+                gatewayOrderNo,
                 payableAmount,
                 buildAntomConfig(effectiveProviderConfig).config
               )
@@ -1722,6 +1820,10 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         }) as Record<string, unknown>
       }
 
+      if (paymentAttempt) {
+        paymentDetails = mergeRechargePaymentAttempt(paymentDetails, paymentAttempt)
+      }
+
       let payUrl: string | null = null
       const urls = buildRechargeUrls(provider.id, record.orderNo)
 
@@ -1729,7 +1831,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         payUrl = await createRechargePayUrl(
           provider,
           effectiveProviderConfig,
-          record.orderNo,
+          gatewayOrderNo,
           payableAmount,
           selectedPaymentMethod,
           urls,
@@ -1749,16 +1851,14 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         return reply.status(400).send({ error: '不支持的支付渠道类型' })
       }
 
-      if (paymentMethodChanged) {
-        const updatedRecord = await db.updatePendingRechargePaymentSelection(orderNo, {
-          paymentMethod: selectedPaymentMethod || null,
-          fee,
-          actualAmount,
-          paymentDetails
-        })
-        if (!updatedRecord) {
-          return reply.status(409).send({ error: '订单状态已变化，请刷新后重试' })
-        }
+      const updatedRecord = await db.updatePendingRechargePaymentSelection(orderNo, {
+        paymentMethod: selectedPaymentMethod || null,
+        fee,
+        actualAmount,
+        paymentDetails
+      })
+      if (!updatedRecord) {
+        return reply.status(409).send({ error: '订单状态已变化，请刷新后重试' })
       }
 
       return {
@@ -1773,6 +1873,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           expiredAt: record.expiredAt?.toISOString() || null
         },
         payUrl,
+        previousPaymentLinkInvalidated: paymentAttempt !== null,
         manualPayment: provider.type === MANUAL_PROVIDER_TYPE
           ? buildManualRechargeResponse(paymentDetails)
           : null
@@ -1897,13 +1998,14 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       let actualAmount = creditedAmount
       let callbackPayload: Record<string, unknown> = { source: 'verify_api' }
       let paymentDetails = (record as any).paymentDetails as Record<string, unknown> | undefined
+      const gatewayOrderNo = getCurrentRechargeGatewayOrderNo((record as any).paymentDetails, record.orderNo)
 
       if (provider.type === PLUGIN_GATEWAY_PROVIDER_TYPE) {
         const pluginPayment = await dispatchPluginGatewayPaymentHook({
           hook: 'verifyPayment',
           provider,
           config: effectiveConfig,
-          orderNo: record.orderNo,
+          orderNo: gatewayOrderNo,
           rechargeId: record.id,
           userId: record.userId,
           amount: rechargeAmount,
@@ -1930,7 +2032,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         }
 
         const pluginResult = pluginPayment.result
-        if (!isRechargeGatewayOrderNoMatch(record.orderNo, pluginResult.orderNo)) {
+        if (!isRechargeGatewayOrderNoMatch(gatewayOrderNo, pluginResult.orderNo)) {
           request.log.warn(
             { orderNo: record.orderNo, pluginOrderNo: pluginResult.orderNo },
             '插件支付主动验单返回订单号不匹配，拒绝处理'
@@ -2139,7 +2241,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         }
 
         const epay = createEpayClient(epayConfig)
-        const queryResult = await epay.queryOrder(orderNo)
+        const queryResult = await epay.queryOrder(gatewayOrderNo)
 
         request.log.info({ orderNo, queryResult: { success: queryResult.success, paid: queryResult.paid } }, '易支付订单查询结果')
 
@@ -2171,7 +2273,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           }
         }
 
-        if (!isRechargeGatewayOrderNoMatch(orderNo, queryResult.out_trade_no)) {
+        if (!isRechargeGatewayOrderNoMatch(gatewayOrderNo, queryResult.out_trade_no)) {
           request.log.warn(
             { orderNo, gatewayOrderNo: queryResult.out_trade_no },
             '易支付订单查询返回订单号不匹配，拒绝主动完成充值'
@@ -2231,7 +2333,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
         }
 
         const heleket = createHeleketClient(heleketConfig)
-        const queryResult = await heleket.getPaymentInfo({ order_id: orderNo })
+        const queryResult = await heleket.getPaymentInfo({ order_id: gatewayOrderNo })
         const status = extractHeleketStatus(queryResult)
         const paymentState = getHeleketPaymentState(queryResult)
         const statusMessage = getHeleketStatusMessage(status)
@@ -2241,7 +2343,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           'Heleket 订单查询结果'
         )
 
-        if (!isRechargeGatewayOrderNoMatch(orderNo, queryResult.order_id)) {
+        if (!isRechargeGatewayOrderNoMatch(gatewayOrderNo, queryResult.order_id)) {
           request.log.warn(
             { orderNo, gatewayOrderNo: queryResult.order_id },
             'Heleket 订单查询返回订单号不匹配，拒绝主动完成充值'
@@ -2269,7 +2371,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           queryResult,
           heleketConfig,
           {
-            orderNo,
+            orderNo: gatewayOrderNo,
             invoiceAmount: orderAmount
           }
         ) as Record<string, unknown>
@@ -2457,7 +2559,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           }
         }
 
-        const queryResult = await new AntomClient(antomConfig).inquiryPayment(orderNo)
+        const queryResult = await new AntomClient(antomConfig).inquiryPayment(gatewayOrderNo)
         request.log.info(
           { orderNo, paymentStatus: queryResult.paymentStatus, paymentId: queryResult.paymentId },
           'Antom 订单查询结果'
@@ -2473,7 +2575,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           }
         }
 
-        if (!isRechargeGatewayOrderNoMatch(orderNo, queryResult.paymentRequestId)) {
+        if (!isRechargeGatewayOrderNoMatch(gatewayOrderNo, queryResult.paymentRequestId)) {
           request.log.warn({ orderNo, gatewayOrderNo: queryResult.paymentRequestId }, 'Antom 查询返回订单号不匹配')
           return {
             success: false,
@@ -2488,7 +2590,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
           (record as any).paymentDetails,
           queryResult,
           antomConfig,
-          { orderNo, amountCny: orderAmount }
+          { orderNo: gatewayOrderNo, amountCny: orderAmount }
         ) as Record<string, unknown>
         callbackPayload = {
           source: 'verify_api',
@@ -3160,12 +3262,13 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     callbackData: Record<string, unknown>,
     clientIp: string
   ) {
-    const preliminaryOrderNo = extractRechargeOrderNoFromCallback(PLUGIN_GATEWAY_PROVIDER_TYPE, callbackData)
-    if (!preliminaryOrderNo) {
+    const preliminaryGatewayOrderNo = extractRechargeOrderNoFromCallback(PLUGIN_GATEWAY_PROVIDER_TYPE, callbackData)
+    if (!preliminaryGatewayOrderNo) {
       request.log.warn({ providerId: providerIdNum, data: sanitizeObject(callbackData) }, '插件支付回调缺少订单号')
       return reply.status(400).send({ error: '缺少订单号' })
     }
 
+    const preliminaryOrderNo = resolveRechargeOrderNoFromGatewayOrderNo(preliminaryGatewayOrderNo)
     const record = await db.getRechargeRecordByOrderNo(preliminaryOrderNo)
     if (!record) {
       request.log.warn({ providerId: providerIdNum, orderNo: preliminaryOrderNo }, '插件支付回调订单不存在')
@@ -3175,6 +3278,14 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     if (record.providerId !== providerIdNum) {
       request.log.warn({ orderNo: preliminaryOrderNo, expected: record.providerId, actual: providerIdNum }, '插件支付回调支付渠道不匹配')
       return reply.status(400).send({ error: '支付渠道不匹配' })
+    }
+
+    if (!isCurrentRechargePaymentAttempt((record as any).paymentDetails, record.orderNo, preliminaryGatewayOrderNo)) {
+      request.log.warn(
+        { orderNo: record.orderNo, gatewayOrderNo: preliminaryGatewayOrderNo },
+        '插件支付回调来自已失效的支付尝试，拒绝入账'
+      )
+      return { code: 'SUCCESS', message: 'OK' }
     }
 
     const currentConfig = typeof provider.config === 'string'
@@ -3202,7 +3313,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
       hook: 'webhook',
       provider,
       config,
-      orderNo: record.orderNo,
+      orderNo: preliminaryGatewayOrderNo,
       rechargeId: record.id,
       userId: record.userId,
       amount: rechargeAmount,
@@ -3222,7 +3333,7 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     }
 
     const pluginResult = pluginPayment.result
-    if (!isRechargeGatewayOrderNoMatch(record.orderNo, pluginResult.orderNo)) {
+    if (!isRechargeGatewayOrderNoMatch(preliminaryGatewayOrderNo, pluginResult.orderNo)) {
       request.log.warn(
         { orderNo: record.orderNo, pluginOrderNo: pluginResult.orderNo },
         '插件支付回调返回订单号不匹配，拒绝处理'
@@ -3413,7 +3524,10 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     }
 
     const currentConfig = typeof provider.config === 'string' ? JSON.parse(provider.config) : (provider.config || {})
-    const preliminaryOrderNo = extractRechargeOrderNoFromCallback(provider.type, callbackData)
+    const preliminaryGatewayOrderNo = extractRechargeOrderNoFromCallback(provider.type, callbackData)
+    const preliminaryOrderNo = preliminaryGatewayOrderNo
+      ? resolveRechargeOrderNoFromGatewayOrderNo(preliminaryGatewayOrderNo)
+      : undefined
     const preliminaryRecord = preliminaryOrderNo
       ? await db.getRechargeRecordByOrderNo(preliminaryOrderNo)
       : null
@@ -3558,7 +3672,9 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     }
 
     // 5. 防重放攻击检查（数据库持久化，使用处理后的 tradeNo）
-    const tradeNoForIndex = getTradeNoForIndex(orderNo, tradeNo)
+    const gatewayOrderNo = orderNo
+    orderNo = resolveRechargeOrderNoFromGatewayOrderNo(gatewayOrderNo)
+    const tradeNoForIndex = getTradeNoForIndex(gatewayOrderNo, tradeNo)
     if (await isCallbackProcessed(providerIdNum, orderNo, tradeNoForIndex)) {
       request.log.info({ orderNo }, '重复回调，忽略')
       // 返回成功，避免支付平台重试
@@ -3579,6 +3695,17 @@ export default async function rechargeRoutes(app: FastifyInstance): Promise<void
     if (record.providerId !== providerIdNum) {
       request.log.warn({ orderNo, expected: record.providerId, actual: providerIdNum }, '支付渠道不匹配')
       return reply.status(400).send({ error: '支付渠道不匹配' })
+    }
+
+
+    if (!isCurrentRechargePaymentAttempt((record as any).paymentDetails, record.orderNo, gatewayOrderNo)) {
+      await markCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex, clientIp)
+      request.log.warn(
+        { orderNo: record.orderNo, gatewayOrderNo, tradeNo },
+        '支付回调来自已失效的支付尝试，拒绝入账'
+      )
+      if (provider.type === 'antom') return antomNotificationResponse(true)
+      return provider.type === 'yipay' && epayVersion === 'v1' ? 'success' : { code: 'SUCCESS', message: 'OK' }
     }
 
     let paymentDetails = (record as any).paymentDetails as Record<string, unknown> | undefined

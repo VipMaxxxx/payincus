@@ -370,14 +370,6 @@ router.beforeEach(async (to: RouteLocationNormalized, _from: RouteLocationNormal
     return
   }
 
-  if (to.name === 'tickets' && authStore.isAuthenticated && !authStore.isAdmin) {
-    await configStore.loadPublicConfig()
-    if (!configStore.ticketEnabled) {
-      next({ name: 'dashboard' })
-      return
-    }
-  }
-
   if (
     authStore.isAuthenticated &&
     !authStore.isAdmin &&

@@ -33,34 +33,69 @@ const USER_SEARCH_FIELDS = ['username', 'id', 'email'] as const
 const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
 const MAX_HOSTING_BALANCE_ADJUST_AMOUNT = 99999999.99
 const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500
+const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'
 type UserSearchField = (typeof USER_SEARCH_FIELDS)[number]
 type UserDeletionBlockers = {
   instances: number
   hosts: number
   packages: number
   hostingZones: number
+  balanceNonZero: boolean
+  hostingBalanceNonZero: boolean
+  balanceLogs: number
+  rechargeRecords: number
+  hostingBalanceLogs: number
+  loginRecords: number
+  redeemCodeUsages: number
 }
 
 async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
-  const [instances, hosts, packages, hostingZones] = await Promise.all([
+  const [
+    balances,
+    instances,
+    hosts,
+    packages,
+    hostingZones,
+    balanceLogs,
+    rechargeRecords,
+    hostingBalanceLogs,
+    loginRecords,
+    redeemCodeUsages
+  ] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { balance: true, hostingBalance: true }
+    }),
     // Count every instance state, including deleted history, because the required User relation
     // still blocks hard deletion and the history should not be orphaned by admin actions.
     prisma.instance.count({ where: { userId } }),
     prisma.host.count({ where: { userId } }),
     prisma.package.count({ where: { userId } }),
-    prisma.hostingZone.count({ where: { ownerId: userId } })
+    prisma.hostingZone.count({ where: { ownerId: userId } }),
+    prisma.balanceLog.count({ where: { userId } }),
+    prisma.rechargeRecord.count({ where: { userId } }),
+    prisma.hostingBalanceLog.count({ where: { userId } }),
+    prisma.loginRecord.count({ where: { userId } }),
+    prisma.redeemCodeUsage.count({ where: { userId } })
   ])
 
   return {
     instances,
     hosts,
     packages,
-    hostingZones
+    hostingZones,
+    balanceNonZero: balances?.balance.isZero() === false,
+    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
+    balanceLogs,
+    rechargeRecords,
+    hostingBalanceLogs,
+    loginRecords,
+    redeemCodeUsages
   }
 }
 
 function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
-  return Object.values(blockers).some(count => count > 0)
+  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
 }
 
 function parseUserSearchFields(rawValue?: string): UserSearchField[] {
@@ -950,13 +985,13 @@ export default async function userRoutes(fastify: FastifyInstance) {
     // 检查是否只提供了一种配额类型
     const providedTypes = [hostLimit !== undefined, friendLimit !== undefined].filter(Boolean).length
     if (providedTypes !== 1) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '每次只能增加一种配额类型'))
+      return reply.code(400).send(apiError(ErrorCode.QUOTA_INCREASE_TYPE_REQUIRED))
     }
 
     // 获取当前配额
     const currentQuota = await db.getUserQuota(userId)
     if (!currentQuota) {
-      return reply.code(404).send(apiError(ErrorCode.USER_NOT_FOUND, '配额信息不存在'))
+      return reply.code(404).send(apiError(ErrorCode.QUOTA_INFO_NOT_FOUND))
     }
 
     // 确定要增加的配额类型和数量
@@ -982,18 +1017,17 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
     // 验证增加数量是否正确
     if (increaseAmount !== expectedIncrease) {
-      const typeNames = { host: '宿主机', friend: '好友' }
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, `${typeNames[quotaType!]}每次只能增加 ${expectedIncrease} 个`))
+      return reply.code(400).send(apiError(ErrorCode.QUOTA_INCREASE_STEP_INVALID))
     }
 
     // 检查使用率是否达到50%
     if (currentLimit === 0) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '配额限制为0，无法计算使用率'))
+      return reply.code(400).send(apiError(ErrorCode.QUOTA_USAGE_UNAVAILABLE))
     }
 
     const usagePercent = (currentUsed / currentLimit) * 100
     if (usagePercent < 50) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, `当前使用率为 ${Math.round(usagePercent)}%，需要达到50%（含）才能增加配额`))
+      return reply.code(400).send(apiError(ErrorCode.QUOTA_USAGE_TOO_LOW))
     }
 
     // 更新配额
@@ -1013,7 +1047,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       'success'
     )
 
-    return { message: '配额增加成功' }
+    return { message: 'QUOTA_INCREASED' }
   })
 
   // 封禁/解封用户 (管理员)
@@ -1149,13 +1183,43 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
     const blockers = await getUserDeletionBlockers(userId)
     if (hasUserDeletionBlockers(blockers)) {
+      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
+        return reply.code(400).send(apiError(
+          ErrorCode.USER_HAS_RESOURCES,
+          '用户主余额或托管余额非零，请先清零或结算'
+        ))
+      }
+
+      if (
+        blockers.balanceLogs > 0 ||
+        blockers.rechargeRecords > 0 ||
+        blockers.hostingBalanceLogs > 0 ||
+        blockers.loginRecords > 0 ||
+        blockers.redeemCodeUsages > 0
+      ) {
+        return reply.code(400).send(apiError(
+          ErrorCode.USER_HAS_RESOURCES,
+          '该用户有资金/审计流水，不能直接删除'
+        ))
+      }
+
       return reply.code(400).send(apiError(
         ErrorCode.USER_HAS_RESOURCES,
         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
       ))
     }
 
-    await db.deleteUser(userId)
+    try {
+      await db.deleteUser(userId)
+    } catch (error) {
+      if (error instanceof db.UserDeletionConflictError) {
+        return reply.code(409).send(apiError(
+          ErrorCode.USER_HAS_RESOURCES,
+          '该用户存在关联记录，无法删除'
+        ))
+      }
+      throw error
+    }
 
     await createLog(
       request.user.id,
@@ -1237,7 +1301,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       metadata: { revokedCount: count }
     })
 
-    return { message: `已撤销 ${count} 个会话` }
+    return { message: 'SESSIONS_REVOKED', revokedCount: count }
   })
 
   // 管理员重置用户密码（由管理员输入新密码，不在响应中回显明文）
@@ -1701,7 +1765,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
               actionType: 'admin_adjust',
               amount: absAmount,
               frozen: false,
-              remark: `[Admin] ${normalizedReason}`
+              remark: `${ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX} ${normalizedReason}`
             }
           })
         })
@@ -1780,7 +1844,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (message === 'Hosting balance is being processed') {
-        return reply.code(409).send({ error: '托管余额正在处理，请稍后重试', code: 'HOSTING_BALANCE_BUSY' })
+        return reply.code(409).send(apiError(ErrorCode.HOSTING_BALANCE_BUSY))
       }
       if (message === 'Insufficient hosting balance') {
         return reply.code(400).send(apiError(ErrorCode.BALANCE_INSUFFICIENT, 'Insufficient hosting balance'))

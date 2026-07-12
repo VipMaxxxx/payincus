@@ -358,8 +358,8 @@ onMounted(() => {
               </div>
             </button>
           </div>
-          <div class="hidden overflow-x-auto lg:block">
-            <table class="w-full min-w-[900px] divide-y divide-themed text-sm">
+          <div class="hidden overflow-hidden lg:block">
+            <table class="w-full table-fixed divide-y divide-themed text-sm">
               <thead>
                 <tr class="text-left text-xs text-themed-muted">
                   <th class="w-[10%] px-4 py-3 font-medium">等级</th>
@@ -388,13 +388,13 @@ onMounted(() => {
                       {{ statusLabel(alert.status) }}
                     </span>
                   </td>
-                  <td class="truncate px-4 py-3 text-themed-muted">{{ moduleLabel(alert.module) }}</td>
-                  <td class="px-4 py-3">
-                    <div class="truncate font-medium text-themed">{{ alert.title }}</div>
-                    <div class="mt-1 truncate text-xs text-themed-muted">{{ alert.message }}</div>
+                  <td class="break-words px-4 py-3 text-themed-muted">{{ moduleLabel(alert.module) }}</td>
+                  <td class="break-words px-4 py-3">
+                    <div class="font-medium text-themed">{{ alert.title }}</div>
+                    <div class="mt-1 text-xs text-themed-muted">{{ alert.message }}</div>
                   </td>
                   <td class="px-4 py-3 text-themed-muted">{{ alert.triggerCount }}</td>
-                  <td class="truncate px-4 py-3 text-themed-muted">{{ formatDate(alert.lastTriggeredAt) }}</td>
+                  <td class="break-words px-4 py-3 text-themed-muted">{{ formatDate(alert.lastTriggeredAt) }}</td>
                 </tr>
               </tbody>
             </table>

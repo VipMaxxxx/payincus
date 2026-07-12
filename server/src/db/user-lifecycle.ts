@@ -1,12 +1,12 @@
 import type {
   Prisma,
-  RedeemCodeType,
   UserLifecycleActionType,
   UserLifecycleEventType,
   UserLifecycleTagKey
 } from '@prisma/client'
 import { prisma } from './prisma.js'
 import { createRedeemCode } from './redeem-codes.js'
+import type { ResourceRedeemCodeType } from './redeem-codes.js'
 import { createLog } from './logs.js'
 import { createInboxMessage } from './inbox.js'
 
@@ -592,7 +592,7 @@ export async function removeLifecycleTag(userId: number, tagKey: UserLifecycleTa
 export async function issueLifecycleRedeemCode(data: {
   userId: number
   hostId: number
-  codeType: RedeemCodeType
+  codeType: ResourceRedeemCodeType
   codeValue: number
   expiresInDays: number
   remark?: string

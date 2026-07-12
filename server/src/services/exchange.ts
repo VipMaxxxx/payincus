@@ -16,9 +16,9 @@ const exchangeWithdrawalNo = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXY
 const maxMoney = 99999999.99
 const maxDescriptionLength = 500
 const listingVisibleStatuses: ExchangeListingStatus[] = ['active']
-const listingBlockingStatuses: ExchangeListingStatus[] = ['active', 'paused', 'locked', 'delivery_failed']
-const orderBlockingStatuses: ExchangeOrderStatus[] = ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed']
-const activeDisputeStatuses: ExchangeDisputeStatus[] = ['open', 'processing', 'redelivering']
+const listingBlockingStatuses: ExchangeListingStatus[] = ['active', 'locked', 'delivery_failed']
+const orderBlockingStatuses: ExchangeOrderStatus[] = ['delivering', 'confirming', 'disputed', 'manual_review', 'failed']
+const activeDisputeStatuses: ExchangeDisputeStatus[] = ['open', 'processing']
 const exchangeRiskWindowDays = 7
 const maxRecentBuyerCancellations = 3
 const maxRecentDisputes = 3
@@ -1204,7 +1204,7 @@ export async function delistExchangeListing(userId: number, listingId: number) {
     where: {
       id: listingId,
       sellerUserId: userId,
-      status: { in: ['active', 'paused'] }
+      status: 'active'
     },
     data: {
       status: 'delisted',
@@ -1614,6 +1614,7 @@ export async function releaseExchangeOrderEscrow(
       resolution: string
       releaseRemark?: string
     }
+    expectedBuyerUserId?: number
   } = {}
 ) {
   const allowedStatuses = options.allowedStatuses || ['confirming']
@@ -1621,6 +1622,9 @@ export async function releaseExchangeOrderEscrow(
     const order = await tx.exchangeOrder.findUnique({ where: { id: orderId } })
     if (!order) {
       throw new ExchangeError('EXCHANGE_ORDER_NOT_FOUND', '交易订单不存在', 404)
+    }
+    if (options.expectedBuyerUserId !== undefined && order.buyerUserId !== options.expectedBuyerUserId) {
+      throw new ExchangeError('EXCHANGE_ORDER_NOT_FOUND', '交易订单不存在或无权确认', 404)
     }
     if (order.status === 'completed' && order.walletLogId) {
       if (options.resolveDispute) {
@@ -2027,7 +2031,7 @@ export async function createExchangeWithdrawal(input: WithdrawalInput) {
     const unsettledSales = await tx.exchangeOrder.count({
       where: {
         sellerUserId: input.userId,
-        status: { in: ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review'] }
+        status: { in: ['delivering', 'confirming', 'disputed', 'manual_review'] }
       }
     })
     if (unsettledSales > 0) {
@@ -2223,7 +2227,7 @@ export async function createExchangeDispute(userId: number, orderId: number, rea
     if (!order || (order.buyerUserId !== userId && order.sellerUserId !== userId)) {
       throw new ExchangeError('EXCHANGE_ORDER_NOT_FOUND', '交易订单不存在', 404)
     }
-    if (!['delivered', 'confirming', 'disputed', 'manual_review'].includes(order.status)) {
+    if (!['confirming', 'disputed', 'manual_review'].includes(order.status)) {
       throw new ExchangeError('EXCHANGE_DISPUTE_NOT_ALLOWED', '当前交易状态不能发起争议')
     }
     const activeDispute = await tx.exchangeDispute.findFirst({
@@ -2243,7 +2247,7 @@ export async function createExchangeDispute(userId: number, orderId: number, rea
       }
     })
     const disputed = await tx.exchangeOrder.updateMany({
-      where: { id: orderId, status: { in: ['delivered', 'confirming', 'disputed', 'manual_review'] } },
+      where: { id: orderId, status: { in: ['confirming', 'disputed', 'manual_review'] } },
       data: { status: 'disputed' }
     })
     if (disputed.count !== 1) {

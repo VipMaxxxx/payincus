@@ -31,7 +31,7 @@ watchEffect(() => {
   const pageTitle = translatedTitle && translatedTitle !== titleKey ? translatedTitle : fallbackTitle
 
   const brandName = configStore.brandName?.trim() || 'Incudal'
-  document.title = pageTitle ? `${brandName} - ${pageTitle}` : `${brandName} - 管理后台`
+  document.title = pageTitle ? `${brandName} - ${pageTitle}` : `${brandName} - ${t('common.adminPanel')}`
 })
 
 let sessionCheckTimer: number | null = null

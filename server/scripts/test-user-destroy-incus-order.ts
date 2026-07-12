@@ -69,5 +69,22 @@ assert.ok(
   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
   'destroy refund should not use non-blocking balance lock'
 )
+assert.ok(
+  billingSection.includes(`await db.deductHostingBalance(
+        instance.hostId,
+        refundableValue,`),
+  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
+)
+assert.ok(
+  !billingSection.includes(`await db.deductHostingBalance(
+        instance.hostId,
+        refundAmount,`),
+  'host owner clawback must not use the post-fee buyer refund amount'
+)
+assert.ok(
+  billingSection.includes('await reverseInstanceAffCommissionForRefund({') &&
+    billingSection.includes('refundAmount,'),
+  'user destroy must proportionally reverse AFF commission using the actual buyer refund'
+)
 
 console.log('user destroy Incus order tests passed')

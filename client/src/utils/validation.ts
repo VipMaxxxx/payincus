@@ -309,11 +309,19 @@ export function isValidRedirectUrl(url: string | undefined | null): boolean {
         return false
     }
 
-    if (trimmed.startsWith('//')) {
+    if (trimmed[1] === '/' || trimmed[1] === '\\') {
+        return false
+    }
+
+    if (trimmed.includes('\\')) {
         return false
     }
 
     const lowerUrl = trimmed.toLowerCase()
+    if (lowerUrl.includes('%5c') || lowerUrl.startsWith('/%2f') || lowerUrl.startsWith('/%5c')) {
+        return false
+    }
+
     if (lowerUrl.includes('javascript:') || lowerUrl.includes('data:') || lowerUrl.includes('vbscript:')) {
         return false
     }

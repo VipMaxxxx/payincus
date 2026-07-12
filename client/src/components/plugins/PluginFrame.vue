@@ -39,7 +39,7 @@ function postPluginConfig(pluginId: string, config: Record<string, unknown>): vo
     pluginId,
     config,
     updatedAt: new Date().toISOString()
-  }, window.location.origin)
+  }, '*')
 }
 
 async function refreshPluginConfig(): Promise<void> {
@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
     :src="frameUrl"
     :title="title"
-    sandbox="allow-forms allow-scripts allow-same-origin"
+    sandbox="allow-forms allow-scripts"
     referrerpolicy="same-origin"
     @load="refreshPluginConfig"
   />

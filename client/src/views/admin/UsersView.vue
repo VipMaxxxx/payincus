@@ -844,7 +844,9 @@ async function submitAdjustHostingBalance() {
     // 切换到概览TAB
     hostingBalanceTab.value = 'overview'
   } catch (err) {
-    toast.error(t('admin.users.hostingBalanceAdjustFailed') + ': ' + err.message)
+    const errorCode = err?.code
+    const errorMessage = errorCode ? t(`errors.${errorCode}`) : err.message
+    toast.error(t('admin.users.hostingBalanceAdjustFailed') + ': ' + errorMessage)
   } finally {
     adjustHostingBalanceLoading.value = false
   }

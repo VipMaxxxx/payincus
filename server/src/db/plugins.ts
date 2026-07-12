@@ -200,7 +200,7 @@ export function serializePlugin(plugin: PluginWithRelations): SerializedPlugin {
     pluginId: plugin.pluginId,
     name: plugin.name,
     status: plugin.status,
-    enabled: plugin.enabled,
+    enabled: isPluginEnabled(plugin),
     currentVersion: plugin.currentVersion,
     sourceType: plugin.sourceType,
     sourceRepo: plugin.sourceRepo,
@@ -217,6 +217,10 @@ export function serializePlugin(plugin: PluginWithRelations): SerializedPlugin {
   return serialized
 }
 
+export function isPluginEnabled(plugin: Pick<Plugin, 'enabled' | 'status'>): boolean {
+  return plugin.enabled && plugin.status === 'enabled'
+}
+
 function jsonStringArray(value: Prisma.JsonValue | null): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string')
@@ -228,7 +232,7 @@ export function serializePluginCapabilityReview(review: PluginCapabilityReviewWi
     pluginId: review.pluginId,
     pluginName: review.plugin?.name ?? null,
     pluginStatus: review.plugin?.status ?? null,
-    pluginEnabled: review.plugin?.enabled ?? null,
+    pluginEnabled: review.plugin ? isPluginEnabled(review.plugin) : null,
     pluginCurrentVersion: review.plugin?.currentVersion ?? null,
     manifestVersion: review.manifestVersion,
     capabilityKey: review.capabilityKey,
@@ -487,6 +491,24 @@ export async function assertPluginCapabilitiesApprovedForEnable(pluginId: string
   return { ok: false, reviews: blocking.map(serializePluginCapabilityReview) }
 }
 
+export async function assertPluginCapabilitiesApprovedForListing(input: {
+  pluginId: string
+  manifestVersion: string
+  riskLevel: PluginCapabilityRiskLevel
+}): Promise<{ ok: boolean }> {
+  if (input.riskLevel !== 'high' && input.riskLevel !== 'critical') return { ok: true }
+
+  const reviews = await prisma.pluginCapabilityReview.findMany({
+    where: {
+      pluginId: input.pluginId,
+      manifestVersion: input.manifestVersion,
+      riskLevel: { in: ['high', 'critical'] }
+    },
+    select: { status: true }
+  })
+  return { ok: reviews.length > 0 && reviews.every(review => review.status === 'approved') }
+}
+
 export function serializePluginTask(task: PluginInstallTask & { startedBy?: { username: string } | null }): SerializedPluginTask {
   return {
     id: task.id,
@@ -647,6 +669,9 @@ export async function installValidatedPlugin(input: {
     update: {
       name: input.manifest.name,
       status: 'installed',
+      enabled: false,
+      enabledByUserId: null,
+      enabledAt: null,
       currentVersion: input.manifest.version,
       sourceType: input.sourceType,
       sourceRepo: input.sourceRepo || null

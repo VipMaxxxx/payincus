@@ -23,7 +23,7 @@ const MAX_PACKAGE_PLAN_NAME_LENGTH = 50
 const PUBLIC_PACKAGE_MAX_INSTANCES_MIN = 1
 const PUBLIC_PACKAGE_MAX_INSTANCES_MAX = 5
 const MAX_PACKAGE_PLAN_PRICE_CENTS = 99999999
-const MAX_TRAFFIC_RESET_PRICE_CENTS = MAX_PACKAGE_PLAN_PRICE_CENTS
+const MAX_TRAFFIC_RESET_PRICE_YUAN = 999999.99
 const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
 const POSTGRES_INT_MAX = 2147483647
 const MAX_PACKAGE_PLAN_BILLING_CYCLE_MONTHS = 120
@@ -278,7 +278,7 @@ function optionalPlanBoolean(input: Record<string, unknown>, key: string, field:
   return value
 }
 
-function optionalMoneyCents(
+function optionalMoneyYuan(
   input: Record<string, unknown>,
   key: string,
   field: string,
@@ -288,13 +288,17 @@ function optionalMoneyCents(
   const value = input[key]
   if (value === undefined) return undefined
   if (value === null && options.nullable) return null
-  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
-    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须为整数分`)
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须为数字`)
   }
   if (value < 0 || value > max) {
-    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须在 0-${max} 分之间`)
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 必须在 0-${max} 元之间`)
   }
-  return value
+  const rounded = Math.round(value * 100) / 100
+  if (Math.abs(value - rounded) >= 1e-8) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 最多支持两位小数`)
+  }
+  return rounded
 }
 
 function normalizePackagePlanDescription(value: unknown): string | undefined {
@@ -366,7 +370,7 @@ function normalizePackagePlanInput(input: unknown, options: {
     ? 0
     : optionalPlanInteger(input, 'swapSize', 'SWAP', 0, 1048576)
   normalized.price = optionalPlanInteger(input, 'price', '价格', 0, MAX_PACKAGE_PLAN_PRICE_CENTS)
-  normalized.trafficResetPrice = optionalMoneyCents(input, 'trafficResetPrice', '流量重置价格', MAX_TRAFFIC_RESET_PRICE_CENTS, { nullable: true })
+  normalized.trafficResetPrice = optionalMoneyYuan(input, 'trafficResetPrice', '流量重置价格', MAX_TRAFFIC_RESET_PRICE_YUAN, { nullable: true })
   normalized.billingCycle = optionalPlanInteger(input, 'billingCycle', '计费周期', 1, MAX_PACKAGE_PLAN_BILLING_CYCLE_MONTHS)
   normalized.sortOrder = optionalPlanInteger(input, 'sortOrder', '排序值', -MAX_PACKAGE_PLAN_SORT_ORDER, MAX_PACKAGE_PLAN_SORT_ORDER)
   normalized.isActive = optionalPlanBoolean(input, 'isActive', 'isActive')
@@ -600,7 +604,7 @@ function normalizePackageInput(input: unknown, options: { requireAll: boolean })
   normalized.nested = optionalPackageBoolean(input, 'nested', 'nested')
   normalized.active = optionalPackageBoolean(input, 'active', 'active')
   normalized.monthlyTrafficLimit = optionalPackageNullableString(input, 'monthlyTrafficLimit', '月流量限制', 64)
-  normalized.trafficResetPrice = optionalMoneyCents(input, 'trafficResetPrice', '流量重置价格', MAX_TRAFFIC_RESET_PRICE_CENTS) as number | undefined
+  normalized.trafficResetPrice = optionalMoneyYuan(input, 'trafficResetPrice', '流量重置价格', MAX_TRAFFIC_RESET_PRICE_YUAN) as number | undefined
   normalized.portLimit = optionalPackageInteger(input, 'portLimit', '端口映射数', 1, POSTGRES_INT_MAX)
   normalized.snapshotLimit = optionalPackageInteger(input, 'snapshotLimit', '快照数', 0, POSTGRES_INT_MAX)
   normalized.backupLimit = optionalPackageInteger(input, 'backupLimit', '备份数', 0, POSTGRES_INT_MAX)
@@ -1675,7 +1679,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
           nested: { type: 'boolean' },
           active: { type: 'boolean' },
           monthlyTrafficLimit: { type: 'string' },
-          trafficResetPrice: { type: 'integer', minimum: 0, maximum: MAX_TRAFFIC_RESET_PRICE_CENTS },
+          trafficResetPrice: { type: 'number', minimum: 0, maximum: MAX_TRAFFIC_RESET_PRICE_YUAN },
           portLimit: { type: 'integer', minimum: 1 },
           snapshotLimit: { type: 'integer', minimum: 0 },
           backupLimit: { type: 'integer', minimum: 0 },
@@ -1867,7 +1871,7 @@ export default async function packageRoutes(fastify: FastifyInstance) {
           nested: { type: 'boolean' },
           active: { type: 'boolean' },
           monthlyTrafficLimit: { type: ['string', 'null'] },
-          trafficResetPrice: { type: 'integer', minimum: 0, maximum: MAX_TRAFFIC_RESET_PRICE_CENTS },
+          trafficResetPrice: { type: 'number', minimum: 0, maximum: MAX_TRAFFIC_RESET_PRICE_YUAN },
           portLimit: { type: 'integer', minimum: 1 },
           snapshotLimit: { type: 'integer', minimum: 0 },
           backupLimit: { type: 'integer', minimum: 0 },

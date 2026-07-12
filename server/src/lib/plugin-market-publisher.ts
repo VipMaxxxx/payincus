@@ -1,9 +1,18 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { copyFile, mkdir, readFile, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import { createHash } from 'crypto'
 import { prisma } from '../db/prisma.js'
-import type { PluginMarketEntry, PluginMarketIndex } from './plugin-market.js'
+import { assertPluginCapabilitiesApprovedForListing } from '../db/plugins.js'
+import { isPluginDeveloperVerifiedByAdmin } from '../db/plugin-market-submissions.js'
+import {
+  normalizePluginMarketCompatibility,
+  normalizePluginMarketPricing,
+  type PluginMarketEntry,
+  type PluginMarketIndex
+} from './plugin-market.js'
 import { getRuntimeConfigString } from './runtime-settings.js'
+import { getPluginDataDir, resolveInside } from './plugin-package.js'
+import { parsePluginManifest, type PayIncusPluginManifest } from './plugin-manifest.js'
 
 export interface PluginMarketPublishResult {
   indexPath: string
@@ -36,26 +45,11 @@ function normalizePermissions(value: unknown): PluginMarketEntry['permissions'] 
   }
 }
 
-function normalizeCompatibility(value: unknown): PluginMarketEntry['compatibility'] {
-  const record = isRecord(value) ? value : {}
-  return {
-    minPayincus: pickString(record.minPayincus) || undefined,
-    maxPayincus: pickString(record.maxPayincus) || undefined
-  }
-}
-
-function normalizePricing(value: unknown): PluginMarketEntry['pricing'] {
-  const record = isRecord(value) ? value : {}
-  const type = record.type === 'paid' ? 'paid' : 'free'
-  return {
-    type,
-    price: pickString(record.price) || undefined,
-    currency: pickString(record.currency) || undefined,
-    revenueSharePercent: typeof record.revenueSharePercent === 'number'
-      ? Math.min(Math.max(record.revenueSharePercent, 0), 100)
-      : record.revenueSharePercent === null
-        ? null
-        : undefined
+function isFreeSubmissionPricing(value: unknown): boolean {
+  try {
+    return normalizePluginMarketPricing(value).type === 'free'
+  } catch {
+    return false
   }
 }
 
@@ -86,35 +80,95 @@ async function getPluginMarketPublicBaseUrl(): Promise<string> {
   )).replace(/\/+$/, '')
 }
 
-function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.pluginMarketSubmission.findMany>>[number], publicBaseUrl: string): PluginMarketEntry {
-  const manifestUrl = submission.manifestUrl || `${publicBaseUrl}/manifests/${submission.pluginId}/${submission.version}.json`
+interface PublishedSubmissionArtifacts {
+  manifest: PayIncusPluginManifest
+  manifestUrl: string
+  packageUrl: string
+}
+
+function managedUploadFilename(input: string, extension: '.tar.gz' | '.plugin.json'): string {
+  const url = new URL(input)
+  const prefix = '/api/plugin-market-submissions/uploads/plugins/'
+  if (!url.pathname.startsWith(prefix)) throw new Error('Listed submission artifacts must use managed review uploads')
+  const filename = decodeURIComponent(url.pathname.slice(prefix.length))
+  if (!filename || filename.includes('/') || filename.includes('\\') || !filename.endsWith(extension)) {
+    throw new Error('Listed submission artifact URL is invalid')
+  }
+  return filename
+}
+
+async function persistSubmissionArtifacts(
+  submission: Awaited<ReturnType<typeof prisma.pluginMarketSubmission.findMany>>[number],
+  publishDir: string,
+  publicBaseUrl: string
+): Promise<PublishedSubmissionArtifacts> {
+  const uploadDir = join(getPluginDataDir(), 'submission-uploads', 'plugins')
+  const sourcePackagePath = resolveInside(uploadDir, managedUploadFilename(submission.packageUrl, '.tar.gz'))
+  const sourceManifestPath = resolveInside(uploadDir, managedUploadFilename(submission.manifestUrl, '.plugin.json'))
+  const manifest = parsePluginManifest(JSON.parse(await readFile(sourceManifestPath, 'utf8')))
+  if (manifest.id !== submission.pluginId || manifest.version !== submission.version) {
+    throw new Error(`Reviewed manifest identity does not match ${submission.pluginId}@${submission.version}`)
+  }
+
+  const submittedCompatibility = normalizePluginMarketCompatibility(submission.compatibility)
+  if (submittedCompatibility.payincus !== manifest.payincus) {
+    throw new Error('Reviewed submission compatibility differs from manifest.payincus')
+  }
+  normalizePluginMarketPricing(submission.pricing)
+
+  const packageBuffer = await readFile(sourcePackagePath)
+  const packageSha256 = createHash('sha256').update(packageBuffer).digest('hex')
+  if (packageSha256 !== submission.sha256.toLowerCase()) {
+    throw new Error(`Reviewed package SHA256 mismatch for ${submission.pluginId}@${submission.version}`)
+  }
+
+  const packageRelativePath = join('packages', submission.pluginId, `${submission.version}.tar.gz`)
+  const manifestRelativePath = join('manifests', submission.pluginId, `${submission.version}.json`)
+  const packagePath = join(publishDir, packageRelativePath)
+  const manifestPath = join(publishDir, manifestRelativePath)
+  await Promise.all([mkdir(dirname(packagePath), { recursive: true }), mkdir(dirname(manifestPath), { recursive: true })])
+  await copyFile(sourcePackagePath, packagePath)
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', mode: 0o644 })
+
+  return {
+    manifest,
+    packageUrl: `${publicBaseUrl}/packages/${submission.pluginId}/${submission.version}.tar.gz`,
+    manifestUrl: `${publicBaseUrl}/manifests/${submission.pluginId}/${submission.version}.json`
+  }
+}
+
+function submissionToMarketEntry(
+  submission: Awaited<ReturnType<typeof prisma.pluginMarketSubmission.findMany>>[number],
+  artifacts: PublishedSubmissionArtifacts
+): PluginMarketEntry {
+  const developerVerified = isPluginDeveloperVerifiedByAdmin(submission.scanResult)
   return {
     id: submission.pluginId,
     name: submission.name,
     latest: submission.version,
     repo: submission.repoUrl,
-    manifestUrl,
-    downloadUrl: submission.packageUrl,
+    manifestUrl: artifacts.manifestUrl,
+    downloadUrl: artifacts.packageUrl,
     sha256: submission.sha256,
     description: submission.notes || undefined,
     author: submission.developerName,
     reviewStatus: 'listed',
-    trustLevel: submission.developerGithub ? 'verified' : 'third_party',
+    trustLevel: developerVerified ? 'verified' : 'third_party',
     developer: {
       name: submission.developerName,
       homepage: submission.developerHomepage || undefined,
       github: submission.developerGithub || undefined,
-      verified: Boolean(submission.developerGithub),
+      verified: developerVerified,
       contact: submission.contactEmail
     },
     permissions: normalizePermissions(submission.permissions),
-    compatibility: normalizeCompatibility(submission.compatibility),
+    compatibility: normalizePluginMarketCompatibility({ payincus: artifacts.manifest.payincus }),
     security: {
       checksumPinned: true,
       signature: { status: 'unsigned' },
       notes: getScanNotes(submission.scanResult, submission.riskLevel)
     },
-    pricing: normalizePricing(submission.pricing),
+    pricing: normalizePluginMarketPricing(submission.pricing),
     rating: { average: 0, count: 0 },
     installCount: 0,
     releaseNotes: submission.notes || undefined,
@@ -123,41 +177,93 @@ function submissionToMarketEntry(submission: Awaited<ReturnType<typeof prisma.pl
   }
 }
 
-async function readExistingMarketEntries(indexPath: string): Promise<PluginMarketEntry[]> {
-  try {
-    const payload = JSON.parse(await readFile(indexPath, 'utf8')) as unknown
-    if (!isRecord(payload) || !Array.isArray(payload.plugins)) return []
-    return payload.plugins.filter((entry): entry is PluginMarketEntry => isRecord(entry) && typeof entry.id === 'string')
-  } catch {
-    return []
+interface ParsedSemVer {
+  major: bigint
+  minor: bigint
+  patch: bigint
+  prerelease: string[]
+}
+
+function parseSemVer(version: string): ParsedSemVer | null {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(version)
+  if (!match) return null
+  const prerelease = match[4]?.split('.') ?? []
+  if (prerelease.some(identifier => /^\d+$/.test(identifier) && identifier.length > 1 && identifier.startsWith('0'))) {
+    return null
   }
+  return {
+    major: BigInt(match[1]),
+    minor: BigInt(match[2]),
+    patch: BigInt(match[3]),
+    prerelease
+  }
+}
+
+function compareSemVer(left: ParsedSemVer, right: ParsedSemVer): number {
+  for (const key of ['major', 'minor', 'patch'] as const) {
+    if (left[key] !== right[key]) return left[key] > right[key] ? 1 : -1
+  }
+  if (left.prerelease.length === 0 || right.prerelease.length === 0) {
+    return left.prerelease.length === right.prerelease.length ? 0 : left.prerelease.length === 0 ? 1 : -1
+  }
+  const length = Math.max(left.prerelease.length, right.prerelease.length)
+  for (let index = 0; index < length; index += 1) {
+    const leftIdentifier = left.prerelease[index]
+    const rightIdentifier = right.prerelease[index]
+    if (leftIdentifier === undefined || rightIdentifier === undefined) {
+      return leftIdentifier === rightIdentifier ? 0 : leftIdentifier === undefined ? -1 : 1
+    }
+    if (leftIdentifier === rightIdentifier) continue
+    const leftNumeric = /^\d+$/.test(leftIdentifier)
+    const rightNumeric = /^\d+$/.test(rightIdentifier)
+    if (leftNumeric && rightNumeric) return BigInt(leftIdentifier) > BigInt(rightIdentifier) ? 1 : -1
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1
+    return leftIdentifier > rightIdentifier ? 1 : -1
+  }
+  return 0
 }
 
 export async function publishPluginMarketIndex(): Promise<PluginMarketPublishResult> {
   const publishDir = getPluginMarketPublishDir()
   const indexPath = join(publishDir, 'index.json')
-  const [existingEntries, listedSubmissions, publicBaseUrl] = await Promise.all([
-    readExistingMarketEntries(indexPath),
+  const [listedSubmissions, publicBaseUrl] = await Promise.all([
     prisma.pluginMarketSubmission.findMany({
       where: {
         reviewStatus: 'listed',
         scanStatus: { in: ['passed', 'warning'] }
       },
-      orderBy: [{ pluginId: 'asc' }, { version: 'desc' }]
+      orderBy: [{ pluginId: 'asc' }, { version: 'asc' }]
     }),
     getPluginMarketPublicBaseUrl()
   ])
 
-  const entriesById = new Map<string, PluginMarketEntry>()
-  for (const entry of existingEntries) {
-    entriesById.set(entry.id, entry)
+  const freeListedSubmissions = listedSubmissions.filter(submission => isFreeSubmissionPricing(submission.pricing))
+  const approvedListedSubmissions = []
+  for (const submission of freeListedSubmissions) {
+    const capabilityApproval = await assertPluginCapabilitiesApprovedForListing({
+      pluginId: submission.pluginId,
+      manifestVersion: submission.version,
+      riskLevel: submission.riskLevel as 'low' | 'medium' | 'high' | 'critical'
+    })
+    if (capabilityApproval.ok) approvedListedSubmissions.push(submission)
   }
-  for (const submission of listedSubmissions) {
-    entriesById.set(submission.pluginId, submissionToMarketEntry(submission, publicBaseUrl))
+  const highestSubmissionById = new Map<string, { submission: typeof approvedListedSubmissions[number]; version: ParsedSemVer }>()
+  for (const submission of approvedListedSubmissions) {
+    const version = parseSemVer(submission.version)
+    if (!version) continue
+    const current = highestSubmissionById.get(submission.pluginId)
+    if (!current || compareSemVer(version, current.version) > 0) {
+      highestSubmissionById.set(submission.pluginId, { submission, version })
+    }
   }
 
   const updatedAt = new Date().toISOString()
-  const plugins = Array.from(entriesById.values()).sort((left, right) => left.id.localeCompare(right.id))
+  const plugins: PluginMarketEntry[] = []
+  for (const { submission } of highestSubmissionById.values()) {
+    const artifacts = await persistSubmissionArtifacts(submission, publishDir, publicBaseUrl)
+    plugins.push(submissionToMarketEntry(submission, artifacts))
+  }
+  plugins.sort((left, right) => left.id.localeCompare(right.id))
   const fingerprint = createHash('sha256').update(JSON.stringify(plugins.map(entry => ({
     id: entry.id,
     latest: entry.latest,
@@ -173,8 +279,8 @@ export async function publishPluginMarketIndex(): Promise<PluginMarketPublishRes
     updatedAt,
     plugins,
     governance: {
-      totalEntries: entriesById.size,
-      visibleEntries: entriesById.size,
+      totalEntries: plugins.length,
+      visibleEntries: plugins.length,
       hiddenEntries: 0,
       indexHost: null,
       fingerprint,
@@ -187,7 +293,7 @@ export async function publishPluginMarketIndex(): Promise<PluginMarketPublishRes
   await writeFile(indexPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8')
   return {
     indexPath,
-    publishedEntries: listedSubmissions.length,
+    publishedEntries: plugins.length,
     totalEntries: index.plugins.length,
     updatedAt
   }

@@ -118,6 +118,15 @@
       "max": 1,
       "step": 0.01
     },
+    "sensitiveHandoffRules": {
+      "type": "tags",
+      "label": "敏感问题转人工规则",
+      "group": "安全策略",
+      "order": 95,
+      "required": false,
+      "default": ["refund", "payment_dispute", "account_security", "risk_control", "data_recovery", "resource_delivery_exception", "delete_or_reinstall_instance", "credential_or_backend_request"],
+      "placeholder": "refund,payment_dispute,account_security"
+    },
     "dailyAutoReplyLimit": {
       "type": "number",
       "label": "每日自动回复上限",

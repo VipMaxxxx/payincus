@@ -18,6 +18,7 @@ import { getCombinedAdminIdAllowlist } from '../lib/runtime-settings.js'
 
 const REVIEW_STATUSES: ThemeMarketSubmissionReviewStatus[] = ['pending', 'listed', 'rejected', 'delisted']
 const RISK_LEVELS: ThemeMarketSubmissionRiskLevel[] = ['low', 'medium', 'high', 'critical']
+const PAID_MARKET_LISTING_NOT_AVAILABLE = '付费上架暂未开放(交易闭环未上线)'
 const THEME_ID_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9-]*){2,}$/
 const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i
@@ -38,6 +39,7 @@ interface SubmissionBody {
   compatibility?: unknown
   tokens?: unknown
   layoutSlots?: unknown
+  pricing?: unknown
   notes?: unknown
 }
 
@@ -126,6 +128,13 @@ function normalizeJsonRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function isFreePricing(value: unknown): boolean {
+  if (value === undefined || value === null) return true
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const pricing = value as Record<string, unknown>
+  return pricing.type === undefined || pricing.type === 'free'
+}
+
 function normalizeStringArray(value: unknown, maxItems = 80, maxLength = 120): string[] {
   if (!Array.isArray(value)) return []
   return Array.from(new Set(
@@ -137,6 +146,7 @@ function normalizeStringArray(value: unknown, maxItems = 80, maxLength = 120): s
 }
 
 function normalizeSubmissionBody(body: SubmissionBody) {
+  if (!isFreePricing(body.pricing)) throw new Error(PAID_MARKET_LISTING_NOT_AVAILABLE)
   const themeId = normalizeText(body.themeId, 120)
   const version = normalizeText(body.version, 64)
   const name = normalizeText(body.name, 120)

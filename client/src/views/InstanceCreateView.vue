@@ -124,6 +124,7 @@ const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 const turnstileSectionRef = ref<HTMLElement | null>(null)
 const isCreateTurnstileRequired = computed(() => configStore.turnstileEnabled && Boolean(configStore.turnstileSiteKey))
 const createTurnstileSiteKey = computed(() => configStore.turnstileSiteKey || '')
+const createIntentIdempotencyKey = ref<string | null>(null)
 
 // 表单数据
 interface InstanceForm {
@@ -153,6 +154,12 @@ const form = ref<InstanceForm>({
   customInitCommandIds: [],
   promoCode: ''
 })
+
+watch(form, () => {
+  if (!submitting.value) {
+    createIntentIdempotencyKey.value = null
+  }
+}, { deep: true })
 
 // 优惠码验证状态
 const promoCodeVerifying = ref(false)
@@ -1085,6 +1092,9 @@ async function handleSubmit(): Promise<void> {
     const flashSaleId = flashSaleItemId.value
     const verificationToken = await getCreateTurnstileToken()
     if (verificationToken === null) return
+    if (!flashSaleId && isPaidPackage.value && !createIntentIdempotencyKey.value) {
+      createIntentIdempotencyKey.value = crypto.randomUUID?.() || `instance-create-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }
     const requestPayload: CreateInstanceRequest = {
       name: form.value.name.trim(),
       packageId: form.value.packageId,
@@ -1100,11 +1110,12 @@ async function handleSubmit(): Promise<void> {
       flashSaleItemId: flashSaleId || undefined,
       idempotencyKey: flashSaleId
         ? (crypto.randomUUID?.() || `flash-sale-${flashSaleId}-${Date.now()}`)
-        : undefined,
+        : (isPaidPackage.value ? createIntentIdempotencyKey.value || undefined : undefined),
       turnstileToken: verificationToken
     }
 
     const response = await api.instances.create(requestPayload)
+    createIntentIdempotencyKey.value = null
     
     toast.success(t('instance.createPage.createSuccess'))
     resetCreateTurnstile()

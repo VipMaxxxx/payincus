@@ -35,6 +35,21 @@ assert.ok(
     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
   'approval must atomically claim pending request, mutate balance, and bind balance log'
 )
+const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
+assert.notEqual(approvalStart, -1, 'missing approval execution db function')
+const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
+assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
+const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
+assert.ok(
+  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
+    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
+    approvalSection.includes(": 'admin_adjust'") &&
+    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
+    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
+    approvalSection.includes('type: logType') &&
+    approvalSection.includes('amount: balanceChangeAmount'),
+  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
+)
 assert.ok(
   balanceDb.includes("status: 'rejected'") &&
     balanceDb.includes("where: { id: requestId, status: 'pending' }"),

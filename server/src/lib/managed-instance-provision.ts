@@ -1,8 +1,10 @@
 import { prisma } from '../db/prisma.js'
 import * as db from '../db/index.js'
 import { buildInstanceConfig, createInstance, deleteInstance, getIncusClient, getInstanceState, startInstance, stopInstance } from '../lib/incus/index.js'
+import { emitServicePluginEvent } from './plugin-business-events.js'
 import type { Host } from '../types/database.js'
 import { networkModeAllowsPortMapping, networkModeNeedsPublicIpv4 } from './network-modes.js'
+import { markFlashSaleDelivered } from '../services/flash-sales.js'
 
 export interface ManagedInstanceProvisionConfig {
   name: string
@@ -155,6 +157,122 @@ export async function provisionManagedInstanceAsync(
         console.error(`[Managed Provisioning] failed to clean finalized instance ${config.name}:`, cleanupError)
       }
       return
+    }
+
+    await markFlashSaleDelivered(instanceId).catch((error) => {
+      console.error(`[Managed Provisioning] failed to mark flash sale delivered for instance ${instanceId}:`, error)
+    })
+
+    if (ipv4) {
+      try {
+        await db.createIpAddress({
+          address: ipv4,
+          type: 'inet4',
+          isPrimary: true,
+          device: 'eth0',
+          instanceId
+        })
+      } catch (error) {
+        console.warn(`[Managed Provisioning] failed to create IPv4 record for instance ${instanceId}:`, error)
+      }
+    }
+
+    if (ipv6) {
+      try {
+        await db.createIpAddress({
+          address: ipv6,
+          type: 'inet6',
+          isPrimary: true,
+          device: 'eth1',
+          instanceId
+        })
+      } catch (error) {
+        console.warn(`[Managed Provisioning] failed to create IPv6 record for instance ${instanceId}:`, error)
+      }
+    }
+
+    const instance = await db.getInstanceById(instanceId).catch((error) => {
+      console.warn(`[Managed Provisioning] failed to load notification context for instance ${instanceId}:`, error)
+      return null
+    })
+    if (instance) {
+      try {
+        const { sendNotification } = await import('./notifier.js')
+        await sendNotification(instance.user_id, 'instance_created', {
+          instanceName: instance.name,
+          status: 'running',
+          hostName: host.name,
+          hostLocation: host.location || undefined,
+          image: config.image,
+          cpu: config.cpu,
+          memory: config.memory,
+          disk: config.disk,
+          networkMode: config.networkMode,
+          ipv4: ipv4 || undefined,
+          ipv6: ipv6 || undefined
+        })
+      } catch (error) {
+        console.warn(`[Managed Provisioning] failed to notify user for instance ${instanceId}:`, error)
+      }
+
+      try {
+        emitServicePluginEvent({
+          event: 'service.provisioned',
+          instanceId,
+          userId: instance.user_id,
+          hostId: host.id,
+          instanceName: instance.name,
+          status: 'running',
+          incusId: config.name,
+          source: 'instance.provisioning',
+          metadata: {
+            image: config.image,
+            cpu: config.cpu,
+            memory: config.memory,
+            disk: config.disk,
+            networkMode: config.networkMode,
+            ipv4: ipv4 || null,
+            ipv6: ipv6 || null
+          }
+        })
+      } catch (error) {
+        console.warn(`[Managed Provisioning] failed to emit provisioned event for instance ${instanceId}:`, error)
+      }
+
+      try {
+        const { sendInstanceCreatedEmail } = await import('./mailer.js')
+        const user = await db.findUserById(instance.user_id)
+        if (user?.email) {
+          const instanceWithBilling = await prisma.instance.findUnique({
+            where: { id: instanceId },
+            select: {
+              packagePlanId: true,
+              billingPrice: true,
+              expiresAt: true,
+              packagePlan: { select: { name: true } }
+            }
+          })
+          const isPaid = instanceWithBilling?.packagePlanId !== null
+
+          await sendInstanceCreatedEmail(user.email, {
+            username: user.username,
+            instanceName: instance.name,
+            hostName: host.name,
+            image: config.image,
+            cpu: config.cpu,
+            memory: config.memory,
+            disk: config.disk,
+            ipv4: ipv4 || undefined,
+            ipv6: ipv6 || undefined,
+            isPaid,
+            planName: instanceWithBilling?.packagePlan?.name,
+            amount: isPaid ? Number(instanceWithBilling?.billingPrice) : undefined,
+            expiresAt: instanceWithBilling?.expiresAt ?? undefined
+          })
+        }
+      } catch (error) {
+        console.warn(`[Managed Provisioning] failed to email user for instance ${instanceId}:`, error)
+      }
     }
   } catch (error) {
     console.error(`[Managed Provisioning] instance ${instanceId} failed:`, error)

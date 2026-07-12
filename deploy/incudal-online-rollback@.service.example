@@ -8,16 +8,11 @@ Requires=postgresql.service redis-server.service
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=/opt/incudal/current
+WorkingDirectory=/opt/incudal
 EnvironmentFile=/opt/incudal/.env
-Environment=HOME=/opt/incudal
+Environment=HOME=/var/cache/incudal-ota
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=NPM_CONFIG_CACHE=/opt/incudal/.npm
-Environment=XDG_CACHE_HOME=/opt/incudal/.cache
-Environment=INCUDAL_APP_DIR=/opt/incudal/current
-Environment=INSTALL_DIR=/opt/incudal
-Environment=SERVICE_NAME=incudal-backend
-ExecStart=/usr/bin/node /opt/incudal/current/server/dist/scripts/rollback-system-update-task.js %i
+ExecStart=/usr/local/libexec/incudal/incudal-online-task rollback %i
 TimeoutStartSec=900
 StandardOutput=journal
 StandardError=journal

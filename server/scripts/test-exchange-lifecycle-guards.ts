@@ -77,6 +77,11 @@ const settlementWorkerSection = sourceBetween(
   'async function settleDueConfirmingOrders',
   'async function autoDelistExpiredListings'
 )
+const buyerConfirmRouteSection = sourceBetween(
+  exchangeRouteSource,
+  "fastify.post<{ Params: { orderId: string } }>('/orders/:orderId/confirm'",
+  "fastify.get('/wallet'"
+)
 const adminWithdrawalSection = sourceBetween(
   adminExchangeRouteSource,
   "fastify.get('/withdrawals'",
@@ -192,6 +197,8 @@ assertSourceOrder(
 assert(
   releaseSection.includes('if (order.status ===') &&
     releaseSection.includes('order.walletLogId') &&
+    releaseSection.includes('expectedBuyerUserId?: number') &&
+    releaseSection.includes('order.buyerUserId !== options.expectedBuyerUserId') &&
     releaseSection.includes('EXCHANGE_ORDER_NOT_RELEASABLE') &&
     releaseSection.includes('walletLogId: walletLog.id') &&
     releaseSection.includes('completedAt: new Date()') &&
@@ -199,6 +206,21 @@ assert(
     releaseSection.includes('EXCHANGE_DISPUTE_STATE_CHANGED') &&
     releaseSection.includes("targetType: 'exchange_dispute'"),
   'exchange escrow release must be idempotent, refuse unreleasable order states, and atomically close a resolving dispute when requested'
+)
+
+assertSourceOrder(
+  buyerConfirmRouteSection,
+  [
+    'fastify.authenticateUser',
+    'parsePositiveId(request.params.orderId)',
+    'await releaseExchangeOrderEscrow(orderId',
+    'actorUserId: request.user.id',
+    "action: 'order.buyer_confirm'",
+    "allowedStatuses: ['confirming']",
+    'expectedBuyerUserId: request.user.id',
+    'getUserExchangeOrder(request.user.id, orderId)'
+  ],
+  'buyer confirmation must authenticate, atomically verify the buyer, reuse idempotent escrow release, audit the action, and return the completed order'
 )
 
 assertSourceOrder(
@@ -231,10 +253,21 @@ assert(
     adminExchangeRouteSource.includes('async function releaseExchangeOrderManually') &&
     adminExchangeRouteSource.includes('订单存在未完结争议，请在争议管理中放款结案') &&
     adminExchangeRouteSource.includes("action: 'order.manual_release'") &&
-    adminExchangeRouteSource.includes("allowedStatuses: ['confirming', 'delivered', 'manual_review']") &&
+    adminExchangeRouteSource.includes("allowedStatuses: ['confirming', 'manual_review']") &&
     adminExchangeRouteSource.includes('管理员人工放款：${reason}') &&
     adminExchangeRouteSource.includes("createLog(order.sellerUserId, 'exchange', 'exchange.order.completed'"),
-  'admin exchange orders must support audited manual escrow release for non-disputed delivered/confirming/manual-review orders'
+  'admin exchange orders must support audited manual escrow release for non-disputed confirming/manual-review orders'
+)
+
+assert(
+  /enum ExchangeListingStatus \{[\s\S]*?\bpaused\b[\s\S]*?\}/.test(schema) &&
+    /enum ExchangeOrderStatus \{[\s\S]*?\bescrowed\b[\s\S]*?\bdelivered\b[\s\S]*?\}/.test(schema) &&
+    /enum ExchangeDisputeStatus \{[\s\S]*?\bredelivering\b[\s\S]*?\}/.test(schema) &&
+    exchangeServiceSource.includes("const listingBlockingStatuses: ExchangeListingStatus[] = ['active', 'locked', 'delivery_failed']") &&
+    exchangeServiceSource.includes("const orderBlockingStatuses: ExchangeOrderStatus[] = ['delivering', 'confirming', 'disputed', 'manual_review', 'failed']") &&
+    exchangeServiceSource.includes("const activeDisputeStatuses: ExchangeDisputeStatus[] = ['open', 'processing']") &&
+    adminExchangeRouteSource.includes("prisma.exchangeOrder.count({ where: { status: { in: ['delivering', 'confirming'] } } })"),
+  'deprecated exchange enum values must remain in schema but stay out of active blocking state sets and admin delivery counters'
 )
 
 assertSourceOrder(

@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly INSTALL_DIR="/opt/incudal"
+readonly RUN_USER="incudal"
+readonly RUN_GROUP="incudal"
+readonly MANIFEST_DIR="/var/lib/incudal-ota/manifests"
+readonly ROOT_CACHE_DIR="/var/cache/incudal-ota"
+readonly HELPER_DIR="/usr/local/libexec/incudal"
+readonly SYSTEM_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+readonly OTA_PATH="${HELPER_DIR}/ota-path:${SYSTEM_PATH}"
+
+fail() {
+  echo "incudal online task: $*" >&2
+  exit 1
+}
+
+resolve_app_dir() {
+  local app_dir="$INSTALL_DIR"
+  if [[ -L "${INSTALL_DIR}/current" ]]; then
+    app_dir="$(readlink -f -- "${INSTALL_DIR}/current")"
+    [[ "$app_dir" == "${INSTALL_DIR}/releases/"* ]] || fail "current points outside releases"
+  fi
+  [[ -d "$app_dir" ]] || fail "application directory is missing"
+  printf '%s\n' "$app_dir"
+}
+
+manifest_path() {
+  local app_dir="$1"
+  local key
+  key="$(printf '%s' "$app_dir" | sha256sum | awk '{print $1}')"
+  printf '%s/%s.sha256\n' "$MANIFEST_DIR" "$key"
+}
+
+static_files() {
+  find . -xdev -type f \
+    ! -path './.env' \
+    ! -path './server/certs/*' \
+    ! -path './.npm/*' \
+    ! -path './.cache/*' \
+    ! -path './.incudal-update-downloads/*' \
+    ! -path './update-logs/*' \
+    ! -path './plugins/*' \
+    ! -path './plugin-data/*' \
+    ! -path './plugin-logs/*' \
+    ! -path './plugin-staging/*' \
+    ! -path './themes/*' \
+    ! -path './theme-data/*' \
+    ! -path './theme-staging/*' \
+    ! -path './agent-release/*' \
+    ! -path './.trusted-release-manifests/*' \
+    -print0 | sort -z
+}
+
+static_links() {
+  find . -xdev -type l \
+    ! -path './server/certs/*' \
+    ! -path './.npm/*' \
+    ! -path './.cache/*' \
+    ! -path './.incudal-update-downloads/*' \
+    ! -path './update-logs/*' \
+    ! -path './plugins/*' \
+    ! -path './plugin-data/*' \
+    ! -path './plugin-logs/*' \
+    ! -path './plugin-staging/*' \
+    ! -path './themes/*' \
+    ! -path './theme-data/*' \
+    ! -path './theme-staging/*' \
+    ! -path './agent-release/*' \
+    -print0
+}
+
+link_entries() {
+  while IFS= read -r -d '' link; do
+    printf '%q -> %q\n' "$link" "$(readlink -- "$link")"
+  done < <(static_links | sort -z)
+}
+
+apply_secure_ownership() {
+  local app_dir
+  app_dir="$(resolve_app_dir)"
+
+  /usr/bin/chown root:root "$INSTALL_DIR"
+  /usr/bin/chmod 0751 "$INSTALL_DIR"
+  if [[ -e "${INSTALL_DIR}/current" || -L "${INSTALL_DIR}/current" ]]; then
+    /usr/bin/chown -h root:root "${INSTALL_DIR}/current"
+  fi
+  if [[ -d "${INSTALL_DIR}/releases" ]]; then
+    /usr/bin/chown -R root:root "${INSTALL_DIR}/releases"
+    find "${INSTALL_DIR}/releases" -xdev -type d -exec /usr/bin/chmod u=rwx,go=rx {} +
+    find "${INSTALL_DIR}/releases" -xdev -type f -exec /usr/bin/chmod u+rw,go+r,go-w {} +
+  else
+    /usr/bin/chown -R root:root "$app_dir"
+    find "$app_dir" -xdev -type d -exec /usr/bin/chmod u=rwx,go=rx {} +
+    find "$app_dir" -xdev -type f -exec /usr/bin/chmod u+rw,go+r,go-w {} +
+  fi
+  local controlled
+  for controlled in .git .gitconfig; do
+    if [[ -e "${INSTALL_DIR}/${controlled}" ]]; then
+      /usr/bin/chown -R root:root "${INSTALL_DIR}/${controlled}"
+      find "${INSTALL_DIR}/${controlled}" -xdev -type d -exec /usr/bin/chmod u=rwx,go=rx {} +
+      find "${INSTALL_DIR}/${controlled}" -xdev -type f -exec /usr/bin/chmod u+rw,go+r,go-w {} +
+    fi
+  done
+
+  local mutable
+  for mutable in \
+    .npm .cache .incudal-update-downloads update-logs \
+    plugins plugin-data plugin-logs plugin-staging \
+    themes theme-data theme-staging agent-release; do
+    if [[ -e "${INSTALL_DIR}/${mutable}" ]]; then
+      /usr/bin/chown -R "${RUN_USER}:${RUN_GROUP}" "${INSTALL_DIR}/${mutable}"
+      find "${INSTALL_DIR}/${mutable}" -xdev -type d -exec /usr/bin/chmod u=rwx,go= {} +
+      find "${INSTALL_DIR}/${mutable}" -xdev -type f -exec /usr/bin/chmod u+rw,go-rwx {} +
+    fi
+  done
+
+  if [[ -f "${INSTALL_DIR}/.env" ]]; then
+    /usr/bin/chown root:"${RUN_GROUP}" "${INSTALL_DIR}/.env"
+    /usr/bin/chmod 0640 "${INSTALL_DIR}/.env"
+  fi
+  if [[ -d "${INSTALL_DIR}/releases" ]]; then
+    while IFS= read -r -d '' release_env; do
+      /usr/bin/chown root:"${RUN_GROUP}" "$release_env"
+      /usr/bin/chmod 0640 "$release_env"
+    done < <(find "${INSTALL_DIR}/releases" -xdev -type f -name .env -print0)
+    while IFS= read -r -d '' release_cert_dir; do
+      /usr/bin/chown -R root:"${RUN_GROUP}" "$release_cert_dir"
+      find "$release_cert_dir" -xdev -type d -exec /usr/bin/chmod 0750 {} +
+      find "$release_cert_dir" -xdev -type f -exec /usr/bin/chmod 0640 {} +
+    done < <(find "${INSTALL_DIR}/releases" -xdev -type d -path '*/server/certs' -print0)
+  fi
+  if [[ -d "${app_dir}/server/certs" ]]; then
+    /usr/bin/chown -R root:"${RUN_GROUP}" "${app_dir}/server/certs"
+    find "${app_dir}/server/certs" -xdev -type d -exec /usr/bin/chmod 0750 {} +
+    find "${app_dir}/server/certs" -xdev -type f -exec /usr/bin/chmod 0640 {} +
+  fi
+
+  /usr/bin/install -d -o root -g root -m 0755 "$MANIFEST_DIR" "$ROOT_CACHE_DIR"
+  /usr/bin/chown -R root:root "$HELPER_DIR"
+  /usr/bin/chmod 0755 \
+    "${HELPER_DIR}/incudal-online-task" \
+    "${HELPER_DIR}/systemctl" \
+    "${HELPER_DIR}/ota-path/chown"
+}
+
+verify_git_control() {
+  [[ -d "${INSTALL_DIR}/.git" ]] || fail "trusted Git metadata is missing"
+  if find "${INSTALL_DIR}/.git" -xdev \( ! -user root -o -perm /022 \) -print -quit | grep -q .; then
+    fail "Git metadata is not root-controlled"
+  fi
+  if [[ -d "${INSTALL_DIR}/.git/hooks" ]] && \
+      find "${INSTALL_DIR}/.git/hooks" -xdev -type f -perm /111 -print -quit | grep -q .; then
+    fail "executable Git hooks are forbidden for root OTA"
+  fi
+  local origin
+  origin="$(/usr/bin/git -C "$INSTALL_DIR" remote get-url origin 2>/dev/null)" || fail "Git origin is missing"
+  [[ "$origin" == "https://github.com/VipMaxxxx/payincus.git" ]] || fail "Git origin is not the trusted repository"
+  if /usr/bin/git -C "$INSTALL_DIR" config --local --get-regexp \
+      '^(core\.hooksPath|core\.fsmonitor|filter\..*\.(clean|smudge|process)|diff\..*\.command)$' \
+      >/dev/null 2>&1; then
+    fail "executable Git configuration is forbidden for root OTA"
+  fi
+}
+
+write_manifest() {
+  local app_dir manifest link_manifest tmp tmp_links
+  app_dir="$(resolve_app_dir)"
+  manifest="$(manifest_path "$app_dir")"
+  link_manifest="${manifest}.links"
+  tmp="$(mktemp "${MANIFEST_DIR}/.manifest.XXXXXX")"
+  tmp_links="$(mktemp "${MANIFEST_DIR}/.links.XXXXXX")"
+  (cd "$app_dir" && static_files | xargs -0 -r sha256sum) > "$tmp"
+  (cd "$app_dir" && link_entries) > "$tmp_links"
+  /usr/bin/chown root:root "$tmp" "$tmp_links"
+  /usr/bin/chmod 0644 "$tmp" "$tmp_links"
+  /usr/bin/mv -f "$tmp" "$manifest"
+  /usr/bin/mv -f "$tmp_links" "$link_manifest"
+}
+
+verify_manifest() {
+  local app_dir manifest link_manifest observed observed_links
+  app_dir="$(resolve_app_dir)"
+  manifest="$(manifest_path "$app_dir")"
+  link_manifest="${manifest}.links"
+  [[ -f "$manifest" && ! -L "$manifest" && -f "$link_manifest" && ! -L "$link_manifest" ]] || fail "trusted manifest is missing"
+  [[ "$(stat -c '%u:%g' "$manifest")" == "0:0" && "$(stat -c '%u:%g' "$link_manifest")" == "0:0" ]] || fail "trusted manifest is not root-owned"
+  if find "$manifest" "$link_manifest" -perm /022 -print -quit | grep -q .; then
+    fail "trusted manifest is writable by group/other"
+  fi
+  observed="$(mktemp "${MANIFEST_DIR}/.observed.XXXXXX")"
+  observed_links="$(mktemp "${MANIFEST_DIR}/.observed-links.XXXXXX")"
+  (cd "$app_dir" && static_files | xargs -0 -r sha256sum) > "$observed"
+  (cd "$app_dir" && link_entries) > "$observed_links"
+  if ! cmp -s "$manifest" "$observed" || ! cmp -s "$link_manifest" "$observed_links"; then
+    rm -f "$observed" "$observed_links"
+    fail "release file set or digest differs from trusted manifest"
+  fi
+  rm -f "$observed" "$observed_links"
+  while IFS= read -r -d '' link; do
+    local target
+    link="${app_dir}/${link#./}"
+    target="$(readlink -f -- "$link")" || fail "release contains a broken symlink"
+    [[ "$target" == "$app_dir/"* ]] || fail "release symlink escapes the sealed tree"
+  done < <(cd "$app_dir" && static_links)
+  (cd "$app_dir" && sha256sum --check --strict --quiet "$manifest") || fail "release integrity verification failed"
+}
+
+seal_release() {
+  apply_secure_ownership
+  write_manifest
+}
+
+run_task() {
+  local mode="$1"
+  local task_id="$2"
+  [[ "$task_id" =~ ^[1-9][0-9]*$ ]] || fail "task id must be a positive integer"
+
+  apply_secure_ownership
+  verify_manifest
+  verify_git_control
+
+  local app_dir script
+  app_dir="$(resolve_app_dir)"
+  case "$mode" in
+    update) script="server/dist/scripts/run-system-update-task.js" ;;
+    rollback) script="server/dist/scripts/rollback-system-update-task.js" ;;
+    *) fail "unsupported mode" ;;
+  esac
+  [[ -f "${app_dir}/${script}" && ! -L "${app_dir}/${script}" ]] || fail "worker entry is missing or is a symlink"
+
+  set +e
+  /usr/bin/env \
+    -u NODE_OPTIONS \
+    -u NODE_PATH \
+    -u LD_PRELOAD \
+    -u BASH_ENV \
+    -u ENV \
+    PATH="$OTA_PATH" \
+    HOME="$ROOT_CACHE_DIR" \
+    NPM_CONFIG_CACHE="${ROOT_CACHE_DIR}/npm" \
+    XDG_CACHE_HOME="${ROOT_CACHE_DIR}/xdg" \
+    INCUDAL_APP_DIR="$app_dir" \
+    INSTALL_DIR="$INSTALL_DIR" \
+    SERVICE_NAME="incudal-backend" \
+    /usr/bin/node "${app_dir}/${script}" "$task_id"
+  local status=$?
+  set -e
+
+  apply_secure_ownership
+  if [[ "$status" -eq 0 ]]; then
+    write_manifest
+  fi
+  return "$status"
+}
+
+case "${1:-}" in
+  harden)
+    [[ "$#" -eq 1 ]] || fail "harden accepts no arguments"
+    apply_secure_ownership
+    ;;
+  seal)
+    [[ "$#" -eq 1 ]] || fail "seal accepts no arguments"
+    seal_release
+    ;;
+  update|rollback)
+    [[ "$#" -eq 2 ]] || fail "task mode requires exactly one task id"
+    run_task "$1" "$2"
+    ;;
+  *)
+    fail "usage: incudal-online-task {harden|seal|update TASK_ID|rollback TASK_ID}"
+    ;;
+esac

@@ -17,14 +17,15 @@ import type {
   DeveloperPluginEventHealth,
   PluginEventAlertPreference,
   UpdatePluginEventAlertPreferenceRequest,
-  PluginMarketSubmission
+  PluginMarketSubmission,
+  ThemeMarketSubmission
 } from '@/types/api'
 
 const { t } = useI18n()
 const toast = useToast()
 
 // TAB 状态
-const activeTab = ref<'init-commands' | 'developer-submissions'>('init-commands')
+const activeTab = ref<'init-commands' | 'developer-submissions' | 'theme-submissions'>('init-commands')
 
 // 命令列表
 interface InitCommand {
@@ -44,8 +45,11 @@ const loading = ref(false)
 const submissionsLoading = ref(false)
 const eventHealthLoading = ref(false)
 const submittingPlugin = ref(false)
+const submittingTheme = ref(false)
+const themeSubmissionsLoading = ref(false)
 const uploadingSubmissionPackage = ref(false)
 const submissions = ref<PluginMarketSubmission[]>([])
+const themeSubmissions = ref<ThemeMarketSubmission[]>([])
 const eventHealth = ref<DeveloperPluginEventHealth[]>([])
 const eventAlertPreferences = ref<PluginEventAlertPreference[]>([])
 const savingEventAlertPreference = ref<Record<string, boolean>>({})
@@ -66,6 +70,24 @@ const submissionForm = ref({
   permissions: '',
   compatibility: '',
   pricing: '',
+  notes: ''
+})
+const themeSubmissionForm = ref({
+  themeId: '',
+  version: '',
+  name: '',
+  repoUrl: '',
+  releaseUrl: '',
+  manifestUrl: '',
+  packageUrl: '',
+  sha256: '',
+  developerName: '',
+  developerHomepage: '',
+  developerGithub: '',
+  contactEmail: '',
+  compatibility: '{ "minPayincus": "0.6.0" }',
+  tokens: '',
+  layoutSlots: '',
   notes: ''
 })
 
@@ -110,6 +132,20 @@ const submissionScanLabels: Record<PluginMarketSubmission['scanStatus'], string>
   warning: '有警告',
   failed: '扫描失败'
 }
+
+const themeSubmissionReviewLabels = computed<Record<ThemeMarketSubmission['reviewStatus'], string>>(() => ({
+  pending: t('extensions.themeSubmissions.status.pending'),
+  listed: t('extensions.themeSubmissions.status.listed'),
+  rejected: t('extensions.themeSubmissions.status.rejected'),
+  delisted: t('extensions.themeSubmissions.status.delisted')
+}))
+
+const themeSubmissionScanLabels = computed<Record<ThemeMarketSubmission['scanStatus'], string>>(() => ({
+  pending: t('extensions.themeSubmissions.scan.pending'),
+  passed: t('extensions.themeSubmissions.scan.passed'),
+  warning: t('extensions.themeSubmissions.scan.warning'),
+  failed: t('extensions.themeSubmissions.scan.failed')
+}))
 
 const eventHealthByPluginId = computed(() => new Map(eventHealth.value.map(item => [item.pluginId, item])))
 const eventAlertPreferenceByPluginId = computed(() => new Map(eventAlertPreferences.value.map(item => [item.pluginId, item])))
@@ -236,6 +272,10 @@ function parseJsonObjectInput(value: string, fallback: Record<string, unknown>):
   return parsed as Record<string, unknown>
 }
 
+function parseListInput(value: string): string[] {
+  return Array.from(new Set(value.split(/[\n,]/).map(item => item.trim()).filter(Boolean)))
+}
+
 function resetSubmissionForm(): void {
   submissionForm.value = {
     pluginId: '',
@@ -319,9 +359,63 @@ async function submitPluginReview(): Promise<void> {
   }
 }
 
+async function loadThemeSubmissions(): Promise<void> {
+  themeSubmissionsLoading.value = true
+  try {
+    const response = await api.themeMarketSubmissions.mine()
+    themeSubmissions.value = response.submissions
+  } catch (error: any) {
+    toast.error(t('extensions.themeSubmissions.loadFailed') + ': ' + (error?.message || String(error)))
+  } finally {
+    themeSubmissionsLoading.value = false
+  }
+}
+
+async function submitThemeReview(): Promise<void> {
+  submittingTheme.value = true
+  try {
+    const form = themeSubmissionForm.value
+    await api.themeMarketSubmissions.create({
+      themeId: form.themeId.trim(),
+      version: form.version.trim(),
+      name: form.name.trim(),
+      repoUrl: form.repoUrl.trim(),
+      releaseUrl: form.releaseUrl.trim(),
+      manifestUrl: form.manifestUrl.trim(),
+      packageUrl: form.packageUrl.trim(),
+      sha256: form.sha256.trim(),
+      developerName: form.developerName.trim(),
+      developerHomepage: form.developerHomepage.trim() || null,
+      developerGithub: form.developerGithub.trim() || null,
+      contactEmail: form.contactEmail.trim(),
+      compatibility: parseJsonObjectInput(form.compatibility, {}),
+      tokens: parseListInput(form.tokens),
+      layoutSlots: parseListInput(form.layoutSlots),
+      pricing: { type: 'free' },
+      notes: form.notes.trim() || null
+    })
+    toast.success(t('extensions.themeSubmissions.submitSuccess'))
+    themeSubmissionForm.value = {
+      themeId: '', version: '', name: '', repoUrl: '', releaseUrl: '', manifestUrl: '', packageUrl: '', sha256: '',
+      developerName: '', developerHomepage: '', developerGithub: '', contactEmail: '',
+      compatibility: '{ "minPayincus": "0.6.0" }', tokens: '', layoutSlots: '', notes: ''
+    }
+    await loadThemeSubmissions()
+  } catch (error: any) {
+    toast.error(t('extensions.themeSubmissions.submitFailed') + ': ' + (error?.message || String(error)))
+  } finally {
+    submittingTheme.value = false
+  }
+}
+
 function openDeveloperSubmissions(): void {
   activeTab.value = 'developer-submissions'
   if (!submissions.value.length && !submissionsLoading.value) void loadSubmissions()
+}
+
+function openThemeSubmissions(): void {
+  activeTab.value = 'theme-submissions'
+  if (!themeSubmissions.value.length && !themeSubmissionsLoading.value) void loadThemeSubmissions()
 }
 
 function submissionStatusClass(status: PluginMarketSubmission['reviewStatus']): string {
@@ -467,6 +561,15 @@ loadCommands()
           @click="openDeveloperSubmissions"
         >
           开发者投稿
+        </button>
+        <button
+          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+          :class="activeTab === 'theme-submissions'
+            ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+            : 'border-transparent text-themed-muted hover:text-themed-secondary hover:border-themed'"
+          @click="openThemeSubmissions"
+        >
+          {{ $t('extensions.themeSubmissions.entry') }}
         </button>
       </nav>
     </div>
@@ -919,6 +1022,125 @@ loadCommands()
                   </div>
                 </div>
               </div>
+            </div>
+          </article>
+        </div>
+      </aside>
+    </div>
+
+    <div v-else-if="activeTab === 'theme-submissions'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <section class="card p-5">
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold text-themed">{{ $t('extensions.themeSubmissions.title') }}</h2>
+          <p class="mt-1 text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.description') }}</p>
+        </div>
+
+        <div class="mb-5 rounded-lg border border-themed bg-themed p-4 text-sm text-themed-muted">
+          {{ $t('extensions.themeSubmissions.freeReviewHint') }}
+        </div>
+
+        <form class="grid gap-4 md:grid-cols-2" @submit.prevent="submitThemeReview">
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.themeId') }}</span>
+            <input v-model="themeSubmissionForm.themeId" class="input w-full" placeholder="com.example.theme.clean" required pattern="[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*){2,}" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.version') }}</span>
+            <input v-model="themeSubmissionForm.version" class="input w-full" placeholder="1.0.0" required maxlength="64" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.name') }}</span>
+            <input v-model="themeSubmissionForm.name" class="input w-full" placeholder="Clean Theme" required maxlength="120" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.contactEmail') }}</span>
+            <input v-model="themeSubmissionForm.contactEmail" class="input w-full" type="email" placeholder="themes@example.com" required maxlength="254" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.repoUrl') }}</span>
+            <input v-model="themeSubmissionForm.repoUrl" class="input w-full" type="url" placeholder="https://github.com/example/theme" required />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.releaseUrl') }}</span>
+            <input v-model="themeSubmissionForm.releaseUrl" class="input w-full" type="url" placeholder="https://github.com/example/theme/releases/tag/v1.0.0" required />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.manifestUrl') }}</span>
+            <input v-model="themeSubmissionForm.manifestUrl" class="input w-full" type="url" placeholder="https://.../payincus.theme.json" required />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.packageUrl') }}</span>
+            <input v-model="themeSubmissionForm.packageUrl" class="input w-full" type="url" placeholder="https://.../theme.tar.gz" required />
+          </label>
+          <label class="space-y-1 md:col-span-2">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.sha256') }}</span>
+            <input v-model="themeSubmissionForm.sha256" class="input w-full font-mono" placeholder="64-character-sha256" required pattern="[A-Fa-f0-9]{64}" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.developerName') }}</span>
+            <input v-model="themeSubmissionForm.developerName" class="input w-full" placeholder="Example" required maxlength="120" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.developerHomepage') }}</span>
+            <input v-model="themeSubmissionForm.developerHomepage" class="input w-full" type="url" placeholder="https://example.com" />
+          </label>
+          <label class="space-y-1 md:col-span-2">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.developerGithub') }}</span>
+            <input v-model="themeSubmissionForm.developerGithub" class="input w-full" type="url" placeholder="https://github.com/example" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.compatibility') }}</span>
+            <textarea v-model="themeSubmissionForm.compatibility" class="input min-h-[110px] w-full font-mono text-xs" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.tokens') }}</span>
+            <textarea v-model="themeSubmissionForm.tokens" class="input min-h-[110px] w-full font-mono text-xs" :placeholder="$t('extensions.themeSubmissions.listPlaceholder')" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.layoutSlots') }}</span>
+            <textarea v-model="themeSubmissionForm.layoutSlots" class="input min-h-[110px] w-full font-mono text-xs" :placeholder="$t('extensions.themeSubmissions.listPlaceholder')" />
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.notes') }}</span>
+            <textarea v-model="themeSubmissionForm.notes" class="input min-h-[110px] w-full" :placeholder="$t('extensions.themeSubmissions.notesPlaceholder')" />
+          </label>
+          <div class="md:col-span-2 flex justify-end">
+            <button class="btn-primary" type="submit" :disabled="submittingTheme">
+              {{ submittingTheme ? $t('extensions.themeSubmissions.submitting') : $t('extensions.themeSubmissions.submit') }}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="card p-5">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-themed">{{ $t('extensions.themeSubmissions.mine') }}</h2>
+            <p class="mt-1 text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.mineHint') }}</p>
+          </div>
+          <button class="btn-secondary btn-sm" :disabled="themeSubmissionsLoading" @click="loadThemeSubmissions">
+            {{ themeSubmissionsLoading ? $t('extensions.themeSubmissions.loading') : $t('extensions.themeSubmissions.refresh') }}
+          </button>
+        </div>
+
+        <div v-if="themeSubmissionsLoading" class="py-8 text-center text-themed-muted">{{ $t('extensions.themeSubmissions.loading') }}</div>
+        <div v-else-if="themeSubmissions.length === 0" class="py-8 text-center text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.empty') }}</div>
+        <div v-else class="mt-4 space-y-3">
+          <article v-for="submission in themeSubmissions" :key="submission.id" class="rounded-lg border border-themed bg-themed p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h3 class="truncate text-sm font-medium text-themed">{{ submission.name }}</h3>
+                <p class="mt-1 truncate font-mono text-xs text-themed-muted">{{ submission.themeId }}@{{ submission.version }}</p>
+              </div>
+              <span class="rounded border px-2 py-1 text-xs" :class="submissionStatusClass(submission.reviewStatus)">
+                {{ themeSubmissionReviewLabels[submission.reviewStatus] }}
+              </span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted">
+              <div>{{ $t('extensions.themeSubmissions.scanLabel') }}：{{ themeSubmissionScanLabels[submission.scanStatus] }}</div>
+              <div>{{ $t('extensions.themeSubmissions.submittedAt') }}：{{ new Date(submission.createdAt).toLocaleString() }}</div>
+              <div v-if="submission.reviewedAt">{{ $t('extensions.themeSubmissions.reviewedAt') }}：{{ new Date(submission.reviewedAt).toLocaleString() }}</div>
+              <div v-if="submission.reviewNotes" class="rounded bg-themed-hover p-2 text-themed">{{ submission.reviewNotes }}</div>
             </div>
           </article>
         </div>

@@ -8,6 +8,7 @@ import {
   type InstanceTaskType
 } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
+import { INSTANCE_OPERATION_LOCK_NAMESPACE, advisoryTransactionLock } from '../db/advisory-locks.js'
 import { createInstanceTask, InstanceTaskConflictError } from '../db/instance-tasks.js'
 import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
@@ -160,6 +161,75 @@ async function addCaseAction(
   })
 }
 
+export async function recordInitialProvisioningFailureCase(input: {
+  instanceId: number
+  instanceName: string
+  hostId: number
+  userId: number
+  errorMessage: string
+  compensationClaimed: boolean
+  refundStatus: string
+  refundAmount: number
+  refundReason?: string | null
+  refundError?: string | null
+}) {
+  const title = `初始开通失败：${input.instanceName}`
+  const lastError = sanitizeTokensInString(input.errorMessage).slice(0, 1000)
+  const detail = {
+    source: 'initial_instance_provisioning',
+    compensationClaimed: input.compensationClaimed,
+    refundStatus: input.refundStatus,
+    refundAmount: input.refundAmount,
+    refundReason: input.refundReason ?? null,
+    refundError: input.refundError ? sanitizeTokensInString(input.refundError).slice(0, 1000) : null,
+    failedAt: new Date().toISOString()
+  } satisfies Prisma.InputJsonObject
+
+  return prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, input.instanceId)
+
+    const existing = await tx.deliveryAssuranceCase.findFirst({
+      where: {
+        taskId: null,
+        instanceId: input.instanceId,
+        issueType: 'task_failed',
+        title: { startsWith: '初始开通失败：' }
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
+    })
+    if (existing) return existing
+
+    const deliveryCase = await tx.deliveryAssuranceCase.create({
+      data: {
+        taskId: null,
+        instanceId: input.instanceId,
+        hostId: input.hostId,
+        userId: input.userId,
+        status: 'pending_manual',
+        issueType: 'task_failed',
+        severity: 'critical',
+        retryable: false,
+        title,
+        lastError,
+        detail
+      }
+    })
+
+    await tx.deliveryAssuranceAction.create({
+      data: {
+        caseId: deliveryCase.id,
+        actionType: 'detected',
+        actorUserId: null,
+        actorUsername: null,
+        note: '初始开通失败，已进入交付保障中心等待人工接管。',
+        detail
+      }
+    })
+
+    return deliveryCase
+  })
+}
+
 async function ensureCaseForTask(task: {
   id: number
   instanceId: number
@@ -276,7 +346,11 @@ function getRepairCaseWhere(query: DeliveryQuery): Prisma.DeliveryAssuranceCaseW
     ? query.status as DeliveryAssuranceCaseStatus
     : undefined
   const where: Prisma.DeliveryAssuranceCaseWhereInput = {
-    issueType: 'plan_upgrade_sync_failed'
+    taskId: null,
+    OR: [
+      { issueType: 'plan_upgrade_sync_failed' },
+      { issueType: 'task_failed', title: { startsWith: '初始开通失败：' } }
+    ]
   }
 
   if (status) {
@@ -285,20 +359,22 @@ function getRepairCaseWhere(query: DeliveryQuery): Prisma.DeliveryAssuranceCaseW
 
   if (search) {
     const numericId = POSITIVE_ROUTE_ID_PATTERN.test(search) ? Number(search) : null
-    where.OR = [
-      ...(numericId && Number.isSafeInteger(numericId)
-        ? [
-            { id: numericId },
-            { instanceId: numericId }
-          ]
-        : []),
-      {
-        title: {
-          contains: search,
-          mode: 'insensitive'
+    where.AND = [{
+      OR: [
+        ...(numericId && Number.isSafeInteger(numericId)
+          ? [
+              { id: numericId },
+              { instanceId: numericId }
+            ]
+          : []),
+        {
+          title: {
+            contains: search,
+            mode: 'insensitive'
+          }
         }
-      }
-    ]
+      ]
+    }]
   }
 
   return where
@@ -909,7 +985,10 @@ export default async function adminDeliveryRoutes(fastify: FastifyInstance) {
       }
       const deliveryCase = await prisma.deliveryAssuranceCase.findUnique({ where: { id: caseId } })
       if (!deliveryCase) return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
-      if (deliveryCase.issueType !== 'plan_upgrade_sync_failed') {
+      const isInitialProvisioningFailure = deliveryCase.taskId === null &&
+        deliveryCase.issueType === 'task_failed' &&
+        deliveryCase.title.startsWith('初始开通失败：')
+      if (deliveryCase.issueType !== 'plan_upgrade_sync_failed' && !isInitialProvisioningFailure) {
         return reply.code(409).send({ error: '该交付保障问题不支持 case 级结案' })
       }
       const note = normalizeNote(request.body?.note)

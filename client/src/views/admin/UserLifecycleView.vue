@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import api from '@/api/admin'
 import { useToast } from '@/stores/toast'
 import type {
@@ -10,6 +11,7 @@ import type {
 } from '@/types/api'
 
 const toast = useToast()
+const { t } = useI18n()
 
 const loading = ref(false)
 const overviewLoading = ref(false)
@@ -36,7 +38,7 @@ const filters = ref({
 
 const tagForm = ref({ tagKey: 'new_user', note: '' })
 const codeForm = ref({ hostId: '', codeType: 't', codeValue: '10', expiresInDays: '14', remark: '' })
-const reminderForm = ref({ title: '续费提醒', content: '您的服务即将到期，请及时查看实例并完成续费。', confirm: false })
+const reminderForm = ref({ title: t('userLifecycle.reminder.defaultTitle'), content: t('userLifecycle.reminder.defaultContent'), confirm: false })
 
 const tagDefinitions = computed<UserLifecycleTagDefinition[]>(() => overview.value?.tags || [])
 const segments = computed(() => overview.value?.segments || [])
@@ -70,7 +72,7 @@ async function loadOverview() {
   try {
     overview.value = await api.userLifecycle.overview()
   } catch (error: any) {
-    toast.error(`加载生命周期总览失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.overviewLoadFailed', { error: error.message }))
   } finally {
     overviewLoading.value = false
   }
@@ -96,7 +98,7 @@ async function loadUsers() {
     totalPages.value = response.totalPages || 1
     selectedUserIds.value = selectedUserIds.value.filter(id => users.value.some(user => user.id === id))
   } catch (error: any) {
-    toast.error(`加载生命周期用户失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.usersLoadFailed', { error: error.message }))
   } finally {
     loading.value = false
   }
@@ -110,10 +112,10 @@ async function refreshSegments() {
   actionLoading.value = true
   try {
     await api.userLifecycle.refreshSegments()
-    toast.success('分群已刷新')
+    toast.success(t('userLifecycle.messages.segmentsRefreshed'))
     await refreshAll()
   } catch (error: any) {
-    toast.error(`刷新分群失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.segmentsRefreshFailed', { error: error.message }))
   } finally {
     actionLoading.value = false
   }
@@ -123,10 +125,10 @@ async function syncEvents() {
   actionLoading.value = true
   try {
     const result = await api.userLifecycle.syncEvents()
-    toast.success(`生命周期事件已同步：${result.synced} 条`)
+    toast.success(t('userLifecycle.messages.eventsSynced', { count: result.synced }))
     await loadSelectedUser()
   } catch (error: any) {
-    toast.error(`同步事件失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.eventsSyncFailed', { error: error.message }))
   } finally {
     actionLoading.value = false
   }
@@ -138,7 +140,7 @@ async function openUser(user: UserLifecycleListUser) {
     selectedUser.value = await api.userLifecycle.summary(user.id)
     tagForm.value = { tagKey: 'new_user', note: '' }
   } catch (error: any) {
-    toast.error(`加载用户摘要失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.summaryLoadFailed', { error: error.message }))
   }
 }
 
@@ -161,10 +163,10 @@ async function addTag() {
       tagKey: tagForm.value.tagKey,
       note: tagForm.value.note || undefined
     })
-    toast.success('标签已添加')
+    toast.success(t('userLifecycle.messages.tagAdded'))
     await Promise.all([loadSelectedUser(), loadOverview(), loadUsers()])
   } catch (error: any) {
-    toast.error(`添加标签失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.tagAddFailed', { error: error.message }))
   } finally {
     actionLoading.value = false
   }
@@ -175,10 +177,10 @@ async function removeTag(tagKey: string) {
   actionLoading.value = true
   try {
     await api.userLifecycle.removeTag(selectedUser.value.id, tagKey)
-    toast.success('标签已移除')
+    toast.success(t('userLifecycle.messages.tagRemoved'))
     await Promise.all([loadSelectedUser(), loadOverview(), loadUsers()])
   } catch (error: any) {
-    toast.error(`移除标签失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.tagRemoveFailed', { error: error.message }))
   } finally {
     actionLoading.value = false
   }
@@ -190,7 +192,7 @@ async function issueRedeemCode() {
   const codeValue = Number(codeForm.value.codeValue)
   const expiresInDays = Number(codeForm.value.expiresInDays)
   if (!Number.isSafeInteger(hostId) || hostId <= 0 || !Number.isSafeInteger(codeValue) || codeValue <= 0 || !Number.isSafeInteger(expiresInDays)) {
-    toast.error('请填写有效的节点 ID、数值和有效期')
+    toast.error(t('userLifecycle.messages.invalidRedeemCode'))
     return
   }
   actionLoading.value = true
@@ -202,10 +204,10 @@ async function issueRedeemCode() {
       expiresInDays,
       remark: codeForm.value.remark || undefined
     })
-    toast.success(`已发放兑换码：${result.code.code}`)
+    toast.success(t('userLifecycle.messages.redeemCodeIssued', { code: result.code.code }))
     await loadSelectedUser()
   } catch (error: any) {
-    toast.error(`发放兑换码失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.redeemCodeIssueFailed', { error: error.message }))
   } finally {
     actionLoading.value = false
   }
@@ -213,7 +215,7 @@ async function issueRedeemCode() {
 
 async function sendReminder() {
   if (!hasSelectedUsers.value || !reminderForm.value.confirm) {
-    toast.error('请选择用户并勾选确认')
+    toast.error(t('userLifecycle.messages.selectAndConfirm'))
     return
   }
   actionLoading.value = true
@@ -224,10 +226,10 @@ async function sendReminder() {
       content: reminderForm.value.content,
       confirm: reminderForm.value.confirm
     })
-    toast.success(`已发送 ${result.sent} 条提醒`)
+    toast.success(t('userLifecycle.messages.remindersSent', { count: result.sent }))
     reminderForm.value.confirm = false
   } catch (error: any) {
-    toast.error(`发送提醒失败：${error.message}`)
+    toast.error(t('userLifecycle.messages.reminderSendFailed', { error: error.message }))
   } finally {
     actionLoading.value = false
   }
@@ -255,66 +257,66 @@ onMounted(refreshAll)
   <div class="kawaii-page lifecycle-page animate-fade-in">
     <div class="page-header">
       <div>
-        <h1>用户生命周期</h1>
-        <p>围绕注册、首购、续费、到期、流失风险和召回做运营动作。</p>
+        <h1>{{ t('userLifecycle.title') }}</h1>
+        <p>{{ t('userLifecycle.description') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn secondary" :disabled="actionLoading" @click="syncEvents">同步事件</button>
-        <button class="btn secondary" :disabled="actionLoading" @click="refreshSegments">刷新分群</button>
-        <button class="btn primary" :disabled="overviewLoading || loading" @click="refreshAll">刷新</button>
+        <button class="btn secondary" :disabled="actionLoading" @click="syncEvents">{{ t('userLifecycle.syncEvents') }}</button>
+        <button class="btn secondary" :disabled="actionLoading" @click="refreshSegments">{{ t('userLifecycle.refreshSegments') }}</button>
+        <button class="btn primary" :disabled="overviewLoading || loading" @click="refreshAll">{{ t('common.refresh') }}</button>
       </div>
     </div>
 
     <section class="overview-grid">
       <div class="metric">
-        <span>用户总数</span>
+        <span>{{ t('userLifecycle.metrics.totalUsers') }}</span>
         <strong>{{ overview?.totalUsers ?? '-' }}</strong>
       </div>
       <div class="metric">
-        <span>活跃用户</span>
+        <span>{{ t('userLifecycle.metrics.activeUsers') }}</span>
         <strong>{{ overview?.activeUsers ?? '-' }}</strong>
       </div>
       <div class="metric">
-        <span>即将到期实例</span>
+        <span>{{ t('userLifecycle.metrics.expiringInstances') }}</span>
         <strong>{{ overview?.expiringInstances ?? '-' }}</strong>
       </div>
       <div class="metric">
-        <span>已选用户</span>
+        <span>{{ t('userLifecycle.metrics.selectedUsers') }}</span>
         <strong>{{ selectedUserIds.length }}</strong>
       </div>
     </section>
 
     <section class="panel">
-      <div class="panel-title">筛选</div>
+      <div class="panel-title">{{ t('userLifecycle.filters.title') }}</div>
       <div class="filter-grid">
-        <input v-model="filters.search" placeholder="搜索用户名、邮箱、用户 ID" />
+        <input v-model="filters.search" :placeholder="t('userLifecycle.filters.searchPlaceholder')" />
         <select v-model="filters.tag">
-          <option value="">全部标签</option>
+          <option value="">{{ t('userLifecycle.filters.allTags') }}</option>
           <option v-for="tag in tagDefinitions" :key="tag.key" :value="tag.key">{{ tag.label }}（{{ tag.count || 0 }}）</option>
         </select>
         <select v-model="filters.segment">
-          <option value="">全部分群</option>
+          <option value="">{{ t('userLifecycle.filters.allSegments') }}</option>
           <option v-for="segment in segments" :key="segment.key" :value="segment.key">{{ segment.name }}（{{ segment.count || 0 }}）</option>
         </select>
         <select v-model="filters.activeState">
-          <option value="">全部活跃状态</option>
-          <option value="active">活跃</option>
-          <option value="inactive">不活跃</option>
+          <option value="">{{ t('userLifecycle.filters.allActivityStates') }}</option>
+          <option value="active">{{ t('userLifecycle.filters.active') }}</option>
+          <option value="inactive">{{ t('userLifecycle.filters.inactive') }}</option>
         </select>
-        <input v-model="filters.minRecharge" placeholder="最低累计充值" />
-        <input v-model="filters.maxRecharge" placeholder="最高累计充值" />
-        <input v-model="filters.minInstances" placeholder="最低实例数" />
-        <input v-model="filters.maxInstances" placeholder="最高实例数" />
+        <input v-model="filters.minRecharge" :placeholder="t('userLifecycle.filters.minRecharge')" />
+        <input v-model="filters.maxRecharge" :placeholder="t('userLifecycle.filters.maxRecharge')" />
+        <input v-model="filters.minInstances" :placeholder="t('userLifecycle.filters.minInstances')" />
+        <input v-model="filters.maxInstances" :placeholder="t('userLifecycle.filters.maxInstances')" />
       </div>
       <div class="panel-actions">
-        <button class="btn primary" @click="page = 1; loadUsers()">搜索</button>
-        <button class="btn secondary" @click="resetFilters">重置</button>
+        <button class="btn primary" @click="page = 1; loadUsers()">{{ t('common.search') }}</button>
+        <button class="btn secondary" @click="resetFilters">{{ t('common.reset') }}</button>
       </div>
     </section>
 
     <section class="workspace">
       <div class="panel users-panel">
-        <div class="panel-title">用户列表</div>
+        <div class="panel-title">{{ t('userLifecycle.userList') }}</div>
         <div class="user-list" :class="loading ? 'is-loading' : ''">
           <button
             v-for="user in users"
@@ -335,34 +337,34 @@ onMounted(refreshAll)
             </div>
             <div class="user-metrics">
               <span>{{ formatMoney(user.metrics?.totalRecharge) }}</span>
-              <span>{{ user.metrics?.instanceCount || 0 }} 个实例</span>
-              <span>{{ user.metrics?.expiringSoonInstances || 0 }} 个即将到期</span>
+              <span>{{ t('userLifecycle.instanceCount', { count: user.metrics?.instanceCount || 0 }) }}</span>
+              <span>{{ t('userLifecycle.expiringCount', { count: user.metrics?.expiringSoonInstances || 0 }) }}</span>
             </div>
           </button>
-          <div v-if="users.length === 0" class="empty">暂无匹配用户</div>
+          <div v-if="users.length === 0" class="empty">{{ t('userLifecycle.noMatchingUsers') }}</div>
         </div>
         <div class="pagination">
-          <span>共 {{ total }} 条，第 {{ page }}/{{ totalPages }} 页</span>
-          <button class="btn secondary" :disabled="page <= 1" @click="page--; loadUsers()">上一页</button>
-          <button class="btn secondary" :disabled="page >= totalPages" @click="page++; loadUsers()">下一页</button>
+          <span>{{ t('userLifecycle.pagination', { total, page, totalPages }) }}</span>
+          <button class="btn secondary" :disabled="page <= 1" @click="page--; loadUsers()">{{ t('common.prevPage') }}</button>
+          <button class="btn secondary" :disabled="page >= totalPages" @click="page++; loadUsers()">{{ t('common.nextPage') }}</button>
         </div>
       </div>
 
       <div class="panel detail-panel">
         <template v-if="selectedUser">
-          <div class="panel-title">用户摘要</div>
+          <div class="panel-title">{{ t('userLifecycle.summary.title') }}</div>
           <div class="summary-grid">
-            <div><span>用户</span><strong>#{{ selectedUser.id }} {{ selectedUser.username }}</strong></div>
-            <div><span>邮箱</span><strong>{{ selectedUser.emailMasked || '-' }}</strong></div>
-            <div><span>累计充值</span><strong>{{ formatMoney(selectedUser.metrics?.totalRecharge) }}</strong></div>
-            <div><span>累计消费</span><strong>{{ formatMoney(selectedUser.metrics?.totalConsume) }}</strong></div>
-            <div><span>实例</span><strong>{{ selectedUser.metrics?.instanceCount || 0 }} / 运行 {{ selectedUser.metrics?.runningInstances || 0 }}</strong></div>
-            <div><span>最早到期</span><strong>{{ formatDate(selectedUser.metrics?.earliestExpiry) }}</strong></div>
-            <div><span>工单</span><strong>{{ selectedUser.tickets.total }} / 未结 {{ selectedUser.tickets.open }}</strong></div>
-            <div><span>最后登录</span><strong>{{ formatDate(selectedUser.metrics?.lastLoginAt) }}</strong></div>
+            <div><span>{{ t('userLifecycle.summary.user') }}</span><strong>#{{ selectedUser.id }} {{ selectedUser.username }}</strong></div>
+            <div><span>{{ t('userLifecycle.summary.email') }}</span><strong>{{ selectedUser.emailMasked || '-' }}</strong></div>
+            <div><span>{{ t('userLifecycle.summary.totalRecharge') }}</span><strong>{{ formatMoney(selectedUser.metrics?.totalRecharge) }}</strong></div>
+            <div><span>{{ t('userLifecycle.summary.totalConsume') }}</span><strong>{{ formatMoney(selectedUser.metrics?.totalConsume) }}</strong></div>
+            <div><span>{{ t('userLifecycle.summary.instances') }}</span><strong>{{ t('userLifecycle.summary.instanceValue', { total: selectedUser.metrics?.instanceCount || 0, running: selectedUser.metrics?.runningInstances || 0 }) }}</strong></div>
+            <div><span>{{ t('userLifecycle.summary.earliestExpiry') }}</span><strong>{{ formatDate(selectedUser.metrics?.earliestExpiry) }}</strong></div>
+            <div><span>{{ t('userLifecycle.summary.tickets') }}</span><strong>{{ t('userLifecycle.summary.ticketValue', { total: selectedUser.tickets.total, open: selectedUser.tickets.open }) }}</strong></div>
+            <div><span>{{ t('userLifecycle.summary.lastLogin') }}</span><strong>{{ formatDate(selectedUser.metrics?.lastLoginAt) }}</strong></div>
           </div>
 
-          <div class="section-title">标签</div>
+          <div class="section-title">{{ t('userLifecycle.tags') }}</div>
           <div class="chips block">
             <span v-for="tag in selectedUser.tags.filter(item => item.active !== false)" :key="tag.tagKey" class="chip">
               {{ getTagLabel(tag.tagKey) }}
@@ -373,33 +375,33 @@ onMounted(refreshAll)
             <select v-model="tagForm.tagKey">
               <option v-for="tag in tagDefinitions" :key="tag.key" :value="tag.key">{{ tag.label }}</option>
             </select>
-            <input v-model="tagForm.note" placeholder="备注，可选" />
-            <button class="btn primary" :disabled="actionLoading" @click="addTag">添加标签</button>
+            <input v-model="tagForm.note" :placeholder="t('userLifecycle.optionalNote')" />
+            <button class="btn primary" :disabled="actionLoading" @click="addTag">{{ t('userLifecycle.addTag') }}</button>
           </div>
 
-          <div class="section-title">定向资源兑换码</div>
+          <div class="section-title">{{ t('userLifecycle.redeemCode.title') }}</div>
           <div class="inline-form code-form">
-            <input v-model="codeForm.hostId" placeholder="节点 ID" />
+            <input v-model="codeForm.hostId" :placeholder="t('userLifecycle.redeemCode.hostId')" />
             <select v-model="codeForm.codeType">
               <option value="c">CPU</option>
-              <option value="r">内存</option>
-              <option value="d">磁盘</option>
-              <option value="t">流量</option>
+              <option value="r">{{ t('userLifecycle.redeemCode.memory') }}</option>
+              <option value="d">{{ t('userLifecycle.redeemCode.disk') }}</option>
+              <option value="t">{{ t('userLifecycle.redeemCode.traffic') }}</option>
             </select>
-            <input v-model="codeForm.codeValue" :placeholder="`数值（${getCodeUnit(codeForm.codeType)}）`" />
-            <input v-model="codeForm.expiresInDays" placeholder="有效天数" />
-            <input v-model="codeForm.remark" placeholder="备注，可选" />
-            <button class="btn primary" :disabled="actionLoading" @click="issueRedeemCode">发放</button>
+            <input v-model="codeForm.codeValue" :placeholder="t('userLifecycle.redeemCode.value', { unit: getCodeUnit(codeForm.codeType) })" />
+            <input v-model="codeForm.expiresInDays" :placeholder="t('userLifecycle.redeemCode.validDays')" />
+            <input v-model="codeForm.remark" :placeholder="t('userLifecycle.optionalNote')" />
+            <button class="btn primary" :disabled="actionLoading" @click="issueRedeemCode">{{ t('userLifecycle.redeemCode.issue') }}</button>
           </div>
           <div class="offer-list">
             <div v-for="offer in selectedUser.offers" :key="offer.id" class="offer-item">
               <strong>{{ offer.code }}</strong>
               <span>{{ offer.host.name }} · {{ offer.codeType }} +{{ offer.codeValue }}{{ getCodeUnit(offer.codeType) }}</span>
-              <span>{{ offer.used ? '已使用' : '未使用' }} · {{ formatDate(offer.expiresAt) }}</span>
+              <span>{{ offer.used ? t('userLifecycle.used') : t('userLifecycle.unused') }} · {{ formatDate(offer.expiresAt) }}</span>
             </div>
           </div>
 
-          <div class="section-title">生命周期</div>
+          <div class="section-title">{{ t('userLifecycle.lifecycle') }}</div>
           <div class="timeline">
             <div v-for="event in selectedUser.events" :key="event.id" class="timeline-item">
               <strong>{{ event.eventType }}</strong>
@@ -407,7 +409,7 @@ onMounted(refreshAll)
             </div>
           </div>
 
-          <div class="section-title">运营动作</div>
+          <div class="section-title">{{ t('userLifecycle.operations') }}</div>
           <div class="timeline">
             <div v-for="action in selectedUser.actions" :key="action.id" class="timeline-item">
               <strong>{{ action.actionType }} · {{ action.status }}</strong>
@@ -416,20 +418,20 @@ onMounted(refreshAll)
             </div>
           </div>
         </template>
-        <div v-else class="empty detail-empty">选择一个用户查看商业摘要和运营动作。</div>
+        <div v-else class="empty detail-empty">{{ t('userLifecycle.selectUserHint') }}</div>
       </div>
     </section>
 
     <section class="panel">
-      <div class="panel-title">批量提醒</div>
+      <div class="panel-title">{{ t('userLifecycle.reminder.title') }}</div>
       <div class="reminder-grid">
-        <input v-model="reminderForm.title" placeholder="提醒标题" />
-        <textarea v-model="reminderForm.content" placeholder="提醒内容"></textarea>
+        <input v-model="reminderForm.title" :placeholder="t('userLifecycle.reminder.titlePlaceholder')" />
+        <textarea v-model="reminderForm.content" :placeholder="t('userLifecycle.reminder.contentPlaceholder')"></textarea>
         <label class="confirm-line">
           <input v-model="reminderForm.confirm" type="checkbox" />
-          确认向已选 {{ selectedUserIds.length }} 个用户发送站内提醒
+          {{ t('userLifecycle.reminder.confirm', { count: selectedUserIds.length }) }}
         </label>
-        <button class="btn primary" :disabled="!hasSelectedUsers || actionLoading" @click="sendReminder">发送提醒</button>
+        <button class="btn primary" :disabled="!hasSelectedUsers || actionLoading" @click="sendReminder">{{ t('userLifecycle.reminder.send') }}</button>
       </div>
     </section>
   </div>

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import type { RedeemCodeType, UserLifecycleTagKey } from '@prisma/client'
+import type { UserLifecycleTagKey } from '@prisma/client'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { prisma } from '../db/prisma.js'
 import {
@@ -18,10 +18,11 @@ import {
   USER_LIFECYCLE_TAGS
 } from '../db/user-lifecycle.js'
 import { CODE_VALUE_RANGES } from '../db/redeem-codes.js'
+import type { ResourceRedeemCodeType } from '../db/redeem-codes.js'
 
 const POSITIVE_ID_PATTERN = /^[1-9]\d*$/
 const TAG_KEYS = new Set(USER_LIFECYCLE_TAGS.map(tag => tag.key))
-const CODE_TYPES = new Set<RedeemCodeType>(['c', 'r', 'd', 't'])
+const CODE_TYPES = new Set<ResourceRedeemCodeType>(['c', 'r', 'd', 't'])
 const MAX_MESSAGE_LENGTH = 1000
 
 function parsePositiveId(value: string): number | null {
@@ -173,7 +174,7 @@ export default async function userLifecycleRoutes(fastify: FastifyInstance) {
     Params: { userId: string }
     Body: {
       hostId?: number
-      codeType?: RedeemCodeType
+      codeType?: ResourceRedeemCodeType
       codeValue?: number
       expiresInDays?: number
       remark?: string
@@ -189,7 +190,7 @@ export default async function userLifecycleRoutes(fastify: FastifyInstance) {
     if (!await ensureTargetUser(userId, reply)) return
 
     const normalizedHostId = hostId as number
-    const normalizedCodeType = codeType as RedeemCodeType
+    const normalizedCodeType = codeType as ResourceRedeemCodeType
     const normalizedCodeValue = codeValue as number
     const normalizedExpiresInDays = expiresInDays as number
 

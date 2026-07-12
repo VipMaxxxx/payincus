@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Install as /usr/local/libexec/incudal/systemctl, owned by root:root
+# and mode 0755.  It is intentionally the only systemctl command reachable via
+# the incudal sudoers rule.
+if [[ "$#" -ne 3 || "$1" != "start" || "$2" != "--no-block" ]]; then
+  echo "incudal systemctl wrapper: unsupported arguments" >&2
+  exit 64
+fi
+
+readonly UNIT_NAME="$3"
+if [[ ! "$UNIT_NAME" =~ ^incudal-online-(update|rollback)@[1-9][0-9]*\.service$ ]]; then
+  echo "incudal systemctl wrapper: invalid unit name" >&2
+  exit 64
+fi
+
+exec /usr/bin/systemctl start --no-block "$UNIT_NAME"

@@ -7,9 +7,9 @@ import type { FastifyInstance } from 'fastify'
 import * as db from '../db/index.js'
 import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
-import type { RedeemCodeType } from '@prisma/client'
+import type { ResourceRedeemCodeType } from '../db/redeem-codes.js'
 
-const REDEEM_CODE_TYPES: RedeemCodeType[] = ['c', 'r', 'd', 't']
+const REDEEM_CODE_TYPES: readonly ResourceRedeemCodeType[] = ['c', 'r', 'd', 't']
 const MAX_REDEEM_CODE_BATCH_COUNT = 100
 const MAX_REDEEM_CODE_MAX_USES = 1000
 const MAX_REDEEM_CODE_REMARK_LENGTH = 200
@@ -66,11 +66,11 @@ function requireRedeemCodeInteger(value: unknown, field: string, min: number, ma
   return value
 }
 
-function normalizeRedeemCodeType(value: unknown): RedeemCodeType {
-  if (typeof value !== 'string' || !REDEEM_CODE_TYPES.includes(value as RedeemCodeType)) {
+function normalizeRedeemCodeType(value: unknown): ResourceRedeemCodeType {
+  if (typeof value !== 'string' || !REDEEM_CODE_TYPES.includes(value as ResourceRedeemCodeType)) {
     throw apiError(ErrorCode.INVALID_PARAMS, 'Invalid redeem code type')
   }
-  return value as RedeemCodeType
+  return value as ResourceRedeemCodeType
 }
 
 function normalizeOptionalRedeemCodeRemark(value: unknown): string | undefined {
@@ -98,7 +98,7 @@ function normalizeOptionalExpiryDate(value: string | null | undefined): Date | n
 }
 
 function normalizeRedeemCodeCreateBody(input: unknown): {
-  codeType: RedeemCodeType
+  codeType: ResourceRedeemCodeType
   codeValue: number
   maxUses?: number
   expiresAt?: string | null
@@ -221,7 +221,7 @@ export default async function redeemCodesRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Params: { hostId: string }
     Body: {
-      codeType: RedeemCodeType
+      codeType: ResourceRedeemCodeType
       codeValue: number
       maxUses?: number
       expiresAt?: string | null
@@ -287,7 +287,7 @@ export default async function redeemCodesRoutes(fastify: FastifyInstance) {
         const { codes, batchId } = await db.createRedeemCodeBatch({
           hostId,
           createdById: user.id,
-          codeType: codeType as RedeemCodeType,
+          codeType,
           codeValue,
           count: batchCount,
           expiresAt: expiresAtDate,
@@ -315,7 +315,7 @@ export default async function redeemCodesRoutes(fastify: FastifyInstance) {
         const code = await db.createRedeemCode({
           hostId,
           createdById: user.id,
-          codeType: codeType as RedeemCodeType,
+          codeType,
           codeValue,
           maxUses: maxUses ?? 1,
           expiresAt: expiresAtDate,
@@ -463,9 +463,15 @@ export default async function redeemCodesRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const deleted = await db.deleteRedeemCodeForHost(hostId, codeId)
-      if (!deleted) {
+      const deleteResult = await db.deleteRedeemCodeForHost(hostId, codeId)
+      if (deleteResult === 'not_found') {
         return reply.code(404).send(apiError(ErrorCode.REDEEM_CODE_NOT_FOUND))
+      }
+      if (deleteResult === 'disabled') {
+        return reply.code(409).send(apiError(
+          ErrorCode.REDEEM_CODE_USED,
+          'Redeem code has usage records and was disabled instead of deleted'
+        ))
       }
       return { message: 'Deleted successfully' }
     } catch (error) {
@@ -519,11 +525,17 @@ export default async function redeemCodesRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const deletedCount = await db.deleteRedeemCodeBatchForHost(hostId, normalizedIds)
-      if (deletedCount !== normalizedIds.length) {
+      const result = await db.deleteRedeemCodeBatchForHost(hostId, normalizedIds)
+      if (result.foundCount !== normalizedIds.length) {
         return reply.code(404).send(apiError(ErrorCode.REDEEM_CODE_NOT_FOUND))
       }
-      return { message: 'Batch deleted successfully', count: deletedCount }
+      if (result.disabledCount > 0) {
+        return reply.code(409).send(apiError(
+          ErrorCode.REDEEM_CODE_USED,
+          `${result.disabledCount} redeem code(s) have usage records and were disabled instead of deleted`
+        ))
+      }
+      return { message: 'Batch deleted successfully', count: result.deletedCount }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       return reply.code(500).send(apiError(ErrorCode.INTERNAL_ERROR, errorMessage))

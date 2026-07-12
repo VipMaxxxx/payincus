@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import api from '@/api'
 import type { InviteCostOption, UserInvite, UserInviteSummary } from '@/types/api'
 import { useToast } from '@/stores/toast'
@@ -12,6 +13,7 @@ import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
 defineOptions({ name: 'InvitesView' })
 
 const toast = useToast()
+const { t } = useI18n()
 const themeStore = useThemeStore()
 
 const loading = ref(true)
@@ -84,11 +86,11 @@ async function generateInvite(): Promise<void> {
   try {
     const res = await api.userInvites.generate({ costResource: selectedCostResource.value })
     generatedInvites.value = res.invites || []
-    toast.success('邀请码已生成')
+    toast.success(t('invites.generateSuccess'))
     page.value = 1
     await Promise.all([loadSummary(), loadInvites()])
   } catch (err: any) {
-    toast.error(err?.message || '生成邀请码失败')
+    toast.error(err?.message || t('invites.generateFailed'))
   } finally {
     generating.value = false
   }
@@ -105,18 +107,18 @@ function hasEnoughResource(option: InviteCostOption): boolean {
 function getBalanceLabel(resource: string): string {
   if (!summary.value) return '-'
   if (resource === 'balance') return `¥${summary.value.balances.balance.toFixed(2)}`
-  if (resource === 'points') return `${summary.value.balances.points} 积分`
+  if (resource === 'points') return t('invites.pointsBalance', { points: summary.value.balances.points })
   return '-'
 }
 
 function getStatus(invite: UserInvite): { label: string; className: string } {
   if (invite.usedBy) {
-    return { label: '已使用', className: 'badge-success' }
+    return { label: t('invites.status.used'), className: 'badge-success' }
   }
   if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-    return { label: '已过期', className: 'badge-error' }
+    return { label: t('invites.status.expired'), className: 'badge-error' }
   }
-  return { label: '未使用', className: 'badge-warning' }
+  return { label: t('invites.status.unused'), className: 'badge-warning' }
 }
 
 function formatDate(value: string | null): string {
@@ -134,7 +136,7 @@ async function copyText(text: string, successMessage: string): Promise<void> {
     await navigator.clipboard.writeText(text)
     toast.success(successMessage)
   } catch {
-    toast.error('复制失败')
+    toast.error(t('common.copyFailed'))
   }
 }
 
@@ -155,11 +157,11 @@ function nextPage(): void {
   <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header flex-col gap-4 sm:flex-row sm:gap-0">
       <div>
-        <h1 class="page-title">邀请码管理</h1>
-        <p class="page-description">生成新的注册链接，并查看每个邀请码的使用情况。</p>
+        <h1 class="page-title">{{ t('invites.title') }}</h1>
+        <p class="page-description">{{ t('invites.description') }}</p>
       </div>
       <RouterLink :to="dashboardPath()" class="btn-ghost w-full justify-center sm:w-auto">
-        返回概览
+        {{ t('invites.backToOverview') }}
       </RouterLink>
     </div>
 
@@ -175,15 +177,15 @@ function nextPage(): void {
     <template v-else>
       <div class="grid gap-3 md:grid-cols-3">
         <div class="card p-5">
-          <p class="text-sm text-themed-muted">已生成</p>
+          <p class="text-sm text-themed-muted">{{ t('invites.stats.generated') }}</p>
           <p class="mt-2 text-3xl font-bold text-themed">{{ summary?.stats.total || 0 }}</p>
         </div>
         <div class="card p-5">
-          <p class="text-sm text-themed-muted">已使用</p>
+          <p class="text-sm text-themed-muted">{{ t('invites.stats.used') }}</p>
           <p class="mt-2 text-3xl font-bold text-themed">{{ summary?.stats.used || 0 }}</p>
         </div>
         <div class="card p-5">
-          <p class="text-sm text-themed-muted">使用率</p>
+          <p class="text-sm text-themed-muted">{{ t('invites.stats.usageRate') }}</p>
           <p class="mt-2 text-3xl font-bold text-themed">{{ summary?.stats.usageRate || 0 }}%</p>
         </div>
       </div>
@@ -191,8 +193,8 @@ function nextPage(): void {
       <div class="card p-5">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div class="min-w-0 flex-1">
-            <h2 class="text-base font-semibold text-themed">生成邀请码</h2>
-            <p class="mt-1 text-sm text-themed-muted">选择一种管理员配置的成本方式，生成成功后可复制注册链接给新用户。</p>
+            <h2 class="text-base font-semibold text-themed">{{ t('invites.generateTitle') }}</h2>
+            <p class="mt-1 text-sm text-themed-muted">{{ t('invites.generateDescription') }}</p>
 
             <div v-if="enabledCostOptions.length > 0" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <button
@@ -221,7 +223,7 @@ function nextPage(): void {
             </div>
 
             <div v-else class="mt-4 rounded-lg border border-themed bg-themed-secondary/40 p-4 text-sm text-themed-muted">
-              管理员尚未开启用户生成邀请码的价格选项。
+              {{ t('invites.noCostOptions') }}
             </div>
           </div>
 
@@ -235,18 +237,18 @@ function nextPage(): void {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
             </svg>
-            <span>{{ generating ? '生成中' : '生成邀请码' }}</span>
+            <span>{{ generating ? t('invites.generating') : t('invites.generate') }}</span>
           </button>
         </div>
 
         <div v-if="generatedInvites.length > 0" class="mt-5 rounded-lg border border-themed bg-themed-secondary/40 p-4">
-          <p class="text-sm font-medium text-themed">刚刚生成</p>
+          <p class="text-sm font-medium text-themed">{{ t('invites.justGenerated') }}</p>
           <div class="mt-3 space-y-2">
             <div v-for="invite in generatedInvites" :key="invite.id" class="flex flex-col gap-2 rounded-lg bg-themed p-3 sm:flex-row sm:items-center sm:justify-between">
               <code class="text-sm text-themed-secondary">{{ invite.code }}</code>
               <div class="flex gap-2">
-                <button class="btn-ghost btn-sm" @click="copyText(invite.code, '邀请码已复制')">复制码</button>
-                <button class="btn-secondary btn-sm" @click="copyText(getInviteLink(invite), '邀请链接已复制')">复制链接</button>
+                <button class="btn-ghost btn-sm" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
+                <button class="btn-secondary btn-sm" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
               </div>
             </div>
           </div>
@@ -256,15 +258,15 @@ function nextPage(): void {
       <div class="card overflow-hidden">
         <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 class="text-base font-semibold text-themed">我的邀请码</h2>
-            <p class="text-sm text-themed-muted">可查看是否已被注册使用，以及注册用户的用户名和邮箱。</p>
+            <h2 class="text-base font-semibold text-themed">{{ t('invites.myInvites') }}</h2>
+            <p class="text-sm text-themed-muted">{{ t('invites.myInvitesDescription') }}</p>
           </div>
-          <button class="btn-ghost btn-sm" :disabled="listLoading" @click="loadInvites">刷新</button>
+          <button class="btn-ghost btn-sm" :disabled="listLoading" @click="loadInvites">{{ t('common.refresh') }}</button>
         </div>
 
-        <div v-if="listLoading" class="p-8 text-center text-themed-muted">加载中...</div>
+        <div v-if="listLoading" class="p-8 text-center text-themed-muted">{{ t('common.loading') }}</div>
         <div v-else-if="invites.length === 0" class="p-8 text-center text-themed-muted">
-          暂无邀请码
+          {{ t('invites.empty') }}
         </div>
         <div v-else class="space-y-3 p-4 lg:hidden">
           <div
@@ -278,7 +280,7 @@ function nextPage(): void {
                   {{ invite.code }}
                 </code>
                 <div class="mt-1 text-xs text-themed-muted">
-                  {{ invite.costSnapshot?.displayAmount || '管理员生成' }}
+                  {{ invite.costSnapshot?.displayAmount || t('invites.adminGenerated') }}
                 </div>
               </div>
               <span class="badge shrink-0 whitespace-nowrap" :class="getStatus(invite).className">
@@ -287,7 +289,7 @@ function nextPage(): void {
             </div>
 
             <div class="mt-4 rounded-lg bg-themed-secondary px-3 py-2">
-              <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-themed-muted">使用人</div>
+              <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ t('invites.usedBy') }}</div>
               <div v-if="invite.usedByUser" class="flex min-w-0 items-center gap-2">
                 <UserAvatar
                   :username="invite.usedByUser.username"
@@ -305,14 +307,14 @@ function nextPage(): void {
             </div>
 
             <div class="mt-3 rounded-lg bg-themed-secondary px-3 py-2 text-sm text-themed-muted">
-              <div>生成 {{ formatDate(invite.createdAt) }}</div>
-              <div v-if="invite.usedAt">使用 {{ formatDate(invite.usedAt) }}</div>
-              <div v-else-if="invite.expiresAt">过期 {{ formatDate(invite.expiresAt) }}</div>
+              <div>{{ t('invites.time.generated', { time: formatDate(invite.createdAt) }) }}</div>
+              <div v-if="invite.usedAt">{{ t('invites.time.used', { time: formatDate(invite.usedAt) }) }}</div>
+              <div v-else-if="invite.expiresAt">{{ t('invites.time.expires', { time: formatDate(invite.expiresAt) }) }}</div>
             </div>
 
             <div class="mt-4 grid grid-cols-2 gap-2">
-              <button class="btn-ghost btn-sm justify-center" @click="copyText(invite.code, '邀请码已复制')">复制码</button>
-              <button class="btn-secondary btn-sm justify-center" @click="copyText(getInviteLink(invite), '邀请链接已复制')">复制链接</button>
+              <button class="btn-ghost btn-sm justify-center" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
+              <button class="btn-secondary btn-sm justify-center" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
             </div>
           </div>
         </div>
@@ -320,12 +322,12 @@ function nextPage(): void {
           <table class="w-full table-fixed divide-y divide-themed">
             <thead>
               <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">邀请码</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">状态</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">使用人</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">生成成本</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">时间</th>
-                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-themed-muted">操作</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">{{ t('invites.columns.code') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">{{ t('common.status') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">{{ t('invites.usedBy') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">{{ t('invites.columns.cost') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-themed-muted">{{ t('invites.columns.time') }}</th>
+                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-themed-muted">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
@@ -353,17 +355,17 @@ function nextPage(): void {
                   <span v-else class="text-sm text-themed-muted">-</span>
                 </td>
                 <td class="px-4 py-3 text-sm text-themed-muted">
-                  <div class="truncate">{{ invite.costSnapshot?.displayAmount || '管理员生成' }}</div>
+                  <div class="truncate">{{ invite.costSnapshot?.displayAmount || t('invites.adminGenerated') }}</div>
                 </td>
                 <td class="px-4 py-3 text-sm text-themed-muted">
-                  <div>生成 {{ formatDate(invite.createdAt) }}</div>
-                  <div v-if="invite.usedAt">使用 {{ formatDate(invite.usedAt) }}</div>
-                  <div v-else-if="invite.expiresAt">过期 {{ formatDate(invite.expiresAt) }}</div>
+                  <div>{{ t('invites.time.generated', { time: formatDate(invite.createdAt) }) }}</div>
+                  <div v-if="invite.usedAt">{{ t('invites.time.used', { time: formatDate(invite.usedAt) }) }}</div>
+                  <div v-else-if="invite.expiresAt">{{ t('invites.time.expires', { time: formatDate(invite.expiresAt) }) }}</div>
                 </td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
                   <div class="inline-flex justify-end gap-2">
-                    <button class="btn-ghost btn-sm" @click="copyText(invite.code, '邀请码已复制')">复制码</button>
-                    <button class="btn-secondary btn-sm" @click="copyText(getInviteLink(invite), '邀请链接已复制')">复制链接</button>
+                    <button class="btn-ghost btn-sm" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
+                    <button class="btn-secondary btn-sm" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
                   </div>
                 </td>
               </tr>
@@ -372,11 +374,11 @@ function nextPage(): void {
         </div>
 
         <div v-if="total > 0" class="flex flex-col gap-3 border-t border-themed px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-sm text-themed-muted">共 {{ total }} 条</p>
+          <p class="text-sm text-themed-muted">{{ t('invites.total', { total }) }}</p>
           <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex">
-            <button class="btn-ghost btn-sm justify-center" :disabled="page <= 1" @click="previousPage">上一页</button>
+            <button class="btn-ghost btn-sm justify-center" :disabled="page <= 1" @click="previousPage">{{ t('common.prevPage') }}</button>
             <span class="min-w-[72px] text-center text-sm text-themed-muted">{{ page }} / {{ totalPages }}</span>
-            <button class="btn-ghost btn-sm justify-center" :disabled="page >= totalPages" @click="nextPage">下一页</button>
+            <button class="btn-ghost btn-sm justify-center" :disabled="page >= totalPages" @click="nextPage">{{ t('common.nextPage') }}</button>
           </div>
         </div>
       </div>

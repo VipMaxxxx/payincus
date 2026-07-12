@@ -140,9 +140,50 @@ try {
   assert.ok(result.warnings.includes('ENCRYPTION_KEY not configured, will use JWT_SECRET as fallback'))
 
   const securitySource = readFileSync(resolve(__dirname, '../src/lib/security.ts'), 'utf8')
+  const configCacheSource = readFileSync(resolve(__dirname, '../src/lib/config-cache.ts'), 'utf8')
+  const exchangeDeliveryWorkerSource = readFileSync(resolve(__dirname, '../src/workers/exchangeDeliveryWorker.ts'), 'utf8')
   const hostRouteSource = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'utf8')
   const envExampleSource = readFileSync(resolve(__dirname, '../../.env.example'), 'utf8')
   const readmeSource = readFileSync(resolve(__dirname, '../../README.md'), 'utf8')
+  const operationsHandoffSource = readFileSync(resolve(__dirname, '../../OPERATIONS_HANDOFF.md'), 'utf8')
+  const agentsSource = readFileSync(resolve(__dirname, '../../AGENTS.md'), 'utf8')
+
+  assert.ok(
+    securitySource.includes('依赖私有后端仅运行单个进程实例') &&
+      securitySource.includes('未来扩容前必须下沉到 PostgreSQL 或其它共享存储') &&
+      securitySource.includes('const loginAttempts = new Map') &&
+      securitySource.includes('const usedNonces = new Map') &&
+      securitySource.includes('const usedLoginCodeNonces = new Map'),
+    'security process-local locks and nonce replay protection must document the single-backend-process invariant'
+  )
+
+  assert.ok(
+    configCacheSource.includes('依赖私有后端仅运行单个进程实例') &&
+      configCacheSource.includes('未来扩容前必须下沉到 PostgreSQL 或其它共享存储/失效通知机制') &&
+      configCacheSource.includes('const configCache = new Map'),
+    'configuration cache must document the single-backend-process invariant and shared-store migration requirement'
+  )
+
+  assert.ok(
+    exchangeDeliveryWorkerSource.includes('交割 finalize 重入去重是进程内状态') &&
+      exchangeDeliveryWorkerSource.includes('依赖私有后端仅运行单个进程实例') &&
+      exchangeDeliveryWorkerSource.includes('const runningTaskIds = new Set<number>()'),
+    'exchange delivery finalize deduplication must document the single-backend-process invariant'
+  )
+
+  assert.ok(
+    operationsHandoffSource.includes('## Private Backend Must Run As A Single Instance') &&
+      operationsHandoffSource.includes('must run as exactly one Node.js process') &&
+      operationsHandoffSource.includes('Treat a second backend replica as an unsupported deployment'),
+    'operations handoff must prohibit multiple private-backend process instances'
+  )
+
+  assert.ok(
+    agentsSource.includes('### 私有后端必须单实例运行') &&
+      agentsSource.includes('必须且只能运行 **1 个 Node.js 进程实例**') &&
+      agentsSource.includes('第二个后端副本属于不受支持的部署'),
+    'agent instructions must preserve the private-backend single-instance architecture invariant'
+  )
 
   assert.ok(
     securitySource.includes('export function getJwtSigningSecret(purpose = \'token signing\'): string') &&

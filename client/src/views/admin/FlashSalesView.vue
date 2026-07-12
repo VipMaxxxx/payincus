@@ -76,6 +76,11 @@ function formatMoneyCents(cents: number): string {
   return `¥${(Number(cents || 0) / 100).toFixed(2)}`
 }
 
+function isValidFlashPrice(flashPriceYuan: number, originalPriceCents: number): boolean {
+  const flashPriceCents = Math.round(Number(flashPriceYuan) * 100)
+  return Number.isFinite(flashPriceYuan) && flashPriceCents > 0 && flashPriceCents < Number(originalPriceCents)
+}
+
 function formatDate(value: string): string {
   return new Date(value).toLocaleString('zh-CN')
 }
@@ -172,12 +177,12 @@ async function createCampaign(): Promise<void> {
     return
   }
   const invalidItem = validItems.some(item =>
-    item.flashPrice < 0 ||
+    !isValidFlashPrice(item.flashPrice, plans.value.find(plan => plan.id === item.packagePlanId)?.price ?? 0) ||
     item.totalStock < 1 ||
     item.perUserLimit < 1
   )
   if (invalidItem) {
-    toast.warning('秒杀商品的价格、库存和限购配置无效')
+    toast.warning('秒杀价必须大于 0 且低于方案原价，库存和限购也必须有效')
     return
   }
   const duplicatePlan = new Set(validItems.map(item => item.packagePlanId)).size !== validItems.length
@@ -347,8 +352,8 @@ function cancelEditItem(): void {
 }
 
 async function saveItemContent(item: FlashSaleItem): Promise<void> {
-  if (itemForm.value.flashPrice < 0 || !Number.isInteger(Number(itemForm.value.totalStock)) || itemForm.value.totalStock < 0 || !Number.isInteger(Number(itemForm.value.perUserLimit)) || itemForm.value.perUserLimit < 1) {
-    toast.warning('秒杀商品的价格、库存和限购配置无效')
+  if (!isValidFlashPrice(itemForm.value.flashPrice, item.originalPriceSnapshot) || !Number.isInteger(Number(itemForm.value.totalStock)) || itemForm.value.totalStock < 0 || !Number.isInteger(Number(itemForm.value.perUserLimit)) || itemForm.value.perUserLimit < 1) {
+    toast.warning('秒杀价必须大于 0 且低于原价，库存和限购也必须有效')
     return
   }
   if (itemForm.value.totalStock < item.soldCount + item.reservedCount) {
@@ -503,7 +508,7 @@ onMounted(async () => {
                 </label>
                 <label class="space-y-1">
                   <span class="text-xs text-themed-muted">秒杀价（元）</span>
-                  <input v-model.number="item.flashPrice" type="number" min="0" step="0.01" class="input w-full" />
+                  <input v-model.number="item.flashPrice" type="number" min="0.01" step="0.01" class="input w-full" />
                 </label>
                 <label class="space-y-1">
                   <span class="text-xs text-themed-muted">库存</span>
@@ -548,7 +553,7 @@ onMounted(async () => {
                     </select>
                   </td>
                   <td class="px-4 py-3">
-                    <input v-model.number="item.flashPrice" type="number" min="0" step="0.01" class="input w-full" />
+                    <input v-model.number="item.flashPrice" type="number" min="0.01" step="0.01" class="input w-full" />
                   </td>
                   <td class="px-4 py-3">
                     <input v-model.number="item.totalStock" type="number" min="1" step="1" class="input w-full" />
@@ -666,7 +671,7 @@ onMounted(async () => {
 	                  <div class="grid gap-3 md:grid-cols-3">
 	                    <label class="space-y-1">
 	                      <span class="text-xs text-themed-muted">秒杀价（元）</span>
-	                      <input v-model.number="itemForm.flashPrice" type="number" min="0" step="0.01" class="input" />
+	                      <input v-model.number="itemForm.flashPrice" type="number" min="0.01" :max="Math.max(0.01, item.originalPriceSnapshot / 100 - 0.01)" step="0.01" class="input" />
 	                    </label>
 	                    <label class="space-y-1">
 	                      <span class="text-xs text-themed-muted">总库存</span>

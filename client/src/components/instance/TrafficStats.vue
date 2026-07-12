@@ -338,7 +338,7 @@ const xAxisLabels = computed(() => {
                 :key="label.index"
                 class="absolute text-xs transform -translate-x-1/2"
                 :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-400'"
-                :style="{ left: `${(label.index / (trafficHistory.length - 1)) * 100}%` }"
+                :style="{ left: `${trafficHistory.length === 1 ? 50 : (label.index / (trafficHistory.length - 1)) * 100}%` }"
               >
                 {{ label.date }}
               </div>

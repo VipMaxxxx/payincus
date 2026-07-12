@@ -571,7 +571,7 @@ export async function getInstancesPaginated(options: PaginationOptions = {}): Pr
       package_name: i.package?.name || null,
       package_plan_id: i.packagePlanId,
       billing_price: i.billingPrice ? Number(i.billingPrice) : null,
-      traffic_reset_price: Number(i.packagePlan?.trafficResetPrice ?? i.package?.trafficResetPrice ?? 0) / 100,
+      traffic_reset_price: Number(i.packagePlan?.trafficResetPrice ?? i.package?.trafficResetPrice ?? 0),
       package_instance_type: i.package?.instanceType || 'container',
       allow_instance_deletion: i.package?.allowInstanceDeletion ?? true
     })),

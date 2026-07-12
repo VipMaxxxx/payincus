@@ -2,16 +2,19 @@ import { schedule } from 'node-cron'
 import type { Prisma } from '@prisma/client'
 import pLimit from 'p-limit'
 import { prisma } from '../db/prisma.js'
+import { advisoryTransactionLock } from '../db/advisory-locks.js'
 import { getIncusClientFromPool } from '../lib/incus/incus-pool.js'
-import { restoreBandwidth } from '../lib/incus/incus-traffic.js'
 import { stopInstance } from '../lib/incus/incus-instances.js'
 import { createLog } from '../db/logs.js'
 import { sendNotification } from '../lib/notifier.js'
 import { restrictUserOrdersForRisk } from './user-order-restrictions.js'
+import { reconcileEffectiveBandwidth } from './traffic-bandwidth.js'
 
 const DEFAULT_SAMPLE_INTERVAL_MINUTES = 3
+export const DEFAULT_SCORE_DECAY_PER_HOUR = 5
 const MAX_SCORE = 100
 const EVALUATION_CONCURRENCY = 8
+const RESOURCE_RISK_EVALUATION_LOCK_NAMESPACE = 62068
 let schedulerStarted = false
 
 type RiskSeverity = 'low' | 'medium' | 'high' | 'critical'
@@ -161,7 +164,7 @@ async function getDefaultPolicy(): Promise<RiskPolicy> {
   if (policy) return policy
 
   return prisma.resourceRiskPolicy.create({
-    data: { name: '默认策略' }
+    data: { name: '默认策略', scoreDecayPerHour: DEFAULT_SCORE_DECAY_PER_HOUR }
   })
 }
 
@@ -248,12 +251,15 @@ function projectRisk(input: {
   samples: Parameters<typeof buildRiskTriggers>[0]['samples']
   policy: RiskPolicy
   previousScore: number
-  lastEvaluatedAt: Date | null | undefined
+  decayAnchorAt: Date | null | undefined
+  decayAppliedSinceTrigger: number
 }): RiskProjection {
   const now = new Date()
   const { triggers, evidence } = buildRiskTriggers({ samples: input.samples, policy: input.policy })
-  const elapsedHours = input.lastEvaluatedAt ? Math.max(0, (now.getTime() - input.lastEvaluatedAt.getTime()) / 3_600_000) : 0
-  const decay = triggers.length === 0 ? Math.floor(elapsedHours * input.policy.scoreDecayPerHour) : 0
+  const elapsedHours = input.decayAnchorAt ? Math.max(0, (now.getTime() - input.decayAnchorAt.getTime()) / 3_600_000) : 0
+  const scoreDecayPerHour = positiveInt(input.policy.scoreDecayPerHour, DEFAULT_SCORE_DECAY_PER_HOUR)
+  const cumulativeDecay = triggers.length === 0 ? Math.floor(elapsedHours * scoreDecayPerHour) : 0
+  const decay = triggers.length === 0 ? Math.max(0, cumulativeDecay - input.decayAppliedSinceTrigger) : 0
   const scoreDelta = triggers.reduce((sum, trigger) => sum + trigger.delta, 0)
   const nextScore = clampScore(input.previousScore + scoreDelta - decay)
   const qosTiers = parseQosTiers(input.policy.qosTiers)
@@ -270,13 +276,22 @@ function projectRisk(input: {
     evidence: {
       ...evidence,
       scoreDelta,
-      decay
+      decay,
+      cumulativeDecay,
+      decayAppliedSinceTrigger: triggers.length > 0 ? 0 : input.decayAppliedSinceTrigger + decay,
+      scoreDecayPerHour
     },
     qosTiers,
     targetTier,
     shouldRestrictOrders,
     shouldAutoSuspend: input.policy.autoSuspendEnabled && nextScore >= input.policy.autoSuspendScore
   }
+}
+
+function getDecayAppliedSinceTrigger(evidence: unknown): number {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) return 0
+  const value = Number((evidence as Record<string, unknown>).decayAppliedSinceTrigger)
+  return Number.isInteger(value) && value >= 0 ? value : 0
 }
 
 function qosTierEvidence(tier: QosTier | null): Record<string, unknown> | null {
@@ -294,87 +309,12 @@ function qosTierEvidence(tier: QosTier | null): Record<string, unknown> | null {
   }
 }
 
-async function restoreQosLimit(input: {
-  instance: {
-    id: number
-    incusId: string
-    host: {
-      id: number
-      url: string
-      certPath: string | null
-      keyPath: string | null
-      status: string
-    }
-  }
-  state: {
-    originalIngress: string | null
-    originalEgress: string | null
-  }
-}): Promise<void> {
-  if (input.instance.host.status === 'online' && input.instance.host.certPath && input.instance.host.keyPath) {
-    const client = await getIncusClientFromPool({
-      id: input.instance.host.id,
-      url: input.instance.host.url,
-      certPath: input.instance.host.certPath,
-      keyPath: input.instance.host.keyPath
-    })
-    await restoreBandwidth(client, input.instance.incusId, input.state.originalIngress, input.state.originalEgress)
-  }
-
-  await prisma.instance.update({
-    where: { id: input.instance.id },
-    data: {
-      limitsIngress: input.state.originalIngress,
-      limitsEgress: input.state.originalEgress
-    }
-  })
-}
-
-async function applyQosLimit(input: {
-  instance: {
-    id: number
-    incusId: string
-    limitsIngress: string | null
-    limitsEgress: string | null
-    host: {
-      id: number
-      url: string
-      certPath: string | null
-      keyPath: string | null
-      status: string
-    }
-  }
-  tier: QosTier
-  state: {
-    originalIngress: string | null
-    originalEgress: string | null
-  } | null
-}): Promise<string | null> {
-  if (input.instance.host.status !== 'online' || !input.instance.host.certPath || !input.instance.host.keyPath) {
-    return null
-  }
-
-  const limit = `${input.tier.bandwidthMbps}Mbit`
-  const client = await getIncusClientFromPool({
-    id: input.instance.host.id,
-    url: input.instance.host.url,
-    certPath: input.instance.host.certPath,
-    keyPath: input.instance.host.keyPath
-  })
-
-  await restoreBandwidth(client, input.instance.incusId, limit, limit)
-  await prisma.instance.update({
-    where: { id: input.instance.id },
-    data: {
-      limitsIngress: limit,
-      limitsEgress: limit
-    }
-  })
-
-  return limit
+function qosBandwidthLimit(tier: QosTier): string {
+  return `${tier.bandwidthMbps}Mbit`
 }
 
 async function autoSuspendInstance(input: {
+  transaction: Prisma.TransactionClient
   instance: {
     id: number
     incusId: string
@@ -393,7 +333,7 @@ async function autoSuspendInstance(input: {
 }) {
   if (input.instance.status === 'suspended') return
 
-  await prisma.instance.update({
+  await input.transaction.instance.update({
     where: { id: input.instance.id },
     data: {
       status: 'suspended',
@@ -422,11 +362,14 @@ async function autoSuspendInstance(input: {
   })
 }
 
-export async function evaluateInstanceRisk(instanceId: number, policyInput?: RiskPolicy) {
-  const policy = policyInput ?? await getDefaultPolicy()
-  if (!policy.enabled) return null
+async function evaluateInstanceRiskLocked(
+  instanceId: number,
+  policy: RiskPolicy,
+  tx: Prisma.TransactionClient
+) {
+  await advisoryTransactionLock(tx, RESOURCE_RISK_EVALUATION_LOCK_NAMESPACE, instanceId)
 
-  const instance = await prisma.instance.findUnique({
+  const instance = await tx.instance.findUnique({
     where: { id: instanceId },
     include: {
       host: {
@@ -447,7 +390,7 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
 
   const now = new Date()
   const windowMinutes = Math.max(policy.bandwidthWindowMinutes, policy.cpuWindowMinutes)
-  const samples = await prisma.instanceResourceSample.findMany({
+  const samples = await tx.instanceResourceSample.findMany({
     where: {
       instanceId,
       sampledAt: {
@@ -459,11 +402,14 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
   })
 
   const previousScore = instance.resourceRiskState?.score ?? 0
+  const decayAnchorAt = instance.resourceRiskState?.lastTriggeredAt ??
+    (previousScore > 0 ? instance.resourceRiskState?.lastEvaluatedAt : null)
   const projection = projectRisk({
     samples,
     policy,
     previousScore,
-    lastEvaluatedAt: instance.resourceRiskState?.lastEvaluatedAt
+    decayAnchorAt,
+    decayAppliedSinceTrigger: getDecayAppliedSinceTrigger(instance.resourceRiskState?.evidence)
   })
   const {
     triggers,
@@ -485,9 +431,12 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
   let bandwidthLimit: string | null = instance.resourceRiskState?.currentBandwidthLimit ?? null
   let nextQosLevel = currentQosLevel
   let nextStatus = shouldAutoSuspend && !manualLocked ? 'suspended' : (currentQosLevel > 0 ? 'qos_limited' : nextLevel)
-  let nextLastTriggeredAt: Date | undefined
+  let nextLastTriggeredAt: Date | undefined = triggers.length > 0
+    ? now
+    : (instance.resourceRiskState?.lastTriggeredAt ? undefined : decayAnchorAt ?? undefined)
   let nextLastRecoveredAt: Date | undefined
   let effectiveTargetTier = targetTier
+  let shouldNotifyQos = false
 
   const canRecoverQos = !manualLocked &&
     currentTier &&
@@ -496,23 +445,13 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
     (lastActionMinutes === null || lastActionMinutes >= currentTier.minDurationMinutes)
 
   if (canRecoverQos) {
-    try {
-      await restoreQosLimit({
-        instance,
-        state: {
-          originalIngress: instance.resourceRiskState?.originalIngress ?? null,
-          originalEgress: instance.resourceRiskState?.originalEgress ?? null
-        }
-      })
-      actionTaken = 'qos_recovered'
-      bandwidthLimit = null
-      nextQosLevel = 0
-      nextStatus = nextLevel
-      effectiveTargetTier = null
-      nextLastRecoveredAt = now
-    } catch (error) {
-      console.error(`[ResourceRisk] Failed to recover QoS for instance ${instance.id}:`, error)
-    }
+    // 只清除风控自己的约束；实际带宽在状态落库后由仲裁点按剩余约束重算。
+    actionTaken = 'qos_recovered'
+    bandwidthLimit = null
+    nextQosLevel = 0
+    nextStatus = nextLevel
+    effectiveTargetTier = null
+    nextLastRecoveredAt = now
   }
 
   const canEscalateQos = !manualLocked &&
@@ -522,32 +461,12 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
     (lastActionMinutes === null || lastActionMinutes >= effectiveTargetTier.cooldownMinutes)
 
   if (canEscalateQos && effectiveTargetTier) {
-    try {
-      bandwidthLimit = await applyQosLimit({
-        instance,
-        tier: effectiveTargetTier,
-        state: instance.resourceRiskState
-      })
-      if (bandwidthLimit) {
-        nextQosLevel = effectiveTargetTier.level
-        nextStatus = 'qos_limited'
-        nextLastTriggeredAt = now
-        actionTaken = `qos_level_${effectiveTargetTier.level}`
-        if (effectiveTargetTier.notifyUser) {
-          await sendNotification(instance.userId, 'resource_risk_qos_limited', {
-            instanceName: instance.name,
-            hostName: instance.host.name,
-            bandwidthLimit,
-            score: nextScore,
-            reason: triggers.map(trigger => trigger.message).join('；') || '资源使用触发自动风控'
-          }).catch((error) => {
-            console.error('[ResourceRisk] Failed to send QoS notification:', error)
-          })
-        }
-      }
-    } catch (error) {
-      console.error(`[ResourceRisk] Failed to apply QoS for instance ${instance.id}:`, error)
-    }
+    bandwidthLimit = qosBandwidthLimit(effectiveTargetTier)
+    nextQosLevel = effectiveTargetTier.level
+    nextStatus = 'qos_limited'
+    nextLastTriggeredAt = now
+    actionTaken = `qos_level_${effectiveTargetTier.level}`
+    shouldNotifyQos = effectiveTargetTier.notifyUser
   }
 
   if (!manualLocked && effectiveTargetTier && effectiveTargetTier.level <= nextQosLevel) {
@@ -561,6 +480,7 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
   if (shouldAutoSuspend && !manualLocked) {
     try {
       await autoSuspendInstance({
+        transaction: tx,
         instance,
         reason: 'resource_risk_auto_suspend'
       })
@@ -594,7 +514,7 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
   }
   const evidenceJson = evidence as Prisma.InputJsonObject
 
-  const state = await prisma.instanceRiskState.upsert({
+  const state = await tx.instanceRiskState.upsert({
     where: { instanceId },
     update: {
       score: nextScore,
@@ -602,8 +522,6 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
       status: nextStatus,
       qosLevel: nextQosLevel,
       currentBandwidthLimit: bandwidthLimit,
-      originalIngress: instance.resourceRiskState?.originalIngress ?? instance.limitsIngress,
-      originalEgress: instance.resourceRiskState?.originalEgress ?? instance.limitsEgress,
       lastEvaluatedAt: now,
       lastTriggeredAt: nextLastTriggeredAt,
       lastRecoveredAt: nextLastRecoveredAt,
@@ -619,8 +537,6 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
       status: nextStatus,
       qosLevel: nextQosLevel,
       currentBandwidthLimit: bandwidthLimit,
-      originalIngress: instance.limitsIngress,
-      originalEgress: instance.limitsEgress,
       lastEvaluatedAt: now,
       lastTriggeredAt: nextLastTriggeredAt ?? (triggers.length > 0 ? now : null),
       lastRecoveredAt: nextLastRecoveredAt ?? null,
@@ -631,7 +547,7 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
 
   let latestEventId: number | null = null
   if (triggers.length > 0 || actionTaken || nextLevel !== (instance.resourceRiskState?.level ?? 'normal')) {
-    const event = await prisma.instanceRiskEvent.create({
+    const event = await tx.instanceRiskEvent.create({
       data: {
         instanceId,
         userId: instance.userId,
@@ -654,10 +570,73 @@ export async function evaluateInstanceRisk(instanceId: number, policyInput?: Ris
       sourceInstanceId: instance.id,
       sourceRiskEventId: latestEventId,
       reason: `实例 ${instance.name} 触发高风险资源风控，需工单人工审核后恢复下单`
+    }, tx)
+  }
+
+  const automaticActions = [
+    actionTaken && actionTaken !== 'manual_state_preserved' ? actionTaken : null,
+    shouldRestrictOrders && !manualLocked ? 'order_restricted' : null
+  ].filter((action): action is string => Boolean(action))
+
+  return {
+    state,
+    shouldReconcileBandwidth: bandwidthLimit !== null || instance.resourceRiskState?.currentBandwidthLimit !== bandwidthLimit,
+    shouldNotifyQos,
+    bandwidthLimit,
+    instanceName: instance.name,
+    hostName: instance.host.name,
+    userId: instance.userId,
+    score: nextScore,
+    reason: triggers.map(trigger => trigger.message).join('；') || '资源使用触发自动风控',
+    automaticActions
+  }
+}
+
+export async function evaluateInstanceRisk(instanceId: number, policyInput?: RiskPolicy) {
+  const policy = policyInput ?? await getDefaultPolicy()
+  if (!policy.enabled) return null
+
+  const evaluation = await prisma.$transaction(
+    tx => evaluateInstanceRiskLocked(instanceId, policy, tx),
+    { timeout: 120_000 }
+  )
+  if (!evaluation) return null
+
+  let bandwidthReconciled = false
+  if (evaluation.shouldReconcileBandwidth) {
+    try {
+      // FX-063: 风控约束已提交后，再由唯一仲裁点计算并下发 Incus 带宽。
+      await reconcileEffectiveBandwidth(instanceId)
+      bandwidthReconciled = true
+    } catch (error) {
+      console.error(`[ResourceRisk] Failed to reconcile bandwidth for instance ${instanceId}:`, error)
+    }
+  }
+
+  if (bandwidthReconciled && evaluation.shouldNotifyQos && evaluation.bandwidthLimit) {
+    await sendNotification(evaluation.userId, 'resource_risk_qos_limited', {
+      instanceName: evaluation.instanceName,
+      hostName: evaluation.hostName,
+      bandwidthLimit: evaluation.bandwidthLimit,
+      score: evaluation.score,
+      reason: evaluation.reason
+    }).catch((error) => {
+      console.error('[ResourceRisk] Failed to send QoS notification:', error)
     })
   }
 
-  return state
+  if (evaluation.automaticActions.length > 0) {
+    await createLog(
+      null,
+      'instance',
+      'resource_risk.auto_action',
+      `System automatically applied resource risk action(s) ${evaluation.automaticActions.join(',')} to instance #${instanceId}`,
+      'success',
+      { instanceId }
+    )
+  }
+
+  return evaluation.state
 }
 
 export async function simulateResourceRiskPolicy(policyInput?: RiskPolicy): Promise<ResourceRiskSimulationResult> {
@@ -721,7 +700,9 @@ export async function simulateResourceRiskPolicy(policyInput?: RiskPolicy): Prom
       samples: samplesByInstanceId.get(instance.id) ?? [],
       policy,
       previousScore: instance.resourceRiskState?.score ?? 0,
-      lastEvaluatedAt: instance.resourceRiskState?.lastEvaluatedAt
+      decayAnchorAt: instance.resourceRiskState?.lastTriggeredAt ??
+        ((instance.resourceRiskState?.score ?? 0) > 0 ? instance.resourceRiskState?.lastEvaluatedAt : null),
+      decayAppliedSinceTrigger: getDecayAppliedSinceTrigger(instance.resourceRiskState?.evidence)
     })
     const manualLocked = instance.resourceRiskState?.status === 'manual_suspended' || instance.resourceRiskState?.status === 'manual_qos_limited'
     const currentQosLevel = instance.resourceRiskState?.qosLevel ?? 0
@@ -786,23 +767,6 @@ export async function releaseInstanceRisk(input: {
   })
   if (!state) return null
 
-  if ((state.qosLevel > 0 || state.currentBandwidthLimit) && state.instance.host.status === 'online' && state.instance.host.certPath && state.instance.host.keyPath) {
-    const client = await getIncusClientFromPool({
-      id: state.instance.host.id,
-      url: state.instance.host.url,
-      certPath: state.instance.host.certPath,
-      keyPath: state.instance.host.keyPath
-    })
-    await restoreBandwidth(client, state.instance.incusId, state.originalIngress, state.originalEgress)
-    await prisma.instance.update({
-      where: { id: state.instanceId },
-      data: {
-        limitsIngress: state.originalIngress,
-        limitsEgress: state.originalEgress
-      }
-    })
-  }
-
   const released = await prisma.instanceRiskState.update({
     where: { instanceId: input.instanceId },
     data: {
@@ -816,6 +780,7 @@ export async function releaseInstanceRisk(input: {
       evidence: {}
     }
   })
+  await reconcileEffectiveBandwidth(state.instanceId)
 
   await prisma.instanceRiskEvent.create({
     data: {
@@ -859,24 +824,6 @@ export async function manualLimitInstanceRisk(input: {
   }
 
   const limit = `${Math.round(input.bandwidthMbps)}Mbit`
-  if (instance.host.status === 'online' && instance.host.certPath && instance.host.keyPath) {
-    const client = await getIncusClientFromPool({
-      id: instance.host.id,
-      url: instance.host.url,
-      certPath: instance.host.certPath,
-      keyPath: instance.host.keyPath
-    })
-    await restoreBandwidth(client, instance.incusId, limit, limit)
-  }
-
-  await prisma.instance.update({
-    where: { id: instance.id },
-    data: {
-      limitsIngress: limit,
-      limitsEgress: limit
-    }
-  })
-
   const previousScore = instance.resourceRiskState?.score ?? 0
   const nextScore = clampScore(Math.max(previousScore, 50))
   const evidence = {
@@ -895,8 +842,6 @@ export async function manualLimitInstanceRisk(input: {
       level: riskLevel(nextScore),
       status: 'manual_qos_limited',
       currentBandwidthLimit: limit,
-      originalIngress: instance.resourceRiskState?.originalIngress ?? instance.limitsIngress,
-      originalEgress: instance.resourceRiskState?.originalEgress ?? instance.limitsEgress,
       lastTriggeredAt: new Date(),
       reason,
       evidence
@@ -910,13 +855,12 @@ export async function manualLimitInstanceRisk(input: {
       status: 'manual_qos_limited',
       qosLevel: 0,
       currentBandwidthLimit: limit,
-      originalIngress: instance.limitsIngress,
-      originalEgress: instance.limitsEgress,
       lastTriggeredAt: new Date(),
       reason,
       evidence
     }
   })
+  await reconcileEffectiveBandwidth(instance.id)
 
   const event = await prisma.instanceRiskEvent.create({
     data: {
@@ -1016,8 +960,6 @@ export async function manualSuspendInstanceRisk(input: {
       status: 'manual_suspended',
       qosLevel: 0,
       currentBandwidthLimit: instance.resourceRiskState?.currentBandwidthLimit ?? null,
-      originalIngress: instance.resourceRiskState?.originalIngress ?? instance.limitsIngress,
-      originalEgress: instance.resourceRiskState?.originalEgress ?? instance.limitsEgress,
       lastTriggeredAt: new Date(),
       reason,
       evidence
@@ -1084,18 +1026,6 @@ export async function manualUnsuspendInstanceRisk(input: {
   if (!state) return null
 
   const previousStatus = state.instance.status
-  if (state.qosLevel > 0 || state.currentBandwidthLimit) {
-    if (state.instance.host.status === 'online' && state.instance.host.certPath && state.instance.host.keyPath) {
-      const client = await getIncusClientFromPool({
-        id: state.instance.host.id,
-        url: state.instance.host.url,
-        certPath: state.instance.host.certPath,
-        keyPath: state.instance.host.keyPath
-      })
-      await restoreBandwidth(client, state.instance.incusId, state.originalIngress, state.originalEgress)
-    }
-  }
-
   await prisma.instance.update({
     where: { id: state.instanceId },
     data: {
@@ -1103,8 +1033,6 @@ export async function manualUnsuspendInstanceRisk(input: {
       suspendedAt: null,
       suspendedBy: null,
       suspendReason: null,
-      limitsIngress: state.originalIngress,
-      limitsEgress: state.originalEgress,
       version: { increment: 1 }
     }
   })
@@ -1122,6 +1050,7 @@ export async function manualUnsuspendInstanceRisk(input: {
       evidence: {}
     }
   })
+  await reconcileEffectiveBandwidth(state.instanceId)
 
   await prisma.instanceRiskEvent.create({
     data: {

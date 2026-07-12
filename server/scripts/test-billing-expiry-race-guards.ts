@@ -98,22 +98,23 @@ const processDelete = sectionBetween(
 
 const claimIndex = processDelete.indexOf('const claimResult = await prisma.instance.updateMany')
 const incusDeleteIndex = processDelete.indexOf('await deleteIncusInstance')
-const dbDeleteIndex = processDelete.indexOf('await prisma.instance.delete')
+const networkReleaseIndex = processDelete.indexOf('await tx.portMapping.deleteMany')
 const restoreIndex = processDelete.indexOf('await restoreExpiryDeleteClaim(instance)')
 
 assert.notEqual(claimIndex, -1, 'expiry delete must conditionally claim the instance before side effects')
 assert.notEqual(incusDeleteIndex, -1, 'expiry delete Incus delete not found')
-assert.notEqual(dbDeleteIndex, -1, 'expiry delete database delete not found')
+assert.notEqual(networkReleaseIndex, -1, 'expiry delete network allocation release not found')
 assert.notEqual(restoreIndex, -1, 'expiry delete must restore claimed rows when Incus deletion cannot be completed')
 assert.ok(claimIndex < incusDeleteIndex, 'expiry delete must claim before Incus deletion')
-assert.ok(claimIndex < dbDeleteIndex, 'expiry delete must claim before database deletion')
-assert.ok(incusDeleteIndex < dbDeleteIndex, 'expiry delete must delete Incus before database deletion')
+assert.ok(claimIndex < networkReleaseIndex, 'expiry delete must claim before releasing network allocations')
+assert.ok(incusDeleteIndex < networkReleaseIndex, 'expiry delete must delete Incus before releasing network allocations')
 assert.ok(processDelete.includes('version: instance.version'), 'expiry delete claim must use optimistic version')
 assert.ok(processDelete.includes("status: 'suspended'"), 'expiry delete claim must require suspended status')
 assert.ok(processDelete.includes("suspendReason: 'expired'"), 'expiry delete claim must require expired suspension')
 assert.ok(processDelete.includes("status: 'deleted'"), 'expiry delete claim must mark the row deleted')
 assert.ok(processDelete.includes('version: { increment: 1 }'), 'expiry delete claim must increment version')
 assert.ok(processDelete.includes('if (claimResult.count === 0)'), 'expiry delete must skip stale ineligible rows')
+assert.ok(!processDelete.includes('prisma.instance.delete'), 'expiry delete must never hard-delete the instance')
 assert.ok(
   processDelete.includes('if (!host)') && processDelete.includes('restored expired suspension'),
   'expiry delete must stop and restore when the host or Incus deletion is unavailable'

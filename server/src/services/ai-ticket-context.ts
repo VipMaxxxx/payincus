@@ -22,6 +22,21 @@ const DEFAULT_TICKET_AUTO_REPLY_LIMIT = 3
 const DEFAULT_REPLY_COOLDOWN_SECONDS = 120
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.82
 
+const SENSITIVE_HANDOFF_RULES = {
+  refund: ['refund_or_dispute_requires_handoff', /退款|退费|refund/i],
+  payment_dispute: ['refund_or_dispute_requires_handoff', /争议|拒付|chargeback|dispute/i],
+  account_security: ['risk_or_account_security_requires_handoff', /盗号|账号安全|account security/i],
+  risk_control: ['risk_or_account_security_requires_handoff', /风控|封禁|解封|冻结|risk|abuse|ban/i],
+  data_recovery: ['destructive_instance_operation_requires_handoff', /恢复数据|数据恢复|数据丢失|recovery/i],
+  delete_or_reinstall_instance: ['destructive_instance_operation_requires_handoff', /删除|销毁|重装|迁移|delete|destroy|reinstall|migrate/i],
+  credential_or_backend_request: ['credential_or_backend_request_requires_handoff', /root|密码|ssh|密钥|后台|数据库|路径|password|secret|token/i],
+  resource_delivery_exception: ['resource_delivery_exception_requires_handoff', /开通失败|交付失败|机器异常|实例异常|无法连接|故障|宕机|delivery failed|outage/i]
+} as const satisfies Record<string, readonly [string, RegExp]>
+
+type SensitiveHandoffRule = keyof typeof SENSITIVE_HANDOFF_RULES
+
+const DEFAULT_SENSITIVE_HANDOFF_RULES = Object.keys(SENSITIVE_HANDOFF_RULES) as SensitiveHandoffRule[]
+
 type AiTicketPermission =
   | typeof AI_TICKET_CONTEXT_PERMISSION
   | typeof AI_TICKET_DRAFT_PERMISSION
@@ -77,7 +92,10 @@ interface AiTicketAgentConfig {
   cooldownSeconds: number
   showAiIdentity: boolean
   systemPrompt: string | null
+  sensitiveHandoffRules: SensitiveHandoffRule[]
 }
+
+export type AiTicketReplyTrigger = 'manual' | 'scheduler'
 
 export interface AiTicketContext {
   policy: {
@@ -289,6 +307,23 @@ function getConfigStringArray(configs: Map<string, unknown>, key: string, fallba
   return normalized.length > 0 ? normalized : fallback
 }
 
+export function resolveSensitiveHandoffRules(value: unknown): SensitiveHandoffRule[] {
+  if (!Array.isArray(value) || value.length === 0) return [...DEFAULT_SENSITIVE_HANDOFF_RULES]
+
+  const normalized = value
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => item.trim())
+
+  if (
+    normalized.length !== value.length ||
+    normalized.some(item => !Object.prototype.hasOwnProperty.call(SENSITIVE_HANDOFF_RULES, item))
+  ) {
+    return [...DEFAULT_SENSITIVE_HANDOFF_RULES]
+  }
+
+  return Array.from(new Set(normalized)) as SensitiveHandoffRule[]
+}
+
 function normalizeAiMode(value: string): AiTicketAgentConfig['mode'] {
   return value === 'semi_auto' || value === 'auto' ? value : 'draft'
 }
@@ -328,7 +363,8 @@ async function loadAiTicketAgentConfig(): Promise<AiTicketAgentConfig> {
     ticketAutoReplyLimit: Math.max(Math.floor(getConfigNumber(configs, 'ticketAutoReplyLimit', DEFAULT_TICKET_AUTO_REPLY_LIMIT)), 0),
     cooldownSeconds: Math.max(Math.floor(getConfigNumber(configs, 'cooldownSeconds', DEFAULT_REPLY_COOLDOWN_SECONDS)), 0),
     showAiIdentity: getConfigBoolean(configs, 'showAiIdentity', true),
-    systemPrompt: getConfigString(configs, 'systemPrompt') || null
+    systemPrompt: getConfigString(configs, 'systemPrompt') || null,
+    sensitiveHandoffRules: resolveSensitiveHandoffRules(configs.get('sensitiveHandoffRules'))
   }
 }
 
@@ -441,14 +477,6 @@ function inspectAiReplySendEligibility(context: AiTicketContext, config: AiTicke
     ...context.ticket.recentMessages.map(message => message.content)
   ].join(' ')
 
-  const sensitivePatterns: Array<[string, RegExp]> = [
-    ['refund_or_dispute_requires_handoff', /退款|退费|争议|拒付|chargeback|dispute|refund/i],
-    ['risk_or_account_security_requires_handoff', /风控|封禁|解封|冻结|盗号|账号安全|risk|abuse|ban/i],
-    ['destructive_instance_operation_requires_handoff', /删除|销毁|重装|迁移|恢复数据|数据恢复|数据丢失|delete|destroy|reinstall|migrate|recovery/i],
-    ['credential_or_backend_request_requires_handoff', /root|密码|ssh|密钥|后台|数据库|路径|password|secret|token/i],
-    ['resource_delivery_exception_requires_handoff', /开通失败|交付失败|机器异常|实例异常|无法连接|故障|宕机|delivery failed|outage/i]
-  ]
-
   if (context.ticket.category === 'abuse') {
     blockedReasons.push('abuse_category_requires_handoff')
   }
@@ -459,7 +487,8 @@ function inspectAiReplySendEligibility(context: AiTicketContext, config: AiTicke
     blockedReasons.push('category_not_allowed_for_auto_reply')
   }
 
-  for (const [reason, pattern] of sensitivePatterns) {
+  for (const rule of config.sensitiveHandoffRules) {
+    const [reason, pattern] = SENSITIVE_HANDOFF_RULES[rule]
     if (pattern.test(searchableText)) {
       blockedReasons.push(reason)
     }
@@ -470,7 +499,8 @@ function inspectAiReplySendEligibility(context: AiTicketContext, config: AiTicke
 
 async function inspectAiReplySendLimits(ticketId: number, config: AiTicketAgentConfig): Promise<string[]> {
   const blockedReasons: string[] = []
-  const ticketMarker = `ticket #${ticketId}`
+  const ticketMarker = getAiTicketSchedulerAuditMarker(ticketId)
+  const schedulerMarker = '[trigger=scheduler]'
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
 
@@ -480,6 +510,7 @@ async function inspectAiReplySendLimits(ticketId: number, config: AiTicketAgentC
         module: LogModule.PLUGIN,
         action: 'ai_ticket.reply_send',
         result: LogResult.SUCCESS,
+        content: { contains: schedulerMarker },
         createdAt: { gte: todayStart }
       }
     }),
@@ -770,15 +801,21 @@ export async function auditAiTicketReply(input: {
   ticketId: number
   result: 'success' | 'denied' | 'failed' | 'blocked'
   reason?: string
+  trigger?: AiTicketReplyTrigger
 }): Promise<void> {
   const detail = input.reason ? ` (${input.reason})` : ''
+  const triggerDetail = input.trigger === 'scheduler' ? ' [trigger=scheduler]' : ''
   await createLog(
     input.actorUserId,
     LogModule.PLUGIN,
     'ai_ticket.reply_send',
-    `AI ticket reply ${input.result} for ticket #${input.ticketId}${detail}`,
+    `AI ticket reply ${input.result} for ticket #${input.ticketId}${triggerDetail}${detail}`,
     input.result === 'success' ? LogResult.SUCCESS : LogResult.WARNING
   )
+}
+
+export function getAiTicketSchedulerAuditMarker(ticketId: number): string {
+  return `ticket #${ticketId} [trigger=scheduler]`
 }
 
 export async function buildAiTicketContext(ticketId: number): Promise<AiTicketContext | null> {
@@ -1021,7 +1058,7 @@ export async function buildAiTicketContext(ticketId: number): Promise<AiTicketCo
   }
 }
 
-async function generateAiTicketReplyCandidate(ticketId: number): Promise<AiTicketReplyCandidate> {
+async function generateAiTicketReplyCandidate(ticketId: number, trigger: AiTicketReplyTrigger): Promise<AiTicketReplyCandidate> {
   const config = await loadAiTicketAgentConfig()
   if (!config.enabled) {
     throw new Error('AI_TICKET_AGENT_DISABLED')
@@ -1049,7 +1086,7 @@ async function generateAiTicketReplyCandidate(ticketId: number): Promise<AiTicke
     ...inspectAiReplySendEligibility(context, config),
     ...(decision.handoffRequired ? [`model_handoff_required${decision.handoffReason ? `:${decision.handoffReason}` : ''}`] : []),
     ...(decision.confidence < config.confidenceThreshold ? ['confidence_below_threshold'] : []),
-    ...(config.mode === 'draft' ? [] : await inspectAiReplySendLimits(ticketId, config))
+    ...(trigger === 'scheduler' && config.mode !== 'draft' ? await inspectAiReplySendLimits(ticketId, config) : [])
   ]
 
   return {
@@ -1086,6 +1123,37 @@ export async function generateAiTicketDraft(ticketId: number): Promise<AiTicketD
   }
 }
 
-export async function generateAiTicketReply(ticketId: number): Promise<AiTicketReplyCandidate> {
-  return generateAiTicketReplyCandidate(ticketId)
+export async function validateAiTicketReviewedReply(
+  ticketId: number,
+  reviewedBody: string
+): Promise<AiTicketReplyCandidate> {
+  const config = await loadAiTicketAgentConfig()
+  if (!config.enabled) {
+    throw new Error('AI_TICKET_AGENT_DISABLED')
+  }
+
+  const context = await buildAiTicketContext(ticketId)
+  if (!context) {
+    throw new Error('TICKET_NOT_FOUND')
+  }
+
+  const safety = inspectAiDraftSafety(reviewedBody)
+  const sendBlockedReasons = inspectAiReplySendEligibility(context, config)
+  return {
+    draft: reviewedBody,
+    model: config.model,
+    safety,
+    mode: config.mode,
+    confidence: 1,
+    confidenceThreshold: config.confidenceThreshold,
+    canSend: (config.mode === 'semi_auto' || config.mode === 'auto') && sendBlockedReasons.length === 0,
+    sendBlockedReasons
+  }
+}
+
+export async function generateAiTicketReply(
+  ticketId: number,
+  trigger: AiTicketReplyTrigger = 'manual'
+): Promise<AiTicketReplyCandidate> {
+  return generateAiTicketReplyCandidate(ticketId, trigger)
 }

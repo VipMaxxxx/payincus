@@ -5,7 +5,7 @@
 
 import type { MailSource } from '@prisma/client'
 import { sanitizeObject, sanitizeTokensInString } from '../lib/log-sanitizer.js'
-import { assertSafeHttpUrl } from '../lib/outbound-security.js'
+import { assertSafeHttpUrl, safeFetch } from '../lib/outbound-security.js'
 import { readLimitedTextResponse } from '../lib/http-response.js'
 
 const CRANEMAIL_API_TIMEOUT_MS = 30_000
@@ -23,6 +23,11 @@ interface CraneMailResponse {
   [key: string]: any
 }
 
+function parseDiskUsageMb(value: unknown): number | undefined {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : undefined
+}
+
 /**
  * 调用 CraneMail API
  */
@@ -37,7 +42,7 @@ async function callApi(source: MailSource, action: string, data: Record<string, 
   console.log(`[CraneMail] Calling API: ${apiUrl}`)
   console.log('[CraneMail] Request payload:', sanitizeObject({ action, data }))
   
-  const response = await fetch(apiUrl, {
+  const response = await safeFetch(apiUrl, {
     method: 'POST',
     signal: AbortSignal.timeout(CRANEMAIL_API_TIMEOUT_MS),
     headers: {
@@ -46,7 +51,7 @@ async function callApi(source: MailSource, action: string, data: Record<string, 
     },
     body: bodyData,
     redirect: 'manual'
-  })
+  }, 'CraneMail API URL')
 
   const responseText = await readLimitedTextResponse(response, 'CraneMail API response', CRANEMAIL_MAX_RESPONSE_BYTES)
   console.log(`[CraneMail] Response status: ${response.status}`)
@@ -97,11 +102,15 @@ async function callApi(source: MailSource, action: string, data: Record<string, 
 export async function createDomain(
   source: MailSource,
   domain: string,
-  diskLimitGb: number
+  subscriptionDiskLimitGb: number,
+  domainLimit: number
 ): Promise<{ username?: string; password?: string; server?: string }> {
+  // CraneMail only supports a per-domain cap. Split the subscription's shared
+  // total evenly so all provisioned domain caps cannot add up beyond the plan.
+  const sharedDomainDiskLimitGb = subscriptionDiskLimitGb / domainLimit
   const result = await callApi(source, 'domain/create', {
     domain,
-    disklimit: diskLimitGb.toString(),
+    disklimit: sharedDomainDiskLimitGb.toString(),
     userlimit: '0', // 无限用户
     useraliaslimit: '0',
     domainaliaslimit: '0',
@@ -188,8 +197,20 @@ export async function getDomainInfo(source: MailSource, domain: string): Promise
     spfRecord,
     dkimRecord,
     cnameRecords,
-    diskUsedMb: result?.diskusage ? parseInt(result.diskusage) : 0
+    diskUsedMb: parseDiskUsageMb(result?.diskusage)
   }
+}
+
+/**
+ * 获取域名上游实际磁盘用量。
+ */
+export async function getDomainUsage(
+  source: MailSource,
+  domain: string
+): Promise<{ diskUsedMb: number } | null> {
+  const result = await callApi(source, 'domain/info', { domain })
+  const diskUsedMb = parseDiskUsageMb(result?.diskusage)
+  return diskUsedMb === undefined ? null : { diskUsedMb }
 }
 
 /**
@@ -209,9 +230,12 @@ export async function suspendDomain(source: MailSource, domain: string): Promise
 /**
  * 恢复域名
  */
-export async function unsuspendDomain(source: MailSource, domain: string): Promise<void> {
+export async function resumeDomain(source: MailSource, domain: string): Promise<void> {
   await callApi(source, 'domain/unsuspend', { domain })
 }
+
+// 保留旧名称，避免已有调用方在迁移期间失效。
+export const unsuspendDomain = resumeDomain
 
 /**
  * 修改域名配置

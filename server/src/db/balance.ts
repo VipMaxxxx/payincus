@@ -386,19 +386,24 @@ export async function approveBalanceAdjustmentRequest(
       throw new Error('调账申请已处理')
     }
 
-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
+    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
+    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
       ? 'refund'
       : 'admin_adjust'
+    const balanceChangeAmount = isRechargeRefund
+      ? -Math.abs(Number(request.amount))
+      : Number(request.amount)
     const remark = [
       `[审批通过] ${request.reason}`,
       request.orderNo ? `订单 ${request.orderNo}` : '',
+      isRechargeRefund ? '充值退款收回余额' : '',
       reviewRemark ? `审核备注: ${reviewRemark}` : ''
     ].filter(Boolean).join('；')
 
     const balanceResult = await changeBalanceInTransaction(tx, {
       userId: request.userId,
       type: logType,
-      amount: Number(request.amount),
+      amount: balanceChangeAmount,
       orderId: request.orderNo || undefined,
       remark
     })
@@ -536,9 +541,15 @@ export async function giftBalance(
 }
 
 /**
- * 获取用户实际消费额。
- * 历史上部分业务把 consume.amount 写成正数，不能直接 SUM(amount) 再取绝对值。
- * 这里优先使用余额前后差额，兼容正负号不一致的历史日志。
+ * 获取用户实际消费额（净消费 = 实例消费 − 实例相关退款）。
+ * 历史上部分业务把 consume.amount 写成正数，不能直接 SUM(amount) 再取绝对值，
+ * 因此优先使用余额前后差额，兼容正负号不一致的历史日志。
+ *
+ * 退款按同样口径扣减，但**仅扣减挂了实例的退款**（type='refund' 且 instance_id 非空，
+ * 即实例创建失败自动退款、销毁退款、降级退款等消费冲正）。充值退款、管理员调账退款
+ * （走 type='refund' 但无 instance_id）不计入，避免把与消费无关的退款错误地从消费额中扣掉。
+ * 与实例级的 getInstanceRefundableAmount（消费 − 退款）口径保持一致，
+ * 修复「消费→退款→再消费」时累计消费被重复计数、进而虚高可兑换积分/VIP 等级的问题。
  */
 export async function getUsersTotalConsumeMap(
   userIds: number[],
@@ -555,15 +566,21 @@ export async function getUsersTotalConsumeMap(
   const rows = await client.$queryRaw<Array<{ userId: number; totalConsume: unknown }>>(Prisma.sql`
     SELECT
       user_id AS "userId",
-      COALESCE(SUM(
+      GREATEST(COALESCE(SUM(
         CASE
-          WHEN balance_before > balance_after THEN balance_before - balance_after
-          ELSE ABS(amount)
+          WHEN type = 'consume' THEN
+            CASE WHEN balance_before > balance_after THEN balance_before - balance_after ELSE ABS(amount) END
+          WHEN type = 'refund' THEN
+            -1 * (CASE WHEN balance_after > balance_before THEN balance_after - balance_before ELSE ABS(amount) END)
+          ELSE 0
         END
-      ), 0)::numeric AS "totalConsume"
+      ), 0), 0)::numeric AS "totalConsume"
     FROM balance_logs
     WHERE user_id IN (${Prisma.join(validUserIds)})
-      AND type = 'consume'
+      AND (
+        type = 'consume'
+        OR (type = 'refund' AND instance_id IS NOT NULL)
+      )
     GROUP BY user_id
   `)
 

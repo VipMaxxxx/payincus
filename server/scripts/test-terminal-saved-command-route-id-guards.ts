@@ -35,4 +35,28 @@ assert.ok(
   'terminal saved command DB helpers must keep user ownership filters on update/delete'
 )
 
+const createStart = dbSource.indexOf('export async function createTerminalSavedCommand(')
+const createEnd = dbSource.indexOf('\nexport async function updateTerminalSavedCommand(', createStart)
+assert.notEqual(createStart, -1, 'terminal saved command create helper must exist')
+assert.notEqual(createEnd, -1, 'terminal saved command create helper must have a bounded body')
+const createSource = dbSource.slice(createStart, createEnd)
+const transactionStart = createSource.indexOf('return prisma.$transaction(async tx => {')
+const lockIndex = createSource.indexOf(
+  'await advisoryTransactionLock(tx, TERMINAL_SAVED_COMMAND_LOCK_NAMESPACE, data.userId)',
+  transactionStart
+)
+const countIndex = createSource.indexOf('SELECT COUNT(*)::int AS count', lockIndex)
+const insertIndex = createSource.indexOf('INSERT INTO terminal_saved_commands', countIndex)
+assert.ok(
+  transactionStart !== -1 && lockIndex > transactionStart && countIndex > lockIndex && insertIndex > countIndex,
+  'terminal saved command limit must lock per user, count, and insert in one transaction'
+)
+assert.ok(
+  createSource.includes('if (count >= MAX_COMMANDS_PER_USER)') &&
+    createSource.includes("return { success: false as const, error: 'MAX_COMMANDS_REACHED' }") &&
+    createSource.includes('await tx.$queryRawUnsafe<Array<{ count: number }>>') &&
+    createSource.includes('const createdRows = await tx.$queryRawUnsafe<Array<{'),
+  'terminal saved command transaction must reject the explicit limit and use the transaction client for count and insert'
+)
+
 console.log('terminal saved command route ID guard tests passed')

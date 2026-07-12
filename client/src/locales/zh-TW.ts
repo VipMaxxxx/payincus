@@ -1,6 +1,69 @@
 // 繁體中文（台灣）語言檔案
 // Traditional Chinese (Taiwan) - 使用台灣用語習慣
-export default {
+import en from './en'
+
+const zhTW = {
+    pluginCenter: {
+        status: {
+            enabled: '已啟用',
+            pendingReenable: '待重新啟用',
+            failed: '異常',
+            disabled: '未啟用',
+        },
+        actions: {
+            enable: '啟用',
+            disable: '停用',
+        },
+    },
+    flashSales: {
+        firstTermOnly: '僅首期秒殺價，續費按原價。',
+        title: '秒殺', description: '限時活動方案，庫存和交付以即時資源驗證為準。', loadFailed: '載入秒殺活動失敗：{error}', reservationsLoadFailed: '載入搶購記錄失敗：{error}',
+        empty: '暫無秒殺活動', emptyHint: '有新活動時會在這裡顯示。', buyNow: '立即搶購', perUserLimit: '每人限購 {count} 台', planResources: '{cpu}% 核 {memory} {disk}',
+        stock: '庫存 {remaining} / {total}', soldPercent: '已售 {percent}%', myReservations: '我的搶購記錄', reservationsDescription: '顯示最近 20 筆秒殺購買和交付結果。', refreshReservations: '重新整理記錄', noReservations: '暫無搶購記錄',
+        status: { notStarted: '未開始', paused: '已暫停', ended: '已結束', soldOut: '已搶完', planUnavailable: '方案不可用', active: '進行中', upcoming: '即將開始' },
+        columns: { campaign: '活動', package: '方案', amount: '金額', status: '狀態', time: '時間' },
+    },
+    hostPublicIpv4: {
+        title: '獨立 IPv4 位址池', description: '為獨立 IPv4 方案提供 routed 公網 IPv4 分配、回收和容量驗證。', newPool: '新增位址池', newPoolTitle: '新增獨立 IPv4 位址池',
+        total: '總位址', empty: '暫無獨立 IPv4 位址池。', enabled: '啟用', disabled: '停用', enable: '啟用', disable: '停用', gateway: '閘道', addAddress: '新增位址', add: '新增',
+        address: '位址', instance: '實例', cidrOptional: 'CIDR（選填）', prefixLength: '前綴長度', initialAddresses: '初始位址清單', addressesPlaceholder: '每行一個 IPv4 位址',
+        loadFailed: '載入獨立 IPv4 位址池失敗：{error}', nameGatewayRequired: '請填寫位址池名稱和閘道', createSuccess: '獨立 IPv4 位址池已建立', createFailed: '建立位址池失敗：{error}',
+        addressRequired: '請輸入要新增的 IPv4 位址', addSuccess: '已新增 {count} 個位址', addFailed: '新增位址失敗：{error}', statusUpdateFailed: '更新位址狀態失敗：{error}',
+        deleteConfirm: '刪除 IPv4 位址 {address}？', deleteFailed: '刪除位址失敗：{error}', status: { free: '可用', assigned: '已分配', disabled: '停用' },
+    },
+    invites: {
+        title: '邀請碼管理', description: '產生新的註冊連結，並查看每個邀請碼的使用情況。', backToOverview: '返回總覽', generateSuccess: '邀請碼已產生', generateFailed: '產生邀請碼失敗', pointsBalance: '{points} 積分',
+        generateTitle: '產生邀請碼', generateDescription: '選擇一種管理員設定的成本方式，產生成功後可複製註冊連結給新使用者。', noCostOptions: '管理員尚未開啟使用者產生邀請碼的價格選項。',
+        generating: '產生中', generate: '產生邀請碼', justGenerated: '剛剛產生', codeCopied: '邀請碼已複製', linkCopied: '邀請連結已複製', copyCode: '複製碼', copyLink: '複製連結',
+        myInvites: '我的邀請碼', myInvitesDescription: '可查看是否已被註冊使用，以及註冊使用者的名稱和電子郵件。', empty: '暫無邀請碼', adminGenerated: '管理員產生', usedBy: '使用者', total: '共 {total} 筆',
+        stats: { generated: '已產生', used: '已使用', usageRate: '使用率' }, status: { used: '已使用', expired: '已過期', unused: '未使用' },
+        time: { generated: '產生 {time}', used: '使用 {time}', expires: '過期 {time}' }, columns: { code: '邀請碼', cost: '產生成本', time: '時間' },
+    },
+    userLifecycle: {
+        title: '使用者生命週期', description: '圍繞註冊、首購、續費、到期、流失風險和召回執行營運動作。', syncEvents: '同步事件', refreshSegments: '重新整理分群',
+        userList: '使用者清單', instanceCount: '{count} 個實例', expiringCount: '{count} 個即將到期', noMatchingUsers: '暫無符合的使用者', pagination: '共 {total} 筆，第 {page}/{totalPages} 頁',
+        tags: '標籤', optionalNote: '備註，選填', addTag: '新增標籤', used: '已使用', unused: '未使用', lifecycle: '生命週期', operations: '營運動作', selectUserHint: '選擇一位使用者查看商業摘要和營運動作。',
+        metrics: { totalUsers: '使用者總數', activeUsers: '活躍使用者', expiringInstances: '即將到期實例', selectedUsers: '已選使用者' },
+        filters: { title: '篩選', searchPlaceholder: '搜尋使用者名稱、電子郵件、使用者 ID', allTags: '全部標籤', allSegments: '全部分群', allActivityStates: '全部活躍狀態', active: '活躍', inactive: '不活躍', minRecharge: '最低累計儲值', maxRecharge: '最高累計儲值', minInstances: '最低實例數', maxInstances: '最高實例數' },
+        summary: { title: '使用者摘要', user: '使用者', email: '電子郵件', totalRecharge: '累計儲值', totalConsume: '累計消費', instances: '實例', instanceValue: '{total} / 執行中 {running}', earliestExpiry: '最早到期', tickets: '工單', ticketValue: '{total} / 未結 {open}', lastLogin: '最後登入' },
+        redeemCode: { title: '定向資源兌換碼', hostId: '節點 ID', memory: '記憶體', disk: '磁碟', traffic: '流量', value: '數值（{unit}）', validDays: '有效天數', issue: '發放' },
+        reminder: { title: '批次提醒', defaultTitle: '續費提醒', defaultContent: '您的服務即將到期，請及時查看實例並完成續費。', titlePlaceholder: '提醒標題', contentPlaceholder: '提醒內容', confirm: '確認向已選 {count} 位使用者傳送站內提醒', send: '傳送提醒' },
+        messages: { overviewLoadFailed: '載入生命週期總覽失敗：{error}', usersLoadFailed: '載入生命週期使用者失敗：{error}', segmentsRefreshed: '分群已重新整理', segmentsRefreshFailed: '重新整理分群失敗：{error}', eventsSynced: '生命週期事件已同步：{count} 筆', eventsSyncFailed: '同步事件失敗：{error}', summaryLoadFailed: '載入使用者摘要失敗：{error}', tagAdded: '標籤已新增', tagAddFailed: '新增標籤失敗：{error}', tagRemoved: '標籤已移除', tagRemoveFailed: '移除標籤失敗：{error}', invalidRedeemCode: '請填寫有效的節點 ID、數值和有效期', redeemCodeIssued: '已發放兌換碼：{code}', redeemCodeIssueFailed: '發放兌換碼失敗：{error}', selectAndConfirm: '請選擇使用者並勾選確認', remindersSent: '已傳送 {count} 筆提醒', reminderSendFailed: '傳送提醒失敗：{error}' },
+    },
+    telegramConfig: {
+        title: 'Telegram 設定', description: '集中管理網站專用機器人、Webhook、入群申請和全域通知頻道。', enabled: '啟用', minutes: '分鐘',
+        secretInvalid: 'Webhook Secret 只能包含字母、數字、底線和連字號，長度 1-256。', userNumber: '使用者 #{id}',
+        eligibility: { eligible: '已達標', ineligible: '未達標', disabled: '未啟用', unconfigured: '未設定', unknown: '未知' },
+        groupRule: { chatIdMissing: '未設定 Chat ID', recharge: '累計儲值 ¥{amount}', consume: '累計消費 ¥{amount}', noThreshold: '無金額門檻', all: '同時滿足：{thresholds}', any: '滿足任一：{thresholds}', separator: '；' },
+        footer: { title: '網站 Telegram 入口', description: '設定側邊欄底部 Telegram 群組按鈕。留空後隱藏該按鈕。', link: 'Telegram 群組連結', hint: '這是網站顯示入口，不影響機器人綁定、Webhook 或入群申請邏輯。' },
+        bot: { title: 'Telegram 專用機器人', description: '設定網站配套 Bot，用於使用者 Telegram 帳號綁定和後續私人群組准入。', enableBinding: '啟用綁定機器人', disabledHint: '關閉後使用者個人設定頁會顯示未啟用，不允許產生綁定連結。', username: 'Bot 使用者名稱', usernameHint: '不需要填寫 @，用於產生 https://t.me/... 綁定連結。', tokenHint: '由 BotFather 分配，儲存後只會顯示為預留位置。', generateSecret: '自動產生 Secret', secretHint: '必填。自動產生會覆蓋目前輸入，儲存設定後生效；也可用 openssl rand -hex 32 手動產生。' },
+        webhook: { address: 'Webhook 位址：', addressHint: '按目前存取網域動態產生；點擊「設定 Webhook」時會使用該位址。', title: 'Webhook 管理', description: '儲存 Bot Token 和 Webhook Secret 後，可由系統自動設定回呼並同步機器人指令選單。', setting: '設定中', setup: '設定 Webhook', checking: '檢查中', check: '檢查 Webhook', delete: '刪除 Webhook', currentAddress: '目前位址：', pendingUpdates: '待處理更新：{count}', maxConnections: '最大連線數：{count}', allowedUpdates: '允許更新：{updates}', lastError: '最近錯誤：{error}' },
+        group: { title: '一般使用者群組入群申請', description: '使用者綁定 Telegram 後，私訊機器人傳送 /join。達標時機器人回傳一般群組一次性邀請連結。', chatId: '一般群組 Chat ID', chatIdHint: 'Bot 必須是該私人群組管理員，並擁有建立邀請連結權限。', thresholdMode: '門檻模式', modeAny: '累計儲值或累計消費，任一達標', modeAll: '累計儲值和累計消費，同時達標', thresholdHint: '門檻為 0 表示該項不參與判斷。', rechargeThreshold: '累計儲值門檻', consumeThreshold: '累計消費門檻', inviteExpiry: '邀請連結有效期', inviteHint: '每次申請產生一個 member_limit=1 的一次性邀請連結。' },
+        vipGroup: { title: '進階使用者群組入群申請', description: '使用者綁定 Telegram 後，私訊機器人傳送 /join_vip。達標時機器人回傳進階群組一次性邀請連結。', chatId: '進階群組 Chat ID', chatIdHint: '可以和一般群組不同；Bot 必須是該群組管理員，並擁有建立邀請連結權限。', thresholdHint: '進階群組預設建議使用更高門檻，門檻為 0 表示該項不參與判斷。', inviteHint: '每次申請產生一個 member_limit=1 的進階群組一次性邀請連結。' },
+        bindings: { title: '綁定使用者與入群資格', description: '查看已綁定 Telegram 的站內使用者、累計儲值/消費和目前入群資格，可人工解除異常綁定。', refreshing: '重新整理中...', refresh: '重新整理清單', searchPlaceholder: '搜尋站內使用者名稱、電子郵件、使用者 ID、Telegram ID 或使用者名稱', clear: '清除', groupThreshold: '一般群組門檻', vipGroupThreshold: '進階群組門檻', empty: '暫無 Telegram 綁定使用者。', active: '正常', banned: '已停權', userId: '使用者 ID {id}', recharge: '儲值 ¥{amount}', consume: '消費 ¥{amount}', boundAt: '綁定 {time}', normal: '一般：', vip: '進階：', unlinking: '解除綁定中...', unlink: '解除綁定', pagination: '共 {total} 筆，目前第 {page} / {totalPages} 頁' },
+        channels: { title: '全域 Telegram 通知頻道', add: '+ 新增頻道', description: '建立全域 Telegram 通知頻道後，託管使用者可在方案設定中綁定，當有使用者新購或銷毀實例時自動傳送通知。', empty: '暫無全域通知頻道，點擊右上角「新增頻道」建立。', enabled: '已啟用', disabled: '已停用', boundPackages: '綁定 {count} 個方案', test: '測試', edit: '編輯頻道', new: '新增頻道', name: '頻道名稱', namePlaceholder: '例：新購通知頻道', chatIdPlaceholder: '例：-1001234567890', chatIdHint: '負數為群組/頻道，正數為使用者。', keepUnchanged: '（留空保持不變）', tokenPlaceholder: '例：123456:ABC-DEF...', enable: '啟用此頻道', needToken: '需要 Telegram Bot Token？前往', botFatherHint: '建立機器人，並將機器人新增為群組/頻道管理員。' },
+        messages: { configLoadFailed: '載入 Telegram 設定失敗：{error}', saveSuccess: '儲存成功', saveFailed: '儲存失敗：{error}', saveFailedShort: '儲存失敗', groupModeInvalid: '一般群組入群門檻模式無效', vipGroupModeInvalid: '進階群組入群門檻模式無效', groupExpiryInvalid: '一般群組邀請連結有效期必須在 1 到 10080 分鐘之間', vipGroupExpiryInvalid: '進階群組邀請連結有效期必須在 1 到 10080 分鐘之間', randomUnsupported: '目前瀏覽器不支援安全隨機數產生，請使用 openssl rand -hex 32 手動產生。', secretGenerated: 'Webhook Secret 已產生，請儲存 Telegram 設定。', webhookCommandsSet: 'Telegram Webhook 和機器人指令已設定', webhookSet: 'Telegram Webhook 已設定', webhookSetFailed: '設定 Telegram Webhook 失敗：{error}', webhookUpdated: 'Telegram Webhook 狀態已更新', webhookCheckFailed: '檢查 Telegram Webhook 失敗：{error}', webhookDeleteConfirm: '確定刪除 Telegram Webhook？刪除後機器人將不再把訊息回呼到本站。', webhookDeleted: 'Telegram Webhook 已刪除', webhookDeleteFailed: '刪除 Telegram Webhook 失敗：{error}', bindingsLoadFailed: '載入 Telegram 綁定使用者失敗：{error}', unlinkConfirm: '確定解除 {user} 的 Telegram 綁定？解除後該使用者需要重新綁定才能申請入群。', unlinked: 'Telegram 綁定已解除', unlinkFailed: '解除綁定失敗：{error}', channelLoadFailed: '載入頻道失敗', channelFieldsRequired: '請填寫頻道名稱和 Chat ID', botTokenRequired: '請填寫 Bot Token', channelUpdated: '頻道已更新', channelCreated: '頻道已建立', channelDeleteConfirm: '確定刪除該頻道？將同時解除所有綁定此頻道的方案。', channelDeleteFailed: '刪除失敗：{error}', testSuccess: '測試訊息傳送成功', testFailed: '測試失敗：{error}' },
+    },
     // 應用程式名稱
     app: {
         name: 'Incus NAT VPS',
@@ -10,6 +73,7 @@ export default {
 
     // 通用
     common: {
+        defaultBrandSubtitle: '基於 Incus 的平價 NAT VPS', adminPanel: '管理後台',
         confirm: '確認',
         cancel: '取消',
         save: '儲存',
@@ -394,6 +458,7 @@ export default {
             marketPackageDescription: '查看 {name} 的 {type} 配置、月流量與商品資訊，並在商品瀏覽頁延續開通流程。',
         },
         portal: {
+            heroTitlePrimary: '智慧雲端運算', heroTitlePrefix: '連接', heroTitleAccent: '無限可能', stableSupply: '穩定供應', moreChoices: '更多選擇',
             badge: 'Incus Driven NAT Platform',
             title: '基於 Incus 的 NAT VPS 入口與控制台',
             description: '精選全球多節點 LXC / KVM 商品，覆蓋直營與託管供給，配置檔位豐富，持續提供高性價比 NAT VPS 選擇。',
@@ -1154,6 +1219,7 @@ export default {
         errorBanner: {
             title: '實例異常',
             description: '實例異常，您可直接銷毀（付費實例剩餘價值退款不扣除手續費）',
+            reasonLabel: '失敗原因',
             destroyNow: '立即銷毀',
             confirmDestroy: '確定要銷毀此異常實例嗎？付費實例的剩餘價值將退款至您的錢包（不扣除手續費）。',
         },
@@ -3223,6 +3289,10 @@ export default {
             statusFailed: '失敗',
             statusPending: '等待',
             errorPrefix: '錯誤: {error}',
+            trafficMessages: {
+                warning: '超出限額後，受影響實例將被限速至 {throttleSpeed}。流量於每月 {resetDay} 日重設後，正常頻寬將恢復至 {speed}。',
+                throttled: '該實例已被限速至 {throttleSpeed}。流量於每月 {resetDay} 日重設後，頻寬將恢復至 {speed}。',
+            },
             eventTypes: {
                 snapshot_created: '快照建立',
                 snapshot_restored: '快照還原',
@@ -4184,6 +4254,28 @@ export default {
                 enableDesc: '關閉後，使用者端隱藏工單入口，一般使用者也無法透過 API 建立工單。',
                 enabled: '已開放',
                 disabled: '已關閉',
+                autoClose: '自動關閉已解決工單',
+                autoCloseDesc: '關閉後，已解決工單不會再被自動關閉。',
+                autoCloseHours: '自動關閉等待時間（小時）',
+                autoCloseHoursDesc: '從最後一則公開訊息開始計時，最少 1 小時。',
+            },
+            affRates: {
+                title: 'AFF 佣金/折扣設定',
+                description: '設定新產生 AFF 碼寫入的比例，現有碼繼續使用自身已儲存比例。',
+                commissionRate: '佣金率',
+                commissionRateHint: '填小數，如 0.05 = 5%；範圍 0~0.5。',
+                discountRate: '折扣率',
+                discountRateHint: '填小數，如 0.05 = 5%；範圍 0~0.95。',
+                rangeError: '佣金率必須在 0~0.5，折扣率必須在 0~0.95。',
+            },
+            vipBenefits: {
+                title: 'VIP 持續權益',
+                description: '依 VIP 等級設定新購/續費折扣、執行個體額外流量和資源池購買力加成。',
+                orderDiscount: '下單/續費折扣（%）',
+                extraTraffic: '額外流量（%）',
+                resourcePoolBonus: '資源池加成（%）',
+                arbitrationHint: 'VIP 與 AFF/優惠碼/秒殺不疊加，由後端選擇單一最優價格；秒殺價不再疊加 VIP。',
+                rangeError: '所有 VIP 權益百分比必須在 0~100 之間。',
             },
             freeSite: {
                 title: '白嫖站',
@@ -5768,6 +5860,12 @@ export default {
         QUOTA_SNAPSHOT_EXCEEDED: '快照配額不足',
         QUOTA_BACKUP_EXCEEDED: '備份配額不足',
         QUOTA_NOT_ALLOCATED: '請先分配配額',
+        QUOTA_INCREASE_TYPE_REQUIRED: '每次只能增加一種配額類型',
+        QUOTA_INFO_NOT_FOUND: '配額資訊不存在',
+        QUOTA_INCREASE_STEP_INVALID: '配額增加數量不符合要求',
+        QUOTA_USAGE_UNAVAILABLE: '目前配額無法計算使用率',
+        QUOTA_USAGE_TOO_LOW: '目前使用率尚未達到增加配額的要求',
+        HOSTING_BALANCE_BUSY: '託管餘額正在處理，請稍後重試',
         // 快照錯誤
         SNAPSHOT_NOT_FOUND: '快照不存在',
         SNAPSHOT_RESTORE_REQUIRES_STOP: '請先停止實例再還原快照',
@@ -6755,6 +6853,7 @@ export default {
 
     // Web 終端機
     terminal: {
+        errors: { authenticationRequired: '需要登入後才能連線', connectionLost: '連線已中斷', terminalLine: '錯誤：{error}', invalidId: '實例 ID 無效', originNotAllowed: '目前來源不允許連線終端機', ipLimitExceeded: '目前 IP 的終端機連線過多', sessionInvalidated: '登入工作階段已失效', userLimitExceeded: '目前帳號的終端機連線過多', connectionLimitExceeded: '終端機連線數已達上限', instanceNotFound: '實例不存在', forbidden: '無權連線此實例', instanceLocked: '實例目前處於交易鎖定狀態', instanceNotRunning: '實例未執行', instanceLimitExceeded: '該實例的終端機連線過多', hostNotFound: '實例節點不存在', connectionFailed: '終端機連線失敗', unknown: '未知終端機錯誤' },
         title: '終端機',
         connecting: '正在連線...',
         connected: '已連線',
@@ -6975,6 +7074,7 @@ export default {
         contentTooShort: '工單內容至少需要 10 個字元，或上傳一張圖片附件',
         replySuccess: '回覆成功',
         closeSuccess: '工單已關閉',
+        reopenSuccess: '工單已重新開啟',
         statusUpdated: '狀態已更新',
         host: '主機',
         instance: '實例',
@@ -7160,9 +7260,9 @@ export default {
         rulesCheckin2: '預設不要求實例，可由後台開啟實例門檻',
         rulesCheckin3: '隨機獲得後台設定範圍內的積分獎勵',
         rulesRedeem: '兌換規則',
-        rulesRedeem1: '兌換碼有效期 3 小時',
-        rulesRedeem2: '每人每日限兌換 1 次',
-        rulesRedeem3: '資源不能超過方案上限',
+        rulesRedeem1: '每張 h-碼均顯示實際有效期，可能為永久有效',
+        rulesRedeem2: '每張 h-碼均顯示剩餘次數 / 總次數',
+        rulesRedeem3: '兌換資源永久疊加，不受方案上限限制',
         rulesShare: '分享',
         rulesShare1: '兌換碼可分享給好友使用',
         rulesShare2: '連續 2 天被他人使用將限制為僅自己可用，直到再次自己使用後解除',
@@ -7291,6 +7391,45 @@ export default {
     extensions: {
         title: '腳本',
         description: '管理擴充功能',
+        themeSubmissions: {
+            entry: '投稿主題',
+            title: '提交主題審核',
+            description: '提交主題的 HTTPS Release、manifest、主題套件網址、SHA256、相容範圍、token 和版面槽說明。',
+            freeReviewHint: '主題投稿目前僅支援免費上架；提交後進入待審核狀態，由管理員掃描、審核並發布市集目錄。',
+            themeId: '主題 ID',
+            version: '版本',
+            name: '主題名稱',
+            contactEmail: '聯絡信箱',
+            repoUrl: '儲存庫 URL',
+            releaseUrl: 'Release URL',
+            manifestUrl: 'Manifest URL',
+            packageUrl: '主題套件 URL',
+            sha256: 'SHA256',
+            developerName: '開發者名稱',
+            developerHomepage: '開發者首頁',
+            developerGithub: 'GitHub',
+            compatibility: '相容 JSON',
+            tokens: 'Token 清單',
+            layoutSlots: '版面槽清單',
+            listPlaceholder: '每行一項，或使用英文逗號分隔',
+            notes: '說明',
+            notesPlaceholder: '主題說明、回復說明、外部資源依賴等',
+            submit: '提交審核',
+            submitting: '提交中...',
+            submitSuccess: '主題投稿已提交審核',
+            submitFailed: '提交主題審核失敗',
+            mine: '我的主題投稿',
+            mineHint: '審核通過後會由平台發布到主題市集目錄。',
+            refresh: '重新整理',
+            loading: '載入中...',
+            empty: '暫無主題投稿。',
+            loadFailed: '載入主題投稿失敗',
+            scanLabel: '掃描',
+            submittedAt: '提交',
+            reviewedAt: '審核',
+            status: { pending: '待審核', listed: '已通過', rejected: '已拒絕', delisted: '已下架' },
+            scan: { pending: '未掃描', passed: '掃描通過', warning: '有警告', failed: '掃描失敗' },
+        },
         initCommands: {
             title: '自訂初始化指令',
             description: '建立指令範本，在實例建立/重裝時執行',
@@ -8116,6 +8255,12 @@ export default {
         month: '月',
         year: '年',
         renew: '續費',
+        autoRenew: '自動續費',
+        autoRenewOn: '已開啟',
+        autoRenewOff: '已關閉',
+        autoRenewEnabled: '已開啟自動續費',
+        autoRenewDisabled: '已關閉自動續費',
+        autoRenewHint: '到期前將從餘額自動續費 1 個月；餘額不足時會提醒您手動續費。',
         myDomains: '我的網域',
         addDomain: '新增網域',
         noDomains: '暫無網域，點擊上方按鈕新增',
@@ -8263,3 +8408,24 @@ export default {
         newPasswordPlaceholder: '輸入新密碼',
     },
 }
+
+function mergeMissingMessages(
+    fallback: Record<string, unknown>,
+    localized: Record<string, unknown>
+): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...fallback }
+    for (const [key, value] of Object.entries(localized)) {
+        const fallbackValue = fallback[key]
+        merged[key] = value && typeof value === 'object' && !Array.isArray(value)
+            ? mergeMissingMessages(
+                fallbackValue && typeof fallbackValue === 'object' && !Array.isArray(fallbackValue)
+                    ? fallbackValue as Record<string, unknown>
+                    : {},
+                value as Record<string, unknown>
+            )
+            : value
+    }
+    return merged
+}
+
+export default mergeMissingMessages(en, zhTW) as typeof zhTW

@@ -18,6 +18,7 @@ import {
   listUserExchangeListings,
   listUserExchangeOrders,
   purchaseExchangeListing,
+  releaseExchangeOrderEscrow,
   transferExchangeBalanceToUserBalance,
   updateExchangeListing
 } from '../services/exchange.js'
@@ -464,6 +465,27 @@ export default async function exchangeRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: '交易订单 ID 无效' })
     }
     try {
+      return await getUserExchangeOrder(request.user.id, orderId)
+    } catch (error) {
+      return sendExchangeError(reply, error)
+    }
+  })
+
+  fastify.post<{ Params: { orderId: string } }>('/orders/:orderId/confirm', {
+    onRequest: [fastify.authenticateUser]
+  }, async (request, reply) => {
+    const orderId = parsePositiveId(request.params.orderId)
+    if (!orderId) {
+      return reply.code(400).send({ error: '交易订单 ID 无效' })
+    }
+    try {
+      await releaseExchangeOrderEscrow(orderId, {
+        actorUserId: request.user.id,
+        action: 'order.buyer_confirm',
+        remark: `买家确认收货，交易所订单 ${orderId} 立即放款`,
+        allowedStatuses: ['confirming'],
+        expectedBuyerUserId: request.user.id
+      })
       return await getUserExchangeOrder(request.user.id, orderId)
     } catch (error) {
       return sendExchangeError(reply, error)

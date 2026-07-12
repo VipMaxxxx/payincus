@@ -252,7 +252,12 @@ export async function deletePrize(id: number) {
 export async function getPrizeById(id: number) {
   return prisma.lotteryPrize.findUnique({
     where: { id },
-    include: { lottery: true }
+    include: {
+      lottery: true,
+      _count: {
+        select: { records: true }
+      }
+    }
   })
 }
 

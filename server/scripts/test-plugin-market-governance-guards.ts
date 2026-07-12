@@ -10,6 +10,12 @@ function read(path: string): string {
 
 const market = read('server/src/lib/plugin-market.ts')
 const adminRoute = read('server/src/routes/admin-plugins.ts')
+const submissionRoute = read('server/src/routes/plugin-market-submissions.ts')
+const themeSubmissionRoute = read('server/src/routes/theme-market-submissions.ts')
+const pluginPublisher = read('server/src/lib/plugin-market-publisher.ts')
+const pluginDb = read('server/src/db/plugins.ts')
+const submissionDb = read('server/src/db/plugin-market-submissions.ts')
+const themePublisher = read('server/src/lib/theme-market-publisher.ts')
 const clientTypes = read('client/src/types/api.ts')
 const pluginCenter = read('client/src/views/admin/PluginCenterView.vue')
 const releaseWorkflow = read('.github/workflows/release.yml')
@@ -33,13 +39,75 @@ assert.ok(
 )
 
 assert.ok(
+  pluginDb.includes('assertPluginCapabilitiesApprovedForListing') &&
+    pluginDb.includes("riskLevel: { in: ['high', 'critical'] }") &&
+    pluginDb.includes("reviews.every(review => review.status === 'approved')") &&
+    submissionRoute.includes('assertPluginCapabilitiesApprovedForListing') &&
+    submissionRoute.includes("code: 'PLUGIN_CAPABILITY_REVIEW_REQUIRED'") &&
+    pluginPublisher.includes('assertPluginCapabilitiesApprovedForListing'),
+  'high-risk plugin capabilities must be approved before listing and rechecked before public index publishing'
+)
+
+assert.ok(
+  submissionRoute.includes("typeof request.body?.developerVerified === 'boolean'") &&
+    submissionDb.includes('developerVerifiedByUserId: input.developerVerified ? input.reviewedByUserId : null') &&
+    pluginPublisher.includes("trustLevel: developerVerified ? 'verified' : 'third_party'") &&
+    pluginPublisher.includes('verified: developerVerified') &&
+    !pluginPublisher.includes("submission.developerGithub ? 'verified'") &&
+    !pluginPublisher.includes('Boolean(submission.developerGithub)'),
+  'verified trust must require an explicit administrator decision; a GitHub URL is display-only'
+)
+
+assert.ok(
+  submissionRoute.includes("reviewStatus === 'listed'") &&
+    submissionRoute.includes('!isFreePricing(submission.pricing)') &&
+    submissionRoute.includes("PAID_MARKET_LISTING_NOT_AVAILABLE = '付费上架暂未开放(交易闭环未上线)'") &&
+    themeSubmissionRoute.includes('!isFreePricing(body.pricing)') &&
+    themeSubmissionRoute.includes("PAID_MARKET_LISTING_NOT_AVAILABLE = '付费上架暂未开放(交易闭环未上线)'"),
+  'plugin and theme market governance must reject non-free pricing before listing or accepting an explicitly priced theme submission'
+)
+
+assert.ok(
+  submissionRoute.includes("const LISTABLE_SCAN_STATUSES = new Set(['passed', 'warning'])") &&
+    submissionRoute.includes('!LISTABLE_SCAN_STATUSES.has(submission.scanStatus)') &&
+    submissionRoute.includes("code: 'PLUGIN_MARKET_SCAN_NOT_APPROVED'"),
+  'plugin market governance must reject listed review state unless the latest scan passed or completed with warnings'
+)
+
+assert.ok(
+  !pluginPublisher.includes('readExistingMarketEntries') &&
+    !themePublisher.includes('readExistingMarketEntries') &&
+    pluginPublisher.includes('highestSubmissionById') &&
+    themePublisher.includes('highestSubmissionById') &&
+    pluginPublisher.includes('compareSemVer(version, current.version) > 0') &&
+    themePublisher.includes('compareSemVer(version, current.version) > 0'),
+  'market governance must rebuild public indexes from current DB state and publish one highest SemVer version per ID'
+)
+
+assert.ok(
   market.includes('compareVersions') &&
-    market.includes('entry.compatibility.minPayincus') &&
-    market.includes('entry.compatibility.maxPayincus') &&
+    market.includes('normalizePluginMarketCompatibility(entry.compatibility)') &&
+    market.includes('const payincus = pickString(record.payincus, 80)') &&
+    !market.includes('minPayincus: pickString(record.minPayincus') &&
+    !market.includes('maxPayincus: pickString(record.maxPayincus') &&
+    market.includes('compatibility.minPayincus') &&
+    market.includes('compatibility.maxPayincus') &&
     market.includes('Plugin requires PayIncus') &&
     market.includes('Plugin supports PayIncus up to') &&
     market.includes('Plugin market entry must pin a SHA256 checksum'),
   'plugin installs must enforce compatibility and pinned checksum before downloading'
+)
+
+assert.ok(
+  market.includes("PLUGIN_MARKET_SUPPORTED_CURRENCIES = ['CNY', 'USD']") &&
+    market.includes('PLUGIN_MARKET_PLATFORM_REVENUE_SHARE_PERCENT = 20') &&
+    market.includes('price?: number') &&
+    pluginPublisher.includes('persistSubmissionArtifacts') &&
+    pluginPublisher.includes('Listed submission artifacts must use managed review uploads') &&
+    pluginPublisher.includes('Reviewed submission compatibility differs from manifest.payincus') &&
+    pluginPublisher.includes('`${publicBaseUrl}/packages/') &&
+    pluginPublisher.includes('`${publicBaseUrl}/manifests/'),
+  'market governance must use canonical minor-unit pricing, manifest.payincus compatibility, and stable managed artifacts'
 )
 
 assert.ok(

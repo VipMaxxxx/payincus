@@ -4,7 +4,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import type { HostingActionType, WithdrawalStatus } from '@prisma/client'
+import type { HostingActionType, Prisma, WithdrawalStatus } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import { createLog } from '../db/logs.js'
 import { checkHostingAccess } from '../lib/hosting-access.js'
@@ -22,6 +22,18 @@ const WITHDRAWAL_CONFIG = {
   minAmount: 10,              // 最低提现金额（元）
   feeRateBalance: 0.05        // 提现到面板余额手续费率 5%
 }
+
+const MAX_USDT_ADDRESS_LENGTH = 256
+const MAX_WITHDRAWAL_REJECT_REASON_LENGTH = 500
+
+const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'
+const OPERATING_HOSTING_INCOME_WHERE = {
+  type: 'income',
+  OR: [
+    { remark: null },
+    { NOT: { remark: { startsWith: ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX } } }
+  ]
+} satisfies Prisma.HostingBalanceLogWhereInput
 
 const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
 const HOSTING_ACTION_TYPES = new Set<HostingActionType>([
@@ -283,7 +295,7 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
     const totalIncomeResult = await prisma.hostingBalanceLog.aggregate({
       where: {
         userId: user.id,
-        type: 'income'
+        ...OPERATING_HOSTING_INCOME_WHERE
       },
       _sum: { amount: true }
     })
@@ -550,10 +562,12 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
 
   // ==================== 提现申请 ====================
 
-  // 申请提现（仅支持提现到面板余额）
+  // 申请提现（转面板余额即时到账，外部提现等待管理员审核）
   fastify.post<{
     Body: {
       amount: number
+      target?: 'balance' | 'usdt'
+      usdtAddress?: string
     }
   }>('/withdraw', {
     onRequest: [fastify.authenticateUser],
@@ -562,20 +576,31 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
       body: {
         type: 'object',
         required: ['amount'],
+        additionalProperties: false,
         properties: {
-          amount: { type: 'number', minimum: WITHDRAWAL_CONFIG.minAmount }
+          amount: { type: 'number', minimum: WITHDRAWAL_CONFIG.minAmount },
+          target: { type: 'string', enum: ['balance', 'usdt'] },
+          usdtAddress: { type: 'string', maxLength: MAX_USDT_ADDRESS_LENGTH }
         }
       }
     }
   }, async (request, reply) => {
     const { user } = request
-    const { amount } = request.body
+    const { amount, target = 'balance' } = request.body
+    const usdtAddress = request.body.usdtAddress?.trim()
+    const isBalanceTransfer = target === 'balance'
 
     // 验证提现金额
     if (amount < WITHDRAWAL_CONFIG.minAmount) {
       return reply.code(400).send({ 
         error: `最低提现金额为 ¥${WITHDRAWAL_CONFIG.minAmount}`,
         code: 'AMOUNT_TOO_LOW'
+      })
+    }
+    if (!isBalanceTransfer && !usdtAddress) {
+      return reply.code(400).send({
+        error: '外部提现地址不能为空',
+        code: 'WITHDRAWAL_ADDRESS_REQUIRED'
       })
     }
 
@@ -592,9 +617,11 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
         if (!locked) {
           throw new Error('托管余额正在处理，请稍后重试')
         }
-        const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, user.id)
-        if (!balanceLocked) {
-          throw new Error('用户余额正在处理，请稍后重试')
+        if (isBalanceTransfer) {
+          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, user.id)
+          if (!balanceLocked) {
+            throw new Error('用户余额正在处理，请稍后重试')
+          }
         }
 
         // 扣减托管余额
@@ -617,37 +644,40 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
             feeRate,
             feeAmount,
             actualAmount,
-            target: 'balance',
-            status: 'completed',
-            processedAt: new Date()
+            target,
+            usdtAddress: isBalanceTransfer ? null : usdtAddress,
+            status: isBalanceTransfer ? 'completed' : 'pending',
+            processedAt: isBalanceTransfer ? new Date() : null
           }
         })
 
-        // 获取当前面板余额
-        const currentUser = await tx.user.findUnique({
-          where: { id: user.id },
-          select: { balance: true }
-        })
-        const oldBalance = Number(currentUser?.balance || 0)
+        if (isBalanceTransfer) {
+          // 获取当前面板余额
+          const currentUser = await tx.user.findUnique({
+            where: { id: user.id },
+            select: { balance: true }
+          })
+          const oldBalance = Number(currentUser?.balance || 0)
 
-        const updatedUser = await tx.user.update({
-          where: { id: user.id },
-          data: { balance: { increment: actualAmount } },
-          select: { balance: true }
-        })
-        const newBalance = Number(updatedUser.balance)
+          const updatedUser = await tx.user.update({
+            where: { id: user.id },
+            data: { balance: { increment: actualAmount } },
+            select: { balance: true }
+          })
+          const newBalance = Number(updatedUser.balance)
 
-        // 记录面板余额日志
-        await tx.balanceLog.create({
-          data: {
-            userId: user.id,
-            type: 'hosting_withdraw',
-            amount: actualAmount,
-            balanceBefore: oldBalance,
-            balanceAfter: newBalance,
-            remark: `托管余额提现（手续费 ${feeRate * 100}%: ¥${feeAmount.toFixed(2)}）`
-          }
-        })
+          // 记录面板余额日志
+          await tx.balanceLog.create({
+            data: {
+              userId: user.id,
+              type: 'hosting_withdraw',
+              amount: actualAmount,
+              balanceBefore: oldBalance,
+              balanceAfter: newBalance,
+              remark: `托管余额提现（手续费 ${feeRate * 100}%: ¥${feeAmount.toFixed(2)}）`
+            }
+          })
+        }
 
         // 记录托管余额日志
         await tx.hostingBalanceLog.create({
@@ -658,7 +688,9 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
             amount: -amount,
             frozen: false,
             relatedId: record.id,
-            remark: `提现到面板余额 ¥${actualAmount.toFixed(2)}（手续费 ¥${feeAmount.toFixed(2)}）`
+            remark: isBalanceTransfer
+              ? `提现到面板余额 ¥${actualAmount.toFixed(2)}（手续费 ¥${feeAmount.toFixed(2)}）`
+              : `外部提现申请冻结 ¥${amount.toFixed(2)}（预计到账 ¥${actualAmount.toFixed(2)}）`
           }
         })
 
@@ -679,12 +711,12 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
       user.id,
       'hosting',
       'hosting.withdraw',
-      `Withdrawal to balance: amount=${amount}, actualAmount=${actualAmount}`,
+      `Withdrawal requested: target=${target}, amount=${amount}, actualAmount=${actualAmount}`,
       'success'
     )
 
     return {
-      message: '提现成功',
+      message: isBalanceTransfer ? '提现成功' : '提现申请已提交，等待管理员审核',
       withdrawal: {
         id: withdrawal.id,
         amount: Number(withdrawal.amount),
@@ -696,6 +728,124 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
         createdAt: withdrawal.createdAt.toISOString()
       }
     }
+  })
+
+  // 管理员批准外部提现：申请时已扣减冻结金额，此处仅确认实际放款完成
+  fastify.post<{
+    Params: { id: string }
+  }>('/admin/withdrawals/:id/approve', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin],
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } }
+  }, async (request, reply) => {
+    const withdrawalId = parsePositiveRouteId(request.params.id)
+    if (!withdrawalId) {
+      return reply.code(400).send({ error: '无效的提现 ID', code: 'INVALID_WITHDRAWAL_ID' })
+    }
+
+    const processedAt = new Date()
+    const approved = await prisma.hostingWithdrawal.updateMany({
+      where: {
+        id: withdrawalId,
+        target: 'usdt',
+        status: 'pending'
+      },
+      data: {
+        status: 'completed',
+        processedAt,
+        processedBy: request.user.id,
+        rejectReason: null
+      }
+    })
+    if (approved.count !== 1) {
+      return reply.code(409).send({ error: '提现已处理或不存在', code: 'WITHDRAWAL_ALREADY_PROCESSED' })
+    }
+
+    await createLog(
+      request.user.id,
+      'admin',
+      'hosting.withdrawal.approve',
+      `Approved hosting withdrawal #${withdrawalId}`,
+      'success'
+    )
+    return { message: '提现已批准并完成放款', status: 'completed', processedAt: processedAt.toISOString() }
+  })
+
+  // 管理员拒绝外部提现：按申请时扣减的原始金额全额退回
+  fastify.post<{
+    Params: { id: string }
+    Body: { reason?: string }
+  }>('/admin/withdrawals/:id/reject', {
+    onRequest: [fastify.authenticate, fastify.requireAdmin],
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          reason: { type: 'string', maxLength: MAX_WITHDRAWAL_REJECT_REASON_LENGTH }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const withdrawalId = parsePositiveRouteId(request.params.id)
+    if (!withdrawalId) {
+      return reply.code(400).send({ error: '无效的提现 ID', code: 'INVALID_WITHDRAWAL_ID' })
+    }
+    const rejectReason = request.body?.reason?.trim() || '管理员拒绝提现'
+
+    const result = await prisma.$transaction(async (tx) => {
+      const withdrawal = await tx.hostingWithdrawal.findUnique({ where: { id: withdrawalId } })
+      if (!withdrawal || withdrawal.target !== 'usdt' || withdrawal.status !== 'pending') {
+        return null
+      }
+
+      const locked = await tryAdvisoryTransactionLock(tx, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, withdrawal.userId)
+      if (!locked) {
+        throw new Error('托管余额正在处理，请稍后重试')
+      }
+
+      const rejected = await tx.hostingWithdrawal.updateMany({
+        where: { id: withdrawalId, target: 'usdt', status: 'pending' },
+        data: {
+          status: 'rejected',
+          rejectReason,
+          processedAt: new Date(),
+          processedBy: request.user.id
+        }
+      })
+      if (rejected.count !== 1) return null
+
+      const refundAmount = Number(withdrawal.amount)
+      await tx.user.update({
+        where: { id: withdrawal.userId },
+        data: { hostingBalance: { increment: refundAmount } }
+      })
+      await tx.hostingBalanceLog.create({
+        data: {
+          userId: withdrawal.userId,
+          type: 'withdraw',
+          actionType: 'withdraw',
+          amount: refundAmount,
+          frozen: false,
+          relatedId: withdrawal.id,
+          remark: `外部提现拒绝退回 ¥${refundAmount.toFixed(2)}：${rejectReason}`
+        }
+      })
+      return { withdrawal, refundAmount }
+    })
+
+    if (!result) {
+      return reply.code(409).send({ error: '提现已处理或不存在', code: 'WITHDRAWAL_ALREADY_PROCESSED' })
+    }
+
+    await createLog(
+      request.user.id,
+      'admin',
+      'hosting.withdrawal.reject',
+      `Rejected hosting withdrawal #${withdrawalId}; refunded amount=${result.refundAmount}`,
+      'success'
+    )
+    return { message: '提现已拒绝并退回冻结金额', status: 'rejected', refundedAmount: result.refundAmount }
   })
 
   // 获取提现记录
@@ -787,7 +937,7 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
     const monthIncome = await prisma.hostingBalanceLog.aggregate({
       where: {
         userId: user.id,
-        type: 'income',
+        ...OPERATING_HOSTING_INCOME_WHERE,
         createdAt: { gte: monthStart }
       },
       _sum: { amount: true }
@@ -797,7 +947,7 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
     const totalHostingIncome = await prisma.hostingBalanceLog.aggregate({
       where: {
         userId: user.id,
-        type: 'income'
+        ...OPERATING_HOSTING_INCOME_WHERE
       },
       _sum: { amount: true }
     })
@@ -806,7 +956,7 @@ export default async function hostingRoutes(fastify: FastifyInstance) {
     const recentIncome = await prisma.hostingBalanceLog.findMany({
       where: {
         userId: user.id,
-        type: 'income'
+        ...OPERATING_HOSTING_INCOME_WHERE
       },
       orderBy: { createdAt: 'desc' },
       take: 5,

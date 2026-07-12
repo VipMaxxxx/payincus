@@ -77,7 +77,13 @@ function computeSlaStatus(input: {
   lastMessage?: { isFromOwner: boolean } | null
 }, now = new Date()): TicketSlaStatus {
   if (input.status === 'closed') return 'closed'
-  if (input.resolvedAt || input.status === 'resolved') return 'met'
+  if (input.resolvedAt || input.status === 'resolved') {
+    return input.resolvedAt &&
+      input.resolutionDueAt &&
+      input.resolvedAt.getTime() <= input.resolutionDueAt.getTime()
+      ? 'met'
+      : 'overdue'
+  }
 
   const hasFirstResponse = Boolean(input.firstRespondedAt)
   if (!hasFirstResponse && input.firstResponseDueAt && input.firstResponseDueAt.getTime() < now.getTime()) {
@@ -665,8 +671,7 @@ export async function getHostTickets(
     }
   }
 
-  const [tickets, total] = await Promise.all([
-    prisma.ticket.findMany({
+  const tickets = await prisma.ticket.findMany({
       where,
       include: {
         user: {
@@ -706,13 +711,9 @@ export async function getHostTickets(
           }
         }
       },
-      // 排序策略：按更新时间降序，便于在内存中排序
+      // 先取完整候选集；needsReply/优先级排序完成后再分页，避免跨页乱序。
       orderBy: { updatedAt: 'desc' },
-      skip,
-      take: pageSize
-    }),
-    prisma.ticket.count({ where })
-  ])
+    })
 
   // 构建返回数据，添加 needsReply 字段
   const ticketsWithNeedsReply = tickets.map(ticket => {
@@ -773,11 +774,15 @@ export async function getHostTickets(
     // 4. 按更新时间排序：需要回复的按旧到新，其他按新到旧
     const aTime = new Date(a.updatedAt).getTime()
     const bTime = new Date(b.updatedAt).getTime()
-    return a.needsReply ? aTime - bTime : bTime - aTime
+    const timeOrder = a.needsReply ? aTime - bTime : bTime - aTime
+    return timeOrder || a.id - b.id
   })
 
+  const total = ticketsWithNeedsReply.length
+  const paginatedTickets = ticketsWithNeedsReply.slice(skip, skip + pageSize)
+
   return {
-    tickets: ticketsWithNeedsReply,
+    tickets: paginatedTickets,
     total,
     page,
     pageSize,
@@ -853,8 +858,7 @@ export async function getOwnerAllTickets(
     }
   }
 
-  const [tickets, total] = await Promise.all([
-    prisma.ticket.findMany({
+  const tickets = await prisma.ticket.findMany({
       where,
       include: {
         user: {
@@ -894,13 +898,9 @@ export async function getOwnerAllTickets(
           }
         }
       },
-      // 排序策略：按更新时间降序，便于在内存中排序
+      // 先取完整候选集；队列过滤和智能排序完成后再分页。
       orderBy: { updatedAt: 'desc' },
-      skip,
-      take: pageSize
-    }),
-    prisma.ticket.count({ where })
-  ])
+    })
 
   // 构建返回数据，添加 needsReply 字段
   let ticketsWithNeedsReply = tickets.map(ticket => {
@@ -968,11 +968,15 @@ export async function getOwnerAllTickets(
     // 4. 按更新时间排序：需要回复的按旧到新，其他按新到旧
     const aTime = new Date(a.updatedAt).getTime()
     const bTime = new Date(b.updatedAt).getTime()
-    return a.needsReply ? aTime - bTime : bTime - aTime
+    const timeOrder = a.needsReply ? aTime - bTime : bTime - aTime
+    return timeOrder || a.id - b.id
   })
 
+  const total = ticketsWithNeedsReply.length
+  const paginatedTickets = ticketsWithNeedsReply.slice(skip, skip + pageSize)
+
   return {
-    tickets: ticketsWithNeedsReply,
+    tickets: paginatedTickets,
     total,
     page,
     pageSize,
@@ -1048,18 +1052,14 @@ export async function addTicketMessage(
   attachments: CreateTicketMessageAttachmentData[] = []
 ): Promise<TicketMessage> {
   const message = await prisma.$transaction(async tx => {
+    const repliedAt = new Date()
     const ticketUpdate = await tx.ticket.updateMany({
       where: {
         id: ticketId,
         status: { not: 'closed' }
       },
       data: {
-        updatedAt: new Date(),
-        ...(!isFromOwner ? {
-          status: 'in_progress' as TicketStatus,
-          resolvedAt: null,
-          closedAt: null
-        } : {})
+        updatedAt: repliedAt
       }
     })
 
@@ -1074,7 +1074,29 @@ export async function addTicketMessage(
           firstRespondedAt: null
         },
         data: {
-          firstRespondedAt: new Date()
+          firstRespondedAt: repliedAt
+        }
+      })
+      await tx.ticket.updateMany({
+        where: {
+          id: ticketId,
+          status: 'open'
+        },
+        data: {
+          status: 'in_progress' as TicketStatus
+        }
+      })
+    } else {
+      // 客户回复已解决工单时重开；open 工单仍等待客服首响推进状态。
+      await tx.ticket.updateMany({
+        where: {
+          id: ticketId,
+          status: 'resolved'
+        },
+        data: {
+          status: 'in_progress' as TicketStatus,
+          resolvedAt: null,
+          closedAt: null
         }
       })
     }
@@ -1150,10 +1172,22 @@ export async function updateTicketStatus(
     status: TicketStatus
     resolvedAt?: Date | null
     closedAt?: Date | null
+    slaBreachedAt?: Date
   } = { status }
 
   if (status === 'resolved') {
-    updateData.resolvedAt = new Date()
+    const resolvedAt = new Date()
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      where: { id: ticketId },
+      select: {
+        resolutionDueAt: true,
+        slaBreachedAt: true
+      }
+    })
+    updateData.resolvedAt = resolvedAt
+    if (ticket.resolutionDueAt && resolvedAt.getTime() > ticket.resolutionDueAt.getTime() && !ticket.slaBreachedAt) {
+      updateData.slaBreachedAt = resolvedAt
+    }
   } else if (status === 'closed') {
     updateData.closedAt = new Date()
   } else if (status === 'open' || status === 'in_progress') {
@@ -1223,7 +1257,7 @@ export async function canUserAccessTicket(userId: number, ticketId: number, user
  */
 export async function getOwnerPendingTicketCount(ownerId: number | undefined): Promise<number> {
   const where: any = {
-    status: { in: ['open', 'in_progress'] }
+    status: { not: 'closed' }
   }
   
   // 如果指定了 ownerId，只查询该用户的节点工单；否则查询所有工单（管理员）
@@ -1231,7 +1265,18 @@ export async function getOwnerPendingTicketCount(ownerId: number | undefined): P
     where.host = { userId: ownerId }
   }
   
-  return prisma.ticket.count({ where })
+  const tickets = await prisma.ticket.findMany({
+    where,
+    select: {
+      messages: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { isFromOwner: true }
+      }
+    }
+  })
+
+  return tickets.filter(ticket => ticket.messages[0]?.isFromOwner === false).length
 }
 
 /**
@@ -1250,51 +1295,51 @@ export async function getUserOpenTicketCount(userId: number): Promise<number> {
  * 获取需要自动关闭的工单
  * 条件：
  * 1. 状态为 resolved（已解决）
- * 2. resolvedAt 早于指定时间（默认24小时前）
+ * 2. 最后一条公开消息早于调用方按系统配置计算的截止时间
  * 3. 最后一条消息来自宿主机主人（isFromOwner = true），表示不需要管理员再回复
  */
-export async function getTicketsForAutoClose(timeoutMs: number = 24 * 60 * 60 * 1000): Promise<{
+export async function getTicketsForAutoClose(timeoutMs: number): Promise<{
   id: number
   subject: string
   userId: number
   hostId: number | null
-  resolvedAt: Date
+  lastPublicMessageAt: Date
 }[]> {
   const cutoffTime = new Date(Date.now() - timeoutMs)
 
   // 查询符合条件的工单
   const tickets = await prisma.ticket.findMany({
     where: {
-      status: 'resolved',
-      resolvedAt: {
-        lt: cutoffTime
-      }
+      status: 'resolved'
     },
     select: {
       id: true,
       subject: true,
       userId: true,
       hostId: true,
-      resolvedAt: true,
       messages: {
         orderBy: { createdAt: 'desc' },
         take: 1,
         select: {
-          isFromOwner: true
+          isFromOwner: true,
+          createdAt: true
         }
       }
     }
   })
 
-  // 过滤：只保留最后一条消息来自宿主机主人的工单
+  // 过滤：最后一条公开消息来自处理方，且距今已达到自动关闭时限
   return tickets
-    .filter(ticket => ticket.messages[0]?.isFromOwner === true)
+    .filter(ticket =>
+      ticket.messages[0]?.isFromOwner === true &&
+      ticket.messages[0].createdAt < cutoffTime
+    )
     .map(ticket => ({
       id: ticket.id,
       subject: ticket.subject,
       userId: ticket.userId,
       hostId: ticket.hostId,
-      resolvedAt: ticket.resolvedAt!
+      lastPublicMessageAt: ticket.messages[0]!.createdAt
     }))
 }
 
@@ -1305,7 +1350,7 @@ export async function getTicketsForAutoClose(timeoutMs: number = 24 * 60 * 60 * 
  */
 export async function autoCloseTickets(
   ticketIds: number[],
-  timeoutMs: number = 24 * 60 * 60 * 1000
+  timeoutMs: number
 ): Promise<AutoClosedTicket[]> {
   if (ticketIds.length === 0) return []
 
@@ -1323,12 +1368,13 @@ export async function autoCloseTickets(
           userId: true,
           hostId: true,
           status: true,
-          resolvedAt: true,
+          updatedAt: true,
           messages: {
             orderBy: { createdAt: 'desc' },
             take: 1,
             select: {
-              isFromOwner: true
+              isFromOwner: true,
+              createdAt: true
             }
           }
         }
@@ -1337,9 +1383,8 @@ export async function autoCloseTickets(
       if (
         !latest ||
         latest.status !== 'resolved' ||
-        !latest.resolvedAt ||
-        latest.resolvedAt >= cutoffTime ||
-        latest.messages[0]?.isFromOwner !== true
+        latest.messages[0]?.isFromOwner !== true ||
+        latest.messages[0].createdAt >= cutoffTime
       ) {
         return null
       }
@@ -1348,7 +1393,7 @@ export async function autoCloseTickets(
         where: {
           id: latest.id,
           status: 'resolved',
-          resolvedAt: { lt: cutoffTime }
+          updatedAt: latest.updatedAt
         },
         data: {
           status: 'closed',

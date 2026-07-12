@@ -19,6 +19,10 @@ const SENSITIVE_FIELDS = [
     'currentPassword',
     'confirmPassword',
     'token',
+    'assetToken',
+    'agentSecret',
+    'pat',
+    'poa',
     'botToken',
     'bot_token',
     'telegramBotToken',
@@ -82,15 +86,21 @@ const SENSITIVE_FIELD_PATTERN = new RegExp(
     'i'
 )
 
-// Token 模式匹配（用于检测值中包含的 token）
-const TOKEN_PATTERNS = [
-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
-]
-
 // 替换值
 const REDACTED = '[REDACTED]'
 const REDACTED_JWT = '[REDACTED_JWT]'
+
+// Token 模式匹配（用于检测值中包含的 token）
+const TOKEN_PATTERNS = [
+    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
+    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
+    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
+    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
+    {
+        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
+        replacement: `$1${REDACTED}`
+    },  // URL query secrets
+]
 
 /**
  * 检查字段名是否为敏感字段
@@ -104,8 +114,8 @@ export function isSensitiveField(fieldName: string): boolean {
  */
 export function sanitizeTokensInString(value: string): string {
     let result = value
-    for (const pattern of TOKEN_PATTERNS) {
-        result = result.replace(pattern, REDACTED_JWT)
+    for (const { pattern, replacement } of TOKEN_PATTERNS) {
+        result = result.replace(pattern, replacement)
     }
     return result
 }
@@ -116,7 +126,7 @@ export function sanitizeTokensInString(value: string): string {
  */
 export function sanitizeObject<T>(obj: T, depth = 0): T {
     // 防止无限递归
-    if (depth > 10) return obj
+    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
 
     if (obj === null || obj === undefined) {
         return obj

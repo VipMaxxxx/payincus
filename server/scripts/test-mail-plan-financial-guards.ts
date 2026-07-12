@@ -115,4 +115,31 @@ assert.ok(
   'mail subscription purchase route must not destructure raw typed bodies or trim AFF codes inline'
 )
 
+const cancelSectionStart = source.indexOf('// 管理员退订（删除订阅）')
+const domainManagementSectionStart = source.indexOf('// ==================== 管理员：域名管理 ====================')
+assert.notEqual(cancelSectionStart, -1, 'mail subscription cancel section not found')
+assert.notEqual(domainManagementSectionStart, -1, 'mail domain management section not found')
+const cancelSection = source.slice(cancelSectionStart, domainManagementSectionStart)
+
+assert.ok(
+  source.includes('async function getMailRefundableAmount(') &&
+    source.includes("type: 'consume'") &&
+    source.includes('const totalPaid = paymentRecords.reduce') &&
+    source.includes('const totalRefunded = refundRecords.reduce') &&
+    source.includes('Math.max(0, totalPaid - totalRefunded)'),
+  'mail refunds must use actual purchase/renew balance logs and cap cumulative refunds at cumulative paid amount'
+)
+assert.ok(
+  source.includes('remainingValue += Math.abs(Number(record.amount)) * unusedRatio') &&
+    source.includes('Math.min(remainingValue, maxRefundable)'),
+  'mail remaining-value refunds must prorate actual per-period payments and respect the paid-minus-refunded cap'
+)
+assert.ok(
+  cancelSection.includes('refundAmount = refundType === \'full\'') &&
+    cancelSection.includes('? refundable.maxRefundable') &&
+    !cancelSection.includes('const planPrice = Number(subscription.plan.price)') &&
+    !cancelSection.includes('refundAmount = planPrice'),
+  'mail full refunds must use historical actual payments instead of the current plan price'
+)
+
 console.log('mail plan financial guard tests passed')

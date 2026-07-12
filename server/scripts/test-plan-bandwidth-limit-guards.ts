@@ -18,6 +18,13 @@ const adminBillingSource = readFileSync(resolve(repoRoot, 'server/src/routes/adm
 const hostsSource = readFileSync(resolve(repoRoot, 'server/src/routes/hosts.ts'), 'utf8')
 const packagesSource = readFileSync(resolve(repoRoot, 'server/src/routes/packages.ts'), 'utf8')
 const myPackagesViewSource = readFileSync(resolve(repoRoot, 'client/src/views/resources/MyPackagesView.vue'), 'utf8')
+const trafficBandwidthSource = readFileSync(resolve(repoRoot, 'server/src/services/traffic-bandwidth.ts'), 'utf8')
+
+includes(
+  trafficBandwidthSource,
+  '`trafficLimitSpeed` 是套餐正常线速（normal line speed），不是流量超量后的限速值。',
+  'trafficLimitSpeed normal line speed semantics'
+)
 
 assert.equal(normalizePlanTrafficLimitSpeed(null), null, 'null speed must mean no plan bandwidth limit')
 assert.equal(normalizePlanTrafficLimitSpeed(undefined), null, 'missing speed must mean no plan bandwidth limit')

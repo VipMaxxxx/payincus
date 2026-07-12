@@ -35,6 +35,19 @@ assert.ok(
 )
 
 assert.ok(
+  (route.match(/FROM exchange_orders/g) || []).length === 7 &&
+    route.includes('SELECT fee_amount::numeric AS value') &&
+    route.includes("WHERE status = 'completed'") &&
+    route.includes('AND completed_at IS NOT NULL') &&
+    route.includes('AND wallet_log_id IS NOT NULL') &&
+    route.includes("to_char(completed_at + interval '8 hours', 'YYYY-MM-DD')") &&
+    route.includes("to_char(completed_at + interval '8 hours', 'YYYY-MM')") &&
+    !route.includes('FROM exchange_wallet_logs') &&
+    !route.includes("type = 'fee_charge'"),
+  'official income totals, period series, and operations revenue must include each settled exchange order fee once by completion time'
+)
+
+assert.ok(
   adminApi.includes('operations: {') &&
     adminApi.includes("risks: Array<{") &&
     adminApi.includes("severity: 'info' | 'warning' | 'critical'") &&

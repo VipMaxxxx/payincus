@@ -9,6 +9,7 @@ const __dirname = dirname(__filename)
 const invitePricingSource = readFileSync(resolve(__dirname, '../src/lib/invite-pricing.ts'), 'utf8')
 const userInvitesRouteSource = readFileSync(resolve(__dirname, '../src/routes/user-invites.ts'), 'utf8')
 const systemConfigRouteSource = readFileSync(resolve(__dirname, '../src/routes/system-config.ts'), 'utf8')
+const affDbSource = readFileSync(resolve(__dirname, '../src/db/aff.ts'), 'utf8')
 
 function sectionBetween(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -28,6 +29,27 @@ const pointsHandler = sectionBetween(
   invitePricingSource,
   "points: {",
   'export function isSupportedInviteCostResource'
+)
+
+const createAffCodeHandler = sectionBetween(
+  affDbSource,
+  'export async function createAffCode(',
+  'export async function deleteAffCode('
+)
+
+assert.ok(
+  createAffCodeHandler.includes("getSystemConfigFloat('aff_discount_rate', 0.05)") &&
+    createAffCodeHandler.includes("getSystemConfigFloat('aff_commission_rate', 0.05)") &&
+    createAffCodeHandler.includes('discountRate,') &&
+    createAffCodeHandler.includes('commissionRate'),
+  'new AFF codes must snapshot the current configured discount and commission rates'
+)
+
+assert.ok(
+  affDbSource.includes('discountRate: Number(affCode.discountRate)') &&
+    affDbSource.includes('commissionRate: Number(affCode.commissionRate)') &&
+    affDbSource.includes('const commissionRate = Number(affCode.commissionRate)'),
+  'existing AFF codes and commission accounting must keep using each code stored rates'
 )
 
 assert.ok(

@@ -24,6 +24,64 @@ const NOTIFICATION_TYPES = new Set(['telegram', 'discord', 'webhook'])
 const USER_POINTS_ORDER_BY_FIELDS = new Set(['points', 'totalEarned', 'totalSpent'])
 const SORT_ORDERS = new Set(['asc', 'desc'])
 const MAX_POINTS_ADJUST_AMOUNT = 1_000_000
+const LOTTERY_TOTAL_PROBABILITY = 100
+const MAX_BALANCE_PRIZE_COST_MULTIPLIER = 100
+
+type LotteryPrizeConfig = {
+  type: LotteryPrizeType
+  value: number
+  probability: number
+}
+
+type LotteryConfigValidationError = {
+  error: string
+  message: string
+}
+
+function validateLotteryConfig(
+  costPoints: number,
+  prizes: LotteryPrizeConfig[]
+): LotteryConfigValidationError | null {
+  const totalProbability = prizes.reduce((sum, prize) => sum + prize.probability, 0)
+
+  if (totalProbability > LOTTERY_TOTAL_PROBABILITY) {
+    return {
+      error: 'INVALID_PROBABILITY_TOTAL',
+      message: 'Total prize probability must not exceed 100%'
+    }
+  }
+
+  if (totalProbability < LOTTERY_TOTAL_PROBABILITY && !prizes.some(prize => prize.type === 'nothing')) {
+    return {
+      error: 'MISSING_NOTHING_PRIZE',
+      message: 'A nothing prize is required when total prize probability is below 100%'
+    }
+  }
+
+  const balancePrizes = prizes.filter(prize => prize.type === 'balance')
+  const expectedBalanceValue = balancePrizes.reduce(
+    (sum, prize) => sum + (prize.probability / 100) * (prize.value / 100),
+    0
+  )
+  const drawCostValue = costPoints / 100
+
+  if (expectedBalanceValue > drawCostValue) {
+    return {
+      error: 'BALANCE_EXPECTED_VALUE_EXCEEDED',
+      message: 'Expected balance payout per draw must not exceed the point cost value'
+    }
+  }
+
+  const maxBalancePrizeValue = costPoints * MAX_BALANCE_PRIZE_COST_MULTIPLIER
+  if (balancePrizes.some(prize => prize.value > maxBalancePrizeValue)) {
+    return {
+      error: 'BALANCE_PRIZE_VALUE_EXCEEDED',
+      message: `A balance prize must not exceed ${MAX_BALANCE_PRIZE_COST_MULTIPLIER} times the point cost value`
+    }
+  }
+
+  return null
+}
 
 function parsePositiveRouteId(value: string): number | null {
   if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
@@ -283,6 +341,18 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       return reply.code(400).send({ error: 'INVALID_COST', message: 'Cost points must be at least 1' })
     }
 
+    if (existing.prizes.length > 0) {
+      const configError = validateLotteryConfig(
+        parsedCostPoints ?? existing.costPoints,
+        existing.prizes.map(prize => ({
+          type: prize.type,
+          value: prize.value,
+          probability: Number(prize.probability)
+        }))
+      )
+      if (configError) return reply.code(400).send(configError)
+    }
+
     await db.updateLottery(lotteryId, {
       name: name?.trim(),
       description: description?.trim(),
@@ -463,6 +533,20 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       return reply.code(400).send({ error: 'INVALID_VALUE', message: 'Prize value must be a non-negative integer' })
     }
 
+    const configError = validateLotteryConfig(lottery.costPoints, [
+      ...lottery.prizes.map(prize => ({
+        type: prize.type,
+        value: prize.value,
+        probability: Number(prize.probability)
+      })),
+      {
+        type: prizeType,
+        value: prizeType === 'badge' || prizeType === 'nothing' || prizeType === 'instance' ? 0 : parsedValue ?? 0,
+        probability: parsedProbability
+      }
+    ])
+    if (configError) return reply.code(400).send(configError)
+
     const prize = await db.createPrize({
       lotteryId,
       name: name.trim(),
@@ -564,6 +648,20 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
       return reply.code(400).send({ error: 'INVALID_DISPLAY_ORDER', message: 'Display order must be an integer' })
     }
 
+    const lottery = await db.getLotteryById(existing.lotteryId)
+    if (!lottery) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+    }
+
+    const configError = validateLotteryConfig(lottery.costPoints, lottery.prizes.map(prize => ({
+      type: prize.id === prizeId ? prizeType : prize.type,
+      value: prize.id === prizeId
+        ? (prizeType === 'badge' || prizeType === 'nothing' ? 0 : parsedValue ?? prize.value)
+        : prize.value,
+      probability: prize.id === prizeId ? parsedProbability ?? Number(prize.probability) : Number(prize.probability)
+    })))
+    if (configError) return reply.code(400).send(configError)
+
     await db.updatePrize(prizeId, {
       name: name?.trim(),
       type: parsedType ?? undefined,
@@ -601,6 +699,28 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
     const existing = await db.getPrizeById(prizeId)
     if (!existing) {
       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+    }
+
+    if (existing._count.records > 0) {
+      return reply.code(409).send({
+        error: 'PRIZE_HAS_RECORDS',
+        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
+      })
+    }
+
+    const lottery = await db.getLotteryById(existing.lotteryId)
+    if (!lottery) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+    }
+
+    const remainingPrizes = lottery.prizes.filter(prize => prize.id !== prizeId)
+    if (remainingPrizes.length > 0) {
+      const configError = validateLotteryConfig(lottery.costPoints, remainingPrizes.map(prize => ({
+        type: prize.type,
+        value: prize.value,
+        probability: Number(prize.probability)
+      })))
+      if (configError) return reply.code(400).send(configError)
     }
 
     await db.deletePrize(prizeId)

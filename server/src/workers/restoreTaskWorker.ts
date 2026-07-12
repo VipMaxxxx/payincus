@@ -9,7 +9,8 @@ import { getIncusClient } from '../lib/incus/index.js'
 import { getBackupExportStream } from '../lib/incus/incus-backups.js'
 import {
     restoreFromStream,
-    renameInstance
+    renameInstance,
+    instanceExists
 } from '../lib/incus/incus-restore.js'
 import {
     stopInstance,
@@ -412,8 +413,10 @@ async function executeRestoreTask(taskId: number): Promise<void> {
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
+        let manualInterventionReason: string | null = null
 
-        // 尝试清理临时实例
+        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
+        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
         if (task.tempInstanceName) {
             try {
                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
@@ -424,14 +427,21 @@ async function executeRestoreTask(taskId: number): Promise<void> {
                         certPath: host.certPath,
                         keyPath: host.keyPath
                     })
-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
+                    const originalExists = await instanceExists(client, task.originalIncusId)
                     const tempExists = await instanceExists(client, task.tempInstanceName)
-                    if (tempExists) {
+                    if (!originalExists) {
+                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
+                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                    } else if (tempExists) {
                         await deleteInstance(client, task.tempInstanceName)
                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
                     }
+                } else {
+                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
                 }
             } catch (cleanupErr) {
+                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
             }
         }
@@ -440,7 +450,12 @@ async function executeRestoreTask(taskId: number): Promise<void> {
             where: { id: taskId, status: 'PROCESSING' },
             data: {
                 status: 'FAILED',
-                error: errorMessage,
+                ...(manualInterventionReason
+                    ? {
+                        progress: 'manual_intervention',
+                        error: `${errorMessage}; ${manualInterventionReason}`
+                    }
+                    : { error: errorMessage }),
                 finishedAt: new Date()
             }
         })

@@ -42,7 +42,8 @@ assert.ok(
 )
 
 assert.ok(
-  pluginFrame.includes('sandbox=') &&
+  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
+    !pluginFrame.includes('allow-same-origin') &&
     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
     pluginFrame.includes('requestPluginAssetToken(asset)') &&
     pluginFrame.includes('assetToken') &&
@@ -50,7 +51,7 @@ assert.ok(
     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
     pluginFrame.includes("type: 'payincus:plugin-config'") &&
     pluginFrame.includes('postMessage') &&
-    pluginFrame.includes('window.location.origin') &&
+    pluginFrame.includes("}, '*')") &&
     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
     pluginFrame.includes('frameClass?: string') &&
     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&

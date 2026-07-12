@@ -3,6 +3,77 @@
  * 包含增量计算、格式化等纯函数
  */
 
+import type { Prisma } from '@prisma/client'
+import { calculateVipExtraTraffic, getUserContinuousVipBenefit } from './vip-benefits.js'
+
+export interface TrafficSnapshotSample {
+    rxRaw: bigint
+    txRaw: bigint
+    sampledAt: Date
+    source: 'agent-report' | 'active-collector'
+    rxPacketsRaw?: bigint
+    txPacketsRaw?: bigint
+    cpuUsageRaw?: bigint | null
+}
+
+export async function getVipExtraTrafficQuota(userId: number, baseLimit: bigint | null): Promise<bigint> {
+    const vip = await getUserContinuousVipBenefit(userId)
+    return calculateVipExtraTraffic(baseLimit, vip.benefit.extraTrafficPercent)
+}
+
+/**
+ * 原子推进两条采集通道共用的流量快照。
+ * updatedAt 作为快照采样时间；迟到样本不能回退基线，也不能参与增量计量。
+ */
+export async function advanceTrafficSnapshot(
+    tx: Prisma.TransactionClient,
+    instanceId: number,
+    sample: TrafficSnapshotSample
+) {
+    const previous = await tx.trafficSnapshot.findUnique({
+        where: { instanceId }
+    })
+
+    const data = {
+        rxRaw: sample.rxRaw,
+        txRaw: sample.txRaw,
+        updatedAt: sample.sampledAt,
+        ...(sample.rxPacketsRaw !== undefined ? { rxPacketsRaw: sample.rxPacketsRaw } : {}),
+        ...(sample.txPacketsRaw !== undefined ? { txPacketsRaw: sample.txPacketsRaw } : {}),
+        ...(sample.cpuUsageRaw !== undefined ? { cpuUsageRaw: sample.cpuUsageRaw } : {})
+    }
+
+    if (!previous) {
+        await tx.trafficSnapshot.create({
+            data: {
+                instanceId,
+                ...data
+            }
+        })
+        return { accepted: true, previous: null }
+    }
+
+    const updateResult = await tx.trafficSnapshot.updateMany({
+        where: {
+            instanceId,
+            updatedAt: { lte: sample.sampledAt }
+        },
+        data
+    })
+
+    if (updateResult.count === 0) {
+        console.debug('[Traffic] Dropped stale traffic sample', {
+            instanceId,
+            source: sample.source,
+            sampledAt: sample.sampledAt.toISOString(),
+            snapshotSampledAt: previous.updatedAt.toISOString()
+        })
+        return { accepted: false, previous }
+    }
+
+    return { accepted: true, previous }
+}
+
 /**
  * 计算流量增量
  * 计数器归零或统计口径变化时只重建基线，不追补当前原始值。

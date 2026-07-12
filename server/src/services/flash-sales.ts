@@ -30,6 +30,28 @@ function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null
 }
 
+function assertValidFlashPrice(flashPrice: number, originalPriceSnapshot: unknown): void {
+  const originalPrice = toNumber(originalPriceSnapshot)
+  if (!Number.isInteger(flashPrice) || flashPrice <= 0 || flashPrice >= originalPrice) {
+    throw new FlashSaleError('FLASH_SALE_INVALID_PRICE', '秒杀价必须大于 0 且低于原价')
+  }
+}
+
+function getCheckoutPriceSnapshot(metadata: Prisma.InputJsonValue | undefined): {
+  flashPriceCents: number
+  discountAmountCents: number
+} | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
+  const snapshot = metadata as Record<string, unknown>
+  const flashPriceCents = Number(snapshot.flashPriceCents)
+  const discountAmount = Number(snapshot.discountAmount ?? 0)
+  if (!Number.isInteger(flashPriceCents) || !Number.isFinite(discountAmount) || discountAmount < 0) return null
+  return {
+    flashPriceCents,
+    discountAmountCents: Math.round(discountAmount * 100)
+  }
+}
+
 function remainingStock(item: {
   totalStock: number
   soldCount: number
@@ -398,9 +420,7 @@ export async function createFlashSaleCampaign(input: {
             if (!plan) {
               throw new FlashSaleError('FLASH_SALE_PLAN_NOT_FOUND', `方案 #${item.packagePlanId} 不存在`)
             }
-            if (!Number.isFinite(item.flashPrice) || item.flashPrice < 0) {
-              throw new FlashSaleError('FLASH_SALE_INVALID_PRICE', '秒杀价无效')
-            }
+            assertValidFlashPrice(item.flashPrice, plan.price)
             if (!Number.isInteger(item.totalStock) || item.totalStock < 1) {
               throw new FlashSaleError('FLASH_SALE_INVALID_STOCK', '库存必须大于 0')
             }
@@ -560,8 +580,8 @@ export async function updateFlashSaleItemConfig(itemId: number, input: {
   actorUserId: number
   reason?: string
 }) {
-  if (input.flashPrice !== undefined && (!Number.isInteger(input.flashPrice) || input.flashPrice < 0)) {
-    throw new FlashSaleError('FLASH_SALE_INVALID_PRICE', '秒杀价无效')
+  if (input.flashPrice !== undefined && (!Number.isInteger(input.flashPrice) || input.flashPrice <= 0)) {
+    throw new FlashSaleError('FLASH_SALE_INVALID_PRICE', '秒杀价必须大于 0 且低于原价')
   }
   if (input.totalStock !== undefined && (!Number.isInteger(input.totalStock) || input.totalStock < 0)) {
     throw new FlashSaleError('FLASH_SALE_INVALID_STOCK', '库存不能小于 0')
@@ -573,13 +593,16 @@ export async function updateFlashSaleItemConfig(itemId: number, input: {
     throw new FlashSaleError('FLASH_SALE_INVALID_SORT', '排序值不能小于 0')
   }
 
-  const item = await prisma.flashSaleItem.findUnique({ where: { id: itemId } })
-  if (!item) return null
-  if (input.totalStock !== undefined && input.totalStock < item.soldCount + item.reservedCount) {
-    throw new FlashSaleError('FLASH_SALE_STOCK_BELOW_SOLD', '库存不能小于已售和锁定数量')
-  }
-
   const updated = await prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, FLASH_SALE_ITEM_LOCK_NAMESPACE, itemId)
+    const item = await tx.flashSaleItem.findUnique({ where: { id: itemId } })
+    if (!item) return null
+    if (input.flashPrice !== undefined) {
+      assertValidFlashPrice(input.flashPrice, item.originalPriceSnapshot)
+    }
+    if (input.totalStock !== undefined && input.totalStock < item.soldCount + item.reservedCount) {
+      throw new FlashSaleError('FLASH_SALE_STOCK_BELOW_SOLD', '库存不能小于已售和锁定数量')
+    }
     const next = await tx.flashSaleItem.update({
       where: { id: itemId },
       data: {
@@ -641,13 +664,13 @@ export async function assertFlashSaleCheckoutEligibility(input: {
   }
 
   const now = new Date()
-  if (item.campaign.status !== 'active' || now < item.campaign.startAt || now > item.campaign.endAt) {
+  if (normalizeStatusForTime(item.campaign.status, item.campaign.startAt, item.campaign.endAt, now) !== 'active') {
     throw new FlashSaleError('FLASH_SALE_NOT_ACTIVE', '秒杀活动未开始或已结束')
   }
   if (remainingStock(item) <= 0) {
     throw new FlashSaleError('FLASH_SALE_SOLD_OUT', '秒杀库存已抢完', 409)
   }
-  if (input.promoCode && (!item.allowCoupon || !item.allowAff)) {
+  if (input.promoCode && !item.allowAff) {
     throw new FlashSaleError('FLASH_SALE_COUPON_DISABLED', '秒杀商品不支持叠加优惠码或 AFF')
   }
 
@@ -674,16 +697,26 @@ export async function assertFlashSaleCheckoutEligibility(input: {
     }
   }
 
-  const perUserLimit = Math.max(1, Math.min(item.perUserLimit, item.campaign.maxPerUser || item.perUserLimit))
-  const purchasedCount = await prisma.flashSaleReservation.count({
-    where: {
-      itemId: item.id,
-      userId: input.userId,
-      status: { in: ACTIVE_PURCHASE_STATUSES }
-    }
-  })
-  if (purchasedCount >= perUserLimit) {
-    throw new FlashSaleError('FLASH_SALE_USER_LIMIT_REACHED', `每个账号限购 ${perUserLimit} 台`, 409)
+  const itemPerUserLimit = Math.max(1, item.perUserLimit)
+  const campaignMaxPerUser = Math.max(1, item.campaign.maxPerUser || itemPerUserLimit)
+  const [itemPurchasedCount, campaignPurchasedCount] = await Promise.all([
+    prisma.flashSaleReservation.count({
+      where: {
+        itemId: item.id,
+        userId: input.userId,
+        status: { in: ACTIVE_PURCHASE_STATUSES }
+      }
+    }),
+    prisma.flashSaleReservation.count({
+      where: {
+        campaignId: item.campaignId,
+        userId: input.userId,
+        status: { in: ACTIVE_PURCHASE_STATUSES }
+      }
+    })
+  ])
+  if (itemPurchasedCount >= itemPerUserLimit || campaignPurchasedCount >= campaignMaxPerUser) {
+    throw new FlashSaleError('FLASH_SALE_USER_LIMIT_REACHED', `每个账号活动限购 ${campaignMaxPerUser} 台`, 409)
   }
 
   if (item.campaign.requireTurnstile) {
@@ -741,27 +774,50 @@ export async function claimFlashSalePurchaseInTransaction(tx: Prisma.Transaction
   if (!item) {
     throw new FlashSaleError('FLASH_SALE_ITEM_NOT_FOUND', '秒杀商品不存在', 404)
   }
+  // 使用负 campaignId 复用秒杀锁命名空间，和正数 itemId 隔离并串行化跨商品活动限购检查。
+  await advisoryTransactionLock(tx, FLASH_SALE_ITEM_LOCK_NAMESPACE, -item.campaignId)
   const now = new Date()
   if (item.packagePlanId !== input.planId || item.packagePlan.packageId !== input.packageId) {
     throw new FlashSaleError('FLASH_SALE_PLAN_MISMATCH', '秒杀商品与当前套餐方案不匹配')
   }
-  if (item.campaign.status !== 'active' || now < item.campaign.startAt || now > item.campaign.endAt) {
+  if (normalizeStatusForTime(item.campaign.status, item.campaign.startAt, item.campaign.endAt, now) !== 'active') {
     throw new FlashSaleError('FLASH_SALE_NOT_ACTIVE', '秒杀活动未开始或已结束')
   }
   if (remainingStock(item) <= 0) {
     throw new FlashSaleError('FLASH_SALE_SOLD_OUT', '秒杀库存已抢完', 409)
   }
 
-  const perUserLimit = Math.max(1, Math.min(item.perUserLimit, item.campaign.maxPerUser || item.perUserLimit))
-  const purchasedCount = await tx.flashSaleReservation.count({
-    where: {
-      itemId: item.id,
-      userId: input.userId,
-      status: { in: ACTIVE_PURCHASE_STATUSES }
-    }
-  })
-  if (purchasedCount >= perUserLimit) {
-    throw new FlashSaleError('FLASH_SALE_USER_LIMIT_REACHED', `每个账号限购 ${perUserLimit} 台`, 409)
+  const priceSnapshot = getCheckoutPriceSnapshot(input.metadata)
+  const currentFlashPriceCents = toNumber(item.flashPrice)
+  const expectedAmountCents = currentFlashPriceCents - (priceSnapshot?.discountAmountCents ?? 0)
+  if (
+    !priceSnapshot ||
+    priceSnapshot.flashPriceCents !== currentFlashPriceCents ||
+    Math.round(input.amount * 100) !== expectedAmountCents
+  ) {
+    throw new FlashSaleError('FLASH_SALE_PRICE_CHANGED', '秒杀价格已更新，请刷新后重试', 409)
+  }
+
+  const itemPerUserLimit = Math.max(1, item.perUserLimit)
+  const campaignMaxPerUser = Math.max(1, item.campaign.maxPerUser || itemPerUserLimit)
+  const [itemPurchasedCount, campaignPurchasedCount] = await Promise.all([
+    tx.flashSaleReservation.count({
+      where: {
+        itemId: item.id,
+        userId: input.userId,
+        status: { in: ACTIVE_PURCHASE_STATUSES }
+      }
+    }),
+    tx.flashSaleReservation.count({
+      where: {
+        campaignId: item.campaignId,
+        userId: input.userId,
+        status: { in: ACTIVE_PURCHASE_STATUSES }
+      }
+    })
+  ])
+  if (itemPurchasedCount >= itemPerUserLimit || campaignPurchasedCount >= campaignMaxPerUser) {
+    throw new FlashSaleError('FLASH_SALE_USER_LIMIT_REACHED', `每个账号活动限购 ${campaignMaxPerUser} 台`, 409)
   }
 
   const reservation = await tx.flashSaleReservation.create({
@@ -821,14 +877,19 @@ export async function markFlashSaleFailed(instanceId: number, reason: string, re
     })
     if (!reservation) return
 
-    await tx.flashSaleReservation.update({
-      where: { id: reservation.id },
+    const updateResult = await tx.flashSaleReservation.updateMany({
+      where: {
+        id: reservation.id,
+        status: { in: ['paid', 'delivering'] }
+      },
       data: {
         status: refunded ? 'refunded' : 'failed',
         failureReason: reason.slice(0, 1000),
         refundedAt: refunded ? new Date() : null
       }
     })
+    if (updateResult.count === 0) return
+
     await tx.flashSaleItem.update({
       where: { id: reservation.itemId },
       data: {

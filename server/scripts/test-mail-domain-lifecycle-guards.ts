@@ -7,6 +7,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const routeSource = readFileSync(resolve(__dirname, '../src/routes/mail.ts'), 'utf8')
+const craneMailSource = readFileSync(resolve(__dirname, '../src/services/cranemail.ts'), 'utf8')
+const expirySchedulerSource = readFileSync(resolve(__dirname, '../src/services/mail-expiry-scheduler.ts'), 'utf8')
 const lockSource = readFileSync(resolve(__dirname, '../src/db/advisory-locks.ts'), 'utf8')
 const dbSource = readFileSync(resolve(__dirname, '../src/db/mail.ts'), 'utf8')
 
@@ -56,6 +58,7 @@ const countIndex = addDomainSection.indexOf('await tx.mailDomain.count')
 const existsIndex = addDomainSection.indexOf('await tx.mailDomain.findUnique')
 const upstreamCreateIndex = addDomainSection.indexOf('await craneMailService.createDomain')
 const localCreateIndex = addDomainSection.indexOf('await db.createMailDomainWithTx')
+const sharedQuotaIndex = addDomainSection.indexOf('await mailSubscriptionHasDiskQuota')
 
 assert.notEqual(subscriptionLockIndex, -1, 'mail domain add must lock the user subscription')
 assert.notEqual(domainLockIndex, -1, 'mail domain add must lock the mail source domain namespace')
@@ -63,10 +66,40 @@ assert.notEqual(countIndex, -1, 'mail domain add must re-check domain quota insi
 assert.notEqual(existsIndex, -1, 'mail domain add must re-check source/domain uniqueness inside the lock')
 assert.notEqual(upstreamCreateIndex, -1, 'mail domain add must create the upstream domain')
 assert.notEqual(localCreateIndex, -1, 'mail domain add must persist the domain inside the same guarded transaction')
+assert.notEqual(sharedQuotaIndex, -1, 'mail domain add must reserve its administrator account from shared disk quota')
 assert.ok(subscriptionLockIndex < countIndex, 'quota re-check must happen after acquiring the subscription lock')
 assert.ok(domainLockIndex < existsIndex, 'domain uniqueness re-check must happen after acquiring the domain lock')
 assert.ok(existsIndex < upstreamCreateIndex, 'upstream domain creation must happen after duplicate re-check')
+assert.ok(sharedQuotaIndex < upstreamCreateIndex, 'shared disk quota must be checked before upstream domain creation')
 assert.ok(upstreamCreateIndex < localCreateIndex, 'local domain record must only be created after upstream creation succeeds')
+
+assert.ok(
+  craneMailSource.includes('const sharedDomainDiskLimitGb = subscriptionDiskLimitGb / domainLimit') &&
+    craneMailSource.includes('disklimit: sharedDomainDiskLimitGb.toString()'),
+  'CraneMail domain caps must split the subscription total instead of granting every domain the full quota'
+)
+assert.ok(
+  addDomainSection.includes('currentSubscription.diskLimitGb,') &&
+    addDomainSection.includes('currentSubscription.domainLimit') &&
+    addDomainSection.includes('diskLimitMb: adminDiskLimitMb'),
+  'mail domain creation must pass the shared-total inputs upstream and count the administrator mailbox allocation'
+)
+assert.ok(
+  craneMailSource.includes("await callApi(source, 'domain/suspend', { domain })") &&
+    craneMailSource.includes("await callApi(source, 'domain/unsuspend', { domain })") &&
+    craneMailSource.includes('safeFetch(apiUrl,') &&
+    expirySchedulerSource.includes('await craneMailService.suspendDomain(source, domain.domain)') &&
+    expirySchedulerSource.includes('mail_upstream_suspend_pending_retry'),
+  'mail suspend/resume calls must use the protected CraneMail client and expiry failures must remain retryable and alerted'
+)
+assert.ok(
+  routeSource.includes('function mailSubscriptionCanUseUpstream(') &&
+    routeSource.includes("subscription.status === 'active' && subscription.expiresAt.getTime() > Date.now()") &&
+    addDomainSection.includes('!mailSubscriptionCanUseUpstream(currentSubscription)') &&
+    deleteDomainSection.includes('!mailSubscriptionCanUseUpstream(domain.subscription)') &&
+    deleteAccountSection.includes('!mailSubscriptionCanUseUpstream(domain.subscription)'),
+  'expired subscriptions must be rejected before domain/account upstream mutations, including scheduler-lag expiry'
+)
 
 assert.ok(
   adminCancelSection.includes('const source = await db.getMailSourceById(subscription.sourceId)'),

@@ -161,12 +161,17 @@ async function main(): Promise<void> {
   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
   assert.equal(batchDisable.count, 2)
 
+  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
   const expiredCard = await giftCards.createGiftCard({
     faceValue: 1,
     balanceValue: 1,
     expiresAt: new Date(Date.now() - 60_000),
     remark: `${runId}:expired`
   })
+  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
+  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
+  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
+
   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
   assert.equal(expiredAfterRedeem?.status, 'expired')

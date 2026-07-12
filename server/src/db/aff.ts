@@ -6,6 +6,7 @@
 import { prisma } from './prisma.js'
 import type { AffCode, AffLog, AffLogType, AffWithdrawal, AffWithdrawalStatus, Prisma, PrismaClient } from '@prisma/client'
 import { nanoid } from 'nanoid'
+import { getSystemConfigFloat } from './system-config.js'
 import {
   USER_AFF_BALANCE_LOCK_NAMESPACE,
   USER_BALANCE_LOCK_NAMESPACE,
@@ -286,7 +287,7 @@ export async function getAvailablePlansForAffCode(userId: number): Promise<{
 /**
  * 创建优惠码（支持方案专有码和全局码）
  * @param packagePlanId 不传或传 undefined 则创建全局码
- * 折扣率和返利率固定为 5%/5%
+ * 折扣率和返利率在创建时从系统配置写入，存量码保留自身费率
  */
 export async function createAffCode(
   userId: number,
@@ -299,9 +300,10 @@ export async function createAffCode(
       return { success: false, error: '推荐计划尚未激活，请先充值任意金额' }
     }
 
-    // 固定折扣率和返利率为 5%/5%
-    const discountRate = 0.05
-    const commissionRate = 0.05
+    const [discountRate, commissionRate] = await Promise.all([
+      getSystemConfigFloat('aff_discount_rate', 0.05),
+      getSystemConfigFloat('aff_commission_rate', 0.05)
+    ])
 
     // 全局码逻辑 - 允许创建多个
     if (packagePlanId === undefined) {
@@ -457,6 +459,11 @@ export async function validateAffCode(
   // 3. 检查是否自己的优惠码
   if (affCode.userId === userId) {
     return { valid: false, error: '不能使用自己的优惠码' }
+  }
+
+  // 4. 检查优惠码是否启用
+  if (!affCode.enabled) {
+    return { valid: false, error: '优惠码已禁用' }
   }
 
   return {

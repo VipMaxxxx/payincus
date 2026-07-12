@@ -26,6 +26,7 @@ const aiTicketManifest = read('plugin-templates/ai-ticket-agent-plugin/payincus.
 const developmentDocs = read('docs-site/docs/plugins/development.md')
 const zhLocale = read('client/src/locales/zh-CN.ts')
 const enLocale = read('client/src/locales/en.ts')
+const zhTwLocale = read('client/src/locales/zh-TW.ts')
 const docsIndex = read('docs-site/docs/index.md')
 const enDocsIndex = read('docs-site/docs/en/index.md')
 const adminOverviewDocs = read('docs-site/docs/admin/overview.md')
@@ -96,6 +97,19 @@ assert.ok(
     db.includes('pluginCapabilityReview.upsert') &&
     db.includes("riskLevel: { in: ['high', 'critical'] }"),
   'plugin db layer must redact secret config, cover lifecycle operations, and sync capability review records'
+)
+
+assert.ok(
+  /update:\s*{[\s\S]*?status: 'installed',\s*enabled: false,\s*enabledByUserId: null,\s*enabledAt: null,/.test(db) &&
+    db.includes('enabled: isPluginEnabled(plugin)') &&
+    db.includes('pluginEnabled: review.plugin ? isPluginEnabled(review.plugin) : null') &&
+    pluginCenterView.includes("plugin.status === 'installed'") &&
+    pluginCenterView.includes("t('pluginCenter.status.pendingReenable')") &&
+    pluginCenterView.includes("isPluginEnabled(plugin) ? t('pluginCenter.actions.disable') : t('pluginCenter.actions.enable')") &&
+    zhLocale.includes("pendingReenable: '待重新启用'") &&
+    zhTwLocale.includes("pendingReenable: '待重新啟用'") &&
+    enLocale.includes("pendingReenable: 'Pending re-enable'"),
+  'plugin reinstall must reset enablement and the admin UI must show a localized pending re-enable state'
 )
 
 assert.ok(

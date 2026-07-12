@@ -22,6 +22,11 @@ import {
     claimOperationVerificationRequirement
 } from '../lib/operation-verification.js'
 import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
+import {
+    assertUserCanPurchaseOrReceiveInstance,
+    OrderRestrictedError,
+    orderRestrictionApiError
+} from '../services/user-order-restrictions.js'
 
 // 自定义 nanoid，只使用小写字母和数字（Incus 不允许下划线）
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
@@ -501,6 +506,16 @@ export default async function transferRoutes(fastify: FastifyInstance) {
             }
         }
 
+        try {
+            await assertUserCanPurchaseOrReceiveInstance(user.id)
+        } catch (error) {
+            await rollbackToPending()
+            if (error instanceof OrderRestrictedError) {
+                return reply.code(403).send(orderRestrictionApiError(error))
+            }
+            throw error
+        }
+
         // 检查实例是否还存在
         const instance = await db.getInstanceById(transfer.instanceId)
         if (!instance || instance.status === 'deleted') {
@@ -728,6 +743,11 @@ export default async function transferRoutes(fastify: FastifyInstance) {
         await sendNotification(transfer.fromUserId, 'transfer_accepted', {
             instanceName: instance.name,
             receiverUsername: user.username
+        })
+
+        // 提醒新所有者：普通转移不重装，需自行重置实例凭证并按需重开自动续费
+        await sendNotification(user.id, 'transfer_ownership_received', {
+            instanceName: newName
         })
 
         return { message: 'Transfer accepted' }
@@ -1178,10 +1198,9 @@ export default async function transferRoutes(fastify: FastifyInstance) {
             { instanceId: transfer.instanceId }
         )
 
-        // 通知接收方实例已被推送
-        await sendNotification(transfer.toUserId, 'transfer_accepted', {
-            instanceName: instance.name,
-            receiverUsername: transfer.toUser.username
+        // 通知接收方实例已过户，并提醒重置既有凭证
+        await sendNotification(transfer.toUserId, 'transfer_ownership_received', {
+            instanceName: newName
         })
 
         return { message: 'Transfer pushed successfully' }

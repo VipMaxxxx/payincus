@@ -38,6 +38,20 @@ assert.ok(
   'batch config route must require every requested instance to be available on the target host'
 )
 
+assert.ok(
+  routeSource.includes('await db.incrementHostResourceUsage(hostId, {') &&
+    routeSource.includes('cpuUsed: totalCpuDelta') &&
+    routeSource.includes('memoryUsed: totalMemoryDelta') &&
+    routeSource.includes('diskUsed: totalDiskDelta'),
+  'batch config route must apply CPU, memory, and disk usage as atomic deltas'
+)
+assert.ok(
+  !routeSource.includes('cpuUsed: host.cpu_used + totalCpuDelta') &&
+    !routeSource.includes('memoryUsed: host.memory_used + totalMemoryDelta') &&
+    !routeSource.includes('diskUsed: host.disk_used + totalDiskDelta'),
+  'batch config route must not overwrite host usage from a stale request-time snapshot'
+)
+
 for (const forbiddenPattern of [
   'const hostId = Number(id)',
   'isNaN(hostId)',

@@ -1,8 +1,10 @@
 import { prisma } from './prisma.js'
 import { decryptSensitiveData, encryptSensitiveData, isEncrypted } from '../lib/security.js'
+import { advisoryTransactionLock } from './advisory-locks.js'
 
 const MAX_COMMANDS_PER_USER = 100
 const MAX_COMMAND_SIZE = 16 * 1024
+const TERMINAL_SAVED_COMMAND_LOCK_NAMESPACE = 4124
 const CONTROL_CHARS_REGEX = /[\u0000-\u001F\u007F]/g
 
 function normalizeCommandLabel(value: string): string {
@@ -147,52 +149,56 @@ export async function createTerminalSavedCommand(data: {
     return { success: false, error: 'COMMAND_TOO_LARGE' }
   }
 
-  const countRows = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
-    `
-      SELECT COUNT(*)::int AS count
-      FROM terminal_saved_commands
-      WHERE user_id = $1
-    `,
-    data.userId
-  )
-  const count = countRows[0]?.count || 0
+  return prisma.$transaction(async tx => {
+    await advisoryTransactionLock(tx, TERMINAL_SAVED_COMMAND_LOCK_NAMESPACE, data.userId)
 
-  if (count >= MAX_COMMANDS_PER_USER) {
-    return { success: false, error: 'MAX_COMMANDS_REACHED' }
-  }
+    const countRows = await tx.$queryRawUnsafe<Array<{ count: number }>>(
+      `
+        SELECT COUNT(*)::int AS count
+        FROM terminal_saved_commands
+        WHERE user_id = $1
+      `,
+      data.userId
+    )
+    const count = countRows[0]?.count || 0
 
-  const createdRows = await prisma.$queryRawUnsafe<Array<{
-    id: number
-    userId: number
-    name: string
-    command: string
-    description: string | null
-    createdAt: Date
-    updatedAt: Date
-  }>>(
-    `
-      INSERT INTO terminal_saved_commands (user_id, name, command, description, updated_at)
-      VALUES ($1, $2, $3, $4, NOW())
-      RETURNING
-        id,
-        user_id AS "userId",
-        name,
-        command,
-        description,
-        created_at AS "createdAt",
-        updated_at AS "updatedAt"
-    `,
-    data.userId,
-    encryptSensitiveData(name),
-    encryptSensitiveData(command),
-    description ? encryptSensitiveData(description) : null
-  )
-  const created = createdRows[0]
+    if (count >= MAX_COMMANDS_PER_USER) {
+      return { success: false as const, error: 'MAX_COMMANDS_REACHED' }
+    }
 
-  return {
-    success: true,
-    command: mapTerminalSavedCommand(created)
-  }
+    const createdRows = await tx.$queryRawUnsafe<Array<{
+      id: number
+      userId: number
+      name: string
+      command: string
+      description: string | null
+      createdAt: Date
+      updatedAt: Date
+    }>>(
+      `
+        INSERT INTO terminal_saved_commands (user_id, name, command, description, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        RETURNING
+          id,
+          user_id AS "userId",
+          name,
+          command,
+          description,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+      `,
+      data.userId,
+      encryptSensitiveData(name),
+      encryptSensitiveData(command),
+      description ? encryptSensitiveData(description) : null
+    )
+    const created = createdRows[0]
+
+    return {
+      success: true as const,
+      command: mapTerminalSavedCommand(created)
+    }
+  })
 }
 
 export async function updateTerminalSavedCommand(

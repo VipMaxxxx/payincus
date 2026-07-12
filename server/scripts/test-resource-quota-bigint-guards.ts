@@ -20,6 +20,8 @@ const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const batchConfigSource = readFileSync(resolve(repoRoot, 'server/src/routes/batch-config.ts'), 'utf8')
 const packagesSource = readFileSync(resolve(repoRoot, 'server/src/routes/packages.ts'), 'utf8')
 const instancesSource = readFileSync(resolve(repoRoot, 'server/src/routes/instances.ts'), 'utf8')
+const resourcePoolDbSource = readFileSync(resolve(repoRoot, 'server/src/db/resource-pool.ts'), 'utf8')
+const resourcePoolRouteSource = readFileSync(resolve(repoRoot, 'server/src/routes/resource-pool.ts'), 'utf8')
 
 assert.equal(parseNullablePostgresBigIntInput(null), null, 'nullable parser must accept null as unlimited')
 assert.equal(parseNullablePostgresBigIntInput(undefined), null, 'nullable parser must keep legacy missing-value behavior')
@@ -57,5 +59,10 @@ excludes(packagesSource, 'BigInt(trafficLimit)', 'raw package plan traffic BigIn
 includes(instancesSource, "import { parseNullablePostgresBigIntInput } from '../lib/bigint-input.js'", 'instance config bigint parser import')
 includes(instancesSource, 'const parsedMonthlyTrafficLimit = parseNullablePostgresBigIntInput(monthlyTrafficLimit)', 'instance monthly traffic parsing')
 excludes(instancesSource, 'BigInt(monthlyTrafficLimit)', 'raw instance monthly traffic BigInt conversion')
+
+includes(resourcePoolDbSource, 'traffic: pool.traffic.toString()', 'resource-pool bigint balance string serialization')
+excludes(resourcePoolDbSource, 'traffic: Number(pool.traffic)', 'lossy resource-pool bigint balance conversion')
+includes(resourcePoolDbSource, 'amount: log.amount.toString()', 'resource-pool log amount string serialization')
+includes(resourcePoolRouteSource, 'amount: amount.toString()', 'resource-pool apply amount string serialization')
 
 console.log('resource quota bigint guard checks passed')

@@ -12,7 +12,8 @@ import {
   OutboundTargetValidationError,
   assertSafeHttpUrl,
   assertSafeStorageTarget,
-  isIpPrivateOrReserved
+  isIpPrivateOrReserved,
+  resolvePublicHostname
 } from '../src/lib/outbound-security.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -62,6 +63,12 @@ assert.equal(isIpPrivateOrReserved('192.168.1.1'), true)
 assert.equal(isIpPrivateOrReserved('169.254.169.254'), true)
 assert.equal(isIpPrivateOrReserved('::1'), true)
 assert.equal(isIpPrivateOrReserved('fc00::1'), true)
+assert.deepEqual(await resolvePublicHostname('8.8.8.8'), [{ address: '8.8.8.8', family: 4 }])
+await assertThrowsOutbound(() => resolvePublicHostname('127.0.0.1'))
+await assertThrowsOutbound(() => resolvePublicHostname('10.0.0.1'))
+await assertThrowsOutbound(() => resolvePublicHostname('169.254.169.254'))
+await assertThrowsOutbound(() => resolvePublicHostname('::1'))
+await assertThrowsOutbound(() => resolvePublicHostname('fc00::1'))
 
 await assertThrowsOutbound(() => assertSafeHttpUrl('http://127.0.0.1:8080'))
 await assertThrowsOutbound(() => assertSafeHttpUrl('http://localhost:8080'))

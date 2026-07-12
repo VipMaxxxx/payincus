@@ -241,14 +241,14 @@ const isHostOwner = computed(() => authStore.isAdmin || pendingCount.value.isHos
 
 type TicketAiAction = 'draft' | 'reply'
 
-async function postTicketAiAction<T>(ticketId: number, action: TicketAiAction): Promise<T> {
+async function postTicketAiAction<T>(ticketId: number, action: TicketAiAction, body: Record<string, unknown> = {}): Promise<T> {
   const response = await fetch(buildApiUrl(`/tickets/${ticketId}/ai/${action}`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {})
     },
-    body: '{}'
+    body: JSON.stringify(body)
   })
   const payload = await response.json().catch(() => ({}))
 
@@ -265,8 +265,8 @@ async function requestAiDraft(ticketId: number): Promise<TicketAiDraftResponse> 
   return postTicketAiAction<TicketAiDraftResponse>(ticketId, 'draft')
 }
 
-async function requestAiReply(ticketId: number): Promise<TicketAiReplyResponse> {
-  return postTicketAiAction<TicketAiReplyResponse>(ticketId, 'reply')
+async function requestAiReply(ticketId: number, reviewedBody: string): Promise<TicketAiReplyResponse> {
+  return postTicketAiAction<TicketAiReplyResponse>(ticketId, 'reply', { reviewedBody })
 }
 
 const hostEmptyState = computed(() => {
@@ -462,11 +462,13 @@ async function generateAiDraft(): Promise<void> {
 
 async function sendAiReply(): Promise<void> {
   if (!authStore.isAdmin || !selectedTicket.value || aiReplyLoading.value) return
+  const reviewedBody = replyContent.value.trim()
+  if (!reviewedBody) return
   if (!window.confirm(t('tickets.support.aiReplyConfirm'))) return
 
   aiReplyLoading.value = true
   try {
-    const result = await requestAiReply(selectedTicket.value.id)
+    const result = await requestAiReply(selectedTicket.value.id, reviewedBody)
     messages.value.push(result.data)
     messagesTotal.value++
     await ensureMessageAttachmentUrls([result.data])
@@ -748,6 +750,21 @@ async function closeTicket() {
     if (authStore.isAdmin) {
       await loadSupportContext()
     }
+  } catch (error: any) {
+    toast.error(error?.message || t('common.error'))
+  }
+}
+
+// Reopen own closed ticket
+async function reopenTicket() {
+  if (!selectedTicket.value || !isCreator.value || selectedTicket.value.status !== 'closed') return
+
+  try {
+    await api.tickets.updateStatus(selectedTicket.value.id, 'open')
+    selectedTicket.value.status = 'open'
+    toast.success(t('tickets.reopenSuccess'))
+    loadPendingCount()
+    loadTickets(true)
   } catch (error: any) {
     toast.error(error?.message || t('common.error'))
   }
@@ -1279,6 +1296,11 @@ function formatDateShort(dateString: string) {
                 {{ t('tickets.close') }}
               </button>
             </div>
+            <div v-else-if="isCreator && selectedTicket.status === 'closed'" class="mt-4">
+              <button class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" @click="reopenTicket">
+                {{ t('tickets.reopen') }}
+              </button>
+            </div>
           </div>
 
           <div v-if="authStore.isAdmin" class="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
@@ -1360,7 +1382,7 @@ function formatDateShort(dateString: string) {
                     <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket" @click="generateAiDraft">
                       {{ aiDraftLoading ? t('tickets.support.aiDraftGenerating') : t('tickets.support.generateAiDraft') }}
                     </button>
-                    <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket" @click="sendAiReply">
+                    <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket || !replyContent.trim()" @click="sendAiReply">
                       {{ aiReplyLoading ? t('tickets.support.aiReplySending') : t('tickets.support.sendAiReply') }}
                     </button>
                     <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700" @click="openAdminPath(supportContext.quickActions.balanceAdjustmentPath)">

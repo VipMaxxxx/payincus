@@ -862,8 +862,18 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="w-full min-w-[900px] text-sm">
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-sm">
+            <colgroup>
+              <col class="w-[13%]" />
+              <col class="w-[11%]" />
+              <col class="w-[10%]" />
+              <col class="w-[7%]" />
+              <col class="w-[9%]" />
+              <col class="w-[8%]" />
+              <col class="w-[18%]" />
+              <col class="w-[24%]" />
+            </colgroup>
             <thead class="bg-themed-secondary text-themed-muted">
               <tr>
                 <th class="p-3 text-left">实例</th>
@@ -886,7 +896,7 @@ onMounted(() => {
                 </td>
                 <td class="p-3 text-themed-secondary">{{ item.status }}</td>
                 <td class="p-3 text-themed-secondary">{{ item.currentBandwidthLimit || '-' }}</td>
-                <td class="max-w-sm truncate p-3 text-themed-muted">{{ item.reason || '-' }}</td>
+                <td class="break-words p-3 text-themed-muted">{{ item.reason || '-' }}</td>
                 <td class="p-3">
                   <div class="flex flex-wrap justify-end gap-2">
                     <button class="btn-secondary px-3 py-1 text-xs" @click="openEvidence(item)">证据</button>
@@ -1005,8 +1015,17 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="w-full min-w-[900px] text-sm">
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-sm">
+            <colgroup>
+              <col class="w-[16%]" />
+              <col class="w-[13%]" />
+              <col class="w-[13%]" />
+              <col class="w-[9%]" />
+              <col class="w-[12%]" />
+              <col class="w-[13%]" />
+              <col class="w-[24%]" />
+            </colgroup>
             <thead class="bg-themed-secondary text-themed-muted">
               <tr>
                 <th class="p-3 text-left">时间</th>
@@ -1026,7 +1045,7 @@ onMounted(() => {
                 <td class="p-3"><span :class="badgeClass(event.severity)">{{ event.severity }}</span></td>
                 <td class="p-3 text-themed-secondary">{{ event.scoreAfter }} / {{ event.scoreDelta >= 0 ? '+' : '' }}{{ event.scoreDelta }}</td>
                 <td class="p-3 text-themed-secondary">{{ event.actionTaken || '-' }}</td>
-                <td class="max-w-lg truncate p-3 text-themed-muted">{{ event.message }}</td>
+                <td class="break-words p-3 text-themed-muted">{{ event.message }}</td>
               </tr>
               <tr v-if="events.length === 0">
                 <td colspan="7" class="p-8 text-center text-themed-muted">暂无风险事件。</td>
@@ -1088,8 +1107,17 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="w-full min-w-[900px] text-sm">
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-sm">
+            <colgroup>
+              <col class="w-[13%]" />
+              <col class="w-[14%]" />
+              <col class="w-[10%]" />
+              <col class="w-[9%]" />
+              <col class="w-[24%]" />
+              <col class="w-[16%]" />
+              <col class="w-[14%]" />
+            </colgroup>
             <thead class="bg-themed-secondary text-themed-muted">
               <tr>
                 <th class="p-3 text-left">用户</th>
@@ -1107,7 +1135,7 @@ onMounted(() => {
                 <td class="p-3 text-themed-secondary">{{ item.sourceInstance?.name || item.sourceInstanceId || '-' }}</td>
                 <td class="p-3"><span :class="item.status === 'active' ? 'badge badge-error' : 'badge badge-success'">{{ item.status }}</span></td>
                 <td class="p-3 text-themed-secondary">{{ item.ticketId ? `#${item.ticketId}` : '-' }}</td>
-                <td class="max-w-lg truncate p-3 text-themed-muted">{{ item.reason }}</td>
+                <td class="break-words p-3 text-themed-muted">{{ item.reason }}</td>
                 <td class="p-3 text-themed-muted">{{ formatDate(item.createdAt) }}</td>
                 <td class="p-3 text-right">
                   <button class="btn-primary px-3 py-1 text-xs" :disabled="item.status !== 'active'" @click="releaseRestriction(item)">解除</button>
@@ -1255,8 +1283,20 @@ onMounted(() => {
               </div>
             </div>
           </div>
-          <div class="hidden overflow-x-auto rounded-lg border border-themed lg:block">
-            <table class="w-full min-w-[900px] text-sm">
+          <div class="hidden overflow-hidden rounded-lg border border-themed lg:block">
+            <table class="w-full table-fixed text-sm">
+              <colgroup>
+                <col class="w-[8%]" />
+                <col class="w-[11%]" />
+                <col class="w-[10%]" />
+                <col class="w-[10%]" />
+                <col class="w-[11%]" />
+                <col class="w-[11%]" />
+                <col class="w-[10%]" />
+                <col class="w-[8%]" />
+                <col class="w-[8%]" />
+                <col class="w-[13%]" />
+              </colgroup>
               <thead class="bg-themed-secondary text-themed-muted">
                 <tr>
                   <th class="p-3 text-left">档位</th>
@@ -1559,8 +1599,15 @@ onMounted(() => {
                   </div>
                 </div>
               </div>
-              <div class="hidden overflow-x-auto lg:block">
-                <table class="w-full min-w-[900px] text-sm">
+              <div class="hidden overflow-hidden lg:block">
+                <table class="w-full table-fixed text-sm">
+                  <colgroup>
+                    <col class="w-[18%]" />
+                    <col class="w-[24%]" />
+                    <col class="w-[20%]" />
+                    <col class="w-[20%]" />
+                    <col class="w-[18%]" />
+                  </colgroup>
                   <thead class="resource-risk-evidence-code text-themed-muted">
                     <tr>
                       <th class="p-3 text-left">时间</th>
@@ -1620,8 +1667,15 @@ onMounted(() => {
                   </div>
                 </div>
               </div>
-              <div class="hidden overflow-x-auto lg:block">
-                <table class="w-full min-w-[900px] text-sm">
+              <div class="hidden overflow-hidden lg:block">
+                <table class="w-full table-fixed text-sm">
+                  <colgroup>
+                    <col class="w-[18%]" />
+                    <col class="w-[24%]" />
+                    <col class="w-[20%]" />
+                    <col class="w-[20%]" />
+                    <col class="w-[18%]" />
+                  </colgroup>
                   <thead class="resource-risk-evidence-code text-themed-muted">
                     <tr>
                       <th class="p-3 text-left">日期</th>
@@ -1686,8 +1740,16 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-            <div class="hidden overflow-x-auto lg:block">
-              <table class="w-full min-w-[900px] text-sm">
+            <div class="hidden overflow-hidden lg:block">
+              <table class="w-full table-fixed text-sm">
+                <colgroup>
+                  <col class="w-[20%]" />
+                  <col class="w-[16%]" />
+                  <col class="w-[14%]" />
+                  <col class="w-[14%]" />
+                  <col class="w-[20%]" />
+                  <col class="w-[16%]" />
+                </colgroup>
                 <thead class="resource-risk-evidence-code text-themed-muted">
                   <tr>
                     <th class="p-3 text-left">采样时间</th>
@@ -1785,8 +1847,15 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-            <div class="hidden overflow-x-auto lg:block">
-              <table class="w-full min-w-[900px] text-sm">
+            <div class="hidden overflow-hidden lg:block">
+              <table class="w-full table-fixed text-sm">
+                <colgroup>
+                  <col class="w-[10%]" />
+                  <col class="w-[12%]" />
+                  <col class="w-[12%]" />
+                  <col class="w-[40%]" />
+                  <col class="w-[26%]" />
+                </colgroup>
                 <thead class="resource-risk-evidence-code text-themed-muted">
                   <tr>
                     <th class="p-3 text-left">ID</th>
@@ -1801,7 +1870,7 @@ onMounted(() => {
                     <td class="p-3 text-themed">#{{ restriction.id }}</td>
                     <td class="p-3"><span :class="restriction.status === 'active' ? 'badge badge-error' : 'badge badge-success'">{{ restriction.status }}</span></td>
                     <td class="p-3 text-themed-muted">{{ restriction.ticketId ? `#${restriction.ticketId}` : '-' }}</td>
-                    <td class="max-w-lg p-3 text-themed-muted">{{ restriction.reason }}</td>
+                    <td class="break-words p-3 text-themed-muted">{{ restriction.reason }}</td>
                     <td class="p-3 text-themed-muted">{{ formatDate(restriction.createdAt) }}</td>
                   </tr>
                   <tr v-if="evidenceDetail.restrictions.length === 0">

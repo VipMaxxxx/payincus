@@ -319,6 +319,31 @@ enum PluginSourceType {
   market
 }
 
+enum PluginPurchaseStatus {
+  completed
+  refunded
+}
+
+enum PluginLicenseStatus {
+  active
+  revoked
+}
+
+enum PluginRefundStatus {
+  completed
+}
+
+enum PluginDeveloperEarningStatus {
+  pending
+  reversed
+}
+
+enum PluginDeveloperWithdrawalStatus {
+  pending
+  completed
+  rejected
+}
+
 // ==================== 恢复任务模型 ====================
 
 model RestoreTask {
@@ -864,6 +889,12 @@ model User {
   pluginStorageBackupRemoteArchives PluginStorageBackupRemoteArchive[] @relation("PluginStorageBackupRemoteArchiveUploader")
   pluginMarketSubmissions PluginMarketSubmission[] @relation("PluginMarketSubmissionSubmitter")
   pluginMarketReviews PluginMarketSubmission[] @relation("PluginMarketSubmissionReviewer")
+  pluginPurchases PluginPurchase[] @relation("PluginPurchaseBuyer")
+  pluginSales PluginPurchase[] @relation("PluginPurchaseDeveloper")
+  pluginLicenses PluginLicense[] @relation("PluginLicenseOwner")
+  pluginDeveloperEarnings PluginDeveloperEarning[] @relation("PluginDeveloperEarningOwner")
+  pluginDeveloperWithdrawals PluginDeveloperWithdrawal[] @relation("PluginDeveloperWithdrawalOwner")
+  pluginDeveloperWithdrawalsReviewed PluginDeveloperWithdrawal[] @relation("PluginDeveloperWithdrawalReviewer")
   pluginEventAlertPreferences PluginEventAlertPreference[] @relation("PluginEventAlertPreferenceUser")
   themeMarketSubmissions ThemeMarketSubmission[] @relation("ThemeMarketSubmissionSubmitter")
   themeMarketReviews ThemeMarketSubmission[] @relation("ThemeMarketSubmissionReviewer")
@@ -1324,7 +1355,7 @@ model Package {
   backupLimit         Int          @default(3) @map("backup_limit") // 备份数上限
   siteLimit           Int          @default(10) @map("site_limit") // 反代站点数上限
   monthlyTrafficLimit BigInt?      @map("monthly_traffic_limit") // 月流量限额 (Bytes)，null = 无限制
-  trafficResetPrice   Decimal      @default(0) @map("traffic_reset_price") @db.Decimal(10, 2) // 用户自助重置月流量价格（分）
+  trafficResetPrice   Decimal      @default(0) @map("traffic_reset_price") @db.Decimal(10, 2) // 用户自助重置月流量价格（元）
 
   // 存储 I/O 限制
   ioLimitMode     String @default("throughput") @map("io_limit_mode") // "throughput" | "iops" - IO限制模式
@@ -1384,6 +1415,7 @@ model Package {
 model Instance {
   id               Int            @id @default(autoincrement())
   incusId          String         @map("incus_id")
+  idempotencyKey   String?        @unique @map("idempotency_key")
   name             String
   userId           Int            @map("user_id")
   hostId           Int            @map("host_id")
@@ -2757,6 +2789,7 @@ model PluginMarketSubmission {
 
   submittedBy User  @relation("PluginMarketSubmissionSubmitter", fields: [submittedByUserId], references: [id], onDelete: Cascade)
   reviewedBy  User? @relation("PluginMarketSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  purchases PluginPurchase[]
 
   @@unique([pluginId, version])
   @@index([reviewStatus])
@@ -2766,6 +2799,120 @@ model PluginMarketSubmission {
   @@index([reviewedByUserId])
   @@index([createdAt])
   @@map("plugin_market_submissions")
+}
+
+model PluginPurchase {
+  id               Int                  @id @default(autoincrement())
+  tradeNo          String               @unique @map("trade_no")
+  idempotencyKey   String               @map("idempotency_key")
+  userId           Int                  @map("user_id")
+  developerId      Int                  @map("developer_id")
+  submissionId     Int                  @map("submission_id")
+  pluginId         String               @map("plugin_id")
+  version          String
+  grossCents       Int                  @map("gross_cents")
+  platformFeeCents Int                  @map("platform_fee_cents")
+  netCents         Int                  @map("net_cents")
+  currency         String               @db.VarChar(3)
+  status           PluginPurchaseStatus @default(completed)
+  refundableUntil  DateTime             @map("refundable_until")
+  refundedAt       DateTime?            @map("refunded_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  user       User                    @relation("PluginPurchaseBuyer", fields: [userId], references: [id], onDelete: Restrict)
+  developer  User                    @relation("PluginPurchaseDeveloper", fields: [developerId], references: [id], onDelete: Restrict)
+  submission PluginMarketSubmission  @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  license    PluginLicense?
+  refund     PluginRefund?
+  earning    PluginDeveloperEarning?
+
+  @@unique([userId, idempotencyKey])
+  @@unique([userId, pluginId, version])
+  @@index([developerId, currency, createdAt])
+  @@index([submissionId])
+  @@index([status, refundableUntil])
+  @@map("plugin_purchases")
+}
+
+model PluginLicense {
+  id         Int                 @id @default(autoincrement())
+  purchaseId Int                 @unique @map("purchase_id")
+  userId     Int                 @map("user_id")
+  pluginId   String              @map("plugin_id")
+  version    String
+  status     PluginLicenseStatus @default(active)
+  grantedAt  DateTime            @default(now()) @map("granted_at")
+  revokedAt  DateTime?           @map("revoked_at")
+
+  purchase PluginPurchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  user     User           @relation("PluginLicenseOwner", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, pluginId, version])
+  @@index([userId, pluginId, status])
+  @@map("plugin_licenses")
+}
+
+model PluginRefund {
+  id          Int                @id @default(autoincrement())
+  purchaseId  Int                @unique @map("purchase_id")
+  amountCents Int                @map("amount_cents")
+  currency    String             @db.VarChar(3)
+  reason      String?
+  status      PluginRefundStatus @default(completed)
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  purchase PluginPurchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@map("plugin_refunds")
+}
+
+model PluginDeveloperEarning {
+  id               Int                          @id @default(autoincrement())
+  purchaseId       Int                          @unique @map("purchase_id")
+  developerId      Int                          @map("developer_id")
+  pluginId         String                       @map("plugin_id")
+  grossCents       Int                          @map("gross_cents")
+  platformFeeCents Int                          @map("platform_fee_cents")
+  netCents         Int                          @map("net_cents")
+  currency         String                       @db.VarChar(3)
+  status           PluginDeveloperEarningStatus @default(pending)
+  availableAt      DateTime                     @map("available_at")
+  reversedAt       DateTime?                    @map("reversed_at")
+  createdAt        DateTime                     @default(now()) @map("created_at")
+  updatedAt        DateTime                     @updatedAt @map("updated_at")
+
+  purchase  PluginPurchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  developer User           @relation("PluginDeveloperEarningOwner", fields: [developerId], references: [id], onDelete: Restrict)
+
+  @@index([developerId, currency, status, availableAt])
+  @@index([pluginId, createdAt])
+  @@map("plugin_developer_earnings")
+}
+
+model PluginDeveloperWithdrawal {
+  id               Int                             @id @default(autoincrement())
+  developerId      Int                             @map("developer_id")
+  idempotencyKey   String                          @map("idempotency_key")
+  amountCents      Int                             @map("amount_cents")
+  currency         String                          @db.VarChar(3)
+  payoutMethod     String                          @map("payout_method") @db.VarChar(32)
+  payoutTarget     String                          @map("payout_target") @db.VarChar(256)
+  status           PluginDeveloperWithdrawalStatus @default(pending)
+  rejectReason     String?                         @map("reject_reason")
+  reviewedByUserId Int?                            @map("reviewed_by_user_id")
+  reviewedAt       DateTime?                       @map("reviewed_at")
+  createdAt        DateTime                        @default(now()) @map("created_at")
+  updatedAt        DateTime                        @updatedAt @map("updated_at")
+
+  developer  User  @relation("PluginDeveloperWithdrawalOwner", fields: [developerId], references: [id], onDelete: Restrict)
+  reviewedBy User? @relation("PluginDeveloperWithdrawalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([developerId, idempotencyKey])
+  @@index([developerId, currency, status, createdAt])
+  @@index([status, createdAt])
+  @@map("plugin_developer_withdrawals")
 }
 
 model ThemeMarketSubmission {
@@ -3716,6 +3863,7 @@ enum RedeemCodeType {
   r // 内存 (RAM)
   d // 硬盘 (Disk)
   t // 流量 (Traffic)
+  /// @deprecated 积分兑换码已取消，仅保留兼容存量值；积分只通过每日签到发放
   p // 积分 (Points)
 }
 
@@ -4223,7 +4371,7 @@ model PackagePlan {
   price        Decimal @db.Decimal(10, 2)                             // 价格
   billingCycle Int     @default(1) @map("billing_cycle")              // 计费周期（月）
   setupFee     Decimal @default(0) @map("setup_fee") @db.Decimal(10, 2) // 开通费
-  trafficResetPrice Decimal? @map("traffic_reset_price") @db.Decimal(10, 2) // 用户自助重置月流量价格覆盖（分），null=继承套餐
+  trafficResetPrice Decimal? @map("traffic_reset_price") @db.Decimal(10, 2) // 用户自助重置月流量价格覆盖（元），null=继承套餐
 
   // ========== 状态与排序 ==========
   isActive  Boolean @default(true) @map("is_active") // 是否启用

@@ -1,5 +1,10 @@
+import type { Prisma } from '@prisma/client'
+import { advisoryTransactionLock } from '../db/advisory-locks.js'
 import { prisma } from '../db/prisma.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
+
+const USER_ORDER_RESTRICTION_LOCK_NAMESPACE = 62067
+type OrderRestrictionClient = Prisma.TransactionClient | typeof prisma
 
 export class OrderRestrictedError extends Error {
   restrictionId: number
@@ -13,12 +18,16 @@ export class OrderRestrictedError extends Error {
   }
 }
 
-export async function getActiveOrderRestriction(userId: number) {
-  return prisma.userOrderRestriction.findFirst({
+export async function getActiveOrderRestriction(
+  userId: number,
+  client: OrderRestrictionClient = prisma,
+  restrictedField: 'restrictedCreate' | 'restrictedPurchase' | null = 'restrictedCreate'
+) {
+  return client.userOrderRestriction.findFirst({
     where: {
       userId,
       status: 'active',
-      restrictedCreate: true
+      ...(restrictedField ? { [restrictedField]: true } : {})
     },
     orderBy: { createdAt: 'desc' },
     include: {
@@ -40,6 +49,16 @@ export async function assertUserCanCreateInstance(userId: number): Promise<void>
   }
 }
 
+export async function assertUserCanPurchaseOrReceiveInstance(
+  userId: number,
+  client: OrderRestrictionClient = prisma
+): Promise<void> {
+  const restriction = await getActiveOrderRestriction(userId, client, 'restrictedPurchase')
+  if (restriction) {
+    throw new OrderRestrictedError(restriction.id, restriction.reason)
+  }
+}
+
 export function orderRestrictionApiError(error: OrderRestrictedError) {
   return {
     ...apiError(ErrorCode.ORDER_RESTRICTED_BY_RISK, error.reason),
@@ -53,24 +72,33 @@ export async function restrictUserOrdersForRisk(input: {
   sourceInstanceId: number
   sourceRiskEventId?: number | null
   reason: string
-}) {
-  const existing = await getActiveOrderRestriction(input.userId)
-  if (existing) {
-    return existing
+}, transaction?: Prisma.TransactionClient) {
+  const createUnderLock = async (tx: Prisma.TransactionClient) => {
+    await advisoryTransactionLock(tx, USER_ORDER_RESTRICTION_LOCK_NAMESPACE, input.userId)
+    const existing = await getActiveOrderRestriction(input.userId, tx, null)
+    if (existing) {
+      return existing
+    }
+
+    return tx.userOrderRestriction.create({
+      data: {
+        userId: input.userId,
+        sourceInstanceId: input.sourceInstanceId,
+        sourceRiskEventId: input.sourceRiskEventId ?? null,
+        reason: input.reason,
+        restrictedCreate: true,
+        restrictedPurchase: true,
+        restrictedRenew: false,
+        reviewRequired: true
+      }
+    })
   }
 
-  return prisma.userOrderRestriction.create({
-    data: {
-      userId: input.userId,
-      sourceInstanceId: input.sourceInstanceId,
-      sourceRiskEventId: input.sourceRiskEventId ?? null,
-      reason: input.reason,
-      restrictedCreate: true,
-      restrictedPurchase: true,
-      restrictedRenew: false,
-      reviewRequired: true
-    }
-  })
+  if (transaction) {
+    return createUnderLock(transaction)
+  }
+
+  return prisma.$transaction(createUnderLock)
 }
 
 export async function releaseOrderRestriction(input: {

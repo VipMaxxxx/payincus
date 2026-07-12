@@ -12,17 +12,16 @@ import { schedule } from 'node-cron'
 import pLimit from 'p-limit'
 import { IncusClient } from '../lib/incus/incus-client.js'
 import { getIncusClientFromPool, updateClientResponseTime, recordClientError, getPoolStatus } from '../lib/incus/incus-pool.js'
-import { applyThrottle, isThrottled, restoreBandwidth } from '../lib/incus/incus-traffic.js'
 import * as trafficDb from '../db/traffic.js'
 import { sendTrafficWarningNotification, sendTrafficThrottledNotification } from './traffic-notifier.js'
 import { collectTrafficForInstanceWithClient } from './instance-traffic-collector.js'
-import { resolveTrafficBandwidthLimits } from './traffic-bandwidth.js'
+import { reconcileEffectiveBandwidth } from './traffic-bandwidth.js'
 import {
     calculateUserTrafficStatus,
     getEffectiveLimit,
+    getVipExtraTrafficQuota,
     isOverLimit,
-    isWarningThreshold,
-    isWarningSentThisMonth
+    isWarningThreshold
 } from './traffic-utils.js'
 
 // 任务超时时间（15分钟，大规模实例需要更长时间）
@@ -50,6 +49,52 @@ interface TrafficDelta {
 }
 
 type RunningTrafficInstance = Awaited<ReturnType<typeof trafficDb.getRunningInstancesForTraffic>>[number]
+
+async function markInstanceTrafficWarningIfNeeded(instanceId: number): Promise<boolean> {
+    const { prisma } = await import('../db/prisma.js')
+    const result = await prisma.instance.updateMany({
+        where: {
+            id: instanceId,
+            status: { not: 'deleted' },
+            trafficStatus: 'NORMAL'
+        },
+        data: { trafficStatus: 'WARNING' }
+    })
+
+    return result.count > 0
+}
+
+async function releaseUserTrafficWarningLease(
+    userId: number,
+    claimedAt: Date,
+    previousSentAt: Date | null,
+    previousStatus: 'NORMAL' | 'WARNING' | 'LIMITED'
+): Promise<void> {
+    const { prisma } = await import('../db/prisma.js')
+    await prisma.userQuota.updateMany({
+        where: {
+            userId,
+            trafficWarningSentAt: claimedAt,
+            trafficStatus: 'WARNING'
+        },
+        data: {
+            trafficWarningSentAt: previousSentAt,
+            trafficStatus: previousStatus
+        }
+    })
+}
+
+async function releaseInstanceTrafficWarningLease(instanceId: number): Promise<void> {
+    const { prisma } = await import('../db/prisma.js')
+    await prisma.instance.updateMany({
+        where: {
+            id: instanceId,
+            status: { not: 'deleted' },
+            trafficStatus: 'WARNING'
+        },
+        data: { trafficStatus: 'NORMAL' }
+    })
+}
 
 /**
  * 获取或创建主机客户端（使用统一连接池）
@@ -128,47 +173,79 @@ async function checkAndThrottle(
     if (!userQuota) return
 
     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
-    const instanceLimit = instance.monthlyTrafficLimit
+    const vipExtraTrafficQuota = await getVipExtraTrafficQuota(instance.userId, instance.monthlyTrafficLimit)
+    const instanceBaseWithVip = getEffectiveLimit(instance.monthlyTrafficLimit, vipExtraTrafficQuota)
+    const instanceLimit = getEffectiveLimit(instanceBaseWithVip, userQuota.extraTrafficQuota)
+    const instanceUsesExtraTraffic = instanceBaseWithVip !== null &&
+        instance.monthlyTrafficUsed >= instanceBaseWithVip
+    const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+        userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
 
     // 检查用户级别限额
     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
     // 检查实例级别限额
-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit)
+    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+        (instanceUsesExtraTraffic && extraTrafficExhausted)
 
     if (userOverLimit || instanceOverLimit) {
-        const remoteThrottled = await isThrottled(client, instance.incusId)
-
-        if (instance.trafficStatus !== 'LIMITED' || !remoteThrottled) {
-            try {
-                await applyThrottle(client, instance.incusId)
-                const shouldNotifyThrottled = await trafficDb.markInstanceTrafficLimitedIfNeeded(instance.id)
-                if (userOverLimit && userQuota.trafficStatus !== 'LIMITED') {
-                    await trafficDb.updateUserTrafficStatus(instance.userId, 'LIMITED')
-                }
-
-                if (shouldNotifyThrottled) {
-                    await sendTrafficThrottledNotification(instance.userId, instance.name, instance.host.name)
-                }
-
-                console.log(`[Traffic] Throttled instance ${instance.id} (${instance.incusId})`)
-            } catch (error) {
-                console.error(`[Traffic] Failed to throttle instance ${instance.id}:`, error)
+        try {
+            // 只设置流量系统自己的约束；仲裁点读取可配置的超量限速，并与正常线速/风控取最严格值。
+            const shouldNotifyThrottled = await trafficDb.markInstanceTrafficLimitedIfNeeded(instance.id)
+            await reconcileEffectiveBandwidth(instance.id, client)
+            if (userOverLimit && userQuota.trafficStatus !== 'LIMITED') {
+                await trafficDb.updateUserTrafficStatus(instance.userId, 'LIMITED')
             }
-        } else if (userOverLimit && userQuota.trafficStatus !== 'LIMITED') {
-            await trafficDb.updateUserTrafficStatus(instance.userId, 'LIMITED')
+
+            if (shouldNotifyThrottled) {
+                await sendTrafficThrottledNotification(instance.userId, instance.name, instance.host.name)
+            }
+
+            console.log(`[Traffic] Reconciled throttled instance ${instance.id} (${instance.incusId})`)
+        } catch (error) {
+            console.error(`[Traffic] Failed to throttle instance ${instance.id}:`, error)
         }
     } else {
         // 检查预警
         const userWarning = isWarningThreshold(userQuota.monthlyTrafficUsed, userEffectiveLimit)
-        if (userWarning && !isWarningSentThisMonth(userQuota.trafficWarningSentAt)) {
-            const shouldNotifyWarning = await trafficDb.markUserTrafficWarningIfNeeded(instance.userId, new Date())
+        if (userWarning) {
+            const claimedAt = new Date()
+            const shouldNotifyWarning = await trafficDb.markUserTrafficWarningIfNeeded(instance.userId, claimedAt)
             if (shouldNotifyWarning) {
-                await sendTrafficWarningNotification(
+                const notificationSent = await sendTrafficWarningNotification(
                     instance.userId,
                     userQuota.monthlyTrafficUsed,
                     userEffectiveLimit!
                 )
-                console.log(`[Traffic] Sent warning to user ${instance.userId}`)
+                if (notificationSent) {
+                    console.log(`[Traffic] Sent warning to user ${instance.userId}`)
+                } else {
+                    await releaseUserTrafficWarningLease(
+                        instance.userId,
+                        claimedAt,
+                        userQuota.trafficWarningSentAt,
+                        userQuota.trafficStatus
+                    )
+                    console.warn(`[Traffic] Warning delivery failed for user ${instance.userId}; claim released for retry`)
+                }
+            }
+        }
+
+        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+        if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+            const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
+            if (shouldNotifyWarning) {
+                const notificationSent = await sendTrafficWarningNotification(
+                    instance.userId,
+                    instance.monthlyTrafficUsed,
+                    instanceLimit!,
+                    instance.name
+                )
+                if (notificationSent) {
+                    console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
+                } else {
+                    await releaseInstanceTrafficWarningLease(instance.id)
+                    console.warn(`[Traffic] Warning delivery failed for instance ${instance.id}; claim released for retry`)
+                }
             }
         }
     }
@@ -185,38 +262,26 @@ async function checkAndRestore(
     if (!userQuota) return
 
     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
-    const instanceLimit = instance.monthlyTrafficLimit
+    const vipExtraTrafficQuota = await getVipExtraTrafficQuota(instance.userId, instance.monthlyTrafficLimit)
+    const instanceBaseWithVip = getEffectiveLimit(instance.monthlyTrafficLimit, vipExtraTrafficQuota)
+    const instanceLimit = getEffectiveLimit(instanceBaseWithVip, userQuota.extraTrafficQuota)
+    const instanceUsesExtraTraffic = instanceBaseWithVip !== null &&
+        instance.monthlyTrafficUsed >= instanceBaseWithVip
+    const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+        userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
 
     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit)
+    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+        !(instanceUsesExtraTraffic && extraTrafficExhausted)
     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
 
     if (userUnderLimit && instanceUnderLimit) {
-        const remoteThrottled = await isThrottled(client, instance.incusId)
-        if (instance.trafficStatus !== 'LIMITED' && !remoteThrottled) {
-            if (userQuota.trafficStatus !== desiredUserStatus) {
-                await trafficDb.updateUserTrafficStatus(instance.userId, desiredUserStatus)
-            }
-            return
-        }
-
         try {
-            const resolvedLimits = resolveTrafficBandwidthLimits(instance, {
-                stripThrottleOverride: remoteThrottled || instance.trafficStatus === 'LIMITED'
-            })
-
-            await restoreBandwidth(
-                client,
-                instance.incusId,
-                resolvedLimits.incusIngress,
-                resolvedLimits.incusEgress
-            )
-            await trafficDb.updateInstanceTrafficStatus(instance.id, 'NORMAL')
-            await trafficDb.updateInstanceBandwidthLimits(
-                instance.id,
-                resolvedLimits.dbIngress,
-                resolvedLimits.dbEgress
-            )
+            if (instance.trafficStatus === 'LIMITED') {
+                // 只清除流量约束；仲裁会恢复 trafficLimitSpeed 正常线速或保留更严的风控 QoS。
+                await trafficDb.updateInstanceTrafficStatus(instance.id, 'NORMAL')
+            }
+            await reconcileEffectiveBandwidth(instance.id, client)
 
             if (userQuota.trafficStatus !== desiredUserStatus) {
                 await trafficDb.updateUserTrafficStatus(instance.userId, desiredUserStatus)
@@ -462,6 +527,16 @@ async function executeTrafficJob(startTime: number): Promise<void> {
             }
         }
 
+        // extraTrafficUsed 按各实例超出自身基础限额的部分同步；DB 层会覆盖该用户所有未删除实例并封顶。
+        const affectedUserIds = new Set<number>()
+        for (const instanceId of instancesToCheckForThrottle) {
+            const instance = instanceMap.get(instanceId)
+            if (instance?.user.quota) affectedUserIds.add(instance.userId)
+        }
+        const extraTrafficUsedByUser = new Map(await Promise.all(Array.from(affectedUserIds, async userId => (
+            [userId, await trafficDb.syncUserExtraTrafficUsed(userId)] as const
+        ))))
+
         // 构建用于限速检查的实例列表
         const instancesToCheck = Array.from(instancesToCheckForThrottle)
             .map(instanceId => instanceMap.get(instanceId))
@@ -483,7 +558,8 @@ async function executeTrafficJob(startTime: number): Promise<void> {
                         ...instance.user,
                         quota: instance.user.quota ? {
                             ...instance.user.quota,
-                            monthlyTrafficUsed: updatedUserUsage
+                            monthlyTrafficUsed: updatedUserUsage,
+                            extraTrafficUsed: extraTrafficUsedByUser.get(instance.userId) ?? instance.user.quota.extraTrafficUsed
                         } : null
                     }
                 }
@@ -505,28 +581,11 @@ async function executeTrafficJob(startTime: number): Promise<void> {
 }
 
 /**
- * 月度重置任务（用户级别）
- * 每月1号重置所有用户的月度流量统计
- * 注：实例级别流量改由 runDailyHostTrafficResetJob 按节点重置日重置
- */
-export async function runMonthlyUserTrafficResetJob(): Promise<void> {
-    console.log('[Traffic] Starting monthly user traffic reset job...')
-
-    try {
-        // 只重置用户级别的月度用量（保持自然月）
-        await trafficDb.resetAllUserMonthlyTraffic()
-        console.log('[Traffic] Monthly user traffic reset completed')
-    } catch (error) {
-        console.error('[Traffic] Monthly user traffic reset failed:', error)
-    }
-}
-
-/**
  * 每日节点流量重置任务
- * 根据各节点的 trafficResetDay 配置，重置该节点下所有实例的流量
+ * 根据各节点的 trafficResetDay 配置，逐实例重置流量并同步扣减用户级贡献
  */
 export async function runDailyHostTrafficResetJob(): Promise<void> {
-    const today = new Date().getDate()
+    const today = trafficDb.shanghaiDateParts().day
     console.log(`[Traffic] Starting daily host traffic reset check (today is day ${today})...`)
 
     try {
@@ -560,11 +619,10 @@ export async function runDailyHostTrafficResetJob(): Promise<void> {
 
 /**
  * 保留旧的月度重置函数名稱（兼容性）
- * @deprecated 使用 runMonthlyUserTrafficResetJob 和 runDailyHostTrafficResetJob 代替
+ * @deprecated 使用 runDailyHostTrafficResetJob 代替
  */
 export async function runMonthlyResetJob(): Promise<void> {
-    // 兼容旧代码：调用用户级别重置
-    await runMonthlyUserTrafficResetJob()
+    await runDailyHostTrafficResetJob()
 }
 
 /**
@@ -668,15 +726,10 @@ export function startTrafficScheduler(): void {
         runTrafficJob().catch(console.error)
     })
 
-    // 每月 1 日 00:05 重置用户级别流量
-    schedule('5 0 1 * *', () => {
-        runMonthlyUserTrafficResetJob().catch(console.error)
-    })
-
-    // 每天 00:05 检查并重置需要重置的节点实例流量
+    // 每天 00:05 按节点 resetDay 逐实例重置，并同步用户级实例贡献
     schedule('5 0 * * *', () => {
         runDailyHostTrafficResetJob().catch(console.error)
-    })
+    }, { timezone: trafficDb.TRAFFIC_TIME_ZONE })
 
     // 每天 03:00 清理旧数据
     schedule('0 3 * * *', () => {
@@ -695,7 +748,6 @@ export function startTrafficScheduler(): void {
 
     console.log('[Traffic] Scheduler started')
     console.log('[Traffic] - Traffic collection: every 3 minutes')
-    console.log('[Traffic] - User traffic reset: 1st of each month at 00:05')
-    console.log('[Traffic] - Host instance traffic reset: daily at 00:05 (per host resetDay)')
+    console.log('[Traffic] - Instance and user traffic reset: daily at 00:05 (per host resetDay)')
     console.log('[Traffic] - Data cleanup: daily at 03:00 (retention: 35 days)')
 }

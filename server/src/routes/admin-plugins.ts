@@ -34,6 +34,7 @@ import { processDuePluginEventRetries, replayPluginEventLog } from '../lib/plugi
 import type { PayIncusPluginManifest, PluginConfigFieldManifest } from '../lib/plugin-manifest.js'
 import { dispatchPluginLifecycleEvent } from '../lib/plugin-business-events.js'
 import { getCombinedAdminIdAllowlist } from '../lib/runtime-settings.js'
+import { PluginTradeError, assertPaidPluginLicense } from '../services/plugin-trade.js'
 
 interface PluginParams {
   pluginId: string
@@ -724,9 +725,10 @@ export default async function adminPluginRoutes(fastify: FastifyInstance) {
     const entry = market.plugins.find(item => item.id === pluginId)
     if (!entry) return reply.code(404).send({ error: 'Plugin not found in market', code: 'PLUGIN_MARKET_ENTRY_NOT_FOUND' })
     try {
-      await assertMarketEntryInstallable(entry)
-      const packagePath = await downloadMarketPlugin(entry)
       const user = getRequestUser(request)
+      await assertMarketEntryInstallable(entry)
+      await assertPaidPluginLicense({ userId: user.id, pluginId: entry.id, version: entry.latest, pricing: entry.pricing })
+      const packagePath = await downloadMarketPlugin(entry)
       const task = await installPackage({
         packagePath,
         sourceType: 'market',
@@ -744,7 +746,10 @@ export default async function adminPluginRoutes(fastify: FastifyInstance) {
       return reply.code(202).send({ task: task ? serializePluginTask(task) : null })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return reply.code(400).send({ error: message, code: 'PLUGIN_MARKET_INSTALL_FAILED' })
+      return reply.code(error instanceof PluginTradeError ? error.statusCode : 400).send({
+        error: message,
+        code: error instanceof PluginTradeError ? error.code : 'PLUGIN_MARKET_INSTALL_FAILED'
+      })
     }
   })
 
@@ -1001,6 +1006,18 @@ export default async function adminPluginRoutes(fastify: FastifyInstance) {
     const pluginId = normalizePluginId(request.params.pluginId)
     if (!pluginId) return reply.code(400).send({ error: 'Invalid plugin id', code: 'INVALID_PLUGIN_ID' })
     const user = getRequestUser(request)
+    const current = await getPlugin(pluginId)
+    if (!current) return reply.code(404).send({ error: 'Plugin not found', code: 'PLUGIN_NOT_FOUND' })
+    if (current.currentVersion) {
+      try {
+        await assertPaidPluginLicense({ userId: user.id, pluginId, version: current.currentVersion })
+      } catch (error) {
+        if (error instanceof PluginTradeError) {
+          return reply.code(error.statusCode).send({ error: error.message, code: error.code })
+        }
+        throw error
+      }
+    }
     const capabilityGate = await assertPluginCapabilitiesApprovedForEnable(pluginId)
     if (!capabilityGate.ok) {
       await createLog(

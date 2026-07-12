@@ -15,6 +15,8 @@ import { releaseExchangeOrderEscrow } from '../services/exchange.js'
 const POLL_INTERVAL_MS = 5000
 const DELIVERY_BATCH_SIZE = 5
 const exchangeInstanceSuffix = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+// 交割 finalize 重入去重是进程内状态，依赖私有后端仅运行单个进程实例；
+// 多进程或水平扩展会绕过去重，未来扩容前必须下沉到 PostgreSQL 或其它共享存储。
 const runningTaskIds = new Set<number>()
 let workerInterval: ReturnType<typeof setInterval> | null = null
 const DELIVERY_PROGRESS_STEPS = [

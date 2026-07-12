@@ -10,6 +10,7 @@ import {
   manualUnsuspendInstanceRisk,
   releaseInstanceRisk,
   simulateResourceRiskPolicy,
+  DEFAULT_SCORE_DECAY_PER_HOUR,
   type RiskPolicy
 } from '../services/resource-risk.js'
 import { getActiveOrderRestriction, releaseOrderRestriction } from '../services/user-order-restrictions.js'
@@ -215,6 +216,7 @@ function buildPolicyUpdate(body: Record<string, unknown>, policy: RiskPolicy, ne
     cpuActiveMinutes: parsePage(body.cpuActiveMinutes, policy.cpuActiveMinutes),
     cpuThresholdPercent: parsePage(body.cpuThresholdPercent, policy.cpuThresholdPercent),
     ppsThreshold: parsePage(body.ppsThreshold, policy.ppsThreshold),
+    scoreDecayPerHour: parsePage(body.scoreDecayPerHour, policy.scoreDecayPerHour),
     orderRestrictScore: parseScore(body.orderRestrictScore, policy.orderRestrictScore),
     autoSuspendScore: parseScore(body.autoSuspendScore, policy.autoSuspendScore),
     autoSuspendEnabled: typeof body.autoSuspendEnabled === 'boolean' ? body.autoSuspendEnabled : policy.autoSuspendEnabled,
@@ -331,7 +333,7 @@ export default async function resourceRiskRoutes(fastify: FastifyInstance) {
   }, async () => {
     let policy = await prisma.resourceRiskPolicy.findFirst({ orderBy: { id: 'asc' } })
     if (!policy) {
-      policy = await prisma.resourceRiskPolicy.create({ data: { name: '默认策略' } })
+      policy = await prisma.resourceRiskPolicy.create({ data: { name: '默认策略', scoreDecayPerHour: DEFAULT_SCORE_DECAY_PER_HOUR } })
     }
     return { policy }
   })
@@ -342,7 +344,7 @@ export default async function resourceRiskRoutes(fastify: FastifyInstance) {
     const body = request.body as Record<string, unknown>
     let policy = await prisma.resourceRiskPolicy.findFirst({ orderBy: { id: 'asc' } })
     if (!policy) {
-      policy = await prisma.resourceRiskPolicy.create({ data: { name: '默认策略' } })
+      policy = await prisma.resourceRiskPolicy.create({ data: { name: '默认策略', scoreDecayPerHour: DEFAULT_SCORE_DECAY_PER_HOUR } })
     }
     const nextQosTiers = parseQosTiers(body.qosTiers)
     if (Array.isArray(body.qosTiers) && !nextQosTiers) {
@@ -365,7 +367,7 @@ export default async function resourceRiskRoutes(fastify: FastifyInstance) {
     const body = request.body as Record<string, unknown>
     let policy = await prisma.resourceRiskPolicy.findFirst({ orderBy: { id: 'asc' } })
     if (!policy) {
-      policy = await prisma.resourceRiskPolicy.create({ data: { name: '默认策略' } })
+      policy = await prisma.resourceRiskPolicy.create({ data: { name: '默认策略', scoreDecayPerHour: DEFAULT_SCORE_DECAY_PER_HOUR } })
     }
     const nextQosTiers = parseQosTiers(body.qosTiers)
     if (Array.isArray(body.qosTiers) && !nextQosTiers) {

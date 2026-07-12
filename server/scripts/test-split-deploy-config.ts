@@ -59,6 +59,11 @@ const backendServiceExample = readRepoFile('deploy/incudal-backend.service.examp
 const installPanel = readRepoFile('scripts/install-panel.sh')
 const initEnv = readRepoFile('scripts/init-env.sh')
 const migrateAtomicLayout = readRepoFile('scripts/migrate-ota-atomic-layout.sh')
+const onlineUpdateServiceExample = readRepoFile('deploy/incudal-online-update@.service.example')
+const onlineRollbackServiceExample = readRepoFile('deploy/incudal-online-rollback@.service.example')
+const onlineTaskHelper = readRepoFile('deploy/incudal-online-task.sh.example')
+const systemctlWrapper = readRepoFile('deploy/incudal-systemctl-wrapper.sh.example')
+const otaChownWrapper = readRepoFile('deploy/incudal-ota-chown-wrapper.sh.example')
 const verifySplitHost = readRepoFile('scripts/verify-split-host.sh')
 const verifyProductionReadiness = readRepoFile('scripts/verify-production-readiness.sh')
 const verifyLogHeaderExposure = readRepoFile('scripts/verify-log-header-exposure.sh')
@@ -216,8 +221,49 @@ assert.ok(
 assert.ok(
   installPanel.includes('Nginx runs as www-data and must be able to traverse the install root') &&
     countOccurrences(installPanel, 'chmod 751 "$INSTALL_DIR"') >= 2 &&
-    countOccurrences(installPanel, 'chmod 600 "${ENV_FILE}" 2>/dev/null || true') >= 2,
-  'install script must keep the install root traversable for Nginx static assets while preserving .env owner-only permissions'
+    countOccurrences(installPanel, 'chown "root:${RUN_USER}" "$ENV_FILE"') >= 2 &&
+    countOccurrences(installPanel, 'chmod 640 "$ENV_FILE"') >= 2,
+  'install script must keep the install root traversable while making root-unit env service-readable but not service-writable'
+)
+
+for (const [name, source, mode] of [
+  ['update', onlineUpdateServiceExample, 'update'],
+  ['rollback', onlineRollbackServiceExample, 'rollback']
+] as const) {
+  assert.ok(
+    source.includes('User=root') &&
+      source.includes(`ExecStart=/usr/local/libexec/incudal/incudal-online-task ${mode} %i`) &&
+      !source.includes('/opt/incudal/current/server/dist/scripts/'),
+    `root ${name} service example must not execute a service-user-writable worker directly`
+  )
+}
+assert.ok(
+  onlineTaskHelper.includes('/usr/bin/chown -R root:root "${INSTALL_DIR}/releases"') &&
+    onlineTaskHelper.includes('verify_manifest') &&
+    onlineTaskHelper.includes('verify_git_control') &&
+    onlineTaskHelper.indexOf('verify_manifest') < onlineTaskHelper.indexOf('/usr/bin/node "${app_dir}/${script}"'),
+  'fixed root helper must enforce root ownership and verify release integrity before Node execution'
+)
+assert.ok(
+  installPanel.includes('install_verified_root_helpers_from_archive "$tar_file"') &&
+    installPanel.includes('install -o root -g root -m 0440 "$sudoers_tmp" /etc/sudoers.d/incudal-online-update') &&
+    installPanel.includes('${RUN_USER} ALL=(root) NOPASSWD: /usr/local/libexec/incudal/systemctl start --no-block incudal-online-update@*.service') &&
+    !installPanel.includes('NOPASSWD: /usr/bin/systemctl'),
+  'installer must source root helpers from the verified artifact and grant sudo only through the constrained wrapper'
+)
+assert.ok(
+  systemctlWrapper.includes('[[ "$#" -ne 3') &&
+    systemctlWrapper.includes('^incudal-online-(update|rollback)@[1-9][0-9]*\\.service$') &&
+    otaChownWrapper.includes('exec /usr/local/libexec/incudal/incudal-online-task harden'),
+  'root-owned wrappers must validate exact OTA commands and prevent recursive service ownership of the install tree'
+)
+assert.ok(
+  migrateAtomicLayout.includes('VERIFIED_RELEASE_ARCHIVE') &&
+    migrateAtomicLayout.includes('release archive and checksum must be root-owned') &&
+    migrateAtomicLayout.includes('ExecStart=/usr/local/libexec/incudal/incudal-online-task update %i') &&
+    migrateAtomicLayout.includes('ExecStart=/usr/local/libexec/incudal/incudal-online-task rollback %i') &&
+    !migrateAtomicLayout.includes('ExecStart=/usr/bin/node ${app_dir}/server/dist/scripts/'),
+  'atomic-layout migration must require a root-controlled verified artifact and install only fixed root OTA entries'
 )
 assert.ok(initEnv.includes('set_env_if_missing "PORT" "3001" "后端监听端口"'), 'init-env script must default backend PORT to 3001')
 assert.ok(initEnv.includes('set_env_if_missing "SERVE_STATIC_CLIENT" "false" "后端静态文件服务开关"'), 'init-env script must default SERVE_STATIC_CLIENT=false')

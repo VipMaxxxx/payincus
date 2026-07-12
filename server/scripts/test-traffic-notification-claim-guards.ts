@@ -21,6 +21,21 @@ function section(source: string, startPattern: string, endPattern: string): stri
 
 const trafficDbSource = readRepoFile('server/src/db/traffic.ts')
 const trafficSchedulerSource = readRepoFile('server/src/services/traffic-scheduler.ts')
+const trafficNotifierSource = readRepoFile('server/src/services/traffic-notifier.ts')
+
+const markInstanceWarningSection = section(
+  trafficSchedulerSource,
+  'async function markInstanceTrafficWarningIfNeeded(',
+  '/**\n * 获取或创建主机客户端'
+)
+assert.ok(
+  markInstanceWarningSection.includes('prisma.instance.updateMany') &&
+    markInstanceWarningSection.includes("status: { not: 'deleted' }") &&
+    markInstanceWarningSection.includes("trafficStatus: 'NORMAL'") &&
+    markInstanceWarningSection.includes("data: { trafficStatus: 'WARNING' }") &&
+    markInstanceWarningSection.includes('return result.count > 0'),
+  'instance traffic warning must be claimed with a conditional NORMAL-to-WARNING update'
+)
 
 const markLimitedSection = section(
   trafficDbSource,
@@ -42,7 +57,7 @@ const markWarningSection = section(
   '// ==================== 月度重置操作'
 )
 assert.ok(
-  markWarningSection.includes('const currentMonthStart = new Date(sentAt.getFullYear(), sentAt.getMonth(), 1)') &&
+  markWarningSection.includes('const currentMonthStart = startOfMonthShanghai(sentAt)') &&
     markWarningSection.includes('prisma.userQuota.updateMany') &&
     markWarningSection.includes('{ trafficWarningSentAt: null }') &&
     markWarningSection.includes('{ trafficWarningSentAt: { lt: currentMonthStart } }') &&
@@ -72,12 +87,101 @@ const warningSection = section(
   '/**\n * 检查并恢复带宽'
 )
 assert.ok(
-  warningSection.includes('const shouldNotifyWarning = await trafficDb.markUserTrafficWarningIfNeeded(instance.userId, new Date())') &&
+  warningSection.includes('const claimedAt = new Date()') &&
+    warningSection.includes('const shouldNotifyWarning = await trafficDb.markUserTrafficWarningIfNeeded(instance.userId, claimedAt)') &&
     warningSection.includes('if (shouldNotifyWarning)') &&
-    warningSection.indexOf('markUserTrafficWarningIfNeeded(instance.userId, new Date())') <
+    warningSection.indexOf('markUserTrafficWarningIfNeeded(instance.userId, claimedAt)') <
       warningSection.indexOf('sendTrafficWarningNotification(') &&
     !warningSection.includes('await trafficDb.updateUserTrafficWarningSentAt(instance.userId, new Date())'),
   'traffic scheduler must send warning notifications only after claiming this month warning state'
+)
+
+assert.ok(
+  warningSection.includes('const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)') &&
+    warningSection.includes("instance.trafficStatus === 'NORMAL'") &&
+    warningSection.includes('const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)') &&
+    warningSection.indexOf('markInstanceTrafficWarningIfNeeded(instance.id)') <
+      warningSection.lastIndexOf('sendTrafficWarningNotification(') &&
+    warningSection.includes('instance.monthlyTrafficUsed') &&
+    warningSection.includes('instanceLimit!') &&
+    warningSection.includes('instance.name'),
+  'traffic scheduler must warn at the instance 80% threshold only after claiming its warning state'
+)
+
+const notifierWarningSection = section(
+  trafficNotifierSource,
+  'export async function sendTrafficWarningNotification(',
+  '/**\n * 发送流量限速通知'
+)
+assert.ok(
+  notifierWarningSection.includes('instanceName?: string') &&
+    notifierWarningSection.includes('instanceName ?') &&
+    notifierWarningSection.includes('${instanceName}'),
+  'instance traffic warning notification must identify the affected instance'
+)
+
+assert.ok(
+  notifierWarningSection.includes('): Promise<boolean>') &&
+    notifierWarningSection.includes('let allChannelsSent = true') &&
+    notifierWarningSection.includes('if (!result.success) allChannelsSent = false') &&
+    notifierWarningSection.includes('return allChannelsSent') &&
+    notifierWarningSection.includes('return false'),
+  'traffic warning notifier must report delivery failure instead of swallowing it as success'
+)
+
+const notifierContextSection = section(
+  trafficNotifierSource,
+  'async function resolveTrafficNotificationContext(',
+  '/**\n * 发送流量预警通知'
+)
+const notifierThrottleSection = section(
+  trafficNotifierSource,
+  'export async function sendTrafficThrottledNotification(',
+  '/**\n * 发送 Telegram 通知'
+)
+assert.ok(
+  notifierContextSection.includes('packagePlan:') &&
+    notifierContextSection.includes('trafficLimitSpeed: true') &&
+    notifierContextSection.includes('trafficResetDay: true') &&
+    notifierContextSection.includes('TRAFFIC_OVERAGE_THROTTLE_CONFIG_KEY') &&
+    notifierContextSection.includes('normalLineSpeed') &&
+    notifierWarningSection.includes('${context.throttleSpeed}') &&
+    notifierWarningSection.includes('${context.resetDay}') &&
+    notifierWarningSection.includes('${context.normalLineSpeed}') &&
+    notifierThrottleSection.includes('${context.throttleSpeed}') &&
+    notifierThrottleSection.includes('${context.resetDay}') &&
+    notifierThrottleSection.includes('${context.normalLineSpeed}'),
+  'traffic notifications must use configured throttle speed, plan normal speed, and host reset day'
+)
+assert.ok(
+  !notifierWarningSection.includes('1Mbit') &&
+    !notifierThrottleSection.includes('1Mbit') &&
+    !notifierThrottleSection.includes('下月 1 日') &&
+    !notifierThrottleSection.includes('下月1日'),
+  'traffic notifications must not hard-code 1Mbit or a first-of-next-month reset'
+)
+
+assert.ok(
+  warningSection.includes('const claimedAt = new Date()') &&
+    warningSection.includes('const notificationSent = await sendTrafficWarningNotification(') &&
+    warningSection.includes('await releaseUserTrafficWarningLease(') &&
+    warningSection.includes('await releaseInstanceTrafficWarningLease(instance.id)') &&
+    warningSection.indexOf('const notificationSent = await sendTrafficWarningNotification(') <
+      warningSection.indexOf('await releaseUserTrafficWarningLease('),
+  'failed traffic warning delivery must release its state lease so the next scheduler run can retry'
+)
+
+const releaseUserLeaseSection = section(
+  trafficSchedulerSource,
+  'async function releaseUserTrafficWarningLease(',
+  'async function releaseInstanceTrafficWarningLease('
+)
+assert.ok(
+  releaseUserLeaseSection.includes('trafficWarningSentAt: claimedAt') &&
+    releaseUserLeaseSection.includes("trafficStatus: 'WARNING'") &&
+    releaseUserLeaseSection.includes('trafficWarningSentAt: previousSentAt') &&
+    releaseUserLeaseSection.includes('trafficStatus: previousStatus'),
+  'user warning lease release must only roll back the matching claim and preserve its previous state'
 )
 
 console.log('traffic notification claim guard checks passed')

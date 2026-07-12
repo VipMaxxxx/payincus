@@ -39,6 +39,15 @@ assertStartGuard('server/src/services/status-scheduler.ts', 'startStatusSchedule
 assertStartGuard('server/src/services/system-monitor.ts', 'startSystemMonitor', 'let schedulerStarted = false')
 assertStartGuard('server/src/services/traffic-scheduler.ts', 'startTrafficScheduler', 'let schedulerStarted = false')
 assertStartGuard('server/src/services/ai-ticket-auto-reply-scheduler.ts', 'startAiTicketAutoReplyScheduler', 'let schedulerStarted = false')
+assertStartGuard('server/src/services/mail-usage-scheduler.ts', 'startMailUsageScheduler', 'let schedulerStarted = false')
+assertStartGuard('server/src/services/mail-autorenew-scheduler.ts', 'startMailAutoRenewScheduler', 'let schedulerStarted = false')
+
+const appSource = readRepoFile('server/src/app.ts')
+assert.ok(
+  appSource.includes("await import('./services/mail-autorenew-scheduler.js')") &&
+    appSource.includes('startMailAutoRenewScheduler()'),
+  'app startup must register the mail auto-renew scheduler'
+)
 
 const mailExpirySource = readRepoFile('server/src/services/mail-expiry-scheduler.ts')
 const mailStartIndex = mailExpirySource.indexOf('export function startMailExpiryScheduler(')

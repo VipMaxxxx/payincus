@@ -14,6 +14,7 @@ const __dirname = dirname(__filename)
 const logsRouteSource = readFileSync(resolve(__dirname, '../src/routes/logs.ts'), 'utf8')
 const logsDbSource = readFileSync(resolve(__dirname, '../src/db/logs.ts'), 'utf8')
 const riskAuditSource = readFileSync(resolve(__dirname, '../src/lib/risk-audit.ts'), 'utf8')
+const resourceRiskSource = readFileSync(resolve(__dirname, '../src/services/resource-risk.ts'), 'utf8')
 const logsViewSource = readFileSync(resolve(__dirname, '../../client/src/views/LogsView.vue'), 'utf8')
 const zhCnSource = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
 const zhTwSource = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
@@ -66,6 +67,14 @@ assert.ok(
     riskAuditSource.includes('user.role.update') &&
     riskAuditSource.includes('plugin.install'),
   'risk catalog must include payment, balance, batch resource, role and plugin sensitive operations'
+)
+
+assert.ok(
+  resourceRiskSource.includes("'resource_risk.auto_action'") &&
+    resourceRiskSource.includes('System automatically applied resource risk action(s)') &&
+    resourceRiskSource.includes("shouldRestrictOrders && !manualLocked ? 'order_restricted' : null") &&
+    /await createLog\(\s*null,\s*'instance',\s*'resource_risk\.auto_action'/m.test(resourceRiskSource),
+  'automatic resource-risk QoS, suspension, and order restriction actions must write a central audit log with the system actor'
 )
 
 const definitions = getRiskOperationDefinitions()

@@ -22,7 +22,7 @@ defineOptions({
 })
 
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const authStore = useAuthStore()
 const brand = useBrand()
 
@@ -35,19 +35,9 @@ const loading = ref(true)
 type ProductLineKey = PackageSource | 'all'
 const activeProductLine = ref<ProductLineKey>('all')
 
-const isChineseLocale = computed(() => locale.value.startsWith('zh'))
-
-const heroTitlePrimary = computed(() => (
-  isChineseLocale.value ? '智能云计算' : 'Smart cloud computing'
-))
-
-const heroTitlePrefix = computed(() => (
-  isChineseLocale.value ? '连接' : 'Connect '
-))
-
-const heroTitleAccent = computed(() => (
-  isChineseLocale.value ? '无限可能' : 'infinite possibilities'
-))
+const heroTitlePrimary = computed(() => t('publicSite.portal.heroTitlePrimary'))
+const heroTitlePrefix = computed(() => t('publicSite.portal.heroTitlePrefix'))
+const heroTitleAccent = computed(() => t('publicSite.portal.heroTitleAccent'))
 
 const spotlightPackages = computed(() => {
   const allPackages = [...packages.value].sort((left, right) => {
@@ -370,7 +360,7 @@ onMounted(() => {
                       {{ line.source === 'official' ? t('publicSite.market.official') : t('publicSite.market.market') }}
                     </span>
                     <span class="kawaii-product-line-badge">
-                      {{ line.source === 'official' ? (isChineseLocale ? '稳定供应' : 'Stable supply') : (isChineseLocale ? '更多选择' : 'More choices') }}
+                      {{ line.source === 'official' ? t('publicSite.portal.stableSupply') : t('publicSite.portal.moreChoices') }}
                     </span>
                   </div>
 

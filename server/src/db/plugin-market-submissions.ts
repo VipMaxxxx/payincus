@@ -38,6 +38,7 @@ export interface SerializedPluginMarketSubmission {
   developerName: string
   developerHomepage: string | null
   developerGithub: string | null
+  developerVerified: boolean
   contactEmail: string
   permissions: unknown
   compatibility: unknown
@@ -63,6 +64,16 @@ type PluginMarketSubmissionWithUsers = PluginMarketSubmission & {
   reviewedBy?: { username: string } | null
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function isPluginDeveloperVerifiedByAdmin(scanResult: unknown): boolean {
+  if (!isRecord(scanResult) || !isRecord(scanResult.governance)) return false
+  return scanResult.governance.developerVerified === true &&
+    typeof scanResult.governance.developerVerifiedByUserId === 'number'
+}
+
 export function serializePluginMarketSubmission(submission: PluginMarketSubmissionWithUsers): SerializedPluginMarketSubmission {
   return {
     id: submission.id,
@@ -77,6 +88,7 @@ export function serializePluginMarketSubmission(submission: PluginMarketSubmissi
     developerName: submission.developerName,
     developerHomepage: submission.developerHomepage,
     developerGithub: submission.developerGithub,
+    developerVerified: isPluginDeveloperVerifiedByAdmin(submission.scanResult),
     contactEmail: submission.contactEmail,
     permissions: submission.permissions,
     compatibility: submission.compatibility,
@@ -190,19 +202,37 @@ export async function reviewPluginMarketSubmission(input: {
   riskLevel: PluginMarketSubmissionRiskLevel
   reviewNotes?: string | null
   reviewedByUserId: number
+  developerVerified?: boolean
 }) {
-  return prisma.pluginMarketSubmission.update({
-    where: { id: input.id },
-    data: {
-      reviewStatus: input.reviewStatus,
-      riskLevel: input.riskLevel,
-      reviewNotes: input.reviewNotes ?? null,
-      reviewedByUserId: input.reviewedByUserId,
-      reviewedAt: new Date()
-    },
-    include: {
-      submittedBy: { select: { username: true } },
-      reviewedBy: { select: { username: true } }
-    }
+  return prisma.$transaction(async tx => {
+    const current = await tx.pluginMarketSubmission.findUniqueOrThrow({ where: { id: input.id } })
+    const scanResult = isRecord(current.scanResult) ? current.scanResult : {}
+    const existingGovernance = isRecord(scanResult.governance) ? scanResult.governance : {}
+    const governance = input.developerVerified === undefined
+      ? existingGovernance
+      : {
+          ...existingGovernance,
+          developerVerified: input.developerVerified,
+          developerVerifiedByUserId: input.developerVerified ? input.reviewedByUserId : null,
+          developerVerifiedAt: input.developerVerified ? new Date().toISOString() : null
+        }
+
+    return tx.pluginMarketSubmission.update({
+      where: { id: input.id },
+      data: {
+        reviewStatus: input.reviewStatus,
+        riskLevel: input.riskLevel,
+        reviewNotes: input.reviewNotes ?? null,
+        reviewedByUserId: input.reviewedByUserId,
+        reviewedAt: new Date(),
+        ...(input.developerVerified === undefined ? {} : {
+          scanResult: { ...scanResult, governance } as Prisma.InputJsonObject
+        })
+      },
+      include: {
+        submittedBy: { select: { username: true } },
+        reviewedBy: { select: { username: true } }
+      }
+    })
   })
 }

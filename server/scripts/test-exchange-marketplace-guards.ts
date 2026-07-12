@@ -702,6 +702,30 @@ assert(
   'exchange service must release escrow only through the confirmation/administrator settlement path and close resolving disputes atomically in the release transaction'
 )
 
+const buyerConfirmRoute = routeBlock(exchangeRouteSource, "'/orders/:orderId/confirm'")
+assert(
+  buyerConfirmRoute.includes('fastify.authenticateUser') &&
+    buyerConfirmRoute.includes('await releaseExchangeOrderEscrow(orderId') &&
+    buyerConfirmRoute.includes('actorUserId: request.user.id') &&
+    buyerConfirmRoute.includes("action: 'order.buyer_confirm'") &&
+    buyerConfirmRoute.includes("allowedStatuses: ['confirming']") &&
+    buyerConfirmRoute.includes('expectedBuyerUserId: request.user.id') &&
+    buyerConfirmRoute.includes('getUserExchangeOrder(request.user.id, orderId)') &&
+    exchangeServiceSource.includes('expectedBuyerUserId?: number') &&
+    exchangeServiceSource.includes('order.buyerUserId !== options.expectedBuyerUserId') &&
+    exchangeServiceSource.includes("if (order.status === 'completed' && order.walletLogId)"),
+  'buyer receipt confirmation must authenticate the buyer, atomically authorize and audit immediate escrow release, and remain idempotent after completion'
+)
+
+assert(
+  /enum ExchangeListingStatus \{[\s\S]*?\bpaused\b[\s\S]*?\}/.test(schema) &&
+    /enum ExchangeOrderStatus \{[\s\S]*?\bescrowed\b[\s\S]*?\bdelivered\b[\s\S]*?\}/.test(schema) &&
+    /enum ExchangeDisputeStatus \{[\s\S]*?\bredelivering\b[\s\S]*?\}/.test(schema) &&
+    adminExchangeRouteSource.includes("prisma.exchangeOrder.count({ where: { status: { in: ['delivering', 'confirming'] } } })") &&
+    !adminExchangeRouteSource.includes("status: { in: ['escrowed', 'delivering', 'delivered', 'confirming'] }"),
+  'deprecated exchange statuses must remain schema-compatible while admin delivery statistics count only live order states'
+)
+
 assert(
   exchangeServiceSource.includes('sellerUserId') &&
     exchangeServiceSource.includes('buyerUserId') &&
@@ -931,7 +955,7 @@ assert(
 		adminExchangeRouteSource.includes('/disputes/:id/release') &&
 		adminExchangeRouteSource.includes('claimExchangeDisputeForProcessing') &&
 		adminExchangeRouteSource.includes('restoreProcessingDispute') &&
-		adminExchangeRouteSource.includes("const activeDisputeStatuses = ['open', 'processing', 'redelivering'] as const") &&
+		adminExchangeRouteSource.includes("const activeDisputeStatuses = ['open', 'processing'] as const") &&
 		adminExchangeRouteSource.includes('status: { in: [...activeDisputeStatuses] }') &&
 		adminExchangeRouteSource.includes("dispute.status === 'processing' && dispute.handledByUserId && dispute.handledByUserId !== actorUserId") &&
 	adminExchangeRouteSource.includes("{ status: 'open' }") &&
@@ -1007,7 +1031,7 @@ assert(
     adminExchangeRouteSource.includes('resolveDispute: {') &&
     adminExchangeRouteSource.includes('releaseRemark: `交易所争议 ${id} 人工放款，争议冻结标记解除：${resolution}`') &&
     !adminExchangeRouteSource.includes("action: 'dispute.release', 'exchange_dispute'") &&
-    adminExchangeRouteSource.includes("!['active', 'paused', 'delivery_failed'].includes(listing.status)"),
+    adminExchangeRouteSource.includes("!['active', 'delivery_failed'].includes(listing.status)"),
 	  'admin exchange routes must support refunds, order freeze/cancel, dispute release, wallet freeze/unfreeze/adjust, risk records, and must not force-delist locked orders'
 )
 
@@ -1111,7 +1135,7 @@ assert(
 	    exchangeServiceSource.includes('EXCHANGE_DISPUTE_EXISTS') &&
 	    exchangeServiceSource.includes("type: 'dispute_freeze'") &&
 	    exchangeServiceSource.includes('dispute.freeze') &&
-		    exchangeServiceSource.includes("const activeDisputeStatuses: ExchangeDisputeStatus[] = ['open', 'processing', 'redelivering']") &&
+		    exchangeServiceSource.includes("const activeDisputeStatuses: ExchangeDisputeStatus[] = ['open', 'processing']") &&
 		    exchangeServiceSource.includes('status: { in: activeDisputeStatuses }') &&
     exchangeServiceSource.includes('EXCHANGE_ORDER_STATE_CHANGED'),
   'user dispute creation must use order-level transaction locking, idempotency, active-dispute checks, and conditional order status updates'
@@ -1266,10 +1290,10 @@ assert(
 )
 
 assert(
-  exchangeServiceSource.includes("status: { in: ['active', 'paused'] }") &&
+  exchangeServiceSource.includes("status: 'active'") &&
     exchangeServiceSource.includes("action: 'listing.delist'") &&
     !exchangeServiceSource.includes("status: { in: ['active', 'paused', 'locked'] }"),
-  'seller delist must support active and paused listings while keeping locked or delivery-failed listings protected'
+  'seller delist must support active listings while keeping deprecated, locked, or delivery-failed listings protected'
 )
 
 assert(
@@ -1457,29 +1481,29 @@ assert(
 assert(
   instanceTaskSource.includes('allowExchangeLocked') &&
     instanceTaskSource.includes('实例已上架交易所或处于交易锁定中，不能执行该操作') &&
-    instanceTaskSource.includes("status: { in: ['active', 'paused', 'locked', 'delivery_failed'] }") &&
-    instanceTaskSource.includes("status: { in: ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed'] }") &&
+    instanceTaskSource.includes("status: { in: ['active', 'locked', 'delivery_failed'] }") &&
+    instanceTaskSource.includes("status: { in: ['delivering', 'confirming', 'disputed', 'manual_review', 'failed'] }") &&
     instanceTaskSource.includes('实例存在未完成的交易所订单，不能执行该操作'),
-  'instance task creation must block paused/listed, delivery-failed, exchange-ordered, or failed-order instances'
+  'instance task creation must block listed, delivery-failed, exchange-ordered, or failed-order instances'
 )
 
 assert(
   instanceDestroySource.includes('getExchangeDestroyLock') &&
     instanceDestroySource.includes('EXCHANGE_DESTROY_LOCK_REASON') &&
-    instanceDestroySource.includes("status: { in: ['active', 'paused', 'locked', 'delivery_failed'] }") &&
-    instanceDestroySource.includes("status: { in: ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed'] }") &&
+    instanceDestroySource.includes("status: { in: ['active', 'locked', 'delivery_failed'] }") &&
+    instanceDestroySource.includes("status: { in: ['delivering', 'confirming', 'disputed', 'manual_review', 'failed'] }") &&
     instanceDestroySource.includes('EXCHANGE_INSTANCE_LOCKED') &&
     instanceDestroySource.includes('EXCHANGE_ORDER_ACTIVE'),
-  'instance destroy routes must block paused/listed/failed-delivery exchange listings and unsettled exchange-ordered instances'
+  'instance destroy routes must block listed/failed-delivery exchange listings and unsettled exchange-ordered instances'
 )
 
 assert(
-  exchangeOperationLockSource.includes("const listingLockedStatuses = ['active', 'paused', 'locked', 'delivery_failed']") &&
-    exchangeOperationLockSource.includes("const orderLockedStatuses = ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed']") &&
-    exchangeServiceSource.includes("const listingBlockingStatuses: ExchangeListingStatus[] = ['active', 'paused', 'locked', 'delivery_failed']") &&
+  exchangeOperationLockSource.includes("const listingLockedStatuses = ['active', 'locked', 'delivery_failed']") &&
+    exchangeOperationLockSource.includes("const orderLockedStatuses = ['delivering', 'confirming', 'disputed', 'manual_review', 'failed']") &&
+    exchangeServiceSource.includes("const listingBlockingStatuses: ExchangeListingStatus[] = ['active', 'locked', 'delivery_failed']") &&
     exchangeServiceSource.includes('status: { in: listingBlockingStatuses }') &&
-    exchangeServiceSource.includes("const orderBlockingStatuses: ExchangeOrderStatus[] = ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed']"),
-  'exchange operation lock, listing-state display, and listing eligibility must cover active, paused, failed, and unsettled exchange states'
+    exchangeServiceSource.includes("const orderBlockingStatuses: ExchangeOrderStatus[] = ['delivering', 'confirming', 'disputed', 'manual_review', 'failed']"),
+  'exchange operation lock, listing-state display, and listing eligibility must cover active, failed, and unsettled exchange states without deprecated enum values'
 )
 
 assert(
@@ -1502,7 +1526,7 @@ assert(
 
 assert(
   exchangeOperationLockSource.includes('export async function getExchangeSensitiveAccessLock') &&
-    exchangeOperationLockSource.includes("const buyerDeliveredAccessStatuses = ['delivered', 'confirming', 'disputed'] as const") &&
+    exchangeOperationLockSource.includes("const buyerDeliveredAccessStatuses = ['confirming', 'disputed'] as const") &&
     exchangeOperationLockSource.includes('viewer.role ===') &&
     exchangeOperationLockSource.includes('viewerIsDeliveredBuyer') &&
     exchangeOperationLockSource.includes('不能查看密码或连接终端') &&

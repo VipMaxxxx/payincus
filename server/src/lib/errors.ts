@@ -3,6 +3,8 @@
  * Frontend will translate these based on error codes
  */
 
+import { sanitizeTokensInString } from './log-sanitizer.js'
+
 export const ErrorCode = {
     // Common errors
     INVALID_ID: 'INVALID_ID',
@@ -88,6 +90,12 @@ export const ErrorCode = {
     QUOTA_SNAPSHOT_EXCEEDED: 'QUOTA_SNAPSHOT_EXCEEDED',
     QUOTA_BACKUP_EXCEEDED: 'QUOTA_BACKUP_EXCEEDED',
     QUOTA_NOT_ALLOCATED: 'QUOTA_NOT_ALLOCATED',
+    QUOTA_INCREASE_TYPE_REQUIRED: 'QUOTA_INCREASE_TYPE_REQUIRED',
+    QUOTA_INFO_NOT_FOUND: 'QUOTA_INFO_NOT_FOUND',
+    QUOTA_INCREASE_STEP_INVALID: 'QUOTA_INCREASE_STEP_INVALID',
+    QUOTA_USAGE_UNAVAILABLE: 'QUOTA_USAGE_UNAVAILABLE',
+    QUOTA_USAGE_TOO_LOW: 'QUOTA_USAGE_TOO_LOW',
+    HOSTING_BALANCE_BUSY: 'HOSTING_BALANCE_BUSY',
 
     // Snapshot errors
     SNAPSHOT_NOT_FOUND: 'SNAPSHOT_NOT_FOUND',
@@ -435,6 +443,12 @@ export const ErrorMessages: Record<ErrorCodeType, string> = {
     [ErrorCode.QUOTA_SNAPSHOT_EXCEEDED]: 'Snapshot quota exceeded',
     [ErrorCode.QUOTA_BACKUP_EXCEEDED]: 'Backup quota exceeded',
     [ErrorCode.QUOTA_NOT_ALLOCATED]: 'Quota not allocated',
+    [ErrorCode.QUOTA_INCREASE_TYPE_REQUIRED]: 'Exactly one quota type must be increased at a time',
+    [ErrorCode.QUOTA_INFO_NOT_FOUND]: 'Quota information not found',
+    [ErrorCode.QUOTA_INCREASE_STEP_INVALID]: 'Quota increase step is invalid',
+    [ErrorCode.QUOTA_USAGE_UNAVAILABLE]: 'Quota usage cannot be calculated',
+    [ErrorCode.QUOTA_USAGE_TOO_LOW]: 'Quota usage is below the required threshold',
+    [ErrorCode.HOSTING_BALANCE_BUSY]: 'Hosting balance is being processed, please try again later',
 
     // Snapshot errors
     [ErrorCode.SNAPSHOT_NOT_FOUND]: 'Snapshot not found',
@@ -694,13 +708,25 @@ export const ErrorMessages: Record<ErrorCodeType, string> = {
     [ErrorCode.GIFT_CARD_TURNSTILE_REQUIRED]: 'Turnstile verification required',
 }
 
+const INTERNAL_ERROR_CODES = new Set<ErrorCodeType>([
+    ErrorCode.INTERNAL_ERROR,
+])
+
 /**
  * Create API error response with code and message
  */
 export function apiError(code: ErrorCodeType, details?: string) {
-    return {
+    const response = {
         error: ErrorMessages[code],
         code,
-        details
+    }
+
+    if (INTERNAL_ERROR_CODES.has(code) || details === undefined) {
+        return response
+    }
+
+    return {
+        ...response,
+        details: sanitizeTokensInString(details).slice(0, 256),
     }
 }

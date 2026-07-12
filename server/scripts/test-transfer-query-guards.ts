@@ -8,6 +8,7 @@ const __dirname = dirname(__filename)
 
 const routeSource = readFileSync(resolve(__dirname, '../src/routes/transfers.ts'), 'utf8')
 const dbSource = readFileSync(resolve(__dirname, '../src/db/transfers.ts'), 'utf8')
+const notifierSource = readFileSync(resolve(__dirname, '../src/lib/notifier.ts'), 'utf8')
 
 function sectionBetween(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -23,8 +24,10 @@ const detailRoute = sectionBetween(routeSource, '// 获取转移详情', '// 接
 const acceptRoute = sectionBetween(routeSource, '// 接受转移', '// 拒绝转移')
 const rejectRoute = sectionBetween(routeSource, '// 拒绝转移', '// 取消转移')
 const cancelRoute = sectionBetween(routeSource, '// 取消转移', '// 直接推送')
+const pushRoute = routeSource.slice(routeSource.indexOf('// 直接推送'))
 const sentHelper = sectionBetween(dbSource, '// 获取用户发起的转移列表', '// 获取用户收到的转移列表')
 const receivedHelper = sectionBetween(dbSource, '// 获取用户收到的转移列表', '// 获取用户待处理的接收数量')
+const executeTransferHelper = dbSource.slice(dbSource.indexOf('// 执行转移（事务操作）'))
 
 assert.ok(
   dbSource.includes('const TRANSFER_LIST_MAX_PAGE_SIZE = 100') &&
@@ -112,5 +115,31 @@ for (const [name, route] of [
     `${name} transfer route must reject malformed transfer IDs before DB access`
   )
 }
+
+assert.ok(
+  routeSource.includes('assertUserCanPurchaseOrReceiveInstance,') &&
+    routeSource.includes('OrderRestrictedError,') &&
+    routeSource.includes('orderRestrictionApiError') &&
+    acceptRoute.includes('await assertUserCanPurchaseOrReceiveInstance(user.id)') &&
+    acceptRoute.includes('await rollbackToPending()') &&
+    acceptRoute.includes('error instanceof OrderRestrictedError') &&
+    acceptRoute.includes('return reply.code(403).send(orderRestrictionApiError(error))'),
+  'accept transfer route must reject purchase-restricted recipients and restore the pending transfer state'
+)
+
+assert.ok(
+  executeTransferHelper.includes('userId: toUserId,') &&
+    executeTransferHelper.includes('autoRenew: false,'),
+  'completed transfers must disable auto-renew when ownership changes'
+)
+
+assert.ok(
+  acceptRoute.includes("sendNotification(user.id, 'transfer_ownership_received'") &&
+    pushRoute.includes("sendNotification(transfer.toUserId, 'transfer_ownership_received'") &&
+    notifierSource.includes("| 'transfer_ownership_received'") &&
+    notifierSource.includes('自动续费已关闭') &&
+    notifierSource.includes('重置 SSH 密钥、登录密码等实例凭证'),
+  'completed transfers must notify the new owner to reset credentials and re-enable auto-renew as needed'
+)
 
 console.log('transfer query guard tests passed')

@@ -78,6 +78,7 @@ export interface TerminalSession {
     lastActivity: number
     reconnectingIncus: boolean
     incusReconnectAttempts: number
+    reconnectGeneration: number
 }
 
 // 活跃终端会话存储
@@ -190,6 +191,20 @@ function safeSendClientMessage(clientWs: WsWebSocket, message: Record<string, un
     }
 }
 
+function closeIncusConnectionPair(dataWs: WsWebSocket, controlWs: WsWebSocket | null): void {
+    for (const socket of [dataWs, controlWs]) {
+        if (!socket) continue
+        socket.removeAllListeners()
+        try {
+            if (socket.readyState === socket.OPEN || socket.readyState === socket.CONNECTING) {
+                socket.close()
+            }
+        } catch (err) {
+            console.debug('[Terminal] Failed to close stale Incus WebSocket:', err)
+        }
+    }
+}
+
 function cleanupIncusSockets(session: TerminalSession): void {
     if (session.incusWebSocket) {
         session.incusWebSocket.removeAllListeners()
@@ -266,6 +281,7 @@ async function reconnectIncusConnection(sessionId: string, reason: string): Prom
 
     session.reconnectingIncus = true
     session.incusReconnectAttempts += 1
+    const reconnectGeneration = ++session.reconnectGeneration
 
     if (session.incusReconnectAttempts > TERMINAL_CONFIG.maxReconnectAttempts) {
         closeTerminalSession(sessionId, 'Terminal backend reconnection limit exceeded')
@@ -283,12 +299,35 @@ async function reconnectIncusConnection(sessionId: string, reason: string): Prom
     const delay = Math.min(TERMINAL_CONFIG.reconnectDelay + (session.incusReconnectAttempts - 1) * 2000, 15000)
     await new Promise(resolve => setTimeout(resolve, delay))
 
+    if (activeSessions.get(sessionId) !== session || session.reconnectGeneration !== reconnectGeneration) {
+        return
+    }
+    if (session.clientWebSocket.readyState !== session.clientWebSocket.OPEN) {
+        closeTerminalSession(sessionId, reason)
+        return
+    }
+
     try {
         const { controlWs, dataWs, mode } = await createIncusConsoleConnection(
             session.host,
             session.instanceName,
             session.instanceType
         )
+
+        if (
+            activeSessions.get(sessionId) !== session ||
+            session.reconnectGeneration !== reconnectGeneration ||
+            session.clientWebSocket.readyState !== session.clientWebSocket.OPEN
+        ) {
+            closeIncusConnectionPair(dataWs, controlWs)
+            if (
+                activeSessions.get(sessionId) === session &&
+                session.reconnectGeneration === reconnectGeneration
+            ) {
+                closeTerminalSession(sessionId, reason)
+            }
+            return
+        }
 
         session.connectionMode = mode
         session.incusWebSocket = dataWs
@@ -306,6 +345,13 @@ async function reconnectIncusConnection(sessionId: string, reason: string): Prom
             mode
         })
     } catch (error) {
+        if (activeSessions.get(sessionId) !== session || session.reconnectGeneration !== reconnectGeneration) {
+            return
+        }
+        if (session.clientWebSocket.readyState !== session.clientWebSocket.OPEN) {
+            closeTerminalSession(sessionId, reason)
+            return
+        }
         session.reconnectingIncus = false
         console.error(`[Terminal] Failed to reconnect Incus backend for session ${session.id}:`, error)
         await reconnectIncusConnection(sessionId, 'Incus reconnection failed')
@@ -497,6 +543,21 @@ export async function createTerminalSession(
     authSessionId?: string
 ): Promise<TerminalSession> {
     const sessionId = generateSessionId()
+    let clientDisconnected = clientWs.readyState !== clientWs.OPEN
+
+    // Install lifecycle handlers before any asynchronous Incus work so an early
+    // browser disconnect cannot be missed while the backend connection is opening.
+    clientWs.on('close', () => {
+        clientDisconnected = true
+        console.log(`[Terminal] Client WebSocket closed for session ${sessionId}`)
+        closeTerminalSession(sessionId, 'Client disconnected')
+    })
+
+    clientWs.on('error', (err) => {
+        clientDisconnected = true
+        console.error(`[Terminal] Client WebSocket error for session ${sessionId}:`, err.message)
+        closeTerminalSession(sessionId, 'Client connection error')
+    })
 
     // 创建 Incus 控制台连接
     const { controlWs, dataWs, operationId, mode } = await createIncusConsoleConnection(
@@ -504,6 +565,11 @@ export async function createTerminalSession(
         instanceName,
         instanceType
     )
+
+    if (clientDisconnected || clientWs.readyState !== clientWs.OPEN) {
+        closeIncusConnectionPair(dataWs, controlWs)
+        throw new Error('Client disconnected while terminal backend connection was opening')
+    }
 
     console.log(`[Terminal] Session ${sessionId} created for instance ${instanceName} (operation: ${operationId}, mode: ${mode})`)
 
@@ -523,7 +589,8 @@ export async function createTerminalSession(
         createdAt: Date.now(),
         lastActivity: Date.now(),
         reconnectingIncus: false,
-        incusReconnectAttempts: 0
+        incusReconnectAttempts: 0,
+        reconnectGeneration: 0
     }
 
     bindIncusSocketHandlers(session, dataWs, controlWs)
@@ -597,16 +664,6 @@ export async function createTerminalSession(
                 console.debug(`[Terminal] Failed to send to Incus:`, err)
             }
         }
-    })
-
-    clientWs.on('close', () => {
-        console.log(`[Terminal] Client WebSocket closed for session ${sessionId}`)
-        closeTerminalSession(sessionId, 'Client disconnected')
-    })
-
-    clientWs.on('error', (err) => {
-        console.error(`[Terminal] Client WebSocket error for session ${sessionId}:`, err.message)
-        closeTerminalSession(sessionId, 'Client connection error')
     })
 
     // 设置心跳保活
@@ -691,6 +748,9 @@ export function closeTerminalSession(sessionId: string, reason: string = 'Sessio
     if (!session) return
 
     console.log(`[Terminal] Closing session ${sessionId}: ${reason}`)
+
+    // Invalidate reconnect work that may currently be sleeping or opening sockets.
+    session.reconnectGeneration += 1
 
     // 清除心跳定时器
     if (session.heartbeatTimer) {

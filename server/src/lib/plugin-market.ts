@@ -3,6 +3,7 @@ import { join } from 'path'
 import { createHash, randomUUID } from 'crypto'
 import { getPluginStagingDir } from './plugin-package.js'
 import { getCurrentVersionMetadata } from './system-version.js'
+import { parsePluginManifest } from './plugin-manifest.js'
 import {
   getPluginMarketIndexUrl as getConfiguredPluginMarketIndexUrl,
   getPluginMarketTrustedHosts
@@ -13,6 +14,8 @@ const PLUGIN_MARKET_TRUSTED_HOSTS_ENV = 'PLUGIN_MARKET_TRUSTED_HOSTS'
 export type PluginMarketReviewStatus = 'pending' | 'listed' | 'delisted' | 'rejected'
 export type PluginMarketTrustLevel = 'official' | 'verified' | 'third_party'
 export type PluginMarketPricingType = 'free' | 'paid'
+export const PLUGIN_MARKET_SUPPORTED_CURRENCIES = ['CNY', 'USD'] as const
+export const PLUGIN_MARKET_PLATFORM_REVENUE_SHARE_PERCENT = 20
 
 export interface PluginMarketDeveloper {
   name: string
@@ -30,6 +33,7 @@ export interface PluginMarketPermissions {
 }
 
 export interface PluginMarketCompatibility {
+  payincus: string
   minPayincus?: string
   maxPayincus?: string
 }
@@ -46,7 +50,7 @@ export interface PluginMarketSecurity {
 
 export interface PluginMarketPricing {
   type: PluginMarketPricingType
-  price?: string
+  price?: number
   currency?: string
   revenueSharePercent?: number | null
 }
@@ -186,11 +190,38 @@ function normalizePermissions(input: unknown): PluginMarketPermissions {
   }
 }
 
-function normalizeCompatibility(input: unknown): PluginMarketCompatibility {
+export function normalizePluginMarketCompatibility(input: unknown): PluginMarketCompatibility {
   const record = isRecord(input) ? input : {}
+  const payincus = pickString(record.payincus, 80)
+  if (!payincus) throw new Error('manifest.payincus compatibility range is required')
+
+  const exact = /^v?(\d+\.\d+\.\d+)$/.exec(payincus)
+  if (exact) {
+    return { payincus, minPayincus: exact[1], maxPayincus: exact[1] }
+  }
+
+  const comparators = payincus.split(/\s+/).filter(Boolean)
+  let minPayincus: string | undefined
+  let maxPayincus: string | undefined
+  for (const comparator of comparators) {
+    const match = /^(>=|<=)v?(\d+\.\d+\.\d+)$/.exec(comparator)
+    if (!match) throw new Error('manifest.payincus must use an exact version and/or inclusive >= / <= bounds')
+    if (match[1] === '>=') {
+      if (minPayincus) throw new Error('manifest.payincus must declare at most one minimum version')
+      minPayincus = match[2]
+    } else {
+      if (maxPayincus) throw new Error('manifest.payincus must declare at most one maximum version')
+      maxPayincus = match[2]
+    }
+  }
+  if (!minPayincus && !maxPayincus) throw new Error('manifest.payincus compatibility range is invalid')
+  if (minPayincus && maxPayincus && compareVersions(minPayincus, maxPayincus) > 0) {
+    throw new Error('manifest.payincus minimum version cannot exceed maximum version')
+  }
   return {
-    minPayincus: pickString(record.minPayincus, 64) ?? undefined,
-    maxPayincus: pickString(record.maxPayincus, 64) ?? undefined
+    payincus,
+    minPayincus,
+    maxPayincus
   }
 }
 
@@ -210,20 +241,31 @@ function normalizeSecurity(input: unknown): PluginMarketSecurity {
   }
 }
 
-function normalizePricing(input: unknown): PluginMarketPricing {
+export function normalizePluginMarketPricing(input: unknown): PluginMarketPricing {
   const record = isRecord(input) ? input : {}
-  const type = pickEnum(record.type, ['free', 'paid'] as const, 'free')
+  const type = record.type === undefined ? 'free' : record.type
+  if (type !== 'free' && type !== 'paid') throw new Error('Plugin pricing type must be free or paid')
+  if (type === 'free') return { type: 'free', revenueSharePercent: null }
+
+  if (!Number.isSafeInteger(record.price) || (record.price as number) <= 0) {
+    throw new Error('Paid plugin price must be a positive integer in the currency minimum unit')
+  }
+  const currency = typeof record.currency === 'string' ? record.currency.trim().toUpperCase() : ''
+  if (!PLUGIN_MARKET_SUPPORTED_CURRENCIES.includes(currency as typeof PLUGIN_MARKET_SUPPORTED_CURRENCIES[number])) {
+    throw new Error(`Paid plugin currency must be one of: ${PLUGIN_MARKET_SUPPORTED_CURRENCIES.join(', ')}`)
+  }
+  if (record.revenueSharePercent !== undefined && record.revenueSharePercent !== PLUGIN_MARKET_PLATFORM_REVENUE_SHARE_PERCENT) {
+    throw new Error(`Paid plugin revenue share is fixed at ${PLUGIN_MARKET_PLATFORM_REVENUE_SHARE_PERCENT}%`)
+  }
   return {
-    type,
-    price: pickString(record.price, 60) ?? undefined,
-    currency: pickString(record.currency, 12) ?? undefined,
-    revenueSharePercent: record.revenueSharePercent === null
-      ? null
-      : pickNumber(record.revenueSharePercent, 0, 0, 100)
+    type: 'paid',
+    price: record.price as number,
+    currency,
+    revenueSharePercent: PLUGIN_MARKET_PLATFORM_REVENUE_SHARE_PERCENT
   }
 }
 
-function normalizeEntry(input: unknown, trustedHosts: Set<string>): PluginMarketEntry | null {
+async function normalizeEntry(input: unknown, trustedHosts: Set<string>): Promise<PluginMarketEntry | null> {
   if (!isRecord(input)) return null
   const id = pickString(input.id, 120)
   const name = pickString(input.name, 120)
@@ -233,12 +275,26 @@ function normalizeEntry(input: unknown, trustedHosts: Set<string>): PluginMarket
   const downloadUrl = pickString(input.downloadUrl, 500)
   const sha256 = pickString(input.sha256, 64)
   if (!id || !name || !latest || !repo || !manifestUrl || !downloadUrl || !sha256) return null
-  assertTrustedMarketUrl(manifestUrl, 'download', trustedHosts)
+  const trustedManifestUrl = assertTrustedMarketUrl(manifestUrl, 'download', trustedHosts)
   assertTrustedMarketUrl(downloadUrl, 'download', trustedHosts)
   if (!/^[a-f0-9]{64}$/i.test(sha256)) return null
   const reviewStatus = pickEnum(input.reviewStatus, ['pending', 'listed', 'delisted', 'rejected'] as const, 'pending')
   const trustLevel = pickEnum(input.trustLevel, ['official', 'verified', 'third_party'] as const, 'third_party')
   const author = pickString(input.author, 120) ?? undefined
+  let compatibility: PluginMarketCompatibility
+  let pricing: PluginMarketPricing
+  try {
+    const manifestResponse = await fetch(trustedManifestUrl, {
+      headers: { 'user-agent': 'payincus-plugin-center' }
+    })
+    if (!manifestResponse.ok) return null
+    const manifest = parsePluginManifest(await manifestResponse.json())
+    if (manifest.id !== id || manifest.version !== latest) return null
+    compatibility = normalizePluginMarketCompatibility({ payincus: manifest.payincus })
+    pricing = normalizePluginMarketPricing(input.pricing)
+  } catch {
+    return null
+  }
   return {
     id,
     name,
@@ -253,9 +309,9 @@ function normalizeEntry(input: unknown, trustedHosts: Set<string>): PluginMarket
     trustLevel,
     developer: normalizeDeveloper(input.developer, author || name),
     permissions: normalizePermissions(input.permissions),
-    compatibility: normalizeCompatibility(input.compatibility),
+    compatibility,
     security: normalizeSecurity(input.security),
-    pricing: normalizePricing(input.pricing),
+    pricing,
     rating: {
       average: pickNumber(isRecord(input.rating) ? input.rating.average : undefined, 0, 0, 5),
       count: Math.floor(pickNumber(isRecord(input.rating) ? input.rating.count : undefined, 0, 0, 1_000_000))
@@ -332,9 +388,9 @@ export async function fetchPluginMarketIndex(url?: string | null): Promise<Plugi
     throw new Error(`Failed to fetch plugin market index: HTTP ${response.status}`)
   }
   const payload: unknown = await response.json()
-  const normalized = isRecord(payload) && Array.isArray(payload.plugins)
-    ? payload.plugins.map(entry => normalizeEntry(entry, trustedHosts)).filter((entry): entry is PluginMarketEntry => !!entry)
-    : []
+  const candidates = isRecord(payload) && Array.isArray(payload.plugins) ? payload.plugins : []
+  const normalized = (await Promise.all(candidates.map(entry => normalizeEntry(entry, trustedHosts))))
+    .filter((entry): entry is PluginMarketEntry => !!entry)
   const plugins = normalized.filter(entry => entry.reviewStatus === 'listed')
   return {
     plugins,
@@ -360,13 +416,14 @@ export async function assertMarketEntryInstallable(entry: PluginMarketEntry): Pr
   if (!/^[a-f0-9]{64}$/i.test(entry.sha256)) {
     throw new Error('Plugin market entry has an invalid SHA256 checksum')
   }
+  const compatibility = normalizePluginMarketCompatibility(entry.compatibility)
   const current = await getCurrentVersionMetadata()
   const currentVersion = current.gitTag || current.version
-  if (entry.compatibility.minPayincus && compareVersions(currentVersion, entry.compatibility.minPayincus) < 0) {
-    throw new Error(`Plugin requires PayIncus ${entry.compatibility.minPayincus} or later`)
+  if (compatibility.minPayincus && compareVersions(currentVersion, compatibility.minPayincus) < 0) {
+    throw new Error(`Plugin requires PayIncus ${compatibility.minPayincus} or later`)
   }
-  if (entry.compatibility.maxPayincus && compareVersions(currentVersion, entry.compatibility.maxPayincus) > 0) {
-    throw new Error(`Plugin supports PayIncus up to ${entry.compatibility.maxPayincus}`)
+  if (compatibility.maxPayincus && compareVersions(currentVersion, compatibility.maxPayincus) > 0) {
+    throw new Error(`Plugin supports PayIncus up to ${compatibility.maxPayincus}`)
   }
 }
 

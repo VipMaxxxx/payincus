@@ -9,6 +9,7 @@ const schema = read('server/prisma/schema.prisma')
 const migration = read('server/prisma/migrations/20260627043000_add_instance_resource_risk_center/migration.sql')
 const incusTraffic = read('server/src/lib/incus/incus-traffic.ts')
 const trafficCollector = read('server/src/services/instance-traffic-collector.ts')
+const trafficBandwidth = read('server/src/services/traffic-bandwidth.ts')
 const riskService = read('server/src/services/resource-risk.ts')
 const restrictionService = read('server/src/services/user-order-restrictions.ts')
 const riskRoute = read('server/src/routes/resource-risk.ts')
@@ -61,7 +62,7 @@ assert(
     riskService.includes('cpu_sustained') &&
     riskService.includes('packet_anomaly') &&
     riskService.includes('scan_suspected') &&
-    riskService.includes('restoreBandwidth(client, input.instance.incusId, limit, limit)') &&
+    riskService.includes('reconcileEffectiveBandwidth') &&
     riskService.includes('accountOrderRestrictEnabled') &&
     riskService.includes('autoSuspendEnabled') &&
     riskService.includes('restrictUserOrdersForRisk') &&
@@ -84,12 +85,72 @@ assert(
 )
 
 assert(
+  trafficBandwidth.includes('export function computeEffectiveBandwidth') &&
+    trafficBandwidth.includes('Math.min(...candidates)') &&
+    trafficBandwidth.includes('instance.packagePlan?.trafficLimitSpeed') &&
+    trafficBandwidth.includes("instance.trafficStatus === 'LIMITED' ? overageThrottleSpeed : null") &&
+    trafficBandwidth.includes('instance.resourceRiskState?.currentBandwidthLimit ?? null') &&
+    trafficBandwidth.includes('export async function reconcileEffectiveBandwidth') &&
+    riskService.includes('currentBandwidthLimit: bandwidthLimit') &&
+    riskService.includes('await reconcileEffectiveBandwidth(instance.id)') &&
+    riskService.includes('await reconcileEffectiveBandwidth(state.instanceId)') &&
+    !riskService.includes('originalIngress:') &&
+    !riskService.includes('originalEgress:') &&
+    !riskService.includes('restoreBandwidth('),
+  'resource risk QoS must set or clear only its own constraint, use configured baseline arbitration, and recompute from remaining constraints instead of captured bandwidth'
+)
+
+assert(
+  riskService.includes('export const DEFAULT_SCORE_DECAY_PER_HOUR = 5') &&
+    riskService.includes('decayAnchorAt: instance.resourceRiskState?.lastTriggeredAt ??') &&
+    riskService.includes('cumulativeDecay - input.decayAppliedSinceTrigger') &&
+    riskService.includes('decayAppliedSinceTrigger: triggers.length > 0 ? 0') &&
+    riskService.includes('let nextLastTriggeredAt: Date | undefined = triggers.length > 0') &&
+    riskRoute.includes('scoreDecayPerHour: parsePage(body.scoreDecayPerHour, policy.scoreDecayPerHour)') &&
+    riskRoute.includes('scoreDecayPerHour: DEFAULT_SCORE_DECAY_PER_HOUR'),
+  'resource risk score decay must use the cumulative time since the last trigger, avoid reapplying prior decay, default to 5 per hour, and remain policy-configurable'
+)
+
+assert(
   restrictionService.includes('assertUserCanCreateInstance') &&
     restrictionService.includes('OrderRestrictedError') &&
     restrictionService.includes('ORDER_RESTRICTED_BY_RISK') &&
     instanceRoute.includes('await assertUserCanCreateInstance(user.id)') &&
     instanceRoute.includes('orderRestrictionApiError(error)'),
   'user instance creation must be blocked when the account has an active instance-risk order restriction'
+)
+
+assert(
+  riskService.includes('RESOURCE_RISK_EVALUATION_LOCK_NAMESPACE') &&
+    riskService.includes('await advisoryTransactionLock(tx, RESOURCE_RISK_EVALUATION_LOCK_NAMESPACE, instanceId)') &&
+    riskService.includes('tx => evaluateInstanceRiskLocked(instanceId, policy, tx)'),
+  'resource risk evaluation must serialize read, decision, and persistence by instance advisory transaction lock'
+)
+
+const restrictionLockIndex = restrictionService.indexOf(
+  'await advisoryTransactionLock(tx, USER_ORDER_RESTRICTION_LOCK_NAMESPACE, input.userId)'
+)
+const restrictionCheckIndex = restrictionService.indexOf(
+  'const existing = await getActiveOrderRestriction(input.userId, tx, null)'
+)
+const restrictionCreateIndex = restrictionService.indexOf('return tx.userOrderRestriction.create({')
+assert(
+  restrictionService.includes('return prisma.$transaction(createUnderLock)') &&
+    restrictionLockIndex >= 0 &&
+    restrictionCheckIndex > restrictionLockIndex &&
+    restrictionCreateIndex > restrictionCheckIndex,
+  'risk order restriction creation must serialize user-scoped check and insert in one advisory-locked transaction'
+)
+
+const automaticQosPersistIndex = riskService.indexOf('currentBandwidthLimit: bandwidthLimit')
+const automaticQosApplyIndex = riskService.indexOf('await reconcileEffectiveBandwidth(instanceId)')
+assert(
+  automaticQosPersistIndex >= 0 &&
+    automaticQosApplyIndex > automaticQosPersistIndex &&
+    riskService.includes('tx => evaluateInstanceRiskLocked(instanceId, policy, tx)') &&
+    !riskService.includes('originalIngress:') &&
+    !riskService.includes('originalEgress:'),
+  'automatic QoS must persist only the FX-063 risk constraint transactionally before applying the effective Incus bandwidth'
 )
 
 assert(

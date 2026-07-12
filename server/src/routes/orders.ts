@@ -711,8 +711,25 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: '订单不存在', code: 'ORDER_NOT_FOUND' })
     }
 
-    if (input.refundAmount !== undefined && input.refundAmount > toMoney(order.amount)) {
-      return reply.code(400).send({ error: '退款金额不能超过订单金额' })
+    if (
+      input.createRefundRequest &&
+      rechargeOrder &&
+      rechargeOrder.status !== 'completed' &&
+      rechargeOrder.status !== 'refunded'
+    ) {
+      return reply.code(409).send({
+        error: '仅已完成或已退款的充值订单可登记退款',
+        code: 'RECHARGE_NOT_CREDITED'
+      })
+    }
+
+    const refundLimit = rechargeOrder
+      ? toMoney(rechargeOrder.actualAmount ?? rechargeOrder.amount)
+      : toMoney(order.amount)
+    if (input.refundAmount !== undefined && input.refundAmount > refundLimit) {
+      return reply.code(400).send({
+        error: rechargeOrder ? '退款金额不能超过实际到账金额' : '退款金额不能超过订单金额'
+      })
     }
 
     const existingPendingRefund = input.createRefundRequest

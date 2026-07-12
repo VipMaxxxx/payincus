@@ -95,30 +95,22 @@ assert.ok(
 )
 
 assert.ok(
-  routeSource.includes('await patchInstanceResources(client, instance.incus_id, { cpu: newCpu })') &&
-  routeSource.includes('await patchInstanceResources(client, instance.incus_id, { memory: newMemory })') &&
-  routeSource.includes('await patchInstanceResources(client, instance.incus_id, { disk: newDisk })'),
-  'CPU, memory, and disk applies must patch Incus before recording successful pool consumption'
-)
-
-assert.ok(
-  routeSource.match(/patchedRollback = async \(\) => \{[\s\S]*?patchInstanceResources\(client, instance\.incus_id, \{ cpu: instance\.cpu \}\)/),
-  'CPU apply must prepare an Incus rollback if DB recording fails'
-)
-
-assert.ok(
-  routeSource.match(/patchedRollback = async \(\) => \{[\s\S]*?patchInstanceResources\(client, instance\.incus_id, \{ memory: instance\.memory \}\)/),
-  'memory apply must prepare an Incus rollback if DB recording fails'
-)
-
-assert.ok(
-  routeSource.match(/patchedRollback = async \(\) => \{[\s\S]*?patchInstanceResources\(client, instance\.incus_id, \{ disk: instance\.disk \}\)/),
-  'disk apply must prepare an Incus rollback if DB recording fails'
+  routeSource.indexOf('await db.applyResourcePoolToInstance({') <
+    routeSource.indexOf('await patchInstanceResources(client, instance.incus_id, resourcesToPatch)'),
+  'resource-pool apply must durably commit the DB intent before patching Incus'
 )
 
 assert.ok(
   routeSource.includes('await db.applyResourcePoolToInstance({'),
   'resource-pool apply route must record success through the atomic DB helper'
+)
+
+assert.ok(
+  dbSource.includes('export const MAX_RESOURCE_POOL_APPLY_AMOUNT = 104_857_600') &&
+  routeSource.includes("amount: { type: 'integer', minimum: 1, maximum: db.MAX_RESOURCE_POOL_APPLY_AMOUNT }") &&
+  dbSource.includes('!Number.isSafeInteger(data.amount)') &&
+  dbSource.includes('data.amount > MAX_RESOURCE_POOL_APPLY_AMOUNT'),
+  'resource-pool apply amount must be positive, safely represented, and bounded'
 )
 
 assert.ok(
@@ -177,18 +169,56 @@ assert.ok(
 
 assert.ok(
   dbSource.includes('WHERE "user_id" = ${data.userId}') &&
-  dbSource.includes('AND "cpu" >= ${data.amount}') &&
-  dbSource.includes('AND "memory" >= ${data.amount}') &&
-  dbSource.includes('AND "disk" >= ${data.amount}') &&
+  dbSource.includes('AND "cpu" >= ${poolDebitAmount}') &&
+  dbSource.includes('AND "memory" >= ${poolDebitAmount}') &&
+  dbSource.includes('AND "disk" >= ${poolDebitAmount}') &&
   dbSource.includes('AND "traffic" >= ${amount}'),
   'resource-pool consumption must be conditional to prevent negative balances under concurrency'
 )
 
 assert.ok(
-  dbSource.includes('cpuUsed: { increment: data.hostResourceDelta.cpuUsed }') &&
-  dbSource.includes('memoryUsed: { increment: data.hostResourceDelta.memoryUsed }') &&
-  dbSource.includes('diskUsed: { increment: data.hostResourceDelta.diskUsed }'),
-  'host resource usage must be incremented instead of absolute-written from stale reads'
+  routeSource.includes('const poolDebitAmount = calculateVipResourcePoolCost(amount, vip.benefit.resourcePoolBonusPercent)') &&
+  routeSource.match(/poolDebitAmount,/g)?.length === 4 &&
+  dbSource.includes('const poolDebitAmount = data.poolDebitAmount ?? data.amount') &&
+  dbSource.includes('poolDebitAmount > data.amount') &&
+  dbSource.includes('amount: -poolDebitAmount') &&
+  dbSource.includes('const cpuDelta = data.hostResourceDelta.cpuUsed ?? 0'),
+  'VIP resource-pool bonus must reduce only pool debit while host capacity remains checked against the full delivered amount'
+)
+
+assert.ok(
+  dbSource.includes('const applyWhere: Prisma.HostWhereInput = { id: data.hostId }') &&
+  dbSource.includes('applyWhere.cpuUsed = { lte: cpuLimit - cpuDelta }') &&
+  dbSource.includes('applyWhere.memoryUsed = { lte: memoryLimit - memoryDelta }') &&
+  dbSource.includes('applyWhere.diskUsed = { lte: diskLimit - diskDelta }') &&
+  dbSource.includes('const hostUpdate = await tx.host.updateMany({') &&
+  dbSource.includes('cpuUsed: { increment: cpuDelta }') &&
+  dbSource.includes('memoryUsed: { increment: memoryDelta }') &&
+  dbSource.includes('diskUsed: { increment: diskDelta }') &&
+  dbSource.includes('if (hostUpdate.count === 0)') &&
+  dbSource.includes("throw new Error('HOST_RESOURCES_INSUFFICIENT')"),
+  'host resource usage must use bounded conditional atomic increments for every dimension'
+)
+
+assert.ok(
+  routeSource.includes("if (errorMessage === 'HOST_RESOURCES_INSUFFICIENT')") &&
+  routeSource.includes("apiError(ErrorCode.HOST_RESOURCES_INSUFFICIENT, 'Host capacity is insufficient for this resource claim')"),
+  'host capacity rejection must return a clear error before Incus is patched'
+)
+
+assert.ok(
+  dbSource.includes('export async function getResourcePoolApplyReconciliationCandidates') &&
+  dbSource.includes("export const RESOURCE_POOL_INCUS_PENDING_PREFIX = '[incus-pending] '") &&
+  dbSource.includes("action: 'apply'") &&
+  dbSource.includes('remark: { startsWith: RESOURCE_POOL_INCUS_PENDING_PREFIX }') &&
+  dbSource.includes('export async function markResourcePoolAppliesReconciled') &&
+  routeSource.includes('async function reconcileResourcePoolApplies') &&
+  routeSource.includes('const incusInstance = await getInstance(client, instance.incus_id)') &&
+  routeSource.includes('await patchInstanceResources(client, instance.incus_id, resources)') &&
+  routeSource.includes('await db.markResourcePoolAppliesReconciled(') &&
+  routeSource.includes('setInterval(() => void runReconciliation(), RESOURCE_POOL_RECONCILIATION_INTERVAL_MS)') &&
+  routeSource.includes("'Resource-pool DB apply committed but Incus patch confirmation failed; reconciliation will retry'"),
+  'committed resource-pool applies must be replayable and periodically reconciled against Incus'
 )
 
 assert.ok(
@@ -198,7 +228,7 @@ assert.ok(
 
 assert.ok(
   dbSource.includes("action: 'apply'") &&
-  dbSource.includes('amount: -data.amount') &&
+  dbSource.includes('amount: -poolDebitAmount') &&
   dbSource.includes('instanceId: data.instanceId'),
   'resource-pool apply helper must write the consumption log in the same transaction'
 )

@@ -24,7 +24,7 @@ import { checkJwtConfig, isAccessTokenInvalidated } from './lib/security.js'
 // 导入日志敏感信息过滤器
 import { logSerializers } from './lib/log-sanitizer.js'
 import { networkModeAllowsPortMapping, networkModeNeedsPublicIpv4 } from './lib/network-modes.js'
-import { getTrustProxyEnabled } from './lib/trust-proxy-config.js'
+import { getTrustProxyConfig } from './lib/trust-proxy-config.js'
 import { getCorsOrigins } from './lib/origin-config.js'
 import {
   DEMO_READ_ONLY_MESSAGE,
@@ -101,6 +101,7 @@ import pluginRoutes from './routes/plugins.js'
 import adminThemeRoutes from './routes/admin-themes.js'
 import themeRoutes from './routes/themes.js'
 import pluginMarketSubmissionRoutes from './routes/plugin-market-submissions.js'
+import pluginTradeRoutes from './routes/plugin-trade.js'
 import themeMarketSubmissionRoutes from './routes/theme-market-submissions.js'
 import apiTokenRoutes from './routes/api-tokens.js'
 import publicApiRoutes from './routes/public-api.js'
@@ -133,7 +134,7 @@ const fastify = Fastify({
   // 关闭请求/响应日志，减少噪音
   disableRequestLogging: process.env.DISABLE_REQUEST_LOG !== 'false',
   // 信任代理：仅在后端位于可信 Nginx/内网代理之后时显式开启
-  trustProxy: getTrustProxyEnabled(),
+  trustProxy: getTrustProxyConfig(),
   // 请求大小限制（防止 DoS 攻击）
   bodyLimit: parseInt(process.env.BODY_LIMIT || '10485760', 10), // 默认 10MB
   // 参数长度限制（使用新的 routerOptions 格式）
@@ -571,6 +572,7 @@ await fastify.register(pluginRoutes, { prefix: '/api/plugins' })
 await fastify.register(adminThemeRoutes, { prefix: '/api/admin/themes' })
 await fastify.register(themeRoutes, { prefix: '/api/themes' })
 await fastify.register(pluginMarketSubmissionRoutes, { prefix: '/api/plugin-market-submissions' })
+await fastify.register(pluginTradeRoutes, { prefix: '/api/plugin-trade' })
 await fastify.register(themeMarketSubmissionRoutes, { prefix: '/api/theme-market-submissions' })
 await fastify.register(apiTokenRoutes, { prefix: '/api/api-tokens' })
 await fastify.register(publicApiRoutes, { prefix: '/api/v1' })
@@ -784,6 +786,14 @@ const start = async (): Promise<void> => {
     const { startMailExpiryScheduler } = await import('./services/mail-expiry-scheduler.js')
     startMailExpiryScheduler()
 
+    // 启动邮箱订阅自动续费调度器
+    const { startMailAutoRenewScheduler } = await import('./services/mail-autorenew-scheduler.js')
+    startMailAutoRenewScheduler()
+
+    // 启动邮箱上游实际用量同步调度器
+    const { startMailUsageScheduler } = await import('./services/mail-usage-scheduler.js')
+    startMailUsageScheduler()
+
     // 启动托管余额调度器（解冻）
     const { startHostingScheduler } = await import('./services/hosting-scheduler.js')
     startHostingScheduler()
@@ -902,6 +912,7 @@ const start = async (): Promise<void> => {
     const { getStuckCreatingInstances, getHostById, compensateFailedInstancePurchase, releasePublicIpv4ForInstance } = await import('./db/index.js')
     const { getIncusClient, deleteInstance } = await import('./lib/incus/index.js')
     const { createLog } = await import('./db/logs.js')
+    const { markFlashSaleFailed } = await import('./services/flash-sales.js')
     const CREATE_TIMEOUT_MS = 10 * 60 * 1000 // 10分钟
     const CREATE_TIMEOUT_CHECK_INTERVAL = 2 * 60 * 1000 // 每2分钟检查一次
     
@@ -960,6 +971,9 @@ const start = async (): Promise<void> => {
 
           try {
             const compensation = await compensateFailedInstancePurchase(instance.id, instance.user_id, instance.host_id)
+            await markFlashSaleFailed(instance.id, '实例创建超时', compensation.refunded).catch((err) => {
+              console.error(`[CreateTimeout] 实例 ${instance.name} 秒杀失败状态回写失败:`, err)
+            })
             if (compensation.refunded) {
               console.log(`[CreateTimeout] 实例 ${instance.name} 创建超时已自动退款 ¥${compensation.refundAmount.toFixed(2)}`)
             } else if (compensation.reason !== 'not_paid_purchase') {
@@ -967,6 +981,9 @@ const start = async (): Promise<void> => {
             }
           } catch (compensationErr) {
             console.error(`[CreateTimeout] 实例 ${instance.name} 创建超时后的账务补偿失败:`, compensationErr)
+            await markFlashSaleFailed(instance.id, '实例创建超时', false).catch((err) => {
+              console.error(`[CreateTimeout] 实例 ${instance.name} 秒杀失败状态回写失败:`, err)
+            })
           }
           
           // 3. 尝试清理 Incus 残留

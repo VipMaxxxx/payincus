@@ -412,7 +412,8 @@ export default async function adminCapacityCostRoutes(app: FastifyInstance): Pro
       for (const binding of host.packageHosts) {
         for (const plan of binding.package.plans) {
           const existing = packagePlanMap.get(plan.id)
-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
+          const priceYuan = toMoney(plan.price) / 100
+          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
           const slots = estimatePlanSlots(plan, capacity)
           const cost = estimatePlanMonthlyCost(plan, host)
           if (existing) {
@@ -424,7 +425,7 @@ export default async function adminCapacityCostRoutes(app: FastifyInstance): Pro
               packageName: binding.package.name,
               planId: plan.id,
               planName: plan.name,
-              price: toMoney(plan.price),
+              price: priceYuan,
               billingCycle: plan.billingCycle,
               revenueMonthly: toMoney(monthlyRevenue),
               estimatedCostMonthlyValues: [cost],

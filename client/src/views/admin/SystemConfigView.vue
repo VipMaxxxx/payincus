@@ -22,6 +22,8 @@ const loading = ref(true)
 // 每个卡片独立的 saving 状态
 const savingRegistration = ref(false)
 const savingInvitePricing = ref(false)
+const savingAffRates = ref(false)
+const savingVipBenefits = ref(false)
 const savingPopupAnnouncement = ref(false)
 const savingPopupPromo = ref(false)
 const savingHostingFeature = ref(false)
@@ -46,6 +48,8 @@ const popupPromoPackages = ref<Package[]>([])
 const popupPromoPackagesLoading = ref(false)
 const popupPromoPackagesLoaded = ref(false)
 const MAX_TRANSFER_FEE = 100
+const MAX_AFF_COMMISSION_RATE = 0.5
+const MAX_AFF_DISCOUNT_RATE = 0.95
 
 interface ConfigItem {
   id: number
@@ -54,6 +58,29 @@ interface ConfigItem {
   type: string
   label: string | null
   description: string | null
+}
+
+interface VipBenefitLevelConfig {
+  orderDiscountPercent: number
+  extraTrafficPercent: number
+  resourcePoolBonusPercent: number
+}
+
+interface VipBenefitsConfig {
+  levels: Record<string, VipBenefitLevelConfig>
+}
+
+function defaultVipBenefitsConfig(): VipBenefitsConfig {
+  return {
+    levels: Object.fromEntries(Array.from({ length: 5 }, (_, index) => {
+      const level = index + 1
+      return [String(level), {
+        orderDiscountPercent: level,
+        extraTrafficPercent: level * 2,
+        resourcePoolBonusPercent: level * 2
+      }]
+    }))
+  }
 }
 
 const configs = ref<ConfigItem[]>([])
@@ -70,6 +97,9 @@ const form = ref({
     { resource: 'points', amount: 0, enabled: false }
   ],
   invite_default_expire_days: 0,
+  aff_commission_rate: 0.05,
+  aff_discount_rate: 0.05,
+  vip_benefits_config: defaultVipBenefitsConfig(),
   popup_announcement: '',
   popup_promo_image_url: '',
   popup_promo_package_id: '',
@@ -77,6 +107,8 @@ const form = ref({
   hosting_market_entry_enabled: true,
   hosting_notice: '',
   ticket_enabled: true,
+  ticket_auto_close_enabled: true,
+  ticket_auto_close_hours: 24,
   free_site_mode: false,
   free_site_register_gift_enabled: false,
   free_site_register_gift_balance: 0,
@@ -156,13 +188,13 @@ const configMeta = computed(() => {
 
 // 数字类型的配置键
 // 注意：不再限制实例配额，已删除 default_quota_instance
-const numericConfigKeys = ['default_quota_host', 'default_quota_friend', 'default_quota_package', 'smtp_port', 'free_site_register_gift_points', 'invite_default_expire_days', 'plugin_storage_backup_interval_hours', 'plugin_storage_backup_retention_count']
+const numericConfigKeys = ['default_quota_host', 'default_quota_friend', 'default_quota_package', 'smtp_port', 'free_site_register_gift_points', 'invite_default_expire_days', 'plugin_storage_backup_interval_hours', 'plugin_storage_backup_retention_count', 'ticket_auto_close_hours']
 
 // 浮点数类型的配置键
-const floatConfigKeys = ['transfer_fee', 'free_site_register_gift_balance']
+const floatConfigKeys = ['transfer_fee', 'free_site_register_gift_balance', 'aff_commission_rate', 'aff_discount_rate']
 
 // 布尔类型的配置键
-const booleanConfigKeys = ['registration_enabled', 'require_invite_code', 'hosting_feature_enabled', 'hosting_market_entry_enabled', 'ticket_enabled', 'free_site_mode', 'free_site_register_gift_enabled', 'turnstile_enabled', 'smtp_enabled', 'smtp_secure', 'email_domain_whitelist_enabled', 'plugin_storage_backup_schedule_enabled']
+const booleanConfigKeys = ['registration_enabled', 'require_invite_code', 'hosting_feature_enabled', 'hosting_market_entry_enabled', 'ticket_enabled', 'ticket_auto_close_enabled', 'free_site_mode', 'free_site_register_gift_enabled', 'turnstile_enabled', 'smtp_enabled', 'smtp_secure', 'email_domain_whitelist_enabled', 'plugin_storage_backup_schedule_enabled']
 
 // 字符串类型的配置键
 const stringConfigKeys = ['turnstile_site_key', 'turnstile_secret_key', 'avatar_api_base', 'smtp_host', 'smtp_username', 'smtp_password', 'smtp_from_email', 'smtp_from_name', 'email_allowed_domains', 'footer_contact_email', 'brand_name', 'brand_subtitle', 'brand_logo_url', 'hosting_notice']
@@ -170,7 +202,7 @@ stringConfigKeys.push('popup_announcement', 'popup_promo_image_url', 'popup_prom
 stringConfigKeys.push('system_update_allowed_admin_ids', 'payincus_gift_card_admin_ids', 'plugin_manager_allowed_admin_ids', 'theme_manager_allowed_admin_ids')
 stringConfigKeys.push('plugin_market_index_url', 'plugin_market_trusted_hosts', 'plugin_market_public_base_url', 'theme_market_index_url', 'theme_market_trusted_hosts', 'theme_market_public_base_url', 'plugin_submission_public_base_url')
 
-const jsonConfigKeys = ['invite_generation_costs']
+const jsonConfigKeys = ['invite_generation_costs', 'vip_benefits_config']
 
 const currentSectionKey = computed<SystemSettingsSectionKey>(() => {
   return systemSettingsSections.find(section => section.path === route.path)?.key || 'access'
@@ -377,6 +409,52 @@ const hasInvitePricingChanges = computed(() => {
   })
 })
 
+const affRateKeys = ['aff_commission_rate', 'aff_discount_rate']
+async function saveAffRates() {
+  const commissionRate = Number(form.value.aff_commission_rate)
+  const discountRate = Number(form.value.aff_discount_rate)
+  if (
+    !Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > MAX_AFF_COMMISSION_RATE ||
+    !Number.isFinite(discountRate) || discountRate < 0 || discountRate > MAX_AFF_DISCOUNT_RATE
+  ) {
+    toast.error(t('admin.system.affRates.rangeError'))
+    return
+  }
+  await saveConfigGroup(affRateKeys, savingAffRates)
+}
+const hasAffRateChanges = computed(() => affRateKeys.some(key => {
+  const config = configs.value.find(c => c.key === key)
+  if (!config) return false
+  return String((form.value as any)[key]) !== config.value
+}))
+
+const vipBenefitsKeys = ['vip_benefits_config']
+function normalizeVipBenefitsForm(): boolean {
+  const levels = form.value.vip_benefits_config?.levels
+  if (!levels || typeof levels !== 'object') return false
+  for (let level = 1; level <= 5; level++) {
+    const item = levels[String(level)]
+    if (!item) return false
+    for (const key of ['orderDiscountPercent', 'extraTrafficPercent', 'resourcePoolBonusPercent'] as const) {
+      const value = Number(item[key])
+      if (!Number.isFinite(value) || value < 0 || value > 100) return false
+      item[key] = Math.round(value * 100) / 100
+    }
+  }
+  return true
+}
+async function saveVipBenefits() {
+  if (!normalizeVipBenefitsForm()) {
+    toast.error(t('admin.system.vipBenefits.rangeError'))
+    return
+  }
+  await saveConfigGroup(vipBenefitsKeys, savingVipBenefits)
+}
+const hasVipBenefitsChanges = computed(() => {
+  const config = configs.value.find(item => item.key === 'vip_benefits_config')
+  return !!config && JSON.stringify(form.value.vip_benefits_config) !== config.value
+})
+
 const popupAnnouncementKeys = ['popup_announcement']
 async function savePopupAnnouncement() {
   await saveConfigGroup(popupAnnouncementKeys, savingPopupAnnouncement)
@@ -466,7 +544,7 @@ const hasBrandChanges = computed(() => {
   })
 })
 
-const ticketKeys = ['ticket_enabled']
+const ticketKeys = ['ticket_enabled', 'ticket_auto_close_enabled', 'ticket_auto_close_hours']
 async function saveTicket() {
   await saveConfigGroup(ticketKeys, savingTicket)
   await configStore.loadPublicConfig(true)
@@ -1065,6 +1143,108 @@ async function sendTestEmail() {
               </span>
             </div>
           </div>
+
+        </div>
+
+        <div v-if="isAccessSection" class="card p-6">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-themed font-medium">{{ t('admin.system.affRates.title') }}</h3>
+            <button
+              type="button"
+              class="btn-primary text-sm px-4 py-1.5"
+              :disabled="!hasAffRateChanges || savingAffRates"
+              @click="saveAffRates"
+            >
+              {{ savingAffRates ? t('admin.system.saving') : t('admin.system.save') }}
+            </button>
+          </div>
+          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.affRates.description') }}</p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">{{ t('admin.system.affRates.commissionRate') }}</label>
+              <input
+                v-model.number="form.aff_commission_rate"
+                type="number"
+                min="0"
+                :max="MAX_AFF_COMMISSION_RATE"
+                step="0.01"
+                class="input"
+              />
+              <p class="text-xs text-themed-muted">{{ t('admin.system.affRates.commissionRateHint') }}</p>
+            </div>
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">{{ t('admin.system.affRates.discountRate') }}</label>
+              <input
+                v-model.number="form.aff_discount_rate"
+                type="number"
+                min="0"
+                :max="MAX_AFF_DISCOUNT_RATE"
+                step="0.01"
+                class="input"
+              />
+              <p class="text-xs text-themed-muted">{{ t('admin.system.affRates.discountRateHint') }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="isAccessSection" class="card p-6">
+          <div class="flex items-center justify-between gap-4 mb-2">
+            <h3 class="text-themed font-medium">{{ t('admin.system.vipBenefits.title') }}</h3>
+            <button
+              type="button"
+              class="btn-primary text-sm px-4 py-1.5"
+              :disabled="!hasVipBenefitsChanges || savingVipBenefits"
+              @click="saveVipBenefits"
+            >
+              {{ savingVipBenefits ? t('admin.system.saving') : t('admin.system.save') }}
+            </button>
+          </div>
+          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.vipBenefits.description') }}</p>
+
+          <div class="space-y-3">
+            <div
+              v-for="level in 5"
+              :key="level"
+              class="grid grid-cols-1 gap-3 rounded-lg bg-themed-secondary/50 p-4 md:grid-cols-4 md:items-end"
+            >
+              <div class="text-sm font-medium text-themed">VIP {{ level }}</div>
+              <label class="space-y-1 text-sm text-themed-secondary">
+                <span>{{ t('admin.system.vipBenefits.orderDiscount') }}</span>
+                <input
+                  v-model.number="form.vip_benefits_config.levels[String(level)].orderDiscountPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  class="input"
+                />
+              </label>
+              <label class="space-y-1 text-sm text-themed-secondary">
+                <span>{{ t('admin.system.vipBenefits.extraTraffic') }}</span>
+                <input
+                  v-model.number="form.vip_benefits_config.levels[String(level)].extraTrafficPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  class="input"
+                />
+              </label>
+              <label class="space-y-1 text-sm text-themed-secondary">
+                <span>{{ t('admin.system.vipBenefits.resourcePoolBonus') }}</span>
+                <input
+                  v-model.number="form.vip_benefits_config.levels[String(level)].resourcePoolBonusPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  class="input"
+                />
+              </label>
+            </div>
+          </div>
+          <p class="mt-4 text-xs text-themed-muted">{{ t('admin.system.vipBenefits.arbitrationHint') }}</p>
         </div>
 
         <div v-if="isAccessSection" class="card p-6">
@@ -1538,6 +1718,41 @@ async function sendTestEmail() {
               <span class="text-xs" :class="form.ticket_enabled ? 'text-themed font-medium' : 'text-themed-muted'">
                 {{ t('admin.system.ticket.enabled') }}
               </span>
+            </div>
+          </div>
+
+          <div class="mt-4 p-4 rounded-lg bg-themed-secondary/50 space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="flex-1">
+                <label class="text-sm font-medium text-themed">{{ t('admin.system.ticket.autoClose') }}</label>
+                <p class="text-xs text-themed-muted mt-1">{{ t('admin.system.ticket.autoCloseDesc') }}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="form.ticket_auto_close_enabled"
+                class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2"
+                :class="form.ticket_auto_close_enabled ? 'bg-accent focus:ring-accent' : 'bg-gray-400 dark:bg-gray-500 focus:ring-gray-400'"
+                @click="form.ticket_auto_close_enabled = !form.ticket_auto_close_enabled"
+              >
+                <span
+                  class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out"
+                  :class="form.ticket_auto_close_enabled ? 'translate-x-5' : 'translate-x-0'"
+                />
+              </button>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-sm text-themed-secondary">{{ t('admin.system.ticket.autoCloseHours') }}</label>
+              <input
+                v-model.number="form.ticket_auto_close_hours"
+                type="number"
+                min="1"
+                step="1"
+                class="input"
+                :disabled="!form.ticket_auto_close_enabled"
+              />
+              <p class="text-xs text-themed-muted">{{ t('admin.system.ticket.autoCloseHoursDesc') }}</p>
             </div>
           </div>
         </div>

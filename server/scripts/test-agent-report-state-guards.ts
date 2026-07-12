@@ -100,7 +100,7 @@ assert(
   'Agent status writes must re-check the current database state to avoid resurrecting suspended/error instances'
 )
 assert(
-  reportProcessor.includes('applyReportedTrafficCounters(trafficInstance, item, now)'),
+  reportProcessor.includes('applyReportedTrafficCounters(trafficInstance, item, now, sampledAt)'),
   'Agent traffic processing must use the post-sync status guard input'
 )
 
@@ -113,6 +113,13 @@ assert(
   trafficApply.includes('const currentInstance = await tx.instance.findUnique') &&
     trafficApply.includes('!currentInstance || !shouldApplyTraffic(currentInstance.status, item)'),
   'Agent traffic writes must re-check current instance status inside the write transaction'
+)
+assert(
+  source.includes('const sampledAt = normalizeReportSampledAt(payload, receivedAt)') &&
+    trafficApply.includes('const snapshotResult = await advanceTrafficSnapshot') &&
+    trafficApply.includes("source: 'agent-report'") &&
+    trafficApply.includes('if (!snapshotResult.accepted)'),
+  'Agent traffic reports must use reportedAt and reject stale samples through the shared atomic snapshot guard'
 )
 
 console.log('agent report state guard checks passed')

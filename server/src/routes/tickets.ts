@@ -14,7 +14,7 @@ import { prisma } from '../db/prisma.js'
 import { getAllAdminUserIds } from '../db/users.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { sendNotification } from '../lib/notifier.js'
-import { assertSafeHttpUrl } from '../lib/outbound-security.js'
+import { assertSafeHttpUrl, safeFetch } from '../lib/outbound-security.js'
 import { emitPluginEvent } from '../lib/plugin-event-emitter.js'
 import {
   ALLOWED_IMAGE_MIME_TYPES,
@@ -34,10 +34,10 @@ import {
   auditAiTicketReply,
   buildAiTicketContext,
   generateAiTicketDraft,
-  generateAiTicketReply,
   getAiTicketAutomationStatus,
   getAiTicketPermission,
-  getAiTicketContextPermission
+  getAiTicketContextPermission,
+  validateAiTicketReviewedReply
 } from '../services/ai-ticket-context.js'
 
 // 工单状态类型
@@ -379,10 +379,10 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     let upstream: Response
     try {
       const safeImageUrl = await assertSafeHttpUrl(attachment.url, 'Ticket attachment image URL')
-      upstream = await fetch(safeImageUrl.toString(), {
+      upstream = await safeFetch(safeImageUrl.toString(), {
         redirect: 'manual',
         signal: AbortSignal.timeout(TICKET_PROXY_FETCH_TIMEOUT_MS)
-      })
+      }, 'Ticket attachment image URL')
     } catch {
       return reply.code(502).send(apiError(ErrorCode.INTERNAL_ERROR, 'Failed to load remote image'))
     }
@@ -682,11 +682,12 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
   })
 
   /**
-   * 由 AI 工单插件生成并发送一条客服回复（仅管理员 + 已启用 AI 工单插件 + reply 权限）
+   * 发送管理员已审核/编辑的 AI 草稿（仅管理员 + 已启用 AI 工单插件 + reply 权限）
    * POST /tickets/:id/ai/reply
    */
   fastify.post<{
     Params: { id: string }
+    Body: { reviewedBody?: string }
   }>('/:id/ai/reply', {
     onRequest: [fastify.authenticate, fastify.requireAdmin],
     schema: {
@@ -696,16 +697,31 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
         properties: {
           id: { type: 'string', pattern: '^[1-9]\\d*$' }
         }
+      },
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          reviewedBody: { type: 'string', maxLength: 2000 }
+        }
       }
     }
   }, async (request: FastifyRequest<{
     Params: { id: string }
+    Body: { reviewedBody?: string }
   }>, reply: FastifyReply) => {
     const { user } = request
     const ticketId = parsePositiveId(request.params.id)
+    const reviewedBody = sanitizeContent(request.body?.reviewedBody)
 
     if (ticketId === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+    if (!reviewedBody || reviewedBody.length > 2000) {
+      return reply.code(400).send({
+        error: 'Review or edit an AI draft before sending',
+        code: 'AI_TICKET_REVIEWED_BODY_REQUIRED'
+      })
     }
 
     const permission = await getAiTicketPermission(AI_TICKET_REPLY_PERMISSION)
@@ -746,7 +762,7 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const result = await generateAiTicketReply(ticketId)
+      const result = await validateAiTicketReviewedReply(ticketId, reviewedBody)
       if (!result.canSend) {
         const code = result.mode === 'draft'
           ? 'AI_TICKET_AGENT_REPLY_MODE_DISABLED'
@@ -811,10 +827,6 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       const message = error instanceof Error ? error.message : String(error)
       const knownStatus: Record<string, number> = {
         AI_TICKET_AGENT_DISABLED: 403,
-        AI_TICKET_AGENT_MODEL_NOT_CONFIGURED: 400,
-        AI_TICKET_MODEL_REQUEST_FAILED: 502,
-        AI_TICKET_MODEL_EMPTY_RESPONSE: 502,
-        AI_TICKET_MODEL_DECISION_INVALID: 502,
         TICKET_NOT_FOUND: 404
       }
       const statusCode = knownStatus[message] || 502
@@ -830,7 +842,7 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       }
 
       return reply.code(statusCode).send({
-        error: statusCode === 502 ? 'AI reply generation failed' : message,
+        error: statusCode === 502 ? 'AI reply validation failed' : message,
         code: message.startsWith('AI_TICKET_') ? message : 'AI_TICKET_REPLY_FAILED'
       })
     }
@@ -1145,7 +1157,7 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
   })
 
   /**
-   * 更新工单状态（管理员）
+   * 更新工单状态（管理员/宿主机所有者；工单创建者可重开已关闭工单）
    * PATCH /tickets/:id/status
    */
   fastify.patch<{
@@ -1170,16 +1182,21 @@ export default async function ticketsRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid status'))
     }
 
-    // 权限检查：必须是管理员
+    // 权限检查：处理方可更新状态；工单创建者只能将自己的已关闭工单重开为 open
     const access = await ticketDb.canUserAccessTicket(user.id, ticketId, user.role)
-    if (!access.canAccess || !access.isOwner) {
-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+    if (!access.canAccess) {
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
     }
 
     // 获取工单详情
     const ticket = await ticketDb.getTicketById(ticketId)
     if (!ticket) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND))
+    }
+
+    const isCreatorReopen = access.isCreator && ticket.status === 'closed' && status === 'open'
+    if (!access.isOwner && !isCreatorReopen) {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
     // 更新状态

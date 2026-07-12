@@ -645,22 +645,22 @@ onMounted(() => {
             </div>
           </button>
         </div>
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="w-full min-w-[900px] divide-y divide-themed">
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed divide-y divide-themed">
           <thead class="bg-themed-tertiary">
             <tr class="text-left text-xs font-medium text-themed-muted">
-              <th class="px-4 py-3">订单</th>
-              <th class="px-4 py-3">用户</th>
-              <th class="px-4 py-3">类型</th>
-              <th class="px-4 py-3">金额</th>
-              <th class="px-4 py-3">状态</th>
-              <th class="px-4 py-3">关联实例</th>
-              <th class="px-4 py-3">时间</th>
-              <th class="px-4 py-3 text-right">操作</th>
+              <th class="w-[18%] px-4 py-3">订单</th>
+              <th class="w-[12%] px-4 py-3">用户</th>
+              <th class="w-[10%] px-4 py-3">类型</th>
+              <th class="w-[10%] px-4 py-3">金额</th>
+              <th class="w-[10%] px-4 py-3">状态</th>
+              <th class="w-[14%] px-4 py-3">关联实例</th>
+              <th class="w-[16%] px-4 py-3">时间</th>
+              <th class="w-[10%] px-4 py-3 text-right">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-themed">
-            <tr v-for="order in orders" :key="order.id" class="text-sm">
+            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
               <td class="px-4 py-3">
                 <div class="font-medium text-themed">{{ order.title }}</div>
                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
@@ -761,21 +761,21 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="w-full min-w-[900px] divide-y divide-themed">
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed divide-y divide-themed">
           <thead class="bg-themed-tertiary">
             <tr class="text-left text-xs font-medium text-themed-muted">
-              <th class="px-4 py-3">申请</th>
-              <th class="px-4 py-3">用户</th>
-              <th class="px-4 py-3">金额</th>
-              <th class="px-4 py-3">来源</th>
-              <th class="px-4 py-3">状态</th>
-              <th class="px-4 py-3">时间</th>
-              <th class="px-4 py-3 text-right">操作</th>
+              <th class="w-[20%] px-4 py-3">申请</th>
+              <th class="w-[14%] px-4 py-3">用户</th>
+              <th class="w-[12%] px-4 py-3">金额</th>
+              <th class="w-[16%] px-4 py-3">来源</th>
+              <th class="w-[12%] px-4 py-3">状态</th>
+              <th class="w-[16%] px-4 py-3">时间</th>
+              <th class="w-[10%] px-4 py-3 text-right">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-themed">
-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
+            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
               <td class="px-4 py-3">
                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>

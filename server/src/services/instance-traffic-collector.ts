@@ -4,7 +4,7 @@ import { getIncusClientFromPool } from '../lib/incus/incus-pool.js'
 import type { IncusClient } from '../lib/incus/incus-client.js'
 import { acquireLock, extendLock, releaseLock, withLock } from '../lib/distributed-lock.js'
 import type { LockOptions } from '../lib/distributed-lock.js'
-import { calculateIncrement } from './traffic-utils.js'
+import { advanceTrafficSnapshot, calculateIncrement } from './traffic-utils.js'
 
 export interface CollectInstanceTrafficResult {
   success: boolean
@@ -66,9 +66,24 @@ async function applyTrafficCounters(
       }
     }
 
-    const latestSnapshot = await tx.trafficSnapshot.findUnique({
-      where: { instanceId }
+    const snapshotResult = await advanceTrafficSnapshot(tx, instanceId, {
+      rxRaw: counters.rxBytes,
+      txRaw: counters.txBytes,
+      rxPacketsRaw: counters.rxPackets,
+      txPacketsRaw: counters.txPackets,
+      cpuUsageRaw: counters.cpuUsageRaw,
+      sampledAt: counters.sampledAt,
+      source: 'active-collector'
     })
+    if (!snapshotResult.accepted) {
+      return {
+        totalDelta: 0n,
+        currentUsage: instance.monthlyTrafficUsed,
+        skipped: true
+      }
+    }
+
+    const latestSnapshot = snapshotResult.previous
 
     const rxIncrement = latestSnapshot
       ? calculateIncrement(counters.rxBytes, latestSnapshot.rxRaw)
@@ -94,25 +109,6 @@ async function applyTrafficCounters(
     const cpuPercent = elapsedSeconds > 0 && cpuUsageDelta > 0n
       ? Math.min(1000, Number(cpuUsageDelta) / (elapsedSeconds * 1_000_000_000) * 100)
       : null
-
-    await tx.trafficSnapshot.upsert({
-      where: { instanceId },
-      update: {
-        rxRaw: counters.rxBytes,
-        txRaw: counters.txBytes,
-        rxPacketsRaw: counters.rxPackets,
-        txPacketsRaw: counters.txPackets,
-        cpuUsageRaw: counters.cpuUsageRaw
-      },
-      create: {
-        instanceId,
-        rxRaw: counters.rxBytes,
-        txRaw: counters.txBytes,
-        rxPacketsRaw: counters.rxPackets,
-        txPacketsRaw: counters.txPackets,
-        cpuUsageRaw: counters.cpuUsageRaw
-      }
-    })
 
     if (latestSnapshot && elapsedSeconds > 0) {
       const rxMbps = Number(rxIncrement) * 8 / elapsedSeconds / 1_000_000

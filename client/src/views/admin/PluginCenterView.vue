@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api/admin'
 import ThemeTemplateSlot from '@/components/theme/ThemeTemplateSlot.vue'
@@ -7,6 +8,7 @@ import { useToast } from '@/stores/toast'
 import type { PayIncusThemeConfigField, PluginCapabilityReview, PluginCapabilityReviewStatus, PluginEventLog, PluginEventSummary, PluginMarketEntry, PluginMarketGovernance, PluginMarketSubmission, PluginMarketSubmissionReviewStatus, PluginRecord, PluginStorageBackupArchive, PluginStorageBackupRemoteArchive, PluginStorageUsage, PluginTask, PublicPluginActionRateLimitDefault, PublicPluginActionRateLimitPolicy, ThemeMarketEntry, ThemeMarketGovernance, ThemeMarketSubmission, ThemeMarketSubmissionReviewStatus, ThemePackageRecord } from '@/types/api'
 
 const toast = useToast()
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 type ThemeConfigDraftValue = string | number | boolean | string[]
@@ -163,7 +165,7 @@ const selectedTask = computed(() =>
 
 const stats = computed(() => ({
   installed: plugins.value.length,
-  enabled: plugins.value.filter(plugin => plugin.enabled).length,
+  enabled: plugins.value.filter(isPluginEnabled).length,
   failed: plugins.value.filter(plugin => plugin.status === 'failed').length,
   market: market.value.length,
   themes: themes.value.length,
@@ -708,15 +710,21 @@ function formatDate(value: string | null | undefined): string {
 }
 
 function statusClass(plugin: PluginRecord): string {
-  if (plugin.enabled) return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  if (isPluginEnabled(plugin)) return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  if (plugin.status === 'installed') return 'bg-amber-50 text-amber-700 border-amber-200'
   if (plugin.status === 'failed') return 'bg-red-50 text-red-700 border-red-200'
   return 'bg-gray-50 text-gray-700 border-gray-200'
 }
 
+function isPluginEnabled(plugin: PluginRecord): boolean {
+  return plugin.enabled && plugin.status === 'enabled'
+}
+
 function statusText(plugin: PluginRecord): string {
-  if (plugin.enabled) return '已启用'
-  if (plugin.status === 'failed') return '异常'
-  return '未启用'
+  if (isPluginEnabled(plugin)) return t('pluginCenter.status.enabled')
+  if (plugin.status === 'installed') return t('pluginCenter.status.pendingReenable')
+  if (plugin.status === 'failed') return t('pluginCenter.status.failed')
+  return t('pluginCenter.status.disabled')
 }
 
 function themeStatusClass(theme: ThemePackageRecord): string {
@@ -1457,7 +1465,7 @@ async function installMarketPlugin(entry: PluginMarketEntry) {
 
 async function togglePlugin(plugin: PluginRecord) {
   try {
-    if (plugin.enabled) {
+    if (isPluginEnabled(plugin)) {
       await api.plugins.disable(plugin.pluginId)
       toast.success('扩展已禁用')
     } else {
@@ -1805,9 +1813,9 @@ watch(() => route.query.tab, tab => {
                     <span class="rounded border px-2 py-1 text-xs" :class="statusClass(plugin)">{{ statusText(plugin) }}</span>
                   </td>
                   <td class="py-3 pr-4">
-                    <button class="btn-secondary mr-2" @click="togglePlugin(plugin)">{{ plugin.enabled ? '禁用' : '启用' }}</button>
+                    <button class="btn-secondary mr-2" @click="togglePlugin(plugin)">{{ isPluginEnabled(plugin) ? t('pluginCenter.actions.disable') : t('pluginCenter.actions.enable') }}</button>
                     <button
-                      v-if="plugin.enabled && hasAdminSettingsPage(plugin)"
+                      v-if="isPluginEnabled(plugin) && hasAdminSettingsPage(plugin)"
                       class="btn-secondary mr-2"
                       @click="openPluginSettings(plugin)"
                     >
@@ -2006,14 +2014,14 @@ watch(() => route.query.tab, tab => {
               <div v-else class="mt-4 text-sm text-themed-muted">选择扩展后显示存储用量。</div>
             </div>
 
-            <div v-if="selectedPlugin.enabled && hasAdminSettingsPage(selectedPlugin)" class="mt-5 rounded border border-themed bg-themed p-4">
+            <div v-if="isPluginEnabled(selectedPlugin) && hasAdminSettingsPage(selectedPlugin)" class="mt-5 rounded border border-themed bg-themed p-4">
               <h3 class="text-sm font-medium text-themed">扩展设置</h3>
               <p class="mt-2 text-sm leading-6 text-themed-muted">
                 该扩展的设置入口会显示在左侧菜单中，也可以从这里打开独立设置页。
               </p>
               <button class="btn-primary mt-3" @click="openPluginSettings(selectedPlugin)">打开设置</button>
             </div>
-            <div v-else-if="selectedPlugin.enabled" class="mt-5 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">
+            <div v-else-if="isPluginEnabled(selectedPlugin)" class="mt-5 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">
               该扩展未声明后台设置页。
             </div>
             <div v-else class="mt-5 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">

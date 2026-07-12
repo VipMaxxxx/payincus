@@ -15,8 +15,7 @@ const CODE_TYPE_NAMES: Record<string, { zh: string; en: string }> = {
   c: { zh: 'CPU', en: 'CPU' },
   r: { zh: '内存', en: 'Memory' },
   d: { zh: '硬盘', en: 'Disk' },
-  t: { zh: '流量', en: 'Traffic' },
-  p: { zh: '积分', en: 'Points' }
+  t: { zh: '流量', en: 'Traffic' }
 }
 
 // 资源单位映射
@@ -24,8 +23,7 @@ const CODE_TYPE_UNITS: Record<string, string> = {
   c: '%',
   r: 'MB',
   d: 'MB',
-  t: 'GB',
-  p: ''  // 积分无单位
+  t: 'GB'
 }
 
 async function withSystemRedeemLocks<T>(
@@ -351,7 +349,7 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
               instanceId,
               hostId: currentInstance.host_id,
               batchId: currentCodeRecord.batchId,
-              monthlyTrafficDelta: trafficBytes
+              extraTrafficQuotaDelta: trafficBytes
             })
           }
         } catch (error) {
@@ -377,15 +375,13 @@ export default async function checkinRoutes(fastify: FastifyInstance) {
         )
 
         // 记录到资源池日志（不加资源池，因为资源直接应用到实例）
-        if (codeType !== 'p') {
-          await db.logSystemRedeemToInstance(
-            user.id,
-            codeType as any,
-            actualAdded,
-            instanceId,
-            `系统兑换码 ${trimmedCode} 应用到 ${currentInstance.name}`
-          )
-        }
+        await db.logSystemRedeemToInstance(
+          user.id,
+          codeType as any,
+          actualAdded,
+          instanceId,
+          `系统兑换码 ${trimmedCode} 应用到 ${currentInstance.name}`
+        )
 
         return {
           message: 'Redeem successful',

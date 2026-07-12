@@ -10,6 +10,9 @@ const balanceDbSource = readFileSync(resolve(__dirname, '../src/db/balance.ts'),
 const billingRecordsDbSource = readFileSync(resolve(__dirname, '../src/db/billing-records.ts'), 'utf8')
 const rechargeRecordsDbSource = readFileSync(resolve(__dirname, '../src/db/recharge-records.ts'), 'utf8')
 const adminBillingRouteSource = readFileSync(resolve(__dirname, '../src/routes/admin-billing.ts'), 'utf8')
+const billingSchedulerSource = readFileSync(resolve(__dirname, '../src/services/billing-scheduler.ts'), 'utf8')
+const billingOperationsSource = readFileSync(resolve(__dirname, '../src/db/billing-operations.ts'), 'utf8')
+const instanceRouteSource = readFileSync(resolve(__dirname, '../src/routes/instances.ts'), 'utf8')
 
 function sectionBetween(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -120,6 +123,31 @@ assert.ok(
     rechargeRecordsRoute.includes('const normalizedStatus = normalizeStringFilter(status, RECHARGE_STATUSES)') &&
     rechargeRecordsRoute.includes('const parsedUserId = parseOptionalPositiveInteger(userId)'),
   'admin recharge records route must sanitize pagination, status, and userId filters'
+)
+
+const processAutoRenew = sectionBetween(
+  billingSchedulerSource,
+  'async function processAutoRenew(instance: any): Promise<void> {',
+  '// ==================== 到期封停任务 ===================='
+)
+
+assert.ok(
+  processAutoRenew.includes('const affBinding = await getInstanceAffBinding(instance.id)') &&
+    processAutoRenew.includes('affBinding?.affCode.enabled') &&
+    processAutoRenew.includes('const vip = await getUserContinuousVipBenefit(instance.userId)') &&
+    processAutoRenew.includes('const renewAmount = arbitrateVipPrice({') &&
+    processAutoRenew.includes('if (balance < renewAmount)'),
+  'auto-renew balance preflight must use the same AFF/VIP best-price arbitration as the actual renewal charge'
+)
+
+assert.ok(
+  billingOperationsSource.includes('const renewalPrice = arbitrateVipPrice({') &&
+    billingOperationsSource.includes("affBinding?.affCode.enabled && pricingSource === 'aff'") &&
+    billingOperationsSource.includes('discountedAmount: arbitrateVipPrice({') &&
+    instanceRouteSource.includes('const priceDecision = arbitrateVipPrice({') &&
+    instanceRouteSource.includes('vipDiscountPercent: vip.benefit.orderDiscountPercent') &&
+    instanceRouteSource.includes('flashSalePrice: flashSaleCheckout ? flashSaleCheckout.flashPrice / 100 : null'),
+  'new purchase, renewal preview, manual renewal, and auto-renew must enforce one non-stacking backend price arbiter'
 )
 
 console.log('billing query guard tests passed')

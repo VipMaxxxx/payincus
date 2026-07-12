@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/routes/admin-hosting.ts'), 'utf8')
+const hostingSource = readFileSync(resolve(__dirname, '../src/routes/hosting.ts'), 'utf8')
 const viewSource = readFileSync(resolve(__dirname, '../../client/src/views/admin/HostingView.vue'), 'utf8')
 
 assert.ok(
@@ -20,6 +21,23 @@ assert.equal(
   source.match(/const zoneId = parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
   1,
   'admin hosting zone delete route must strictly validate zone route ID'
+)
+
+assert.ok(
+  hostingSource.includes("}>('/admin/withdrawals/:id/approve'") &&
+    hostingSource.includes("}>('/admin/withdrawals/:id/reject'") &&
+    (hostingSource.match(/const withdrawalId = parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0) === 2 &&
+    (hostingSource.match(/onRequest: \[fastify\.authenticate, fastify\.requireAdmin\]/g)?.length ?? 0) >= 2,
+  'hosting cash withdrawal approval routes must validate route IDs and require admin authentication'
+)
+
+assert.ok(
+  hostingSource.includes("target: 'usdt'") &&
+    hostingSource.includes("status: 'pending'") &&
+    hostingSource.includes("status: 'completed'") &&
+    hostingSource.includes('if (approved.count !== 1)') &&
+    hostingSource.includes("code: 'WITHDRAWAL_ALREADY_PROCESSED'"),
+  'cash withdrawal approval must use an idempotent pending-to-completed conditional transition'
 )
 
 for (const forbiddenPattern of [

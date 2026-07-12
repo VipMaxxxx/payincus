@@ -12,6 +12,22 @@ const hostRoutes = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'u
 const zhCnLocale = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
 const zhTwLocale = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
 const enLocale = readFileSync(resolve(__dirname, '../../client/src/locales/en.ts'), 'utf8')
+const installPanel = readFileSync(resolve(__dirname, '../../scripts/install-panel.sh'), 'utf8')
+const systemctlWrapper = readFileSync(resolve(__dirname, '../../deploy/incudal-systemctl-wrapper.sh.example'), 'utf8')
+
+assert.ok(
+  installPanel.includes('install_verified_root_helpers_from_archive') &&
+    installPanel.includes('install -o root -g root -m 0755 "$tmp" /usr/local/libexec/incudal/incudal-online-task') &&
+    installPanel.includes('chown "root:${RUN_USER}" "$ENV_FILE"') &&
+    installPanel.includes('chmod 640 "$ENV_FILE"'),
+  'panel installer must install the fixed OTA entry from the verified archive and keep root unit env service-read-only'
+)
+assert.ok(
+  systemctlWrapper.includes('[[ "$#" -ne 3 || "$1" != "start" || "$2" != "--no-block" ]]') &&
+    systemctlWrapper.includes('^incudal-online-(update|rollback)@[1-9][0-9]*\\.service$') &&
+    systemctlWrapper.includes('exec /usr/bin/systemctl start --no-block "$UNIT_NAME"'),
+  'sudo systemctl wrapper must reject extra arguments and non-OTA unit names'
+)
 
 assert.ok(
   hostInstallScript.includes('明确支持 Debian 12/13') &&

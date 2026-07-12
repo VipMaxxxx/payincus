@@ -77,6 +77,13 @@ assert.ok(
 )
 
 assert.ok(
+  !routeSource.includes("p: { zh: '积分', en: 'Points' }") &&
+    !routeSource.includes("p: ''") &&
+    !routeSource.includes("if (codeType !== 'p')"),
+  'system redeem flow must not retain unreachable points redeem-code metadata or branches'
+)
+
+assert.ok(
   redeemDbSource.includes('export async function applySystemRedeemCodeToInstance'),
   'redeem DB module must expose an atomic application helper'
 )
@@ -102,8 +109,10 @@ assert.ok(
 )
 
 assert.ok(
-  redeemDbSource.includes('SET "monthly_traffic_limit" = COALESCE("monthly_traffic_limit", 0) + ${data.monthlyTrafficDelta}'),
-  'traffic redeem must increment the monthly traffic limit atomically'
+  redeemDbSource.includes('extraTrafficQuota: { increment: data.extraTrafficQuotaDelta }') &&
+    !redeemDbSource.includes('SET "monthly_traffic_limit" = COALESCE("monthly_traffic_limit", 0)') &&
+    !redeemDbSource.includes('monthlyTrafficDelta?: bigint'),
+  'traffic redeem must atomically increment only the current-period extra traffic quota'
 )
 
 assert.ok(

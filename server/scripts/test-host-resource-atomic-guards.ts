@@ -20,6 +20,8 @@ function section(source: string, startPattern: string, endPattern: string): stri
 }
 
 const quotaSource = readRepoFile('server/src/db/quota-operations.ts')
+const resourcePoolSource = readRepoFile('server/src/db/resource-pool.ts')
+const hostsSource = readRepoFile('server/src/db/hosts.ts')
 
 const reserveSection = section(
   quotaSource,
@@ -45,6 +47,51 @@ assert.ok(
     !reserveSection.includes('diskUsed: host.diskUsed + disk') &&
     !reserveSection.includes('natPortsUsedCount: host.natPortsUsedCount + portCount'),
   'host resource reservation must not write back stale read-modify-write values'
+)
+
+const resourcePoolApplySection = section(
+  resourcePoolSource,
+  'export async function applyResourcePoolToInstance(',
+  '/**\n * 获取资源池变动记录'
+)
+assert.ok(
+  resourcePoolApplySection.includes('cpuAllowanceMax: true') &&
+    resourcePoolApplySection.includes('memoryMax: true') &&
+    resourcePoolApplySection.includes('storageSize: true') &&
+    resourcePoolApplySection.includes('applyWhere.cpuUsed = { lte: cpuLimit - cpuDelta }') &&
+    resourcePoolApplySection.includes('applyWhere.memoryUsed = { lte: memoryLimit - memoryDelta }') &&
+    resourcePoolApplySection.includes('applyWhere.diskUsed = { lte: diskLimit - diskDelta }') &&
+    resourcePoolApplySection.includes('const hostUpdate = await tx.host.updateMany({') &&
+    resourcePoolApplySection.includes('cpuUsed: { increment: cpuDelta }') &&
+    resourcePoolApplySection.includes('memoryUsed: { increment: memoryDelta }') &&
+    resourcePoolApplySection.includes('diskUsed: { increment: diskDelta }') &&
+    resourcePoolApplySection.includes('if (hostUpdate.count === 0)') &&
+    resourcePoolApplySection.includes("throw new Error('HOST_RESOURCES_INSUFFICIENT')"),
+  'resource-pool claims must atomically enforce CPU, memory, and disk host capacity'
+)
+assert.ok(
+  !resourcePoolApplySection.includes('await tx.host.update({'),
+  'resource-pool claims must not increment host usage without capacity conditions'
+)
+
+const incrementHostUsageSection = section(
+  hostsSource,
+  'export async function incrementHostResourceUsage(',
+  'function buildPlanUpgradeCapacityResult('
+)
+assert.ok(
+  incrementHostUsageSection.includes('await prisma.$transaction(async (tx) => {') &&
+    incrementHostUsageSection.includes('await tx.host.update({') &&
+    incrementHostUsageSection.includes('cpuUsed: { increment: deltas.cpuUsed }') &&
+    incrementHostUsageSection.includes('memoryUsed: { increment: deltas.memoryUsed }') &&
+    incrementHostUsageSection.includes('diskUsed: { increment: deltas.diskUsed }'),
+  'batch host usage deltas must atomically increment CPU, memory, and disk in a transaction'
+)
+assert.ok(
+  !incrementHostUsageSection.includes('cpuUsed +') &&
+    !incrementHostUsageSection.includes('memoryUsed +') &&
+    !incrementHostUsageSection.includes('diskUsed +'),
+  'batch host usage deltas must not use stale read-modify-write values'
 )
 
 const rollbackSection = section(

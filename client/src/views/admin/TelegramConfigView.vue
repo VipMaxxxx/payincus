@@ -134,7 +134,7 @@ const telegramWebhookSecretError = computed(() => {
   }
   return telegramWebhookSecretPattern.test(value)
     ? ''
-    : 'Webhook Secret 只能包含字母、数字、下划线和连字符，长度 1-256。'
+    : t('telegramConfig.secretInvalid')
 })
 
 const hasTelegramBotChanges = computed(() => {
@@ -185,7 +185,7 @@ async function loadConfigs() {
       }
     }
   } catch (err: any) {
-    toast.error('加载 Telegram 配置失败: ' + (err?.message || String(err)))
+    toast.error(t('telegramConfig.messages.configLoadFailed', { error: err?.message || String(err) }))
     configs.value = []
   } finally {
     loading.value = false
@@ -203,10 +203,10 @@ async function saveConfigGroup(keys: string[], savingRef: { value: boolean }) {
     }))
 
     await api.systemConfig.update(configsToUpdate)
-    toast.success('保存成功')
+    toast.success(t('telegramConfig.messages.saveSuccess'))
     await loadConfigs()
   } catch (err: any) {
-    toast.error('保存失败: ' + (err?.message || String(err)))
+    toast.error(t('telegramConfig.messages.saveFailed', { error: err?.message || String(err) }))
   } finally {
     savingRef.value = false
   }
@@ -218,19 +218,19 @@ async function saveTelegramBot() {
     return
   }
   if (!['any', 'all'].includes(form.value.telegram_group_join_mode)) {
-    toast.error('普通群入群门槛模式无效')
+    toast.error(t('telegramConfig.messages.groupModeInvalid'))
     return
   }
   if (!['any', 'all'].includes(form.value.telegram_vip_group_join_mode)) {
-    toast.error('高级群入群门槛模式无效')
+    toast.error(t('telegramConfig.messages.vipGroupModeInvalid'))
     return
   }
   if (form.value.telegram_group_invite_expire_minutes < 1 || form.value.telegram_group_invite_expire_minutes > 10080) {
-    toast.error('普通群邀请链接有效期必须在 1 到 10080 分钟之间')
+    toast.error(t('telegramConfig.messages.groupExpiryInvalid'))
     return
   }
   if (form.value.telegram_vip_group_invite_expire_minutes < 1 || form.value.telegram_vip_group_invite_expire_minutes > 10080) {
-    toast.error('高级群邀请链接有效期必须在 1 到 10080 分钟之间')
+    toast.error(t('telegramConfig.messages.vipGroupExpiryInvalid'))
     return
   }
   await saveConfigGroup(telegramBotKeys, savingTelegramBot)
@@ -243,14 +243,14 @@ async function saveFooterTelegramLink() {
 function generateTelegramWebhookSecret() {
   const cryptoApi = globalThis.crypto
   if (!cryptoApi?.getRandomValues) {
-    toast.error('当前浏览器不支持安全随机数生成，请使用 openssl rand -hex 32 手动生成。')
+    toast.error(t('telegramConfig.messages.randomUnsupported'))
     return
   }
 
   const bytes = new Uint8Array(32)
   cryptoApi.getRandomValues(bytes)
   form.value.telegram_webhook_secret = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
-  toast.success('Webhook Secret 已生成，请保存 Telegram 配置。')
+  toast.success(t('telegramConfig.messages.secretGenerated'))
 }
 
 function getApiErrorMessage(err: unknown): string {
@@ -265,11 +265,11 @@ function getApiErrorMessage(err: unknown): string {
 
 function formatTelegramWebhookDate(value?: number): string {
   if (!value) return ''
-  return new Date(value * 1000).toLocaleString('zh-CN')
+  return new Date(value * 1000).toLocaleString()
 }
 
 function formatDate(value: string): string {
-  return new Date(value).toLocaleString('zh-CN')
+  return new Date(value).toLocaleString()
 }
 
 function formatMoney(value: number): string {
@@ -285,15 +285,15 @@ function formatTelegramName(binding: TelegramAdminBinding): string {
 function eligibilityLabel(status: TelegramAdminBinding['eligibility']['status']): string {
   switch (status) {
     case 'eligible':
-      return '已达标'
+      return t('telegramConfig.eligibility.eligible')
     case 'ineligible':
-      return '未达标'
+      return t('telegramConfig.eligibility.ineligible')
     case 'disabled':
-      return '未启用'
+      return t('telegramConfig.eligibility.disabled')
     case 'unconfigured':
-      return '未配置'
+      return t('telegramConfig.eligibility.unconfigured')
     default:
-      return '未知'
+      return t('telegramConfig.eligibility.unknown')
   }
 }
 
@@ -309,20 +309,20 @@ function eligibilityClass(status: TelegramAdminBinding['eligibility']['status'])
 }
 
 function formatGroupRule(group: TelegramAdminBindingsResponse['group'] | null): string {
-  if (!group) return '加载中'
-  if (!group.enabled) return '未启用'
-  if (!group.configured) return '未配置 Chat ID'
+  if (!group) return t('common.loading')
+  if (!group.enabled) return t('telegramConfig.eligibility.disabled')
+  if (!group.configured) return t('telegramConfig.groupRule.chatIdMissing')
 
   const thresholds = [
-    group.minRecharge > 0 ? `累计充值 ¥${formatMoney(group.minRecharge)}` : null,
-    group.minConsume > 0 ? `累计消费 ¥${formatMoney(group.minConsume)}` : null
+    group.minRecharge > 0 ? t('telegramConfig.groupRule.recharge', { amount: formatMoney(group.minRecharge) }) : null,
+    group.minConsume > 0 ? t('telegramConfig.groupRule.consume', { amount: formatMoney(group.minConsume) }) : null
   ].filter(Boolean)
 
   if (thresholds.length === 0) {
-    return '无金额门槛'
+    return t('telegramConfig.groupRule.noThreshold')
   }
 
-  return `${group.joinMode === 'all' ? '同时满足' : '满足任一'}：${thresholds.join('；')}`
+  return t(group.joinMode === 'all' ? 'telegramConfig.groupRule.all' : 'telegramConfig.groupRule.any', { thresholds: thresholds.join(t('telegramConfig.groupRule.separator')) })
 }
 
 async function setupTelegramWebhook() {
@@ -331,14 +331,14 @@ async function setupTelegramWebhook() {
     const response = await api.telegram.setupWebhook({
       baseUrl: getFrontendOrigin()
     })
-    toast.success(response.commandsSynced ? 'Telegram Webhook 和机器人指令已设置' : 'Telegram Webhook 已设置')
+    toast.success(response.commandsSynced ? t('telegramConfig.messages.webhookCommandsSet') : t('telegramConfig.messages.webhookSet'))
     telegramWebhookInfo.value = {
       ...(telegramWebhookInfo.value || { url: '' }),
       url: response.webhookUrl
     }
     await checkTelegramWebhook(false)
   } catch (err: any) {
-    toast.error('设置 Telegram Webhook 失败: ' + getApiErrorMessage(err))
+    toast.error(t('telegramConfig.messages.webhookSetFailed', { error: getApiErrorMessage(err) }))
   } finally {
     settingTelegramWebhook.value = false
   }
@@ -350,25 +350,25 @@ async function checkTelegramWebhook(showSuccess = true) {
     const response = await api.telegram.getWebhookInfo()
     telegramWebhookInfo.value = response.info
     if (showSuccess) {
-      toast.success('Telegram Webhook 状态已更新')
+      toast.success(t('telegramConfig.messages.webhookUpdated'))
     }
   } catch (err: any) {
-    toast.error('检查 Telegram Webhook 失败: ' + getApiErrorMessage(err))
+    toast.error(t('telegramConfig.messages.webhookCheckFailed', { error: getApiErrorMessage(err) }))
   } finally {
     checkingTelegramWebhook.value = false
   }
 }
 
 async function deleteTelegramWebhook() {
-  if (!confirm('确定删除 Telegram Webhook？删除后机器人将不再把消息回调到本站。')) return
+  if (!confirm(t('telegramConfig.messages.webhookDeleteConfirm'))) return
 
   deletingTelegramWebhook.value = true
   try {
     await api.telegram.deleteWebhook()
     telegramWebhookInfo.value = { url: '' }
-    toast.success('Telegram Webhook 已删除')
+    toast.success(t('telegramConfig.messages.webhookDeleted'))
   } catch (err: any) {
-    toast.error('删除 Telegram Webhook 失败: ' + getApiErrorMessage(err))
+    toast.error(t('telegramConfig.messages.webhookDeleteFailed', { error: getApiErrorMessage(err) }))
   } finally {
     deletingTelegramWebhook.value = false
   }
@@ -389,7 +389,7 @@ async function loadTelegramBindings(page = telegramBindingsPage.value) {
     telegramBindingGroup.value = response.group
     telegramBindingVipGroup.value = response.vipGroup
   } catch (err: any) {
-    toast.error('加载 Telegram 绑定用户失败: ' + (err?.message || String(err)))
+    toast.error(t('telegramConfig.messages.bindingsLoadFailed', { error: err?.message || String(err) }))
     telegramBindings.value = []
     telegramBindingsTotal.value = 0
     telegramBindingGroup.value = null
@@ -416,16 +416,16 @@ async function goTelegramBindingsPage(page: number) {
 }
 
 async function unlinkTelegramBinding(binding: TelegramAdminBinding) {
-  const userLabel = binding.user?.username || `用户 #${binding.userId}`
-  if (!confirm(`确定解除 ${userLabel} 的 Telegram 绑定？解除后该用户需要重新绑定后才能申请入群。`)) return
+  const userLabel = binding.user?.username || t('telegramConfig.userNumber', { id: binding.userId })
+  if (!confirm(t('telegramConfig.messages.unlinkConfirm', { user: userLabel }))) return
 
   unlinkingBindingId.value = binding.id
   try {
     await api.telegram.unlinkAdminBinding(binding.id)
-    toast.success('Telegram 绑定已解除')
+    toast.success(t('telegramConfig.messages.unlinked'))
     await loadTelegramBindings()
   } catch (err: any) {
-    toast.error('解除绑定失败: ' + (err?.message || String(err)))
+    toast.error(t('telegramConfig.messages.unlinkFailed', { error: err?.message || String(err) }))
   } finally {
     unlinkingBindingId.value = null
   }
@@ -474,18 +474,18 @@ async function openEditChannelForm(ch: GlobalChannel) {
     }
     showChannelForm.value = true
   } catch {
-    toast.error('加载渠道失败')
+    toast.error(t('telegramConfig.messages.channelLoadFailed'))
   }
 }
 
 async function saveChannel() {
   channelFormError.value = ''
   if (!channelForm.value.name || !channelForm.value.chatId) {
-    channelFormError.value = '请填写渠道名称和 Chat ID'
+    channelFormError.value = t('telegramConfig.messages.channelFieldsRequired')
     return
   }
   if (!editingChannel.value && !channelForm.value.botToken) {
-    channelFormError.value = '请填写 Bot Token'
+    channelFormError.value = t('telegramConfig.messages.botTokenRequired')
     return
   }
 
@@ -498,30 +498,30 @@ async function saveChannel() {
         enabled: channelForm.value.enabled,
         ...(channelForm.value.botToken && !channelForm.value.botToken.includes('...') ? { botToken: channelForm.value.botToken } : {})
       })
-      toast.success('渠道已更新')
+      toast.success(t('telegramConfig.messages.channelUpdated'))
     } else {
       await api.adminNotificationChannels.create(channelForm.value)
-      toast.success('渠道已创建')
+      toast.success(t('telegramConfig.messages.channelCreated'))
     }
     showChannelForm.value = false
     await loadChannels()
   } catch (err: any) {
-    channelFormError.value = err?.message || '保存失败'
+    channelFormError.value = err?.message || t('telegramConfig.messages.saveFailedShort')
   } finally {
     savingChannel.value = false
   }
 }
 
 async function deleteChannel(id: number) {
-  if (!confirm('确定删除该渠道？将同时解绑所有绑定此渠道的套餐。')) return
+  if (!confirm(t('telegramConfig.messages.channelDeleteConfirm'))) return
 
   deletingChannelId.value = id
   try {
     await api.adminNotificationChannels.delete(id)
-    toast.success('删除成功')
+    toast.success(t('common.deleteSuccess'))
     await loadChannels()
   } catch (err: any) {
-    toast.error('删除失败: ' + (err?.message || ''))
+    toast.error(t('telegramConfig.messages.channelDeleteFailed', { error: err?.message || '' }))
   } finally {
     deletingChannelId.value = null
   }
@@ -531,9 +531,9 @@ async function testChannel(id: number) {
   testingChannelId.value = id
   try {
     await api.adminNotificationChannels.test(id)
-    toast.success('测试消息发送成功')
+    toast.success(t('telegramConfig.messages.testSuccess'))
   } catch (err: any) {
-    toast.error('测试失败: ' + (err?.message || ''))
+    toast.error(t('telegramConfig.messages.testFailed', { error: err?.message || '' }))
   } finally {
     testingChannelId.value = null
   }
@@ -544,8 +544,8 @@ async function testChannel(id: number) {
   <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header">
       <div>
-        <h1 class="page-title">Telegram 设置</h1>
-        <p class="page-description">集中管理网站专用机器人、Webhook、入群申请和全局通知渠道。</p>
+        <h1 class="page-title">{{ t('telegramConfig.title') }}</h1>
+        <p class="page-description">{{ t('telegramConfig.description') }}</p>
       </div>
     </div>
 
@@ -573,22 +573,22 @@ async function testChannel(id: number) {
     <div v-else class="space-y-6">
       <div class="card p-6">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-themed font-medium">站点 Telegram 入口</h3>
+          <h3 class="text-themed font-medium">{{ t('telegramConfig.footer.title') }}</h3>
           <button
             type="button"
             class="btn-primary text-sm px-4 py-1.5"
             :disabled="!hasFooterTelegramLinkChanges || savingFooterTelegramLink"
             @click="saveFooterTelegramLink"
           >
-            {{ savingFooterTelegramLink ? '保存中...' : '保存' }}
+            {{ savingFooterTelegramLink ? t('common.saving') : t('common.save') }}
           </button>
         </div>
         <p class="text-sm text-themed-muted mb-6">
-          配置侧边栏底部 Telegram 群按钮。留空后隐藏该按钮。
+          {{ t('telegramConfig.footer.description') }}
         </p>
         <div class="space-y-2">
           <label class="block text-sm text-themed-secondary">
-            Telegram 群链接
+            {{ t('telegramConfig.footer.link') }}
           </label>
           <input
             v-model="form.footer_telegram_link"
@@ -597,37 +597,37 @@ async function testChannel(id: number) {
             placeholder="https://t.me/your_group"
           />
           <p class="text-xs text-themed-muted">
-            这是网站展示入口，不影响机器人绑定、Webhook 或入群申请逻辑。
+          {{ t('telegramConfig.footer.hint') }}
           </p>
         </div>
       </div>
 
       <div class="card p-6">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-themed font-medium">Telegram 专用机器人</h3>
+          <h3 class="text-themed font-medium">{{ t('telegramConfig.bot.title') }}</h3>
           <button
             type="button"
             class="btn-primary text-sm px-4 py-1.5"
             :disabled="!hasTelegramBotChanges || savingTelegramBot"
             @click="saveTelegramBot"
           >
-            {{ savingTelegramBot ? '保存中...' : '保存' }}
+            {{ savingTelegramBot ? t('common.saving') : t('common.save') }}
           </button>
         </div>
         <p class="text-sm text-themed-muted mb-6">
-          配置网站配套 Bot，用于用户 Telegram 账号绑定和后续私有群准入。
+          {{ t('telegramConfig.bot.description') }}
         </p>
 
         <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50 mb-6">
           <div class="flex-1">
-            <label class="text-sm font-medium text-themed">启用绑定机器人</label>
+              <label class="text-sm font-medium text-themed">{{ t('telegramConfig.bot.enableBinding') }}</label>
             <p class="text-xs text-themed-muted mt-1">
-              关闭后用户个人设置页会显示未启用，不允许生成绑定链接。
+                {{ t('telegramConfig.bot.disabledHint') }}
             </p>
           </div>
           <div class="flex items-center gap-3 ml-4">
             <span class="text-xs" :class="form.telegram_bot_enabled ? 'text-themed-muted' : 'text-themed font-medium'">
-              关闭
+              {{ t('common.close') }}
             </span>
             <button
               type="button"
@@ -647,7 +647,7 @@ async function testChannel(id: number) {
               />
             </button>
             <span class="text-xs" :class="form.telegram_bot_enabled ? 'text-themed font-medium' : 'text-themed-muted'">
-              启用
+              {{ t('telegramConfig.enabled') }}
             </span>
           </div>
         </div>
@@ -655,7 +655,7 @@ async function testChannel(id: number) {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div class="space-y-2">
             <label class="block text-sm text-themed-secondary">
-              Bot 用户名
+              {{ t('telegramConfig.bot.username') }}
             </label>
             <input
               v-model="form.telegram_bot_username"
@@ -663,7 +663,7 @@ async function testChannel(id: number) {
               class="input"
               placeholder="your_bot_username"
             />
-            <p class="text-xs text-themed-muted">不需要填写 @，用于生成 https://t.me/... 绑定链接。</p>
+            <p class="text-xs text-themed-muted">{{ t('telegramConfig.bot.usernameHint') }}</p>
           </div>
           <div class="space-y-2">
             <label class="block text-sm text-themed-secondary">
@@ -675,7 +675,7 @@ async function testChannel(id: number) {
               class="input"
               placeholder="********"
             />
-            <p class="text-xs text-themed-muted">由 BotFather 分配，保存后只会显示为占位符。</p>
+            <p class="text-xs text-themed-muted">{{ t('telegramConfig.bot.tokenHint') }}</p>
           </div>
           <div class="space-y-2 md:col-span-2">
             <label class="block text-sm text-themed-secondary">
@@ -693,33 +693,33 @@ async function testChannel(id: number) {
                 class="btn-secondary text-sm px-4 py-2 whitespace-nowrap"
                 @click="generateTelegramWebhookSecret"
               >
-                自动生成 Secret
+                {{ t('telegramConfig.bot.generateSecret') }}
               </button>
             </div>
             <p v-if="telegramWebhookSecretError" class="text-xs text-error">
               {{ telegramWebhookSecretError }}
             </p>
             <p class="text-xs text-themed-muted">
-              必填。自动生成会覆盖当前输入，保存配置后生效；也可用 openssl rand -hex 32 手动生成。
+              {{ t('telegramConfig.bot.secretHint') }}
             </p>
           </div>
         </div>
 
         <div class="mt-4 p-3 rounded-lg bg-themed-secondary/50 border border-themed">
           <p class="text-sm text-themed-muted">
-            Webhook 地址：<code class="px-1 py-0.5 rounded bg-black/20">{{ telegramWebhookUrl }}</code>
+              {{ t('telegramConfig.webhook.address') }}<code class="px-1 py-0.5 rounded bg-black/20">{{ telegramWebhookUrl }}</code>
           </p>
           <p class="text-xs text-themed-muted mt-1">
-            按当前访问域名动态生成；点击“设置 Webhook”时会使用该地址。
+              {{ t('telegramConfig.webhook.addressHint') }}
           </p>
         </div>
 
         <div class="mt-4 p-4 rounded-lg bg-themed-secondary/40 border border-themed">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
             <div>
-              <h4 class="text-sm font-medium text-themed">Webhook 管理</h4>
+              <h4 class="text-sm font-medium text-themed">{{ t('telegramConfig.webhook.title') }}</h4>
               <p class="text-xs text-themed-muted mt-1">
-                保存 Bot Token 和 Webhook Secret 后，可由系统自动设置回调并同步机器人指令菜单。
+                {{ t('telegramConfig.webhook.description') }}
               </p>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -729,7 +729,7 @@ async function testChannel(id: number) {
                 :disabled="!canManageTelegramWebhook || settingTelegramWebhook"
                 @click="setupTelegramWebhook"
               >
-                {{ settingTelegramWebhook ? '设置中' : '设置 Webhook' }}
+                {{ settingTelegramWebhook ? t('telegramConfig.webhook.setting') : t('telegramConfig.webhook.setup') }}
               </button>
               <button
                 type="button"
@@ -737,7 +737,7 @@ async function testChannel(id: number) {
                 :disabled="!form.telegram_bot_token || checkingTelegramWebhook"
                 @click="() => checkTelegramWebhook()"
               >
-                {{ checkingTelegramWebhook ? '检查中' : '检查 Webhook' }}
+                {{ checkingTelegramWebhook ? t('telegramConfig.webhook.checking') : t('telegramConfig.webhook.check') }}
               </button>
               <button
                 type="button"
@@ -745,25 +745,25 @@ async function testChannel(id: number) {
                 :disabled="!form.telegram_bot_token || deletingTelegramWebhook"
                 @click="deleteTelegramWebhook"
               >
-                {{ deletingTelegramWebhook ? '删除中' : '删除 Webhook' }}
+                {{ deletingTelegramWebhook ? t('common.deleting') : t('telegramConfig.webhook.delete') }}
               </button>
             </div>
           </div>
 
           <div v-if="telegramWebhookInfo" class="space-y-2 text-xs text-themed-muted">
             <p>
-              当前地址：
-              <span class="text-themed break-all">{{ telegramWebhookInfo.url || '未设置' }}</span>
+                {{ t('telegramConfig.webhook.currentAddress') }}
+                <span class="text-themed break-all">{{ telegramWebhookInfo.url || t('common.notSet') }}</span>
             </p>
-            <p>待处理更新：{{ telegramWebhookInfo.pending_update_count ?? 0 }}</p>
+              <p>{{ t('telegramConfig.webhook.pendingUpdates', { count: telegramWebhookInfo.pending_update_count ?? 0 }) }}</p>
             <p v-if="telegramWebhookInfo.max_connections">
-              最大连接数：{{ telegramWebhookInfo.max_connections }}
+                {{ t('telegramConfig.webhook.maxConnections', { count: telegramWebhookInfo.max_connections }) }}
             </p>
             <p v-if="telegramWebhookInfo.allowed_updates?.length">
-              允许更新：{{ telegramWebhookInfo.allowed_updates.join(', ') }}
+                {{ t('telegramConfig.webhook.allowedUpdates', { updates: telegramWebhookInfo.allowed_updates.join(', ') }) }}
             </p>
             <p v-if="telegramWebhookInfo.last_error_message" class="text-error">
-              最近错误：{{ telegramWebhookInfo.last_error_message }}
+                {{ t('telegramConfig.webhook.lastError', { error: telegramWebhookInfo.last_error_message }) }}
               <span v-if="telegramWebhookInfo.last_error_date">
                 （{{ formatTelegramWebhookDate(telegramWebhookInfo.last_error_date) }}）
               </span>
@@ -774,14 +774,14 @@ async function testChannel(id: number) {
         <div class="mt-4 p-4 rounded-lg bg-themed-secondary/40 border border-themed">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
             <div>
-              <h4 class="text-sm font-medium text-themed">普通用户群入群申请</h4>
+              <h4 class="text-sm font-medium text-themed">{{ t('telegramConfig.group.title') }}</h4>
               <p class="text-xs text-themed-muted mt-1">
-                用户绑定 Telegram 后，私聊机器人发送 /join。达标时机器人返回普通群一次性邀请链接。
+                {{ t('telegramConfig.group.description') }}
               </p>
             </div>
             <div class="flex items-center gap-3">
               <span class="text-xs" :class="form.telegram_group_join_enabled ? 'text-themed-muted' : 'text-themed font-medium'">
-                关闭
+                {{ t('common.close') }}
               </span>
               <button
                 type="button"
@@ -801,7 +801,7 @@ async function testChannel(id: number) {
                 />
               </button>
               <span class="text-xs" :class="form.telegram_group_join_enabled ? 'text-themed font-medium' : 'text-themed-muted'">
-                启用
+                {{ t('telegramConfig.enabled') }}
               </span>
             </div>
           </div>
@@ -809,7 +809,7 @@ async function testChannel(id: number) {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">
-                普通群 Chat ID
+                {{ t('telegramConfig.group.chatId') }}
               </label>
               <input
                 v-model="form.telegram_group_chat_id"
@@ -818,24 +818,24 @@ async function testChannel(id: number) {
                 placeholder="-1001234567890"
               />
               <p class="text-xs text-themed-muted">
-                Bot 必须是该私有群管理员，并拥有创建邀请链接权限。
+                {{ t('telegramConfig.group.chatIdHint') }}
               </p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">
-                门槛模式
+                {{ t('telegramConfig.group.thresholdMode') }}
               </label>
               <select v-model="form.telegram_group_join_mode" class="input">
-                <option value="any">累计充值或累计消费，任一达标</option>
-                <option value="all">累计充值和累计消费，同时达标</option>
+                <option value="any">{{ t('telegramConfig.group.modeAny') }}</option>
+                <option value="all">{{ t('telegramConfig.group.modeAll') }}</option>
               </select>
               <p class="text-xs text-themed-muted">
-                门槛为 0 表示该项不参与判断。
+                {{ t('telegramConfig.group.thresholdHint') }}
               </p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">
-                累计充值门槛
+                {{ t('telegramConfig.group.rechargeThreshold') }}
               </label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">¥</span>
@@ -851,7 +851,7 @@ async function testChannel(id: number) {
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">
-                累计消费门槛
+                {{ t('telegramConfig.group.consumeThreshold') }}
               </label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">¥</span>
@@ -867,7 +867,7 @@ async function testChannel(id: number) {
             </div>
             <div class="space-y-2 md:col-span-2">
               <label class="block text-sm text-themed-secondary">
-                邀请链接有效期
+                {{ t('telegramConfig.group.inviteExpiry') }}
               </label>
               <div class="relative max-w-xs">
                 <input
@@ -880,11 +880,11 @@ async function testChannel(id: number) {
                   placeholder="30"
                 />
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">
-                  分钟
+                  {{ t('telegramConfig.minutes') }}
                 </span>
               </div>
               <p class="text-xs text-themed-muted">
-                每次申请生成一个 member_limit=1 的一次性邀请链接。
+                {{ t('telegramConfig.group.inviteHint') }}
               </p>
             </div>
           </div>
@@ -893,14 +893,14 @@ async function testChannel(id: number) {
         <div class="mt-4 p-4 rounded-lg bg-themed-secondary/40 border border-themed">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
             <div>
-              <h4 class="text-sm font-medium text-themed">高级用户群入群申请</h4>
+              <h4 class="text-sm font-medium text-themed">{{ t('telegramConfig.vipGroup.title') }}</h4>
               <p class="text-xs text-themed-muted mt-1">
-                用户绑定 Telegram 后，私聊机器人发送 /join_vip。达标时机器人返回高级群一次性邀请链接。
+                {{ t('telegramConfig.vipGroup.description') }}
               </p>
             </div>
             <div class="flex items-center gap-3">
               <span class="text-xs" :class="form.telegram_vip_group_join_enabled ? 'text-themed-muted' : 'text-themed font-medium'">
-                关闭
+                {{ t('common.close') }}
               </span>
               <button
                 type="button"
@@ -920,7 +920,7 @@ async function testChannel(id: number) {
                 />
               </button>
               <span class="text-xs" :class="form.telegram_vip_group_join_enabled ? 'text-themed font-medium' : 'text-themed-muted'">
-                启用
+                {{ t('telegramConfig.enabled') }}
               </span>
             </div>
           </div>
@@ -928,7 +928,7 @@ async function testChannel(id: number) {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">
-                高级群 Chat ID
+                {{ t('telegramConfig.vipGroup.chatId') }}
               </label>
               <input
                 v-model="form.telegram_vip_group_chat_id"
@@ -937,24 +937,24 @@ async function testChannel(id: number) {
                 placeholder="-1001234567890"
               />
               <p class="text-xs text-themed-muted">
-                可以和普通群不同；Bot 必须是该群管理员，并拥有创建邀请链接权限。
+                {{ t('telegramConfig.vipGroup.chatIdHint') }}
               </p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">
-                门槛模式
+                {{ t('telegramConfig.group.thresholdMode') }}
               </label>
               <select v-model="form.telegram_vip_group_join_mode" class="input">
-                <option value="any">累计充值或累计消费，任一达标</option>
-                <option value="all">累计充值和累计消费，同时达标</option>
+                <option value="any">{{ t('telegramConfig.group.modeAny') }}</option>
+                <option value="all">{{ t('telegramConfig.group.modeAll') }}</option>
               </select>
               <p class="text-xs text-themed-muted">
-                高级群默认建议使用更高门槛，门槛为 0 表示该项不参与判断。
+                {{ t('telegramConfig.vipGroup.thresholdHint') }}
               </p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">
-                累计充值门槛
+                {{ t('telegramConfig.group.rechargeThreshold') }}
               </label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">¥</span>
@@ -970,7 +970,7 @@ async function testChannel(id: number) {
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">
-                累计消费门槛
+                {{ t('telegramConfig.group.consumeThreshold') }}
               </label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">¥</span>
@@ -986,7 +986,7 @@ async function testChannel(id: number) {
             </div>
             <div class="space-y-2 md:col-span-2">
               <label class="block text-sm text-themed-secondary">
-                邀请链接有效期
+                {{ t('telegramConfig.group.inviteExpiry') }}
               </label>
               <div class="relative max-w-xs">
                 <input
@@ -999,11 +999,11 @@ async function testChannel(id: number) {
                   placeholder="30"
                 />
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">
-                  分钟
+                  {{ t('telegramConfig.minutes') }}
                 </span>
               </div>
               <p class="text-xs text-themed-muted">
-                每次申请生成一个 member_limit=1 的高级群一次性邀请链接。
+                {{ t('telegramConfig.vipGroup.inviteHint') }}
               </p>
             </div>
           </div>
@@ -1013,9 +1013,9 @@ async function testChannel(id: number) {
       <div class="card p-4">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-3">
           <div>
-            <h3 class="text-themed font-medium">绑定用户与入群资格</h3>
+            <h3 class="text-themed font-medium">{{ t('telegramConfig.bindings.title') }}</h3>
             <p class="text-sm text-themed-muted mt-1">
-              查看已绑定 Telegram 的站内用户、累计充值/消费和当前入群资格，可人工解除异常绑定。
+              {{ t('telegramConfig.bindings.description') }}
             </p>
           </div>
           <button
@@ -1024,7 +1024,7 @@ async function testChannel(id: number) {
             :disabled="bindingLoading"
             @click="() => loadTelegramBindings()"
           >
-            {{ bindingLoading ? '刷新中...' : '刷新列表' }}
+            {{ bindingLoading ? t('telegramConfig.bindings.refreshing') : t('telegramConfig.bindings.refresh') }}
           </button>
         </div>
 
@@ -1033,7 +1033,7 @@ async function testChannel(id: number) {
             v-model="bindingSearch"
             type="search"
             class="input flex-1 text-sm"
-            placeholder="搜索站内用户名、邮箱、用户 ID、Telegram ID 或用户名"
+            :placeholder="t('telegramConfig.bindings.searchPlaceholder')"
             @keyup.enter="searchTelegramBindings"
           />
           <button
@@ -1042,7 +1042,7 @@ async function testChannel(id: number) {
             :disabled="bindingLoading"
             @click="searchTelegramBindings"
           >
-            搜索
+            {{ t('common.search') }}
           </button>
           <button
             type="button"
@@ -1050,26 +1050,26 @@ async function testChannel(id: number) {
             :disabled="bindingLoading || !bindingSearch"
             @click="resetTelegramBindingSearch"
           >
-            清空
+            {{ t('telegramConfig.bindings.clear') }}
           </button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-3 text-xs">
           <div class="p-3 rounded-lg bg-themed-secondary/30 border border-themed-border">
-            <div class="text-themed font-medium">普通群门槛</div>
+            <div class="text-themed font-medium">{{ t('telegramConfig.bindings.groupThreshold') }}</div>
             <div class="text-themed-muted mt-1">{{ formatGroupRule(telegramBindingGroup) }}</div>
           </div>
           <div class="p-3 rounded-lg bg-themed-secondary/30 border border-themed-border">
-            <div class="text-themed font-medium">高级群门槛</div>
+            <div class="text-themed font-medium">{{ t('telegramConfig.bindings.vipGroupThreshold') }}</div>
             <div class="text-themed-muted mt-1">{{ formatGroupRule(telegramBindingVipGroup) }}</div>
           </div>
         </div>
 
         <div v-if="bindingLoading" class="text-sm text-themed-muted p-3 rounded-lg bg-themed-secondary/30">
-          加载中...
+          {{ t('common.loading') }}
         </div>
         <div v-else-if="telegramBindings.length === 0" class="text-sm text-themed-muted p-3 rounded-lg bg-themed-secondary/30">
-          暂无 Telegram 绑定用户。
+          {{ t('telegramConfig.bindings.empty') }}
         </div>
         <div v-else class="space-y-2">
           <div
@@ -1081,24 +1081,24 @@ async function testChannel(id: number) {
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="text-sm font-medium text-themed">
-                    {{ binding.user?.username || `用户 #${binding.userId}` }}
+                    {{ binding.user?.username || t('telegramConfig.userNumber', { id: binding.userId }) }}
                   </span>
                   <span
                     v-if="binding.user"
                     class="text-xs px-1.5 py-0.5 rounded-full"
                     :class="binding.user.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-rose-500/20 text-rose-400'"
                   >
-                    {{ binding.user.status === 'active' ? '正常' : '已封禁' }}
+                    {{ binding.user.status === 'active' ? t('telegramConfig.bindings.active') : t('telegramConfig.bindings.banned') }}
                   </span>
-                  <span class="text-xs text-themed-muted">用户 ID {{ binding.userId }}</span>
+                  <span class="text-xs text-themed-muted">{{ t('telegramConfig.bindings.userId', { id: binding.userId }) }}</span>
                   <span class="text-xs text-themed-muted">Telegram {{ formatTelegramName(binding) }}</span>
                   <span class="text-xs text-themed-muted">ID {{ binding.telegramUserId }}</span>
                 </div>
                 <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-themed-muted">
                   <span v-if="binding.user?.email" class="break-all">{{ binding.user.email }}</span>
-                  <span>充值 ¥{{ formatMoney(binding.stats.totalRecharge) }}</span>
-                  <span>消费 ¥{{ formatMoney(binding.stats.totalConsume) }}</span>
-                  <span>绑定 {{ formatDate(binding.boundAt) }}</span>
+                  <span>{{ t('telegramConfig.bindings.recharge', { amount: formatMoney(binding.stats.totalRecharge) }) }}</span>
+                  <span>{{ t('telegramConfig.bindings.consume', { amount: formatMoney(binding.stats.totalConsume) }) }}</span>
+                  <span>{{ t('telegramConfig.bindings.boundAt', { time: formatDate(binding.boundAt) }) }}</span>
                 </div>
               </div>
               <div class="flex flex-wrap items-center gap-2 xl:ml-4 xl:justify-end">
@@ -1106,13 +1106,13 @@ async function testChannel(id: number) {
                   class="text-xs px-2 py-1 rounded-full"
                   :class="eligibilityClass(binding.eligibility.status)"
                 >
-                  普通：{{ eligibilityLabel(binding.eligibility.status) }}
+                  {{ t('telegramConfig.bindings.normal') }}{{ eligibilityLabel(binding.eligibility.status) }}
                 </span>
                 <span
                   class="text-xs px-2 py-1 rounded-full"
                   :class="eligibilityClass(binding.vipEligibility.status)"
                 >
-                  高级：{{ eligibilityLabel(binding.vipEligibility.status) }}
+                  {{ t('telegramConfig.bindings.vip') }}{{ eligibilityLabel(binding.vipEligibility.status) }}
                 </span>
                 <button
                   type="button"
@@ -1120,7 +1120,7 @@ async function testChannel(id: number) {
                   :disabled="unlinkingBindingId === binding.id"
                   @click="unlinkTelegramBinding(binding)"
                 >
-                  {{ unlinkingBindingId === binding.id ? '解绑中...' : '解除绑定' }}
+                  {{ unlinkingBindingId === binding.id ? t('telegramConfig.bindings.unlinking') : t('telegramConfig.bindings.unlink') }}
                 </button>
               </div>
             </div>
@@ -1132,7 +1132,7 @@ async function testChannel(id: number) {
           class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs text-themed-muted"
         >
           <span>
-            共 {{ telegramBindingsTotal }} 条，当前第 {{ telegramBindingsPage }} / {{ telegramBindingsTotalPages }} 页
+            {{ t('telegramConfig.bindings.pagination', { total: telegramBindingsTotal, page: telegramBindingsPage, totalPages: telegramBindingsTotalPages }) }}
           </span>
           <div class="flex gap-2">
             <button
@@ -1141,7 +1141,7 @@ async function testChannel(id: number) {
               :disabled="bindingLoading || telegramBindingsPage <= 1"
               @click="goTelegramBindingsPage(telegramBindingsPage - 1)"
             >
-              上一页
+              {{ t('common.prevPage') }}
             </button>
             <button
               type="button"
@@ -1149,7 +1149,7 @@ async function testChannel(id: number) {
               :disabled="bindingLoading || telegramBindingsPage >= telegramBindingsTotalPages"
               @click="goTelegramBindingsPage(telegramBindingsPage + 1)"
             >
-              下一页
+              {{ t('common.nextPage') }}
             </button>
           </div>
         </div>
@@ -1157,14 +1157,14 @@ async function testChannel(id: number) {
 
       <div class="card p-6">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-themed font-medium">全局 Telegram 通知渠道</h3>
-          <button type="button" class="btn-primary text-sm px-4 py-1.5" @click="openCreateChannelForm">+ 添加渠道</button>
+          <h3 class="text-themed font-medium">{{ t('telegramConfig.channels.title') }}</h3>
+          <button type="button" class="btn-primary text-sm px-4 py-1.5" @click="openCreateChannelForm">{{ t('telegramConfig.channels.add') }}</button>
         </div>
-        <p class="text-sm text-themed-muted mb-4">创建全局 Telegram 通知渠道后，托管用户可在套餐设置中绑定，当有用户新购或销毁实例时自动发送通知。</p>
+        <p class="text-sm text-themed-muted mb-4">{{ t('telegramConfig.channels.description') }}</p>
 
-        <div v-if="channelLoading" class="text-sm text-themed-muted">加载中...</div>
+        <div v-if="channelLoading" class="text-sm text-themed-muted">{{ t('common.loading') }}</div>
         <div v-else-if="globalChannels.length === 0" class="text-sm text-themed-muted p-3 rounded-lg bg-themed-secondary/30">
-          暂无全局通知渠道，点击右上角「添加渠道」创建。
+          {{ t('telegramConfig.channels.empty') }}
         </div>
         <div v-else class="space-y-3">
           <div
@@ -1179,9 +1179,9 @@ async function testChannel(id: number) {
                   class="text-xs px-1.5 py-0.5 rounded-full"
                   :class="ch.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'"
                 >
-                  {{ ch.enabled ? '已启用' : '已停用' }}
+                  {{ ch.enabled ? t('telegramConfig.channels.enabled') : t('telegramConfig.channels.disabled') }}
                 </span>
-                <span class="text-xs text-themed-muted">绑定 {{ ch.boundPackages }} 个套餐</span>
+                <span class="text-xs text-themed-muted">{{ t('telegramConfig.channels.boundPackages', { count: ch.boundPackages }) }}</span>
               </div>
               <p class="text-xs text-themed-muted mt-0.5">{{ ch.configPreview }}</p>
             </div>
@@ -1192,56 +1192,56 @@ async function testChannel(id: number) {
                 :disabled="testingChannelId === ch.id"
                 @click="testChannel(ch.id)"
               >
-                {{ testingChannelId === ch.id ? '发送中...' : '测试' }}
+                {{ testingChannelId === ch.id ? t('common.sending') : t('telegramConfig.channels.test') }}
               </button>
-              <button type="button" class="text-xs text-themed-muted hover:text-themed" @click="openEditChannelForm(ch)">编辑</button>
+              <button type="button" class="text-xs text-themed-muted hover:text-themed" @click="openEditChannelForm(ch)">{{ t('common.edit') }}</button>
               <button
                 type="button"
                 class="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300"
                 :disabled="deletingChannelId === ch.id"
                 @click="deleteChannel(ch.id)"
               >
-                {{ deletingChannelId === ch.id ? '删除中...' : '删除' }}
+                {{ deletingChannelId === ch.id ? t('common.deleting') : t('common.delete') }}
               </button>
             </div>
           </div>
         </div>
 
         <div v-if="showChannelForm" class="mt-4 p-4 rounded-lg border border-themed-border bg-themed-secondary/20 space-y-3">
-          <h4 class="font-medium text-sm text-themed">{{ editingChannel ? '编辑渠道' : '新建渠道' }}</h4>
+          <h4 class="font-medium text-sm text-themed">{{ editingChannel ? t('telegramConfig.channels.edit') : t('telegramConfig.channels.new') }}</h4>
           <div v-if="channelFormError" class="text-xs text-rose-600 dark:text-rose-400">{{ channelFormError }}</div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div class="space-y-1">
-              <label class="block text-xs text-themed-muted">渠道名称 *</label>
-              <input v-model="channelForm.name" type="text" class="input" placeholder="例：新购通知频道" />
+              <label class="block text-xs text-themed-muted">{{ t('telegramConfig.channels.name') }} *</label>
+              <input v-model="channelForm.name" type="text" class="input" :placeholder="t('telegramConfig.channels.namePlaceholder')" />
             </div>
             <div class="space-y-1">
               <label class="block text-xs text-themed-muted">Chat ID *</label>
-              <input v-model="channelForm.chatId" type="text" class="input" placeholder="例：-1001234567890" />
-              <p class="text-xs text-themed-muted">负数为群组/频道，正数为用户。</p>
+              <input v-model="channelForm.chatId" type="text" class="input" :placeholder="t('telegramConfig.channels.chatIdPlaceholder')" />
+              <p class="text-xs text-themed-muted">{{ t('telegramConfig.channels.chatIdHint') }}</p>
             </div>
             <div class="md:col-span-2 space-y-1">
-              <label class="block text-xs text-themed-muted">Bot Token {{ editingChannel ? '（留空保持不变）' : '*' }}</label>
-              <input v-model="channelForm.botToken" type="password" class="input" placeholder="例：123456:ABC-DEF..." />
+              <label class="block text-xs text-themed-muted">Bot Token {{ editingChannel ? t('telegramConfig.channels.keepUnchanged') : '*' }}</label>
+              <input v-model="channelForm.botToken" type="password" class="input" :placeholder="t('telegramConfig.channels.tokenPlaceholder')" />
             </div>
             <div class="md:col-span-2 flex items-center gap-2">
               <input id="telegramChannelEnabled" v-model="channelForm.enabled" type="checkbox" class="w-4 h-4 rounded" />
-              <label for="telegramChannelEnabled" class="text-sm text-themed-secondary">启用此渠道</label>
+              <label for="telegramChannelEnabled" class="text-sm text-themed-secondary">{{ t('telegramConfig.channels.enable') }}</label>
             </div>
           </div>
           <div class="flex gap-2 justify-end">
-            <button type="button" class="btn-secondary text-sm" @click="showChannelForm = false">取消</button>
+            <button type="button" class="btn-secondary text-sm" @click="showChannelForm = false">{{ t('common.cancel') }}</button>
             <button type="button" class="btn-primary text-sm" :disabled="savingChannel" @click="saveChannel">
-              {{ savingChannel ? '保存中...' : '保存' }}
+              {{ savingChannel ? t('common.saving') : t('common.save') }}
             </button>
           </div>
         </div>
 
         <div class="mt-4 p-3 rounded-lg bg-themed-secondary/50 border border-themed">
           <p class="text-sm text-themed-muted">
-            需要 Telegram Bot Token？去
+            {{ t('telegramConfig.channels.needToken') }}
             <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" class="underline hover:text-themed">@BotFather</a>
-            创建机器人，并将机器人添加为群组/频道管理员。
+            {{ t('telegramConfig.channels.botFatherHint') }}
           </p>
         </div>
       </div>

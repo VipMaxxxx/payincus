@@ -16,8 +16,13 @@ import {
   type PluginMarketSubmissionRiskLevel
 } from '../db/plugin-market-submissions.js'
 import { createLog, LogModule, LogResult } from '../db/logs.js'
+import { assertPluginCapabilitiesApprovedForListing } from '../db/plugins.js'
 import { scanPluginMarketSubmission } from '../lib/plugin-market-submission-scan.js'
 import { publishPluginMarketIndex } from '../lib/plugin-market-publisher.js'
+import {
+  normalizePluginMarketCompatibility,
+  normalizePluginMarketPricing
+} from '../lib/plugin-market.js'
 import { prisma } from '../db/prisma.js'
 import {
   getPluginDataDir,
@@ -35,6 +40,8 @@ import { getCombinedAdminIdAllowlist, getPluginSubmissionPublicBaseUrl } from '.
 
 const REVIEW_STATUSES: PluginMarketSubmissionReviewStatus[] = ['pending', 'listed', 'rejected', 'delisted']
 const RISK_LEVELS: PluginMarketSubmissionRiskLevel[] = ['low', 'medium', 'high', 'critical']
+const LISTABLE_SCAN_STATUSES = new Set(['passed', 'warning'])
+const PAID_MARKET_LISTING_NOT_AVAILABLE = '付费上架暂未开放(交易闭环未上线)'
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9-]*){2,}$/
 const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i
@@ -62,6 +69,7 @@ interface ReviewBody {
   reviewStatus?: unknown
   riskLevel?: unknown
   reviewNotes?: unknown
+  developerVerified?: unknown
 }
 
 interface ReviewParams {
@@ -217,6 +225,21 @@ function normalizeJsonRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function isFreePricing(value: unknown): boolean {
+  if (value === undefined || value === null) return true
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const pricing = value as Record<string, unknown>
+  return pricing.type === undefined || pricing.type === 'free'
+}
+
+function normalizeSubmissionCompatibility(value: unknown): Record<string, unknown> {
+  return normalizePluginMarketCompatibility(normalizeJsonRecord(value)) as unknown as Record<string, unknown>
+}
+
+function normalizeSubmissionPricing(value: unknown): Record<string, unknown> {
+  return normalizePluginMarketPricing(normalizeJsonRecord(value)) as unknown as Record<string, unknown>
+}
+
 function normalizeSubmissionBody(body: SubmissionBody) {
   const pluginId = normalizeText(body.pluginId, 120)
   const version = normalizeText(body.version, 64)
@@ -254,8 +277,8 @@ function normalizeSubmissionBody(body: SubmissionBody) {
     developerGithub,
     contactEmail,
     permissions: normalizeJsonRecord(body.permissions),
-    compatibility: normalizeJsonRecord(body.compatibility),
-    pricing: normalizeJsonRecord(body.pricing),
+    compatibility: normalizeSubmissionCompatibility(body.compatibility),
+    pricing: normalizeSubmissionPricing(body.pricing),
     notes
   }
 }
@@ -704,7 +727,7 @@ export default async function pluginMarketSubmissionRoutes(fastify: FastifyInsta
             events: (validated.manifest.capabilities?.events || []).map(event => event.event),
             actions: (validated.manifest.capabilities?.actions || []).map(action => action.name)
           },
-          compatibility: { payincus: validated.manifest.payincus },
+          compatibility: normalizePluginMarketCompatibility({ payincus: validated.manifest.payincus }),
           sourceName: upload.sourceName
         }
       })
@@ -847,10 +870,46 @@ export default async function pluginMarketSubmissionRoutes(fastify: FastifyInsta
     if (!id) return reply.code(400).send({ error: 'Invalid submission id', code: 'INVALID_SUBMISSION_ID' })
 
     const reviewStatus = normalizeReviewStatus(request.body?.reviewStatus)
-    const riskLevel = normalizeRiskLevel(request.body?.riskLevel) ?? 'medium'
+    let riskLevel = normalizeRiskLevel(request.body?.riskLevel) ?? 'medium'
     const reviewNotes = normalizeOptionalText(request.body?.reviewNotes, 5000)
+    const developerVerified = typeof request.body?.developerVerified === 'boolean'
+      ? request.body.developerVerified
+      : undefined
     if (!reviewStatus) {
       return reply.code(400).send({ error: 'Invalid review status', code: 'INVALID_REVIEW_STATUS' })
+    }
+    if (request.body?.developerVerified !== undefined && developerVerified === undefined) {
+      return reply.code(400).send({ error: 'Invalid developer verification state', code: 'INVALID_DEVELOPER_VERIFICATION' })
+    }
+
+    if (reviewStatus === 'listed') {
+      const submission = await getPluginMarketSubmissionForReview(id)
+      if (submission && !LISTABLE_SCAN_STATUSES.has(submission.scanStatus)) {
+        return reply.code(400).send({
+          error: 'Plugin submission must pass its latest scan before listing',
+          code: 'PLUGIN_MARKET_SCAN_NOT_APPROVED'
+        })
+      }
+      if (submission && !isFreePricing(submission.pricing)) {
+        return reply.code(400).send({
+          error: PAID_MARKET_LISTING_NOT_AVAILABLE,
+          code: 'PAID_MARKET_LISTING_NOT_AVAILABLE'
+        })
+      }
+      if (submission) {
+        riskLevel = normalizeRiskLevel(submission.riskLevel) ?? riskLevel
+        const capabilityApproval = await assertPluginCapabilitiesApprovedForListing({
+          pluginId: submission.pluginId,
+          manifestVersion: submission.version,
+          riskLevel: submission.riskLevel as PluginMarketSubmissionRiskLevel
+        })
+        if (!capabilityApproval.ok) {
+          return reply.code(400).send({
+            error: 'High-risk plugin capabilities must be approved before listing this submission',
+            code: 'PLUGIN_CAPABILITY_REVIEW_REQUIRED'
+          })
+        }
+      }
     }
 
     try {
@@ -860,7 +919,8 @@ export default async function pluginMarketSubmissionRoutes(fastify: FastifyInsta
         reviewStatus,
         riskLevel,
         reviewNotes,
-        reviewedByUserId: user.id
+        reviewedByUserId: user.id,
+        developerVerified
       })
       await createLog(
         user.id,
@@ -901,14 +961,23 @@ export default async function pluginMarketSubmissionRoutes(fastify: FastifyInsta
       packageUrl: submission.packageUrl,
       sha256: submission.sha256,
       permissions: submission.permissions,
-      compatibility: submission.compatibility,
-      pricing: submission.pricing
+      compatibility: normalizePluginMarketCompatibility(submission.compatibility),
+      pricing: normalizePluginMarketPricing(submission.pricing)
     })
 
+    const existingScanResult = submission.scanResult && typeof submission.scanResult === 'object' && !Array.isArray(submission.scanResult)
+      ? submission.scanResult as Record<string, unknown>
+      : {}
+    const existingGovernance = existingScanResult.governance && typeof existingScanResult.governance === 'object' && !Array.isArray(existingScanResult.governance)
+      ? existingScanResult.governance as Record<string, unknown>
+      : undefined
     const updated = await updatePluginMarketSubmissionScan({
       id: submission.id,
       scanStatus: result.status,
-      scanResult: result as unknown as Record<string, unknown>,
+      scanResult: {
+        ...result as unknown as Record<string, unknown>,
+        ...(existingGovernance ? { governance: existingGovernance } : {})
+      },
       riskLevel: result.riskLevel
     })
 

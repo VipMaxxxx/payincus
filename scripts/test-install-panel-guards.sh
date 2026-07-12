@@ -33,5 +33,23 @@ fi
 
 grep -Fq -- '-f "${INSTALL_DIR}/current/server/dist/app.js"' "$REPO_ROOT/scripts/install-panel.sh"
 grep -Fq '检测到原子 OTA 布局' "$REPO_ROOT/scripts/install-panel.sh"
+grep -Fq 'ExecStart=/usr/local/libexec/incudal/incudal-online-task update %i' "$REPO_ROOT/scripts/install-panel.sh"
+grep -Fq 'ExecStart=/usr/local/libexec/incudal/incudal-online-task rollback %i' "$REPO_ROOT/scripts/install-panel.sh"
+grep -Fq 'chown "root:${RUN_USER}" "$ENV_FILE"' "$REPO_ROOT/scripts/install-panel.sh"
+grep -Fq 'Defaults:${RUN_USER} secure_path=/usr/local/libexec/incudal:' "$REPO_ROOT/scripts/install-panel.sh"
+
+for helper in \
+    incudal-online-task.sh.example \
+    incudal-systemctl-wrapper.sh.example \
+    incudal-ota-chown-wrapper.sh.example; do
+    bash -n "$REPO_ROOT/deploy/$helper"
+done
+
+if grep -Fq 'ExecStart=/usr/bin/node /opt/incudal/current/server/dist/scripts/' \
+    "$REPO_ROOT/deploy/incudal-online-update@.service.example" \
+    "$REPO_ROOT/deploy/incudal-online-rollback@.service.example"; then
+    echo "root unit still executes a worker from current directly" >&2
+    exit 1
+fi
 
 echo "install-panel guards passed"

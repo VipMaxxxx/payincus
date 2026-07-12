@@ -6,7 +6,12 @@
 
 import * as db from '../db/index.js'
 import { formatBytes } from './traffic-utils.js'
-import { assertSafeWebhookUrl } from '../lib/outbound-security.js'
+import {
+    DEFAULT_TRAFFIC_OVERAGE_THROTTLE_SPEED,
+    TRAFFIC_OVERAGE_THROTTLE_CONFIG_KEY,
+    normalizePlanTrafficLimitSpeed
+} from './traffic-bandwidth.js'
+import { assertSafeWebhookUrl, safeFetch } from '../lib/outbound-security.js'
 import { sanitizeTokensInString } from '../lib/log-sanitizer.js'
 
 // 重新导出 formatBytes 供其他模块使用
@@ -96,25 +101,86 @@ async function sendWithRetry(
     return { success: false, error: `Failed after ${MAX_RETRIES} attempts: ${lastError}` }
 }
 
+interface TrafficNotificationContext {
+    throttleSpeed: string
+    normalLineSpeed: string
+    resetDay: string
+}
+
+async function resolveTrafficNotificationContext(
+    userId: number,
+    instanceName?: string,
+    hostName?: string
+): Promise<TrafficNotificationContext> {
+    const instances = await db.prisma.instance.findMany({
+        where: {
+            userId,
+            status: { not: 'deleted' },
+            ...(instanceName ? { name: instanceName } : {}),
+            ...(hostName ? { host: { name: hostName } } : {})
+        },
+        select: {
+            package: {
+                select: { limitsIngress: true, limitsEgress: true }
+            },
+            packagePlan: {
+                select: { trafficLimitSpeed: true }
+            },
+            host: {
+                select: { trafficResetDay: true }
+            }
+        },
+        orderBy: { id: 'asc' }
+    })
+
+    if (instances.length === 0) {
+        throw new Error(`No active traffic notification context for user ${userId}`)
+    }
+
+    const configuredThrottleSpeed = normalizePlanTrafficLimitSpeed(
+        await db.getSystemConfig(TRAFFIC_OVERAGE_THROTTLE_CONFIG_KEY)
+    ) ?? DEFAULT_TRAFFIC_OVERAGE_THROTTLE_SPEED
+    const normalLineSpeeds = new Set<string>()
+    const resetDays = new Set<number>()
+
+    for (const instance of instances) {
+        const planSpeed = normalizePlanTrafficLimitSpeed(instance.packagePlan?.trafficLimitSpeed)
+        const normalLineSpeed = planSpeed ?? instance.package?.limitsIngress ?? instance.package?.limitsEgress
+        normalLineSpeeds.add(normalLineSpeed || '不限速')
+        resetDays.add(Math.max(1, Math.min(28, instance.host.trafficResetDay)))
+    }
+
+    return {
+        throttleSpeed: configuredThrottleSpeed,
+        normalLineSpeed: Array.from(normalLineSpeeds).join(' / '),
+        resetDay: Array.from(resetDays).sort((a, b) => a - b).join('、')
+    }
+}
+
 /**
  * 发送流量预警通知 (80%)
  */
 export async function sendTrafficWarningNotification(
     userId: number,
     used: bigint,
-    limit: bigint
-): Promise<void> {
+    limit: bigint,
+    instanceName?: string
+): Promise<boolean> {
     try {
         const channels = await db.getEnabledChannelsByUserId(userId)
-        if (channels.length === 0) return
+        if (channels.length === 0) return true
+        let allChannelsSent = true
 
         // 先转换为浮点数再计算百分比,避免 BigInt 整数除法精度丢失
         const percentage = ((Number(used) / Number(limit)) * 100).toFixed(1)
+        const context = await resolveTrafficNotificationContext(userId, instanceName)
         const title = '⚠️ 流量预警'
-        const message = `您的月度流量已使用 ${percentage}%\n` +
+        const scope = instanceName ? `您的实例 ${instanceName} 月度流量` : '您的月度流量'
+        const message = `${scope}已使用 ${percentage}%\n` +
             `已用: ${formatBytes(used)}\n` +
             `限额: ${formatBytes(limit)}\n\n` +
-            `超出限额后，您的实例将被限速至 1Mbit。`
+            `超出限额后，您的实例将被限速至 ${context.throttleSpeed}。\n` +
+            `流量于每月 ${context.resetDay} 日重置后，带宽将恢复至 ${context.normalLineSpeed}。`
 
         for (const channel of channels) {
             try {
@@ -149,12 +215,17 @@ export async function sendTrafficWarningNotification(
                 }
 
                 await db.updateNotificationLogStatus(logId, result.success ? 'sent' : 'failed', result.error)
+                if (!result.success) allChannelsSent = false
             } catch (err) {
+                allChannelsSent = false
                 console.error(`[TrafficNotifier] Failed to send warning to channel ${channel.id}:`, err)
             }
         }
+
+        return allChannelsSent
     } catch (err) {
         console.error('[TrafficNotifier] sendTrafficWarningNotification error:', err)
+        return false
     }
 }
 
@@ -170,10 +241,11 @@ export async function sendTrafficThrottledNotification(
         const channels = await db.getEnabledChannelsByUserId(userId)
         if (channels.length === 0) return
 
+        const context = await resolveTrafficNotificationContext(userId, instanceName, hostName)
         const title = '🚫 流量限速通知'
-        const message = `您的实例 ${instanceName}（节点：${hostName}）已因流量超额被限速至 1Mbit。\n\n` +
+        const message = `您的实例 ${instanceName}（节点：${hostName}）已因流量超额被限速至 ${context.throttleSpeed}。\n\n` +
             `您仍可通过 SSH 管理实例。\n` +
-            `流量将在下月 1 日自动重置，届时带宽将恢复正常。`
+            `流量将于每月 ${context.resetDay} 日自动重置，届时带宽将恢复至 ${context.normalLineSpeed}。`
 
         for (const channel of channels) {
             try {
@@ -275,7 +347,7 @@ async function sendDiscord(
 
     try {
         const parsedUrl = await assertSafeWebhookUrl(webhookUrl)
-        const response = await fetch(parsedUrl.toString(), {
+        const response = await safeFetch(parsedUrl.toString(), {
             method: 'POST',
             signal: AbortSignal.timeout(TRAFFIC_NOTIFICATION_FETCH_TIMEOUT_MS),
             headers: { 'Content-Type': 'application/json' },
@@ -291,7 +363,7 @@ async function sendDiscord(
                 }]
             }),
             redirect: 'manual'
-        })
+        }, 'Webhook URL')
 
         if (!response.ok) {
             return { success: false, error: await readSafeNotificationError(response) }

@@ -8,6 +8,9 @@ const __dirname = dirname(__filename)
 
 const ticketsDbSource = readFileSync(resolve(__dirname, '../src/db/tickets.ts'), 'utf8')
 const ticketsRouteSource = readFileSync(resolve(__dirname, '../src/routes/tickets.ts'), 'utf8')
+const aiTicketSchedulerSource = readFileSync(resolve(__dirname, '../src/services/ai-ticket-auto-reply-scheduler.ts'), 'utf8')
+const systemConfigRouteSource = readFileSync(resolve(__dirname, '../src/routes/system-config.ts'), 'utf8')
+const userRouterSource = readFileSync(resolve(__dirname, '../../client/src/router/user.ts'), 'utf8')
 
 function sectionBetween(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -30,8 +33,6 @@ assert.ok(
 
 for (const [helperName, fallbackPageSize, endMarker] of [
   ['getUserTickets', 10, '/**\n * 获取宿主机的工单列表'],
-  ['getHostTickets', 10, '/**\n * 获取用户所有宿主机的工单'],
-  ['getOwnerAllTickets', 10, '/**\n * 获取工单消息列表'],
   ['getTicketMessages', 50, '/**\n * 添加工单消息']
 ] as const) {
   const helperSection = sectionBetween(
@@ -51,6 +52,59 @@ for (const [helperName, fallbackPageSize, endMarker] of [
     `${helperName} must use sanitized pagination values for Prisma and response metadata`
   )
 }
+
+for (const [helperName, endMarker] of [
+  ['getHostTickets', '/**\n * 获取用户所有宿主机的工单'],
+  ['getOwnerAllTickets', '/**\n * 获取工单消息列表']
+] as const) {
+  const helperSection = sectionBetween(
+    ticketsDbSource,
+    `export async function ${helperName}(`,
+    endMarker
+  )
+  const filterIndex = helperSection.indexOf("ticketsWithNeedsReply = ticketsWithNeedsReply.filter")
+  const sortIndex = helperSection.indexOf('ticketsWithNeedsReply.sort')
+  const totalIndex = helperSection.indexOf('const total = ticketsWithNeedsReply.length')
+  const sliceIndex = helperSection.indexOf('ticketsWithNeedsReply.slice(skip, skip + pageSize)')
+
+  assert.ok(
+    helperSection.includes('const skip = (page - 1) * pageSize') &&
+      !helperSection.includes('\n      skip,') &&
+      !helperSection.includes('\n      take: pageSize') &&
+      sortIndex !== -1 &&
+      (filterIndex === -1 || filterIndex < sortIndex) &&
+      sortIndex < totalIndex &&
+      totalIndex < sliceIndex &&
+      helperSection.includes('return timeOrder || a.id - b.id') &&
+      helperSection.includes('tickets: paginatedTickets,') &&
+      helperSection.includes('totalPages: Math.ceil(total / pageSize)'),
+    `${helperName} must filter and stably sort the complete queue before pagination, with total based on the filtered queue`
+  )
+}
+
+const aiCandidateSection = sectionBetween(
+  aiTicketSchedulerSource,
+  'async function loadAutoReplyCandidates(',
+  'async function loadTicketForAutoReply('
+)
+assert.ok(
+  !aiCandidateSection.includes('take: AUTO_REPLY_CANDIDATE_LOOKAHEAD') &&
+    aiCandidateSection.includes('const needsHumanTicketIds = await loadNeedsHumanTicketIds()') &&
+    aiCandidateSection.includes('id: { notIn: needsHumanTicketIds }') &&
+    aiCandidateSection.includes(".filter(ticket => ticket.messages[0]?.isFromOwner === false)") &&
+    aiCandidateSection.indexOf('.filter(') < aiCandidateSection.indexOf('.slice(0, AUTO_REPLY_SCAN_BATCH_SIZE)') &&
+    aiCandidateSection.includes("orderBy: [\n      { updatedAt: 'asc' },\n      { id: 'asc' }") &&
+    aiCandidateSection.includes("status: { in: ['open', 'in_progress'] }"),
+  'AI ticket queue must exclude needs-human tickets and filter the complete ordered candidate set by needsReply before taking a batch'
+)
+
+assert.ok(
+  aiTicketSchedulerSource.includes("where: { action: 'ai_ticket.needs_human' }") &&
+    aiTicketSchedulerSource.includes('/\\[ticketId=([1-9]\\d*)\\]/') &&
+    aiTicketSchedulerSource.includes("'ai_ticket.needs_human'") &&
+    (aiTicketSchedulerSource.match(/await markTicketNeedsHuman\(actor\.id, ticketId, reason\)/g) ?? []).length === 2,
+  'blocked AI tickets must receive a durable needs-human marker that removes them from later scheduler scans'
+)
 
 for (const helperName of ['getUserTickets', 'getHostTickets', 'getOwnerAllTickets'] as const) {
   const helperSection = sectionBetween(
@@ -128,6 +182,11 @@ const statusRoute = sectionBetween(
   "}>('/:id/status'",
   '  /**\n   * 关闭工单'
 )
+const closeRoute = sectionBetween(
+  ticketsRouteSource,
+  "}>('/:id/close'",
+  '  // ==================== 宿主机所有者 API ===================='
+)
 const hostTicketsRoute = sectionBetween(
   ticketsRouteSource,
   "}>('/hosts/:hostId'",
@@ -150,12 +209,31 @@ assert.ok(
 )
 
 assert.ok(
+  createTicketRoute.includes("getSystemConfigBoolean('ticket_enabled', true)") &&
+    (ticketsRouteSource.match(/getSystemConfigBoolean\('ticket_enabled', true\)/g) ?? []).length === 1 &&
+    !userTicketsRoute.includes('ticket_enabled') &&
+    !messagesRoute.includes('ticket_enabled') &&
+    !statusRoute.includes('ticket_enabled') &&
+    !closeRoute.includes('ticket_enabled') &&
+    systemConfigRouteSource.includes('ticketEnabled: ticketCreationEnabled') &&
+    !userRouterSource.includes("to.name === 'tickets'"),
+  'ticket_enabled must disable creation only without blocking existing ticket list, reply, close, reopen, or route access'
+)
+
+assert.ok(
   ticketsRouteSource.includes('function normalizeTicketStatusBody(body: unknown): TicketStatus | null') &&
     ticketsRouteSource.includes("if (!body || typeof body !== 'object' || Array.isArray(body))") &&
     statusRoute.includes('const status = normalizeTicketStatusBody(request.body)') &&
     statusRoute.includes('if (!status)') &&
     !statusRoute.includes('const { status } = request.body'),
   'ticket status route must validate runtime body shape before reading status'
+)
+
+assert.ok(
+  statusRoute.includes("const isCreatorReopen = access.isCreator && ticket.status === 'closed' && status === 'open'") &&
+    statusRoute.includes('if (!access.isOwner && !isCreatorReopen)') &&
+    statusRoute.includes('await ticketDb.updateTicketStatus(ticketId, status)'),
+  'web ticket status route must let the ticket creator reopen only their own closed ticket'
 )
 
 assert.ok(
@@ -187,6 +265,21 @@ assert.ok(
     ownerTicketsRoute.includes('page: parsePositiveInteger(page, 1)') &&
     ownerTicketsRoute.includes('pageSize: parsePositiveInteger(pageSize, 10, 100)'),
   'owner ticket summary route must sanitize optional hostId and pagination before DB access'
+)
+
+const pendingCountSection = sectionBetween(
+  ticketsDbSource,
+  'export async function getOwnerPendingTicketCount(',
+  '/**\n * 获取用户待处理工单数量'
+)
+assert.ok(
+  pendingCountSection.includes("status: { not: 'closed' }") &&
+    pendingCountSection.includes('prisma.ticket.findMany({') &&
+    pendingCountSection.includes("orderBy: { createdAt: 'desc' }") &&
+    pendingCountSection.includes('take: 1') &&
+    pendingCountSection.includes('ticket.messages[0]?.isFromOwner === false') &&
+    !pendingCountSection.includes('prisma.ticket.count({ where })'),
+  'owner pending badge must count only tickets whose latest public message needs a support reply'
 )
 
 console.log('ticket query guard tests passed')

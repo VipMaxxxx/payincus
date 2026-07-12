@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 
 const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/admin-sla-alerts.ts'), 'utf8')
 const appSource = readFileSync(resolve(process.cwd(), 'src/app.ts'), 'utf8')
+const ticketsDbSource = readFileSync(resolve(process.cwd(), 'src/db/tickets.ts'), 'utf8')
 const schemaSource = readFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), 'utf8')
 const migrationSource = readFileSync(resolve(process.cwd(), 'prisma/migrations/20260624230000_add_sla_alert_center/migration.sql'), 'utf8')
 const adminApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/admin.ts'), 'utf8')
@@ -57,6 +58,26 @@ assert.ok(
     routeSource.includes("'smtp.failed'") &&
     routeSource.includes("'ota.failed'"),
   'SLA alert scan must cover host, agent, delivery, payment, notification, SMTP and OTA failures'
+)
+
+const computeSlaStart = ticketsDbSource.indexOf('function computeSlaStatus(')
+const computeSlaEnd = ticketsDbSource.indexOf('function toIso(', computeSlaStart)
+const updateStatusStart = ticketsDbSource.indexOf('export async function updateTicketStatus(')
+const updateStatusEnd = ticketsDbSource.indexOf('/**\n * 检查用户是否可以创建工单', updateStatusStart)
+assert.notEqual(computeSlaStart, -1, 'ticket SLA status helper must exist')
+assert.notEqual(computeSlaEnd, -1, 'ticket SLA status helper must end before toIso')
+assert.notEqual(updateStatusStart, -1, 'ticket status update helper must exist')
+assert.notEqual(updateStatusEnd, -1, 'ticket status update helper must end before access checks')
+const computeSlaSource = ticketsDbSource.slice(computeSlaStart, computeSlaEnd)
+const updateStatusSource = ticketsDbSource.slice(updateStatusStart, updateStatusEnd)
+assert.ok(
+  computeSlaSource.includes('input.resolvedAt.getTime() <= input.resolutionDueAt.getTime()') &&
+    !computeSlaSource.includes("if (input.resolvedAt || input.status === 'resolved') return 'met'") &&
+    updateStatusSource.includes('resolutionDueAt: true') &&
+    updateStatusSource.includes('slaBreachedAt: true') &&
+    updateStatusSource.includes('resolvedAt.getTime() > ticket.resolutionDueAt.getTime()') &&
+    updateStatusSource.includes('updateData.slaBreachedAt = resolvedAt'),
+  'ticket SLA met must require on-time resolution and late resolution must retain a breach timestamp'
 )
 
 assert.ok(

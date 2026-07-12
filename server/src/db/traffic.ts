@@ -6,12 +6,44 @@
 
 import { prisma } from './prisma.js'
 import { applyTrafficMultiplier } from '../lib/traffic-multiplier.js'
-import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
+import {
+    advanceTrafficSnapshot,
+    calculateInstanceTrafficStatus,
+    calculateUserTrafficStatus,
+    getEffectiveLimit,
+    type TrafficSnapshotSample
+} from '../services/traffic-utils.js'
 import { withLock } from '../lib/distributed-lock.js'
-import type { TrafficStatus } from '@prisma/client'
+import { getTrafficCounters } from '../lib/incus/incus-traffic.js'
+import { getIncusClientFromPool } from '../lib/incus/incus-pool.js'
+import type { Prisma, TrafficStatus } from '@prisma/client'
 
 // 批量更新分片大小（避免单次 SQL 语句过大，支持大规模实例）
 const BATCH_SIZE = 1000
+const SHANGHAI_UTC_OFFSET_MS = 8 * 60 * 60 * 1000
+
+export const TRAFFIC_TIME_ZONE = 'Asia/Shanghai'
+
+export function shanghaiDateParts(date: Date = new Date()): { year: number; month: number; day: number } {
+    const shifted = new Date(date.getTime() + SHANGHAI_UTC_OFFSET_MS)
+    return {
+        year: shifted.getUTCFullYear(),
+        month: shifted.getUTCMonth(),
+        day: shifted.getUTCDate()
+    }
+}
+
+/** PostgreSQL date-only canonical value for the Shanghai calendar day. */
+export function shanghaiDateOnly(date: Date = new Date(), dayOffset: number = 0): Date {
+    const { year, month, day } = shanghaiDateParts(date)
+    return new Date(Date.UTC(year, month, day + dayOffset))
+}
+
+/** Exact instant at the start of the Shanghai calendar month. */
+export function startOfMonthShanghai(date: Date = new Date()): Date {
+    const { year, month } = shanghaiDateParts(date)
+    return new Date(Date.UTC(year, month, 1) - SHANGHAI_UTC_OFFSET_MS)
+}
 const TRAFFIC_RESET_LOCK_OPTIONS = {
     expireMs: 30000,
     waitTimeoutMs: 10000,
@@ -24,6 +56,89 @@ function getTrafficInstanceLockKey(instanceId: number): string {
 
 function getTrafficUserLockKey(userId: number): string {
     return `traffic:user:${userId}`
+}
+
+async function getTrafficResetSample(instanceId: number): Promise<TrafficSnapshotSample & { userId: number }> {
+    const instance = await prisma.instance.findUnique({
+        where: { id: instanceId },
+        select: {
+            userId: true,
+            status: true,
+            incusId: true,
+            trafficSnapshot: true,
+            host: {
+                select: {
+                    id: true,
+                    url: true,
+                    certPath: true,
+                    keyPath: true
+                }
+            }
+        }
+    })
+
+    if (!instance || instance.status === 'deleted') {
+        throw new Error(`实例 ${instanceId} 不存在`)
+    }
+
+    if (instance.status === 'running') {
+        if (!instance.host) {
+            throw new Error(`实例 ${instanceId} 未绑定节点，无法重建流量基线`)
+        }
+
+        const client = await getIncusClientFromPool({
+            id: instance.host.id,
+            url: instance.host.url,
+            certPath: instance.host.certPath,
+            keyPath: instance.host.keyPath
+        })
+        const counters = await getTrafficCounters(client, instance.incusId)
+        return {
+            userId: instance.userId,
+            rxRaw: counters.rxBytes,
+            txRaw: counters.txBytes,
+            rxPacketsRaw: counters.rxPackets,
+            txPacketsRaw: counters.txPackets,
+            cpuUsageRaw: counters.cpuUsageRaw,
+            sampledAt: counters.sampledAt,
+            source: 'active-collector'
+        }
+    }
+
+    return {
+        userId: instance.userId,
+        rxRaw: instance.trafficSnapshot?.rxRaw ?? 0n,
+        txRaw: instance.trafficSnapshot?.txRaw ?? 0n,
+        rxPacketsRaw: instance.trafficSnapshot?.rxPacketsRaw ?? 0n,
+        txPacketsRaw: instance.trafficSnapshot?.txPacketsRaw ?? 0n,
+        cpuUsageRaw: instance.trafficSnapshot?.cpuUsageRaw,
+        sampledAt: new Date(),
+        source: 'active-collector'
+    }
+}
+
+export async function withInstanceTrafficResetLock<T>(
+    instanceId: number,
+    operation: (tx: Prisma.TransactionClient, sample: TrafficSnapshotSample) => Promise<T>
+): Promise<T> {
+    const result = await withLock(getTrafficInstanceLockKey(instanceId), async () => {
+        const sample = await getTrafficResetSample(instanceId)
+        const userLockResult = await withLock(getTrafficUserLockKey(sample.userId), async () => (
+            prisma.$transaction(tx => operation(tx, sample))
+        ), TRAFFIC_RESET_LOCK_OPTIONS)
+
+        if (!userLockResult.success || userLockResult.result === undefined) {
+            throw new Error(userLockResult.error || `用户 ${sample.userId} 流量锁获取失败`)
+        }
+
+        return userLockResult.result
+    }, TRAFFIC_RESET_LOCK_OPTIONS)
+
+    if (!result.success || result.result === undefined) {
+        throw new Error(result.error || `实例 ${instanceId} 流量重置锁获取失败`)
+    }
+
+    return result.result
 }
 
 /**
@@ -136,8 +251,8 @@ export async function upsertDailyTraffic(
     rxIncrement: bigint,
     txIncrement: bigint
 ) {
-    // 标准化日期为当天 00:00:00
-    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    // 按上海日历日标准化为 date-only 值，避免服务器本地时区影响存库日期
+    const normalizedDate = shanghaiDateOnly(date)
 
     const existing = await prisma.dailyTraffic.findUnique({
         where: {
@@ -178,7 +293,7 @@ export async function bulkUpsertDailyTraffic(
     // 标准化日期并分组（按 instanceId + date）
     const normalizedUpdates = updates.map(u => ({
         instanceId: u.instanceId,
-        date: new Date(u.date.getFullYear(), u.date.getMonth(), u.date.getDate()),
+        date: shanghaiDateOnly(u.date),
         rxIncrement: u.rxIncrement,
         txIncrement: u.txIncrement
     }))
@@ -240,9 +355,7 @@ export async function bulkUpsertDailyTraffic(
  * 获取实例的每日流量历史
  */
 export async function getDailyTraffic(instanceId: number, days: number = 30) {
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - days)
-    startDate.setHours(0, 0, 0, 0)
+    const startDate = shanghaiDateOnly(new Date(), -days)
 
     return prisma.dailyTraffic.findMany({
         where: {
@@ -275,9 +388,12 @@ export async function getDailyTrafficByPeriod(instanceId: number, periodStart: D
  * @param trafficResetDay 流量重置日（默认 1）
  */
 export async function getHostDailyTraffic(hostId: number, trafficResetDay: number = 1) {
-    // 导入周期计算函数
-    const { getTrafficPeriod } = await import('../services/traffic-utils.js')
-    const { periodStart } = getTrafficPeriod(trafficResetDay)
+    const day = Math.max(1, Math.min(28, trafficResetDay))
+    const now = new Date()
+    const { year, month, day: currentDay } = shanghaiDateParts(now)
+    const periodStart = currentDay >= day
+        ? new Date(Date.UTC(year, month, day))
+        : new Date(Date.UTC(year, month - 1, day))
 
     // 使用原生 SQL 进行聚合查询
     // 按日期分组，聚合节点下所有当前存在的实例的流量
@@ -334,9 +450,7 @@ export async function getHostTrafficSummary(hostId: number) {
  * 清理过期的每日流量记录
  */
 export async function cleanOldDailyTraffic(retentionDays: number = 30) {
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - retentionDays)
-    cutoffDate.setHours(0, 0, 0, 0)
+    const cutoffDate = shanghaiDateOnly(new Date(), -retentionDays)
 
     const result = await prisma.dailyTraffic.deleteMany({
         where: {
@@ -420,6 +534,56 @@ export async function incrementUserTrafficUsage(userId: number, delta: bigint) {
             monthlyTrafficUsed: { increment: delta }
         }
     })
+}
+
+/**
+ * 按实例基础限额同步用户已消耗的额外流量包用量
+ */
+async function syncUserExtraTrafficUsedInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: number
+): Promise<bigint> {
+    const quota = await tx.userQuota.findUnique({
+        where: { userId },
+        select: { extraTrafficQuota: true }
+    })
+    if (!quota) return 0n
+
+    const instances = await tx.instance.findMany({
+        where: {
+            userId,
+            status: { not: 'deleted' }
+        },
+        select: {
+            monthlyTrafficLimit: true,
+            monthlyTrafficUsed: true
+        }
+    })
+    const consumed = instances.reduce((total, instance) => {
+        if (instance.monthlyTrafficLimit === null || instance.monthlyTrafficUsed <= instance.monthlyTrafficLimit) {
+            return total
+        }
+        return total + instance.monthlyTrafficUsed - instance.monthlyTrafficLimit
+    }, 0n)
+    const extraTrafficUsed = consumed > quota.extraTrafficQuota ? quota.extraTrafficQuota : consumed
+
+    await tx.userQuota.update({
+        where: { userId },
+        data: { extraTrafficUsed }
+    })
+    return extraTrafficUsed
+}
+
+export async function syncUserExtraTrafficUsed(userId: number): Promise<bigint> {
+    const result = await withLock(getTrafficUserLockKey(userId), async () => prisma.$transaction(
+        tx => syncUserExtraTrafficUsedInTransaction(tx, userId)
+    ), TRAFFIC_RESET_LOCK_OPTIONS)
+
+    if (!result.success || result.result === undefined) {
+        throw new Error(result.error || `用户 ${userId} 额外流量用量同步锁获取失败`)
+    }
+
+    return result.result
 }
 
 /**
@@ -523,7 +687,7 @@ export async function updateUserTrafficWarningSentAt(userId: number, sentAt: Dat
  * 调度器必须只在返回 true 时发送通知，避免多副本重复预警。
  */
 export async function markUserTrafficWarningIfNeeded(userId: number, sentAt: Date): Promise<boolean> {
-    const currentMonthStart = new Date(sentAt.getFullYear(), sentAt.getMonth(), 1)
+    const currentMonthStart = startOfMonthShanghai(sentAt)
     const result = await prisma.userQuota.updateMany({
         where: {
             userId,
@@ -542,37 +706,6 @@ export async function markUserTrafficWarningIfNeeded(userId: number, sentAt: Dat
 }
 
 // ==================== 月度重置操作 ====================
-
-/**
- * 重置所有用户的月度流量用量
- */
-export async function resetAllUserMonthlyTraffic() {
-    const quotas = await prisma.userQuota.findMany({
-        select: { userId: true }
-    })
-
-    let count = 0
-    for (const quota of quotas) {
-        const result = await withLock(getTrafficUserLockKey(quota.userId), async () => {
-            const updated = await prisma.userQuota.updateMany({
-                where: { userId: quota.userId },
-                data: {
-                    monthlyTrafficUsed: 0n,
-                    trafficStatus: 'NORMAL',
-                    trafficWarningSentAt: null
-                }
-            })
-            return updated.count
-        }, TRAFFIC_RESET_LOCK_OPTIONS)
-
-        if (!result.success || result.result === undefined) {
-            throw new Error(result.error || `用户 ${quota.userId} 流量重置锁获取失败`)
-        }
-        count += result.result
-    }
-
-    return { count }
-}
 
 /**
  * 重置所有实例的月度流量用量
@@ -598,16 +731,69 @@ export async function resetAllInstanceMonthlyTraffic() {
  * 重置单个实例的月度流量用量
  */
 export async function resetInstanceMonthlyTraffic(instanceId: number) {
-    const result = await withLock(getTrafficInstanceLockKey(instanceId), async () => prisma.instance.updateMany({
-            where: {
-                id: instanceId,
-                status: { not: 'deleted' }
-            },
-            data: {
-                monthlyTrafficUsed: 0n,
-                trafficStatus: 'NORMAL'
-            }
-        }), TRAFFIC_RESET_LOCK_OPTIONS)
+    const result = await withLock(getTrafficInstanceLockKey(instanceId), async () => {
+        const sample = await getTrafficResetSample(instanceId)
+        const userLockResult = await withLock(getTrafficUserLockKey(sample.userId), async () => (
+            prisma.$transaction(async tx => {
+                const currentInstance = await tx.instance.findUnique({
+                    where: { id: instanceId },
+                    select: {
+                        userId: true,
+                        status: true,
+                        monthlyTrafficUsed: true
+                    }
+                })
+                if (!currentInstance || currentInstance.status === 'deleted') {
+                    throw new Error(`实例 ${instanceId} 不存在`)
+                }
+
+                const userQuota = await tx.userQuota.findUnique({
+                    where: { userId: currentInstance.userId },
+                    select: {
+                        monthlyTrafficLimit: true,
+                        monthlyTrafficUsed: true,
+                        extraTrafficQuota: true
+                    }
+                })
+
+                await advanceTrafficSnapshot(tx, instanceId, sample)
+                const updated = await tx.instance.updateMany({
+                    where: {
+                        id: instanceId,
+                        status: { not: 'deleted' }
+                    },
+                    data: {
+                        monthlyTrafficUsed: 0n,
+                        trafficStatus: 'NORMAL'
+                    }
+                })
+
+                if (updated.count > 0 && userQuota) {
+                    const monthlyTrafficUsed = userQuota.monthlyTrafficUsed > currentInstance.monthlyTrafficUsed
+                        ? userQuota.monthlyTrafficUsed - currentInstance.monthlyTrafficUsed
+                        : 0n
+                    const effectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, 0n)
+                    await tx.userQuota.update({
+                        where: { userId: currentInstance.userId },
+                        data: {
+                            monthlyTrafficUsed,
+                            extraTrafficQuota: 0n,
+                            extraTrafficUsed: 0n,
+                            trafficStatus: calculateUserTrafficStatus(monthlyTrafficUsed, effectiveLimit)
+                        }
+                    })
+                }
+
+                return updated
+            })
+        ), TRAFFIC_RESET_LOCK_OPTIONS)
+
+        if (!userLockResult.success || userLockResult.result === undefined) {
+            throw new Error(userLockResult.error || `用户 ${sample.userId} 流量锁获取失败`)
+        }
+
+        return userLockResult.result
+    }, TRAFFIC_RESET_LOCK_OPTIONS)
 
     if (!result.success || !result.result) {
         throw new Error(result.error || `实例 ${instanceId} 流量重置锁获取失败`)

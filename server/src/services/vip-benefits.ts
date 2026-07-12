@@ -24,6 +24,139 @@ type DbClient = Prisma.TransactionClient | typeof prisma
 export type VipBenefitRewardTypeValue = 'balance' | 'points' | 'instance'
 export type VipBenefitRewardState = 'claimable' | 'claimed' | 'locked' | 'blocked'
 
+export const VIP_BENEFITS_CONFIG_KEY = 'vip_benefits_config'
+export const MAX_VIP_BENEFIT_PERCENT = 100
+export const MAX_CONTINUOUS_VIP_LEVEL = 5
+
+export interface VipContinuousBenefitLevel {
+  orderDiscountPercent: number
+  extraTrafficPercent: number
+  resourcePoolBonusPercent: number
+}
+
+export interface VipContinuousBenefitsConfig {
+  levels: Record<string, VipContinuousBenefitLevel>
+}
+
+export const DEFAULT_VIP_BENEFITS_CONFIG: VipContinuousBenefitsConfig = {
+  levels: {
+    '1': { orderDiscountPercent: 1, extraTrafficPercent: 2, resourcePoolBonusPercent: 2 },
+    '2': { orderDiscountPercent: 2, extraTrafficPercent: 4, resourcePoolBonusPercent: 4 },
+    '3': { orderDiscountPercent: 3, extraTrafficPercent: 6, resourcePoolBonusPercent: 6 },
+    '4': { orderDiscountPercent: 4, extraTrafficPercent: 8, resourcePoolBonusPercent: 8 },
+    '5': { orderDiscountPercent: 5, extraTrafficPercent: 10, resourcePoolBonusPercent: 10 }
+  }
+}
+
+export const DEFAULT_VIP_BENEFITS_CONFIG_JSON = JSON.stringify(DEFAULT_VIP_BENEFITS_CONFIG)
+
+function normalizeBenefitPercent(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_VIP_BENEFIT_PERCENT) {
+    throw new VipBenefitError(
+      'INVALID_CONTINUOUS_BENEFIT_CONFIG',
+      `${field} must be between 0 and ${MAX_VIP_BENEFIT_PERCENT}`
+    )
+  }
+  return Math.round(value * 100) / 100
+}
+
+export function normalizeVipBenefitsConfig(value: unknown): VipContinuousBenefitsConfig {
+  const input = getRecord(value)
+  const levels = getRecord(input.levels)
+  const normalized: Record<string, VipContinuousBenefitLevel> = {}
+
+  for (let level = 1; level <= MAX_CONTINUOUS_VIP_LEVEL; level++) {
+    const levelConfig = getRecord(levels[String(level)])
+    normalized[String(level)] = {
+      orderDiscountPercent: normalizeBenefitPercent(levelConfig.orderDiscountPercent, `VIP${level} order discount`),
+      extraTrafficPercent: normalizeBenefitPercent(levelConfig.extraTrafficPercent, `VIP${level} extra traffic`),
+      resourcePoolBonusPercent: normalizeBenefitPercent(levelConfig.resourcePoolBonusPercent, `VIP${level} resource pool bonus`)
+    }
+  }
+
+  return { levels: normalized }
+}
+
+export function parseVipBenefitsConfigJson(value: string | null | undefined): VipContinuousBenefitsConfig {
+  if (!value) return DEFAULT_VIP_BENEFITS_CONFIG
+  try {
+    return normalizeVipBenefitsConfig(JSON.parse(value))
+  } catch {
+    return DEFAULT_VIP_BENEFITS_CONFIG
+  }
+}
+
+export async function getVipBenefitsConfig(client: DbClient = prisma): Promise<VipContinuousBenefitsConfig> {
+  const config = await client.systemConfig.findUnique({
+    where: { key: VIP_BENEFITS_CONFIG_KEY },
+    select: { value: true }
+  })
+  return parseVipBenefitsConfigJson(config?.value)
+}
+
+export async function getUserContinuousVipBenefit(
+  userId: number,
+  client: DbClient = prisma
+): Promise<{ level: number; benefit: VipContinuousBenefitLevel }> {
+  const [vip, config] = await Promise.all([
+    getCurrentUserVip(userId, client),
+    getVipBenefitsConfig(client)
+  ])
+  return {
+    level: vip.level,
+    benefit: vip.level > 0
+      ? config.levels[String(Math.min(vip.level, MAX_CONTINUOUS_VIP_LEVEL))]
+      : { orderDiscountPercent: 0, extraTrafficPercent: 0, resourcePoolBonusPercent: 0 }
+  }
+}
+
+export type VipPriceSource = 'base' | 'aff' | 'vip' | 'flash_sale'
+
+export function arbitrateVipPrice(input: {
+  basePrice: number
+  affDiscountRate?: number
+  vipDiscountPercent?: number
+  flashSalePrice?: number | null
+}): { finalPrice: number; discountAmount: number; source: VipPriceSource } {
+  const basePrice = Number(input.basePrice.toFixed(2))
+  if (input.flashSalePrice !== null && input.flashSalePrice !== undefined) {
+    const finalPrice = Number(input.flashSalePrice.toFixed(2))
+    return {
+      finalPrice,
+      discountAmount: Number(Math.max(0, basePrice - finalPrice).toFixed(2)),
+      source: 'flash_sale'
+    }
+  }
+
+  const affRate = Math.max(0, Math.min(1, input.affDiscountRate ?? 0))
+  const vipRate = Math.max(0, Math.min(1, (input.vipDiscountPercent ?? 0) / 100))
+  const candidates: Array<{ price: number; source: VipPriceSource }> = [
+    { price: basePrice, source: 'base' },
+    { price: Number((basePrice * (1 - affRate)).toFixed(2)), source: 'aff' },
+    { price: Number((basePrice * (1 - vipRate)).toFixed(2)), source: 'vip' }
+  ]
+  const winner = candidates.reduce((best, candidate) => candidate.price < best.price ? candidate : best)
+  return {
+    finalPrice: winner.price,
+    discountAmount: Number((basePrice - winner.price).toFixed(2)),
+    source: winner.source
+  }
+}
+
+export function calculateVipExtraTraffic(baseLimit: bigint | null, percent: number): bigint {
+  if (baseLimit === null || baseLimit <= 0n || percent <= 0) return 0n
+  const basisPoints = BigInt(Math.round(Math.min(MAX_VIP_BENEFIT_PERCENT, percent) * 100))
+  return (baseLimit * basisPoints) / 10_000n
+}
+
+export function calculateVipResourcePoolCost(amount: number, bonusPercent: number): number {
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    throw new VipBenefitError('INVALID_RESOURCE_POOL_AMOUNT', 'Resource pool amount must be a positive safe integer')
+  }
+  const boundedBonus = Math.max(0, Math.min(MAX_VIP_BENEFIT_PERCENT, bonusPercent))
+  return Math.max(1, Math.ceil((amount * 100) / (100 + boundedBonus)))
+}
+
 export interface VipBenefitRewardInput {
   level?: number
   type?: VipBenefitRewardTypeValue
@@ -447,7 +580,10 @@ export async function updateVipBenefitReward(id: number, input: VipBenefitReward
 
 export async function deleteVipBenefitReward(id: number): Promise<void> {
   try {
-    await prisma.vipBenefitReward.delete({ where: { id } })
+    await prisma.vipBenefitReward.update({
+      where: { id },
+      data: { enabled: false }
+    })
   } catch (error: any) {
     if (error?.code === 'P2025') {
       throw new VipBenefitError('REWARD_NOT_FOUND', 'VIP benefit reward not found', 404)

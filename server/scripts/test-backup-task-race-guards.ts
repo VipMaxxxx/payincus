@@ -231,6 +231,26 @@ assert.ok(
   !restoreExecuteSection.includes('id: { not: task.backupId'),
   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
 )
+const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
+assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
+const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
+const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
+const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
+const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
+assert.ok(
+  originalExistsIndex !== -1 &&
+    preserveTempIndex !== -1 &&
+    deleteTempIndex !== -1 &&
+    originalExistsIndex < preserveTempIndex &&
+    preserveTempIndex < deleteTempIndex,
+  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
+)
+assert.ok(
+  restoreCatchSection.includes("progress: 'manual_intervention'") &&
+    restoreCatchSection.includes('已保留临时实例') &&
+    restoreCatchSection.includes('需要人工介入'),
+  'restore cleanup must mark retained temporary copies for manual intervention'
+)
 
 const uploadTimeoutSection = section(
   uploadWorkerSource,

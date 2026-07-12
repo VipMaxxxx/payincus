@@ -5,11 +5,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import * as db from '../db/index.js'
 import { getIncusClient } from '../lib/incus/index.js'
-import { patchInstanceResources } from '../lib/incus/incus-instances.js'
+import { getInstance, patchInstanceResources } from '../lib/incus/incus-instances.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
 import { createLog } from '../db/logs.js'
 import type { RedeemCodeType, ResourcePoolAction } from '@prisma/client'
 import { acquireLock, releaseLock } from '../lib/distributed-lock.js'
+import { calculateVipResourcePoolCost, getUserContinuousVipBenefit } from '../services/vip-benefits.js'
 
 // 资源类型名称
 const RESOURCE_TYPE_NAMES: Record<string, { zh: string; en: string }> = {
@@ -39,6 +40,7 @@ const RESOURCE_POOL_ACTIONS = new Set<ResourcePoolAction>([
   'system_redeem'
 ])
 const RESOURCE_POOL_RESOURCE_TYPES = new Set<RedeemCodeType>(['c', 'r', 'd', 't'])
+const RESOURCE_POOL_RECONCILIATION_INTERVAL_MS = 5 * 60 * 1000
 
 function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number {
   if (!value || !POSITIVE_INTEGER_QUERY_PATTERN.test(value)) return fallback
@@ -97,7 +99,95 @@ async function withResourcePoolApplyLocks<T>(
   }
 }
 
+async function reconcileResourcePoolApplies(fastify: FastifyInstance): Promise<void> {
+  const candidates = await db.getResourcePoolApplyReconciliationCandidates()
+
+  for (const candidate of candidates) {
+    const lockKey = `instance:${candidate.instanceId}:resource-pool-apply`
+    const lock = await acquireLock(lockKey, {
+      expireMs: 120_000,
+      waitTimeoutMs: 1_000,
+      retryIntervalMs: 100
+    })
+    if (!lock.success || !lock.ownerId) continue
+
+    try {
+      const instance = await db.getInstanceById(candidate.instanceId)
+      if (!instance || !['running', 'stopped'].includes(instance.status)) continue
+
+      const host = await db.getHostById(instance.host_id)
+      if (!host || !host.enable_resource_pool) continue
+
+      const client = await getIncusClient(host)
+      const incusInstance = await getInstance(client, instance.incus_id)
+      const resources: { cpu?: number; memory?: number; disk?: number } = {}
+      const reconciledTypes = new Set<RedeemCodeType>()
+
+      if (candidate.resourceTypes.includes('c')) {
+        reconciledTypes.add('c')
+        if (incusInstance.config?.['limits.cpu.allowance'] !== `${instance.cpu}%`) {
+          resources.cpu = instance.cpu
+        }
+      }
+
+      const canReconcileStoppedOnlyResources = host.instance_type !== 'vm' || instance.status === 'stopped'
+      if (canReconcileStoppedOnlyResources && candidate.resourceTypes.includes('r')) {
+        reconciledTypes.add('r')
+        if (incusInstance.config?.['limits.memory'] !== `${instance.memory}MB`) {
+          resources.memory = instance.memory
+        }
+      }
+
+      const rootDevice = incusInstance.devices?.root
+      const incusDiskSize = rootDevice && typeof rootDevice === 'object'
+        ? (rootDevice as Record<string, unknown>).size
+        : undefined
+      if (canReconcileStoppedOnlyResources && candidate.resourceTypes.includes('d')) {
+        reconciledTypes.add('d')
+        if (incusDiskSize !== `${instance.disk}MB`) {
+          resources.disk = instance.disk
+        }
+      }
+
+      if (Object.keys(resources).length > 0) {
+        await patchInstanceResources(client, instance.incus_id, resources)
+        fastify.log.info({ instanceId: instance.id, resources }, 'Reconciled resource-pool Incus configuration from DB state')
+      }
+      await db.markResourcePoolAppliesReconciled(
+        candidate.pendingApplications
+          .filter(application => reconciledTypes.has(application.resourceType))
+          .map(application => application.id)
+      )
+    } catch (error) {
+      fastify.log.warn({ err: error, instanceId: candidate.instanceId }, 'Resource-pool Incus reconciliation failed; will retry')
+    } finally {
+      await releaseLock(lockKey, lock.ownerId)
+    }
+  }
+}
+
 export default async function resourcePoolRoutes(fastify: FastifyInstance) {
+  let reconciliationRunning = false
+  const runReconciliation = async () => {
+    if (reconciliationRunning) return
+    reconciliationRunning = true
+    try {
+      await reconcileResourcePoolApplies(fastify)
+    } catch (error) {
+      fastify.log.warn({ err: error }, 'Resource-pool reconciliation scan failed; will retry')
+    } finally {
+      reconciliationRunning = false
+    }
+  }
+  const reconciliationStartupTimer = setTimeout(() => void runReconciliation(), 10_000)
+  const reconciliationTimer = setInterval(() => void runReconciliation(), RESOURCE_POOL_RECONCILIATION_INTERVAL_MS)
+  reconciliationStartupTimer.unref()
+  reconciliationTimer.unref()
+  fastify.addHook('onClose', async () => {
+    clearTimeout(reconciliationStartupTimer)
+    clearInterval(reconciliationTimer)
+  })
+
   // ==================== 获取用户资源池 ====================
   fastify.get('/', {
     onRequest: [fastify.authenticateUser]
@@ -123,7 +213,7 @@ export default async function resourcePoolRoutes(fastify: FastifyInstance) {
         properties: {
           instanceId: { type: 'integer', minimum: 1 },
           resourceType: { type: 'string', enum: ['c', 'r', 'd', 't'] },
-          amount: { type: 'integer', minimum: 1 }
+          amount: { type: 'integer', minimum: 1, maximum: db.MAX_RESOURCE_POOL_APPLY_AMOUNT }
         }
       }
     }
@@ -155,6 +245,9 @@ export default async function resourcePoolRoutes(fastify: FastifyInstance) {
           throw new Error('RESOURCE_POOL_DISABLED')
         }
 
+        const vip = await getUserContinuousVipBenefit(user.id)
+        const poolDebitAmount = calculateVipResourcePoolCost(amount, vip.benefit.resourcePoolBonusPercent)
+
         if (resourceType === 'c' && host.instance_type === 'vm' && amount % 100 !== 0) {
           throw new Error('RESOURCE_POOL_KVM_CPU_MULTIPLE')
         }
@@ -171,113 +264,114 @@ export default async function resourcePoolRoutes(fastify: FastifyInstance) {
           throw new Error('RESOURCE_POOL_VM_MUST_STOP')
         }
 
-        let patchedRollback: (() => Promise<void>) | null = null
+        let resourcesToPatch: { cpu?: number; memory?: number; disk?: number } | null = null
+        let applyLogId: number | null = null
 
-        try {
-          if (resourceType === 'c') {
-            const newCpu = instance.cpu + amount
-            const client = await getIncusClient(host)
-            await patchInstanceResources(client, instance.incus_id, { cpu: newCpu })
-            patchedRollback = async () => {
-              await patchInstanceResources(client, instance.incus_id, { cpu: instance.cpu })
-            }
-            const applied = await db.applyResourcePoolToInstance({
-              userId: user.id,
-              instanceId,
-              hostId: instance.host_id,
-              resourceType: resourceType as RedeemCodeType,
-              amount,
-              remark: `应用到实例 ${instance.name}`,
-              instanceResources: { cpu: newCpu },
-              hostResourceDelta: { cpuUsed: amount }
-            })
-            if (!applied) {
-              throw new Error('RESOURCE_POOL_INSUFFICIENT')
-            }
-          } else if (resourceType === 'r') {
-            const newMemory = instance.memory + amount
-            const client = await getIncusClient(host)
-            await patchInstanceResources(client, instance.incus_id, { memory: newMemory })
-            patchedRollback = async () => {
-              await patchInstanceResources(client, instance.incus_id, { memory: instance.memory })
-            }
-            const applied = await db.applyResourcePoolToInstance({
-              userId: user.id,
-              instanceId,
-              hostId: instance.host_id,
-              resourceType: resourceType as RedeemCodeType,
-              amount,
-              remark: `应用到实例 ${instance.name}`,
-              instanceResources: { memory: newMemory },
-              hostResourceDelta: { memoryUsed: amount }
-            })
-            if (!applied) {
-              throw new Error('RESOURCE_POOL_INSUFFICIENT')
-            }
-          } else if (resourceType === 'd') {
-            const newDisk = instance.disk + amount
-            const client = await getIncusClient(host)
-            await patchInstanceResources(client, instance.incus_id, { disk: newDisk })
-            patchedRollback = async () => {
-              await patchInstanceResources(client, instance.incus_id, { disk: instance.disk })
-            }
-            const applied = await db.applyResourcePoolToInstance({
-              userId: user.id,
-              instanceId,
-              hostId: instance.host_id,
-              resourceType: resourceType as RedeemCodeType,
-              amount,
-              remark: `应用到实例 ${instance.name}`,
-              instanceResources: { disk: newDisk },
-              hostResourceDelta: { diskUsed: amount }
-            })
-            if (!applied) {
-              throw new Error('RESOURCE_POOL_INSUFFICIENT')
-            }
-          } else if (resourceType === 't') {
-            const trafficBytes = BigInt(amount) * BigInt(1024 * 1024 * 1024)
-            const applied = await db.applyResourcePoolToInstance({
-              userId: user.id,
-              instanceId,
-              hostId: instance.host_id,
-              resourceType: resourceType as RedeemCodeType,
-              amount,
-              remark: `应用到实例 ${instance.name}`,
-              monthlyTrafficDelta: trafficBytes
-            })
-            if (!applied) {
-              throw new Error('RESOURCE_POOL_INSUFFICIENT')
-            }
+        if (resourceType === 'c') {
+          const newCpu = instance.cpu + amount
+          applyLogId = await db.applyResourcePoolToInstance({
+            userId: user.id,
+            instanceId,
+            hostId: instance.host_id,
+            resourceType: resourceType as RedeemCodeType,
+            amount,
+            poolDebitAmount,
+            remark: `应用到实例 ${instance.name}`,
+            instanceResources: { cpu: newCpu },
+            hostResourceDelta: { cpuUsed: amount }
+          })
+          if (applyLogId === null) {
+            throw new Error('RESOURCE_POOL_INSUFFICIENT')
           }
-        } catch (error) {
-          if (patchedRollback) {
-            try {
-              await patchedRollback()
-            } catch (rollbackError) {
-              request.log.error({ err: rollbackError, instanceId }, 'Failed to roll back Incus resource patch after resource-pool DB failure')
-            }
+          resourcesToPatch = { cpu: newCpu }
+        } else if (resourceType === 'r') {
+          const newMemory = instance.memory + amount
+          applyLogId = await db.applyResourcePoolToInstance({
+            userId: user.id,
+            instanceId,
+            hostId: instance.host_id,
+            resourceType: resourceType as RedeemCodeType,
+            amount,
+            poolDebitAmount,
+            remark: `应用到实例 ${instance.name}`,
+            instanceResources: { memory: newMemory },
+            hostResourceDelta: { memoryUsed: amount }
+          })
+          if (applyLogId === null) {
+            throw new Error('RESOURCE_POOL_INSUFFICIENT')
           }
-          throw error
+          resourcesToPatch = { memory: newMemory }
+        } else if (resourceType === 'd') {
+          const newDisk = instance.disk + amount
+          applyLogId = await db.applyResourcePoolToInstance({
+            userId: user.id,
+            instanceId,
+            hostId: instance.host_id,
+            resourceType: resourceType as RedeemCodeType,
+            amount,
+            poolDebitAmount,
+            remark: `应用到实例 ${instance.name}`,
+            instanceResources: { disk: newDisk },
+            hostResourceDelta: { diskUsed: amount }
+          })
+          if (applyLogId === null) {
+            throw new Error('RESOURCE_POOL_INSUFFICIENT')
+          }
+          resourcesToPatch = { disk: newDisk }
+        } else if (resourceType === 't') {
+          const trafficBytes = BigInt(amount) * BigInt(1024 * 1024 * 1024)
+          applyLogId = await db.applyResourcePoolToInstance({
+            userId: user.id,
+            instanceId,
+            hostId: instance.host_id,
+            resourceType: resourceType as RedeemCodeType,
+            amount,
+            poolDebitAmount,
+            remark: `应用到实例 ${instance.name}`,
+            monthlyTrafficDelta: trafficBytes
+          })
+          if (applyLogId === null) {
+            throw new Error('RESOURCE_POOL_INSUFFICIENT')
+          }
+        }
+
+        let reconciliationPending = false
+        if (resourcesToPatch) {
+          try {
+            const client = await getIncusClient(host)
+            await patchInstanceResources(client, instance.incus_id, resourcesToPatch)
+            await db.markResourcePoolAppliesReconciled([applyLogId!])
+          } catch (patchError) {
+            reconciliationPending = true
+            request.log.error({ err: patchError, instanceId }, 'Resource-pool DB apply committed but Incus patch confirmation failed; reconciliation will retry')
+          }
         }
 
         const typeName = RESOURCE_TYPE_NAMES[resourceType]?.zh || resourceType
         const unit = RESOURCE_TYPE_UNITS[resourceType] || ''
 
-        await createLog(
-          user.id,
-          'resource_pool',
-          'apply.success',
-          `Applied ${amount}${unit} ${typeName} to instance ${instance.name}`,
-          'success',
-          { instanceId }
-        )
+        try {
+          await createLog(
+            user.id,
+            'resource_pool',
+            'apply.success',
+            `Applied ${amount}${unit} ${typeName} to instance ${instance.name}`,
+            'success',
+            { instanceId }
+          )
+        } catch (logError) {
+          request.log.warn({ err: logError, instanceId }, 'Resource-pool apply succeeded but audit log write failed')
+        }
 
         return {
           message: 'Resource applied successfully',
           resourceType,
-          amount,
+          amount: amount.toString(),
+          poolDebitAmount: poolDebitAmount.toString(),
+          vipResourcePoolBonusPercent: vip.benefit.resourcePoolBonusPercent,
           instanceId,
-          instanceName: instance.name
+          instanceName: instance.name,
+          reconciliationPending
         }
       })
 
@@ -313,6 +407,9 @@ export default async function resourcePoolRoutes(fastify: FastifyInstance) {
       }
       if (errorMessage === 'RESOURCE_POOL_INSUFFICIENT') {
         return reply.code(400).send(apiError(ErrorCode.RESOURCE_POOL_INSUFFICIENT))
+      }
+      if (errorMessage === 'HOST_RESOURCES_INSUFFICIENT') {
+        return reply.code(400).send(apiError(ErrorCode.HOST_RESOURCES_INSUFFICIENT, 'Host capacity is insufficient for this resource claim'))
       }
       if (errorMessage === 'RESOURCE_POOL_BUSY') {
         return reply.code(409).send({ error: 'RESOURCE_POOL_BUSY', message: 'Resource pool apply is busy, please retry' })

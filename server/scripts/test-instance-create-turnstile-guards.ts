@@ -6,6 +6,7 @@ const zhLocaleSource = readFileSync(new URL('../../client/src/locales/zh-CN.ts',
 const enLocaleSource = readFileSync(new URL('../../client/src/locales/en.ts', import.meta.url), 'utf8')
 const twLocaleSource = readFileSync(new URL('../../client/src/locales/zh-TW.ts', import.meta.url), 'utf8')
 const errorHandlerSource = readFileSync(new URL('../../client/src/utils/errorHandler.ts', import.meta.url), 'utf8')
+const schemaSource = readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8')
 
 function assert(condition: unknown, message: string): void {
   if (!condition) {
@@ -67,6 +68,24 @@ assert(
     errorHandlerSource.includes('missing-input-response') &&
     errorHandlerSource.includes('invalid-input-response'),
   'frontend error translator must localize raw Turnstile backend messages and Cloudflare error codes'
+)
+
+assert(
+  schemaSource.includes('idempotencyKey   String?        @unique @map("idempotency_key")'),
+  'Instance must persist a nullable unique idempotency key for normal paid creation'
+)
+
+assert(
+  instanceCreateViewSource.includes('const createIntentIdempotencyKey = ref<string | null>(null)') &&
+    instanceCreateViewSource.includes('if (!flashSaleId && isPaidPackage.value && !createIntentIdempotencyKey.value)') &&
+    instanceCreateViewSource.includes(': (isPaidPackage.value ? createIntentIdempotencyKey.value || undefined : undefined)') &&
+    instanceCreateViewSource.includes('createIntentIdempotencyKey.value = null'),
+  'normal paid create retries must reuse one client idempotency key until the intent succeeds or changes'
+)
+
+assert(
+  instanceCreateViewSource.includes("? (crypto.randomUUID?.() || `flash-sale-${flashSaleId}-${Date.now()}`)"),
+  'flash-sale creation must keep its existing reservation idempotency key path'
 )
 
 for (const [name, source] of [

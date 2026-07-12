@@ -50,6 +50,26 @@ assert.ok(
 )
 
 assert.ok(
+  schemaSource.includes('@deprecated 积分兑换码已取消') &&
+    redeemSource.includes("export type ResourceRedeemCodeType = Exclude<RedeemCodeType, 'p'>") &&
+    redeemSource.includes('assertResourceRedeemCodeType(data.codeType)') &&
+    routeSource.includes("const CODE_TYPES = new Set<ResourceRedeemCodeType>(['c', 'r', 'd', 't'])") &&
+    routeSource.includes('codeType?: ResourceRedeemCodeType') &&
+    dbSource.includes('codeType: ResourceRedeemCodeType') &&
+    !routeSource.includes('codeType?: RedeemCodeType'),
+  'points redeem-code enum must remain deprecated while lifecycle creation rejects p'
+)
+
+assert.ok(
+  !checkinSource.includes("p: { zh: '积分', en: 'Points' }") &&
+    !checkinSource.includes("p: ''") &&
+    !checkinSource.includes("if (codeType !== 'p')") &&
+    checkinSource.includes("if (!['c', 'r', 'd', 't'].includes(codeType))") &&
+    checkinSource.includes('await db.logSystemRedeemToInstance('),
+  'system redemption must remove unreachable points-code branches while daily points check-in remains separate'
+)
+
+assert.ok(
   routeSource.includes('confirm') &&
     routeSource.includes('userIds.length > 100') &&
     routeSource.includes('normalizeText') &&

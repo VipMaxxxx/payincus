@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const instancesSource = readFileSync(resolve(__dirname, '../src/routes/instances.ts'), 'utf8')
+const dbInstancesSource = readFileSync(resolve(__dirname, '../src/db/instances.ts'), 'utf8')
 const hostsSource = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'utf8')
 
 function sectionBetween(source: string, startMarker: string, endMarker: string): string {
@@ -84,6 +85,28 @@ assert.ok(
   hostDangerousAction.includes('createHostInstanceTaskOrConflict(reply, {') &&
     hostDangerousAction.includes('if (!task) return'),
   'host dangerous-action route must use conflict-safe task creation'
+)
+
+const syncStatusRoute = sectionBetween(
+  instancesSource,
+  "}>('/:id/sync-status'",
+  "}>('/:id/change-host-options'"
+)
+assert.ok(
+  syncStatusRoute.includes("currentStatus !== 'suspended' && currentStatus !== incusStatus") &&
+    syncStatusRoute.includes('await db.updateInstanceStatus('),
+  'sync-status route must preserve suspended while continuing normal running/stopped status sync'
+)
+
+const updateInstanceStatus = sectionBetween(
+  dbInstancesSource,
+  'export async function updateInstanceStatus(',
+  'export async function updateInstance('
+)
+assert.ok(
+  updateInstanceStatus.includes("status: { notIn: ['deleted', 'suspended'] }") &&
+    updateInstanceStatus.includes('await prisma.instance.updateMany({'),
+  'database status writes must not overwrite suspended with stopped or running'
 )
 
 console.log('instance operation conflict guard tests passed')

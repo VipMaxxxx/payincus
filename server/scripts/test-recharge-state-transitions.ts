@@ -93,8 +93,25 @@ const callbackHandler = routeSectionBetween(
   'async function handlePaymentCallback(',
   '// POST 回调接口'
 )
+const repayRoute = routeSectionBetween(
+  "app.post('/api/recharge/orders/:orderNo/repay'",
+  '// 获取用户充值统计'
+)
+assert.ok(
+  repayRoute.includes('buildNextRechargePaymentAttempt') &&
+    repayRoute.includes('mergeRechargePaymentAttempt') &&
+    repayRoute.includes('previousPaymentLinkInvalidated: paymentAttempt !== null'),
+  'recharge repay must supersede the previous payment attempt, persist the new active attempt, and notify the client'
+)
+assert.ok(
+  repayRoute.includes('gatewayOrderNo') &&
+    repayRoute.indexOf('await db.updatePendingRechargePaymentSelection(orderNo') < repayRoute.indexOf('return {'),
+  'recharge repay must persist the active gateway order before returning its payment URL'
+)
+
 const completedCallbackCheckIndex = callbackHandler.indexOf("record.status === 'completed'")
 const paidAmountValidationIndex = callbackHandler.indexOf('const shouldValidatePaidAmount')
+const activeAttemptCheckIndex = callbackHandler.indexOf('isCurrentRechargePaymentAttempt')
 assert.ok(
   completedCallbackCheckIndex !== -1,
   'payment callback handler must explicitly handle already-completed orders'
@@ -103,11 +120,29 @@ assert.ok(
   completedCallbackCheckIndex < paidAmountValidationIndex,
   'payment callback handler must idempotently accept completed orders before validating callback amount'
 )
+assert.ok(
+  callbackHandler.includes('resolveRechargeOrderNoFromGatewayOrderNo') &&
+    activeAttemptCheckIndex !== -1 &&
+    activeAttemptCheckIndex < callbackHandler.indexOf('db.completeRecharge'),
+  'payment callback handler must resolve attempt-scoped gateway orders and reject superseded attempts before crediting'
+)
 // 迟到但已验签验额的回调不再因本地过期被静默丢弃，而是继续走幂等入账（completeRecharge 只对 pending/paid 入账一次）。
 assert.ok(
   callbackHandler.includes('按真实到账继续入账') &&
     !callbackHandler.includes('订单已过期，拒绝处理回调'),
   'expired but signature/amount-verified callbacks must not be silently dropped; they must fall through to idempotent crediting'
+)
+
+const verifyRoute = routeSectionBetween(
+  "app.post('/api/recharge/orders/:orderNo/verify'",
+  '// ==================== 管理员接口 ===================='
+)
+assert.ok(
+  verifyRoute.includes('const gatewayOrderNo = getCurrentRechargeGatewayOrderNo') &&
+    verifyRoute.includes('epay.queryOrder(gatewayOrderNo)') &&
+    verifyRoute.includes('heleket.getPaymentInfo({ order_id: gatewayOrderNo })') &&
+    verifyRoute.includes('inquiryPayment(gatewayOrderNo)'),
+  'active recharge verification must query only the current payment attempt for each built-in gateway'
 )
 
 console.log('recharge state transition tests passed')

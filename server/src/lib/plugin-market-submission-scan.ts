@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import type { PluginMarketSubmissionRiskLevel } from '../db/plugin-market-submissions.js'
-import { assertSafeHttpUrl } from './outbound-security.js'
+import { assertSafeHttpUrl, safeFetch } from './outbound-security.js'
 import { getPluginPackageMaxBytes, getPluginStagingDir, sha256File, validateAndExtractPluginPackage } from './plugin-package.js'
 import { parsePluginManifest, type PayIncusPluginManifest } from './plugin-manifest.js'
 
@@ -77,7 +77,7 @@ async function downloadBoundedHttpsFile(url: string, label: string, maxBytes: nu
     throw new Error(`${label} must use HTTPS`)
   }
 
-  const response = await fetch(safeUrl, {
+  const response = await safeFetch(safeUrl.toString(), {
     method: 'GET',
     redirect: 'manual',
     signal: AbortSignal.timeout(30_000),
@@ -85,7 +85,7 @@ async function downloadBoundedHttpsFile(url: string, label: string, maxBytes: nu
       'accept': 'application/octet-stream',
       'user-agent': 'PayIncus-Plugin-Submission-Scanner/1.0'
     }
-  })
+  }, label)
 
   if (!response.ok) {
     throw new Error(`${label} download failed with HTTP ${response.status}`)

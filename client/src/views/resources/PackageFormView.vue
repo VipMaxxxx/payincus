@@ -306,16 +306,16 @@ function normalizeTrafficMultiplier(value: unknown): number {
   return Math.round(Math.min(Math.max(num, 0.001), 100) * 1000) / 1000
 }
 
-function normalizeMoneyCents(value: unknown): number | null {
+function normalizeMoneyYuan(value: unknown): number | null {
   const amount = Number(value)
   if (!Number.isFinite(amount) || amount < 0 || amount > MAX_TRAFFIC_RESET_PRICE) {
     return null
   }
-  const cents = amount * 100
-  if (Math.abs(cents - Math.round(cents)) >= 1e-8) {
+  const rounded = Math.round(amount * 100) / 100
+  if (Math.abs(amount - rounded) >= 1e-8) {
     return null
   }
-  return Math.round(cents)
+  return rounded
 }
 
 // Parse storage value with unit (e.g., "100MB" -> { value: "100", unit: "MB" })
@@ -599,7 +599,7 @@ async function loadPackage(id: number): Promise<void> {
       nested: pkg.nested === 1 || pkg.nested === true,
       active: pkg.active === 1 || pkg.active === true,
       monthlyTrafficLimitGB: bytesToGB(pkg.monthly_traffic_limit),
-      trafficResetPrice: Number(pkg.traffic_reset_price || 0) / 100,
+      trafficResetPrice: Number(pkg.traffic_reset_price || 0),
       // 实例配额
       portLimit: pkg.port_limit ?? 20,
       snapshotLimit: pkg.snapshot_limit ?? 10,
@@ -710,8 +710,8 @@ async function savePackage(): Promise<void> {
     return
   }
 
-  const trafficResetPriceCents = normalizeMoneyCents(form.value.trafficResetPrice)
-  if (trafficResetPriceCents === null) {
+  const trafficResetPriceYuan = normalizeMoneyYuan(form.value.trafficResetPrice)
+  if (trafficResetPriceYuan === null) {
     formError.value = `流量重置价格必须在 0-${MAX_TRAFFIC_RESET_PRICE.toFixed(2)} 元之间，且最多两位小数`
     return
   }
@@ -754,7 +754,7 @@ async function savePackage(): Promise<void> {
       nested: form.value.nested,
       active: form.value.active,
       monthlyTrafficLimit: trafficLimitBytes,
-      trafficResetPrice: trafficResetPriceCents,
+      trafficResetPrice: trafficResetPriceYuan,
       // 实例配额
       portLimit: form.value.portLimit ?? undefined,
       snapshotLimit: form.value.snapshotLimit ?? undefined,
@@ -1258,7 +1258,7 @@ function goBack(): void {
               :max="MAX_TRAFFIC_RESET_PRICE"
               step="0.01"
             />
-            <p class="text-xs text-themed-muted mt-1">用户自助重置月流量时扣费，0 表示免费。</p>
+            <p class="text-xs text-themed-muted mt-1">单位:元(如填 5 表示 5 元)；用户自助重置月流量时扣费，0 表示免费。</p>
           </div>
         </div>
       </div>

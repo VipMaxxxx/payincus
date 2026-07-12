@@ -3,7 +3,7 @@
  * 向管理员配置的通知渠道发送中奖通知
  */
 import * as db from '../db/index.js'
-import { assertSafeWebhookUrl } from './outbound-security.js'
+import { assertSafeWebhookUrl, safeFetch } from './outbound-security.js'
 import { sanitizeTokensInString } from './log-sanitizer.js'
 
 const LOTTERY_NOTIFICATION_FETCH_TIMEOUT_MS = 15_000
@@ -197,7 +197,7 @@ async function sendDiscord(
   }
 
   const parsedUrl = await assertSafeWebhookUrl(webhookUrl)
-  const response = await fetch(parsedUrl.toString(), {
+  const response = await safeFetch(parsedUrl.toString(), {
     method: 'POST',
     signal: AbortSignal.timeout(LOTTERY_NOTIFICATION_FETCH_TIMEOUT_MS),
     headers: { 'Content-Type': 'application/json' },
@@ -213,7 +213,7 @@ async function sendDiscord(
       }]
     }),
     redirect: 'manual'
-  })
+  }, 'Webhook URL')
 
   if (!response.ok) {
     throw new Error(await readSafeNotificationError(response))
@@ -246,7 +246,7 @@ async function sendWebhook(
   }
 
   const parsedUrl = await assertSafeWebhookUrl(url)
-  const response = await fetch(parsedUrl.toString(), {
+  const response = await safeFetch(parsedUrl.toString(), {
     method: 'POST',
     signal: AbortSignal.timeout(LOTTERY_NOTIFICATION_FETCH_TIMEOUT_MS),
     headers,
@@ -255,7 +255,7 @@ async function sendWebhook(
       timestamp: new Date().toISOString()
     }),
     redirect: 'manual'
-  })
+  }, 'Webhook URL')
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`)

@@ -62,6 +62,8 @@ import {
   normalizeNetworkMode
 } from '../lib/network-modes.js'
 import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
+import { calculateDailyPrice } from '../lib/billing-calc.js'
+import { reverseInstanceAffCommissionForRefund } from './instance-destroy.js'
 
 // 自定义 nanoid，只使用小写字母和数字
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
@@ -788,14 +790,6 @@ async function processPluginGatewayRechargeRefund(input: {
 function calculateMonthlyPrice(billingPrice: number, billingCycle: number | null): number {
   const cycle = billingCycle || 1
   return Number((billingPrice / cycle).toFixed(2))
-}
-
-/**
- * 计算日均价格
- */
-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
-  return Number((monthlyPrice / 30).toFixed(2))
 }
 
 const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
@@ -2381,7 +2375,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       }
 
       // 计算延期费用（按天价计算）
-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
+      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
 
       // 计算新的到期时间
@@ -2637,6 +2631,21 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
             remark: `管理员退款：${reason}（操作者: ${admin.username}）`
           }
         })
+
+        await reverseInstanceAffCommissionForRefund({
+          tx,
+          instanceId,
+          refundAmount: amount,
+          remark: `管理员退款返利冲正：${instance.name}`
+        })
+
+        await db.deductHostingBalance(
+          instance.hostId,
+          amount,
+          instanceId,
+          `管理员退款扣除托管收入：${instance.name}`,
+          tx
+        )
       })
 
       await createLog(
@@ -2798,6 +2807,21 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
                 remark: `管理员删除并退款（${refundType === 'full' ? '全额' : '按剩余价值'}）：${reason}（操作者: ${admin.username}）`
               }
             })
+
+            await reverseInstanceAffCommissionForRefund({
+              tx,
+              instanceId,
+              refundAmount,
+              remark: `管理员删除并退款返利冲正：${instance.name}`
+            })
+
+            await db.deductHostingBalance(
+              instance.hostId,
+              refundAmount,
+              instanceId,
+              `管理员删除托管实例退款扣除：${instance.name}`,
+              tx
+            )
           })
         } catch (refundError) {
           await prisma.instance.updateMany({
@@ -3144,6 +3168,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
           throw new BatchPriceUpdateError('实例计费信息已变化，请刷新后重试', 409)
         }
 
+        // 共享报价按实付账单计算剩余价值并封顶，执行时在同一事务内重算。
         const quote = await db.calculateInstancePriceAdjustmentQuote(currentInstance, roundedNewPrice, settleBalance, tx)
         priceDiff = quote.priceDiff
         remainingDays = quote.remainingDays
@@ -3334,6 +3359,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         return reply.status(400).send({ error: '免费实例不支持修改价格' })
       }
 
+      // 预览与执行共用实付账单剩余价值口径，避免按 billingPrice 名义价抵扣。
       const quote = await db.calculateInstancePriceAdjustmentQuote(instance, newPrice, settleBalance)
       const userBalance = Number(instance.user?.balance || 0)
 

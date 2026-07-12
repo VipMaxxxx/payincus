@@ -11,7 +11,28 @@ const installScriptSource = readFileSync(resolve(__dirname, '../templates/agent-
 const hostAgentCredentialsSource = readFileSync(resolve(__dirname, '../src/lib/host-agent-credentials.ts'), 'utf8')
 const agentBuildReleaseScriptSource = readFileSync(resolve(__dirname, '../../agent/scripts/build-release.sh'), 'utf8')
 const agentReleaseWorkflowSource = readFileSync(resolve(__dirname, '../../.github/workflows/agent-release.yml'), 'utf8')
+const onlineUpdateUnitSource = readFileSync(resolve(__dirname, '../../deploy/incudal-online-update@.service.example'), 'utf8')
+const onlineRollbackUnitSource = readFileSync(resolve(__dirname, '../../deploy/incudal-online-rollback@.service.example'), 'utf8')
+const onlineTaskHelperSource = readFileSync(resolve(__dirname, '../../deploy/incudal-online-task.sh.example'), 'utf8')
 const retiredReleaseRepository = 'retired-release-repository'
+
+for (const [name, source, mode] of [
+  ['update', onlineUpdateUnitSource, 'update'],
+  ['rollback', onlineRollbackUnitSource, 'rollback']
+] as const) {
+  assert.ok(
+    source.includes('User=root') &&
+      source.includes(`ExecStart=/usr/local/libexec/incudal/incudal-online-task ${mode} %i`) &&
+      !source.includes('/opt/incudal/current/server/dist/scripts/'),
+    `root ${name} unit must enter through the fixed root-owned helper`
+  )
+}
+assert.ok(
+  onlineTaskHelperSource.includes('verify_manifest') &&
+    onlineTaskHelperSource.includes('release file set or digest differs from trusted manifest') &&
+    onlineTaskHelperSource.includes('release integrity verification failed'),
+  'root OTA helper must verify the sealed release manifest before executing a worker'
+)
 
 assert.ok(
   agentRouteSource.includes("const defaultAgentReleaseRepository = 'VipMaxxxx/payincus'"),

@@ -1,6 +1,6 @@
 import { getSystemConfig } from '../db/system-config.js'
 import { sanitizeTokensInString } from './log-sanitizer.js'
-import { assertSafeHttpUrl } from './outbound-security.js'
+import { assertSafeHttpUrl, safeFetch } from './outbound-security.js'
 
 export type LskyApiVersion = 'v1' | 'v2'
 const LSKY_UPLOAD_TIMEOUT_MS = 60_000
@@ -207,12 +207,12 @@ async function fetchLskyDefaultStorageId(config: TicketImageLskyConfig): Promise
   }
 
   const groupUrl = `${apiBase}/group`
-  const response = await fetch(groupUrl, {
+  const response = await safeFetch(groupUrl, {
     method: 'GET',
     redirect: 'manual',
     signal: AbortSignal.timeout(LSKY_GROUP_TIMEOUT_MS),
     headers: buildLskyAuthHeaders(config.token)
-  })
+  }, 'Lsky API URL')
 
   const responseText = await response.text()
   const payload: any = parseJsonResponse(responseText)
@@ -296,13 +296,13 @@ export async function uploadTicketImageToLsky(
 
   const uploadUrl = `${resolveLskyApiBase(config.baseUrl, config.apiVersion)}/upload`
 
-  const response = await fetch(uploadUrl, {
+  const response = await safeFetch(uploadUrl, {
     method: 'POST',
     redirect: 'manual',
     signal: AbortSignal.timeout(LSKY_UPLOAD_TIMEOUT_MS),
     headers: buildLskyAuthHeaders(config.token),
     body: formData
-  })
+  }, 'Lsky API URL')
 
   const responseText = await response.text()
   const payload: any = parseJsonResponse(responseText)
@@ -412,7 +412,7 @@ export async function deleteTicketImageFromLsky(providerVersion: string, provide
     : `${apiBase}/images/${encodeURIComponent(providerFileId)}`
 
   try {
-    const response = await fetch(deleteUrl, {
+    const response = await safeFetch(deleteUrl, {
       method: 'DELETE',
       redirect: 'manual',
       signal: AbortSignal.timeout(LSKY_DELETE_TIMEOUT_MS),
@@ -420,7 +420,7 @@ export async function deleteTicketImageFromLsky(providerVersion: string, provide
         ? { ...buildLskyAuthHeaders(config.token), 'Content-Type': 'application/json' }
         : buildLskyAuthHeaders(config.token),
       body: apiVersion === 'v2' ? JSON.stringify([numericId]) : undefined
-    })
+    }, 'Lsky API URL')
     const responseText = await response.text()
     const payload: any = parseJsonResponse(responseText)
 

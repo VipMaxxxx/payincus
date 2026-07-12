@@ -13,6 +13,15 @@ import { INSTANCE_OPERATION_LOCK_NAMESPACE, REDEEM_CODE_LOCK_NAMESPACE, advisory
 const SYSTEM_CODE_PREFIX = 'h'
 const REDEEM_CODE_LIST_MAX_LIMIT = 100
 
+export type ResourceRedeemCodeType = Exclude<RedeemCodeType, 'p'>
+export const RESOURCE_REDEEM_CODE_TYPES: readonly ResourceRedeemCodeType[] = ['c', 'r', 'd', 't']
+
+function assertResourceRedeemCodeType(codeType: RedeemCodeType): asserts codeType is ResourceRedeemCodeType {
+  if (!RESOURCE_REDEEM_CODE_TYPES.includes(codeType as ResourceRedeemCodeType)) {
+    throw new Error('REDEEM_CODE_INVALID_TYPE')
+  }
+}
+
 function clampRedeemCodeListBounds(limit: number | undefined, offset: number | undefined, defaultLimit: number): {
   limit: number
   offset: number
@@ -26,27 +35,25 @@ function clampRedeemCodeListBounds(limit: number | undefined, offset: number | u
 }
 
 // 签到系统使用的固定可选数值（不要修改）
-export const CODE_VALUES: Record<RedeemCodeType, number[]> = {
+export const CODE_VALUES: Record<ResourceRedeemCodeType, number[]> = {
   c: [1, 2, 3, 5],             // CPU: 1-5%
   r: [2, 4, 6, 12],            // 内存: 2/4/6/12 MB
   d: [16, 32, 64, 128],        // 硬盘: 16/32/64/128 MB
-  t: [1, 2, 3, 5],             // 流量: 1/2/3/5 GB
-  p: [100, 300, 500, 1000]     // 积分: 100/300/500/1000（仅签到使用）
+  t: [1, 2, 3, 5]              // 流量: 1/2/3/5 GB
 }
 
 // 宿主机兑换码的资源范围限制（允许用户自定义任意值）
-export const CODE_VALUE_RANGES: Record<RedeemCodeType, { min: number; max: number; unit: string }> = {
+export const CODE_VALUE_RANGES: Record<ResourceRedeemCodeType, { min: number; max: number; unit: string }> = {
   c: { min: 1, max: 100, unit: '%' },        // CPU: 1-100%
   r: { min: 1, max: 65536, unit: 'MB' },     // 内存: 1MB - 64GB
   d: { min: 1, max: 1048576, unit: 'MB' },   // 硬盘: 1MB - 1TB
-  t: { min: 1, max: 10240, unit: 'GB' },     // 流量: 1GB - 10TB
-  p: { min: 1, max: 100000, unit: '' }       // 积分: 1-100000（保留，宿主机不使用）
+  t: { min: 1, max: 10240, unit: 'GB' }      // 流量: 1GB - 10TB
 }
 
 /**
  * 验证兑换码数值是否在允许范围内（宿主机兑换码使用）
  */
-export function isValidCodeValue(codeType: RedeemCodeType, value: number): boolean {
+export function isValidCodeValue(codeType: ResourceRedeemCodeType, value: number): boolean {
   const range = CODE_VALUE_RANGES[codeType]
   if (!range) return false
   return Number.isInteger(value) && value >= range.min && value <= range.max
@@ -73,13 +80,14 @@ export function isSystemCode(code: string): boolean {
 export async function createRedeemCode(data: {
   hostId: number
   createdById: number
-  codeType: RedeemCodeType
+  codeType: ResourceRedeemCodeType
   codeValue: number
   maxUses?: number
   expiresAt?: Date | null
   remark?: string
   targetUserId?: number | null
 }) {
+  assertResourceRedeemCodeType(data.codeType)
   const code = generateSystemCode()
 
   return prisma.redeemCode.create({
@@ -103,13 +111,14 @@ export async function createRedeemCode(data: {
 export async function createRedeemCodeBatch(data: {
   hostId: number
   createdById: number
-  codeType: RedeemCodeType
+  codeType: ResourceRedeemCodeType
   codeValue: number
   count: number
   expiresAt?: Date | null
   remark?: string
   targetUserId?: number | null
 }): Promise<{ codes: string[]; batchId: string }> {
+  assertResourceRedeemCodeType(data.codeType)
   const codes: string[] = []
   const createData = []
   // 生成批次ID，同批次的兑换码每用户只能使用一张
@@ -349,7 +358,7 @@ export async function applySystemRedeemCodeToInstance(data: {
     memoryUsed?: number
     diskUsed?: number
   }
-  monthlyTrafficDelta?: bigint
+  extraTrafficQuotaDelta?: bigint
 }): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await advisoryTransactionLock(tx, REDEEM_CODE_LOCK_NAMESPACE, data.redeemCodeId)
@@ -404,12 +413,13 @@ export async function applySystemRedeemCodeToInstance(data: {
       })
     }
 
-    if (data.monthlyTrafficDelta !== undefined) {
-      await tx.$executeRaw`
-        UPDATE "instances"
-        SET "monthly_traffic_limit" = COALESCE("monthly_traffic_limit", 0) + ${data.monthlyTrafficDelta}
-        WHERE "id" = ${data.instanceId}
-      `
+    if (data.extraTrafficQuotaDelta !== undefined) {
+      await tx.userQuota.update({
+        where: { userId: data.userId },
+        data: {
+          extraTrafficQuota: { increment: data.extraTrafficQuotaDelta }
+        }
+      })
     }
 
     try {
@@ -454,27 +464,84 @@ export async function updateRedeemCodeForHost(
 /**
  * 删除指定宿主机下的兑换码。
  */
-export async function deleteRedeemCodeForHost(hostId: number, id: number): Promise<boolean> {
-  const result = await prisma.redeemCode.deleteMany({
-    where: { id, hostId }
-  })
+export async function deleteRedeemCodeForHost(
+  hostId: number,
+  id: number
+): Promise<'deleted' | 'disabled' | 'not_found'> {
+  return prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, REDEEM_CODE_LOCK_NAMESPACE, id)
 
-  return result.count > 0
+    const code = await tx.redeemCode.findFirst({
+      where: { id, hostId },
+      select: { id: true }
+    })
+    if (!code) return 'not_found'
+
+    const usageCount = await tx.redeemCodeUsage.count({ where: { redeemCodeId: id } })
+    if (usageCount > 0) {
+      await tx.redeemCode.updateMany({
+        where: { id, hostId },
+        data: { enabled: false }
+      })
+      return 'disabled'
+    }
+
+    await tx.redeemCode.deleteMany({ where: { id, hostId } })
+    return 'deleted'
+  })
 }
 
 /**
  * 批量删除指定宿主机下的兑换码。
  */
-export async function deleteRedeemCodeBatchForHost(hostId: number, ids: number[]): Promise<number> {
+export async function deleteRedeemCodeBatchForHost(
+  hostId: number,
+  ids: number[]
+): Promise<{ foundCount: number; deletedCount: number; disabledCount: number }> {
   if (ids.length === 0) {
-    return 0
+    return { foundCount: 0, deletedCount: 0, disabledCount: 0 }
   }
 
-  const result = await prisma.redeemCode.deleteMany({
-    where: { id: { in: ids }, hostId }
-  })
+  return prisma.$transaction(async (tx) => {
+    const sortedIds = [...ids].sort((a, b) => a - b)
+    for (const id of sortedIds) {
+      await advisoryTransactionLock(tx, REDEEM_CODE_LOCK_NAMESPACE, id)
+    }
 
-  return result.count
+    const codes = await tx.redeemCode.findMany({
+      where: { id: { in: sortedIds }, hostId },
+      select: { id: true }
+    })
+    const foundIds = codes.map(code => code.id)
+    if (foundIds.length === 0) {
+      return { foundCount: 0, deletedCount: 0, disabledCount: 0 }
+    }
+
+    const usages = await tx.redeemCodeUsage.groupBy({
+      by: ['redeemCodeId'],
+      where: { redeemCodeId: { in: foundIds } }
+    })
+    const usedIds = usages.map(usage => usage.redeemCodeId)
+    const unusedIds = foundIds.filter(id => !usedIds.includes(id))
+
+    if (usedIds.length > 0) {
+      await tx.redeemCode.updateMany({
+        where: { id: { in: usedIds }, hostId },
+        data: { enabled: false }
+      })
+    }
+    if (unusedIds.length > 0) {
+      await tx.redeemCode.deleteMany({
+        where: { id: { in: unusedIds }, hostId }
+      })
+    }
+
+    return {
+      foundCount: foundIds.length,
+      deletedCount: unusedIds.length,
+      disabledCount: usedIds.length
+    }
+  })
 }
 
 /**

@@ -184,8 +184,10 @@ assert(
     themeMarketPublisher.includes('THEME_MARKET_PUBLISH_DIR') &&
     themeMarketPublisher.includes('THEME_MARKET_PUBLIC_BASE_URL') &&
     themeMarketPublisher.includes("scanStatus: { in: ['passed', 'warning'] }") &&
-    themeMarketPublisher.includes('entriesById.set(submission.themeId, submissionToMarketEntry(submission, publicBaseUrl))'),
-  'theme submissions must persist review state, scan theme packages safely, and publish listed scanned themes into the theme market index'
+    !themeMarketPublisher.includes('readExistingMarketEntries') &&
+    themeMarketPublisher.includes('highestSubmissionById') &&
+    themeMarketPublisher.includes('compareSemVer(version, current.version) > 0'),
+  'theme submissions must persist review state, scan packages safely, and rebuild the index with the highest listed scanned SemVer per theme ID'
 )
 
 assert(
@@ -269,6 +271,7 @@ assert(
     apiTypes.includes('export interface ThemeMarketGovernance') &&
     apiTypes.includes('unavailableReason?: string') &&
     apiTypes.includes('export interface ThemeMarketSubmission') &&
+    apiTypes.includes('export interface CreateThemeMarketSubmissionRequest') &&
     apiTypes.includes('export interface ThemeMarketSubmissionScanResult') &&
     apiTypes.includes('export interface PayIncusThemeConfigField') &&
     apiTypes.includes('group?: string') &&
@@ -289,6 +292,9 @@ assert(
     adminApi.includes('updateConfig:') &&
     adminApi.includes("http.put(`/admin/themes/${themeId}/config`") &&
     userApi.includes('getActive: (): Promise<{ theme: ThemePackageRecord | null }>') &&
+    userApi.includes('themeMarketSubmissions:') &&
+    userApi.includes("http.post('/theme-market-submissions', data)") &&
+    userApi.includes("http.get('/theme-market-submissions/mine')") &&
     themeStore.includes('ACTIVE_THEME_LINK_ID') &&
     themeStore.includes("fetch(buildApiUrl('/themes/active')") &&
     themeStore.includes('loadActiveTheme') &&
@@ -312,6 +318,11 @@ assert(
     ticketsView.includes('slot-name="user.tickets.banner"') &&
     extensionsView.includes('ThemeTemplateSlot') &&
     extensionsView.includes('slot-name="user.extensions.banner"') &&
+    extensionsView.includes("activeTab === 'theme-submissions'") &&
+    extensionsView.includes('@submit.prevent="submitThemeReview"') &&
+    extensionsView.includes('api.themeMarketSubmissions.create') &&
+    extensionsView.includes("pricing: { type: 'free' }") &&
+    extensionsView.includes('api.themeMarketSubmissions.mine') &&
     ordersView.includes('ThemeTemplateSlot') &&
     ordersView.includes('slot-name="user.orders.banner"') &&
     profileView.includes('ThemeTemplateSlot') &&

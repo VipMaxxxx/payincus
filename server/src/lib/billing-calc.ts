@@ -234,7 +234,9 @@ export function calculatePlanChangeDetails(
   newPrice: number,
   newBillingCycle: number,
   remainingDays: number,
-  discountRate: number = 0
+  discountRate: number,
+  paidRemainingValue: number,
+  maxPaidAmount: number
 ): PlanChangeCalcResult {
   // 计算折扣后的价格
   const actualOldPrice = discountRate > 0
@@ -248,8 +250,12 @@ export function calculatePlanChangeDetails(
   const oldDailyPrice = calculateDailyPrice(actualOldPrice, oldBillingCycle)
   const newDailyPrice = calculateDailyPrice(actualNewPrice, newBillingCycle)
 
-  // 剩余价值 = 旧日价 × 剩余天数
-  const remainingValue = Number((oldDailyPrice * remainingDays).toFixed(2))
+  // 升降级抵扣只认实付账单的未使用价值，并封顶于尚可退的实付总额。
+  // paidRemainingValue / maxPaidAmount 由销毁退款的统一账单报价口径提供。
+  const remainingValue = Math.min(
+    Number(Math.max(0, paidRemainingValue).toFixed(2)),
+    Number(Math.max(0, maxPaidAmount).toFixed(2))
+  )
 
   // 新方案费用 = 新日价 × 剩余天数
   const newPlanCost = Number((newDailyPrice * remainingDays).toFixed(2))

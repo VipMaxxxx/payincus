@@ -4,17 +4,20 @@
  * 功能：自动关闭满足条件的已解决工单
  * 条件：
  * 1. 状态为 resolved（已解决）
- * 2. 超过24小时未更新
+ * 2. 最后一条公开消息超过配置的等待时间
  * 3. 最后一条消息来自宿主机主人（不需要管理员再回复）
  */
 
 import { getTicketsForAutoClose, autoCloseTickets } from '../db/tickets.js'
 import { sendNotification } from '../lib/notifier.js'
 import { createLog } from '../db/logs.js'
-import { getHostById } from '../db/index.js'
+import { getHostById, getSystemConfigBoolean, getSystemConfigNumber } from '../db/index.js'
 
 // 配置常量
-const AUTO_CLOSE_TIMEOUT_MS = 24 * 60 * 60 * 1000 // 24小时
+const TICKET_AUTO_CLOSE_ENABLED_CONFIG_KEY = 'ticket_auto_close_enabled'
+const TICKET_AUTO_CLOSE_HOURS_CONFIG_KEY = 'ticket_auto_close_hours'
+const DEFAULT_TICKET_AUTO_CLOSE_HOURS = 24
+const HOUR_MS = 60 * 60 * 1000
 const CHECK_INTERVAL_MS = 60 * 60 * 1000 // 每小时检查一次
 
 let schedulerInterval: ReturnType<typeof setInterval> | null = null
@@ -24,8 +27,20 @@ let schedulerInterval: ReturnType<typeof setInterval> | null = null
  */
 async function processTicketAutoClose(): Promise<void> {
   try {
+    const enabled = await getSystemConfigBoolean(TICKET_AUTO_CLOSE_ENABLED_CONFIG_KEY, true)
+    if (!enabled) {
+      return
+    }
+
+    const configuredHours = await getSystemConfigNumber(
+      TICKET_AUTO_CLOSE_HOURS_CONFIG_KEY,
+      DEFAULT_TICKET_AUTO_CLOSE_HOURS
+    )
+    const autoCloseHours = configuredHours >= 1 ? configuredHours : DEFAULT_TICKET_AUTO_CLOSE_HOURS
+    const autoCloseTimeoutMs = autoCloseHours * HOUR_MS
+
     // 获取需要自动关闭的工单
-    const ticketsToClose = await getTicketsForAutoClose(AUTO_CLOSE_TIMEOUT_MS)
+    const ticketsToClose = await getTicketsForAutoClose(autoCloseTimeoutMs)
 
     if (ticketsToClose.length === 0) {
       return
@@ -35,7 +50,7 @@ async function processTicketAutoClose(): Promise<void> {
 
     // 批量关闭工单。只对本轮实际抢占并关闭成功的工单发送通知/写日志。
     const ticketIds = ticketsToClose.map(t => t.id)
-    const closedTickets = await autoCloseTickets(ticketIds, AUTO_CLOSE_TIMEOUT_MS)
+    const closedTickets = await autoCloseTickets(ticketIds, autoCloseTimeoutMs)
 
     // 发送通知和记录日志
     for (const ticket of closedTickets) {
@@ -54,7 +69,7 @@ async function processTicketAutoClose(): Promise<void> {
           ticket.userId,
           'ticket',
           'ticket.auto_closed',
-          `Ticket #${ticket.id} "${ticket.subject}" auto-closed after 24 hours`,
+          `Ticket #${ticket.id} "${ticket.subject}" auto-closed after ${autoCloseHours} hours`,
           'success'
         )
       } catch (notifyErr) {
@@ -83,7 +98,7 @@ export function startTicketAutoCloseScheduler(): void {
   // 定期执行
   schedulerInterval = setInterval(processTicketAutoClose, CHECK_INTERVAL_MS)
 
-  console.log('🎫 工单自动关闭调度器已启动（24小时超时，每小时检查）')
+  console.log('🎫 工单自动关闭调度器已启动（超时可配置，每小时检查）')
 }
 
 /**

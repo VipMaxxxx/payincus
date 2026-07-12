@@ -374,7 +374,7 @@ export async function updateInstanceStatus(
   await prisma.instance.updateMany({
     where: {
       id,
-      status: { not: 'deleted' }
+      status: { notIn: ['deleted', 'suspended'] }
     },
     data: updateData
   })

@@ -75,6 +75,7 @@ const newDomain = ref('')
 const showRenewModal = ref(false)
 const renewLoading = ref(false)
 const renewMonths = ref(1)
+const autoRenewLoading = ref(false)
 
 onMounted(async () => {
   await loadData()
@@ -261,6 +262,22 @@ async function renewSubscription() {
   }
 }
 
+async function toggleAutoRenew() {
+  if (!subscription.value || autoRenewLoading.value) return
+
+  const nextValue = !subscription.value.autoRenew
+  autoRenewLoading.value = true
+  try {
+    const result = await api.mail.setAutoRenew(nextValue)
+    subscription.value.autoRenew = result.autoRenew
+    toast.success(t(result.autoRenew ? 'mail.autoRenewEnabled' : 'mail.autoRenewDisabled'))
+  } catch (err: any) {
+    toast.error(translateError(err))
+  } finally {
+    autoRenewLoading.value = false
+  }
+}
+
 function getStatusBadge(status: string) {
   switch (status) {
     case 'verified': return 'badge-success'
@@ -368,15 +385,42 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
             </div>
           </div>
           
-          <div class="flex items-center justify-between gap-3 text-sm">
-            <span class="text-themed-muted min-w-0 truncate">
-              {{ t('mail.plan') }}：{{ subscription.plan.name }} ({{ subscription.source.name }}) ·
-              {{ subscription.plan.domainLimit }} {{ t('mail.domains') }} / {{ subscription.plan.diskLimitGb }}GB ·
-              {{ formatPrice(subscription.plan.price) }}{{ getBillingCycleSuffix(subscription.plan.billingCycle) }}
-            </span>
-            <button class="btn btn-sm btn-outline shrink-0" @click="openRenewModal">
-              {{ t('mail.renew') }}
-            </button>
+          <div class="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
+              <div class="text-themed-muted truncate">
+                {{ t('mail.plan') }}：{{ subscription.plan.name }} ({{ subscription.source.name }}) ·
+                {{ subscription.plan.domainLimit }} {{ t('mail.domains') }} / {{ subscription.plan.diskLimitGb }}GB ·
+                {{ formatPrice(subscription.plan.price) }}{{ getBillingCycleSuffix(subscription.plan.billingCycle) }}
+              </div>
+              <div class="mt-1 text-xs text-themed-muted">{{ t('mail.autoRenewHint') }}</div>
+            </div>
+            <div class="flex shrink-0 items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="subscription.autoRenew"
+                :aria-label="t('mail.autoRenew')"
+                :disabled="autoRenewLoading"
+                :class="[
+                  'relative h-6 w-11 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                  subscription.autoRenew ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
+                ]"
+                @click="toggleAutoRenew"
+              >
+                <span
+                  :class="[
+                    'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
+                    subscription.autoRenew ? 'translate-x-5' : 'translate-x-0.5'
+                  ]"
+                ></span>
+              </button>
+              <span class="text-xs font-medium text-themed">
+                {{ t(subscription.autoRenew ? 'mail.autoRenewOn' : 'mail.autoRenewOff') }}
+              </span>
+              <button class="btn btn-sm btn-outline" @click="openRenewModal">
+                {{ t('mail.renew') }}
+              </button>
+            </div>
           </div>
         </div>
 

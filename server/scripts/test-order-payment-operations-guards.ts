@@ -37,6 +37,18 @@ assert.ok(ordersRoute.includes('normalizeOrderOperationInput(request.body)'), 'r
 assert.ok(ordersRoute.includes("requestType: 'refund'"), 'refund registration must create refund adjustment request')
 assert.ok(ordersRoute.includes('createBalanceAdjustmentRequest({'), 'refund registration must use approval workflow')
 assert.ok(ordersRoute.includes("status: 'pending'") && ordersRoute.includes('existingPendingRefund'), 'route must block duplicate pending refunds')
+assert.ok(
+  ordersRoute.includes('input.createRefundRequest &&') &&
+    ordersRoute.includes("rechargeOrder.status !== 'completed'") &&
+    ordersRoute.includes("rechargeOrder.status !== 'refunded'") &&
+    ordersRoute.includes("code: 'RECHARGE_NOT_CREDITED'"),
+  'recharge refund registration must reject orders that have not been credited'
+)
+assert.ok(
+  ordersRoute.includes('toMoney(rechargeOrder.actualAmount ?? rechargeOrder.amount)') &&
+    ordersRoute.includes('input.refundAmount > refundLimit'),
+  'recharge refund registration must cap refunds at actual credited amount with legacy fallback'
+)
 assert.ok(ordersRoute.includes('serializeOrderOperationCase(operationCase)'), 'route must return serialized operation case')
 assert.ok(ordersRoute.includes('buildProviderStatusSummary'), 'route must expose a redacted provider status summary')
 assert.ok(ordersRoute.includes('maskTradeNo'), 'provider trade number must be masked in summary')

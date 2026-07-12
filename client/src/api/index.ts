@@ -106,6 +106,8 @@ import type {
   CreatePluginMarketSubmissionRequest,
   UpdatePluginEventAlertPreferenceRequest,
   ThemePackageRecord,
+  ThemeMarketSubmission,
+  CreateThemeMarketSubmissionRequest,
   ExchangeDispute,
   ExchangeEligibilityResult,
   ExchangeListing,
@@ -4021,6 +4023,13 @@ const api = {
       http.get('/themes/active')
   },
 
+  themeMarketSubmissions: {
+    create: (data: CreateThemeMarketSubmissionRequest): Promise<{ submission: ThemeMarketSubmission }> =>
+      http.post('/theme-market-submissions', data),
+    mine: (): Promise<{ submissions: ThemeMarketSubmission[] }> =>
+      http.get('/theme-market-submissions/mine')
+  },
+
   apiTokens: {
     list: (): Promise<{ scopes: readonly PublicApiScope[]; tokens: PublicApiToken[] }> =>
       http.get('/api-tokens'),
@@ -4155,6 +4164,10 @@ const api = {
         }>
       } | null
     }> => http.get('/mail/subscription'),
+
+    // 设置自动续费
+    setAutoRenew: (autoRenew: boolean): Promise<{ autoRenew: boolean }> =>
+      http.patch('/mail/subscription/auto-renew', { autoRenew }),
 
     // 购买订阅
     purchaseSubscription: (planId: number, affCode?: string): Promise<{

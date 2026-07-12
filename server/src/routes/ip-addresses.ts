@@ -622,19 +622,28 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
                 if (!isValidIpv6Subnet(inputCidr)) {
                     return reply.code(400).send({ error: 'Invalid IPv6 subnet CIDR format' })
                 }
+                let normalizedCidr: ipv6Subnets.Ipv6CidrRange
+                try {
+                    normalizedCidr = ipv6Subnets.normalizeIpv6CidrRange(inputCidr)
+                } catch {
+                    return reply.code(400).send({ error: 'Invalid IPv6 subnet CIDR format' })
+                }
+                if (!(ipv6Subnets.IPV6_SUBNET_ALLOWED_PREFIXES as readonly number[]).includes(normalizedCidr.prefix)) {
+                    return reply.code(400).send({ error: 'Prefix must be 112, 120, or 124' })
+                }
                 if (!hostWithIpv6.ipv6_subnet) {
                     return reply.code(400).send({ error: 'Host does not have IPv6 subnet configured' })
                 }
-                if (!isIpv6SubnetWithinSubnet(inputCidr, hostWithIpv6.ipv6_subnet)) {
+                if (!isIpv6SubnetWithinSubnet(normalizedCidr.cidr, hostWithIpv6.ipv6_subnet)) {
                     return reply.code(400).send({
                         error: `IPv6 subnet must be within host subnet range (${hostWithIpv6.ipv6_subnet})`,
                         code: 'IPV6_SUBNET_NOT_IN_HOST_SUBNET'
                     })
                 }
-                cidr = inputCidr
-            } else if (prefix) {
+                cidr = normalizedCidr.cidr
+            } else if (prefix !== undefined) {
                 // 根据 prefix 自动分配
-                if (![112, 120, 124].includes(prefix)) {
+                if (!(ipv6Subnets.IPV6_SUBNET_ALLOWED_PREFIXES as readonly number[]).includes(prefix)) {
                     return reply.code(400).send({ error: 'Prefix must be 112, 120, or 124' })
                 }
                 if (!hostWithIpv6.ipv6_subnet) {
@@ -677,12 +686,20 @@ export default async function ipAddressRoutes(fastify: FastifyInstance) {
             const subnetPrimaryIp = primaryIp || cidr.split('/')[0]
 
             // 创建网段记录
-            const subnet = await ipv6Subnets.createIpv6Subnet({
-                cidr,
-                primaryIp: subnetPrimaryIp,
-                device: 'eth1',
-                instanceId
-            })
+            let subnet: Awaited<ReturnType<typeof ipv6Subnets.createIpv6Subnet>>
+            try {
+                subnet = await ipv6Subnets.createIpv6Subnet({
+                    cidr,
+                    primaryIp: subnetPrimaryIp,
+                    device: 'eth1',
+                    instanceId
+                })
+            } catch (error) {
+                if (ipv6Subnets.isIpv6SubnetOverlapError(error)) {
+                    return reply.code(409).send({ error: 'IPv6 subnet overlaps an allocated subnet' })
+                }
+                throw error
+            }
 
             // 同步到 Incus
             if (instance.status === 'running' || instance.status === 'stopped') {

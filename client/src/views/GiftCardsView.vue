@@ -325,8 +325,8 @@ onMounted(async () => {
         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
       </div>
 
-      <div class="mt-5 hidden overflow-x-auto lg:block">
-        <table class="w-full min-w-[720px] text-sm">
+      <div class="mt-5 hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed text-sm">
           <thead class="border-b border-themed text-left text-themed-muted">
             <tr>
               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>

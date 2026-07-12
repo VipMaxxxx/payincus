@@ -8,11 +8,8 @@ import type { Instance, PackagePlan, Prisma } from '@prisma/client'
 import { getInstanceAffBinding, processAffCommission } from './aff.js'
 import { getInstanceBillingLineageIds } from './billing-records.js'
 import {
-  calculateDiscountAmount,
-  calculateDiscountedPrice,
   calculateRemainingDays,
   calculateRemainingDaysPrecise,
-  calculatePriceDiff,
   calculateRemainingValue,
   calculatePlanChangeDetails,
   addMonths as calcAddMonths
@@ -28,6 +25,9 @@ import {
   USER_BALANCE_LOCK_NAMESPACE,
   tryAdvisoryTransactionLock
 } from './advisory-locks.js'
+import { arbitrateVipPrice, getUserContinuousVipBenefit, type VipPriceSource } from '../services/vip-benefits.js'
+
+const HOSTING_FREEZE_DAYS = 30
 
 // ==================== 类型定义 ====================
 
@@ -150,12 +150,16 @@ export function calculateMonthlyPrice(instance: { billingPrice: any; billingCycl
  * @param instanceId 实例 ID
  * @returns { maxRefundable, lastPaymentAmount }
  */
-export async function getMaxRefundable(instanceId: number): Promise<{ maxRefundable: number; lastPaymentAmount: number }> {
-  const billingLineageInstanceIds = await getInstanceBillingLineageIds(instanceId)
+export async function getMaxRefundable(
+  instanceId: number,
+  tx?: Prisma.TransactionClient
+): Promise<{ maxRefundable: number; lastPaymentAmount: number }> {
+  const client = tx || prisma
+  const billingLineageInstanceIds = await getInstanceBillingLineageIds(instanceId, client)
   const instanceIds = billingLineageInstanceIds.length > 0 ? billingLineageInstanceIds : [instanceId]
 
   const [totalConsumed, refundRecords, lastPayment] = await Promise.all([
-    prisma.instanceBillingRecord.aggregate({
+    client.instanceBillingRecord.aggregate({
       where: {
         instanceId: { in: instanceIds },
         type: { in: ['newPurchase', 'renew', 'upgrade'] },
@@ -163,14 +167,14 @@ export async function getMaxRefundable(instanceId: number): Promise<{ maxRefunda
       },
       _sum: { amount: true }
     }),
-    prisma.instanceBillingRecord.findMany({
+    client.instanceBillingRecord.findMany({
       where: {
         instanceId: { in: instanceIds },
         type: 'refund'
       },
       select: { amount: true }
     }),
-    prisma.instanceBillingRecord.findFirst({
+    client.instanceBillingRecord.findFirst({
       where: {
         instanceId: { in: instanceIds },
         // 仅查询 newPurchase/renew（upgrade 记录的 amount 是差价，不是完整周期金额）
@@ -213,7 +217,7 @@ export async function calculateInstanceRemainingRefundQuote(instance: {
   billingCycle: number | null
   expiresAt: Date | null
   packagePlanId: number | null
-}): Promise<InstanceRemainingRefundQuote> {
+}, tx?: Prisma.TransactionClient): Promise<InstanceRemainingRefundQuote> {
   const isPaid = !!(instance.packagePlanId && instance.expiresAt && instance.billingPrice)
 
   if (!isPaid) {
@@ -240,11 +244,12 @@ export async function calculateInstanceRemainingRefundQuote(instance: {
   }
 
   const remainingDays = calculateRemainingDays(expiresAt, now)
-  const billingLineageInstanceIds = await getInstanceBillingLineageIds(instance.id)
+  const client = tx || prisma
+  const billingLineageInstanceIds = await getInstanceBillingLineageIds(instance.id, client)
   const instanceIds = billingLineageInstanceIds.length > 0 ? billingLineageInstanceIds : [instance.id]
   const [maxRefundableInfo, positiveBillingRecords] = await Promise.all([
-    getMaxRefundable(instance.id),
-    prisma.instanceBillingRecord.findMany({
+    getMaxRefundable(instance.id, tx),
+    client.instanceBillingRecord.findMany({
       where: {
         instanceId: { in: instanceIds },
         type: { in: ['newPurchase', 'renew', 'upgrade'] },
@@ -282,7 +287,7 @@ export async function calculateInstanceRemainingRefundQuote(instance: {
   // 避免老实例直接变成 0 退款。
   if (positiveBillingRecords.length === 0 && instance.billingPrice && instance.billingCycle) {
     let discountRate = 0
-    const affBinding = await getInstanceAffBinding(instance.id)
+    const affBinding = await getInstanceAffBinding(instance.id, tx)
     if (affBinding?.affCode?.enabled) {
       discountRate = Number(affBinding.affCode.discountRate) || 0
     }
@@ -369,7 +374,7 @@ export function calculateRenewBilling(
  * 计算公式：
  * 1. 原方案日价 = 原方案周期价格 / 原方案周期天数
  * 2. 新方案日价 = 新方案周期价格 / 新方案周期天数
- * 3. 剩余价值 = 原方案日价 × 剩余天数 × (1 - 折扣率)
+ * 3. 剩余价值 = 实付账单未使用价值，并封顶于尚可退实付总额
  * 4. 新方案费用 = 新方案日价 × 剩余天数 × (1 - 折扣率)
  * 5. 差价 = 新方案费用 - 剩余价值
  */
@@ -419,6 +424,7 @@ export async function calculatePlanChange(
   // ========== 使用公共方法计算差价 ==========
   const oldCyclePrice = Number(instance.billingPrice) || 0 // 已是元
   const newCyclePrice = Number(newPlan.price) / 100 // 分转元
+  const paidRefundQuote = await calculateInstanceRemainingRefundQuote(instance)
 
   // 使用公共方法计算详情
   const calcResult = calculatePlanChangeDetails(
@@ -427,7 +433,9 @@ export async function calculatePlanChange(
     newCyclePrice,
     newPlan.billingCycle,
     remainingDays,
-    discountRate
+    discountRate,
+    paidRefundQuote.remainingValue,
+    paidRefundQuote.maxRefundable
   )
 
   return {
@@ -463,6 +471,7 @@ export async function calculateInstancePriceAdjustmentQuote(
     billingPrice: any
     billingCycle: number | null
     expiresAt: Date | null
+    packagePlanId: number | null
   },
   newPrice: number,
   settleBalance: boolean,
@@ -484,14 +493,17 @@ export async function calculateInstancePriceAdjustmentQuote(
   if (settleBalance && instance.expiresAt) {
     remainingDays = calculateRemainingDaysPrecise(new Date(instance.expiresAt))
     if (remainingDays > 0) {
-      priceDiff = calculatePriceDiff(
+      const paidRefundQuote = await calculateInstanceRemainingRefundQuote(instance, tx)
+      priceDiff = calculatePlanChangeDetails(
         oldPrice,
         billingCycle,
         roundedNewPrice,
         billingCycle,
         remainingDays,
-        discountRate
-      )
+        discountRate,
+        paidRefundQuote.remainingValue,
+        paidRefundQuote.maxRefundable
+      ).priceDiff
     }
   }
 
@@ -540,6 +552,10 @@ export async function performRenewal(
   instance: Instance,
   months: number
 ): Promise<{ newExpiresAt: Date; amount: number; balanceLogId: number; discountAmount?: number; hostingIncomeResult?: { hostOwnerId: number; hostName: string } | null }> {
+  if (instance.status === 'deleted') {
+    throw new Error('实例已删除，无法续费')
+  }
+
   // 验证付费实例
   if (!instance.packagePlanId) {
     throw new Error('免费实例无需续费')
@@ -561,15 +577,16 @@ export async function performRenewal(
 
   // 检查 AFF 绑定，计算折扣
   const affBinding = await getInstanceAffBinding(instance.id)
-  let discountRate = 0
   let discountAmount = 0
-  let finalAmount = originalAmount
-
-  if (affBinding) {
-    discountRate = Number(affBinding.affCode.discountRate)
-    discountAmount = calculateDiscountAmount(originalAmount, discountRate)
-    finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
-  }
+  const vip = await getUserContinuousVipBenefit(userId)
+  const renewalPrice = arbitrateVipPrice({
+    basePrice: originalAmount,
+    affDiscountRate: affBinding?.affCode.enabled ? Number(affBinding.affCode.discountRate) : 0,
+    vipDiscountPercent: vip.benefit.orderDiscountPercent
+  })
+  const finalAmount = renewalPrice.finalPrice
+  const pricingSource: VipPriceSource = renewalPrice.source
+  discountAmount = renewalPrice.discountAmount
 
   // 执行事务（带乐观锁）
   const result = await prisma.$transaction(async (tx) => {
@@ -619,6 +636,7 @@ export async function performRenewal(
     const instanceUpdateResult = await tx.instance.updateMany({
       where: {
         id: instance.id,
+        status: { not: 'deleted' },
         version: instance.version  // 确保版本号未变
       },
       data: {
@@ -674,7 +692,7 @@ export async function performRenewal(
     })
 
     // 如果有 AFF 绑定，给优惠码创建者返利
-    if (affBinding) {
+    if (affBinding?.affCode.enabled && pricingSource === 'aff') {
       await processAffCommission(
         affBinding.affCode.id,
         instance.id,
@@ -689,7 +707,7 @@ export async function performRenewal(
     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
     if (hostingOwner) {
       // 用户托管节点，记录托管收入（带快照）
-      const unfreezeAt = addMonths(new Date(), 1)
+      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
       await createHostingLogWithSnapshot(tx, {
         userId: hostingOwner.userId,
         type: 'income',
@@ -735,6 +753,10 @@ export async function performPlanChange(
   bandwidthLimit: string | null
   capacity: PlanUpgradeCapacityCheck
 }> {
+  if (instance.status === 'deleted') {
+    throw new Error('实例已删除，无法改配')
+  }
+
   const pkg = await prisma.package.findUnique({
     where: { id: newPlan.packageId },
     select: { instanceType: true }
@@ -850,7 +872,7 @@ export async function performPlanChange(
       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
       if (hostingOwner) {
         // 用户托管节点，记录托管收入（升级差价，带快照）
-        const unfreezeAt = addMonths(new Date(), 1)
+        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
         await createHostingLogWithSnapshot(tx, {
           userId: hostingOwner.userId,
           type: 'income',
@@ -901,6 +923,7 @@ export async function performPlanChange(
     const instanceUpdateResult = await tx.instance.updateMany({
       where: {
         id: instance.id,
+        status: { not: 'deleted' },
         version: instance.version  // 确保版本号未变
       },
       data: {
@@ -1064,6 +1087,7 @@ export async function getInstanceBillingInfo(instanceId: number): Promise<{
         affCodeId: affBinding.affCode.id
       }
     }
+    const vip = await getUserContinuousVipBenefit(instance.userId)
 
     // 计算续费预览（包含折扣价）
     const originalPreview = previewRenewPrices({
@@ -1080,9 +1104,11 @@ export async function getInstanceBillingInfo(instanceId: number): Promise<{
     renewPreview = filteredPreview.map(p => ({
       months: p.months,
       amount: p.amount,  // 原价（元）
-      discountedAmount: discountRate > 0
-        ? Number((p.amount * (1 - discountRate)).toFixed(2))  // 折扣价（元，保留两位小数）
-        : p.amount,
+      discountedAmount: arbitrateVipPrice({
+        basePrice: p.amount,
+        affDiscountRate: discountRate,
+        vipDiscountPercent: vip.benefit.orderDiscountPercent
+      }).finalPrice,
       expiresAt: p.expiresAt
     }))
   }
@@ -1310,7 +1336,7 @@ export async function recordHostingIncome(
   const client = tx || prisma
 
   // 计算解冻时间（30天后）
-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
+  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
 
   await createHostingLogWithSnapshot(client, {
     userId: hostOwnerId,
@@ -1438,6 +1464,7 @@ export async function deductHostingBalance(
     let fromFrozen = 0
     let fromAvailable = 0
     let fromBalance = 0
+    let shortfallDebt = 0
 
     // 第一步：优先从冻结收入中扣除
     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
@@ -1532,7 +1559,19 @@ export async function deductHostingBalance(
       }
     }
 
-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
+    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
+    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
+    if (remainingToDeduct > 0) {
+      const shortfall = remainingToDeduct
+      await client.user.update({
+        where: { id: hostOwnerId },
+        data: { hostingBalance: { decrement: shortfall } }
+      })
+      shortfallDebt = shortfall
+      remainingToDeduct = 0
+    }
+
+    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
 
     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
@@ -1542,6 +1581,7 @@ export async function deductHostingBalance(
       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
+      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
 
       await createHostingLogWithSnapshot(client, {
         userId: hostOwnerId,

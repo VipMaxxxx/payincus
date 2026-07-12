@@ -49,9 +49,12 @@ const adminHelpManageViewSource = readRepoFile('client/src/views/admin/HelpManag
 const adminMailViewSource = readRepoFile('client/src/views/admin/AdminMailView.vue')
 const adminImagesViewSource = readRepoFile('client/src/views/admin/ImagesView.vue')
 const adminPluginCenterViewSource = readRepoFile('client/src/views/admin/PluginCenterView.vue')
+const extensionsViewSource = readRepoFile('client/src/views/ExtensionsView.vue')
 const instancesViewSource = readRepoFile('client/src/views/InstancesView.vue')
 const instanceCreateViewSource = readRepoFile('client/src/views/InstanceCreateView.vue')
 const instanceDetailViewSource = readRepoFile('client/src/views/InstanceDetailView.vue')
+const trafficStatsSource = readRepoFile('client/src/components/instance/TrafficStats.vue')
+const packageFormViewSource = readRepoFile('client/src/views/resources/PackageFormView.vue')
 const ticketsViewSource = readRepoFile('client/src/views/TicketsView.vue')
 const renewModalSource = readRepoFile('client/src/components/instance/modals/RenewModal.vue')
 const changePlanModalSource = readRepoFile('client/src/components/instance/modals/ChangePlanModal.vue')
@@ -69,6 +72,40 @@ const dashboardViewSource = readRepoFile('client/src/views/DashboardView.vue')
 const marketViewSource = readRepoFile('client/src/views/MarketView.vue')
 const portalViewSource = readRepoFile('client/src/views/PortalView.vue')
 const loginViewSource = readRepoFile('client/src/views/LoginView.vue')
+
+assert.ok(
+  packageFormViewSource.includes('function normalizeMoneyYuan(value: unknown): number | null') &&
+    packageFormViewSource.includes('trafficResetPrice: Number(pkg.traffic_reset_price || 0),') &&
+    packageFormViewSource.includes('trafficResetPrice: trafficResetPriceYuan,') &&
+    !packageFormViewSource.includes('trafficResetPrice: Number(pkg.traffic_reset_price || 0) / 100') &&
+    !packageFormViewSource.includes('trafficResetPrice: trafficResetPriceCents'),
+  'package form traffic reset price must round-trip directly in yuan'
+)
+
+assert.ok(
+  myPackagesViewSource.includes('function normalizeTrafficResetPriceYuan(value: unknown): number | null') &&
+    myPackagesViewSource.includes('trafficResetPrice: trafficResetPriceYuan,') &&
+    !myPackagesViewSource.includes('plan.trafficResetPrice / 100') &&
+    !myPackagesViewSource.includes('trafficResetPrice: trafficResetPriceCents'),
+  'package plan traffic reset price override must round-trip directly in yuan'
+)
+
+assert.ok(
+  extensionsViewSource.includes("activeTab === 'theme-submissions'") &&
+    extensionsViewSource.includes('@click="openThemeSubmissions"') &&
+    extensionsViewSource.includes('@submit.prevent="submitThemeReview"') &&
+    extensionsViewSource.includes('api.themeMarketSubmissions.create') &&
+    extensionsViewSource.includes("pricing: { type: 'free' }") &&
+    extensionsViewSource.includes('api.themeMarketSubmissions.mine') &&
+    !extensionsViewSource.includes('overflow-x-auto') &&
+    !extensionsViewSource.includes('min-w-['),
+  'user extensions page must expose a free-only reviewed theme submission flow without adding a wide table'
+)
+
+assert.ok(
+  trafficStatsSource.includes("trafficHistory.length === 1 ? 50 : (label.index / (trafficHistory.length - 1)) * 100"),
+  'TrafficStats must center the single-day X-axis label instead of dividing by zero'
+)
 const adminLoginViewSource = readRepoFile('client/src/views/admin/AdminLoginView.vue')
 const registerViewSource = readRepoFile('client/src/views/RegisterView.vue')
 const forgotPasswordViewSource = readRepoFile('client/src/views/ForgotPasswordView.vue')
@@ -944,8 +981,8 @@ assert.ok(
     invitesViewSource.includes('class="hidden overflow-hidden lg:block"') &&
     invitesViewSource.includes('class="w-full table-fixed divide-y divide-themed"') &&
     invitesViewSource.includes('class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"') &&
-    invitesViewSource.includes("@click=\"copyText(invite.code, '邀请码已复制')\"") &&
-    invitesViewSource.includes("@click=\"copyText(getInviteLink(invite), '邀请链接已复制')\"") &&
+    invitesViewSource.includes("@click=\"copyText(invite.code, t('invites.codeCopied'))\"") &&
+    invitesViewSource.includes("@click=\"copyText(getInviteLink(invite), t('invites.linkCopied'))\"") &&
     invitesViewSource.includes('class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex"') &&
     !invitesViewSource.includes('<div class="overflow-x-auto">') &&
     !invitesViewSource.includes('class="w-full min-w-[960px] table-fixed divide-y divide-themed"') &&
@@ -1052,6 +1089,13 @@ assert.ok(
     !instanceDetailViewSource.includes('api.transfers.list') &&
     !instanceDetailViewSource.includes('api.billing.'),
   'admin-reachable instance detail must guard customer transfer, redeem, subscription, billing-destroy, and badge self-service features'
+)
+assert.ok(
+  instanceDetailViewSource.includes('const failureReason = computed<string | null>') &&
+    instanceDetailViewSource.includes('v-if="failureReason"') &&
+    instanceDetailViewSource.includes("$t('instance.errorBanner.reasonLabel')") &&
+    instanceDetailViewSource.includes('{{ failureReason }}'),
+  'InstanceDetailView error banner must render the persisted failure reason as plain text'
 )
 assert.ok(
   instancesViewSource.includes("import { exchangePath, instanceCreatePath, instanceDetailPath, isAdminEntry, transfersPath, walletPath } from '@/utils/app-paths'") &&

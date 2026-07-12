@@ -88,6 +88,44 @@ assert.ok(
   'admin prize mutation routes must validate inventory and prize values'
 )
 
+assert.ok(
+  routeSource.includes('function validateLotteryConfig(') &&
+    routeSource.includes('totalProbability > LOTTERY_TOTAL_PROBABILITY') &&
+    routeSource.includes("totalProbability < LOTTERY_TOTAL_PROBABILITY && !prizes.some(prize => prize.type === 'nothing')") &&
+    routeSource.includes("error: 'INVALID_PROBABILITY_TOTAL'") &&
+    routeSource.includes("error: 'MISSING_NOTHING_PRIZE'"),
+  'admin lottery configuration saves must reject probability totals above 100% and require a nothing fallback below 100%'
+)
+
+assert.ok(
+  routeSource.includes('(prize.probability / 100) * (prize.value / 100)') &&
+    routeSource.includes('const drawCostValue = costPoints / 100') &&
+    routeSource.includes('expectedBalanceValue > drawCostValue') &&
+    routeSource.includes("error: 'BALANCE_EXPECTED_VALUE_EXCEEDED'"),
+  'admin lottery configuration saves must cap expected balance payout at the point cost value'
+)
+
+assert.ok(
+  routeSource.includes('const MAX_BALANCE_PRIZE_COST_MULTIPLIER = 100') &&
+    routeSource.includes('const maxBalancePrizeValue = costPoints * MAX_BALANCE_PRIZE_COST_MULTIPLIER') &&
+    routeSource.includes('balancePrizes.some(prize => prize.value > maxBalancePrizeValue)') &&
+    routeSource.includes("error: 'BALANCE_PRIZE_VALUE_EXCEEDED'"),
+  'admin lottery configuration saves must cap each balance prize at 100 times the draw cost value'
+)
+
+assert.ok(
+  (routeSource.match(/const configError = validateLotteryConfig\(/g)?.length ?? 0) === 4,
+  'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+)
+
+assert.ok(
+  lotteryDbSource.includes('select: { records: true }') &&
+    routeSource.includes('if (existing._count.records > 0)') &&
+    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
+    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
+  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
+)
+
 for (const forbiddenPattern of [
   'Number(request.params.id)',
   'Number(request.params.userId)',

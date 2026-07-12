@@ -578,25 +578,25 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
           </div>
         </div>
       </div>
-      <div class="mt-6 hidden overflow-x-auto lg:block">
-        <table class="w-full min-w-[900px] text-sm">
+      <div class="mt-6 hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed text-sm">
           <thead class="border-b border-themed text-left text-themed-muted">
             <tr>
-              <th class="py-3 pr-4">应用</th>
-              <th class="py-3 pr-4">Redirect URI</th>
-              <th class="py-3 pr-4">Scope</th>
-              <th class="py-3 pr-4">状态</th>
-              <th class="py-3 pr-4">操作</th>
+              <th class="w-[20%] py-3 pr-4">应用</th>
+              <th class="w-[24%] py-3 pr-4">Redirect URI</th>
+              <th class="w-[25%] py-3 pr-4">Scope</th>
+              <th class="w-[9%] py-3 pr-4">状态</th>
+              <th class="w-[22%] py-3 pr-4">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="appItem in oauthApps" :key="appItem.id" class="border-b border-themed">
               <td class="py-3 pr-4">
                 <div class="font-medium text-themed">{{ appItem.name }}</div>
-                <div class="font-mono text-xs text-themed-muted">{{ appItem.clientId }}</div>
+                <div class="break-all font-mono text-xs text-themed-muted">{{ appItem.clientId }}</div>
               </td>
-              <td class="max-w-[280px] py-3 pr-4 text-xs text-themed-muted">
-                <div v-for="uri in appItem.redirectUris" :key="uri" class="truncate">{{ uri }}</div>
+              <td class="py-3 pr-4 text-xs text-themed-muted">
+                <div v-for="uri in appItem.redirectUris" :key="uri" class="break-all">{{ uri }}</div>
               </td>
               <td class="py-3 pr-4">
                 <div class="flex flex-wrap gap-1">
@@ -708,28 +708,28 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
           </button>
         </div>
       </div>
-      <div class="mt-6 hidden overflow-x-auto lg:block">
-        <table class="w-full min-w-[900px] text-sm">
+      <div class="mt-6 hidden overflow-hidden lg:block">
+        <table class="w-full table-fixed text-sm">
           <thead class="border-b border-themed text-left text-themed-muted">
             <tr>
-              <th class="py-3 pr-4">用户</th>
-              <th class="py-3 pr-4">应用</th>
-              <th class="py-3 pr-4">Scope</th>
-              <th class="py-3 pr-4">状态</th>
-              <th class="py-3 pr-4">活跃 Token</th>
-              <th class="py-3 pr-4">最后授权</th>
-              <th class="py-3 pr-4">操作</th>
+              <th class="w-[16%] py-3 pr-4">用户</th>
+              <th class="w-[16%] py-3 pr-4">应用</th>
+              <th class="w-[19%] py-3 pr-4">Scope</th>
+              <th class="w-[12%] py-3 pr-4">状态</th>
+              <th class="w-[12%] py-3 pr-4">活跃 Token</th>
+              <th class="w-[15%] py-3 pr-4">最后授权</th>
+              <th class="w-[10%] py-3 pr-4">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="authorization in oauthAuthorizations" :key="authorization.id" class="border-b border-themed">
               <td class="py-3 pr-4">
                 <div class="font-medium text-themed">{{ authorization.user.username }}</div>
-                <div class="text-xs text-themed-muted">#{{ authorization.user.id }} · {{ authorization.user.email || '无邮箱' }}</div>
+                <div class="break-all text-xs text-themed-muted">#{{ authorization.user.id }} · {{ authorization.user.email || '无邮箱' }}</div>
               </td>
               <td class="py-3 pr-4">
                 <div class="font-medium text-themed">{{ authorization.app.name }}</div>
-                <div class="font-mono text-xs text-themed-muted">{{ authorization.app.clientId }}</div>
+                <div class="break-all font-mono text-xs text-themed-muted">{{ authorization.app.clientId }}</div>
               </td>
               <td class="py-3 pr-4">
                 <div class="flex flex-wrap gap-1">

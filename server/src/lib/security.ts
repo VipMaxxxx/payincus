@@ -5,6 +5,12 @@
 
 import { createLog, LogModule } from '../db/logs.js'
 
+/**
+ * 部署不变量：以下登录锁、导出任务、OAuth state nonce 与一次性登录码 nonce
+ * 均为进程内状态，依赖私有后端仅运行单个进程实例。多进程或水平扩展会使
+ * 锁定/去重状态彼此隔离；未来扩容前必须下沉到 PostgreSQL 或其它共享存储。
+ */
+
 // ==================== 安全事件类型 ====================
 
 export enum SecurityEventType {
@@ -567,7 +573,7 @@ function getRefreshTokenLookupKeys(token: string): string[] {
     return storageKey === token ? [storageKey] : [storageKey, token]
 }
 
-// 导出任务内存存储（替代 Redis）
+// 导出任务内存存储（替代 Redis；受文件顶部的单后端进程部署不变量约束）
 const exportTaskStore = new Map<string, ExportTaskData>()
 const EXPORT_TASK_TTL = 30 * 60 * 1000  // 30分钟（毫秒）
 
@@ -1318,7 +1324,7 @@ function timingSafeStringEqual(a: string, b: string): boolean {
     return crypto.timingSafeEqual(bufA, bufB)
 }
 
-// 已使用的 nonce（防止重放攻击）：记录每个 nonce 的过期时间，按条目逐个过期，
+// 已使用的 nonce（防止重放攻击；受文件顶部的单后端进程部署不变量约束）：记录每个 nonce 的过期时间，按条目逐个过期，
 // 避免整体 clear() 在 token TTL 内清空集合而重新打开重放窗口。
 const usedNonces = new Map<string, number>()
 
@@ -1568,7 +1574,7 @@ export interface OAuthLoginCodeData {
 // OAuth 登录码有效期（60秒）
 const OAUTH_LOGIN_CODE_TTL_MS = 60 * 1000
 
-// 已使用的登录码 nonce（防止重放攻击）：按条目过期，避免整体 clear() 打开重放窗口
+// 已使用的登录码 nonce（防止重放攻击；受文件顶部的单后端进程部署不变量约束）：按条目过期，避免整体 clear() 打开重放窗口
 const usedLoginCodeNonces = new Map<string, number>()
 
 // 定期清理已过期 nonce（每2分钟仅删除到期条目）

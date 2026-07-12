@@ -12,6 +12,7 @@ const schema = read('server/prisma/schema.prisma')
 const migration = read('server/prisma/migrations/20260626103000_add_plugin_market_submissions/migration.sql')
 const db = read('server/src/db/plugin-market-submissions.ts')
 const route = read('server/src/routes/plugin-market-submissions.ts')
+const market = read('server/src/lib/plugin-market.ts')
 const runtimeSettings = read('server/src/lib/runtime-settings.ts')
 const app = read('server/src/app.ts')
 const clientApi = read('client/src/api/index.ts')
@@ -47,6 +48,37 @@ assert.ok(
     db.includes('serializePluginMarketSubmission') &&
     db.includes('reviewedAt: new Date()'),
   'plugin market submission DB helpers must create, list, review, and serialize submissions'
+)
+
+assert.ok(
+  route.includes("const LISTABLE_SCAN_STATUSES = new Set(['passed', 'warning'])") &&
+    route.includes("reviewStatus === 'listed'") &&
+    route.includes('!LISTABLE_SCAN_STATUSES.has(submission.scanStatus)') &&
+    route.includes("code: 'PLUGIN_MARKET_SCAN_NOT_APPROVED'"),
+  'plugin submissions may only transition to listed after their latest scan passed or completed with warnings'
+)
+
+assert.ok(
+  market.includes("PLUGIN_MARKET_SUPPORTED_CURRENCIES = ['CNY', 'USD']") &&
+    market.includes('PLUGIN_MARKET_PLATFORM_REVENUE_SHARE_PERCENT = 20') &&
+    market.includes('Number.isSafeInteger(record.price)') &&
+    market.includes("(record.price as number) <= 0") &&
+    market.includes('Paid plugin currency must be one of:') &&
+    market.includes('Paid plugin revenue share is fixed at') &&
+    route.includes('pricing: normalizeSubmissionPricing(body.pricing)') &&
+    route.includes('pricing: normalizePluginMarketPricing(submission.pricing)') &&
+    route.includes('PAID_MARKET_LISTING_NOT_AVAILABLE'),
+  'paid submissions must use positive integer minor-unit prices, whitelisted currencies, and the fixed platform share while paid listing stays disabled'
+)
+
+assert.ok(
+  route.includes('compatibility: normalizeSubmissionCompatibility(body.compatibility)') &&
+    route.includes('normalizePluginMarketCompatibility({ payincus: validated.manifest.payincus })') &&
+    route.includes('compatibility: normalizePluginMarketCompatibility(submission.compatibility)') &&
+    market.includes('manifest.payincus compatibility range is required') &&
+    market.includes('minPayincus') &&
+    market.includes('maxPayincus'),
+  'upload, submission, and scanning must normalize compatibility only from manifest.payincus'
 )
 
 assert.ok(

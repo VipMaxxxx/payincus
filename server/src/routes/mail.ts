@@ -4,7 +4,7 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import type { MailAccount } from '@prisma/client'
+import type { MailAccount, Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma.js'
 import { createLog } from '../db/logs.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
@@ -63,9 +63,135 @@ const MAIL_CANCEL_REASON_MAX_LENGTH = 500
 const MAIL_SOURCE_CODE_RE = /^[a-z0-9_-]{2,32}$/
 const MAIL_SOURCE_SECRET_MAX_LENGTH = 4096
 const MAIL_AFF_CODE_MAX_LENGTH = 64
+const MAIL_PURCHASE_REMARK_PREFIX = '购买域名邮箱 - '
+const MAIL_RENEW_REMARK_PREFIX = '续费域名邮箱 '
+const MAIL_REFUND_REMARK_PREFIX = '管理员退订邮箱 - '
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function mailSubscriptionCanUseUpstream(subscription: { status: string; expiresAt: Date }): boolean {
+  return subscription.status === 'active' && subscription.expiresAt.getTime() > Date.now()
+}
+
+async function resumeMailSubscriptionDomains(subscriptionId: number, userId: number): Promise<void> {
+  const subscription = await db.getMailSubscriptionById(subscriptionId)
+  if (!subscription || !mailSubscriptionCanUseUpstream(subscription)) return
+
+  for (const domain of subscription.domains) {
+    try {
+      await craneMailService.resumeDomain(subscription.source, domain.domain)
+      await prisma.mailDomain.updateMany({
+        where: {
+          id: domain.id,
+          subscription: { status: 'active', expiresAt: { gt: new Date() } }
+        },
+        data: { status: domain.verifiedAt ? 'verified' : 'pending' }
+      })
+    } catch (error) {
+      console.error(`[Mail] Failed to resume renewed mail domain ${domain.domain}; pending retry:`, error)
+      await prisma.mailDomain.updateMany({
+        where: {
+          id: domain.id,
+          subscription: { status: 'active', expiresAt: { gt: new Date() } }
+        },
+        data: { status: 'suspended' }
+      })
+      await createLog(userId, 'mail', 'mail_upstream_resume_pending_retry', `Upstream resume pending retry for mail domain ${domain.domain}`, 'failed')
+    }
+  }
+}
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function roundMailCurrency(value: number): number {
+  return Number(value.toFixed(2))
+}
+
+function getMailPaymentPeriodMs(remark: string | null, billingCycle: 'monthly' | 'yearly'): number {
+  if (remark?.startsWith(MAIL_RENEW_REMARK_PREFIX)) {
+    const months = Number(remark.slice(MAIL_RENEW_REMARK_PREFIX.length).match(/^(\d+) 个月/)?.[1])
+    if (Number.isSafeInteger(months) && months > 0) {
+      return billingCycle === 'yearly'
+        ? (months / 12) * 365 * DAY_MS
+        : months * 30 * DAY_MS
+    }
+  }
+
+  return billingCycle === 'monthly' ? 30 * DAY_MS : 365 * DAY_MS
+}
+
+async function getMailRefundableAmount(
+  tx: Prisma.TransactionClient,
+  subscription: {
+    userId: number
+    createdAt: Date
+    expiresAt: Date
+    billingCycle: 'monthly' | 'yearly'
+  },
+  now: Date
+): Promise<{ maxRefundable: number; remainingRefundable: number }> {
+  // 邮箱暂无独立计费表：以订阅创建时同一事务写入的购买 BalanceLog 作为流水起点。
+  const purchaseRecord = await tx.balanceLog.findFirst({
+    where: {
+      userId: subscription.userId,
+      type: 'consume',
+      remark: { startsWith: MAIL_PURCHASE_REMARK_PREFIX },
+      createdAt: { lte: subscription.createdAt }
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true }
+  })
+
+  if (!purchaseRecord) {
+    return { maxRefundable: 0, remainingRefundable: 0 }
+  }
+
+  const [paymentRecords, refundRecords] = await Promise.all([
+    tx.balanceLog.findMany({
+      where: {
+        userId: subscription.userId,
+        id: { gte: purchaseRecord.id },
+        type: 'consume',
+        OR: [
+          { remark: { startsWith: MAIL_PURCHASE_REMARK_PREFIX } },
+          { remark: { startsWith: MAIL_RENEW_REMARK_PREFIX } }
+        ]
+      },
+      orderBy: { id: 'asc' },
+      select: { amount: true, remark: true }
+    }),
+    tx.balanceLog.findMany({
+      where: {
+        userId: subscription.userId,
+        id: { gte: purchaseRecord.id },
+        type: 'refund',
+        remark: { startsWith: MAIL_REFUND_REMARK_PREFIX }
+      },
+      select: { amount: true }
+    })
+  ])
+
+  const totalPaid = paymentRecords.reduce((sum, record) => sum + Math.abs(Number(record.amount)), 0)
+  const totalRefunded = refundRecords.reduce((sum, record) => sum + Math.abs(Number(record.amount)), 0)
+  const maxRefundable = roundMailCurrency(Math.max(0, totalPaid - totalRefunded))
+
+  let remainingValue = 0
+  let periodEnd = new Date(subscription.expiresAt).getTime()
+  for (const record of [...paymentRecords].reverse()) {
+    const periodMs = getMailPaymentPeriodMs(record.remark, subscription.billingCycle)
+    const periodStart = periodEnd - periodMs
+    if (periodEnd > now.getTime()) {
+      const unusedRatio = Math.min(Math.max(periodEnd - now.getTime(), 0) / periodMs, 1)
+      remainingValue += Math.abs(Number(record.amount)) * unusedRatio
+    }
+    periodEnd = periodStart
+  }
+
+  return {
+    maxRefundable,
+    remainingRefundable: roundMailCurrency(Math.min(remainingValue, maxRefundable))
+  }
 }
 
 function requireNumber(value: unknown, field: string): number {
@@ -288,12 +414,48 @@ function normalizeMailAccountInput(input: MailAccountInput, options: {
   return normalized
 }
 
+async function getMailSubscriptionAllocatedDiskMb(
+  tx: Prisma.TransactionClient,
+  subscriptionId: number,
+  excludeAccountId?: number
+): Promise<number> {
+  const allocated = await tx.mailAccount.aggregate({
+    where: {
+      domain: { subscriptionId },
+      ...(excludeAccountId !== undefined ? { id: { not: excludeAccountId } } : {})
+    },
+    _sum: { diskLimitMb: true }
+  })
+  return allocated._sum.diskLimitMb ?? 0
+}
+
+async function mailSubscriptionHasDiskQuota(
+  tx: Prisma.TransactionClient,
+  subscriptionId: number,
+  subscriptionDiskLimitGb: number,
+  requestedDiskLimitMb: number,
+  excludeAccountId?: number
+): Promise<boolean> {
+  const allocatedDiskLimitMb = await getMailSubscriptionAllocatedDiskMb(tx, subscriptionId, excludeAccountId)
+  return allocatedDiskLimitMb + requestedDiskLimitMb <= subscriptionDiskLimitGb * 1024
+}
+
 function normalizeMailRenewMonths(value: unknown): number {
   const months = requireSafeInteger(value, '续费月数')
-  if (months < 1 || months > 12) {
-    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+  if (months < 1) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
   }
   return months
+}
+
+function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
+  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
+  if (months % billingCycleMonths !== 0) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
+  }
+  if (billingCycle === 'monthly' && months > 12) {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+  }
 }
 
 function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
@@ -329,6 +491,14 @@ function normalizeMailSubscriptionRenewInput(input: unknown): number {
   }
 
   return normalizeMailRenewMonths(input.months)
+}
+
+function normalizeMailSubscriptionAutoRenewInput(input: unknown): boolean {
+  if (!isPlainRecord(input) || typeof input.autoRenew !== 'boolean') {
+    throw apiError(ErrorCode.VALIDATION_ERROR, '自动续费设置无效')
+  }
+
+  return input.autoRenew
 }
 
 function normalizeMailSubscriptionCancelInput(input: unknown): MailSubscriptionCancelInput {
@@ -770,25 +940,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱源不存在'))
     }
 
-    // 计算退款金额
     let refundAmount = 0
-    const planPrice = Number(subscription.plan.price)
-
-    if (refundType === 'full') {
-      refundAmount = planPrice
-    } else if (refundType === 'remaining') {
-      const now = new Date()
-      const expiresAt = new Date(subscription.expiresAt)
-      if (expiresAt > now) {
-        const totalMs = subscription.plan.billingCycle === 'monthly'
-          ? 30 * 24 * 60 * 60 * 1000
-          : 365 * 24 * 60 * 60 * 1000
-        const remainingMs = expiresAt.getTime() - now.getTime()
-        const ratio = Math.min(remainingMs / totalMs, 1)
-        refundAmount = Number((planPrice * ratio).toFixed(2))
-      }
-      // 已过期则剩余价值为 0
-    }
 
     // 删除 CraneMail 域名。远端删除失败时不能删除本地订阅，否则会隐藏残留资源。
     for (const domain of subscription.domains) {
@@ -802,10 +954,25 @@ export default async function mailRoutes(fastify: FastifyInstance) {
 
     // DB 事务：退款 + 删除订阅
     await prisma.$transaction(async (tx) => {
-      if (refundAmount > 0) {
+      if (refundType !== 'none') {
         const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, subscription.user.id)
         if (!balanceLocked) {
           throw apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试')
+        }
+
+        const refundable = await getMailRefundableAmount(tx, {
+          userId: subscription.user.id,
+          createdAt: subscription.createdAt,
+          expiresAt: subscription.expiresAt,
+          billingCycle: subscription.plan.billingCycle
+        }, new Date())
+        refundAmount = refundType === 'full'
+          ? refundable.maxRefundable
+          : refundable.remainingRefundable
+
+        if (refundAmount <= 0) {
+          await tx.mailSubscription.delete({ where: { id: subscriptionId } })
+          return
         }
 
         const currentUser = await tx.user.findUnique({
@@ -1005,6 +1172,55 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // 设置订阅自动续费
+  fastify.patch<{
+    Body: { autoRenew: unknown }
+  }>('/subscription/auto-renew', {
+    onRequest: [fastify.authenticate]
+  }, async (request, reply) => {
+    let autoRenew: boolean
+    try {
+      autoRenew = normalizeMailSubscriptionAutoRenewInput(request.body)
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
+
+    const userId = request.user.id
+    const subscription = await db.getUserMailSubscription(userId)
+    if (!subscription) {
+      return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅'))
+    }
+
+    const updateResult = await prisma.$transaction(async (tx) => {
+      const locked = await tryAdvisoryTransactionLock(tx, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, userId)
+      if (!locked) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+      }
+
+      const updated = await tx.mailSubscription.updateMany({
+        where: { id: subscription.id, userId },
+        data: { autoRenew }
+      })
+      return updated.count === 1
+        ? { autoRenew }
+        : { error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
+    })
+
+    if ('error' in updateResult) {
+      return reply.code(400).send(updateResult.error)
+    }
+
+    await createLog(
+      userId,
+      'mail',
+      'set_mail_auto_renew',
+      `${autoRenew ? 'Enabled' : 'Disabled'} mail subscription auto-renew for subscription #${subscription.id}`,
+      'success'
+    )
+
+    return { autoRenew: updateResult.autoRenew }
+  })
+
   // 购买订阅
   fastify.post<{
     Body: {
@@ -1024,12 +1240,6 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     const { planId, affCode: affCodeInput } = purchaseInput
     const userId = request.user.id
 
-    // 检查是否已有订阅
-    const existing = await db.getUserMailSubscription(userId)
-    if (existing) {
-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
-    }
-
     // 获取方案
     const plan = await db.getMailPlanById(planId)
     if (!plan || !plan.enabled) {
@@ -1041,6 +1251,16 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
     }
 
+    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
+    const existing = await prisma.mailSubscription.findFirst({
+      where: { userId, sourceId: source.id, status: { in: ['active', 'expired'] } },
+      include: { affBinding: { include: { affCode: true } } },
+      orderBy: { updatedAt: 'desc' }
+    })
+    if (existing?.status === 'active' && existing.expiresAt > new Date()) {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
+    }
+
     // 计算费用
     const originalPrice = Number(plan.price)
     let finalPrice = originalPrice
@@ -1048,7 +1268,15 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     let validatedAffCode: { id: number; userId: number; discountRate: number } | null = null
 
     // 验证优惠码
-    if (affCodeInput) {
+    if (existing?.affBinding?.affCode.enabled) {
+      validatedAffCode = {
+        id: existing.affBinding.affCode.id,
+        userId: existing.affBinding.affCode.userId,
+        discountRate: Number(existing.affBinding.affCode.discountRate)
+      }
+      discountAmount = calculateDiscountAmount(originalPrice, validatedAffCode.discountRate)
+      finalPrice = calculateDiscountedPrice(originalPrice, validatedAffCode.discountRate)
+    } else if (affCodeInput) {
       const { validateMailAffCode } = await import('../db/aff.js')
       const validation = await validateMailAffCode(affCodeInput, userId)
       if (!validation.valid) {
@@ -1093,10 +1321,13 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       }
 
       const existingInTx = await tx.mailSubscription.findFirst({
-        where: { userId }
+        where: { userId, sourceId: source.id, status: { in: ['active', 'expired'] } },
+        include: { affBinding: true },
+        orderBy: { updatedAt: 'desc' }
       })
-      if (existingInTx) {
-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
+      const purchaseNow = new Date()
+      if (existingInTx?.status === 'active' && existingInTx.expiresAt > purchaseNow) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
       }
 
       const deductResult = await tx.user.updateMany({
@@ -1134,38 +1365,61 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         }
       })
 
-      // 创建订阅
-      const newSubscription = await tx.mailSubscription.create({
-        data: {
-          userId,
-          sourceId: source.id,
-          planId: plan.id,
-          domainLimit: plan.domainLimit,
-          diskLimitGb: plan.diskLimitGb,
-          expiresAt
-        },
-        include: {
-          source: true,
-          plan: true
-        }
-      })
+      // 同源历史过期订阅复用原记录，避免遗留域名与新订阅脱节。
+      const revived = existingInTx !== null && (
+        existingInTx.status === 'expired' || existingInTx.expiresAt <= purchaseNow
+      )
+      const revivalPeriodStart = existingInTx && existingInTx.expiresAt > purchaseNow
+        ? existingInTx.expiresAt
+        : purchaseNow
+      const revivalExpiresAt = new Date(revivalPeriodStart)
+      if (plan.billingCycle === 'monthly') {
+        revivalExpiresAt.setMonth(revivalExpiresAt.getMonth() + 1)
+      } else {
+        revivalExpiresAt.setFullYear(revivalExpiresAt.getFullYear() + 1)
+      }
+      const newSubscription = revived
+        ? await tx.mailSubscription.update({
+            where: { id: existingInTx.id },
+            data: {
+              planId: plan.id,
+              domainLimit: plan.domainLimit,
+              diskLimitGb: plan.diskLimitGb,
+              expiresAt: revivalExpiresAt,
+              status: 'active'
+            },
+            include: { source: true, plan: true }
+          })
+        : await tx.mailSubscription.create({
+            data: {
+              userId,
+              sourceId: source.id,
+              planId: plan.id,
+              domainLimit: plan.domainLimit,
+              diskLimitGb: plan.diskLimitGb,
+              expiresAt
+            },
+            include: { source: true, plan: true }
+          })
 
       // 如果使用了优惠码，创建 AFF 绑定并处理返利
       if (validatedAffCode) {
         const { createMailAffBinding, processMailAffCommission } = await import('../db/aff.js')
-        // 创建订阅与优惠码的永久绑定
-        await createMailAffBinding(newSubscription.id, validatedAffCode.id, tx as any)
+        // 复活订阅保留原 AFF 永久绑定；仅首次购买时创建。
+        if (!existingInTx?.affBinding) {
+          await createMailAffBinding(newSubscription.id, validatedAffCode.id, tx as any)
+        }
         // 给优惠码创建者返利（基于原价，不是折扣后价格）
         await processMailAffCommission(
           validatedAffCode.id,
           newSubscription.id,
           originalPrice,
-          'new_purchase',
+          revived ? 'renew' : 'new_purchase',
           tx as any
         )
       }
 
-      return { subscription: newSubscription }
+      return { subscription: newSubscription, revived }
     })
 
     if ('error' in purchaseResult) {
@@ -1173,6 +1427,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     }
 
     const subscription = purchaseResult.subscription
+
+    if (purchaseResult.revived) {
+      await resumeMailSubscriptionDomains(subscription.id, userId)
+    }
 
     await createLog(
       userId,
@@ -1221,6 +1479,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     }
 
     const plan = subscription.plan
+    try {
+      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
     const monthlyPrice = plan.billingCycle === 'monthly' 
       ? Number(plan.price) 
       : Number(plan.price) / 12
@@ -1270,6 +1533,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       if (currentSubscription.status === 'suspended') {
         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
       }
+      try {
+        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
+      } catch (error) {
+        return { error }
+      }
 
       const deductResult = await tx.user.updateMany({
         where: {
@@ -1308,8 +1576,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       })
 
       // 计算新的过期时间
-      const currentExpiry = currentSubscription.expiresAt > new Date() ? currentSubscription.expiresAt : new Date()
-      const newExpiry = new Date(currentExpiry)
+      const now = new Date()
+      const periodStart = currentSubscription.expiresAt > now ? currentSubscription.expiresAt : now
+      const revived = currentSubscription.status === 'expired' || currentSubscription.expiresAt <= now
+      const newExpiry = new Date(periodStart)
       newExpiry.setMonth(newExpiry.getMonth() + renewMonths)
 
       // 更新订阅
@@ -1329,7 +1599,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         )
       }
 
-      return { subscription: result }
+      return { subscription: result, revived }
     })
 
     if ('error' in renewResult) {
@@ -1337,6 +1607,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     }
 
     const updated = renewResult.subscription
+
+    if (renewResult.revived) {
+      await resumeMailSubscriptionDomains(updated.id, userId)
+    }
 
     await createLog(
       userId,
@@ -1454,7 +1728,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅'))
     }
 
-    if (subscription.status !== 'active') {
+    if (!mailSubscriptionCanUseUpstream(subscription)) {
       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停'))
     }
 
@@ -1475,7 +1749,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       if (!currentSubscription || currentSubscription.userId !== userId) {
         return { statusCode: 404, error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
       }
-      if (currentSubscription.status !== 'active') {
+      if (!mailSubscriptionCanUseUpstream(currentSubscription)) {
         return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停') }
       }
 
@@ -1498,9 +1772,26 @@ export default async function mailRoutes(fastify: FastifyInstance) {
         return { statusCode: 400, error: apiError(ErrorCode.RESOURCE_EXISTS, '该域名已被使用') }
       }
 
+      const domainDiskLimitMb = Math.floor(currentSubscription.diskLimitGb * 1024 / currentSubscription.domainLimit)
+      const adminDiskLimitMb = Math.min(2048, domainDiskLimitMb)
+      const hasDiskQuota = await mailSubscriptionHasDiskQuota(
+        tx,
+        currentSubscription.id,
+        currentSubscription.diskLimitGb,
+        adminDiskLimitMb
+      )
+      if (!hasDiskQuota) {
+        return { statusCode: 400, error: apiError(ErrorCode.QUOTA_EXCEEDED, '订阅共享磁盘配额不足') }
+      }
+
       let craneResult: { username?: string; password?: string; server?: string } = {}
       try {
-        craneResult = await craneMailService.createDomain(subscription.source, normalizedDomain, currentSubscription.diskLimitGb)
+        craneResult = await craneMailService.createDomain(
+          subscription.source,
+          normalizedDomain,
+          currentSubscription.diskLimitGb,
+          currentSubscription.domainLimit
+        )
       } catch (err: any) {
         return { statusCode: 502, error: apiError(ErrorCode.UPSTREAM_ERROR, `创建域名失败: ${err.message}`) }
       }
@@ -1522,7 +1813,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
             username: usernameWithoutDomain,
             displayName: 'Administrator',
             isAdmin: true,
-            diskLimitMb: currentSubscription.diskLimitGb * 1024
+            diskLimitMb: adminDiskLimitMb
           }
         })
       }
@@ -1567,6 +1858,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
     }
 
+    if (!mailSubscriptionCanUseUpstream(domain.subscription)) {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游'))
+    }
+
     // 调用 CraneMail API 检查验证状态
     try {
       const info = await craneMailService.getDomainInfo(domain.source, domain.domain)
@@ -1602,6 +1897,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
     }
 
+    if (!mailSubscriptionCanUseUpstream(domain.subscription)) {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游'))
+    }
+
     // 获取 DNS 配置信息
     try {
       const info = await craneMailService.getDomainInfo(domain.source, domain.domain)
@@ -1630,6 +1929,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     
     if (!domain || domain.subscription.userId !== request.user.id) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+    }
+
+    if (!mailSubscriptionCanUseUpstream(domain.subscription)) {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游'))
     }
 
     // 调用 CraneMail API 删除域名
@@ -1704,6 +2007,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
     }
 
+    if (!mailSubscriptionCanUseUpstream(domain.subscription)) {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游'))
+    }
+
     if (domain.status !== 'verified') {
       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '请先完成域名验证'))
     }
@@ -1716,60 +2023,103 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     })
     const accountDiskLimitMb = accountInput.diskLimitMb ?? Math.min(2048, maxDiskLimitMb)
 
-    // 检查账户是否已存在
-    const exists = await db.checkMailAccountExists(domainId, accountInput.username!)
-    if (exists) {
-      return reply.code(400).send(apiError(ErrorCode.RESOURCE_EXISTS, '该邮箱账户已存在'))
-    }
-
     const email = `${accountInput.username!}@${domain.domain}`
 
-    // 调用 SmarterMail API 创建账户
-    try {
-      await smarterMailService.createAccount(
-        domain.source,
-        domain.domain,
-        domain.adminUsername!,
-        domain.adminPassword!,
-        {
-          username: accountInput.username!,
-          password: accountInput.password!,
-          displayName: accountInput.displayName || accountInput.username!,
-          diskLimitMb: accountDiskLimitMb
-        }
+    const createResult = await prisma.$transaction(async (tx) => {
+      const subscriptionLocked = await tryAdvisoryTransactionLock(
+        tx,
+        MAIL_SUBSCRIPTION_LOCK_NAMESPACE,
+        request.user.id
       )
-    } catch (err: any) {
-      return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `创建邮箱账户失败: ${err.message}`))
-    }
+      if (!subscriptionLocked) {
+        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+      }
 
-    // 保存到数据库；如果本地落库失败，需要补偿删除已创建的远端账号，避免产生面板不可见的孤儿邮箱。
-    let account: Awaited<ReturnType<typeof db.createMailAccount>>
-    try {
-      account = await db.createMailAccount({
-        domainId,
-        email,
-        username: accountInput.username!,
-        displayName: accountInput.displayName || accountInput.username!,
-        diskLimitMb: accountDiskLimitMb,
-        isAdmin: false
+      const currentDomain = await tx.mailDomain.findUnique({
+        where: { id: domainId },
+        include: { subscription: true }
       })
-    } catch (err: any) {
+      if (!currentDomain || currentDomain.subscription.userId !== request.user.id) {
+        return { statusCode: 404, error: apiError(ErrorCode.NOT_FOUND, '域名不存在') }
+      }
+      if (!mailSubscriptionCanUseUpstream(currentDomain.subscription)) {
+        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游') }
+      }
+      if (currentDomain.status !== 'verified') {
+        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '请先完成域名验证') }
+      }
+
+      const exists = await tx.mailAccount.findUnique({
+        where: { domainId_username: { domainId, username: accountInput.username! } }
+      })
+      if (exists) {
+        return { statusCode: 400, error: apiError(ErrorCode.RESOURCE_EXISTS, '该邮箱账户已存在') }
+      }
+
+      const hasDiskQuota = await mailSubscriptionHasDiskQuota(
+        tx,
+        currentDomain.subscriptionId,
+        currentDomain.subscription.diskLimitGb,
+        accountDiskLimitMb
+      )
+      if (!hasDiskQuota) {
+        return { statusCode: 400, error: apiError(ErrorCode.QUOTA_EXCEEDED, '订阅共享磁盘配额不足') }
+      }
+
       try {
-        await smarterMailService.deleteAccount(
+        await smarterMailService.createAccount(
           domain.source,
           domain.domain,
           domain.adminUsername!,
           domain.adminPassword!,
-          accountInput.username!
+          {
+            username: accountInput.username!,
+            password: accountInput.password!,
+            displayName: accountInput.displayName || accountInput.username!,
+            diskLimitMb: accountDiskLimitMb
+          }
         )
-      } catch (compensationError) {
-        console.error('SmarterMail account create compensation failed:', compensationError)
-        return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, '邮箱账户已在远端创建，但本地记录保存失败且远端补偿删除失败，请联系管理员处理'))
+      } catch (err: any) {
+        return { statusCode: 502, error: apiError(ErrorCode.UPSTREAM_ERROR, `创建邮箱账户失败: ${err.message}`) }
       }
 
-      console.error('Mail account local create failed after upstream create:', err)
-      return reply.code(500).send(apiError(ErrorCode.INTERNAL_ERROR, '邮箱账户创建失败，已回滚远端账号，请重试'))
+      try {
+        const account = await tx.mailAccount.create({
+          data: {
+            domainId,
+            email,
+            username: accountInput.username!,
+            displayName: accountInput.displayName || accountInput.username!,
+            diskLimitMb: accountDiskLimitMb,
+            isAdmin: false
+          }
+        })
+        return { account }
+      } catch (err: any) {
+        // 本地落库失败时补偿删除远端账号，避免产生面板不可见的孤儿邮箱。
+        try {
+          await smarterMailService.deleteAccount(
+            domain.source,
+            domain.domain,
+            domain.adminUsername!,
+            domain.adminPassword!,
+            accountInput.username!
+          )
+        } catch (compensationError) {
+          console.error('SmarterMail account create compensation failed:', compensationError)
+          return { statusCode: 502, error: apiError(ErrorCode.UPSTREAM_ERROR, '邮箱账户已在远端创建，但本地记录保存失败且远端补偿删除失败，请联系管理员处理') }
+        }
+
+        console.error('Mail account local create failed after upstream create:', err)
+        return { statusCode: 500, error: apiError(ErrorCode.INTERNAL_ERROR, '邮箱账户创建失败，已回滚远端账号，请重试') }
+      }
+    })
+
+    if ('error' in createResult) {
+      return reply.code(createResult.statusCode!).send(createResult.error)
     }
+
+    const account = createResult.account
 
     await createLog(
       request.user.id,
@@ -1810,6 +2160,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
     }
 
+    if (!mailSubscriptionCanUseUpstream(domain.subscription)) {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游'))
+    }
+
     const account = await db.getMailAccountById(accountId)
     if (!account || account.domainId !== domainId) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱账户不存在'))
@@ -1819,27 +2173,76 @@ export default async function mailRoutes(fastify: FastifyInstance) {
       maxDiskLimitMb: domain.subscription.diskLimitGb * 1024
     })
 
-    // 调用 SmarterMail API 更新账户
-    try {
-      await smarterMailService.updateAccount(
-        domain.source,
-        domain.domain,
-        domain.adminUsername!,
-        domain.adminPassword!,
-        account.username,
-        {
+    const updateResult = await prisma.$transaction(async (tx) => {
+      const subscriptionLocked = await tryAdvisoryTransactionLock(
+        tx,
+        MAIL_SUBSCRIPTION_LOCK_NAMESPACE,
+        request.user.id
+      )
+      if (!subscriptionLocked) {
+        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+      }
+
+      const currentDomain = await tx.mailDomain.findUnique({
+        where: { id: domainId },
+        include: { subscription: true }
+      })
+      if (!currentDomain || currentDomain.subscription.userId !== request.user.id) {
+        return { statusCode: 404, error: apiError(ErrorCode.NOT_FOUND, '域名不存在') }
+      }
+      if (!mailSubscriptionCanUseUpstream(currentDomain.subscription)) {
+        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游') }
+      }
+
+      const currentAccount = await tx.mailAccount.findUnique({ where: { id: accountId } })
+      if (!currentAccount || currentAccount.domainId !== domainId) {
+        return { statusCode: 404, error: apiError(ErrorCode.NOT_FOUND, '邮箱账户不存在') }
+      }
+
+      if (accountInput.diskLimitMb !== undefined) {
+        const hasDiskQuota = await mailSubscriptionHasDiskQuota(
+          tx,
+          currentDomain.subscriptionId,
+          currentDomain.subscription.diskLimitGb,
+          accountInput.diskLimitMb,
+          currentAccount.id
+        )
+        if (!hasDiskQuota) {
+          return { statusCode: 400, error: apiError(ErrorCode.QUOTA_EXCEEDED, '订阅共享磁盘配额不足') }
+        }
+      }
+
+      try {
+        await smarterMailService.updateAccount(
+          domain.source,
+          domain.domain,
+          domain.adminUsername!,
+          domain.adminPassword!,
+          currentAccount.username,
+          {
+            displayName: accountInput.displayName,
+            diskLimitMb: accountInput.diskLimitMb
+          }
+        )
+      } catch (err: any) {
+        return { statusCode: 502, error: apiError(ErrorCode.UPSTREAM_ERROR, `更新邮箱账户失败: ${err.message}`) }
+      }
+
+      const updated = await tx.mailAccount.update({
+        where: { id: accountId },
+        data: {
           displayName: accountInput.displayName,
           diskLimitMb: accountInput.diskLimitMb
         }
-      )
-    } catch (err: any) {
-      return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `更新邮箱账户失败: ${err.message}`))
+      })
+      return { updated }
+    })
+
+    if ('error' in updateResult) {
+      return reply.code(updateResult.statusCode!).send(updateResult.error)
     }
 
-    const updated = await db.updateMailAccount(accountId, {
-      displayName: accountInput.displayName,
-      diskLimitMb: accountInput.diskLimitMb
-    })
+    const updated = updateResult.updated
 
     return {
       account: {
@@ -1865,6 +2268,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     const domain = await db.getMailDomainById(domainId)
     if (!domain || domain.subscription.userId !== request.user.id) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+    }
+
+    if (!mailSubscriptionCanUseUpstream(domain.subscription)) {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游'))
     }
 
     const account = await db.getMailAccountById(accountId)
@@ -1914,6 +2321,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
     const domain = await db.getMailDomainById(domainId)
     if (!domain || domain.subscription.userId !== request.user.id) {
       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+    }
+
+    if (!mailSubscriptionCanUseUpstream(domain.subscription)) {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停，无法操作上游'))
     }
 
     const account = await db.getMailAccountById(accountId)

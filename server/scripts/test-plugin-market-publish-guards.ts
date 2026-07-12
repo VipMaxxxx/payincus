@@ -9,7 +9,9 @@ function read(path: string): string {
 }
 
 const publisher = read('server/src/lib/plugin-market-publisher.ts')
+const themePublisher = read('server/src/lib/theme-market-publisher.ts')
 const route = read('server/src/routes/plugin-market-submissions.ts')
+const pluginDb = read('server/src/db/plugins.ts')
 const adminView = read('client/src/views/admin/PluginCenterView.vue')
 const adminApi = read('client/src/api/admin.ts')
 const clientTypes = read('client/src/types/api.ts')
@@ -27,12 +29,58 @@ assert.ok(
     publisher.includes('PLUGIN_MARKET_PUBLIC_BASE_URL') &&
     publisher.includes("reviewStatus: 'listed'") &&
     publisher.includes("scanStatus: { in: ['passed', 'warning'] }") &&
-    publisher.includes('readExistingMarketEntries') &&
-    publisher.includes('entriesById.set(entry.id, entry)') &&
-    publisher.includes('entriesById.set(submission.pluginId, submissionToMarketEntry(submission, publicBaseUrl))') &&
+    !publisher.includes('readExistingMarketEntries') &&
+    !publisher.includes("readFile(indexPath, 'utf8')") &&
+    publisher.includes('highestSubmissionById') &&
     publisher.includes("writeFile(indexPath, `${JSON.stringify(index, null, 2)}\\n`, 'utf8')") &&
     publisher.includes('fingerprint'),
-  'plugin market publisher must generate index.json from listed scanned submissions while preserving existing market entries'
+  'plugin market publisher must rebuild index.json only from the currently listed and successfully scanned DB submissions'
+)
+
+assert.ok(
+  publisher.includes('approvedListedSubmissions') &&
+    publisher.includes('assertPluginCapabilitiesApprovedForListing') &&
+    pluginDb.includes('assertPluginCapabilitiesApprovedForListing') &&
+    publisher.includes('isPluginDeveloperVerifiedByAdmin') &&
+    publisher.includes("trustLevel: developerVerified ? 'verified' : 'third_party'") &&
+    !publisher.includes("submission.developerGithub ? 'verified'") &&
+    !publisher.includes('Boolean(submission.developerGithub)'),
+  'public publishing must exclude unapproved high-risk capabilities and grant verified trust only after admin certification'
+)
+
+assert.ok(
+  publisher.includes('listedSubmissions.filter(submission => isFreeSubmissionPricing(submission.pricing))') &&
+    publisher.includes("normalizePluginMarketPricing(value).type === 'free'") &&
+    !publisher.includes('isFreeMarketEntry') &&
+    !themePublisher.includes('hasFreeOrNoPricing') &&
+    !themePublisher.includes('readExistingMarketEntries'),
+  'plugin and theme market publishers must exclude paid legacy entries by rebuilding indexes from free current DB state'
+)
+
+assert.ok(
+  publisher.includes('persistSubmissionArtifacts') &&
+    publisher.includes("join('packages', submission.pluginId, `${submission.version}.tar.gz`)") &&
+    publisher.includes("join('manifests', submission.pluginId, `${submission.version}.json`)") &&
+    publisher.includes('copyFile(sourcePackagePath, packagePath)') &&
+    publisher.includes('parsePluginManifest') &&
+    publisher.includes('packageSha256 !== submission.sha256.toLowerCase()') &&
+    publisher.includes('artifacts.manifest.payincus') &&
+    publisher.includes('downloadUrl: artifacts.packageUrl') &&
+    publisher.includes('manifestUrl: artifacts.manifestUrl') &&
+    !publisher.includes('downloadUrl: submission.packageUrl'),
+  'publishing must pin the reviewed package and canonical manifest into stable market package/manifest paths before indexing'
+)
+
+assert.ok(
+  publisher.includes('function parseSemVer') &&
+    publisher.includes('function compareSemVer') &&
+    publisher.includes('compareSemVer(version, current.version) > 0') &&
+    publisher.includes('publishedEntries: plugins.length') &&
+    themePublisher.includes('function parseSemVer') &&
+    themePublisher.includes('function compareSemVer') &&
+    themePublisher.includes('compareSemVer(version, current.version) > 0') &&
+    themePublisher.includes('publishedEntries: themes.length'),
+  'plugin and theme market publishers must publish exactly one highest valid SemVer entry per ID (including 10.0.0 above 2.0.0)'
 )
 
 assert.ok(

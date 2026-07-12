@@ -96,7 +96,12 @@ export function isIpPrivateOrReserved(ip: string): boolean {
   return true
 }
 
-async function assertPublicHostname(hostname: string): Promise<void> {
+export interface PublicResolvedAddress {
+  address: string
+  family: number
+}
+
+export async function resolvePublicHostname(hostname: string): Promise<PublicResolvedAddress[]> {
   const normalizedHost = hostname.trim().toLowerCase().replace(/\.$/, '')
   if (!normalizedHost) {
     throw new OutboundTargetValidationError('Hostname cannot be empty')
@@ -116,14 +121,14 @@ async function assertPublicHostname(hostname: string): Promise<void> {
     if (isIpPrivateOrReserved(normalizedHost)) {
       throw new OutboundTargetValidationError('Private or reserved IP targets are not allowed')
     }
-    return
+    return [{ address: normalizedHost, family }]
   }
 
   if (!normalizedHost.includes('.')) {
     throw new OutboundTargetValidationError('Private or local hostnames are not allowed')
   }
 
-  let records: Array<{ address: string }>
+  let records: PublicResolvedAddress[]
   try {
     records = await dnsLookup(normalizedHost, { all: true, verbatim: true })
   } catch (error: any) {
@@ -140,6 +145,12 @@ async function assertPublicHostname(hostname: string): Promise<void> {
       throw new OutboundTargetValidationError('Targets resolving to private or reserved IPs are not allowed')
     }
   }
+
+  return records
+}
+
+async function assertPublicHostname(hostname: string): Promise<void> {
+  await resolvePublicHostname(hostname)
 }
 
 export async function assertSafeWebhookUrl(url: string): Promise<URL> {
@@ -189,6 +200,15 @@ const revalidatingLookup: LookupFunction = (hostname, options, callback) => {
  * 在 fetch(..., { dispatcher: safeOutboundDispatcher }) 中传入即可获得连接期防 rebinding 保护。
  */
 export const safeOutboundDispatcher = new Agent({ connect: { lookup: revalidatingLookup } })
+
+export async function safeFetch(
+  url: string,
+  init?: Parameters<typeof fetch>[1],
+  label = 'URL'
+): Promise<Response> {
+  await assertSafeHttpUrl(url, label)
+  return fetch(url, { ...(init ?? {}), dispatcher: safeOutboundDispatcher as any })
+}
 
 export async function assertSafeStorageTarget(
   type: 'WEBDAV' | 'FTP' | 'SFTP' | 'S3',

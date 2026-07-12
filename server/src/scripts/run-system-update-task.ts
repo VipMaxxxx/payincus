@@ -169,7 +169,7 @@ async function commandExists(command: string): Promise<boolean> {
 }
 
 async function assertRequiredCommands(): Promise<void> {
-  const requiredCommands = ['bash', 'corepack', 'curl', 'git', 'systemctl', 'tar']
+  const requiredCommands = ['bash', 'corepack', 'curl', 'git', 'pg_dump', 'systemctl', 'tar']
   if (process.platform === 'linux') {
     requiredCommands.push('chown', 'id')
   }
@@ -185,6 +185,41 @@ async function assertRequiredCommands(): Promise<void> {
         'Install the missing command(s) or add them to PATH before starting the update.'
     )
   }
+}
+
+async function backupDatabase(backupDir: string, timestamp: string): Promise<string> {
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) {
+    throw new Error('OTA database backup failed: DATABASE_URL is not configured')
+  }
+
+  await mkdir(backupDir, { recursive: true })
+  const backupPath = join(backupDir, `db-pre-migrate-${targetVersion}-${timestamp}.sql`)
+  const temporaryPath = `${backupPath}.tmp`
+  await rm(temporaryPath, { force: true })
+
+  try {
+    await run('pg_dump', ['--format=plain', '--no-owner', '--no-privileges', '--file', temporaryPath], {
+      timeoutMs: 600000,
+      env: { PGDATABASE: databaseUrl }
+    })
+    await rename(temporaryPath, backupPath)
+  } catch (error) {
+    await rm(temporaryPath, { force: true })
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`OTA database backup failed; migration was not started: ${message}`)
+  }
+
+  await log(`Database pre-migration backup completed: ${backupPath}`)
+  return backupPath
+}
+
+async function deployDatabaseMigrations(): Promise<void> {
+  await log('Deploying database migrations from the new release before backend restart')
+  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], {
+    timeoutMs: 300000,
+    cwd: appDir
+  })
 }
 
 async function waitForBackendHealth(): Promise<void> {
@@ -586,10 +621,6 @@ async function applyArtifactAtomic(stagingDir: string, timestamp: string): Promi
     cwd: releaseDir,
     env: { CI: '1' }
   })
-  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], {
-    timeoutMs: 300000,
-    cwd: releaseDir
-  })
   await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'generate'], {
     timeoutMs: 180000,
     cwd: releaseDir
@@ -614,7 +645,6 @@ async function applyArtifactLegacy(stagingDir: string, backupDir: string): Promi
     timeoutMs: 600000,
     env: { CI: '1' }
   })
-  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
   await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'generate'], { timeoutMs: 180000 })
   await writeVersionFile()
   return backupDir
@@ -657,7 +687,6 @@ async function applyGitUpdate(backupDir: string): Promise<string> {
     }
   })
   await run('pnpm', ['build'], { timeoutMs: 900000 })
-  await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy'], { timeoutMs: 300000 })
   await run('pnpm', ['--filter', 'server', 'exec', 'prisma', 'generate'], { timeoutMs: 180000 })
   await run('pnpm', ['--filter', 'server', 'test:frontend-dist-boundary-guards'], { timeoutMs: 120000 })
   await run('pnpm', ['--filter', 'server', 'test:frontend-route-guards'], { timeoutMs: 120000 })
@@ -807,6 +836,8 @@ async function main(): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)
   const backupDir = `${installDir}.bak.${timestamp}`
   let backupPath = backupDir
+  let databaseBackupPath: string | null = null
+  let databaseMigrationAttempted = false
 
   try {
     const artifact = await getRuntimeArtifact(targetVersion)
@@ -818,6 +849,9 @@ async function main(): Promise<void> {
       await assertEnoughDiskSpace('Git 构建并备份当前版本', minimumDiskFreeMb + ((await getInstallDirectorySizeMb()) || 0))
       backupPath = await applyGitUpdate(backupDir)
     }
+    databaseBackupPath = await backupDatabase(backupDir, timestamp)
+    databaseMigrationAttempted = true
+    await deployDatabaseMigrations()
     await verifyUpdatedRuntime(Boolean(artifact))
 
     await updateTask({
@@ -837,6 +871,11 @@ async function main(): Promise<void> {
     } catch (rollbackError) {
       const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
       await log(`AUTO ROLLBACK ERROR: ${rollbackMessage}`)
+    }
+    if (rolledBack && databaseMigrationAttempted && databaseBackupPath) {
+      await log(
+        `WARNING: DB 已迁移但代码回滚，DB 与旧代码可能不兼容；DB 不会自动回滚。如需回滚 DB，请用 ${databaseBackupPath} 手工恢复。该备份将保留。`
+      )
     }
     await updateTask({
       status: rolledBack ? 'rolled_back' : 'failed',

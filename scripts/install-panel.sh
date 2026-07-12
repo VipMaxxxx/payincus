@@ -30,6 +30,38 @@ readonly DEFAULT_PORT=3001
 readonly NODE_MAJOR=22
 readonly PNPM_VERSION="9.14.2"
 readonly PG_VERSION=16
+RELEASE_VERIFIED_THIS_RUN=false
+
+install_verified_root_helpers_from_archive() {
+    local tar_file="$1"
+    local helper entry tmp
+
+    install -d -o root -g root -m 0755 /usr/local/libexec/incudal /usr/local/libexec/incudal/ota-path
+    for helper in \
+        incudal-online-task.sh.example \
+        incudal-systemctl-wrapper.sh.example \
+        incudal-ota-chown-wrapper.sh.example; do
+        entry="$(tar -tzf "$tar_file" | grep -E "^(\./)?deploy/${helper}$" || true)"
+        if [[ "$(printf '%s\n' "$entry" | sed '/^$/d' | wc -l)" -ne 1 ]]; then
+            error "已验证产物缺少唯一 root helper: deploy/${helper}"
+            return 1
+        fi
+        tmp="$(mktemp)"
+        tar -xOzf "$tar_file" "$entry" > "$tmp"
+        if [[ ! -s "$tmp" ]] || ! bash -n "$tmp"; then
+            rm -f "$tmp"
+            error "已验证产物中的 root helper 无效: deploy/${helper}"
+            return 1
+        fi
+        case "$helper" in
+            incudal-online-task.sh.example) install -o root -g root -m 0755 "$tmp" /usr/local/libexec/incudal/incudal-online-task ;;
+            incudal-systemctl-wrapper.sh.example) install -o root -g root -m 0755 "$tmp" /usr/local/libexec/incudal/systemctl ;;
+            incudal-ota-chown-wrapper.sh.example) install -o root -g root -m 0755 "$tmp" /usr/local/libexec/incudal/ota-path/chown ;;
+        esac
+        rm -f "$tmp"
+    done
+    install -d -o root -g root -m 0755 /var/cache/incudal-ota /var/lib/incudal-ota/manifests
+}
 
 # ========================== 颜色定义 ==========================
 readonly RED='\033[1;31m'
@@ -238,8 +270,10 @@ ensure_env_keys() {
         set_env_if_missing "PAYMENT_CALLBACK_BASE_URL" "$frontend_url" "支付回调公网地址"
     fi
 
-    chmod 600 "$ENV_FILE"
-    chown "${RUN_USER}:${RUN_USER}" "$ENV_FILE" 2>/dev/null || true
+    # root-run OTA units read this file.  Keep it readable by the service group,
+    # but never writable by the service account (prevents NODE_OPTIONS/env injection).
+    chown "root:${RUN_USER}" "$ENV_FILE" 2>/dev/null || true
+    chmod 640 "$ENV_FILE"
 }
 
 # ========================== 系统检查 ==========================
@@ -720,9 +754,15 @@ install_release() {
 
     verify_release_checksum "$tar_file" || return 1
     validate_release_archive "$tar_file" || return 1
+    install_verified_root_helpers_from_archive "$tar_file" || return 1
+    RELEASE_VERIFIED_THIS_RUN=true
 
     # 创建安装目录
     mkdir -p "$INSTALL_DIR"
+    # Existing installations may still be service-owned.  Seal ownership
+    # before root extracts over the tree to avoid pre-existing symlink/write
+    # races during an upgrade.
+    /usr/local/libexec/incudal/incudal-online-task harden
 
     if [[ "$is_upgrade" == "true" ]]; then
         # 升级模式：先备份当前版本
@@ -769,6 +809,11 @@ install_release() {
 
     # 创建证书目录
     mkdir -p "${INSTALL_DIR}/server/certs"
+
+    # The fixed helper came directly from the checksum-verified archive.  Use
+    # its non-executing harden action before any service account can modify the
+    # extracted code tree.
+    /usr/local/libexec/incudal/incudal-online-task harden
 
     log "产物包安装完成"
 }
@@ -825,9 +870,19 @@ create_user() {
 
     # Nginx runs as www-data and must be able to traverse the install root
     # to serve client/dist while .env stays owner-only below.
-    chown -R "${RUN_USER}:${RUN_USER}" "$INSTALL_DIR"
+    for mutable in \
+        .npm .cache .incudal-update-downloads update-logs \
+        plugins plugin-data plugin-logs plugin-staging \
+        themes theme-data theme-staging agent-release; do
+        if [[ -e "${INSTALL_DIR}/${mutable}" ]]; then
+            chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/${mutable}"
+        fi
+    done
     chmod 751 "$INSTALL_DIR"
-    chmod 600 "${ENV_FILE}" 2>/dev/null || true
+    if [[ -f "$ENV_FILE" ]]; then
+        chown "root:${RUN_USER}" "$ENV_FILE"
+        chmod 640 "$ENV_FILE"
+    fi
 }
 
 # ========================== 生成面板客户端证书 ==========================
@@ -981,8 +1036,8 @@ COOKIE_DOMAIN=
 # ALERT_WEBHOOK_URL=https://your-webhook-url
 EOF
 
-    chmod 600 "$ENV_FILE"
-    chown "${RUN_USER}:${RUN_USER}" "$ENV_FILE"
+    chown "root:${RUN_USER}" "$ENV_FILE"
+    chmod 640 "$ENV_FILE"
 
     log "环境配置文件生成完成: ${ENV_FILE}"
 }
@@ -1038,7 +1093,6 @@ create_service() {
     if [[ -L "${INSTALL_DIR}/current" ]]; then
         app_dir="${INSTALL_DIR}/current"
     fi
-
     cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=PayIncus 容器虚拟化管理平台
@@ -1057,6 +1111,7 @@ EnvironmentFile=${ENV_FILE}
 Environment=HOME=${INSTALL_DIR}
 Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
 Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
+Environment=PATH=/usr/local/libexec/incudal:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # 启动前自动执行数据库迁移
 ExecStartPre=/usr/bin/bash -c 'cd ${app_dir}/server && pnpm exec prisma migrate deploy'
@@ -1112,6 +1167,34 @@ create_online_update_service() {
     if [[ -L "${INSTALL_DIR}/current" ]]; then
         app_dir="${INSTALL_DIR}/current"
     fi
+    if [[ "$RELEASE_VERIFIED_THIS_RUN" != "true" ]]; then
+        error "本次运行未验证并安装 Release 产物，拒绝为既有目录建立可信清单"
+        error "既有机器请由 owner 按 audits/fixes/FX-008-owner-steps.md 从已验证产物迁移"
+        return 1
+    fi
+
+    # FX-008: root units may only enter through fixed, root-owned helpers.  The
+    # release package is SHA256-verified before extraction; seal records a
+    # root-only manifest so later task starts also verify the installed tree.
+    local helper
+    for helper in \
+        incudal-online-task.sh.example \
+        incudal-systemctl-wrapper.sh.example \
+        incudal-ota-chown-wrapper.sh.example; do
+        local installed_helper=""
+        case "$helper" in
+            incudal-online-task.sh.example) installed_helper=/usr/local/libexec/incudal/incudal-online-task ;;
+            incudal-systemctl-wrapper.sh.example) installed_helper=/usr/local/libexec/incudal/systemctl ;;
+            incudal-ota-chown-wrapper.sh.example) installed_helper=/usr/local/libexec/incudal/ota-path/chown ;;
+        esac
+        if [[ ! -f "$installed_helper" || -L "$installed_helper" || "$(stat -c '%u:%g:%a' "$installed_helper")" != "0:0:755" ]]; then
+            error "root helper 属主或权限无效: ${installed_helper}"
+            return 1
+        fi
+    done
+
+    install -d -o root -g root -m 0755 /usr/local/libexec/incudal /usr/local/libexec/incudal/ota-path
+    install -d -o root -g root -m 0755 /var/cache/incudal-ota /var/lib/incudal-ota/manifests
 
     cat > /etc/systemd/system/incudal-online-update@.service << EOF
 [Unit]
@@ -1124,16 +1207,11 @@ Requires=postgresql.service redis-server.service
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=${app_dir}
+WorkingDirectory=${INSTALL_DIR}
 EnvironmentFile=${ENV_FILE}
-Environment=HOME=${INSTALL_DIR}
+Environment=HOME=/var/cache/incudal-ota
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
-Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
-Environment=INCUDAL_APP_DIR=${app_dir}
-Environment=INSTALL_DIR=${INSTALL_DIR}
-Environment=SERVICE_NAME=${SERVICE_NAME}
-ExecStart=/usr/bin/node ${app_dir}/server/dist/scripts/run-system-update-task.js %i
+ExecStart=/usr/local/libexec/incudal/incudal-online-task update %i
 TimeoutStartSec=1800
 StandardOutput=journal
 StandardError=journal
@@ -1151,33 +1229,37 @@ Requires=postgresql.service redis-server.service
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=${app_dir}
+WorkingDirectory=${INSTALL_DIR}
 EnvironmentFile=${ENV_FILE}
-Environment=HOME=${INSTALL_DIR}
+Environment=HOME=/var/cache/incudal-ota
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=NPM_CONFIG_CACHE=${INSTALL_DIR}/.npm
-Environment=XDG_CACHE_HOME=${INSTALL_DIR}/.cache
-Environment=INCUDAL_APP_DIR=${app_dir}
-Environment=INSTALL_DIR=${INSTALL_DIR}
-Environment=SERVICE_NAME=${SERVICE_NAME}
-ExecStart=/usr/bin/node ${app_dir}/server/dist/scripts/rollback-system-update-task.js %i
+ExecStart=/usr/local/libexec/incudal/incudal-online-task rollback %i
 TimeoutStartSec=900
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=incudal-online-rollback
 EOF
 
-    local systemctl_bin
-    systemctl_bin="$(command -v systemctl)"
-    cat > /etc/sudoers.d/incudal-online-update << EOF
+    local sudoers_tmp
+    sudoers_tmp="$(mktemp)"
+    cat > "$sudoers_tmp" << EOF
 Defaults:${RUN_USER} !requiretty
-${RUN_USER} ALL=(root) NOPASSWD: ${systemctl_bin} start --no-block incudal-online-update@*.service, ${systemctl_bin} start --no-block incudal-online-rollback@*.service
+Defaults:${RUN_USER} secure_path=/usr/local/libexec/incudal:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Only the root-owned wrapper is allowed.  It rejects extra arguments and only
+# accepts positive numeric task IDs for these two unit templates.
+${RUN_USER} ALL=(root) NOPASSWD: /usr/local/libexec/incudal/systemctl start --no-block incudal-online-update@*.service, /usr/local/libexec/incudal/systemctl start --no-block incudal-online-rollback@*.service
 EOF
-    chmod 440 /etc/sudoers.d/incudal-online-update
-    visudo -cf /etc/sudoers.d/incudal-online-update >/dev/null
+    chmod 440 "$sudoers_tmp"
+    visudo -cf "$sudoers_tmp" >/dev/null
+    install -o root -g root -m 0440 "$sudoers_tmp" /etc/sudoers.d/incudal-online-update
+    rm -f "$sudoers_tmp"
+
+    # seal is run only after install_release verified the release SHA256.  It
+    # makes code/current/releases root-owned, leaves only documented runtime
+    # directories writable by incudal, and writes the trusted file manifest.
+    /usr/local/libexec/incudal/incudal-online-task seal
 
     systemctl daemon-reload
-    chown -R "${RUN_USER}:${RUN_USER}" "${INSTALL_DIR}/update-logs" "${INSTALL_DIR}/plugins" "${INSTALL_DIR}/plugin-data" "${INSTALL_DIR}/plugin-logs" "${INSTALL_DIR}/plugin-staging" "${INSTALL_DIR}/themes" "${INSTALL_DIR}/theme-data" "${INSTALL_DIR}/theme-staging" "${INSTALL_DIR}/.git" 2>/dev/null || true
 
     log "在线更新 systemd 单元和 sudoers 创建完成"
 }
@@ -1549,9 +1631,11 @@ do_upgrade() {
     fi
 
     # 修复权限
-    chown -R "${RUN_USER}:${RUN_USER}" "$INSTALL_DIR"
     chmod 751 "$INSTALL_DIR"
-    chmod 600 "${ENV_FILE}" 2>/dev/null || true
+    if [[ -f "$ENV_FILE" ]]; then
+        chown "root:${RUN_USER}" "$ENV_FILE"
+        chmod 640 "$ENV_FILE"
+    fi
 
     configure_git_metadata
     ensure_env_keys
@@ -1598,6 +1682,7 @@ do_uninstall() {
     rm -f /etc/systemd/system/incudal-online-update@.service
     rm -f /etc/systemd/system/incudal-online-rollback@.service
     rm -f /etc/sudoers.d/incudal-online-update
+    rm -rf /usr/local/libexec/incudal /var/cache/incudal-ota /var/lib/incudal-ota
     systemctl daemon-reload
 
     # 删除安装目录

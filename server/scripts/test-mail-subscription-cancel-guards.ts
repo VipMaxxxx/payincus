@@ -7,6 +7,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/routes/mail.ts'), 'utf8')
+const clientApiSource = readFileSync(resolve(__dirname, '../../client/src/api/index.ts'), 'utf8')
+const mailViewSource = readFileSync(resolve(__dirname, '../../client/src/views/MailView.vue'), 'utf8')
 
 function section(sourceText: string, startMarker: string, endMarker: string): string {
   const start = sourceText.indexOf(startMarker)
@@ -76,6 +78,47 @@ assert.ok(
 assert.ok(
   cancelRouteSection.includes('原因：${reason}'),
   'mail subscription cancel balance log must use the normalized refund reason'
+)
+
+const purchaseRouteSection = section(
+  source,
+  '// 购买订阅',
+  '// 续费订阅'
+)
+
+assert.ok(
+  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: { in: ['active', 'expired'] } }") &&
+    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: \{ in: \['active', 'expired'\] \} \}/g)?.length === 2,
+  'mail subscription purchase must inspect active and expired subscriptions per mail source before and inside the transaction'
+)
+assert.ok(
+  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
+    !purchaseRouteSection.includes('where: { userId }'),
+  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
+)
+assert.ok(
+  purchaseRouteSection.includes("existingInTx.status === 'expired' || existingInTx.expiresAt <= purchaseNow") &&
+    purchaseRouteSection.includes('const revivalPeriodStart = existingInTx && existingInTx.expiresAt > purchaseNow') &&
+    purchaseRouteSection.includes('await tx.mailSubscription.update({') &&
+    purchaseRouteSection.includes("status: 'active'") &&
+    purchaseRouteSection.includes('await resumeMailSubscriptionDomains(subscription.id, userId)'),
+  'purchasing on a source with an expired subscription must revive the original row and resume its upstream domains'
+)
+
+assert.ok(
+  source.includes('function normalizeMailSubscriptionAutoRenewInput(input: unknown): boolean') &&
+    source.includes("typeof input.autoRenew !== 'boolean'") &&
+    source.includes("Body: { autoRenew: unknown }") &&
+    source.includes("('/subscription/auto-renew'") &&
+    source.includes('data: { autoRenew }'),
+  'mail subscription auto-renew setting must use an authenticated strict boolean endpoint and persist the stored flag'
+)
+assert.ok(
+  clientApiSource.includes("http.patch('/mail/subscription/auto-renew', { autoRenew })") &&
+    mailViewSource.includes('async function toggleAutoRenew()') &&
+    mailViewSource.includes('role="switch"') &&
+    mailViewSource.includes('@click="toggleAutoRenew"'),
+  'mail subscription view must expose the auto-renew toggle through the dedicated client API'
 )
 
 console.log('mail subscription cancel guard tests passed')

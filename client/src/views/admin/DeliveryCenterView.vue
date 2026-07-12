@@ -517,22 +517,22 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="w-full min-w-[900px] text-left text-sm">
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-left text-sm">
             <thead class="border-b border-themed text-xs uppercase text-themed-muted">
               <tr>
-                <th class="px-4 py-3 font-medium">Case</th>
-                <th class="px-4 py-3 font-medium">实例</th>
-                <th class="px-4 py-3 font-medium">目标资源</th>
-                <th class="px-4 py-3 font-medium">最近扣费</th>
-                <th class="px-4 py-3 font-medium">状态</th>
-                <th class="px-4 py-3 font-medium">错误</th>
-                <th class="px-4 py-3 font-medium">操作</th>
+                <th class="w-[10%] px-4 py-3 font-medium">Case</th>
+                <th class="w-[15%] px-4 py-3 font-medium">实例</th>
+                <th class="w-[16%] px-4 py-3 font-medium">目标资源</th>
+                <th class="w-[12%] px-4 py-3 font-medium">最近扣费</th>
+                <th class="w-[10%] px-4 py-3 font-medium">状态</th>
+                <th class="w-[17%] px-4 py-3 font-medium">错误</th>
+                <th class="w-[20%] px-4 py-3 font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="item in repairCases" :key="item.id" class="border-b border-themed last:border-b-0">
-                <td class="px-4 py-3">
+                <td class="break-words px-4 py-3">
                   <div class="font-medium text-themed">#{{ item.id }}</div>
                   <div class="text-xs text-themed-muted">{{ issueTypeLabel(item.assuranceCase.issueType) }}</div>
                 </td>
@@ -555,8 +555,8 @@ onMounted(() => {
                     {{ caseStatusLabel(item.assuranceCase.status) }}
                   </span>
                 </td>
-                <td class="max-w-[260px] px-4 py-3">
-                  <div class="truncate text-xs text-themed-muted" :title="item.assuranceCase.lastError || ''">
+                <td class="break-words px-4 py-3">
+                  <div class="text-xs text-themed-muted" :title="item.assuranceCase.lastError || ''">
                     {{ item.assuranceCase.lastError || item.assuranceCase.title }}
                   </div>
                   <div v-if="item.assuranceCase.handledByUsername" class="mt-1 text-xs text-themed-muted">
@@ -684,17 +684,17 @@ onMounted(() => {
             </div>
           </button>
         </div>
-        <div class="hidden overflow-x-auto lg:block">
-          <table class="w-full min-w-[900px] text-left text-sm">
+        <div class="hidden overflow-hidden lg:block">
+          <table class="w-full table-fixed text-left text-sm">
               <thead class="border-b border-themed text-xs uppercase text-themed-muted">
                 <tr>
-                  <th class="px-4 py-3 font-medium">任务</th>
-                  <th class="px-4 py-3 font-medium">实例</th>
-                  <th class="px-4 py-3 font-medium">用户</th>
-                  <th class="px-4 py-3 font-medium">节点</th>
-                  <th class="px-4 py-3 font-medium">状态</th>
-                  <th class="px-4 py-3 font-medium">保障</th>
-                  <th class="px-4 py-3 font-medium">时间</th>
+                  <th class="w-[18%] px-4 py-3 font-medium">任务</th>
+                  <th class="w-[18%] px-4 py-3 font-medium">实例</th>
+                  <th class="w-[17%] px-4 py-3 font-medium">用户</th>
+                  <th class="w-[15%] px-4 py-3 font-medium">节点</th>
+                  <th class="w-[10%] px-4 py-3 font-medium">状态</th>
+                  <th class="w-[10%] px-4 py-3 font-medium">保障</th>
+                  <th class="w-[12%] px-4 py-3 font-medium">时间</th>
                 </tr>
               </thead>
               <tbody>
@@ -705,7 +705,7 @@ onMounted(() => {
                   :class="selectedTaskId === task.id ? 'bg-themed-tertiary' : ''"
                   @click="selectedTaskId = task.id"
                 >
-                  <td class="px-4 py-3">
+                  <td class="break-words px-4 py-3">
                     <div class="font-medium text-themed">#{{ task.id }} {{ taskTypeLabel(task.taskType) }}</div>
                     <div class="text-xs text-themed-muted">{{ task.progress || '暂无进度' }}</div>
                   </td>
@@ -715,7 +715,7 @@ onMounted(() => {
                   </td>
                   <td class="px-4 py-3">
                     <div class="text-themed">{{ task.user?.username || `#${task.userId}` }}</div>
-                    <div class="max-w-[180px] truncate text-xs text-themed-muted">{{ task.user?.email || '-' }}</div>
+                    <div class="break-words text-xs text-themed-muted">{{ task.user?.email || '-' }}</div>
                   </td>
                   <td class="px-4 py-3">
                     <div class="text-themed">{{ task.host?.name || `#${task.hostId}` }}</div>
@@ -731,7 +731,7 @@ onMounted(() => {
                       {{ caseStatusLabel(task.assuranceCase?.status) }}
                     </span>
                   </td>
-                  <td class="whitespace-nowrap px-4 py-3 text-xs text-themed-muted">
+                  <td class="break-words px-4 py-3 text-xs text-themed-muted">
                     {{ formatDate(task.createdAt) }}
                   </td>
                 </tr>

@@ -331,20 +331,27 @@ export async function deleteMailPlan(id: number): Promise<void> {
 /**
  * 获取用户的订阅
  */
-export async function getUserMailSubscription(userId: number): Promise<(MailSubscription & {
+export async function getUserMailSubscription(userId: number, sourceId?: number): Promise<(MailSubscription & {
   source: MailSource
   plan: MailPlan
   domains: MailDomain[]
 }) | null> {
-  const subscription = await prisma.mailSubscription.findFirst({
-    where: { userId, status: 'active' },
-    include: {
-      source: true,
-      plan: true,
-      domains: {
-        include: { accounts: true }
-      }
+  const include = {
+    source: true,
+    plan: true,
+    domains: {
+      include: { accounts: true }
     }
+  } satisfies Prisma.MailSubscriptionInclude
+  const sourceFilter = sourceId === undefined ? {} : { sourceId }
+  const subscription = await prisma.mailSubscription.findFirst({
+    where: { userId, ...sourceFilter, status: 'active' },
+    include,
+    orderBy: { updatedAt: 'desc' }
+  }) ?? await prisma.mailSubscription.findFirst({
+    where: { userId, ...sourceFilter, status: 'expired' },
+    include,
+    orderBy: { updatedAt: 'desc' }
   })
   return subscription ? withDecryptedSource(subscription) : null
 }
@@ -450,19 +457,24 @@ export async function updateMailSubscription(id: number, data: {
 /**
  * 续费订阅
  */
-export async function renewMailSubscription(id: number, months: number): Promise<MailSubscription> {
+export async function renewMailSubscription(
+  id: number,
+  months: number,
+  client: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<MailSubscription> {
   if (!Number.isSafeInteger(months) || months < 1 || months > 12) {
     throw new Error('Invalid mail renewal months')
   }
 
-  const subscription = await prisma.mailSubscription.findUnique({ where: { id } })
+  const subscription = await client.mailSubscription.findUnique({ where: { id } })
   if (!subscription) throw new Error('Subscription not found')
   
-  const currentExpiry = subscription.expiresAt > new Date() ? subscription.expiresAt : new Date()
-  const newExpiry = new Date(currentExpiry)
+  const now = new Date()
+  const periodStart = subscription.expiresAt > now ? subscription.expiresAt : now
+  const newExpiry = new Date(periodStart)
   newExpiry.setMonth(newExpiry.getMonth() + months)
   
-  return prisma.mailSubscription.update({
+  return client.mailSubscription.update({
     where: { id },
     data: { expiresAt: newExpiry, status: 'active' }
   })
@@ -741,15 +753,20 @@ export async function getSubscriptionUsageStats(subscriptionId: number): Promise
 /**
  * 检查即将过期的订阅（用于自动续费）
  */
-export async function getExpiringSubscriptions(daysAhead: number): Promise<MailSubscription[]> {
-  const deadline = new Date()
+export async function getExpiringSubscriptions(daysAhead: number, now = new Date()): Promise<Array<Pick<
+  MailSubscription,
+  'id' | 'userId' | 'expiresAt'
+>>> {
+  const deadline = new Date(now)
   deadline.setDate(deadline.getDate() + daysAhead)
   
   return prisma.mailSubscription.findMany({
     where: {
       status: 'active',
       autoRenew: true,
-      expiresAt: { lte: deadline }
-    }
+      expiresAt: { gt: now, lte: deadline }
+    },
+    select: { id: true, userId: true, expiresAt: true },
+    orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }]
   })
 }

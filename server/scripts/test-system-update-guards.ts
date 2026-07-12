@@ -24,6 +24,9 @@ const installPanel = read('scripts/install-panel.sh')
 const backendService = read('deploy/incudal-backend.service.example')
 const updateService = read('deploy/incudal-online-update@.service.example')
 const rollbackService = read('deploy/incudal-online-rollback@.service.example')
+const onlineTaskHelper = read('deploy/incudal-online-task.sh.example')
+const systemctlWrapper = read('deploy/incudal-systemctl-wrapper.sh.example')
+const otaChownWrapper = read('deploy/incudal-ota-chown-wrapper.sh.example')
 const runTask = read('server/src/scripts/run-system-update-task.ts')
 const rollbackTask = read('server/src/scripts/rollback-system-update-task.ts')
 const systemUpdateTasksDb = read('server/src/db/system-update-tasks.ts')
@@ -177,15 +180,39 @@ assert.ok(
 )
 
 assert.ok(
+  runTask.includes("const requiredCommands = ['bash', 'corepack', 'curl', 'git', 'pg_dump', 'systemctl', 'tar']") &&
+    runTask.includes('async function backupDatabase') &&
+    runTask.includes('db-pre-migrate-${targetVersion}-${timestamp}.sql') &&
+    runTask.includes("run('pg_dump', ['--format=plain', '--no-owner', '--no-privileges', '--file', temporaryPath]") &&
+    runTask.includes('env: { PGDATABASE: databaseUrl }') &&
+    runTask.includes('OTA database backup failed; migration was not started') &&
+    runTask.includes('databaseBackupPath = await backupDatabase(backupDir, timestamp)') &&
+    runTask.includes('databaseMigrationAttempted = true') &&
+    runTask.includes("pnpm', ['--filter', 'server', 'exec', 'prisma', 'migrate', 'deploy']") &&
+    runTask.indexOf('databaseBackupPath = await backupDatabase(backupDir, timestamp)') <
+      runTask.indexOf('await deployDatabaseMigrations()') &&
+    runTask.indexOf('await deployDatabaseMigrations()') < runTask.indexOf('await verifyUpdatedRuntime(Boolean(artifact))') &&
+    runTask.includes('DB 已迁移但代码回滚，DB 与旧代码可能不兼容') &&
+    runTask.includes('DB 不会自动回滚') &&
+    runTask.includes('该备份将保留'),
+  'online updater must back up PostgreSQL, deploy new-release migrations before restart, abort on failure, and preserve the backup with an explicit rollback warning'
+)
+
+assert.ok(
   route.includes("execFileAsync('sudo', ['-n', 'systemctl', 'start', '--no-block', unitName]") &&
     route.includes("incudal-online-update@${taskId}.service") &&
     route.includes("incudal-online-rollback@${taskId}.service") &&
     updateService.includes('User=root') &&
-    updateService.includes('run-system-update-task.js %i') &&
+    updateService.includes('ExecStart=/usr/local/libexec/incudal/incudal-online-task update %i') &&
+    !updateService.includes('/opt/incudal/current/server/dist/scripts/') &&
     rollbackService.includes('User=root') &&
-    rollbackService.includes('rollback-system-update-task.js %i') &&
+    rollbackService.includes('ExecStart=/usr/local/libexec/incudal/incudal-online-task rollback %i') &&
+    !rollbackService.includes('/opt/incudal/current/server/dist/scripts/') &&
     installPanel.includes('/etc/sudoers.d/incudal-online-update') &&
-    installPanel.includes('NOPASSWD: ${systemctl_bin} start --no-block incudal-online-update@*.service') &&
+    installPanel.includes('NOPASSWD: /usr/local/libexec/incudal/systemctl start --no-block incudal-online-update@*.service') &&
+    installPanel.includes('Defaults:${RUN_USER} secure_path=/usr/local/libexec/incudal:') &&
+    installPanel.includes('/usr/local/libexec/incudal/incudal-online-task seal') &&
+    installPanel.includes('install -o root -g root -m 0755') &&
     installPanel.includes('readonly SERVICE_NAME="incudal-backend"') &&
     installPanel.includes('SYSTEM_UPDATE_RELEASE_REPOSITORY') &&
     installPanel.includes('SYSTEM_UPDATE_RELEASE_TOKEN') &&
@@ -194,10 +221,27 @@ assert.ok(
     updateService.includes('Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') &&
     rollbackService.includes('Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') &&
     installPanel.includes('Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') &&
+    backendService.includes('Environment=PATH=/usr/local/libexec/incudal:') &&
     installPanel.includes('NoNewPrivileges=false') &&
     backendService.includes('NoNewPrivileges=false') &&
     backendService.includes('/opt/incudal/.git /opt/incudal/update-logs'),
-  'production online updates must run through root-owned systemd oneshot units with restricted sudoers, sudo-compatible backend privileges, and writable git/log paths'
+  'production online updates must run through root-owned fixed helpers with restricted sudoers and sudo-compatible backend privileges'
+)
+
+assert.ok(
+  onlineTaskHelper.includes('verify_manifest') &&
+    onlineTaskHelper.includes('sha256sum --check --strict --quiet') &&
+    onlineTaskHelper.includes('current points outside releases') &&
+    onlineTaskHelper.includes('verify_git_control') &&
+    onlineTaskHelper.includes('executable Git hooks are forbidden') &&
+    onlineTaskHelper.includes('/usr/bin/chown root:root "$INSTALL_DIR"') &&
+    onlineTaskHelper.includes('write_manifest') &&
+    systemctlWrapper.includes('"$#" -ne 3') &&
+    systemctlWrapper.includes('^incudal-online-(update|rollback)@[1-9][0-9]*\\.service$') &&
+    systemctlWrapper.includes('exec /usr/bin/systemctl start --no-block "$UNIT_NAME"') &&
+    otaChownWrapper.includes('"$#" -ne 3') &&
+    otaChownWrapper.includes('exec /usr/local/libexec/incudal/incudal-online-task harden'),
+  'root helpers must verify sealed releases, preserve root ownership, and reject broadened systemctl/chown arguments'
 )
 
 assert.ok(
@@ -258,8 +302,8 @@ assert.ok(
   atomicMigrationScript.includes('current_link="$INSTALL_DIR/current"') &&
     atomicMigrationScript.includes('releases_dir="$INSTALL_DIR/releases"') &&
     atomicMigrationScript.includes('WorkingDirectory=${app_dir}') &&
-    atomicMigrationScript.includes('Environment=INCUDAL_APP_DIR=${app_dir}') &&
-    atomicMigrationScript.includes('ExecStart=/usr/bin/node ${app_dir}/server/dist/scripts/run-system-update-task.js %i') &&
+    atomicMigrationScript.includes('WorkingDirectory=${INSTALL_DIR}') &&
+    atomicMigrationScript.includes('ExecStart=/usr/local/libexec/incudal/incudal-online-task update %i') &&
     atomicMigrationScript.includes('mv -Tf "$next_link" "$current_link"') &&
     atomicMigrationScript.includes('bash "$current_link/scripts/verify-split-host.sh"'),
   'atomic OTA migration script must create current/releases layout, rewrite systemd units, and verify the split host'

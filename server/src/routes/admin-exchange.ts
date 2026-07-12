@@ -13,7 +13,7 @@ import { instanceExists, renameInstance as renameIncusInstance } from '../lib/in
 
 const MAX_PAGE_SIZE = 100
 const POSITIVE_ID_RE = /^[1-9]\d*$/
-const activeDisputeStatuses = ['open', 'processing', 'redelivering'] as const
+const activeDisputeStatuses = ['open', 'processing'] as const
 const exchangeReturnSuffix = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
 const exchangeDeliveryProgressSteps = [
   'escrow_paid',
@@ -125,7 +125,7 @@ async function assertWithdrawalStillPayable(tx: Prisma.TransactionClient, userId
     tx.exchangeOrder.count({
       where: {
         sellerUserId: userId,
-        status: { in: ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review'] }
+        status: { in: ['delivering', 'confirming', 'disputed', 'manual_review'] }
       }
     })
   ])
@@ -803,7 +803,7 @@ async function releaseExchangeOrderManually(orderId: number, actorUserId: number
     actorUserId,
     action: 'order.manual_release',
     remark: `管理员人工放款：${reason}`,
-    allowedStatuses: ['confirming', 'delivered', 'manual_review']
+    allowedStatuses: ['confirming', 'manual_review']
   })
 }
 
@@ -1123,7 +1123,7 @@ export default async function adminExchangeRoutes(fastify: FastifyInstance) {
     ] = await Promise.all([
       prisma.exchangeListing.count({ where: { status: 'active' } }),
       prisma.exchangeListing.count({ where: { status: 'locked' } }),
-      prisma.exchangeOrder.count({ where: { status: { in: ['escrowed', 'delivering', 'delivered', 'confirming'] } } }),
+      prisma.exchangeOrder.count({ where: { status: { in: ['delivering', 'confirming'] } } }),
       prisma.exchangeOrder.count({ where: { status: { in: ['disputed', 'manual_review'] } } }),
       prisma.exchangeWithdrawal.count({ where: { status: 'pending' } }),
       prisma.exchangeDispute.count({ where: { status: { in: [...activeDisputeStatuses] } } }),
@@ -1234,7 +1234,7 @@ export default async function adminExchangeRoutes(fastify: FastifyInstance) {
     const reason = normalizeText(body?.reason, '管理员强制下架')
     const listing = await prisma.exchangeListing.findUnique({ where: { id } })
     if (!listing) return reply.code(404).send({ error: '挂牌不存在' })
-    if (!['active', 'paused', 'delivery_failed'].includes(listing.status)) {
+    if (!['active', 'delivery_failed'].includes(listing.status)) {
       return reply.code(409).send({ error: '当前挂牌已有锁定订单，不能直接强制下架；请走退款、重试交割或争议处理' })
     }
     const updated = await prisma.exchangeListing.update({
@@ -2065,7 +2065,7 @@ export default async function adminExchangeRoutes(fastify: FastifyInstance) {
         actorUserId: user.id,
         action: 'dispute.release',
         remark: `交易所争议 ${id} 人工放款：${resolution}`,
-        allowedStatuses: ['confirming', 'delivered', 'disputed', 'manual_review'],
+        allowedStatuses: ['confirming', 'disputed', 'manual_review'],
         resolveDispute: {
           disputeId: id,
           resolution,

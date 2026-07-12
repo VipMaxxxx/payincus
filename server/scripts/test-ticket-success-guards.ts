@@ -12,6 +12,7 @@ const ticketsViewSource = readFileSync(resolve(process.cwd(), '../client/src/vie
 const typesSource = readFileSync(resolve(process.cwd(), '../client/src/types/api.ts'), 'utf8')
 const zhCnLocale = readFileSync(resolve(process.cwd(), '../client/src/locales/zh-CN.ts'), 'utf8')
 const enLocale = readFileSync(resolve(process.cwd(), '../client/src/locales/en.ts'), 'utf8')
+const zhTwLocale = readFileSync(resolve(process.cwd(), '../client/src/locales/zh-TW.ts'), 'utf8')
 
 assert.ok(
   schemaSource.includes('firstResponseDueAt DateTime? @map("first_response_due_at")') &&
@@ -40,14 +41,45 @@ assert.ok(
   'Support context, internal notes, linked objects and notify endpoints must be admin-only'
 )
 
+const aiReplyRouteStart = routeSource.indexOf("}>('/:id/ai/reply'")
+const aiReplyRouteEnd = routeSource.indexOf('创建内部备注', aiReplyRouteStart)
+assert.notEqual(aiReplyRouteStart, -1, 'AI reviewed-reply route must exist')
+assert.notEqual(aiReplyRouteEnd, -1, 'AI reviewed-reply route end marker must exist')
+const aiReplyRouteSource = routeSource.slice(aiReplyRouteStart, aiReplyRouteEnd)
+assert.ok(
+  aiReplyRouteSource.includes('const reviewedBody = sanitizeContent(request.body?.reviewedBody)') &&
+    aiReplyRouteSource.includes("code: 'AI_TICKET_REVIEWED_BODY_REQUIRED'") &&
+    aiReplyRouteSource.includes('validateAiTicketReviewedReply(ticketId, reviewedBody)') &&
+    aiReplyRouteSource.includes('ticketDb.addTicketMessage(ticketId, user.id, result.draft, true, [])') &&
+    !aiReplyRouteSource.includes('generateAiTicketReply(') &&
+    ticketsViewSource.includes('requestAiReply(selectedTicket.value.id, reviewedBody)') &&
+    ticketsViewSource.includes("postTicketAiAction<TicketAiReplyResponse>(ticketId, 'reply', { reviewedBody })"),
+  'semi-auto send must require and send the administrator-reviewed draft without regenerating model output'
+)
+
 assert.ok(
   dbSource.includes('getSlaMinutes') &&
     dbSource.includes('firstResponseDueAt: addMinutes') &&
     dbSource.includes('resolutionDueAt: addMinutes') &&
-    dbSource.includes('firstRespondedAt: new Date()') &&
+    dbSource.includes('firstRespondedAt: repliedAt') &&
     dbSource.includes('computeSlaStatus') &&
     dbSource.includes("queue?: 'pending' | 'due_soon' | 'overdue' | 'waiting_user' | 'waiting_internal'"),
   'Ticket SLA deadlines, first response tracking and queue filters must be implemented'
+)
+
+const addTicketMessageStart = dbSource.indexOf('export async function addTicketMessage(')
+const addTicketMessageEnd = dbSource.indexOf('/**\n * 更新工单状态', addTicketMessageStart)
+assert.notEqual(addTicketMessageStart, -1, 'addTicketMessage helper must exist')
+assert.notEqual(addTicketMessageEnd, -1, 'ticket status helper must follow addTicketMessage')
+const addTicketMessageSource = dbSource.slice(addTicketMessageStart, addTicketMessageEnd)
+assert.ok(
+  addTicketMessageSource.includes('if (isFromOwner)') &&
+    addTicketMessageSource.includes('firstRespondedAt: repliedAt') &&
+    addTicketMessageSource.includes("status: 'open'") &&
+    addTicketMessageSource.includes("status: 'in_progress' as TicketStatus") &&
+    addTicketMessageSource.includes("status: 'resolved'") &&
+    addTicketMessageSource.includes('resolvedAt: null'),
+  'first public support reply must advance open tickets while customer replies only reopen resolved tickets'
 )
 
 assert.ok(
@@ -109,6 +141,17 @@ assert.ok(
     zhCnLocale.includes('工单内容至少需要 10 个字符') &&
     enLocale.includes('Ticket content must be at least 10 characters'),
   'Ticket create validation must show a specific content length message instead of a generic operation failure'
+)
+
+assert.ok(
+  ticketsViewSource.includes('async function reopenTicket()') &&
+    ticketsViewSource.includes("await api.tickets.updateStatus(selectedTicket.value.id, 'open')") &&
+    ticketsViewSource.includes("isCreator && selectedTicket.status === 'closed'") &&
+    ticketsViewSource.includes("t('tickets.reopenSuccess')") &&
+    zhCnLocale.includes('reopenSuccess:') &&
+    enLocale.includes('reopenSuccess:') &&
+    zhTwLocale.includes('reopenSuccess:'),
+  'Ticket creator UI must expose closed-ticket reopen with complete i18n feedback'
 )
 
 console.log('Ticket success guard tests passed')

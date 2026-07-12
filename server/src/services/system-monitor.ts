@@ -11,6 +11,7 @@ import { schedule } from 'node-cron'
 import { getDbPoolStats, prisma } from '../db/prisma.js'
 import { getPoolStatus } from '../lib/incus/incus-pool.js'
 import { assertSafeWebhookUrl } from '../lib/outbound-security.js'
+import { safeFetch } from '../lib/outbound-security.js'
 
 // 系统启动时间
 const systemStartTime = Date.now()
@@ -148,7 +149,7 @@ async function sendAlert(alerts: string[]): Promise<void> {
     
     try {
       const webhookUrl = await assertSafeWebhookUrl(ALERT_WEBHOOK_URL)
-      const response = await fetch(webhookUrl.toString(), {
+      const response = await safeFetch(webhookUrl.toString(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -156,7 +157,7 @@ async function sendAlert(alerts: string[]): Promise<void> {
         body: JSON.stringify(payload),
         signal: controller.signal,
         redirect: 'manual'
-      })
+      }, 'Webhook URL')
       
       if (response.ok) {
         lastAlertTime = now

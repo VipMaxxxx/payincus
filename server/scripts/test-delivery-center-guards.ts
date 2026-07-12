@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/admin-delivery.ts'), 'utf8')
+const instancesSource = readFileSync(resolve(process.cwd(), 'src/routes/instances.ts'), 'utf8')
+const managedProvisionSource = readFileSync(resolve(process.cwd(), 'src/lib/managed-instance-provision.ts'), 'utf8')
 const appSource = readFileSync(resolve(process.cwd(), 'src/app.ts'), 'utf8')
 const schemaSource = readFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), 'utf8')
 const migrationSource = readFileSync(resolve(process.cwd(), 'prisma/migrations/20260624222000_add_delivery_assurance_cases/migration.sql'), 'utf8')
@@ -15,6 +17,29 @@ const deliveryViewSource = readFileSync(resolve(process.cwd(), '../client/src/vi
 const userApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/index.ts'), 'utf8')
 const workerSource = readFileSync(resolve(process.cwd(), 'src/workers/instanceTaskWorker.ts'), 'utf8')
 const notifierSource = readFileSync(resolve(process.cwd(), 'src/lib/notifier.ts'), 'utf8')
+
+const managedSuccessStart = managedProvisionSource.indexOf('    await markFlashSaleDelivered(instanceId)')
+const managedFailureStart = managedProvisionSource.indexOf(
+  '  } catch (error) {\n    console.error(`[Managed Provisioning] instance',
+  managedSuccessStart
+)
+const managedSuccessSection = managedProvisionSource.slice(managedSuccessStart, managedFailureStart)
+
+assert.ok(
+  managedSuccessStart > managedProvisionSource.indexOf('if (updateResult.count === 0)') &&
+    managedSuccessSection.match(/markFlashSaleDelivered\(instanceId\)/g)?.length === 1 &&
+    !managedSuccessSection.includes('soldCount') &&
+    managedSuccessSection.includes("type: 'inet4'") &&
+    managedSuccessSection.includes("device: 'eth0'") &&
+    managedSuccessSection.includes("type: 'inet6'") &&
+    managedSuccessSection.includes("device: 'eth1'") &&
+    managedSuccessSection.includes('db.getInstanceById(instanceId).catch') &&
+    managedSuccessSection.includes("sendNotification(instance.user_id, 'instance_created'") &&
+    managedSuccessSection.includes('sendInstanceCreatedEmail(user.email') &&
+    managedSuccessSection.includes("event: 'service.provisioned'") &&
+    managedSuccessSection.includes('userId: instance.user_id'),
+  'managed provisioning success must record IPs, notify and email the target user, emit service.provisioned, and mark flash-sale delivery once without incrementing soldCount'
+)
 
 assert.ok(
   appSource.includes("import adminDeliveryRoutes from './routes/admin-delivery.js'") &&
@@ -73,6 +98,22 @@ assert.ok(
     routeSource.includes('casesPendingManual') &&
     routeSource.includes('casesAutoRetryable'),
   'delivery assurance must sanitize errors, restrict retry to idempotent tasks, notify users, and expose case status counts'
+)
+
+assert.ok(
+  instancesSource.includes('await recordInitialProvisioningFailureCase({') &&
+    instancesSource.includes('compensationClaimed: compensationResult.claimed') &&
+    instancesSource.includes('refundStatus: compensationResult.refundStatus') &&
+    routeSource.includes("source: 'initial_instance_provisioning'") &&
+    routeSource.includes("taskId: null") &&
+    routeSource.includes('instanceId: input.instanceId') &&
+    routeSource.includes('await advisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, input.instanceId)') &&
+    routeSource.includes('const existing = await tx.deliveryAssuranceCase.findFirst({') &&
+    routeSource.includes("title: { startsWith: '初始开通失败：' }") &&
+    routeSource.includes('if (existing) return existing') &&
+    routeSource.includes("{ issueType: 'task_failed', title: { startsWith: '初始开通失败：' } }") &&
+    routeSource.includes("deliveryCase.title.startsWith('初始开通失败：')"),
+  'initial createInstanceAsync failures must open one instance-linked delivery assurance case with compensation status'
 )
 
 assert.ok(

@@ -102,6 +102,18 @@ assert(
   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
 )
 
+const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
+
+assert(
+  statsSection.includes('const now = new Date()') &&
+    statsSection.includes("status: 'active'") &&
+    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
+    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
+    statsSection.includes('where: liveActiveWhere') &&
+    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
+  'admin gift card active count and outstanding balance must exclude expired cards in real time'
+)
+
 assert(
   route.includes('function requireGiftCardManager') &&
     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
@@ -137,6 +149,52 @@ assert(
     !adminView.includes('useTurnstile') &&
     !adminView.includes('turnstileToken'),
   'admin gift card generation must rely on admin auth, explicit allowlist, and rate limits, not frontend Turnstile tokens'
+)
+
+assert(
+  adminGenerateSection.includes('if (balanceValue > faceValue)') &&
+    adminBatchSection.includes('if (balanceValue > faceValue)') &&
+    route.includes("GIFT_CARD_BALANCE_EXCEEDS_FACE_VALUE") &&
+    db.includes('balanceValue > faceValue') &&
+    db.includes('MAX_GIFT_CARD_BATCH_FACE_VALUE') &&
+    adminBatchSection.includes('MAX_BATCH_FACE_VALUE'),
+  'gift card credited value must not exceed face value, and unfunded admin batches must have a total face-value cap'
+)
+
+const revokeSection = db.slice(
+  db.indexOf('export async function revokeGiftCard'),
+  db.indexOf('export async function disableGiftCard')
+)
+const refundSection = db.slice(
+  db.indexOf('async function refundUserFundedGiftCard'),
+  db.indexOf('async function disableGiftCardWithRefund')
+)
+
+assert(
+  route.includes("fastify.post('/user/:id/revoke'") &&
+    revokeSection.includes('giftCard.createdById !== issuerId') &&
+    revokeSection.includes('giftCard.ownerId !== issuerId') &&
+    revokeSection.includes("giftCard.status === 'used'") &&
+    revokeSection.includes('refundUserFundedGiftCard(tx, giftCard)') &&
+    revokeSection.includes("data: { status: 'disabled' }") &&
+    refundSection.includes('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, issuerId)') &&
+    refundSection.includes("type: 'refund'") &&
+    refundSection.includes('increment: toDecimal(amount)') &&
+    db.includes('gift-card-refund:${id}') &&
+    refundSection.includes('existingRefund'),
+  'an issuer must be able to revoke an unredeemed balance-funded card and receive the original amount exactly once'
+)
+
+assert(
+  db.includes('async function disableGiftCardWithRefund') &&
+    db.includes('async function deleteGiftCardWithRefund') &&
+    db.includes('await refundUserFundedGiftCard(tx, giftCard)') &&
+    db.includes('return disableGiftCardWithRefund(id)') &&
+    db.includes('return deleteGiftCardWithRefund(id)') &&
+    db.includes('await disableGiftCardWithRefund(id)') &&
+    db.includes('await deleteGiftCardWithRefund(id)') &&
+    db.includes('ownerId: null'),
+  'admin disable/delete, including batch operations, must refund unredeemed user-funded cards and refunded cards must not be re-enabled'
 )
 
 assert(

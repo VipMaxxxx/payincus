@@ -453,7 +453,7 @@ async function connectTab(tabId: string) {
     const token = authStore.token
     if (!token) {
         tab.status = 'error'
-        tab.error = 'Authentication required'
+        tab.error = t('terminal.errors.authenticationRequired')
         return
     }
     
@@ -490,7 +490,7 @@ async function connectTab(tabId: string) {
         }
         
         ws.onerror = () => {
-            currentTab.error = 'Connection error'
+            currentTab.error = t('terminal.connectionError')
         }
         
         ws.onclose = (event) => {
@@ -521,7 +521,7 @@ async function connectTab(tabId: string) {
                     reconnectTimers.value.set(tabId, timer)
                 } else {
                     currentTab.status = 'error'
-                    currentTab.error = 'Connection lost'
+                    currentTab.error = t('terminal.errors.connectionLost')
                     reconnectAttempts.value.delete(tabId)
                 }
             } else {
@@ -557,7 +557,7 @@ async function connectTab(tabId: string) {
         }
 
         currentTab.status = 'error'
-        currentTab.error = err instanceof Error ? err.message : 'Failed to connect'
+        currentTab.error = t('terminal.connectionFailed')
     }
 }
 
@@ -576,7 +576,7 @@ function reconnectTab(tabId: string) {
 }
 
 // 处理控制消息
-function handleControlMessage(tabId: string, message: { type: string; sessionId?: string; message?: string; reason?: string; mode?: 'exec' | 'console' }) {
+function handleControlMessage(tabId: string, message: { type: string; code?: string; sessionId?: string; message?: string; reason?: string; mode?: 'exec' | 'console' }) {
     const tab = tabs.value.find(t => t.id === tabId)
     if (!tab) return
     
@@ -614,12 +614,33 @@ function handleControlMessage(tabId: string, message: { type: string; sessionId?
             break
         case 'error':
             tab.status = 'error'
-            tab.error = message.message || 'Unknown error'
+            tab.error = terminalControlError(message.code)
             if (tab.terminal) {
-                tab.terminal.write(`\r\n\x1b[31mError: ${message.message}\x1b[0m\r\n`)
+                tab.terminal.write(`\r\n\x1b[31m${t('terminal.errors.terminalLine', { error: tab.error })}\x1b[0m\r\n`)
             }
             break
     }
+}
+
+function terminalControlError(code?: string): string {
+    const knownCodes: Record<string, string> = {
+        INVALID_ID: 'invalidId',
+        ORIGIN_NOT_ALLOWED: 'originNotAllowed',
+        IP_LIMIT_EXCEEDED: 'ipLimitExceeded',
+        UNAUTHORIZED: 'authenticationRequired',
+        SESSION_INVALIDATED: 'sessionInvalidated',
+        USER_LIMIT_EXCEEDED: 'userLimitExceeded',
+        WS_LIMIT_EXCEEDED: 'connectionLimitExceeded',
+        INSTANCE_NOT_FOUND: 'instanceNotFound',
+        FORBIDDEN: 'forbidden',
+        EXCHANGE_INSTANCE_LOCKED: 'instanceLocked',
+        INSTANCE_NOT_RUNNING: 'instanceNotRunning',
+        INSTANCE_LIMIT_EXCEEDED: 'instanceLimitExceeded',
+        HOST_NOT_FOUND: 'hostNotFound',
+        CONNECTION_FAILED: 'connectionFailed'
+    }
+    const key = code ? knownCodes[code] : undefined
+    return t(`terminal.errors.${key || 'unknown'}`)
 }
 
 // 发送调整大小命令

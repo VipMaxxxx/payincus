@@ -490,6 +490,11 @@ const isError = computed<boolean>(() => {
   return s === 'error'
 })
 
+const failureReason = computed<string | null>(() => {
+  const reason = (instance.value as (InstanceWithDetails & { failureReason?: string | null }) | null)?.failureReason
+  return typeof reason === 'string' && reason.trim() ? reason.trim() : null
+})
+
 // AUTH004: 节点所有者权限控制
 // 节点所有者可以操作实例（启停/删除/快照），但不能执行仅所有者的操作
 const isHostOwnerOnly = computed<boolean>(() => {
@@ -2913,6 +2918,14 @@ function formatShortDate(dateStr: string | null | undefined): string {
               :class="themeStore.isDark ? 'text-red-300/70' : 'text-red-600'"
             >
               {{ $t('instance.errorBanner.description') }}
+            </p>
+            <p
+              v-if="failureReason"
+              class="text-xs mt-2 break-words whitespace-pre-wrap"
+              :class="themeStore.isDark ? 'text-red-200' : 'text-red-800'"
+            >
+              <span class="font-semibold">{{ $t('instance.errorBanner.reasonLabel') }}:</span>
+              {{ failureReason }}
             </p>
           </div>
         </div>

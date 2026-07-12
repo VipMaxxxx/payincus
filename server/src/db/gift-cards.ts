@@ -16,6 +16,7 @@ const GIFT_CARD_CODE_PREFIX = 'gc-'
 const MAX_GIFT_CARD_BATCH_COUNT = 500
 const MAX_GIFT_CARD_REMARK_LENGTH = 200
 const MAX_GIFT_CARD_FACE_VALUE = 10000
+const MAX_GIFT_CARD_BATCH_FACE_VALUE = 100000
 const MAX_GIFT_CARD_LIST_PAGE_SIZE = 100
 
 export const GIFT_CARD_CONSTANTS = {
@@ -23,7 +24,8 @@ export const GIFT_CARD_CONSTANTS = {
   CODE_PREFIX: GIFT_CARD_CODE_PREFIX,
   MAX_BATCH_COUNT: MAX_GIFT_CARD_BATCH_COUNT,
   MAX_REMARK_LENGTH: MAX_GIFT_CARD_REMARK_LENGTH,
-  MAX_FACE_VALUE: MAX_GIFT_CARD_FACE_VALUE
+  MAX_FACE_VALUE: MAX_GIFT_CARD_FACE_VALUE,
+  MAX_BATCH_FACE_VALUE: MAX_GIFT_CARD_BATCH_FACE_VALUE
 } as const
 
 export interface GiftCardCreateInput {
@@ -113,11 +115,17 @@ async function createGiftCardInTransaction(
   tx: Prisma.TransactionClient,
   input: GiftCardCreateInput
 ) {
+  const faceValue = toMoney(input.faceValue)
+  const balanceValue = toMoney(input.balanceValue)
+  if (faceValue <= 0 || balanceValue <= 0 || balanceValue > faceValue) {
+    throw new Error('GIFT_CARD_BALANCE_EXCEEDS_FACE_VALUE')
+  }
+
   return tx.giftCard.create({
     data: {
       code: generateGiftCardCode(),
-      faceValue: toDecimal(input.faceValue),
-      balanceValue: toDecimal(input.balanceValue),
+      faceValue: toDecimal(faceValue),
+      balanceValue: toDecimal(balanceValue),
       createdById: input.createdById ?? null,
       ownerId: input.ownerId ?? null,
       expiresAt: input.expiresAt ?? null,
@@ -155,6 +163,9 @@ export async function createGiftCardBatch(
 ) {
   if (!Number.isSafeInteger(count) || count < 1 || count > MAX_GIFT_CARD_BATCH_COUNT) {
     throw new Error('GIFT_CARD_BATCH_TOO_LARGE')
+  }
+  if (toMoney(input.faceValue) * count > MAX_GIFT_CARD_BATCH_FACE_VALUE) {
+    throw new Error('GIFT_CARD_BATCH_VALUE_TOO_LARGE')
   }
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -382,11 +393,124 @@ export async function redeemGiftCard(code: string, userId: number): Promise<Gift
   return result
 }
 
-export async function disableGiftCard(id: number) {
-  return prisma.giftCard.updateMany({
-    where: { id, status: 'active' },
-    data: { status: 'disabled' }
+function giftCardRefundRemark(id: number): string {
+  return `Gift card cancellation refund [gift-card-refund:${id}]`
+}
+
+async function refundUserFundedGiftCard(
+  tx: Prisma.TransactionClient,
+  giftCard: { id: number; faceValue: unknown; createdById: number | null; ownerId: number | null }
+): Promise<number | null> {
+  const issuerId = giftCard.ownerId
+  if (issuerId === null || giftCard.createdById !== issuerId) return null
+
+  await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, issuerId)
+  const remark = giftCardRefundRemark(giftCard.id)
+  const existingRefund = await tx.balanceLog.findFirst({
+    where: { userId: issuerId, type: 'refund', remark },
+    select: { id: true }
   })
+  if (existingRefund) {
+    const user = await tx.user.findUnique({ where: { id: issuerId }, select: { balance: true } })
+    return user ? toMoney(user.balance) : null
+  }
+
+  const user = await tx.user.findUnique({ where: { id: issuerId }, select: { balance: true } })
+  if (!user) throw new Error('USER_NOT_FOUND')
+
+  const amount = toMoney(giftCard.faceValue)
+  const balanceBefore = toMoney(user.balance)
+  // Keep the card state, balance mutation, and refund ledger in one transaction.
+  // This mirrors changeBalance's locked update + BalanceLog flow; calling its standalone
+  // transaction here would leave a partial-refund window between the two transactions.
+  const updatedUser = await tx.user.update({
+    where: { id: issuerId },
+    data: { balance: { increment: toDecimal(amount) } },
+    select: { balance: true }
+  })
+  const balanceAfter = toMoney(updatedUser.balance)
+
+  await tx.balanceLog.create({
+    data: {
+      userId: issuerId,
+      type: 'refund',
+      amount: toDecimal(amount),
+      balanceBefore: toDecimal(balanceBefore),
+      balanceAfter: toDecimal(balanceAfter),
+      remark
+    }
+  })
+
+  return balanceAfter
+}
+
+async function disableGiftCardWithRefund(id: number) {
+  return prisma.$transaction(async (tx) => {
+    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
+    if (!initial) return { count: 0 }
+
+    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
+    const giftCard = await tx.giftCard.findUnique({
+      where: { id },
+      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
+    })
+    if (!giftCard || giftCard.status !== 'active') return { count: 0 }
+
+    await refundUserFundedGiftCard(tx, giftCard)
+    const updated = await tx.giftCard.updateMany({
+      where: { id, status: 'active' },
+      data: { status: 'disabled' }
+    })
+    return { count: updated.count }
+  })
+}
+
+async function deleteGiftCardWithRefund(id: number) {
+  return prisma.$transaction(async (tx) => {
+    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
+    if (!initial) return { count: 0 }
+
+    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
+    const giftCard = await tx.giftCard.findUnique({
+      where: { id },
+      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
+    })
+    if (!giftCard || giftCard.status === 'used') return { count: 0 }
+
+    await refundUserFundedGiftCard(tx, giftCard)
+    const deleted = await tx.giftCard.deleteMany({
+      where: { id, status: { in: ['active', 'disabled', 'expired'] } }
+    })
+    return { count: deleted.count }
+  })
+}
+
+export async function revokeGiftCard(id: number, issuerId: number) {
+  return prisma.$transaction(async (tx) => {
+    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
+    if (!initial) throw new Error('GIFT_CARD_NOT_FOUND')
+
+    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
+    const giftCard = await tx.giftCard.findUnique({
+      where: { id },
+      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
+    })
+    if (!giftCard) throw new Error('GIFT_CARD_NOT_FOUND')
+    if (giftCard.createdById !== issuerId || giftCard.ownerId !== issuerId) {
+      throw new Error('GIFT_CARD_NOT_ISSUER')
+    }
+    if (giftCard.status === 'used') throw new Error('GIFT_CARD_USED')
+
+    const balanceAfter = await refundUserFundedGiftCard(tx, giftCard)
+    if (giftCard.status !== 'disabled') {
+      await tx.giftCard.update({ where: { id }, data: { status: 'disabled' } })
+    }
+    return { success: true, balanceAfter }
+  })
+}
+
+export async function disableGiftCard(id: number) {
+  return disableGiftCardWithRefund(id)
 }
 
 export async function enableGiftCard(id: number) {
@@ -394,6 +518,7 @@ export async function enableGiftCard(id: number) {
     where: {
       id,
       status: 'disabled',
+      ownerId: null,
       OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
     },
     data: { status: 'active' }
@@ -401,22 +526,23 @@ export async function enableGiftCard(id: number) {
 }
 
 export async function deleteGiftCard(id: number) {
-  return prisma.giftCard.deleteMany({
-    where: { id, status: { in: ['active', 'disabled', 'expired'] } }
-  })
+  return deleteGiftCardWithRefund(id)
 }
 
 export async function batchDisableGiftCards(ids: number[]) {
-  return prisma.giftCard.updateMany({
-    where: { id: { in: ids }, status: 'active' },
-    data: { status: 'disabled' }
-  })
+  let count = 0
+  for (const id of [...ids].sort((a, b) => a - b)) {
+    count += (await disableGiftCardWithRefund(id)).count
+  }
+  return { count }
 }
 
 export async function batchDeleteGiftCards(ids: number[]) {
-  return prisma.giftCard.deleteMany({
-    where: { id: { in: ids }, status: { in: ['active', 'disabled', 'expired'] } }
-  })
+  let count = 0
+  for (const id of [...ids].sort((a, b) => a - b)) {
+    count += (await deleteGiftCardWithRefund(id)).count
+  }
+  return { count }
 }
 
 export async function listGiftCardsByAdmin(options: GiftCardAdminListOptions) {
@@ -497,15 +623,21 @@ export async function listGiftCardsByUser(userId: number, options: GiftCardUserL
 }
 
 export async function getGiftCardStats() {
+  const now = new Date()
+  const liveActiveWhere: Prisma.GiftCardWhereInput = {
+    status: 'active',
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
+  }
+
   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
     prisma.giftCard.count(),
-    prisma.giftCard.count({ where: { status: 'active' } }),
+    prisma.giftCard.count({ where: liveActiveWhere }),
     prisma.giftCard.count({ where: { status: 'used' } }),
     prisma.giftCard.count({ where: { status: 'disabled' } }),
     prisma.giftCard.count({ where: { status: 'expired' } }),
     prisma.giftCard.aggregate({
       _sum: { balanceValue: true },
-      where: { status: { in: ['active', 'disabled'] } }
+      where: liveActiveWhere
     }),
     prisma.giftCard.aggregate({
       _sum: { balanceValue: true },

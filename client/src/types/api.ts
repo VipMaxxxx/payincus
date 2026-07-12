@@ -693,6 +693,26 @@ export interface ThemeMarketSubmission {
   updatedAt: string
 }
 
+export interface CreateThemeMarketSubmissionRequest {
+  themeId: string
+  version: string
+  name: string
+  repoUrl: string
+  releaseUrl: string
+  manifestUrl: string
+  packageUrl: string
+  sha256: string
+  developerName: string
+  developerHomepage?: string | null
+  developerGithub?: string | null
+  contactEmail: string
+  compatibility?: Record<string, unknown>
+  tokens?: string[]
+  layoutSlots?: string[]
+  pricing: { type: 'free' }
+  notes?: string | null
+}
+
 export interface ThemeMarketSubmissionScanResult {
   status: 'passed' | 'warning' | 'failed'
   riskLevel: ThemeMarketSubmissionRiskLevel
@@ -2583,7 +2603,7 @@ export interface Package {
   site_limit?: number | null
   node_selectors?: string | null
   monthly_traffic_limit?: string | null  // BigInt as string (Bytes)
-  traffic_reset_price?: number | null  // 分
+  traffic_reset_price?: number | null  // 元
   // 存储 I/O 限制
   io_limit_mode?: 'throughput' | 'iops'
   limits_read?: string
@@ -2664,7 +2684,7 @@ export interface CreatePackageRequest {
   siteLimit?: number
   nodeSelectors?: string[]
   monthlyTrafficLimit?: string  // BigInt as string (Bytes)
-  trafficResetPrice?: number    // 分
+  trafficResetPrice?: number    // 元
   // 存储 I/O 限制
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string
@@ -2712,7 +2732,7 @@ export interface UpdatePackageRequest {
   siteLimit?: number
   nodeSelectors?: string[]
   monthlyTrafficLimit?: string | null  // BigInt as string (Bytes), null to clear
-  trafficResetPrice?: number    // 分
+  trafficResetPrice?: number    // 元
   // 存储 I/O 限制
   ioLimitMode?: 'throughput' | 'iops'
   limitsRead?: string

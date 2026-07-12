@@ -19,6 +19,8 @@ import {
   performRenewal,
   calculateRenewBilling
 } from '../db/billing-operations.js'
+import { getInstanceAffBinding } from '../db/aff.js'
+import { arbitrateVipPrice, getUserContinuousVipBenefit } from './vip-benefits.js'
 import {
   getAutoRenewInstances,
   getExpiredUnsuspendedInstances,
@@ -177,10 +179,17 @@ async function processAutoRenew(instance: any): Promise<void> {
     }
 
     const balance = Number(user.balance)
+    const affBinding = await getInstanceAffBinding(instance.id)
+    const vip = await getUserContinuousVipBenefit(instance.userId)
+    const renewAmount = arbitrateVipPrice({
+      basePrice: renewInfo.amount,
+      affDiscountRate: affBinding?.affCode.enabled ? Number(affBinding.affCode.discountRate) : 0,
+      vipDiscountPercent: vip.benefit.orderDiscountPercent
+    }).finalPrice
 
     // 余额不足
-    if (balance < renewInfo.amount) {
-      console.log(`[Billing] Insufficient balance for instance ${instance.id}: need ${renewInfo.amount}, have ${balance}`)
+    if (balance < renewAmount) {
+      console.log(`[Billing] Insufficient balance for instance ${instance.id}: need ${renewAmount}, have ${balance}`)
       const attemptClaimed = await updateAutoRenewAttempt(instance.id, attempts, false, attemptGuard)
       if (!attemptClaimed) {
         console.log(`[Billing] Skip auto-renew failure notification for instance ${instance.id}: no longer eligible`)
@@ -190,8 +199,8 @@ async function processAutoRenew(instance: any): Promise<void> {
       // 发送自动续费失败站内通知
       await sendNotification(instance.userId, 'auto_renew_failed', {
         instanceName: instance.name,
-        failReason: `余额不足（需要 ¥${renewInfo.amount.toFixed(2)}，当前 ¥${balance.toFixed(2)}）`,
-        renewAmount: renewInfo.amount  // 元（calculateRenewBilling 返回的是元）
+        failReason: `余额不足（需要 ¥${renewAmount.toFixed(2)}，当前 ¥${balance.toFixed(2)}）`,
+        renewAmount
       })
 
       // 发送自动续费失败邮件
@@ -200,7 +209,7 @@ async function processAutoRenew(instance: any): Promise<void> {
           await sendAutoRenewFailedEmail(user.email, {
             username: user.username,
             instanceName: instance.name,
-            failReason: `余额不足（需要 ¥${renewInfo.amount.toFixed(2)}，当前 ¥${balance.toFixed(2)}）`,
+            failReason: `余额不足（需要 ¥${renewAmount.toFixed(2)}，当前 ¥${balance.toFixed(2)}）`,
             currentAttempt: attempts,
             maxAttempts: AUTO_RENEW_MAX_ATTEMPTS,
             expiresAt: instance.expiresAt
@@ -516,12 +525,16 @@ async function processExpiryDelete(instance: any): Promise<void> {
       portCount: portMappingsCount
     })
 
-    // 删除数据库记录（级联删除关联数据）
-    await prisma.instance.delete({
-      where: { id: instance.id }
+    // Keep the conditionally claimed instance as a soft-deleted row so billing records remain linked.
+    // Explicitly release network allocations that the former hard-delete cascade removed.
+    await prisma.$transaction(async (tx) => {
+      await tx.portMapping.deleteMany({ where: { instanceId: instance.id } })
+      await tx.ipAddress.deleteMany({ where: { instanceId: instance.id } })
+      await tx.ipv6Subnet.deleteMany({ where: { instanceId: instance.id } })
+      await db.releasePublicIpv4ForInstance(tx, instance.id)
     })
 
-    // 数据库级联删除后，以实例和端口映射事实重新校准宿主机资源计数
+    // Recalculate host resource counters from active instances and remaining port mappings.
     const usedResources = await db.calculateHostResourcesFromInstances(instance.hostId)
     const actualPortsUsed = await prisma.portMapping.count({
       where: {

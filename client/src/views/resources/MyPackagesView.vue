@@ -527,6 +527,16 @@ function normalizePlanPriceCents(value: unknown): number | null {
   return roundedCents <= MAX_PACKAGE_PLAN_PRICE_CENTS ? roundedCents : null
 }
 
+function normalizeTrafficResetPriceYuan(value: unknown): number | null {
+  const price = Number(value)
+  if (!Number.isFinite(price) || price < 0 || price > MAX_PACKAGE_PLAN_PRICE) {
+    return null
+  }
+
+  const rounded = Math.round(price * 100) / 100
+  return Math.abs(price - rounded) < 1e-8 ? rounded : null
+}
+
 async function openPlansModal(pkg: Package): Promise<void> {
   plansPackage.value = pkg
   showPlansModal.value = true
@@ -585,7 +595,7 @@ function openEditPlanModal(plan: PackagePlan): void {
     trafficLimit: bytesToGB(plan.trafficLimit),
     trafficLimitSpeed: bytesToMbps(plan.trafficLimitSpeed),
     price: plan.price / 100,
-    trafficResetPrice: plan.trafficResetPrice === null || plan.trafficResetPrice === undefined ? null : plan.trafficResetPrice / 100,
+    trafficResetPrice: plan.trafficResetPrice === null || plan.trafficResetPrice === undefined ? null : plan.trafficResetPrice,
     billingCycle: plan.billingCycle,
     status: getPlanStatus(plan),
     sortOrder: plan.sortOrder,
@@ -629,11 +639,11 @@ async function savePlan(): Promise<void> {
     toast.error(t('resources.plans.priceRangeError', { max: MAX_PACKAGE_PLAN_PRICE.toFixed(2) }))
     return
   }
-  const trafficResetPriceCents = planForm.value.trafficResetPrice === null || planForm.value.trafficResetPrice === ''
+  const trafficResetPriceYuan = planForm.value.trafficResetPrice === null || planForm.value.trafficResetPrice === ''
     ? null
-    : normalizePlanPriceCents(planForm.value.trafficResetPrice)
+    : normalizeTrafficResetPriceYuan(planForm.value.trafficResetPrice)
   const hasTrafficResetPriceOverride = planForm.value.trafficResetPrice !== null && planForm.value.trafficResetPrice !== ''
-  if (hasTrafficResetPriceOverride && trafficResetPriceCents === null) {
+  if (hasTrafficResetPriceOverride && trafficResetPriceYuan === null) {
     toast.error(`流量重置价格必须在 0-${MAX_PACKAGE_PLAN_PRICE.toFixed(2)} 元之间，且最多两位小数`)
     return
   }
@@ -655,7 +665,7 @@ async function savePlan(): Promise<void> {
       trafficLimit: gbToBytes(planForm.value.trafficLimit) || '0',
       trafficLimitSpeed: mbpsToBytes(planForm.value.trafficLimitSpeed) || '0',
       price: priceCents,
-      trafficResetPrice: trafficResetPriceCents,
+      trafficResetPrice: trafficResetPriceYuan,
       billingCycle: planForm.value.billingCycle,
       isActive: planForm.value.status !== 'inactive',
       isSoldOut: planForm.value.status === 'soldOut',
@@ -1354,7 +1364,7 @@ function getBillingCycleLabel(months: number): string {
                   <div>
                     <label class="block text-xs font-medium text-themed-muted mb-1.5">流量重置价格（元）</label>
                     <input v-model.number="planForm.trafficResetPrice" type="number" min="0" :max="MAX_PACKAGE_PLAN_PRICE" step="0.01" class="input" placeholder="继承套餐默认" />
-                    <p class="mt-1 text-xs text-themed-muted">留空继承套餐默认价，填写后覆盖。</p>
+                    <p class="mt-1 text-xs text-themed-muted">单位:元(如填 5 表示 5 元)；留空继承套餐默认价，填写后覆盖。</p>
                   </div>
                   <div>
                     <label class="block text-xs font-medium text-themed-muted mb-1.5">{{ t('resources.plans.billingCycle') }}</label>

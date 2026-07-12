@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# The existing OTA workers call exactly this recursive chown.  Running them
+# with this root-owned PATH shim preserves their control flow while preventing
+# releases/current from becoming writable by the service account again.
+if [[ "$#" -ne 3 || "$1" != "-R" || "$2" != "incudal:incudal" || "$3" != "/opt/incudal" ]]; then
+  echo "incudal OTA chown wrapper: unsupported arguments" >&2
+  exit 64
+fi
+
+exec /usr/local/libexec/incudal/incudal-online-task harden

@@ -1,8 +1,8 @@
 import { prisma } from '../db/prisma.js'
 
-const listingLockedStatuses = ['active', 'paused', 'locked', 'delivery_failed'] as const
-const orderLockedStatuses = ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed'] as const
-const buyerDeliveredAccessStatuses = ['delivered', 'confirming', 'disputed'] as const
+const listingLockedStatuses = ['active', 'locked', 'delivery_failed'] as const
+const orderLockedStatuses = ['delivering', 'confirming', 'disputed', 'manual_review', 'failed'] as const
+const buyerDeliveredAccessStatuses = ['confirming', 'disputed'] as const
 
 export interface ExchangeOperationLock {
   locked: boolean

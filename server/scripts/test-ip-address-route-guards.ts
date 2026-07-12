@@ -3,12 +3,18 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isIpv6SubnetWithinSubnet } from '../src/lib/ip-calculator.js'
+import {
+  IPV6_SUBNET_ALLOWED_PREFIXES,
+  ipv6CidrRangesOverlap,
+  normalizeIpv6CidrRange
+} from '../src/db/ipv6-subnets.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const source = readFileSync(resolve(__dirname, '../src/routes/ip-addresses.ts'), 'utf8')
 const dbSource = readFileSync(resolve(__dirname, '../src/db/ip-addresses.ts'), 'utf8')
+const ipv6SubnetDbSource = readFileSync(resolve(__dirname, '../src/db/ipv6-subnets.ts'), 'utf8')
 const advisoryLockSource = readFileSync(resolve(__dirname, '../src/db/advisory-locks.ts'), 'utf8')
 const instanceNetworkSyncSource = readFileSync(resolve(__dirname, '../src/lib/instance-network-sync.ts'), 'utf8')
 const instanceTaskWorkerSource = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
@@ -116,9 +122,53 @@ const allocateSubnetSection = sectionBetween(
   '    /**\n     * 删除实例的 IPv6 网段'
 )
 assert.ok(
-  allocateSubnetSection.includes('isIpv6SubnetWithinSubnet(inputCidr, hostWithIpv6.ipv6_subnet)') &&
+  allocateSubnetSection.includes('isIpv6SubnetWithinSubnet(normalizedCidr.cidr, hostWithIpv6.ipv6_subnet)') &&
     allocateSubnetSection.includes("code: 'IPV6_SUBNET_NOT_IN_HOST_SUBNET'"),
   'custom IPv6 subnet allocation must stay inside the host IPv6 subnet'
+)
+assert.ok(
+  allocateSubnetSection.includes('IPV6_SUBNET_ALLOWED_PREFIXES') &&
+    allocateSubnetSection.includes('normalizeIpv6CidrRange(inputCidr)') &&
+    allocateSubnetSection.includes('isIpv6SubnetOverlapError(error)'),
+  'custom and generated IPv6 subnets must enforce allowed prefixes, normalize CIDR, and report overlap conflicts'
+)
+assert.ok(
+  ipv6SubnetDbSource.includes('pg_advisory_xact_lock') &&
+    ipv6SubnetDbSource.includes('await acquireIpv6SubnetAllocationLock(tx)') &&
+    ipv6SubnetDbSource.includes('ipv6CidrRangesOverlap(candidate, normalizeIpv6CidrRange(subnet.cidr))') &&
+    ipv6SubnetDbSource.indexOf('await acquireIpv6SubnetAllocationLock(tx)') <
+      ipv6SubnetDbSource.indexOf('return tx.ipv6Subnet.create({'),
+  'IPv6 subnet overlap check and insert must be serialized in one transaction'
+)
+
+const normalizedSubnet = normalizeIpv6CidrRange('2001:0DB8:1::1234/112')
+assert.equal(normalizedSubnet.cidr, '2001:db8:1::/112', 'IPv6 CIDR must normalize to its compressed network address')
+assert.equal(normalizedSubnet.end - normalizedSubnet.start, 65535n, 'IPv6 /112 range must include exactly 2^16 addresses')
+assert.equal(
+  ipv6CidrRangesOverlap(
+    normalizeIpv6CidrRange('2001:db8:1::/112'),
+    normalizeIpv6CidrRange('2001:db8:1::1000/120')
+  ),
+  true,
+  'nested IPv6 subnet ranges must overlap'
+)
+assert.equal(
+  ipv6CidrRangesOverlap(
+    normalizeIpv6CidrRange('2001:db8:1::/120'),
+    normalizeIpv6CidrRange('2001:db8:1::100/120')
+  ),
+  false,
+  'adjacent IPv6 subnet ranges must not overlap'
+)
+assert.deepEqual(
+  IPV6_SUBNET_ALLOWED_PREFIXES,
+  [112, 120, 124],
+  'IPv6 subnet allowed prefix set must remain /112, /120, and /124'
+)
+assert.equal(
+  (IPV6_SUBNET_ALLOWED_PREFIXES as readonly number[]).includes(64),
+  false,
+  'IPv6 subnet prefixes outside /112, /120, and /124 must be rejected'
 )
 
 const deleteSubnetSection = sectionBetween(

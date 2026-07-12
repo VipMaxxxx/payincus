@@ -24,13 +24,22 @@ export function isValidRedirectUrl(url: string | undefined | null): boolean {
         return false
     }
 
-    // 不允许 // 开头（协议相对 URL，如 //evil.com）
-    if (trimmed.startsWith('//')) {
+    // 不允许 // 或 /\ 开头（浏览器会把反斜杠归一化为正斜杠）
+    if (trimmed[1] === '/' || trimmed[1] === '\\') {
+        return false
+    }
+
+    // 不允许任何反斜杠，避免 WHATWG URL 归一化绕过
+    if (trimmed.includes('\\')) {
         return false
     }
 
     // 不允许 javascript: 协议（包括各种变体）
     const lowerUrl = trimmed.toLowerCase()
+    if (lowerUrl.includes('%5c') || lowerUrl.startsWith('/%2f') || lowerUrl.startsWith('/%5c')) {
+        return false
+    }
+
     if (lowerUrl.includes('javascript:') || lowerUrl.includes('data:') || lowerUrl.includes('vbscript:')) {
         return false
     }

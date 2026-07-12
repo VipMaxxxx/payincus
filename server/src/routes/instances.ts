@@ -83,15 +83,16 @@ import {
 } from '../db/instance-tasks.js'
 import type { CreateInstanceTaskData, InstanceTaskWithDetails } from '../db/instance-tasks.js'
 import { closeInstanceSessions } from '../lib/terminal-proxy.js'
-import { calculateDiscountAmount } from '../lib/billing-calc.js'
 import { validateCommandsOwnership, mergeCommandContents, getImageDistroFromAlias } from '../db/custom-init-commands.js'
 import { getPlanById, isPaidPackage } from '../db/package-plans.js'
 import { calculateCreateBilling } from '../db/billing-operations.js'
 import { getUserBalance } from '../db/balance.js'
+import { recordInitialProvisioningFailureCase } from './admin-delivery.js'
 import type { PublicIpv4Assignment } from '../db/public-ipv4.js'
 import { selectBindableIpv4ListenAddress } from '../lib/network-address.js'
 import { applyTrafficMultiplier, normalizeTrafficMultiplier, resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
 import { listEnabledServiceExtensionTargets } from '../lib/plugin-extension-dispatch.js'
+import { arbitrateVipPrice, getUserContinuousVipBenefit } from '../services/vip-benefits.js'
 import {
   networkModeAllowsPortMapping,
   networkModeNeedsNatIpv4,
@@ -118,6 +119,38 @@ const PORT_MAPPING_LOCK_OPTIONS = {
   expireMs: 120000,
   waitTimeoutMs: 5000,
   retryIntervalMs: 100
+}
+const MAX_BATCH_PORT_MAPPINGS = 100
+
+async function findNormalPaidCreateReplay(userId: number, idempotencyKey: string) {
+  const instance = await prisma.instance.findUnique({
+    where: { idempotencyKey },
+    select: {
+      id: true,
+      name: true,
+      incusId: true,
+      userId: true,
+      hostId: true,
+      status: true,
+      sshPort: true
+    }
+  })
+  if (!instance || instance.userId !== userId) {
+    return null
+  }
+
+  const host = await db.getHostById(instance.hostId)
+  return {
+    message: 'Instance request already accepted',
+    instance: {
+      id: instance.id,
+      name: instance.name,
+      incusId: instance.incusId,
+      host: host?.name || '',
+      status: instance.status,
+      sshPort: instance.sshPort
+    }
+  }
 }
 
 function getInstancePortMappingLockKey(instanceId: number): string {
@@ -1242,6 +1275,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     const { packageId, planId, image, cpu, memory, disk, hostId, sshKeyId, customInitCommandIds, promoCode, flashSaleItemId, idempotencyKey, turnstileToken } = request.body
     let { name, sshKey } = request.body
     const { user } = request
+    const normalPaidIdempotencyKey = flashSaleItemId === undefined
+      ? idempotencyKey?.trim() || null
+      : null
 
     // ==================== 阶段一: 验证与校验 ====================
     name = typeof name === 'string' ? name.trim() : ''
@@ -1401,20 +1437,26 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       }
     }
 
+    if (selectedPlan && normalPaidIdempotencyKey) {
+      const replay = await findNormalPaidCreateReplay(user.id, normalPaidIdempotencyKey)
+      if (replay) {
+        return reply.code(200).send(replay)
+      }
+    }
+
     // 1.4 计算费用并验证余额（付费方案）
     let billing: ReturnType<typeof calculateCreateBilling> | null = null
     let validatedAffCode: { id: number; userId: number; discountRate: number } | null = null
     let discountAmount = 0
-    let finalPrice = 0
     let actualPrice = 0
 
     if (selectedPlan) {
       billing = calculateCreateBilling(selectedPlan)
-      finalPrice = flashSaleCheckout ? Number((flashSaleCheckout.flashPrice / 100).toFixed(2)) : billing.totalPrice
-      actualPrice = finalPrice
-
       // 1.4.1 如果提供了优惠码，验证并计算折扣
       if (promoCode && promoCode.trim()) {
+        if (flashSaleCheckout && !flashSaleCheckout.allowAff) {
+          return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '秒杀商品不支持 AFF 优惠码'))
+        }
         const validation = await db.validateAffCode(promoCode.trim(), selectedPlan.id, user.id)
         if (!validation.valid) {
           return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
@@ -1425,11 +1467,17 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           discountRate: validation.discountRate!
         }
         // 计算折扣金额（折扣应用于方案价格）
-        const discountBasePrice = flashSaleCheckout ? Number((flashSaleCheckout.flashPrice / 100).toFixed(2)) : billing.price
-        discountAmount = calculateDiscountAmount(discountBasePrice, validatedAffCode.discountRate)
-        finalPrice = Number((discountBasePrice - discountAmount).toFixed(2))
-        actualPrice = finalPrice
       }
+
+      const vip = await getUserContinuousVipBenefit(user.id)
+      const priceDecision = arbitrateVipPrice({
+        basePrice: billing.totalPrice,
+        affDiscountRate: validatedAffCode?.discountRate,
+        vipDiscountPercent: vip.benefit.orderDiscountPercent,
+        flashSalePrice: flashSaleCheckout ? flashSaleCheckout.flashPrice / 100 : null
+      })
+      actualPrice = priceDecision.finalPrice
+      discountAmount = priceDecision.source === 'flash_sale' ? 0 : priceDecision.discountAmount
 
       const userBalance = await getUserBalance(user.id)
       if (userBalance < actualPrice) {
@@ -1445,7 +1493,21 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     const requestedMemory = selectedPlan ? selectedPlan.memory : (memory || 128)
     const requestedDisk = selectedPlan ? selectedPlan.disk : (disk || 512)
 
-    // 注意：能否开通实例只跟宿主机的资源有关，不检查套餐包资源限制
+    if (!selectedPlan) {
+      if (requestedCpu > pkg.cpu_max) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS,
+          `CPU 不能超过套餐上限 ${pkg.cpu_max}%`))
+      }
+      if (requestedMemory > pkg.memory_max) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS,
+          `内存不能超过套餐上限 ${pkg.memory_max}MB`))
+      }
+      if (requestedDisk > pkg.disk_max) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS,
+          `磁盘不能超过套餐上限 ${pkg.disk_max}MB`))
+      }
+    }
+
     // 宿主机资源检查在 selectAvailableHost 中进行
 
     // 3. 验证认证方式（必须提供 SSH 公钥）
@@ -1655,6 +1717,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     let staticIPv4: string | null = null
     let staticIPv6: string | null = null
     let publicIpv4Assignment: PublicIpv4Assignment | null = null
+    let staticIpAllocationError: string | null = null
     let selectedStoragePool: string | null = null
     const normalizedPlanTrafficLimitSpeed = selectedPlan
       ? normalizePlanTrafficLimitSpeed(selectedPlan.trafficLimitSpeed)
@@ -1667,26 +1730,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     try {
       const result = await prisma.$transaction(async (tx) => {
         let lockedBalanceBefore: number | null = null
-
-        if (selectedPlan && billing) {
-          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, user.id)
-          if (!balanceLocked) {
-            throw new Error('BALANCE_CONFLICT: 余额正在处理，请稍后重试')
-          }
-
-          const userRecord = await tx.user.findUnique({
-            where: { id: user.id },
-            select: { balance: true }
-          })
-          if (!userRecord) {
-            throw new Error('USER_NOT_FOUND: 用户不存在')
-          }
-
-          lockedBalanceBefore = Number(userRecord.balance)
-          if (lockedBalanceBefore < actualPrice) {
-            throw new Error('BALANCE_INSUFFICIENT: 余额不足')
-          }
-        }
 
         // →→→ 第一步：在事务中使用行锁选择并预占宿主机资源 ←←←
         const lockedHost = await db.selectAndReserveHostWithLock(tx, {
@@ -1748,56 +1791,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           }
         }
 
-        // →→→ 第三步：如果是付费方案，扣除余额并记录日志 ←←←
-        let balanceLogId: number | undefined
-        if (selectedPlan && billing) {
-          const balanceBefore = lockedBalanceBefore ?? 0
-
-          // 扣除余额。使用条件更新和增量扣减，防止并发创建实例绕过余额检查。
-          const balanceUpdateResult = await tx.user.updateMany({
-            where: {
-              id: user.id,
-              balance: { gte: actualPrice }
-            },
-            data: { balance: { decrement: actualPrice } }
-          })
-
-          if (balanceUpdateResult.count === 0) {
-            throw new Error('BALANCE_INSUFFICIENT: 余额不足或并发冲突')
-          }
-
-          const updatedUserRecord = await tx.user.findUnique({
-            where: { id: user.id },
-            select: { balance: true }
-          })
-          if (!updatedUserRecord) {
-            throw new Error('USER_NOT_FOUND: 用户不存在')
-          }
-          const balanceAfter = Number(updatedUserRecord.balance)
-
-          // 记录余额日志
-          const remarkText = flashSaleCheckout
-            ? (discountAmount > 0
-                ? `秒杀开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}，优惠码折扣 -¥${discountAmount.toFixed(2)}`
-                : `秒杀开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}`)
-            : (discountAmount > 0
-                ? `开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}，优惠码折扣 -¥${discountAmount.toFixed(2)}`
-                : `开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}`)
-
-          const balanceLog = await tx.balanceLog.create({
-            data: {
-              userId: user.id,
-              type: 'consume',
-              amount: -actualPrice,
-              balanceBefore,
-              balanceAfter,
-              remark: remarkText
-            }
-          })
-          balanceLogId = balanceLog.id
-        }
-
-        // →→→ 第四步：创建实例记录 ←←←
+        // →→→ 第三步：先创建实例记录，用唯一键抢占普通付费开通意图 ←←←
         // 如果是付费方案，使用方案的配额限制；否则使用套餐配额
         const planBandwidthLimit = normalizedPlanTrafficLimitSpeed
 
@@ -1831,6 +1825,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         const instance = await tx.instance.create({
           data: {
             incusId,
+            idempotencyKey: selectedPlan && !flashSaleCheckout ? normalPaidIdempotencyKey : null,
             name,
             userId: user.id,
             hostId: lockedHost.id,
@@ -1861,6 +1856,72 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
             autoRenew: false
           }
         })
+
+        // →→→ 第四步：抢占成功后才扣除余额并记录日志 ←←←
+        let balanceLogId: number | undefined
+        if (selectedPlan && billing) {
+          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, user.id)
+          if (!balanceLocked) {
+            throw new Error('BALANCE_CONFLICT: 余额正在处理，请稍后重试')
+          }
+
+          const userRecord = await tx.user.findUnique({
+            where: { id: user.id },
+            select: { balance: true }
+          })
+          if (!userRecord) {
+            throw new Error('USER_NOT_FOUND: 用户不存在')
+          }
+
+          lockedBalanceBefore = Number(userRecord.balance)
+          if (lockedBalanceBefore < actualPrice) {
+            throw new Error('BALANCE_INSUFFICIENT: 余额不足')
+          }
+
+          const balanceBefore = lockedBalanceBefore ?? 0
+
+          // 扣除余额。使用条件更新和增量扣减，防止并发创建实例绕过余额检查。
+          const balanceUpdateResult = await tx.user.updateMany({
+            where: {
+              id: user.id,
+              balance: { gte: actualPrice }
+            },
+            data: { balance: { decrement: actualPrice } }
+          })
+
+          if (balanceUpdateResult.count === 0) {
+            throw new Error('BALANCE_INSUFFICIENT: 余额不足或并发冲突')
+          }
+
+          const updatedUserRecord = await tx.user.findUnique({
+            where: { id: user.id },
+            select: { balance: true }
+          })
+          if (!updatedUserRecord) {
+            throw new Error('USER_NOT_FOUND: 用户不存在')
+          }
+          const balanceAfter = Number(updatedUserRecord.balance)
+
+          const remarkText = flashSaleCheckout
+            ? (discountAmount > 0
+                ? `秒杀开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}，优惠码折扣 -¥${discountAmount.toFixed(2)}`
+                : `秒杀开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}`)
+            : (discountAmount > 0
+                ? `开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}，优惠码折扣 -¥${discountAmount.toFixed(2)}`
+                : `开通实例（${billing.billingCycle}个月）：${pkg.name} - ${selectedPlan.name}`)
+
+          const balanceLog = await tx.balanceLog.create({
+            data: {
+              userId: user.id,
+              type: 'consume',
+              amount: -actualPrice,
+              balanceBefore,
+              balanceAfter,
+              remark: remarkText
+            }
+          })
+          balanceLogId = balanceLog.id
+        }
 
         // 更新余额日志，添加 instanceId（因为创建时实例还不存在）
         if (balanceLogId) {
@@ -2011,6 +2072,16 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       }
 
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        if (normalPaidIdempotencyKey) {
+          const replay = await findNormalPaidCreateReplay(user.id, normalPaidIdempotencyKey)
+          if (replay) {
+            return reply.code(200).send(replay)
+          }
+          return reply.code(409).send({
+            error: '开通请求已提交，请勿重复操作',
+            code: 'INSTANCE_CREATE_DUPLICATE_REQUEST'
+          })
+        }
         return reply.code(409).send({ error: '秒杀请求已提交，请勿重复操作', code: 'FLASH_SALE_DUPLICATE_REQUEST' })
       }
 
@@ -2063,7 +2134,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     // 事务成功后，完成 IP 分配和存储池选择（这些不需要在事务中）
-    // 如果这些步骤失败，实例会处于 creating 状态，后续清理任务会处理
 
     // 类型断言：host 在事务成功后一定不为 null
     if (!host) {
@@ -2076,7 +2146,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       ipv6_gateway?: string | null
       ipv6_parent_interface?: string | null
     }
-    console.log(`[Provisioning] Host IPv6 config: mode=${hostWithIpv6.ipv6_mode}, subnet=${hostWithIpv6.ipv6_subnet}, gateway=${hostWithIpv6.ipv6_gateway}, parent_interface=${hostWithIpv6.ipv6_parent_interface}`)
+    let finalConfigPayload = configPayload
+
+    try {
+      console.log(`[Provisioning] Host IPv6 config: mode=${hostWithIpv6.ipv6_mode}, subnet=${hostWithIpv6.ipv6_subnet}, gateway=${hostWithIpv6.ipv6_gateway}, parent_interface=${hostWithIpv6.ipv6_parent_interface}`)
 
     if (networkModeNeedsNatIpv4(networkMode)) {
       try {
@@ -2098,34 +2171,19 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         }
 
         if (!staticIPv4) {
-          console.error(`[Provisioning] IPv4 分配失败（已尝试 ${maxAttempts} 次），实例将使用动态 IP`)
-          // 不在这里返回错误，让实例使用动态 IP
+          staticIpAllocationError = `NAT 内网 IPv4 分配失败（已尝试 ${maxAttempts} 次）`
+          console.error(`[Provisioning] ${staticIpAllocationError}`)
         }
       } catch (err) {
         console.error(`[Provisioning] IPv4 分配错误:`, err)
-        // 不在这里返回错误，让实例使用动态 IP
+        staticIpAllocationError = `NAT 内网 IPv4 分配错误: ${err instanceof Error ? err.message : String(err)}`
       }
     } else if (networkModeNeedsPublicIpv4(networkMode)) {
       publicIpv4Assignment = await prisma.$transaction(async (tx) => {
         return db.reservePublicIpv4ForInstance(tx, { hostId: host.id, instanceId })
       })
       if (!publicIpv4Assignment) {
-        await prisma.instance.updateMany({
-          where: { id: instanceId, status: 'creating' },
-          data: { status: 'error' }
-        }).catch(() => null)
-        await db.rollbackResources({
-          hostId: host.id,
-          cpu: requestedCpu,
-          memory: requestedMemory,
-          disk: requestedDisk,
-          portCount: networkModeAllowsPortMapping(networkMode) ? (pkgWithExtras.port_limit || 0) : 0
-        }).catch(err => console.error('[Provisioning] 独立 IPv4 分配失败后资源回滚失败:', err))
-        await db.compensateFailedInstancePurchase(instanceId, user.id, host.id).catch(err => {
-          console.error('[Provisioning] 独立 IPv4 分配失败后计费补偿失败:', err)
-        })
-        return reply.code(503).send(apiError(ErrorCode.HOST_RESOURCES_INSUFFICIENT,
-          `宿主机 ${host.name} 没有可用独立 IPv4 地址`))
+        throw new Error(`宿主机 ${host.name} 没有可用独立 IPv4 地址`)
       }
       staticIPv4 = publicIpv4Assignment.address
       console.log(`[Provisioning] 分配独立 IPv4: ${staticIPv4}`)
@@ -2134,8 +2192,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     // 分配 IPv6（仅当存在 IPv6 子网配置且是 Routed 模式时，即需要独立 IPv6 地址）
     // nat_ipv6 和 ipv6_only 从子网分配独立 IPv6，nat_ipv6_nat 和 ipv6_nat 共享宿主机 IPv6
     const needsRoutedIPv6 = networkModeNeedsRoutedIpv6(networkMode)
-    if (hostWithIpv6.ipv6_subnet && needsRoutedIPv6) {
-      try {
+    if (needsRoutedIPv6) {
+      if (!hostWithIpv6.ipv6_subnet) {
+        staticIpAllocationError ||= '宿主机未配置 routed IPv6 子网'
+        console.error(`[Provisioning] ${staticIpAllocationError}`)
+      } else try {
         let attempts = 0
         const maxAttempts = 50
 
@@ -2153,19 +2214,24 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         }
 
         if (!staticIPv6) {
-          console.warn(`[Provisioning] IPv6 分配失败（已尝试 ${maxAttempts} 次），将使用动态分配`)
+          staticIpAllocationError ||= `routed IPv6 分配失败（已尝试 ${maxAttempts} 次）`
+          console.error(`[Provisioning] ${staticIpAllocationError}`)
         }
       } catch (err) {
-        console.warn(`[Provisioning] IPv6 分配错误，将使用动态分配:`, err)
+        console.error(`[Provisioning] routed IPv6 分配错误:`, err)
         staticIPv6 = null
+        staticIpAllocationError ||= `routed IPv6 分配错误: ${err instanceof Error ? err.message : String(err)}`
       }
+    }
+
+    if (staticIpAllocationError) {
+      throw new Error(staticIpAllocationError)
     }
 
     console.log(`[Provisioning] IP 分配完成: IPv4=${staticIPv4}, IPv6=${staticIPv6}`)
 
     // VM 和容器都需要在 IP 分配完成后重新生成 cloud-init network-config
     // 确保静态 IPv4 和 IPv6 地址正确注入到 guest OS
-    let finalConfigPayload = configPayload
     const ipv4Cidr = publicIpv4Assignment
       ? `${publicIpv4Assignment.address}/${publicIpv4Assignment.prefixLength}`
       : (staticIPv4 ? `${staticIPv4}/22` : null)
@@ -2225,6 +2291,21 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         storagePoolName: selectedStoragePool
       }
     })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error(`[Provisioning] 事务后同步准备失败:`, errorMessage)
+      await compensateFailedInstanceCreation({
+        instanceId,
+        host,
+        userId: user.id,
+        resources: { cpu: requestedCpu, memory: requestedMemory, disk: requestedDisk },
+        networkMode,
+        portLimit: pkgWithExtras.port_limit || 0,
+        instanceName: incusId,
+        errorMessage
+      })
+      return reply.code(503).send(apiError(ErrorCode.HOST_RESOURCES_INSUFFICIENT, errorMessage))
+    }
 
     // ==================== 阶段六: 异步执行创建 ====================
     // Cast pkg to include advanced config fields
@@ -2332,6 +2413,18 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     const portMappings = await db.getPortMappings(instanceId)
+    const failureCase = instance.status === 'error'
+      ? await prisma.deliveryAssuranceCase.findFirst({
+          where: {
+            instanceId,
+            taskId: null,
+            issueType: 'task_failed',
+            lastError: { not: null }
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: { lastError: true }
+        })
+      : null
 
     const host = await db.getHostById(instance.host_id)
     const natPublicIp = host?.nat_public_ip || null
@@ -2402,7 +2495,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     let planName: string | null = null
     let planPrice: number | null = null  // 方案原价（续费价格，元）
     let billingCycle: number | null = null
-    let trafficResetPrice: number = Number((pkg as any)?.traffic_reset_price ?? 0) / 100
+    let trafficResetPrice: number = Number((pkg as any)?.traffic_reset_price ?? 0)
     let affDiscountRate: number | null = null  // AFF优惠码折扣率
     let hasAffBinding = false
     let isHostedInstance = false
@@ -2413,7 +2506,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       })
       planName = plan?.name ?? null
       if (plan?.trafficResetPrice !== null && plan?.trafficResetPrice !== undefined) {
-        trafficResetPrice = Number(plan.trafficResetPrice) / 100
+        trafficResetPrice = Number(plan.trafficResetPrice)
       }
       if (plan?.price && plan?.billingCycle) {
         // 返回方案原价（分转元）
@@ -2466,6 +2559,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       incusId: string
       name: string
       status: string
+      failureReason?: string | null
       image: string
       imageName?: string | null
       cpu: number
@@ -2542,6 +2636,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       incusId: instance.incus_id,
       name: instance.name,
       status: instance.status,
+      failureReason: failureCase?.lastError?.trim() || null,
       image: instance.image,
       imageName: imageName || null,
       cpu: instance.cpu,
@@ -3325,7 +3420,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       let proxySitesUpdated = 0
 
       // 更新数据库状态
-      if (currentStatus !== incusStatus) {
+      if (currentStatus !== 'suspended' && currentStatus !== incusStatus) {
         await db.updateInstanceStatus(
           instanceId,
           incusStatus as 'creating' | 'running' | 'stopped' | 'error'
@@ -3399,7 +3494,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
         statusChanged,
         from: statusChanged ? currentStatus : undefined,
         to: statusChanged ? incusStatus : undefined,
-        currentStatus: incusStatus,
+        currentStatus: currentStatus === 'suspended' ? currentStatus : incusStatus,
         ipv4Changed,
         oldIpv4: ipv4Changed ? oldIpv4 : undefined,
         newIpv4: ipv4Changed ? newIpv4 : undefined,
@@ -4450,11 +4545,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, `${host.nat_port_start}-${host.nat_port_end}`))
         }
       }
+    }
 
-      const existingPort = await db.checkPortInUse(instance.host_id, allocatedPort, protocol)
-      if (existingPort) {
-        return reply.code(400).send(apiError(ErrorCode.PORT_IN_USE))
-      }
+    const existingPort = await db.checkPortInUse(instance.host_id, allocatedPort, protocol)
+    if (existingPort) {
+      return reply.code(400).send(apiError(ErrorCode.PORT_IN_USE))
     }
 
     const createdDeviceNames: string[] = []
@@ -4651,6 +4746,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           remark: { type: 'string', maxLength: 100 },
           portMappings: {
             type: 'array',
+            maxItems: MAX_BATCH_PORT_MAPPINGS,
             items: {
               type: 'object',
               required: ['privatePort', 'publicPort'],
@@ -4717,25 +4813,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     }
 
     try {
-    // 2. 计算端口数量
+    // 2. 计算连续端口数量（用于生成最终映射列表）
     const privatePortCount = privatePortEnd - privatePortStart + 1
-    if (privatePortCount <= 0 || privatePortCount > 100) {
-      return reply.code(400).send({ error: '端口范围无效，最多支持 100 个连续端口' })
-    }
-
-    // 3. 检查配额
-    // TCP/UDP 各占 1 个配额，Both 占 2 个配额
-    const quotaNeeded = protocol === 'both' ? privatePortCount * 2 : privatePortCount
-    const quotaCheck = await db.checkPortQuota(instance.user_id, instanceId)
-    const remainingQuota = quotaCheck.limit - quotaCheck.current
-
-    if (remainingQuota < quotaNeeded) {
-      return reply.code(400).send({
-        error: ErrorCode.QUOTA_PORT_BATCH_EXCEEDED,
-        message: `配额不足，需要 ${quotaNeeded} 个，剩余 ${remainingQuota} 个`,
-        needed: quotaNeeded,
-        remaining: remainingQuota
-      })
+    if (privatePortCount <= 0 || privatePortCount > MAX_BATCH_PORT_MAPPINGS) {
+      return reply.code(400).send({ error: `端口范围无效，最多支持 ${MAX_BATCH_PORT_MAPPINGS} 个连续端口` })
     }
 
     const host = await db.getHostById(instance.host_id)
@@ -4743,7 +4824,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
     }
 
-    // 4. 确定映射关系
+    // 3. 统一归一为最终映射列表
     let finalMappings: Array<{ privatePort: number; publicPort: number }> = []
 
     if (portMappings && portMappings.length > 0) {
@@ -4754,13 +4835,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       const publicPortCount = publicPortEnd - publicPortStart + 1
       if (publicPortCount !== privatePortCount) {
         return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_MISMATCH, `内网 ${privatePortCount} 个端口，公网 ${publicPortCount} 个端口`))
-      }
-
-      // 检查公网端口范围是否在允许范围内
-      if (host.nat_port_start && host.nat_port_end) {
-        if (publicPortStart < host.nat_port_start || publicPortEnd > host.nat_port_end) {
-          return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, `允许范围: ${host.nat_port_start}-${host.nat_port_end}`))
-        }
       }
 
       // 生成映射关系
@@ -4830,6 +4904,46 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           publicPort: allocatedPorts[i]
         })
       }
+    }
+
+    // 4. 所有入参路径统一按最终映射校验数量、唯一性与 NAT 允许范围
+    if (finalMappings.length === 0 || finalMappings.length > MAX_BATCH_PORT_MAPPINGS) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, `端口映射数量必须为 1-${MAX_BATCH_PORT_MAPPINGS}`))
+    }
+
+    const privatePorts = finalMappings.map(mapping => mapping.privatePort)
+    const publicPorts = finalMappings.map(mapping => mapping.publicPort)
+    if (new Set(privatePorts).size !== finalMappings.length) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '内网端口不能重复'))
+    }
+    if (new Set(publicPorts).size !== finalMappings.length) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '公网端口不能重复'))
+    }
+
+    const natPortStart = host.nat_port_start
+    const natPortEnd = host.nat_port_end
+    if (!natPortStart || !natPortEnd) {
+      return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, '宿主机未配置 NAT 端口范围'))
+    }
+    const hasOutOfRangePort = finalMappings.some(mapping =>
+      mapping.privatePort < natPortStart || mapping.privatePort > natPortEnd ||
+      mapping.publicPort < natPortStart || mapping.publicPort > natPortEnd
+    )
+    if (hasOutOfRangePort) {
+      return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, `允许范围: ${natPortStart}-${natPortEnd}`))
+    }
+
+    // 5. 最终映射数量计入实例套餐配额；Both 会实际创建 TCP/UDP 两组映射
+    const quotaNeeded = finalMappings.length * (protocol === 'both' ? 2 : 1)
+    const quotaCheck = await db.checkPortQuota(instance.user_id, instanceId)
+    const remainingQuota = quotaCheck.limit - quotaCheck.current
+    if (remainingQuota < quotaNeeded) {
+      return reply.code(400).send({
+        error: ErrorCode.QUOTA_PORT_BATCH_EXCEEDED,
+        message: `配额不足，需要 ${quotaNeeded} 个，剩余 ${remainingQuota} 个`,
+        needed: quotaNeeded,
+        remaining: remainingQuota
+      })
     }
 
     // 6. 批量创建映射
@@ -5300,10 +5414,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
       // 更新宿主机资源使用量
       if (cpuDelta !== 0 || memoryDelta !== 0 || diskDelta !== 0) {
+        const usedResources = await db.calculateHostResourcesFromInstances(instance.host_id)
         await db.updateHostResources(instance.host_id, {
-          cpuUsed: host.cpu_used + cpuDelta,
-          memoryUsed: host.memory_used + memoryDelta,
-          diskUsed: host.disk_used + diskDelta
+          cpuUsed: usedResources.cpuUsed,
+          memoryUsed: usedResources.memoryUsed,
+          diskUsed: usedResources.diskUsed
         })
       }
 
@@ -5975,7 +6090,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
     // 获取当前进程数配置
     const instanceConfig = await db.getInstanceConfig(instanceId)
-    const currentProcesses = instanceConfig?.limits_processes ?? 500
+    const previousProcesses = instanceConfig?.limits_processes ?? null
+    const currentProcesses = previousProcesses ?? 500
 
     // 检查是否已达上限
     if (currentProcesses >= targetLimit) {
@@ -5998,9 +6114,50 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           'limits.processes': String(targetLimit)
         }
       })
-    } catch (err) {
-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
-      // 不抛出错误，数据库已更新成功
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
+
+      try {
+        await db.updateInstanceConfig(instanceId, {
+          limitsProcesses: previousProcesses
+        })
+      } catch (rollbackError) {
+        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
+        await createLog(
+          user.id,
+          'instance',
+          'instance.boost_processes',
+          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
+          'failed',
+          { instanceId }
+        )
+        return reply.code(500).send({
+          error: 'Process limit boost partially failed',
+          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
+          details: {
+            incusError: errorMessage,
+            rollbackError: rollbackErrorMessage,
+            databaseLimit: targetLimit,
+            previousDatabaseLimit: previousProcesses,
+            incusLimitApplied: 'unknown'
+          }
+        })
+      }
+
+      await createLog(
+        user.id,
+        'instance',
+        'instance.boost_processes',
+        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
+        'failed',
+        { instanceId }
+      )
+      return reply.code(500).send(apiError(
+        ErrorCode.CONFIG_UPDATE_FAILED,
+        `${errorMessage}; database change rolled back`
+      ))
     }
 
     await createLog(
@@ -6587,6 +6744,141 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
 // ==================== 辅助函数 ====================
 
+async function releaseReservedPublicIpv4ForFailedCreation(
+  instanceId: number,
+  networkMode: NetworkMode
+): Promise<void> {
+  if (!networkModeNeedsPublicIpv4(networkMode)) {
+    return
+  }
+
+  await prisma.$transaction((tx) => db.releasePublicIpv4ForInstance(tx, instanceId))
+  console.log(`[Provisioning] 独立 IPv4 已释放: instance=${instanceId}`)
+}
+
+async function compensateFailedInstanceCreation(input: {
+  instanceId: number
+  host: Host
+  userId: number
+  resources: { cpu: number; memory: number; disk: number }
+  networkMode: NetworkMode
+  portLimit: number
+  instanceName: string
+  errorMessage: string
+}): Promise<{
+  claimed: boolean
+  refundStatus: 'refunded' | 'not_required' | 'already_refunded' | 'not_completed' | 'failed' | 'already_handled'
+  refundAmount: number
+  refundReason?: string
+  refundError?: string
+}> {
+  const {
+    instanceId,
+    host,
+    userId,
+    resources,
+    networkMode,
+    portLimit,
+    instanceName,
+    errorMessage
+  } = input
+  const updateResult = await prisma.instance.updateMany({
+    where: {
+      id: instanceId,
+      status: 'creating'
+    },
+    data: {
+      status: 'error'
+    }
+  })
+
+  // creating -> error 是资源、IPv4 和账务补偿的幂等总闸门。
+  if (updateResult.count === 0) {
+    console.log(`[Provisioning] 实例 ${instanceId} 已被其他失败补偿或超时清理处理，跳过重复补偿`)
+    return { claimed: false, refundStatus: 'already_handled', refundAmount: 0 }
+  }
+
+  const rollbackPortCount = networkModeAllowsPortMapping(networkMode) ? portLimit : 0
+  try {
+    await db.rollbackResources({
+      hostId: host.id,
+      cpu: resources.cpu,
+      memory: resources.memory,
+      disk: resources.disk,
+      portCount: rollbackPortCount
+    })
+    emitServiceResourceRollbackPluginEvent({
+      event: 'service.resource.rollback.completed',
+      instanceId,
+      userId,
+      hostId: host.id,
+      instanceName,
+      source: 'instance.provisioning.failure',
+      reason: 'provisioning_failed',
+      cpu: resources.cpu,
+      memory: resources.memory,
+      disk: resources.disk,
+      portCount: rollbackPortCount,
+      dedupeKey: `service.resource.rollback.completed:provisioning:${instanceId}`
+    })
+    console.log(`[Provisioning] 用户 ${userId} 资源已回滚 (CPU=${resources.cpu}, Mem=${resources.memory}MB, Disk=${resources.disk}MB)`)
+  } catch (rollbackErr) {
+    emitServiceResourceRollbackPluginEvent({
+      event: 'service.resource.rollback.failed',
+      instanceId,
+      userId,
+      hostId: host.id,
+      instanceName,
+      source: 'instance.provisioning.failure',
+      reason: 'rollback_failed',
+      cpu: resources.cpu,
+      memory: resources.memory,
+      disk: resources.disk,
+      portCount: rollbackPortCount,
+      dedupeKey: `service.resource.rollback.failed:provisioning:${instanceId}`,
+      metadata: { failureType: 'resource_rollback_failed' }
+    })
+    console.error(`[Provisioning] 资源回滚失败:`, rollbackErr)
+  }
+
+  try {
+    await releaseReservedPublicIpv4ForFailedCreation(instanceId, networkMode)
+  } catch (releaseErr) {
+    console.error(`[Provisioning] 释放独立 IPv4 失败:`, releaseErr)
+  }
+
+  try {
+    const compensation = await db.compensateFailedInstancePurchase(instanceId, userId, host.id)
+    await markFlashSaleFailed(instanceId, errorMessage, compensation.refunded).catch((err) => {
+      console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
+    })
+    if (compensation.refunded) {
+      console.log(`[Provisioning] 实例 ${instanceId} 创建失败已自动退款 ¥${compensation.refundAmount.toFixed(2)}`)
+    } else if (compensation.reason !== 'not_paid_purchase') {
+      console.log(`[Provisioning] 实例 ${instanceId} 创建失败无需退款: ${compensation.reason || 'unknown'}`)
+    }
+    return {
+      claimed: true,
+      refundStatus: compensation.refunded
+        ? 'refunded'
+        : compensation.reason === 'not_paid_purchase'
+          ? 'not_required'
+          : compensation.reason === 'already_refunded'
+            ? 'already_refunded'
+            : 'not_completed',
+      refundAmount: compensation.refundAmount,
+      refundReason: compensation.reason
+    }
+  } catch (compensationErr) {
+    const refundError = compensationErr instanceof Error ? compensationErr.message : String(compensationErr)
+    console.error(`[Provisioning] 实例 ${instanceId} 创建失败后的账务补偿失败:`, compensationErr)
+    await markFlashSaleFailed(instanceId, errorMessage, false).catch((err) => {
+      console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
+    })
+    return { claimed: true, refundStatus: 'failed', refundAmount: 0, refundError }
+  }
+}
+
 /**
  * 异步创建实例
  */
@@ -6883,90 +7175,44 @@ async function createInstanceAsync(
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error(`[Provisioning] ✘ 实例 ${instanceId} 创建失败:`, errorMessage)
 
-    // 使用原子操作更新状态，防止与超时清理任务竞争
-    // 只有状态仍为 creating 时才更新为 error 并回滚资源
-    const updateResult = await prisma.instance.updateMany({
-      where: {
-        id: instanceId,
-        status: 'creating' // 原子条件
-      },
-      data: {
-        status: 'error'
+    let compensationResult: Awaited<ReturnType<typeof compensateFailedInstanceCreation>>
+    try {
+      compensationResult = await compensateFailedInstanceCreation({
+        instanceId,
+        host,
+        userId,
+        resources,
+        networkMode: config.networkMode,
+        portLimit: config.portLimit || 0,
+        instanceName: config.name,
+        errorMessage
+      })
+    } catch (compensationError) {
+      const refundError = compensationError instanceof Error ? compensationError.message : String(compensationError)
+      console.error(`[Provisioning] 实例 ${instanceId} 创建失败补偿流程异常:`, compensationError)
+      compensationResult = {
+        claimed: false,
+        refundStatus: 'failed',
+        refundAmount: 0,
+        refundError
       }
-    })
+    }
 
-    // 只有成功更新状态时才回滚资源（避免与超时清理任务双重回滚）
-    if (updateResult.count > 0 && userId && resources) {
-      const rollbackPortCount = networkModeAllowsPortMapping(config.networkMode) ? (config.portLimit || 0) : 0
-      try {
-        await db.rollbackResources({
-          hostId: host.id,
-          cpu: resources.cpu,
-          memory: resources.memory,
-          disk: resources.disk,
-          portCount: rollbackPortCount
-        })
-        emitServiceResourceRollbackPluginEvent({
-          event: 'service.resource.rollback.completed',
-          instanceId,
-          userId,
-          hostId: host.id,
-          instanceName: config.name,
-          source: 'instance.provisioning.failure',
-          reason: 'provisioning_failed',
-          cpu: resources.cpu,
-          memory: resources.memory,
-          disk: resources.disk,
-          portCount: rollbackPortCount,
-          dedupeKey: `service.resource.rollback.completed:provisioning:${instanceId}`
-        })
-        console.log(`[Provisioning] 用户 ${userId} 资源已回滚 (CPU=${resources.cpu}, Mem=${resources.memory}MB, Disk=${resources.disk}MB)`)
-      } catch (rollbackErr) {
-        emitServiceResourceRollbackPluginEvent({
-          event: 'service.resource.rollback.failed',
-          instanceId,
-          userId,
-          hostId: host.id,
-          instanceName: config.name,
-          source: 'instance.provisioning.failure',
-          reason: 'rollback_failed',
-          cpu: resources.cpu,
-          memory: resources.memory,
-          disk: resources.disk,
-          portCount: rollbackPortCount,
-          dedupeKey: `service.resource.rollback.failed:provisioning:${instanceId}`,
-          metadata: { failureType: 'resource_rollback_failed' }
-        })
-        console.error(`[Provisioning] 资源回滚失败:`, rollbackErr)
-      }
-
-      if (networkModeNeedsPublicIpv4(config.networkMode)) {
-        try {
-          await prisma.$transaction((tx) => db.releasePublicIpv4ForInstance(tx, instanceId))
-          console.log(`[Provisioning] 独立 IPv4 已释放: instance=${instanceId}`)
-        } catch (releaseErr) {
-          console.error(`[Provisioning] 释放独立 IPv4 失败:`, releaseErr)
-        }
-      }
-
-      try {
-        const compensation = await db.compensateFailedInstancePurchase(instanceId, userId, host.id)
-        await markFlashSaleFailed(instanceId, errorMessage, compensation.refunded).catch((err) => {
-          console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
-        })
-        if (compensation.refunded) {
-          console.log(`[Provisioning] 实例 ${instanceId} 创建失败已自动退款 ¥${compensation.refundAmount.toFixed(2)}`)
-        } else if (compensation.reason !== 'not_paid_purchase') {
-          console.log(`[Provisioning] 实例 ${instanceId} 创建失败无需退款: ${compensation.reason || 'unknown'}`)
-        }
-      } catch (compensationErr) {
-        console.error(`[Provisioning] 实例 ${instanceId} 创建失败后的账务补偿失败:`, compensationErr)
-        await markFlashSaleFailed(instanceId, errorMessage, false).catch((err) => {
-          console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
-        })
-      }
-    } else if (updateResult.count === 0) {
-      console.log(`[Provisioning] 实例 ${instanceId} 已被超时清理任务处理，跳过资源回滚`)
+    try {
+      await recordInitialProvisioningFailureCase({
+        instanceId,
+        instanceName: config.name,
+        hostId: host.id,
+        userId,
+        errorMessage,
+        compensationClaimed: compensationResult.claimed,
+        refundStatus: compensationResult.refundStatus,
+        refundAmount: compensationResult.refundAmount,
+        refundReason: compensationResult.refundReason,
+        refundError: compensationResult.refundError
+      })
+    } catch (caseError) {
+      console.error(`[Provisioning] 实例 ${instanceId} 初始开通失败 case 创建失败:`, caseError)
     }
 
     try {

@@ -3,7 +3,7 @@
  */
 
 import { prisma } from './prisma.js'
-import type { RedeemCodeType, ResourcePoolAction } from '@prisma/client'
+import type { Prisma, RedeemCodeType, ResourcePoolAction } from '@prisma/client'
 import { INSTANCE_OPERATION_LOCK_NAMESPACE, USER_RESOURCE_POOL_LOCK_NAMESPACE, advisoryTransactionLock } from './advisory-locks.js'
 
 // 资源类型到字段的映射
@@ -13,6 +13,9 @@ const RESOURCE_FIELD_MAP: Record<string, 'cpu' | 'memory' | 'disk' | 'traffic'> 
   d: 'disk',
   t: 'traffic'
 }
+
+export const MAX_RESOURCE_POOL_APPLY_AMOUNT = 104_857_600
+export const RESOURCE_POOL_INCUS_PENDING_PREFIX = '[incus-pending] '
 
 /**
  * 获取用户资源池
@@ -26,10 +29,10 @@ export async function getUserResourcePool(userId: number) {
   })
 
   return {
-    cpu: pool.cpu,
-    memory: pool.memory,
-    disk: pool.disk,
-    traffic: Number(pool.traffic)
+    cpu: pool.cpu.toString(),
+    memory: pool.memory.toString(),
+    disk: pool.disk.toString(),
+    traffic: pool.traffic.toString()
   }
 }
 
@@ -153,6 +156,7 @@ export async function applyResourcePoolToInstance(data: {
   hostId: number
   resourceType: RedeemCodeType
   amount: number
+  poolDebitAmount?: number
   remark?: string
   instanceResources?: {
     cpu?: number
@@ -165,7 +169,15 @@ export async function applyResourcePoolToInstance(data: {
     diskUsed?: number
   }
   monthlyTrafficDelta?: bigint
-}): Promise<boolean> {
+}): Promise<number | null> {
+  if (!Number.isSafeInteger(data.amount) || data.amount <= 0 || data.amount > MAX_RESOURCE_POOL_APPLY_AMOUNT) {
+    throw new Error('Invalid resource pool apply amount')
+  }
+  const poolDebitAmount = data.poolDebitAmount ?? data.amount
+  if (!Number.isSafeInteger(poolDebitAmount) || poolDebitAmount <= 0 || poolDebitAmount > data.amount) {
+    throw new Error('Invalid resource pool debit amount')
+  }
+
   const field = RESOURCE_FIELD_MAP[data.resourceType]
   if (!field) {
     throw new Error(`Invalid resource type: ${data.resourceType}`)
@@ -179,26 +191,26 @@ export async function applyResourcePoolToInstance(data: {
     if (field === 'cpu') {
       decrementResult = await tx.$executeRaw`
         UPDATE "user_resource_pools"
-        SET "cpu" = "cpu" - ${data.amount}
+        SET "cpu" = "cpu" - ${poolDebitAmount}
         WHERE "user_id" = ${data.userId}
-          AND "cpu" >= ${data.amount}
+          AND "cpu" >= ${poolDebitAmount}
       `
     } else if (field === 'memory') {
       decrementResult = await tx.$executeRaw`
         UPDATE "user_resource_pools"
-        SET "memory" = "memory" - ${data.amount}
+        SET "memory" = "memory" - ${poolDebitAmount}
         WHERE "user_id" = ${data.userId}
-          AND "memory" >= ${data.amount}
+          AND "memory" >= ${poolDebitAmount}
       `
     } else if (field === 'disk') {
       decrementResult = await tx.$executeRaw`
         UPDATE "user_resource_pools"
-        SET "disk" = "disk" - ${data.amount}
+        SET "disk" = "disk" - ${poolDebitAmount}
         WHERE "user_id" = ${data.userId}
-          AND "disk" >= ${data.amount}
+          AND "disk" >= ${poolDebitAmount}
       `
     } else {
-      const amount = BigInt(data.amount)
+      const amount = BigInt(poolDebitAmount)
       decrementResult = await tx.$executeRaw`
         UPDATE "user_resource_pools"
         SET "traffic" = "traffic" - ${amount}
@@ -208,29 +220,75 @@ export async function applyResourcePoolToInstance(data: {
     }
 
     if (decrementResult === 0) {
-      return false
+      return null
     }
 
-    await tx.resourcePoolLog.create({
+    const applyLog = await tx.resourcePoolLog.create({
       data: {
         userId: data.userId,
         action: 'apply',
         resourceType: data.resourceType,
-        amount: -data.amount,
+        amount: -poolDebitAmount,
         instanceId: data.instanceId,
-        remark: data.remark
+        remark: data.resourceType === 't'
+          ? data.remark
+          : `${RESOURCE_POOL_INCUS_PENDING_PREFIX}${data.remark ?? ''}`
       }
     })
 
     if (data.hostResourceDelta) {
-      await tx.host.update({
+      const cpuDelta = data.hostResourceDelta.cpuUsed ?? 0
+      const memoryDelta = data.hostResourceDelta.memoryUsed ?? 0
+      const diskDelta = data.hostResourceDelta.diskUsed ?? 0
+      if (cpuDelta < 0 || memoryDelta < 0 || diskDelta < 0) {
+        throw new Error('Resource amounts must be non-negative')
+      }
+
+      const host = await tx.host.findUnique({
         where: { id: data.hostId },
-        data: {
-          ...(data.hostResourceDelta.cpuUsed !== undefined ? { cpuUsed: { increment: data.hostResourceDelta.cpuUsed } } : {}),
-          ...(data.hostResourceDelta.memoryUsed !== undefined ? { memoryUsed: { increment: data.hostResourceDelta.memoryUsed } } : {}),
-          ...(data.hostResourceDelta.diskUsed !== undefined ? { diskUsed: { increment: data.hostResourceDelta.diskUsed } } : {})
+        select: {
+          cpuAllowanceMax: true,
+          memoryMax: true,
+          storageSize: true
         }
       })
+      if (!host) {
+        throw new Error('HOST_NOT_FOUND')
+      }
+
+      const cpuLimit = host.cpuAllowanceMax || 0
+      const memoryLimit = host.memoryMax || 0
+      const diskLimit = host.storageSize > 0 ? host.storageSize * 1024 : 0
+      if (
+        (cpuLimit > 0 && cpuDelta > cpuLimit) ||
+        (memoryLimit > 0 && memoryDelta > memoryLimit) ||
+        (diskLimit > 0 && diskDelta > diskLimit)
+      ) {
+        throw new Error('HOST_RESOURCES_INSUFFICIENT')
+      }
+
+      const applyWhere: Prisma.HostWhereInput = { id: data.hostId }
+      if (cpuLimit > 0) {
+        applyWhere.cpuUsed = { lte: cpuLimit - cpuDelta }
+      }
+      if (memoryLimit > 0) {
+        applyWhere.memoryUsed = { lte: memoryLimit - memoryDelta }
+      }
+      if (diskLimit > 0) {
+        applyWhere.diskUsed = { lte: diskLimit - diskDelta }
+      }
+
+      const hostUpdate = await tx.host.updateMany({
+        where: applyWhere,
+        data: {
+          cpuUsed: { increment: cpuDelta },
+          memoryUsed: { increment: memoryDelta },
+          diskUsed: { increment: diskDelta }
+        }
+      })
+      if (hostUpdate.count === 0) {
+        throw new Error('HOST_RESOURCES_INSUFFICIENT')
+      }
     }
 
     if (data.instanceResources) {
@@ -248,8 +306,67 @@ export async function applyResourcePoolToInstance(data: {
       `
     }
 
-    return true
+    return applyLog.id
   })
+}
+
+/**
+ * 获取尚未确认 Incus patch 的申领，供 DB 期望状态幂等重放。
+ */
+export async function getResourcePoolApplyReconciliationCandidates(): Promise<Array<{
+  instanceId: number
+  resourceTypes: RedeemCodeType[]
+  pendingApplications: Array<{ id: number; resourceType: RedeemCodeType }>
+}>> {
+  const appliedResources = await prisma.resourcePoolLog.findMany({
+    where: {
+      action: 'apply',
+      instanceId: { not: null },
+      remark: { startsWith: RESOURCE_POOL_INCUS_PENDING_PREFIX },
+      instance: {
+        status: { in: ['running', 'stopped'] }
+      }
+    },
+    select: {
+      id: true,
+      instanceId: true,
+      resourceType: true
+    }
+  })
+
+  const grouped = new Map<number, Array<{ id: number; resourceType: RedeemCodeType }>>()
+  for (const applied of appliedResources) {
+    if (applied.instanceId === null) continue
+    const pendingApplications = grouped.get(applied.instanceId) ?? []
+    pendingApplications.push({ id: applied.id, resourceType: applied.resourceType })
+    grouped.set(applied.instanceId, pendingApplications)
+  }
+
+  return Array.from(grouped, ([instanceId, pendingApplications]) => ({
+    instanceId,
+    resourceTypes: Array.from(new Set(pendingApplications.map(application => application.resourceType))),
+    pendingApplications
+  }))
+}
+
+/** 确认 Incus 已达到 DB 期望状态，并清除可重放标记。 */
+export async function markResourcePoolAppliesReconciled(logIds: number[]): Promise<void> {
+  if (logIds.length === 0) return
+
+  const logs = await prisma.resourcePoolLog.findMany({
+    where: {
+      id: { in: logIds },
+      action: 'apply',
+      remark: { startsWith: RESOURCE_POOL_INCUS_PENDING_PREFIX }
+    },
+    select: { id: true, remark: true }
+  })
+  if (logs.length === 0) return
+
+  await prisma.$transaction(logs.map(log => prisma.resourcePoolLog.update({
+    where: { id: log.id },
+    data: { remark: log.remark?.slice(RESOURCE_POOL_INCUS_PENDING_PREFIX.length) || null }
+  })))
 }
 
 /**
@@ -295,12 +412,14 @@ export async function getResourcePoolLogs(
       id: log.id,
       action: log.action,
       resourceType: log.resourceType,
-      amount: log.amount,
+      amount: log.amount.toString(),
       instance: log.instance ? {
         id: log.instance.id,
         name: log.instance.name
       } : null,
-      remark: log.remark,
+      remark: log.remark?.startsWith(RESOURCE_POOL_INCUS_PENDING_PREFIX)
+        ? log.remark.slice(RESOURCE_POOL_INCUS_PENDING_PREFIX.length)
+        : log.remark,
       createdAt: log.createdAt.toISOString()
     })),
     total

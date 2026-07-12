@@ -183,7 +183,8 @@ async function buildBatchRenewPreviewItem(userId: number, instanceId: number): P
       id: true,
       name: true,
       userId: true,
-      packagePlanId: true
+      packagePlanId: true,
+      status: true
     }
   })
 
@@ -207,6 +208,19 @@ async function buildBatchRenewPreviewItem(userId: number, instanceId: number): P
       canRenew: false,
       autoRenew: false,
       reason: BATCH_HIDDEN_REASON,
+      isHostedInstance: false,
+      daysUntilExpire: null,
+      options: []
+    }
+  }
+
+  if (instance.status === 'deleted') {
+    return {
+      id: instance.id,
+      name: instance.name,
+      canRenew: false,
+      autoRenew: false,
+      reason: '实例已删除，无法续费',
       isHostedInstance: false,
       daysUntilExpire: null,
       options: []
@@ -326,6 +340,16 @@ async function executeRenewForUser(
       success: false,
       skipped: true,
       reason: BATCH_HIDDEN_REASON
+    }
+  }
+
+  if (instance.status === 'deleted') {
+    return {
+      id: instance.id,
+      name: instance.name,
+      success: false,
+      skipped: true,
+      reason: '实例已删除，无法续费'
     }
   }
 
@@ -476,99 +500,13 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    const { user } = request
     const instanceId = parsePositiveRouteId(request.params.id)
-    const affCodeInput = request.body.affCode?.trim()
 
     if (!instanceId) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
     }
 
-    if (!affCodeInput || affCodeInput.length < 3) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
-    }
-
-    const instance = await prisma.instance.findUnique({
-      where: { id: instanceId },
-      include: {
-        affBinding: true,
-        host: {
-          select: {
-            name: true,
-            user: {
-              select: { role: true }
-            }
-          }
-        }
-      }
-    })
-
-    if (!instance) {
-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
-    }
-
-    // 只有实例所有者可以自行绑定优惠码
-    if (instance.userId !== user.id) {
-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
-    }
-
-    if (instance.status === 'deleted') {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
-    }
-
-    if (!instance.packagePlanId) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
-    }
-
-    if (await checkExchangeBillingLock(instanceId, reply)) return
-
-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
-    const isHostedInstance = instance.host?.user.role === 'user'
-      || instance.host?.name.toLowerCase().startsWith('peer')
-    if (isHostedInstance) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
-    }
-
-    if (instance.affBinding) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
-    }
-
-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
-    if (!validation.valid || !validation.affCode) {
-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
-    }
-
-    try {
-      await db.createAffBinding(instance.id, validation.affCode.id)
-    } catch (error: any) {
-      if (error?.code === 'P2002') {
-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
-      }
-      if (error?.code === 'P2003') {
-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
-      }
-      request.log.error(error, '用户绑定AFF优惠码失败')
-      return reply.code(500).send({ error: '绑定优惠码失败' })
-    }
-
-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
-    const discountPercent = Math.round(discountRate * 100)
-
-    await createLog(
-      user.id,
-      'instance',
-      'instance.apply_aff',
-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
-      'success',
-      { instanceId: instance.id }
-    )
-
-    return {
-      success: true,
-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
-      discountRate,
-      discountPercent
-    }
+    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
   })
 
   // ==================== 手动续费 ====================
@@ -608,6 +546,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     // 只有实例所有者可以续费
     if (instance.userId !== user.id) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+    }
+
+    if (instance.status === 'deleted') {
+      return reply.code(400).send({ error: '实例已删除，无法续费', code: 'INSTANCE_DELETED' })
     }
 
     // 免费实例无需续费
@@ -833,6 +775,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
     }
 
+    if (instance.status === 'deleted') {
+      return reply.code(400).send({ error: '实例已删除，无法改配', code: 'INSTANCE_DELETED' })
+    }
+
     // 免费实例不支持升降级
     if (!instance.packagePlanId) {
       return reply.code(400).send({ error: '免费实例不支持升降级', code: 'FREE_INSTANCE' })
@@ -963,6 +909,10 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
     // 只有实例所有者可以升降级
     if (instance.userId !== user.id) {
       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+    }
+
+    if (instance.status === 'deleted') {
+      return reply.code(400).send({ error: '实例已删除，无法改配', code: 'INSTANCE_DELETED' })
     }
 
     // 免费实例不支持升降级

@@ -20,6 +20,7 @@
     "risk_control",
     "data_recovery",
     "resource_delivery_exception",
-    "delete_or_reinstall_instance"
+    "delete_or_reinstall_instance",
+    "credential_or_backend_request"
   ]
 }

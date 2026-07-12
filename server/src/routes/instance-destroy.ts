@@ -4,7 +4,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import type { InstanceStatus } from '@prisma/client'
+import type { InstanceStatus, Prisma } from '@prisma/client'
 import * as db from '../db/index.js'
 import { prisma } from '../db/prisma.js'
 import { createLog } from '../db/logs.js'
@@ -12,9 +12,11 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 import { sendHostManagedInstanceNotification, sendNotification } from '../lib/notifier.js'
 import { sendInstanceDestroyRefundEmail } from '../lib/mailer.js'
 import { sendReleaseNotification } from '../lib/release-notifier.js'
+import { sanitizeTokensInString } from '../lib/log-sanitizer.js'
 import { collectTrafficForRunningInstance } from '../services/instance-traffic-collector.js'
 import {
   INSTANCE_OPERATION_LOCK_NAMESPACE,
+  USER_AFF_BALANCE_LOCK_NAMESPACE,
   USER_BALANCE_LOCK_NAMESPACE,
   USER_DESTROY_BILLING_LOCK_NAMESPACE,
   advisoryTransactionLock,
@@ -89,7 +91,7 @@ async function getExchangeDestroyLock(instanceId: number, client: any = prisma):
   const listing = await client.exchangeListing.findFirst({
     where: {
       instanceId,
-      status: { in: ['active', 'paused', 'locked', 'delivery_failed'] }
+      status: { in: ['active', 'locked', 'delivery_failed'] }
     },
     select: { id: true, status: true }
   })
@@ -100,7 +102,7 @@ async function getExchangeDestroyLock(instanceId: number, client: any = prisma):
   const order = await client.exchangeOrder.findFirst({
     where: {
       instanceId,
-      status: { in: ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed'] }
+      status: { in: ['delivering', 'confirming', 'disputed', 'manual_review', 'failed'] }
     },
     select: { id: true, status: true }
   })
@@ -167,6 +169,107 @@ async function getDestroyBlockingTask(instanceId: number, client: any = prisma):
 
 function roundMoney(value: number): number {
   return Number(value.toFixed(2))
+}
+
+export async function reverseInstanceAffCommissionForRefund(params: {
+  tx: Prisma.TransactionClient
+  instanceId: number
+  refundAmount: number
+  remark: string
+}): Promise<void> {
+  const { tx, instanceId, refundAmount, remark } = params
+  if (!Number.isFinite(refundAmount) || refundAmount <= 0) return
+
+  const [affBinding, paidAmountResult] = await Promise.all([
+    tx.affBinding.findUnique({
+      where: { instanceId },
+      select: { affCode: { select: { id: true, userId: true } } }
+    }),
+    tx.instanceBillingRecord.aggregate({
+      where: {
+        instanceId,
+        type: { in: ['newPurchase', 'renew', 'upgrade', 'downgrade'] },
+        amount: { gt: 0 }
+      },
+      _sum: { amount: true }
+    })
+  ])
+
+  if (!affBinding) return
+  const originalPaidAmount = Number(paidAmountResult._sum.amount || 0)
+  if (!Number.isFinite(originalPaidAmount) || originalPaidAmount <= 0) return
+
+  const refundRatio = Math.min(1, refundAmount / originalPaidAmount)
+  const affLogs = await tx.affLog.findMany({
+    where: {
+      instanceId,
+      affCodeId: affBinding.affCode.id,
+      userId: affBinding.affCode.userId,
+      type: { in: ['new_purchase', 'renew'] }
+    },
+    select: { type: true, amount: true, originalAmount: true }
+  })
+
+  for (const type of ['new_purchase', 'renew'] as const) {
+    const typeLogs = affLogs.filter(log => log.type === type)
+    const issuedCommission = roundMoney(typeLogs.reduce(
+      (sum, log) => sum + Math.max(0, Number(log.amount)),
+      0
+    ))
+    const alreadyReversed = roundMoney(typeLogs.reduce(
+      (sum, log) => sum + Math.max(0, -Number(log.amount)),
+      0
+    ))
+    const remainingCommission = roundMoney(Math.max(0, issuedCommission - alreadyReversed))
+    const commissionAmount = Math.min(
+      remainingCommission,
+      roundMoney(issuedCommission * refundRatio)
+    )
+    if (commissionAmount <= 0) continue
+
+    await advisoryTransactionLock(tx, USER_AFF_BALANCE_LOCK_NAMESPACE, affBinding.affCode.userId)
+    const affUser = await tx.user.findUniqueOrThrow({
+      where: { id: affBinding.affCode.userId },
+      select: { affBalance: true }
+    })
+    const affBalanceBefore = Number(affUser.affBalance)
+    const updatedAffUser = await tx.user.update({
+      where: { id: affBinding.affCode.userId },
+      data: { affBalance: { decrement: commissionAmount } },
+      select: { affBalance: true }
+    })
+
+    await tx.affLog.create({
+      data: {
+        userId: affBinding.affCode.userId,
+        type,
+        amount: -commissionAmount,
+        affCodeId: affBinding.affCode.id,
+        instanceId,
+        originalAmount: roundMoney(typeLogs.reduce(
+          (sum, log) => Number(log.amount) > 0
+            ? sum + Math.max(0, Number(log.originalAmount || 0))
+            : sum,
+          0
+        )),
+        balanceBefore: affBalanceBefore,
+        balanceAfter: Number(updatedAffUser.affBalance),
+        remark
+      }
+    })
+
+    await tx.affCode.update({
+      where: { id: affBinding.affCode.id },
+      data: { totalEarnings: { decrement: commissionAmount } }
+    })
+
+    if (type === 'new_purchase' && commissionAmount >= remainingCommission) {
+      await tx.affCode.updateMany({
+        where: { id: affBinding.affCode.id, usedCount: { gt: 0 } },
+        data: { usedCount: { decrement: 1 } }
+      })
+    }
+  }
 }
 
 async function claimInstanceForUserDestroy(
@@ -309,9 +412,16 @@ async function settleUserDestroyBilling(params: {
         }
       })
 
+      await reverseInstanceAffCommissionForRefund({
+        tx,
+        instanceId,
+        refundAmount,
+        remark: `用户销毁实例返利冲正：${instance.name}`
+      })
+
       await db.deductHostingBalance(
         instance.hostId,
-        refundAmount,
+        refundableValue,
         instanceId,
         `用户销毁托管实例退款扣除：${instance.name}`,
         tx
@@ -332,6 +442,83 @@ async function settleUserDestroyBilling(params: {
 
     return { refundAmount, feeAmount, isFirstTime }
   })
+}
+
+async function recordDestroyBillingCompensation(params: {
+  requestUserId: number
+  instance: {
+    id: number
+    userId: number
+    hostId: number
+    name: string
+  }
+  refundableValue: number
+  feeWaiver: boolean
+  error: unknown
+}): Promise<void> {
+  const { requestUserId, instance, refundableValue, feeWaiver, error } = params
+  const lastError = sanitizeTokensInString(error instanceof Error ? error.message : String(error)).slice(0, 1000)
+  const detail = {
+    source: 'instance_destroy_billing',
+    requestUserId,
+    refundableValue,
+    feeWaiver,
+    failedAt: new Date().toISOString()
+  } satisfies Prisma.InputJsonObject
+
+  await prisma.$transaction(async (tx) => {
+    const deliveryCase = await tx.deliveryAssuranceCase.create({
+      data: {
+        taskId: null,
+        instanceId: instance.id,
+        hostId: instance.hostId,
+        userId: instance.userId,
+        status: 'pending_manual',
+        issueType: 'task_failed',
+        severity: 'critical',
+        retryable: false,
+        title: `实例销毁退款结算失败：${instance.name}`,
+        lastError,
+        detail
+      }
+    })
+
+    await tx.deliveryAssuranceAction.create({
+      data: {
+        caseId: deliveryCase.id,
+        actionType: 'detected',
+        actorUserId: requestUserId,
+        actorUsername: null,
+        note: 'Incus 实例已销毁，但退款结算失败，等待人工补偿。',
+        detail
+      }
+    })
+  })
+}
+
+async function settleUserDestroyBillingWithCompensation(params: {
+  requestUserId: number
+  instance: {
+    id: number
+    userId: number
+    hostId: number
+    name: string
+  }
+  refundableValue: number
+  feeWaiver: boolean
+  logger: { error: (...args: any[]) => void }
+}): Promise<{ refundAmount: number; feeAmount: number; isFirstTime: boolean }> {
+  const { logger, ...billingParams } = params
+  try {
+    return await settleUserDestroyBilling(billingParams)
+  } catch (error) {
+    try {
+      await recordDestroyBillingCompensation({ ...billingParams, error })
+    } catch (compensationError) {
+      logger.error({ compensationError, instanceId: params.instance.id }, '销毁退款结算失败且补偿工单落库失败')
+    }
+    throw error
+  }
 }
 
 async function buildBatchDestroyPreviewItem(userId: number, instanceId: number): Promise<BatchDestroyPreviewItem> {
@@ -661,11 +848,12 @@ async function executeDestroyForUser(
     }
 
     if (!isFreeInstance) {
-      const billingResult = await settleUserDestroyBilling({
+      const billingResult = await settleUserDestroyBillingWithCompensation({
         requestUserId: user.id,
         instance,
         refundableValue,
-        feeWaiver
+        feeWaiver,
+        logger
       })
       refundAmount = billingResult.refundAmount
       feeAmount = billingResult.feeAmount
@@ -1174,11 +1362,12 @@ export default async function instanceDestroyRoutes(fastify: FastifyInstance) {
       }
 
       if (!isFreeInstance) {
-        const billingResult = await settleUserDestroyBilling({
+        const billingResult = await settleUserDestroyBillingWithCompensation({
           requestUserId: user.id,
           instance,
           refundableValue,
-          feeWaiver
+          feeWaiver,
+          logger: request.log
         })
         refundAmount = billingResult.refundAmount
         feeAmount = billingResult.feeAmount

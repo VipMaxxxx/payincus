@@ -101,6 +101,23 @@ assert.equal(
 )
 
 assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
+assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
+assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
+assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
+assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
+assert.equal(
+  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
+  `https://x/cb?token=${redacted}&x=1`
+)
+
+let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
+for (let depth = 0; depth < 11; depth += 1) {
+  deeplyNested = { nested: deeplyNested }
+}
+const deeplySanitized = sanitizeObject(deeplyNested)
+assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
+assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
+
 assert.equal(isSensitiveField('access_token'), true)
 assert.equal(isSensitiveField('client_secret'), true)
 assert.equal(isSensitiveField('signature'), true)

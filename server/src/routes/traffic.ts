@@ -5,7 +5,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import * as trafficDb from '../db/traffic.js'
 import * as db from '../db/index.js'
-import { prisma } from '../db/prisma.js'
 import {
     INSTANCE_TRAFFIC_RESET_LOCK_NAMESPACE,
     USER_BALANCE_LOCK_NAMESPACE,
@@ -15,7 +14,10 @@ import { formatBytes } from '../services/traffic-notifier.js'
 import {
     calculateInstanceTrafficStatus,
     calculateUserTrafficStatus,
+    advanceTrafficSnapshot,
     formatLocalDate,
+    getEffectiveLimit,
+    getVipExtraTrafficQuota,
     getTrafficPeriod
 } from '../services/traffic-utils.js'
 import { apiError, ErrorCode } from '../lib/errors.js'
@@ -42,15 +44,15 @@ function normalizeMoney(value: number): number {
     return Number(value.toFixed(2))
 }
 
-function resolveTrafficResetPriceCents(instance: {
+function resolveTrafficResetPriceYuan(instance: {
     package?: { trafficResetPrice: unknown } | null
     packagePlan?: { trafficResetPrice: unknown } | null
 }): number {
     const planPrice = instance.packagePlan?.trafficResetPrice
     if (planPrice !== null && planPrice !== undefined) {
-        return Math.max(0, Math.round(Number(planPrice) || 0))
+        return normalizeMoney(Math.max(0, Number(planPrice) || 0))
     }
-    return Math.max(0, Math.round(Number(instance.package?.trafficResetPrice) || 0))
+    return normalizeMoney(Math.max(0, Number(instance.package?.trafficResetPrice) || 0))
 }
 
 /**
@@ -208,16 +210,19 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
         }
         const trafficResetDay = host?.traffic_reset_day ?? 1
         const { periodStart, periodEnd } = getTrafficPeriod(trafficResetDay)
+        const vipExtraTrafficQuota = await getVipExtraTrafficQuota(instance.userId, instance.monthlyTrafficLimit)
+        const effectiveInstanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, vipExtraTrafficQuota)
 
         return {
             monthlyUsed: serializeBigInt(instance.monthlyTrafficUsed),
             monthlyUsedFormatted: formatBytes(instance.monthlyTrafficUsed),
-            monthlyLimit: serializeBigInt(instance.monthlyTrafficLimit),
-            monthlyLimitFormatted: instance.monthlyTrafficLimit
-                ? formatBytes(instance.monthlyTrafficLimit)
+            monthlyLimit: serializeBigInt(effectiveInstanceLimit),
+            monthlyLimitFormatted: effectiveInstanceLimit
+                ? formatBytes(effectiveInstanceLimit)
                 : null,
+            vipExtraQuota: serializeBigInt(vipExtraTrafficQuota),
             trafficStatus: instance.trafficStatus,
-            percentage: calculatePercentage(instance.monthlyTrafficUsed, instance.monthlyTrafficLimit),
+            percentage: calculatePercentage(instance.monthlyTrafficUsed, effectiveInstanceLimit),
             trafficResetDay,
             periodStart: formatLocalDate(periodStart),
             periodEnd: formatLocalDate(periodEnd)
@@ -317,7 +322,9 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
         await trafficDb.updateInstanceTrafficLimit(instanceId, limit)
         const instance = await trafficDb.getInstanceTrafficInfo(instanceId)
         if (instance) {
-            const status = calculateInstanceTrafficStatus(instance.monthlyTrafficUsed, instance.monthlyTrafficLimit)
+            const vipExtraTrafficQuota = await getVipExtraTrafficQuota(instance.userId, instance.monthlyTrafficLimit)
+            const effectiveInstanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, vipExtraTrafficQuota)
+            const status = calculateInstanceTrafficStatus(instance.monthlyTrafficUsed, effectiveInstanceLimit)
             await trafficDb.updateInstanceTrafficStatus(instanceId, status)
         }
         const { reconcileTrafficStateForInstanceIds } = await import('../services/traffic-scheduler.js')
@@ -375,7 +382,7 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
 
         if (shouldChargeOwner) {
             try {
-                const result = await prisma.$transaction(async tx => {
+                const result = await trafficDb.withInstanceTrafficResetLock(instanceId, async (tx, resetSample) => {
                     const resetLocked = await tryAdvisoryTransactionLock(tx, INSTANCE_TRAFFIC_RESET_LOCK_NAMESPACE, instanceId)
                     if (!resetLocked) {
                         throw new Error('流量重置正在处理，请稍后重试')
@@ -388,9 +395,21 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
                             name: true,
                             userId: true,
                             status: true,
+                            monthlyTrafficUsed: true,
                             package: { select: { trafficResetPrice: true } },
                             packagePlan: { select: { trafficResetPrice: true } },
-                            user: { select: { balance: true } }
+                            user: {
+                                select: {
+                                    balance: true,
+                                    quota: {
+                                        select: {
+                                            monthlyTrafficLimit: true,
+                                            monthlyTrafficUsed: true,
+                                            extraTrafficQuota: true
+                                        }
+                                    }
+                                }
+                            }
                         }
                     })
 
@@ -401,8 +420,7 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
                         throw new Error('Access denied')
                     }
 
-                    const priceCents = resolveTrafficResetPriceCents(currentInstance)
-                    const priceYuan = normalizeMoney(priceCents / 100)
+                    const priceYuan = resolveTrafficResetPriceYuan(currentInstance)
 
                     if (priceYuan > 0) {
                         const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, currentInstance.userId)
@@ -448,6 +466,7 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
                         })
                     }
 
+                    await advanceTrafficSnapshot(tx, instanceId, resetSample)
                     await tx.instance.updateMany({
                         where: {
                             id: instanceId,
@@ -458,6 +477,23 @@ export default async function trafficRoutes(fastify: FastifyInstance): Promise<v
                             trafficStatus: 'NORMAL'
                         }
                     })
+                    const userQuota = currentInstance.user.quota
+                    if (userQuota) {
+                        const monthlyTrafficUsed = userQuota.monthlyTrafficUsed > currentInstance.monthlyTrafficUsed
+                            ? userQuota.monthlyTrafficUsed - currentInstance.monthlyTrafficUsed
+                            : 0n
+                        const effectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, 0n)
+
+                        await tx.userQuota.update({
+                            where: { userId: currentInstance.userId },
+                            data: {
+                                monthlyTrafficUsed,
+                                extraTrafficQuota: 0n,
+                                extraTrafficUsed: 0n,
+                                trafficStatus: calculateUserTrafficStatus(monthlyTrafficUsed, effectiveLimit)
+                            }
+                        })
+                    }
 
                     return { price: priceYuan }
                 })

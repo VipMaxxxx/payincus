@@ -12,6 +12,7 @@ import { apiError, ErrorCode } from '../lib/errors.js'
 import { createCaddyClient } from '../lib/caddy-client.js'
 import { getDnsRecordType } from '../lib/network-address.js'
 import { requireInstanceViewPermission } from '../lib/permission.js'
+import { resolvePublicHostname } from '../lib/outbound-security.js'
 import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
 import {
   createProxySite,
@@ -952,6 +953,7 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
 
     // 尝试通过 TLS 连接获取证书信息
     try {
+      const [certificateAddress] = await resolvePublicHostname(site.domain)
       const certInfo = await new Promise<{
         valid: boolean
         issuer: string
@@ -961,7 +963,7 @@ export default async function proxySitesRoutes(fastify: FastifyInstance) {
         daysRemaining: number
       }>((resolve, reject) => {
         const socket = tls.connect({
-          host: site.domain,
+          host: certificateAddress.address,
           port: 443,
           servername: site.domain,
           rejectUnauthorized: false, // 允许自签名证书

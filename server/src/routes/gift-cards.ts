@@ -15,6 +15,7 @@
  * 用户：
  *   POST   /api/gift-cards/user/redeem       — 兑换码充值
  *   POST   /api/gift-cards/user/generate     — 用余额生成兑换码
+ *   POST   /api/gift-cards/user/:id/revoke   — 撤销未兑换的余额礼品卡并退款
  *   GET    /api/gift-cards/user/mine         — 我的兑换码
  */
 
@@ -121,6 +122,15 @@ function mapGiftCardError(reply: FastifyReply, message: string) {
   if (message === 'GIFT_CARD_BATCH_TOO_LARGE') {
     return reply.code(400).send(apiError(ErrorCode.GIFT_CARD_BATCH_TOO_LARGE))
   }
+  if (message === 'GIFT_CARD_BALANCE_EXCEEDS_FACE_VALUE') {
+    return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Balance value cannot exceed face value'))
+  }
+  if (message === 'GIFT_CARD_BATCH_VALUE_TOO_LARGE') {
+    return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Gift card batch total face value is too large'))
+  }
+  if (message === 'GIFT_CARD_NOT_ISSUER') {
+    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'Only the issuer can revoke this gift card'))
+  }
   return null
 }
 
@@ -158,6 +168,9 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
     if (balanceValue === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid balance value'))
     }
+    if (balanceValue > faceValue) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Balance value cannot exceed face value'))
+    }
 
     const expiresAtRaw = normalizeOptionalString(body.expiresAt, 64)
     let expiresAt: Date | null = null
@@ -187,6 +200,8 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
       return reply.code(201).send({ giftCard })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      const mapped = mapGiftCardError(reply, msg)
+      if (mapped) return mapped
       return reply.code(500).send(apiError(ErrorCode.INTERNAL_ERROR, msg))
     }
   })
@@ -223,8 +238,14 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
     if (balanceValue === null) {
       return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Invalid balance value'))
     }
+    if (balanceValue > faceValue) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Balance value cannot exceed face value'))
+    }
 
     const count = parseClampedPositiveInteger(body.count, 1, giftCardDb.GIFT_CARD_CONSTANTS.MAX_BATCH_COUNT)
+    if (faceValue * count > giftCardDb.GIFT_CARD_CONSTANTS.MAX_BATCH_FACE_VALUE) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'Gift card batch total face value is too large'))
+    }
 
     const expiresAtRaw = normalizeOptionalString(body.expiresAt, 64)
     let expiresAt: Date | null = null
@@ -263,6 +284,8 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      const mapped = mapGiftCardError(reply, msg)
+      if (mapped) return mapped
       return reply.code(500).send(apiError(ErrorCode.INTERNAL_ERROR, msg))
     }
   })
@@ -482,6 +505,27 @@ export default async function giftCardsRoutes(fastify: FastifyInstance) {
         },
         newBalance: result.balanceAfter
       })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const mapped = mapGiftCardError(reply, msg)
+      if (mapped) return mapped
+      return reply.code(500).send(apiError(ErrorCode.INTERNAL_ERROR, msg))
+    }
+  })
+
+  // 用户撤销自己用余额生成且尚未兑换的礼品卡，原额退回余额
+  fastify.post('/user/:id/revoke', {
+    onRequest: [fastify.authenticate],
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+  }, async (request, reply) => {
+    const { user } = request
+    const id = parsePositiveId((request.params as { id: string }).id)
+    if (id === null) return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+
+    try {
+      const result = await giftCardDb.revokeGiftCard(id, user.id)
+      await createLog(user.id, 'gift_card', 'revoke', `Revoked gift card id=${id}`, 'success')
+      return result
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       const mapped = mapGiftCardError(reply, msg)

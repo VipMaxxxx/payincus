@@ -29,6 +29,68 @@ const TERMINAL_LIMITS = {
     maxPerInstance: 3,  // 单实例最多 3 个终端连接
 }
 
+const pendingTerminalConnectionsByUser = new Map<number, number>()
+const pendingTerminalConnectionsByInstance = new Map<number, number>()
+
+type TerminalConnectionReservation =
+    | { allowed: true; release: () => void }
+    | { allowed: false; scope: 'user' | 'instance'; current: number; limit: number }
+
+function decrementPendingConnectionCount(counts: Map<number, number>, key: number): void {
+    const nextCount = (counts.get(key) || 0) - 1
+    if (nextCount > 0) {
+        counts.set(key, nextCount)
+    } else {
+        counts.delete(key)
+    }
+}
+
+/**
+ * 同步检查活跃会话并登记 pending 名额。Node 事件循环不会在该函数中间切换任务，
+ * 因此用户和实例两个维度的上限判断与预留处于同一个原子区。
+ */
+function claimTerminalConnection(userId: number, instanceId: number): TerminalConnectionReservation {
+    const stats = getActiveSessionStats()
+    const currentUserConnections =
+        (stats.byUser.get(userId) || 0) + (pendingTerminalConnectionsByUser.get(userId) || 0)
+    if (currentUserConnections >= TERMINAL_LIMITS.maxPerUser) {
+        return {
+            allowed: false,
+            scope: 'user',
+            current: currentUserConnections,
+            limit: TERMINAL_LIMITS.maxPerUser
+        }
+    }
+
+    const currentInstanceConnections =
+        (stats.byInstance.get(instanceId) || 0) + (pendingTerminalConnectionsByInstance.get(instanceId) || 0)
+    if (currentInstanceConnections >= TERMINAL_LIMITS.maxPerInstance) {
+        return {
+            allowed: false,
+            scope: 'instance',
+            current: currentInstanceConnections,
+            limit: TERMINAL_LIMITS.maxPerInstance
+        }
+    }
+
+    pendingTerminalConnectionsByUser.set(userId, (pendingTerminalConnectionsByUser.get(userId) || 0) + 1)
+    pendingTerminalConnectionsByInstance.set(
+        instanceId,
+        (pendingTerminalConnectionsByInstance.get(instanceId) || 0) + 1
+    )
+
+    let released = false
+    return {
+        allowed: true,
+        release: () => {
+            if (released) return
+            released = true
+            decrementPendingConnectionCount(pendingTerminalConnectionsByUser, userId)
+            decrementPendingConnectionCount(pendingTerminalConnectionsByInstance, instanceId)
+        }
+    }
+}
+
 const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
 
 // 注意：不再维护独立的 instanceTerminalCount 计数器
@@ -355,36 +417,7 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
             return
         }
 
-        // 10. 注册连接（连接计数由 terminal-proxy 统一管理）
-        registerConnection(clientIP, socket, user.id)
-
-        // 11. 创建终端会话前的最终检查（防止 TOCTOU 竞态条件）
-        // 重新获取最新统计数据，确保在异步操作期间没有其他连接建立
-        const finalStats = getActiveSessionStats()
-        const finalUserTerminals = finalStats.byUser.get(user.id) || 0
-        const finalInstanceConnections = finalStats.byInstance.get(instanceId) || 0
-        
-        if (finalUserTerminals >= TERMINAL_LIMITS.maxPerUser) {
-            safeSend(socket, JSON.stringify({
-                type: 'error',
-                code: 'USER_LIMIT_EXCEEDED',
-                message: `Too many terminal connections (${finalUserTerminals}/${TERMINAL_LIMITS.maxPerUser})`
-            }))
-            socket.close(4003, 'User terminal limit exceeded')
-            return
-        }
-        
-        if (finalInstanceConnections >= TERMINAL_LIMITS.maxPerInstance) {
-            safeSend(socket, JSON.stringify({
-                type: 'error',
-                code: 'INSTANCE_LIMIT_EXCEEDED',
-                message: `Too many terminal connections for this instance (${finalInstanceConnections}/${TERMINAL_LIMITS.maxPerInstance})`
-            }))
-            socket.close(4003, 'Instance terminal limit exceeded')
-            return
-        }
-
-        // 12. 创建终端会话
+        // 10. 创建终端会话
         // 获取套餐信息以确定实例类型（提前到 try 外以便 catch 块访问）
         let instanceType: 'vm' | 'container' = 'container'
         try {
@@ -394,7 +427,29 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
             // 获取套餐失败时默认使用 container
         }
 
+        // 原子预留终端名额；所有异步建连工作都必须发生在成功 claim 之后。
+        const reservation = claimTerminalConnection(user.id, instanceId)
+        if (!reservation.allowed) {
+            const isUserLimit = reservation.scope === 'user'
+            safeSend(socket, JSON.stringify({
+                type: 'error',
+                code: isUserLimit ? 'USER_LIMIT_EXCEEDED' : 'INSTANCE_LIMIT_EXCEEDED',
+                message: isUserLimit
+                    ? `Too many terminal connections (${reservation.current}/${reservation.limit})`
+                    : `Too many terminal connections for this instance (${reservation.current}/${reservation.limit})`
+            }))
+            socket.close(
+                4003,
+                isUserLimit ? 'User terminal limit exceeded' : 'Instance terminal limit exceeded'
+            )
+            return
+        }
+
         try {
+            // 建连中途客户端断开时立即释放 pending；release 本身幂等。
+            socket.once('close', reservation.release)
+            registerConnection(clientIP, socket, user.id)
+
             const session = await createTerminalSession(
                 socket as any,
                 host,
@@ -404,6 +459,9 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
                 instanceType,
                 authResult.sessionId
             )
+
+            // createTerminalSession 返回前已登记 activeSessions，pending 可安全释放。
+            reservation.release()
 
             // 记录连接日志（包含详细信息）
             const logDetails = [
@@ -415,29 +473,39 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
                 `session: ${session.id}`
             ].join(' | ')
 
-            await createLog(
-                user.id,
-                'terminal',
-                'terminal.connect',
-                `Terminal connected | ${logDetails}`,
-                'success',
-                { instanceId }
-            )
+            try {
+                await createLog(
+                    user.id,
+                    'terminal',
+                    'terminal.connect',
+                    `Terminal connected | ${logDetails}`,
+                    'success',
+                    { instanceId }
+                )
+            } catch (error) {
+                console.error(`[Terminal] Failed to record connection audit log for instance ${instanceId}:`, error)
+            }
 
             // 监听断开连接（连接计数由 terminal-proxy 统一管理）
             socket.on('close', async () => {
                 // 记录断开日志（包含详细信息）
-                await createLog(
-                    user.id,
-                    'terminal',
-                    'terminal.disconnect',
-                    `Terminal disconnected | ${logDetails}`,
-                    'success',
-                    { instanceId }
-                )
+                try {
+                    await createLog(
+                        user.id,
+                        'terminal',
+                        'terminal.disconnect',
+                        `Terminal disconnected | ${logDetails}`,
+                        'success',
+                        { instanceId }
+                    )
+                } catch (error) {
+                    console.error(`[Terminal] Failed to record disconnection audit log for instance ${instanceId}:`, error)
+                }
             })
 
         } catch (error) {
+            reservation.release()
+
             // 内部错误信息仅记录日志，不暴露给客户端
             const internalError = error instanceof Error ? error.message : String(error)
             console.error(`[Terminal] Failed to create session for instance ${instanceId}:`, internalError)

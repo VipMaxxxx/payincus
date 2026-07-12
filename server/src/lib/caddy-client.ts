@@ -4,17 +4,21 @@
  */
 
 import { Agent, request as undiciRequest } from 'undici'
+import { readFileSync } from 'node:fs'
 import { formatHostForUrl } from './network-address.js'
 
 // 请求超时配置（毫秒）
 const REQUEST_TIMEOUT = 30000 // 30秒
 const CONNECT_TIMEOUT = 10000 // 10秒
+const caddyAgentCache = new Map<string, Agent>()
 
 export interface CaddyClientConfig {
   host: string // 宿主机 IP 或域名
   port: number // Caddy API 端口 (默认 8444)
   username: string // Basic Auth 用户名
   password: string // Basic Auth 密码
+  caPath?: string // Caddy 管理端 TLS CA PEM 路径（未传时使用 CADDY_CA_PATH）
+  serverName?: string // TLS 证书名称（默认匹配安装脚本生成的 caddy-admin）
 }
 
 export interface CaddyRoute {
@@ -28,6 +32,16 @@ export interface CaddyRoute {
   terminal?: boolean
 }
 
+class CaddyApiError extends Error {
+  constructor(
+    readonly statusCode: number,
+    responseBody: string
+  ) {
+    super(`Caddy API error: ${statusCode} ${responseBody}`)
+    this.name = 'CaddyApiError'
+  }
+}
+
 /**
  * Caddy API 客户端类
  */
@@ -39,14 +53,37 @@ export class CaddyClient {
   constructor(config: CaddyClientConfig) {
     this.baseUrl = `https://${formatHostForUrl(config.host)}:${config.port}`
     this.authHeader = 'Basic ' + Buffer.from(`${config.username}:${config.password}`).toString('base64')
-    
-    // 创建 undici Agent，忽略自签名证书错误，配置超时
-    this.agent = new Agent({
-      connect: {
-        rejectUnauthorized: false,
-        timeout: CONNECT_TIMEOUT
-      }
-    })
+
+    const caPath = config.caPath?.trim() || process.env.CADDY_CA_PATH?.trim()
+    if (!caPath) {
+      throw new Error('Caddy TLS trust material is missing: configure caPath or CADDY_CA_PATH')
+    }
+
+    let ca: Buffer
+    try {
+      ca = readFileSync(caPath)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`Unable to read Caddy TLS CA: ${message}`)
+    }
+    const serverName = config.serverName?.trim() || process.env.CADDY_TLS_SERVER_NAME?.trim() || 'caddy-admin'
+    const agentKey = `${config.host}:${config.port}:${caPath}:${serverName}`
+    const cachedAgent = caddyAgentCache.get(agentKey)
+
+    // Basic Auth 凭证只能通过由固定 CA 验证的 TLS 连接发送。
+    if (cachedAgent) {
+      this.agent = cachedAgent
+    } else {
+      this.agent = new Agent({
+        connect: {
+          ca,
+          servername: serverName,
+          rejectUnauthorized: true,
+          timeout: CONNECT_TIMEOUT
+        }
+      })
+      caddyAgentCache.set(agentKey, this.agent)
+    }
   }
 
   /**
@@ -76,7 +113,7 @@ export class CaddyClient {
 
       if (response.statusCode >= 400) {
         const errorText = await response.body.text()
-        throw new Error(`Caddy API error: ${response.statusCode} ${errorText}`)
+        throw new CaddyApiError(response.statusCode, errorText)
       }
 
       // 某些请求没有响应体
@@ -154,61 +191,78 @@ export class CaddyClient {
 
     // 统一使用 sites 服务器
     const serverName = 'sites'
+    const serverPath = `/config/apps/http/servers/${serverName}`
+    const routesPath = `${serverPath}/routes`
 
-    // 策略：优先使用精确的 API 路径，避免影响 Caddyfile 定义的服务器
+    // routes 是数组；POST 只追加当前路由，不会替换现有路由集合。
     try {
-      // 尝试添加路由到现有服务器
-      await this.request('POST', `/config/apps/http/servers/${serverName}/routes`, route)
+      await this.request('POST', routesPath, route)
       return
     } catch (postError) {
-      // POST 失败，可能服务器不存在
-      const postErrorMsg = postError instanceof Error ? postError.message : String(postError)
-      console.log(`[Caddy] POST 路由失败: ${postErrorMsg}`)
+      // 网络、认证、5xx 等错误绝不能被当作服务器不存在。
+      if (!(postError instanceof CaddyApiError) || postError.statusCode !== 404) {
+        throw postError
+      }
     }
 
-    // 服务器不存在，创建它
+    // POST 的 404 之后再读取复核，区分 server 不存在与 routes 字段不存在。
+    let existingServer: { routes?: CaddyRoute[] } | undefined
+    try {
+      existingServer = await this.request<{ routes?: CaddyRoute[] }>('GET', serverPath)
+    } catch (getServerError) {
+      if (!(getServerError instanceof CaddyApiError) || getServerError.statusCode !== 404) {
+        throw getServerError
+      }
+    }
+
+    if (existingServer) {
+      if (Array.isArray(existingServer.routes)) {
+        await this.request('POST', routesPath, route)
+      } else {
+        // server 存在但 routes 字段不存在；只在精确字段路径严格创建数组。
+        await this.request('PUT', routesPath, [route])
+      }
+      return
+    }
+
+    // 已明确确认 sites 不存在；PUT 在对象路径上是严格创建，不会替换已有 server。
     const serverConfig: Record<string, unknown> = {
       listen: [':80', ':443'],
-      routes: [route]
-    }
-    
-    // 禁用自动 HTTPS 重定向（我们通过路由匹配控制）
-    serverConfig.automatic_https = {
-      disable_redirects: true
+      routes: [route],
+      automatic_https: {
+        disable_redirects: true
+      }
     }
 
     try {
-      // 尝试直接创建服务器
-      await this.request('PUT', `/config/apps/http/servers/${serverName}`, serverConfig)
+      await this.request('PUT', serverPath, serverConfig)
       return
     } catch (putError) {
-      const putErrorMsg = putError instanceof Error ? putError.message : String(putError)
-      console.log(`[Caddy] PUT 服务器失败: ${putErrorMsg}`)
-      
-      // 只有当是 404 错误时，才说明 http 应用不存在
-      if (!putErrorMsg.includes('404')) {
-        // 其他错误，直接抛出
+      // 只有明确 404 才可能是父级 http 应用不存在。
+      if (!(putError instanceof CaddyApiError) || putError.statusCode !== 404) {
         throw putError
       }
     }
 
-    // http 应用不存在，这是非常罕见的情况（Caddyfile 没有任何 HTTP 配置）
-    // 使用 PATCH 合并，不要使用 PUT 覆盖
-    console.log('[Caddy] http 应用不存在，使用 PATCH 创建')
-    const httpApp = {
-      servers: {
-        [serverName]: serverConfig
-      }
-    }
-    
-    // 尝试 PATCH，如果失败则抛出错误
+    const httpAppPath = '/config/apps/http'
     try {
-      await this.request('PATCH', '/config/apps/http', httpApp)
-    } catch (patchError) {
-      const patchErrorMsg = patchError instanceof Error ? patchError.message : String(patchError)
-      console.error(`[Caddy] PATCH http 应用失败: ${patchErrorMsg}`)
-      throw new Error(`无法创建站点配置: ${patchErrorMsg}`)
+      await this.request('GET', httpAppPath)
+    } catch (getHttpError) {
+      if (!(getHttpError instanceof CaddyApiError) || getHttpError.statusCode !== 404) {
+        throw getHttpError
+      }
+
+      // 父级也已明确确认不存在；严格创建，不覆盖任何现有 HTTP 配置。
+      await this.request('PUT', httpAppPath, {
+        servers: {
+          [serverName]: serverConfig
+        }
+      })
+      return
     }
+
+    // http 在复核期间已由其他请求创建；回到精确 server 路径严格创建。
+    await this.request('PUT', serverPath, serverConfig)
   }
 
   /**

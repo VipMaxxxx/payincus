@@ -97,4 +97,44 @@ for (const forbiddenPattern of [
   )
 }
 
+const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
+assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
+const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
+assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
+const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
+
+assert.ok(
+  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
+    boostRoute.includes('limitsProcesses: previousProcesses'),
+  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
+)
+assert.ok(
+  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
+    boostRoute.includes("incusLimitApplied: 'unknown'") &&
+    boostRoute.includes('databaseLimit: targetLimit'),
+  'boost-processes must return explicit actual-state details when database rollback also fails'
+)
+assert.ok(
+  boostRoute.includes("'failed'") &&
+    boostRoute.includes('return reply.code(500).send(apiError(') &&
+    !boostRoute.includes('不抛出错误'),
+  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
+)
+
+const detailRouteStart = source.indexOf(">('/:id', {")
+assert.ok(detailRouteStart >= 0, 'instance detail route not found')
+const detailRouteEnd = source.indexOf("fastify.get<{ Params: { id: string } }>('/:id/password'", detailRouteStart)
+assert.ok(detailRouteEnd > detailRouteStart, 'instance detail route end marker not found')
+const detailRoute = source.slice(detailRouteStart, detailRouteEnd)
+
+assert.ok(
+  detailRoute.includes("instance.status === 'error'") &&
+    detailRoute.includes('prisma.deliveryAssuranceCase.findFirst({') &&
+    detailRoute.includes('taskId: null') &&
+    detailRoute.includes("issueType: 'task_failed'") &&
+    detailRoute.includes('select: { lastError: true }') &&
+    detailRoute.includes('failureReason: failureCase?.lastError?.trim() || null'),
+  'instance detail must expose the persisted, sanitized initial provisioning failure reason for error instances'
+)
+
 console.log('instance route ID guard tests passed')

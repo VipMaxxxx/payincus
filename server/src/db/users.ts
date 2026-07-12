@@ -694,10 +694,27 @@ export async function updateUserStatus(id: number, status: 'active' | 'banned', 
 /**
  * 删除用户
  */
+export class UserDeletionConflictError extends Error {
+  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
+
+  constructor() {
+    super('User has associated records and cannot be deleted')
+    this.name = 'UserDeletionConflictError'
+  }
+}
+
 export async function deleteUser(id: number): Promise<void> {
-  await prisma.user.delete({
-    where: { id }
-  })
+  try {
+    await prisma.user.delete({
+      where: { id }
+    })
+  } catch (error) {
+    const prismaErrorCode = (error as { code?: string }).code
+    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
+      throw new UserDeletionConflictError()
+    }
+    throw error
+  }
 }
 
 

@@ -110,6 +110,17 @@ assert.ok(
 )
 
 assert.ok(
+  db.includes("export function isPluginEnabled(plugin: Pick<Plugin, 'enabled' | 'status'>): boolean") &&
+    db.includes("return plugin.enabled && plugin.status === 'enabled'") &&
+    db.includes('enabled: isPluginEnabled(plugin)') &&
+    db.includes('pluginEnabled: review.plugin ? isPluginEnabled(review.plugin) : null') &&
+    /update:\s*{[\s\S]*?status: 'installed',\s*enabled: false,\s*enabledByUserId: null,\s*enabledAt: null,/.test(db) &&
+    userRoute.includes('if (!plugin || !isPluginEnabled(plugin)) return null') &&
+    pluginCenter.includes("return plugin.enabled && plugin.status === 'enabled'"),
+  'plugin reinstall, runtime loading, API serialization, and admin display must share enabled/status semantics'
+)
+
+assert.ok(
   pluginBusinessEvents.includes('PluginLifecycleEventName') &&
     pluginBusinessEvents.includes('dispatchPluginLifecycleEvent') &&
     pluginBusinessEvents.includes("'plugin.installed'") &&
@@ -395,7 +406,7 @@ assert.ok(
     rechargeRoute.includes('buildPluginGatewayCallbackHeaders') &&
     rechargeRoute.includes('PLUGIN_GATEWAY_CALLBACK_HEADER_BLOCKLIST') &&
     rechargeRoute.includes('normalizePluginGatewayDispatchResult') &&
-    rechargeRoute.includes('isRechargeGatewayOrderNoMatch(record.orderNo, pluginResult.orderNo)') &&
+    rechargeRoute.includes('isRechargeGatewayOrderNoMatch(gatewayOrderNo, pluginResult.orderNo)') &&
     rechargeRoute.includes('Math.abs(pluginResult.actualAmount - expectedAmount)') &&
     rechargeRoute.includes('插件支付主动验单金额与订单金额不匹配') &&
     rechargeRoute.includes('markCallbackProcessed(providerIdNum, record.orderNo, tradeNoForIndex, clientIp)') &&

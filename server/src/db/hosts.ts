@@ -500,6 +500,26 @@ export async function updateHostResources(id: number, resources: {
   })
 }
 
+/**
+ * Atomically increment host resource usage to avoid stale read-modify-write updates.
+ */
+export async function incrementHostResourceUsage(id: number, deltas: {
+  cpuUsed: number
+  memoryUsed: number
+  diskUsed: number
+}): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.host.update({
+      where: { id },
+      data: {
+        cpuUsed: { increment: deltas.cpuUsed },
+        memoryUsed: { increment: deltas.memoryUsed },
+        diskUsed: { increment: deltas.diskUsed }
+      }
+    })
+  })
+}
+
 function buildPlanUpgradeCapacityResult(input: {
   instance: Pick<Instance, 'hostId' | 'cpu' | 'memory' | 'disk'>
   newPlan: Pick<PackagePlan, 'cpu' | 'memory' | 'disk'>

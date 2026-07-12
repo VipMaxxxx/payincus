@@ -11,6 +11,8 @@ const adminApiSource = readFileSync(resolve(process.cwd(), '../client/src/api/ad
 const ticketsViewSource = readFileSync(resolve(process.cwd(), '../client/src/views/TicketsView.vue'), 'utf8')
 const clientTypesSource = readFileSync(resolve(process.cwd(), '../client/src/types/api.ts'), 'utf8')
 const pluginSettingsSource = readFileSync(resolve(process.cwd(), '../plugin-templates/ai-ticket-agent-plugin/dist/admin/settings.html'), 'utf8')
+const pluginManifestSource = readFileSync(resolve(process.cwd(), '../plugin-templates/ai-ticket-agent-plugin/payincus.plugin.json'), 'utf8')
+const pluginDefaultConfigSource = readFileSync(resolve(process.cwd(), '../plugin-templates/ai-ticket-agent-plugin/templates/default-config.json'), 'utf8')
 
 assert.ok(
     serviceSource.includes("AI_TICKET_AGENT_PLUGIN_ID = 'com.payincus.ai-ticket-agent'") &&
@@ -57,7 +59,7 @@ assert.ok(
 )
 
 const draftRouteIndex = routeSource.indexOf("}>('/:id/ai/draft'")
-const nextRouteIndex = routeSource.indexOf('由 AI 工单插件生成并发送一条客服回复', draftRouteIndex)
+const nextRouteIndex = routeSource.indexOf('发送管理员已审核/编辑的 AI 草稿', draftRouteIndex)
 assert.notEqual(draftRouteIndex, -1, 'AI draft route not found')
 assert.notEqual(nextRouteIndex, -1, 'AI draft route end marker not found')
 const draftRouteSection = routeSource.slice(draftRouteIndex, nextRouteIndex)
@@ -72,14 +74,15 @@ assert.ok(
 assert.ok(
   routeSource.includes("}>('/:id/ai/reply'") &&
     routeSource.includes('getAiTicketPermission(AI_TICKET_REPLY_PERMISSION)') &&
-    routeSource.includes('generateAiTicketReply(ticketId)') &&
+    routeSource.includes('validateAiTicketReviewedReply(ticketId, reviewedBody)') &&
+    routeSource.includes("Body: { reviewedBody?: string }") &&
+    routeSource.includes("code: 'AI_TICKET_REVIEWED_BODY_REQUIRED'") &&
     routeSource.includes('auditAiTicketReply') &&
     routeSource.includes("AI_TICKET_AGENT_REPLY_MODE_DISABLED") &&
     routeSource.includes("AI_TICKET_REPLY_HANDOFF_REQUIRED") &&
     routeSource.includes("code: 'AI_TICKET_REPLY_BLOCKED'") &&
-    routeSource.includes('confidence: result.confidence') &&
-    routeSource.includes('AI_TICKET_MODEL_DECISION_INVALID'),
-  'AI reply endpoint must require the separate reply permission, mode gate, safety checks and audit logging'
+    routeSource.includes('confidence: result.confidence'),
+  'AI reply endpoint must require a reviewed body, the separate reply permission, mode gate, safety checks and audit logging'
 )
 
 const replyRouteIndex = routeSource.indexOf("}>('/:id/ai/reply'")
@@ -90,6 +93,9 @@ const replyRouteSection = routeSource.slice(replyRouteIndex, internalNoteRouteIn
 assert.ok(
   replyRouteSection.includes('onRequest: [fastify.authenticate, fastify.requireAdmin]') &&
     replyRouteSection.includes('AI_TICKET_REPLY_PERMISSION') &&
+    replyRouteSection.includes('const reviewedBody = sanitizeContent(request.body?.reviewedBody)') &&
+    replyRouteSection.includes('validateAiTicketReviewedReply(ticketId, reviewedBody)') &&
+    !replyRouteSection.includes('generateAiTicketReply(') &&
     replyRouteSection.includes('ticketDb.addTicketMessage(ticketId, user.id, result.draft, true, [])') &&
     replyRouteSection.includes('sendNotification(ticket.userId') &&
     !replyRouteSection.includes('updateTicketStatus'),
@@ -127,6 +133,9 @@ assert.ok(
     serviceSource.includes('inspectAiReplySendEligibility') &&
     serviceSource.includes("autoReplyCategories: getConfigStringArray(configs, 'autoReplyCategories'") &&
     serviceSource.includes("confidenceThreshold: Math.min(Math.max(getConfigNumber(configs, 'confidenceThreshold'") &&
+    serviceSource.includes("sensitiveHandoffRules: resolveSensitiveHandoffRules(configs.get('sensitiveHandoffRules'))") &&
+    serviceSource.includes('for (const rule of config.sensitiveHandoffRules)') &&
+    serviceSource.includes('SENSITIVE_HANDOFF_RULES[rule]') &&
     serviceSource.includes('buildAiTicketDecisionPrompt') &&
     serviceSource.includes('parseAiDecisionJson') &&
     serviceSource.includes('handoffWhenInsufficientContext') &&
@@ -146,6 +155,22 @@ assert.ok(
     serviceSource.includes('generateAiTicketDraft') &&
     serviceSource.includes('generateAiTicketReply'),
   'AI draft and reply generation must read encrypted plugin config server-side, safety-check output, and enforce handoff rules before sending'
+)
+
+assert.ok(
+  serviceSource.includes('export function resolveSensitiveHandoffRules(value: unknown)') &&
+    serviceSource.includes('if (!Array.isArray(value) || value.length === 0) return [...DEFAULT_SENSITIVE_HANDOFF_RULES]') &&
+    serviceSource.includes("normalized.some(item => !Object.prototype.hasOwnProperty.call(SENSITIVE_HANDOFF_RULES, item))") &&
+    serviceSource.includes('return Array.from(new Set(normalized)) as SensitiveHandoffRule[]'),
+  'sensitiveHandoffRules must be configurable and malformed values must fall back to the complete default rule set'
+)
+
+assert.ok(
+  pluginManifestSource.includes('"sensitiveHandoffRules"') &&
+    pluginManifestSource.includes('"credential_or_backend_request"') &&
+    pluginDefaultConfigSource.includes('"sensitiveHandoffRules"') &&
+    pluginDefaultConfigSource.includes('"credential_or_backend_request"'),
+  'AI ticket plugin configuration must expose the complete sensitive handoff rule defaults'
 )
 
 const forbiddenSelections = [
@@ -210,6 +235,33 @@ assert.ok(
 )
 
 assert.ok(
+  serviceSource.includes("export type AiTicketReplyTrigger = 'manual' | 'scheduler'") &&
+    serviceSource.includes('generateAiTicketReplyCandidate(ticketId: number, trigger: AiTicketReplyTrigger)') &&
+    serviceSource.includes("trigger: AiTicketReplyTrigger = 'manual'") &&
+    serviceSource.includes("trigger === 'scheduler' && config.mode !== 'draft' ? await inspectAiReplySendLimits(ticketId, config) : []") &&
+    serviceSource.includes("const schedulerMarker = '[trigger=scheduler]'") &&
+    serviceSource.includes('const ticketMarker = getAiTicketSchedulerAuditMarker(ticketId)') &&
+    serviceSource.includes('return `ticket #${ticketId} [trigger=scheduler]`') &&
+    serviceSource.includes("const triggerDetail = input.trigger === 'scheduler' ? ' [trigger=scheduler]' : ''") &&
+    (serviceSource.match(/action: 'ai_ticket\.reply_send'/g) ?? []).length === 3 &&
+    (autoReplySchedulerSource.match(/trigger: 'scheduler'/g) ?? []).length === 4 &&
+    replyRouteSection.includes('validateAiTicketReviewedReply(ticketId, reviewedBody)') &&
+    !replyRouteSection.includes('generateAiTicketReply(') &&
+    autoReplySchedulerSource.includes("generateAiTicketReply(ticketId, 'scheduler')") &&
+    autoReplySchedulerSource.includes("trigger: 'scheduler'"),
+  'Auto reply limits and cooldown must apply and count scheduler sends only, while admin-triggered replies stay manual and unlimited'
+)
+
+const ticketOneMarker = 'ticket #1 [trigger=scheduler]'
+for (const otherTicketId of [10, 100]) {
+  assert.equal(
+    `AI ticket reply success for ticket #${otherTicketId} [trigger=scheduler]`.includes(ticketOneMarker),
+    false,
+    `scheduler ticket #1 quota/cooldown marker must not match ticket #${otherTicketId}`
+  )
+}
+
+assert.ok(
   pluginSettingsSource.includes('/api/tickets/ai/status') &&
     pluginSettingsSource.includes("window.localStorage.getItem('token')") &&
     pluginSettingsSource.includes('function escapeHtml') &&
@@ -231,7 +283,10 @@ assert.ok(
     autoReplySchedulerSource.includes("OR: [\n        { hostId: null },\n        { host: { user: { role: 'admin' } } }") &&
     autoReplySchedulerSource.includes("ticket.messages[0]?.isFromOwner === false") &&
     autoReplySchedulerSource.includes('isStillAutoReplyEligible(ticketId)') &&
-    autoReplySchedulerSource.includes('generateAiTicketReply(ticketId)') &&
+    autoReplySchedulerSource.includes("generateAiTicketReply(ticketId, 'scheduler')") &&
+    autoReplySchedulerSource.includes("where: { action: 'ai_ticket.needs_human' }") &&
+    autoReplySchedulerSource.includes('id: { notIn: needsHumanTicketIds }') &&
+    (autoReplySchedulerSource.match(/await markTicketNeedsHuman\(actor\.id, ticketId, reason\)/g) ?? []).length === 2 &&
     autoReplySchedulerSource.includes('ticketDb.addTicketMessage(ticketId, actor.id, result.draft, true, [])') &&
     autoReplySchedulerSource.includes('sendNotification(ticket.userId') &&
     autoReplySchedulerSource.includes('ai_ticket.auto_reply') &&
@@ -263,9 +318,12 @@ assert.ok(
     ticketsViewSource.includes('generateAiDraft') &&
     ticketsViewSource.includes('sendAiReply') &&
     ticketsViewSource.includes('requestAiDraft(selectedTicket.value.id)') &&
-    ticketsViewSource.includes('requestAiReply(selectedTicket.value.id)') &&
+    ticketsViewSource.includes('requestAiReply(selectedTicket.value.id, reviewedBody)') &&
     ticketsViewSource.includes("postTicketAiAction<TicketAiDraftResponse>(ticketId, 'draft')") &&
-    ticketsViewSource.includes("postTicketAiAction<TicketAiReplyResponse>(ticketId, 'reply')") &&
+    ticketsViewSource.includes("postTicketAiAction<TicketAiReplyResponse>(ticketId, 'reply', { reviewedBody })") &&
+    ticketsViewSource.includes('body: JSON.stringify(body)') &&
+    ticketsViewSource.includes('const reviewedBody = replyContent.value.trim()') &&
+    ticketsViewSource.includes('!selectedTicket || !replyContent.trim()') &&
     ticketsViewSource.includes("buildApiUrl(`/tickets/${ticketId}/ai/${action}`)") &&
     ticketsViewSource.includes('Authorization: `Bearer ${authStore.token}`') &&
     ticketsViewSource.includes("code === 'AI_TICKET_REPLY_HANDOFF_REQUIRED'") &&
