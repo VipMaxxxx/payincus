@@ -184,7 +184,15 @@ assert.ok(
     runTask.includes('async function backupDatabase') &&
     runTask.includes('db-pre-migrate-${targetVersion}-${timestamp}.sql') &&
     runTask.includes("run('pg_dump', ['--format=plain', '--no-owner', '--no-privileges', '--file', temporaryPath]") &&
-    runTask.includes('env: { PGDATABASE: databaseUrl }') &&
+    runTask.includes('env: buildPostgresEnvFromDatabaseUrl(databaseUrl)') &&
+    runTask.includes('function buildPostgresEnvFromDatabaseUrl') &&
+    runTask.includes('env.PGPASSWORD = decodeURIComponent(url.password)') &&
+    // 回归防护：连接凭据只能走 env，绝不能把带密码的 DATABASE_URL 作为 pg_dump 参数（会泄漏进 OTA 日志）；
+    // 也绝不能把整个 URL 塞进 PGDATABASE（会回退到 socket+root 连接触发 role "root" does not exist）。
+    !runTask.includes('env: { PGDATABASE: databaseUrl }') &&
+    !runTask.includes("run('pg_dump', [databaseUrl") &&
+    !runTask.includes("'--dbname', databaseUrl") &&
+    !runTask.includes("'--dbname=' + databaseUrl") &&
     runTask.includes('OTA database backup failed; migration was not started') &&
     runTask.includes('databaseBackupPath = await backupDatabase(backupDir, timestamp)') &&
     runTask.includes('databaseMigrationAttempted = true') &&

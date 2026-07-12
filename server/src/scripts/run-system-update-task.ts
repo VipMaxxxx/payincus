@@ -187,6 +187,29 @@ async function assertRequiredCommands(): Promise<void> {
   }
 }
 
+function buildPostgresEnvFromDatabaseUrl(databaseUrl: string): NodeJS.ProcessEnv {
+  // pg_dump 的连接凭据必须走环境变量，绝不能作为命令行参数传入：
+  // run() 会把命令与参数写进 OTA 日志，带密码的连接串一旦作为 arg 就会泄漏（违反“绝不泄密”）。
+  // 直接把整个 URL 塞进 PGDATABASE 也是错的——PGDATABASE 只接受库名，pg_dump 会因此回退到
+  // 默认 unix socket + OS 用户（root）连接，触发 “role \"root\" does not exist”。
+  let url: URL
+  try {
+    url = new URL(databaseUrl)
+  } catch {
+    throw new Error('OTA database backup failed: DATABASE_URL is not a valid connection URL')
+  }
+  const env: NodeJS.ProcessEnv = {}
+  if (url.hostname) env.PGHOST = decodeURIComponent(url.hostname)
+  if (url.port) env.PGPORT = url.port
+  if (url.username) env.PGUSER = decodeURIComponent(url.username)
+  if (url.password) env.PGPASSWORD = decodeURIComponent(url.password)
+  const database = url.pathname.replace(/^\//, '')
+  if (database) env.PGDATABASE = decodeURIComponent(database)
+  const sslmode = url.searchParams.get('sslmode')
+  if (sslmode) env.PGSSLMODE = sslmode
+  return env
+}
+
 async function backupDatabase(backupDir: string, timestamp: string): Promise<string> {
   const databaseUrl = process.env.DATABASE_URL
   if (!databaseUrl) {
@@ -201,7 +224,7 @@ async function backupDatabase(backupDir: string, timestamp: string): Promise<str
   try {
     await run('pg_dump', ['--format=plain', '--no-owner', '--no-privileges', '--file', temporaryPath], {
       timeoutMs: 600000,
-      env: { PGDATABASE: databaseUrl }
+      env: buildPostgresEnvFromDatabaseUrl(databaseUrl)
     })
     await rename(temporaryPath, backupPath)
   } catch (error) {
