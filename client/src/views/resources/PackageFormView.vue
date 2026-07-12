@@ -805,16 +805,15 @@ function goBack(): void {
 </script>
 
 <template>
-  <div class="kawaii-page space-y-6 animate-fade-in">
+  <div class="pkg-form space-y-6">
     <!-- Header -->
     <div class="page-header">
       <div class="flex items-center gap-4">
         <button
-          class="p-2 rounded-lg transition-colors"
-          :class="themeStore.isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'"
+          class="p-2 rounded-lg transition-colors hover:bg-themed-hover"
           @click="goBack"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5 icon-themed" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -834,83 +833,87 @@ function goBack(): void {
     </div>
 
     <!-- Form -->
-    <form v-else class="space-y-6" novalidate @submit.prevent="savePackage">
+    <form v-else class="space-y-5" novalidate @submit.prevent="savePackage">
       <!-- Error message -->
-      <div v-if="formError" class="p-4 rounded-lg bg-red-500/10 text-error text-sm">
-        {{ formError }}
+      <div v-if="formError" class="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400">
+        <svg class="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span>{{ formError }}</span>
       </div>
 
       <!-- Basic Info Section -->
-      <div class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.basicInfo') }}
-        </h2>
+      <section class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 9h8M8 13h5" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.basicInfo') }}</h2>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="md:col-span-2">
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('admin.packages.name') }} *</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('admin.packages.name') }} *</label>
             <input v-model="form.name" type="text" class="input" required />
           </div>
           <div class="md:col-span-2">
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('admin.packages.descLabel') }}</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('admin.packages.descLabel') }}</label>
             <input v-model="form.description" type="text" class="input" />
-            <p class="text-xs text-orange-500 dark:text-orange-400 mt-1">{{ t('common.noIncudalHint') }}</p>
+            <p class="text-xs text-amber-600 dark:text-amber-400 mt-1">{{ t('common.noIncudalHint') }}</p>
           </div>
           <div v-if="!isEditMode" class="md:col-span-2">
-            <label class="block text-xs text-themed-muted mb-2">{{ t('packageForm.fields.packageCreationMode') }}</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-2">{{ t('packageForm.fields.packageCreationMode') }}</label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
-                class="p-4 rounded-lg border-2 transition-all text-left cursor-pointer"
+                class="p-4 rounded-xl border transition-all text-left cursor-pointer"
                 :class="[
                   packageCreationMode === 'free'
-                    ? (themeStore.isDark ? 'border-teal-500 bg-teal-900/20 ring-2 ring-teal-500/30' : 'border-teal-500 bg-teal-50 ring-2 ring-teal-200')
-                    : (themeStore.isDark ? 'border-gray-700 bg-gray-900/30 hover:border-gray-600' : 'border-gray-200 bg-gray-50 hover:border-gray-300')
+                    ? 'border-primary-500 bg-primary-500/10 ring-1 ring-primary-500/30'
+                    : 'border-themed bg-themed-secondary hover:border-themed-secondary'
                 ]"
                 @click="packageCreationMode = 'free'"
               >
                 <div class="flex items-center gap-2 mb-2">
-                  <svg class="w-5 h-5" :class="packageCreationMode === 'free' ? 'text-teal-500' : 'text-themed-muted'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg class="w-5 h-5" :class="packageCreationMode === 'free' ? 'text-primary-600' : 'icon-themed-muted'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span class="text-sm font-medium" :class="packageCreationMode === 'free' ? (themeStore.isDark ? 'text-teal-400' : 'text-teal-700') : 'text-themed'">
+                  <span class="text-sm font-semibold" :class="packageCreationMode === 'free' ? 'text-primary-600' : 'text-themed'">
                     {{ t('packageForm.creationModes.free.title') }}
                   </span>
                 </div>
-                <p class="text-xs leading-relaxed" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+                <p class="text-xs leading-relaxed text-themed-muted">
                   {{ t('packageForm.creationModes.free.description') }}
                 </p>
               </button>
               <button
                 type="button"
-                class="p-4 rounded-lg border-2 transition-all text-left cursor-pointer"
+                class="p-4 rounded-xl border transition-all text-left cursor-pointer"
                 :class="[
                   packageCreationMode === 'paid'
-                    ? (themeStore.isDark ? 'border-amber-500 bg-amber-900/20 ring-2 ring-amber-500/30' : 'border-amber-500 bg-amber-50 ring-2 ring-amber-200')
-                    : (themeStore.isDark ? 'border-gray-700 bg-gray-900/30 hover:border-gray-600' : 'border-gray-200 bg-gray-50 hover:border-gray-300')
+                    ? 'border-primary-500 bg-primary-500/10 ring-1 ring-primary-500/30'
+                    : 'border-themed bg-themed-secondary hover:border-themed-secondary'
                 ]"
                 @click="packageCreationMode = 'paid'"
               >
                 <div class="flex items-center gap-2 mb-2">
-                  <svg class="w-5 h-5" :class="packageCreationMode === 'paid' ? 'text-amber-500' : 'text-themed-muted'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg class="w-5 h-5" :class="packageCreationMode === 'paid' ? 'text-primary-600' : 'icon-themed-muted'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
-                  <span class="text-sm font-medium" :class="packageCreationMode === 'paid' ? (themeStore.isDark ? 'text-amber-400' : 'text-amber-700') : 'text-themed'">
+                  <span class="text-sm font-semibold" :class="packageCreationMode === 'paid' ? 'text-primary-600' : 'text-themed'">
                     {{ t('packageForm.creationModes.paid.title') }}
                   </span>
                 </div>
-                <p class="text-xs leading-relaxed" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+                <p class="text-xs leading-relaxed text-themed-muted">
                   {{ t('packageForm.creationModes.paid.description') }}
                 </p>
               </button>
             </div>
-            <div
-              class="mt-3 rounded-lg border px-3 py-3 text-sm"
-              :class="packageCreationMode === 'free'
-                ? (themeStore.isDark ? 'border-teal-700/70 bg-teal-950/30 text-teal-100' : 'border-teal-200 bg-teal-50 text-teal-900')
-                : (themeStore.isDark ? 'border-amber-700/70 bg-amber-950/30 text-amber-100' : 'border-amber-200 bg-amber-50 text-amber-900')"
-            >
+            <div class="mt-3 rounded-lg border border-themed bg-themed-secondary px-3 py-3 text-sm text-themed-secondary">
               <div class="flex items-start gap-2">
-                <svg class="w-4 h-4 mt-0.5 shrink-0" :class="packageCreationMode === 'free' ? 'text-teal-500' : 'text-amber-500'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="w-4 h-4 mt-0.5 shrink-0 icon-themed-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
                 </svg>
                 <p class="text-xs leading-relaxed">
@@ -920,56 +923,56 @@ function goBack(): void {
             </div>
           </div>
           <div class="md:col-span-2">
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.networkMode') }} *</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.networkMode') }} *</label>
             <select v-model="form.networkMode" class="input">
               <option v-for="mode in availableNetworkModes" :key="mode.value" :value="mode.value">{{ t(mode.labelKey) }}</option>
             </select>
           </div>
           <div class="md:col-span-2">
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.instanceType') }} *</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.instanceType') }} *</label>
             <!-- 点击卡片选择实例类型 -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <!-- 容器卡片 -->
-              <button 
+              <button
                 type="button"
-                class="p-4 rounded-xl border-2 transition-all text-left cursor-pointer"
+                class="p-4 rounded-xl border transition-all text-left cursor-pointer"
                 :class="[
-                  form.instanceType === 'container' 
-                    ? (themeStore.isDark ? 'border-teal-500 bg-teal-900/20 ring-2 ring-teal-500/30' : 'border-teal-500 bg-teal-50 ring-2 ring-teal-200')
-                    : (themeStore.isDark ? 'border-gray-700 bg-gray-900/30 hover:border-gray-600' : 'border-gray-200 bg-gray-50 hover:border-gray-300')
+                  form.instanceType === 'container'
+                    ? 'border-primary-500 bg-primary-500/10 ring-1 ring-primary-500/30'
+                    : 'border-themed bg-themed-secondary hover:border-themed-secondary'
                 ]"
                 @click="form.instanceType = 'container'"
               >
                 <div class="flex items-center gap-2 mb-2">
-                  <svg class="w-5 h-5" :class="form.instanceType === 'container' ? 'text-teal-500' : 'text-themed-muted'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg class="w-5 h-5" :class="form.instanceType === 'container' ? 'text-primary-600' : 'icon-themed-muted'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
-                  <span class="text-sm font-medium" :class="form.instanceType === 'container' ? (themeStore.isDark ? 'text-teal-400' : 'text-teal-700') : 'text-themed'">{{ t('common.instanceType.container') }}</span>
+                  <span class="text-sm font-semibold" :class="form.instanceType === 'container' ? 'text-primary-600' : 'text-themed'">{{ t('common.instanceType.container') }}</span>
                 </div>
-                <ul class="text-xs space-y-1" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+                <ul class="text-xs space-y-1 text-themed-muted">
                   <li>• {{ t('packageForm.typeHelp.containerFast') }}</li>
                   <li>• {{ t('packageForm.typeHelp.containerLight') }}</li>
                   <li>• {{ t('packageForm.typeHelp.containerDocker') }}</li>
                 </ul>
               </button>
               <!-- VM卡片 -->
-              <button 
+              <button
                 type="button"
-                class="p-4 rounded-xl border-2 transition-all text-left cursor-pointer"
+                class="p-4 rounded-xl border transition-all text-left cursor-pointer"
                 :class="[
-                  form.instanceType === 'vm' 
-                    ? (themeStore.isDark ? 'border-amber-500 bg-amber-900/20 ring-2 ring-amber-500/30' : 'border-amber-500 bg-amber-50 ring-2 ring-amber-200')
-                    : (themeStore.isDark ? 'border-gray-700 bg-gray-900/30 hover:border-gray-600' : 'border-gray-200 bg-gray-50 hover:border-gray-300')
+                  form.instanceType === 'vm'
+                    ? 'border-primary-500 bg-primary-500/10 ring-1 ring-primary-500/30'
+                    : 'border-themed bg-themed-secondary hover:border-themed-secondary'
                 ]"
                 @click="form.instanceType = 'vm'"
               >
                 <div class="flex items-center gap-2 mb-2">
-                  <svg class="w-5 h-5" :class="form.instanceType === 'vm' ? 'text-amber-500' : 'text-themed-muted'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg class="w-5 h-5" :class="form.instanceType === 'vm' ? 'text-primary-600' : 'icon-themed-muted'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                   </svg>
-                  <span class="text-sm font-medium" :class="form.instanceType === 'vm' ? (themeStore.isDark ? 'text-amber-400' : 'text-amber-700') : 'text-themed'">{{ t('common.instanceType.vm') }}</span>
+                  <span class="text-sm font-semibold" :class="form.instanceType === 'vm' ? 'text-primary-600' : 'text-themed'">{{ t('common.instanceType.vm') }}</span>
                 </div>
-                <ul class="text-xs space-y-1" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+                <ul class="text-xs space-y-1 text-themed-muted">
                   <li>• {{ t('packageForm.typeHelp.vmIsolation') }}</li>
                   <li>• {{ t('packageForm.typeHelp.vmKernel') }}</li>
                   <li>• {{ t('packageForm.typeHelp.vmWindows') }}</li>
@@ -980,18 +983,18 @@ function goBack(): void {
           <div class="md:col-span-2">
             <div class="mb-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <label class="block text-xs text-themed-muted mb-1.5">{{ t('admin.packages.boundHosts') }} *</label>
+                <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('admin.packages.boundHosts') }} *</label>
                 <div class="text-xs text-themed-muted">
                   {{ t('packageForm.hostSelector.selectedCount', { count: form.hostIds.length }) }}
                 </div>
               </div>
-              <div v-if="authStore.isAdmin" class="inline-flex self-start rounded-lg p-1" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'">
+              <div v-if="authStore.isAdmin" class="inline-flex self-start rounded-lg bg-themed-secondary p-1">
                 <button
                   type="button"
                   class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
                   :class="hostScope === 'official'
-                    ? (themeStore.isDark ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow-sm')
-                    : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
+                    ? 'bg-primary-500 text-white shadow-sm'
+                    : 'text-themed-muted hover:text-themed'"
                   @click="switchHostScope('official')"
                 >
                   {{ t('packageForm.hostSelector.official') }}
@@ -1000,15 +1003,15 @@ function goBack(): void {
                   type="button"
                   class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
                   :class="hostScope === 'hosted'
-                    ? (themeStore.isDark ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow-sm')
-                    : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
+                    ? 'bg-primary-500 text-white shadow-sm'
+                    : 'text-themed-muted hover:text-themed'"
                   @click="switchHostScope('hosted')"
                 >
                   {{ t('resources.hosts.hosted') }}
                 </button>
               </div>
             </div>
-            <div class="rounded-lg border p-3" :class="themeStore.isDark ? 'border-gray-700 bg-gray-900/40' : 'border-gray-200 bg-gray-50'">
+            <div class="rounded-lg border border-themed bg-themed-tertiary p-3">
               <div class="flex flex-col gap-2 sm:flex-row">
                 <div class="relative flex-1">
                   <input
@@ -1046,15 +1049,15 @@ function goBack(): void {
                     type="button"
                     class="w-full rounded-lg border p-3 text-left transition-colors"
                     :class="selectedHostIdSet.has(host.id)
-                      ? (themeStore.isDark ? 'border-teal-500 bg-teal-500/10 ring-1 ring-teal-500/40' : 'border-teal-400 bg-teal-50 ring-1 ring-teal-300')
-                      : (themeStore.isDark ? 'border-gray-800 bg-gray-950/40 hover:border-gray-700 hover:bg-gray-900/70' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50')"
+                      ? 'border-primary-500 bg-primary-500/10 ring-1 ring-primary-500/40'
+                      : 'border-themed bg-themed-surface hover:border-themed-secondary hover:bg-themed-hover'"
                     @click="toggleHostSelection(host.id)"
                   >
                     <div class="flex items-start gap-3">
                       <input
                         :checked="selectedHostIdSet.has(host.id)"
                         type="checkbox"
-                        class="mt-1 w-4 h-4 rounded pointer-events-none"
+                        class="mt-1 w-4 h-4 rounded pointer-events-none text-primary-600 focus:ring-primary-500"
                         tabindex="-1"
                         readonly
                       />
@@ -1086,23 +1089,19 @@ function goBack(): void {
             </div>
           </div>
           <div v-if="form.hostIds.length > 0" class="md:col-span-2">
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.hostStoragePools') }}</label>
-            <div
-              class="space-y-3 border rounded-lg p-3"
-              :class="themeStore.isDark ? 'border-gray-700 bg-gray-900/40' : 'border-gray-200 bg-gray-50'"
-            >
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.hostStoragePools') }}</label>
+            <div class="space-y-3 rounded-lg border border-themed bg-themed-tertiary p-3">
               <div
                 v-for="host in selectedKnownHosts"
                 :key="host.id"
-                class="rounded-lg border p-3"
-                :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/40' : 'border-gray-200 bg-white'"
+                class="rounded-lg border border-themed bg-themed-surface p-3"
               >
                 <div class="flex items-center justify-between gap-3 mb-2">
                   <div class="flex min-w-0 items-center gap-2">
                     <FlagIcon :code="getHostCountryCode(host)" size="sm" class="shrink-0" />
                     <div class="min-w-0">
                       <div class="truncate text-sm font-medium text-themed">{{ getSelectedHostLabel(host.id) }}</div>
-                      <div class="text-xs text-themed-muted">ID: {{ host.id }}</div>
+                      <div class="text-xs text-themed-muted font-mono tabular-nums">ID: {{ host.id }}</div>
                     </div>
                   </div>
                   <span v-if="storagePoolsLoadingByHost[host.id]" class="text-xs text-themed-muted">
@@ -1132,11 +1131,11 @@ function goBack(): void {
                   {{ t('packageForm.hints.noSystemStoragePools') }}
                 </p>
                 <div class="mt-3">
-                  <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.hostTrafficMultiplier') }}</label>
+                  <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.hostTrafficMultiplier') }}</label>
                   <input
                     v-model.number="form.hostTrafficMultipliers[String(host.id)]"
                     type="number"
-                    class="input w-full"
+                    class="input w-full font-mono tabular-nums"
                     min="0.001"
                     max="100"
                     step="0.001"
@@ -1150,13 +1149,12 @@ function goBack(): void {
               <div
                 v-for="hostId in selectedUnknownHostIds"
                 :key="hostId"
-                class="rounded-lg border p-3"
-                :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/40' : 'border-gray-200 bg-white'"
+                class="rounded-lg border border-themed bg-themed-surface p-3"
               >
                 <div class="flex items-center justify-between gap-3 mb-2">
                   <div>
                     <div class="text-sm font-medium text-themed">{{ getSelectedHostLabel(hostId) }}</div>
-                    <div class="text-xs text-themed-muted">ID: {{ hostId }}</div>
+                    <div class="text-xs text-themed-muted font-mono tabular-nums">ID: {{ hostId }}</div>
                     <div class="mt-0.5 text-xs text-themed-muted">{{ t('packageForm.hostSelector.detailUnavailable') }}</div>
                   </div>
                   <span v-if="storagePoolsLoadingByHost[hostId]" class="text-xs text-themed-muted">
@@ -1186,11 +1184,11 @@ function goBack(): void {
                   {{ t('packageForm.hints.noSystemStoragePools') }}
                 </p>
                 <div class="mt-3">
-                  <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.hostTrafficMultiplier') }}</label>
+                  <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.hostTrafficMultiplier') }}</label>
                   <input
                     v-model.number="form.hostTrafficMultipliers[String(hostId)]"
                     type="number"
-                    class="input w-full"
+                    class="input w-full font-mono tabular-nums"
                     min="0.001"
                     max="100"
                     step="0.001"
@@ -1205,55 +1203,60 @@ function goBack(): void {
           </div>
           <div class="md:col-span-2 flex items-center gap-6">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input v-model="form.active" type="checkbox" class="w-4 h-4 rounded" />
-              <span class="text-sm text-themed-secondary">{{ t('admin.packages.activeLabel') }}</span>
+              <input v-model="form.active" type="checkbox" class="h-4 w-4 rounded border-themed text-primary-600 focus:ring-primary-500" />
+              <span class="text-sm text-themed">{{ t('admin.packages.activeLabel') }}</span>
             </label>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Resource Limits Section -->
-      <div v-if="showPackageLevelInstanceDefaults" class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.resourceLimits') }}
-        </h2>
+      <section v-if="showPackageLevelInstanceDefaults" class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.resourceLimits') }}</h2>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">
               {{ t('admin.packages.cpu') }} (%)
               <span class="text-themed-muted font-normal">- {{ t('admin.packages.instanceMaxLimit') }}</span>
             </label>
-            <input v-model.number="form.cpuMax" type="number" class="input" min="15" max="10000" step="5" />
+            <input v-model.number="form.cpuMax" type="number" class="input font-mono tabular-nums" min="15" max="10000" step="5" />
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">
               {{ t('admin.packages.memory') }} (MB)
               <span class="text-themed-muted font-normal">- {{ t('admin.packages.instanceMaxLimit') }}</span>
             </label>
-            <input v-model.number="form.memoryMax" type="number" class="input" min="128" step="64" />
+            <input v-model.number="form.memoryMax" type="number" class="input font-mono tabular-nums" min="128" step="64" />
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">
               {{ t('admin.packages.disk') }} (MB)
               <span class="text-themed-muted font-normal">- {{ t('admin.packages.instanceMaxLimit') }}</span>
             </label>
-            <input v-model.number="form.diskMax" type="number" class="input" min="512" step="1024" />
+            <input v-model.number="form.diskMax" type="number" class="input font-mono tabular-nums" min="512" step="1024" />
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('admin.packages.trafficLimit') }} (GB)</label>
-            <input 
-              v-model="form.monthlyTrafficLimitGB" 
-              type="text" 
-              class="input" 
-              :placeholder="t('admin.packages.unlimitedPlaceholder')" 
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('admin.packages.trafficLimit') }} (GB)</label>
+            <input
+              v-model="form.monthlyTrafficLimitGB"
+              type="text"
+              class="input font-mono tabular-nums"
+              :placeholder="t('admin.packages.unlimitedPlaceholder')"
             />
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">流量重置价格（元）</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">流量重置价格（元）</label>
             <input
               v-model.number="form.trafficResetPrice"
               type="number"
-              class="input"
+              class="input font-mono tabular-nums"
               min="0"
               :max="MAX_TRAFFIC_RESET_PRICE"
               step="0.01"
@@ -1261,50 +1264,63 @@ function goBack(): void {
             <p class="text-xs text-themed-muted mt-1">单位:元(如填 5 表示 5 元)；用户自助重置月流量时扣费，0 表示免费。</p>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Instance Quota Section -->
-      <div v-if="showPackageLevelInstanceDefaults" class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.instanceQuota') }}
-        </h2>
-        <p class="text-sm text-themed-muted mb-4">{{ t('packageForm.hints.instanceQuota') }}</p>
+      <section v-if="showPackageLevelInstanceDefaults" class="section-card card p-5 sm:p-6">
+        <div class="mb-4 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="font-semibold text-themed">{{ t('packageForm.sections.instanceQuota') }}</h2>
+            <p class="text-xs text-themed-muted">{{ t('packageForm.hints.instanceQuota') }}</p>
+          </div>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.portLimit') }}</label>
-            <input v-model.number="form.portLimit" type="number" class="input" min="1" max="1000" />
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.portLimit') }}</label>
+            <input v-model.number="form.portLimit" type="number" class="input font-mono tabular-nums" min="1" max="1000" />
             <p class="text-xs text-themed-muted mt-1">{{ t('packageForm.hints.portLimit') }}</p>
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.snapshotLimit') }}</label>
-            <input v-model.number="form.snapshotLimit" type="number" class="input" min="0" max="1000" />
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.snapshotLimit') }}</label>
+            <input v-model.number="form.snapshotLimit" type="number" class="input font-mono tabular-nums" min="0" max="1000" />
             <p class="text-xs text-themed-muted mt-1">{{ t('packageForm.hints.snapshotLimit') }}</p>
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.siteLimit') }}</label>
-            <input v-model.number="form.siteLimit" type="number" class="input" min="0" max="1000" />
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.siteLimit') }}</label>
+            <input v-model.number="form.siteLimit" type="number" class="input font-mono tabular-nums" min="0" max="1000" />
             <p class="text-xs text-themed-muted mt-1">{{ t('packageForm.hints.siteLimit') }}</p>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Storage I/O Section -->
-      <div class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.storageIO') }}
-        </h2>
+      <section class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7c0 1.657 3.582 3 8 3s8-1.343 8-3-3.582-3-8-3-8 1.343-8 3z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 1.657 3.582 3 8 3s8-1.343 8-3V7M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.storageIO') }}</h2>
+        </div>
 
         <!-- IO Limit Mode Toggle -->
         <div class="mb-4">
-          <label class="block text-xs text-themed-muted mb-2">{{ t('packageForm.fields.ioLimitMode') }}</label>
-          <div class="flex gap-2">
+          <label class="block text-sm font-medium text-themed-secondary mb-2">{{ t('packageForm.fields.ioLimitMode') }}</label>
+          <div class="inline-flex w-full rounded-lg bg-themed-secondary p-1 sm:w-auto">
             <button
               type="button"
-              class="flex-1 px-3 py-2 rounded-lg border-2 transition-all text-sm font-medium cursor-pointer"
+              class="flex-1 px-4 py-2 rounded-md transition-all text-sm font-medium cursor-pointer sm:flex-none"
               :class="[
                 form.ioLimitMode === 'throughput'
-                  ? (themeStore.isDark ? 'border-teal-500 bg-teal-900/20 text-teal-400 ring-1 ring-teal-500/30' : 'border-teal-500 bg-teal-50 text-teal-700 ring-1 ring-teal-200')
-                  : (themeStore.isDark ? 'border-gray-700 bg-gray-900/30 text-gray-400 hover:border-gray-600' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300')
+                  ? 'bg-primary-500 text-white shadow-sm'
+                  : 'text-themed-muted hover:text-themed'
               ]"
               @click="form.ioLimitMode = 'throughput'"
             >
@@ -1312,11 +1328,11 @@ function goBack(): void {
             </button>
             <button
               type="button"
-              class="flex-1 px-3 py-2 rounded-lg border-2 transition-all text-sm font-medium cursor-pointer"
+              class="flex-1 px-4 py-2 rounded-md transition-all text-sm font-medium cursor-pointer sm:flex-none"
               :class="[
                 form.ioLimitMode === 'iops'
-                  ? (themeStore.isDark ? 'border-amber-500 bg-amber-900/20 text-amber-400 ring-1 ring-amber-500/30' : 'border-amber-500 bg-amber-50 text-amber-700 ring-1 ring-amber-200')
-                  : (themeStore.isDark ? 'border-gray-700 bg-gray-900/30 text-gray-400 hover:border-gray-600' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300')
+                  ? 'bg-primary-500 text-white shadow-sm'
+                  : 'text-themed-muted hover:text-themed'
               ]"
               @click="form.ioLimitMode = 'iops'"
             >
@@ -1329,18 +1345,18 @@ function goBack(): void {
         <!-- Throughput fields -->
         <div v-if="form.ioLimitMode === 'throughput'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.limitsRead') }}</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.limitsRead') }}</label>
             <div class="flex gap-2">
-              <input v-model="form.limitsRead" type="text" class="input flex-1" />
+              <input v-model="form.limitsRead" type="text" class="input flex-1 font-mono tabular-nums" />
               <select v-model="form.limitsReadUnit" class="input w-24">
                 <option v-for="unit in storageUnits" :key="unit" :value="unit">{{ unit }}</option>
               </select>
             </div>
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.limitsWrite') }}</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.limitsWrite') }}</label>
             <div class="flex gap-2">
-              <input v-model="form.limitsWrite" type="text" class="input flex-1" />
+              <input v-model="form.limitsWrite" type="text" class="input flex-1 font-mono tabular-nums" />
               <select v-model="form.limitsWriteUnit" class="input w-24">
                 <option v-for="unit in storageUnits" :key="unit" :value="unit">{{ unit }}</option>
               </select>
@@ -1351,111 +1367,131 @@ function goBack(): void {
         <!-- IOPS fields -->
         <div v-if="form.ioLimitMode === 'iops'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.limitsReadIops') }}</label>
-            <input v-model.number="form.limitsReadIops" type="number" class="input" min="0" />
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.limitsReadIops') }}</label>
+            <input v-model.number="form.limitsReadIops" type="number" class="input font-mono tabular-nums" min="0" />
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.limitsWriteIops') }}</label>
-            <input v-model.number="form.limitsWriteIops" type="number" class="input" min="0" />
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.limitsWriteIops') }}</label>
+            <input v-model.number="form.limitsWriteIops" type="number" class="input font-mono tabular-nums" min="0" />
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Network Limits Section -->
-      <div v-if="showPackageLevelInstanceDefaults" class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.networkLimits') }}
-        </h2>
+      <section v-if="showPackageLevelInstanceDefaults" class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.networkLimits') }}</h2>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.limitsIngress') }}</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.limitsIngress') }}</label>
             <div class="flex gap-2">
-              <input v-model="form.limitsIngress" type="text" class="input flex-1" />
+              <input v-model="form.limitsIngress" type="text" class="input flex-1 font-mono tabular-nums" />
               <select v-model="form.limitsIngressUnit" class="input w-24">
                 <option v-for="unit in networkUnits" :key="unit" :value="unit">{{ unit }}</option>
               </select>
             </div>
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.limitsEgress') }}</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.limitsEgress') }}</label>
             <div class="flex gap-2">
-              <input v-model="form.limitsEgress" type="text" class="input flex-1" />
+              <input v-model="form.limitsEgress" type="text" class="input flex-1 font-mono tabular-nums" />
               <select v-model="form.limitsEgressUnit" class="input w-24">
                 <option v-for="unit in networkUnits" :key="unit" :value="unit">{{ unit }}</option>
               </select>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Process and CPU Scheduling Section -->
-      <div class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.processScheduling') }}
-        </h2>
+      <section class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 7h10v10H7V7z" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.processScheduling') }}</h2>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.limitsProcesses') }}</label>
-            <input v-model.number="form.limitsProcesses" type="number" class="input" min="1" />
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.limitsProcesses') }}</label>
+            <input v-model.number="form.limitsProcesses" type="number" class="input font-mono tabular-nums" min="1" />
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">
               {{ t('packageForm.fields.limitsCpuPriority') }}
               <span class="text-themed-muted font-normal">(0-10)</span>
             </label>
-            <input v-model.number="form.limitsCpuPriority" type="number" class="input" min="0" max="10" />
+            <input v-model.number="form.limitsCpuPriority" type="number" class="input font-mono tabular-nums" min="0" max="10" />
             <p class="text-xs text-themed-muted mt-1">{{ t('packageForm.hints.cpuPriority') }}</p>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Boot Settings Section -->
-      <div class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.bootSettings') }}
-        </h2>
+      <section class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18.36 6.64A9 9 0 1120.77 15M12 2v10" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.bootSettings') }}</h2>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="md:col-span-2">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input v-model="form.bootAutostart" type="checkbox" class="w-4 h-4 rounded" />
-              <span class="text-sm text-themed-secondary">{{ t('packageForm.fields.bootAutostart') }}</span>
+              <input v-model="form.bootAutostart" type="checkbox" class="h-4 w-4 rounded border-themed text-primary-600 focus:ring-primary-500" />
+              <span class="text-sm text-themed">{{ t('packageForm.fields.bootAutostart') }}</span>
             </label>
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">
               {{ t('packageForm.fields.bootAutostartPriority') }}
               <span class="text-themed-muted font-normal">(0-100)</span>
             </label>
-            <input v-model.number="form.bootAutostartPriority" type="number" class="input" min="0" max="100" />
+            <input v-model.number="form.bootAutostartPriority" type="number" class="input font-mono tabular-nums" min="0" max="100" />
             <p class="text-xs text-themed-muted mt-1">{{ t('packageForm.hints.bootPriority') }}</p>
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">
               {{ t('packageForm.fields.bootAutostartDelay') }}
               <span class="text-themed-muted font-normal">({{ t('packageForm.units.seconds') }})</span>
             </label>
-            <input v-model.number="form.bootAutostartDelay" type="number" class="input" min="5" max="600" />
+            <input v-model.number="form.bootAutostartDelay" type="number" class="input font-mono tabular-nums" min="5" max="600" />
             <p class="text-xs text-themed-muted mt-1">{{ t('packageForm.hints.startupDelay') }}</p>
           </div>
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">
               {{ t('packageForm.fields.bootHostShutdownTimeout') }}
               <span class="text-themed-muted font-normal">({{ t('packageForm.units.seconds') }})</span>
             </label>
-            <input v-model.number="form.bootHostShutdownTimeout" type="number" class="input" min="30" max="600" />
+            <input v-model.number="form.bootHostShutdownTimeout" type="number" class="input font-mono tabular-nums" min="30" max="600" />
             <p class="text-xs text-themed-muted mt-1">{{ t('packageForm.hints.shutdownTimeout') }}</p>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Prerequisite Section -->
-      <div class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.prerequisite') }}
-        </h2>
+      <section class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 10-5.656-5.656l-1.1 1.1" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.prerequisite') }}</h2>
+        </div>
         <div class="space-y-3">
           <div>
-            <label class="block text-xs text-themed-muted mb-1.5">{{ t('packageForm.fields.requiredPackage') }}</label>
+            <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ t('packageForm.fields.requiredPackage') }}</label>
             <select v-model="form.requiredPackageId" class="input">
               <option :value="null">{{ t('packageForm.placeholders.noPrerequisite') }}</option>
               <option
@@ -1471,29 +1507,35 @@ function goBack(): void {
             {{ t('packageForm.hints.requiredPackage') }}
           </p>
         </div>
-      </div>
+      </section>
 
       <!-- Visibility Section -->
-      <div class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.visibility') }}
-        </h2>
+      <section class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.visibility') }}</h2>
+        </div>
         <div class="space-y-4">
           <label class="flex items-center gap-2 cursor-pointer">
-            <input v-model="form.globalShared" type="checkbox" class="w-4 h-4 rounded" />
-            <span class="text-sm text-themed-secondary">{{ t('packageForm.fields.publicAccess') }}</span>
+            <input v-model="form.globalShared" type="checkbox" class="h-4 w-4 rounded border-themed text-primary-600 focus:ring-primary-500" />
+            <span class="text-sm text-themed">{{ t('packageForm.fields.publicAccess') }}</span>
           </label>
           <p class="text-xs text-themed-muted">{{ t('packageForm.hints.publicAccess') }}</p>
-          
-          <div v-if="form.globalShared" class="mt-4 space-y-4 pl-6 border-l-2" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-200'">
+
+          <div v-if="form.globalShared" class="mt-4 space-y-4 pl-6 border-l-2 border-themed">
             <div>
-              <label class="block text-xs text-themed-muted mb-1.5">
+              <label class="block text-sm font-medium text-themed-secondary mb-1.5">
                 {{ t('packageForm.fields.globalMaxInstances') }}
               </label>
               <select
                 v-model.number="form.globalMaxInstances"
                 required
-                class="input"
+                class="input font-mono tabular-nums"
               >
                 <option v-for="count in publicPackageMaxInstanceOptions" :key="count" :value="count">
                   {{ count }}
@@ -1503,27 +1545,32 @@ function goBack(): void {
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Advanced Options Section -->
-      <div class="card p-6">
-        <h2 class="text-lg font-medium mb-4" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">
-          {{ t('packageForm.sections.advancedOptions') }}
-        </h2>
+      <section class="section-card card p-5 sm:p-6">
+        <div class="mb-5 flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-themed-secondary">
+            <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+          </div>
+          <h2 class="font-semibold text-themed">{{ t('packageForm.sections.advancedOptions') }}</h2>
+        </div>
         <div class="flex items-center gap-6">
           <label class="flex items-center gap-2 cursor-pointer">
-            <input v-model="form.privileged" type="checkbox" class="w-4 h-4 rounded" />
-            <span class="text-sm text-themed-secondary">{{ t('admin.packages.privileged') }}</span>
+            <input v-model="form.privileged" type="checkbox" class="h-4 w-4 rounded border-themed text-primary-600 focus:ring-primary-500" />
+            <span class="text-sm text-themed">{{ t('admin.packages.privileged') }}</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
-            <input v-model="form.nested" type="checkbox" class="w-4 h-4 rounded" />
-            <span class="text-sm text-themed-secondary">{{ t('admin.packages.nested') }}</span>
+            <input v-model="form.nested" type="checkbox" class="h-4 w-4 rounded border-themed text-primary-600 focus:ring-primary-500" />
+            <span class="text-sm text-themed">{{ t('admin.packages.nested') }}</span>
           </label>
         </div>
-      </div>
+      </section>
 
       <!-- Form Actions -->
-      <div class="flex items-center justify-end gap-4">
+      <div class="action-footer sticky bottom-0 z-10 flex items-center justify-end gap-3 rounded-xl border border-themed bg-themed-surface p-4 shadow-lg">
         <button type="button" class="btn-secondary" @click="goBack">
           {{ t('common.cancel') }}
         </button>
@@ -1535,3 +1582,45 @@ function goBack(): void {
     </form>
   </div>
 </template>
+
+<style scoped>
+/* Nimbus: subtle sectioned-card entrance + hover polish */
+.section-card {
+  animation: nimbus-card-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.section-card:nth-of-type(1) { animation-delay: 0.02s; }
+.section-card:nth-of-type(2) { animation-delay: 0.06s; }
+.section-card:nth-of-type(3) { animation-delay: 0.1s; }
+.section-card:nth-of-type(4) { animation-delay: 0.14s; }
+.section-card:nth-of-type(5) { animation-delay: 0.18s; }
+.section-card:nth-of-type(6) { animation-delay: 0.22s; }
+.section-card:nth-of-type(7) { animation-delay: 0.26s; }
+.section-card:nth-of-type(8) { animation-delay: 0.3s; }
+
+.section-card:hover {
+  box-shadow: 0 6px 24px -12px rgba(79, 70, 229, 0.28);
+}
+
+@keyframes nimbus-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
+</style>

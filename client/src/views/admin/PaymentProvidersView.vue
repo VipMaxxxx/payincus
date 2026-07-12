@@ -438,7 +438,7 @@ function togglePaymentMethod(method: string) {
       <div
         v-for="provider in providers"
         :key="provider.id"
-        class="card p-4"
+        class="card p-4 pp-reveal"
       >
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="min-w-0 flex-1">
@@ -450,27 +450,28 @@ function togglePaymentMethod(method: string) {
               <span class="badge badge-info">{{ getTypeName(provider.type) }}</span>
             </div>
             
-            <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <span class="text-themed-muted">{{ $t('admin.paymentProviders.minAmount') }}:</span>
-                <span class="ml-1 text-themed">¥{{ provider.minAmount }}</span>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">{{ $t('admin.paymentProviders.minAmount') }}</div>
+                <div class="mt-0.5 text-sm text-themed tabular-nums">¥{{ provider.minAmount }}</div>
               </div>
               <div>
-                <span class="text-themed-muted">{{ $t('admin.paymentProviders.maxAmount') }}:</span>
-                <span class="ml-1 text-themed">{{ provider.maxAmount ? `¥${provider.maxAmount}` : $t('common.unlimited') }}</span>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">{{ $t('admin.paymentProviders.maxAmount') }}</div>
+                <div class="mt-0.5 text-sm text-themed tabular-nums">{{ provider.maxAmount ? `¥${provider.maxAmount}` : $t('common.unlimited') }}</div>
               </div>
               <div>
-                <span class="text-themed-muted">{{ $t('admin.paymentProviders.feeRate') }}:</span>
-                <span class="ml-1 text-themed">{{ (provider.feeRate * 100).toFixed(2) }}%</span>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">{{ $t('admin.paymentProviders.feeRate') }}</div>
+                <div class="mt-0.5 text-sm text-themed tabular-nums">{{ (provider.feeRate * 100).toFixed(2) }}%</div>
               </div>
               <div>
-                <span class="text-themed-muted">{{ $t('admin.paymentProviders.feeFixed') }}:</span>
-                <span class="ml-1 text-themed">¥{{ provider.feeFixed }}</span>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">{{ $t('admin.paymentProviders.feeFixed') }}</div>
+                <div class="mt-0.5 text-sm text-themed tabular-nums">¥{{ provider.feeFixed }}</div>
               </div>
             </div>
-            
-            <div class="mt-2 text-xs text-themed-muted">
-              {{ $t('admin.paymentProviders.methods') }}: {{ getProviderMethodSummary(provider) }}
+
+            <div class="mt-3 text-xs text-themed-muted">
+              <span class="text-2xs uppercase tracking-wide">{{ $t('admin.paymentProviders.methods') }}</span>
+              <span class="ml-1.5 text-themed">{{ getProviderMethodSummary(provider) }}</span>
             </div>
           </div>
           
@@ -503,12 +504,14 @@ function togglePaymentMethod(method: string) {
     </div>
 
     <!-- 空状态 -->
-    <div v-else class="card p-12 text-center">
-      <svg class="w-16 h-16 mx-auto text-themed-muted opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-      </svg>
-      <p class="mt-4 text-themed-muted">{{ $t('admin.paymentProviders.empty') }}</p>
-      <button class="btn btn-primary mt-4" @click="openCreateModal">
+    <div v-else class="card flex flex-col items-center gap-4 p-12 text-center">
+      <span class="flex h-14 w-14 items-center justify-center rounded-full bg-themed-secondary text-themed-muted">
+        <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+        </svg>
+      </span>
+      <p class="text-sm text-themed-muted">{{ $t('admin.paymentProviders.empty') }}</p>
+      <button class="btn btn-primary" @click="openCreateModal">
         {{ $t('admin.paymentProviders.add') }}
       </button>
     </div>
@@ -621,7 +624,7 @@ function togglePaymentMethod(method: string) {
                         <input
                           :value="getYipayMethodFeePercent(method)"
                           type="number"
-                          class="input w-full"
+                          class="input w-full font-mono tabular-nums"
                           min="0"
                           max="100"
                           step="0.01"
@@ -825,22 +828,22 @@ function togglePaymentMethod(method: string) {
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="label">{{ $t('admin.paymentProviders.minAmount') }}</label>
-                <input v-model.number="formData.minAmount" type="number" class="input w-full" min="0" step="0.01" />
+                <input v-model.number="formData.minAmount" type="number" class="input w-full font-mono tabular-nums" min="0" step="0.01" />
               </div>
               <div>
                 <label class="label">{{ $t('admin.paymentProviders.maxAmount') }}</label>
-                <input v-model.number="formData.maxAmount" type="number" class="input w-full" min="0" step="0.01" :placeholder="$t('common.unlimited')" />
+                <input v-model.number="formData.maxAmount" type="number" class="input w-full font-mono tabular-nums" min="0" step="0.01" :placeholder="$t('common.unlimited')" />
               </div>
             </div>
             
             <div v-if="formData.type !== 'yipay'" class="grid grid-cols-2 gap-4">
               <div>
                 <label class="label">{{ $t('admin.paymentProviders.feeRate') }} (%)</label>
-                <input v-model.number="formData.feeRate" type="number" class="input w-full" min="0" max="100" step="0.01" />
+                <input v-model.number="formData.feeRate" type="number" class="input w-full font-mono tabular-nums" min="0" max="100" step="0.01" />
               </div>
               <div>
                 <label class="label">{{ $t('admin.paymentProviders.feeFixed') }}</label>
-                <input v-model.number="formData.feeFixed" type="number" class="input w-full" min="0" step="0.01" />
+                <input v-model.number="formData.feeFixed" type="number" class="input w-full font-mono tabular-nums" min="0" step="0.01" />
               </div>
             </div>
             <div v-else class="rounded-lg bg-themed-secondary px-3 py-2 text-xs text-themed-muted">
@@ -849,7 +852,7 @@ function togglePaymentMethod(method: string) {
             
             <div>
               <label class="label">{{ $t('admin.paymentProviders.sortOrder') }}</label>
-              <input v-model.number="formData.sortOrder" type="number" class="input w-full" min="0" />
+              <input v-model.number="formData.sortOrder" type="number" class="input w-full font-mono tabular-nums" min="0" />
             </div>
           </div>
           
@@ -886,3 +889,32 @@ function togglePaymentMethod(method: string) {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.pp-reveal {
+  animation: pp-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.pp-reveal:nth-child(2) { animation-delay: 0.04s; }
+.pp-reveal:nth-child(3) { animation-delay: 0.08s; }
+.pp-reveal:nth-child(4) { animation-delay: 0.12s; }
+.pp-reveal:nth-child(5) { animation-delay: 0.16s; }
+.pp-reveal:nth-child(n + 6) { animation-delay: 0.2s; }
+
+@keyframes pp-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-reveal {
+    animation: none;
+  }
+  .animate-fade-in,
+  .animate-fade-in *,
+  .animate-fade-in *::before,
+  .animate-fade-in *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+</style>

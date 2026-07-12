@@ -37,35 +37,64 @@ useReveal(revealRoot)
 </script>
 
 <template>
-  <div ref="revealRoot" class="kawaii-page space-y-6 animate-fade-in">
-    <div data-reveal class="page-header">
-      <h1 class="page-title">{{ $t('nav.settings') }}</h1>
+  <div ref="revealRoot" class="kawaii-page nimbus-settings animate-fade-in">
+    <div data-reveal class="nimbus-settings-head">
+      <h1 class="nimbus-settings-title">{{ $t('nav.settings') }}</h1>
     </div>
 
-    <ThemeTemplateSlot slot-name="user.profile.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+    <div class="nimbus-settings-stack">
+      <ThemeTemplateSlot slot-name="user.profile.banner" container-class="overflow-hidden rounded-2xl border border-themed bg-themed-surface" />
 
-    <!-- 账户信息和配额 -->
-    <AccountSection data-reveal />
+      <!-- 账户信息和配额 -->
+      <AccountSection data-reveal />
 
-    <!-- 修改密码 -->
-    <PasswordSection data-reveal />
+      <!-- 修改密码 -->
+      <PasswordSection data-reveal />
 
-    <!-- 双因素认证 -->
-    <TwoFactorSection />
+      <!-- 双因素认证 -->
+      <TwoFactorSection />
 
-    <!-- OAuth 账号绑定 -->
-    <OAuthSection />
+      <!-- OAuth 账号绑定 -->
+      <OAuthSection />
 
-    <!-- Telegram 绑定 -->
-    <TelegramBindingSection />
+      <!-- Telegram 绑定 -->
+      <TelegramBindingSection />
 
-    <!-- SSH 公钥（仅普通用户） -->
-    <SSHKeysSection v-if="!authStore.isAdmin" />
+      <!-- SSH 公钥（仅普通用户） -->
+      <SSHKeysSection v-if="!authStore.isAdmin" />
 
-    <!-- 通知渠道 -->
-    <NotificationSection />
+      <!-- 通知渠道 -->
+      <NotificationSection />
 
-    <!-- 登录历史记录 -->
-    <LoginHistorySection />
+      <!-- 登录历史记录 -->
+      <LoginHistorySection />
+    </div>
   </div>
 </template>
+
+<style scoped>
+.nimbus-settings {
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.nimbus-settings-head {
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--kawaii-line);
+}
+
+.nimbus-settings-title {
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--kawaii-text);
+  line-height: 1.2;
+}
+
+.nimbus-settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+</style>

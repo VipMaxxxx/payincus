@@ -215,20 +215,27 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="kawaii-page space-y-6 animate-fade-in">
+  <div class="kawaii-page nimbus-view space-y-6 animate-fade-in">
     <!-- Header -->
-    <div class="page-header flex items-center justify-between">
-      <div>
-        <h1 class="page-title">{{ t('admin.images.title') }}</h1>
-        <p class="page-description">{{ t('admin.images.description') }}</p>
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-start gap-3">
+        <span class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500 sm:flex">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M18 15.75h.008v.008H18v-.008zM6 6h12a2.25 2.25 0 012.25 2.25v9A2.25 2.25 0 0118 19.5H6a2.25 2.25 0 01-2.25-2.25v-9A2.25 2.25 0 016 6z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-xl font-semibold text-themed sm:text-2xl">{{ t('admin.images.title') }}</h1>
+          <p class="mt-1 text-sm text-themed-muted">{{ t('admin.images.description') }}</p>
+        </div>
       </div>
-      <button class="btn-primary whitespace-nowrap" @click="openCreateModal">
-        <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <button class="btn-primary shrink-0 whitespace-nowrap" @click="openCreateModal">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
         {{ t('admin.images.create') }}
       </button>
-    </div>
+    </header>
 
     <!-- Loading -->
     <div v-if="loading" class="card p-12 text-center">
@@ -238,23 +245,23 @@ onMounted(() => {
 
     <template v-else>
       <!-- Architecture Tabs -->
-      <div class="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700">
+      <div class="flex flex-wrap gap-2">
         <button
           v-for="tab in architectureTabs"
           :key="tab.value"
           type="button"
-          class="shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+          class="inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors"
           :class="activeArchitecture === tab.value
-            ? 'border-black dark:border-white text-gray-900 dark:text-white'
-            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+            ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300'
+            : 'border-themed bg-themed-surface text-themed-muted hover:bg-themed-hover hover:text-themed'"
           @click="activeArchitecture = tab.value"
         >
           <span>{{ tab.labelKey ? t(tab.labelKey) : tab.label }}</span>
           <span
-            class="ml-2 rounded-full px-2 py-0.5 text-xs"
+            class="rounded-full px-1.5 py-0.5 font-mono text-2xs tabular-nums"
             :class="activeArchitecture === tab.value
-              ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'"
+              ? 'bg-primary-500/15 text-primary-600 dark:text-primary-300'
+              : 'bg-themed-secondary text-themed-muted'"
           >
             {{ getArchitectureCount(tab.value) }}
           </span>
@@ -263,6 +270,11 @@ onMounted(() => {
 
       <!-- Images List -->
       <div v-if="filteredImages.length === 0" class="card p-12 text-center text-themed-muted">
+        <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M18 15.75h.008v.008H18v-.008zM6 6h12a2.25 2.25 0 012.25 2.25v9A2.25 2.25 0 0118 19.5H6a2.25 2.25 0 01-2.25-2.25v-9A2.25 2.25 0 016 6z" />
+          </svg>
+        </span>
         {{ images.length === 0 ? t('admin.images.noImages') : t('admin.images.noImagesForArchitecture') }}
       </div>
 
@@ -359,26 +371,23 @@ onMounted(() => {
         <div class="card hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
           <thead>
-            <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="w-[7%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.images.fields.icon') }}</th>
-              <th class="w-[17%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.images.fields.name') }}</th>
-              <th class="w-[22%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.images.fields.remoteAlias') }}</th>
-              <th class="w-[13%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.images.fields.architecture') }}</th>
-              <th class="w-[13%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.images.fields.instanceType') }}</th>
-              <th class="w-[8%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.images.fields.sortOrder') }}</th>
-              <th class="w-[8%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.images.fields.status') }}</th>
-              <th class="w-[12%] px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
+            <tr class="border-b border-themed bg-themed-secondary/60 text-left text-2xs font-medium uppercase tracking-wide text-themed-muted">
+              <th class="w-[7%] px-4 py-3">{{ t('admin.images.fields.icon') }}</th>
+              <th class="w-[17%] px-4 py-3">{{ t('admin.images.fields.name') }}</th>
+              <th class="w-[22%] px-4 py-3">{{ t('admin.images.fields.remoteAlias') }}</th>
+              <th class="w-[13%] px-4 py-3">{{ t('admin.images.fields.architecture') }}</th>
+              <th class="w-[13%] px-4 py-3">{{ t('admin.images.fields.instanceType') }}</th>
+              <th class="w-[8%] px-4 py-3">{{ t('admin.images.fields.sortOrder') }}</th>
+              <th class="w-[8%] px-4 py-3">{{ t('admin.images.fields.status') }}</th>
+              <th class="w-[12%] px-4 py-3 text-right">{{ t('common.actions') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y" :class="themeStore.isDark ? 'divide-gray-800' : 'divide-gray-100'">
+          <tbody class="divide-y divide-themed">
             <tr
               v-for="image in filteredImages"
               :key="image.id"
-              :class="[
-                'transition-colors',
-                image.hidden ? (themeStore.isDark ? 'bg-gray-900/50 opacity-60' : 'bg-gray-50/50 opacity-60') : '',
-                themeStore.isDark ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
-              ]"
+              class="transition-colors hover:bg-themed-hover"
+              :class="image.hidden ? 'opacity-60' : ''"
             >
               <td class="px-4 py-3">
                 <DistroIcon :distro="image.icon" :size="32" />
@@ -459,14 +468,11 @@ onMounted(() => {
 
     <!-- Modal -->
     <Teleport to="body">
-      <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/50" @click="showModal = false"></div>
-        <div 
-          class="relative w-full max-w-lg mx-4 rounded-lg shadow-xl"
-          :class="themeStore.isDark ? 'bg-gray-900' : 'bg-white'"
-        >
+        <div class="relative w-full max-w-lg overflow-hidden rounded-xl border border-themed bg-themed-surface shadow-2xl">
           <div class="p-6">
-            <h3 class="text-lg font-medium mb-4 text-themed">{{ modalTitle }}</h3>
+            <h3 class="mb-5 text-base font-semibold text-themed">{{ modalTitle }}</h3>
             
             <form class="space-y-4" @submit.prevent="saveImage">
               <div>
@@ -538,3 +544,14 @@ onMounted(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-view *,
+  .nimbus-view *::before,
+  .nimbus-view *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+</style>

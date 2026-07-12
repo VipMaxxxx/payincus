@@ -407,48 +407,65 @@ onMounted(async () => {
 <template>
   <div class="kawaii-page page-container animate-fade-in">
     <div class="page-header">
-      <div>
-        <h1 class="page-title">秒杀管理</h1>
-        <p class="page-description">配置限时活动价、库存、限购、人机验证和风险账号拦截。</p>
+      <div class="flex items-center gap-3">
+        <span class="nimbus-title-icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="page-title">秒杀管理</h1>
+          <p class="page-description">配置限时活动价、库存、限购、人机验证和风险账号拦截。</p>
+        </div>
       </div>
-      <button class="btn-secondary" :disabled="loading" @click="loadAll">刷新</button>
+      <button class="btn btn-secondary" :disabled="loading" @click="loadAll">
+        <svg class="h-4 w-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 4v5h.58m15.36 2A8 8 0 0 0 5.07 8.11M20 20v-5h-.58m0 0A8 8 0 0 1 4.06 12.03" />
+        </svg>
+        刷新
+      </button>
     </div>
 
     <SkeletonLoader v-if="loading" type="card" :count="4" />
 
     <template v-else>
       <section class="grid gap-4 md:grid-cols-3">
-        <div class="card p-4">
-          <div class="text-sm text-themed-muted">活动总库存</div>
-          <div class="mt-2 text-2xl font-semibold text-themed">{{ totalStock }}</div>
+        <div class="card nimbus-stat p-4">
+          <div class="nimbus-stat-label">活动总库存</div>
+          <div class="nimbus-stat-value">{{ totalStock }}</div>
         </div>
-        <div class="card p-4">
-          <div class="text-sm text-themed-muted">已售名额</div>
-          <div class="mt-2 text-2xl font-semibold text-themed">{{ soldCount }}</div>
+        <div class="card nimbus-stat p-4">
+          <div class="nimbus-stat-label">已售名额</div>
+          <div class="nimbus-stat-value">{{ soldCount }}</div>
         </div>
-        <div class="card p-4">
-          <div class="text-sm text-themed-muted">已交付</div>
-          <div class="mt-2 text-2xl font-semibold text-themed">{{ deliveredCount }}</div>
+        <div class="card nimbus-stat p-4">
+          <div class="nimbus-stat-label">已交付</div>
+          <div class="nimbus-stat-value">{{ deliveredCount }}</div>
         </div>
       </section>
 
-      <section class="mt-6 rounded-lg border border-themed bg-themed-surface p-5">
-        <h2 class="text-lg font-semibold text-themed">创建秒杀活动</h2>
-        <div class="mt-4 grid gap-4 lg:grid-cols-4">
-          <label class="space-y-1">
-            <span class="text-sm text-themed-muted">活动名称</span>
+      <section class="card mt-6 p-6">
+        <div class="mb-4 flex items-center gap-2 border-b border-themed pb-4">
+          <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          <h2 class="text-base font-semibold text-themed">创建秒杀活动</h2>
+        </div>
+        <div class="grid gap-4 lg:grid-cols-4">
+          <label class="space-y-1.5">
+            <span class="nimbus-field-label">活动名称</span>
             <input v-model="form.name" class="input" placeholder="例如：香港入门款限时秒杀" />
           </label>
-          <label class="space-y-1">
-            <span class="text-sm text-themed-muted">开始时间</span>
+          <label class="space-y-1.5">
+            <span class="nimbus-field-label">开始时间</span>
             <input v-model="form.startAt" type="datetime-local" class="input" />
           </label>
-          <label class="space-y-1">
-            <span class="text-sm text-themed-muted">结束时间</span>
+          <label class="space-y-1.5">
+            <span class="nimbus-field-label">结束时间</span>
             <input v-model="form.endAt" type="datetime-local" class="input" />
           </label>
-          <label class="space-y-1">
-            <span class="text-sm text-themed-muted">初始状态</span>
+          <label class="space-y-1.5">
+            <span class="nimbus-field-label">初始状态</span>
             <select v-model="form.status" class="input">
               <option value="draft">草稿</option>
               <option value="scheduled">待开始</option>
@@ -456,14 +473,14 @@ onMounted(async () => {
               <option value="paused">暂停</option>
             </select>
           </label>
-          <label class="space-y-1">
-            <span class="text-sm text-themed-muted">套餐</span>
+          <label class="space-y-1.5">
+            <span class="nimbus-field-label">套餐</span>
             <select v-model.number="form.packageId" class="input">
               <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">{{ pkg.name }}</option>
             </select>
           </label>
-          <label class="space-y-1">
-            <span class="text-sm text-themed-muted">账号最小时长（小时）</span>
+          <label class="space-y-1.5">
+            <span class="nimbus-field-label">账号最小时长（小时）</span>
             <input v-model.number="form.minAccountAgeHours" type="number" min="0" step="1" class="input" />
           </label>
           <label class="flex items-center gap-2 pt-7 text-sm text-themed">
@@ -481,11 +498,16 @@ onMounted(async () => {
         </div>
         <div class="mt-5 rounded-lg border border-themed">
           <div class="flex items-center justify-between border-b border-themed px-4 py-3">
-            <div>
-              <h3 class="font-medium text-themed">秒杀商品</h3>
-              <p class="mt-1 text-xs text-themed-muted">同一活动可配置多个方案；库存、限购和优惠/AFF 策略按商品独立生效。</p>
+            <div class="flex items-center gap-2">
+              <svg class="h-4 w-4 shrink-0 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3.75 5.25h16.5m-16.5 6h16.5m-16.5 6h16.5" />
+              </svg>
+              <div>
+                <h3 class="font-medium text-themed">秒杀商品</h3>
+                <p class="mt-1 text-xs text-themed-muted">同一活动可配置多个方案；库存、限购和优惠/AFF 策略按商品独立生效。</p>
+              </div>
             </div>
-            <button class="btn-secondary" type="button" @click="addFlashSaleItem">新增商品</button>
+            <button class="btn btn-secondary btn-sm" type="button" @click="addFlashSaleItem">新增商品</button>
           </div>
           <div class="space-y-3 p-4 lg:hidden">
             <div
@@ -495,11 +517,11 @@ onMounted(async () => {
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="text-sm font-medium text-themed">商品 #{{ index + 1 }}</div>
-                <button class="btn-secondary" type="button" @click="removeFlashSaleItem(index)">删除</button>
+                <button class="btn btn-secondary btn-sm" type="button" @click="removeFlashSaleItem(index)">删除</button>
               </div>
               <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label class="space-y-1 sm:col-span-2">
-                  <span class="text-xs text-themed-muted">方案</span>
+                  <span class="nimbus-field-label">方案</span>
                   <select v-model.number="item.packagePlanId" class="input w-full">
                     <option v-for="plan in plans" :key="plan.id" :value="plan.id">
                       {{ plan.name }} / {{ formatMoneyCents(plan.price) }}
@@ -507,15 +529,15 @@ onMounted(async () => {
                   </select>
                 </label>
                 <label class="space-y-1">
-                  <span class="text-xs text-themed-muted">秒杀价（元）</span>
+                  <span class="nimbus-field-label">秒杀价（元）</span>
                   <input v-model.number="item.flashPrice" type="number" min="0.01" step="0.01" class="input w-full" />
                 </label>
                 <label class="space-y-1">
-                  <span class="text-xs text-themed-muted">库存</span>
+                  <span class="nimbus-field-label">库存</span>
                   <input v-model.number="item.totalStock" type="number" min="1" step="1" class="input w-full" />
                 </label>
                 <label class="space-y-1">
-                  <span class="text-xs text-themed-muted">每人限购</span>
+                  <span class="nimbus-field-label">每人限购</span>
                   <input v-model.number="item.perUserLimit" type="number" min="1" step="1" class="input w-full" />
                 </label>
                 <div class="flex flex-wrap items-center gap-4 pt-6">
@@ -532,19 +554,19 @@ onMounted(async () => {
             </div>
           </div>
           <div class="hidden overflow-hidden lg:block">
-            <table class="w-full table-fixed divide-y divide-themed text-sm">
-              <thead class="text-left text-xs text-themed-muted">
-                <tr>
-                  <th class="w-[32%] px-4 py-3">方案</th>
-                  <th class="w-[14%] px-4 py-3">秒杀价（元）</th>
-                  <th class="w-[12%] px-4 py-3">库存</th>
-                  <th class="w-[12%] px-4 py-3">每人限购</th>
-                  <th class="w-[16%] px-4 py-3">优惠</th>
-                  <th class="w-[14%] px-4 py-3 text-right">操作</th>
+            <table class="w-full table-fixed text-sm">
+              <thead>
+                <tr class="border-b border-themed">
+                  <th class="nimbus-th w-[32%]">方案</th>
+                  <th class="nimbus-th w-[14%]">秒杀价（元）</th>
+                  <th class="nimbus-th w-[12%]">库存</th>
+                  <th class="nimbus-th w-[12%]">每人限购</th>
+                  <th class="nimbus-th w-[16%]">优惠</th>
+                  <th class="nimbus-th w-[14%] text-right">操作</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-themed">
-                <tr v-for="(item, index) in form.items" :key="index">
+              <tbody>
+                <tr v-for="(item, index) in form.items" :key="index" class="nimbus-row border-b border-themed">
                   <td class="px-4 py-3">
                     <select v-model.number="item.packagePlanId" class="input w-full">
                       <option v-for="plan in plans" :key="plan.id" :value="plan.id">
@@ -574,7 +596,7 @@ onMounted(async () => {
                     </div>
                   </td>
                   <td class="px-4 py-3 text-right">
-                    <button class="btn-secondary" type="button" @click="removeFlashSaleItem(index)">删除</button>
+                    <button class="btn btn-secondary btn-sm" type="button" @click="removeFlashSaleItem(index)">删除</button>
                   </td>
                 </tr>
               </tbody>
@@ -583,13 +605,16 @@ onMounted(async () => {
         </div>
         <textarea v-model="form.description" class="input mt-4 min-h-20" placeholder="活动说明，可选" />
         <div class="mt-4 flex justify-end">
-          <button class="btn-primary" :disabled="saving" @click="createCampaign">{{ saving ? '创建中...' : '创建活动' }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="createCampaign">{{ saving ? '创建中...' : '创建活动' }}</button>
         </div>
       </section>
 
-      <section class="mt-6 rounded-lg border border-themed bg-themed-surface">
-        <div class="border-b border-themed px-5 py-4">
-          <h2 class="text-lg font-semibold text-themed">活动列表</h2>
+      <section class="card mt-6 overflow-hidden">
+        <div class="flex items-center gap-2 border-b border-themed px-5 py-4">
+          <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.008v.008H3.75V6.75Zm0 5.25h.008v.008H3.75V12Zm0 5.25h.008v.008H3.75v-.008Z" />
+          </svg>
+          <h2 class="text-base font-semibold text-themed">活动列表</h2>
         </div>
         <div class="divide-y divide-themed">
           <div v-if="campaigns.length === 0" class="px-5 py-8 text-center text-themed-muted">暂无活动</div>
@@ -602,117 +627,122 @@ onMounted(async () => {
                 </div>
                 <p class="mt-1 text-sm text-themed-muted">{{ formatDate(campaign.startAt) }} - {{ formatDate(campaign.endAt) }}</p>
               </div>
-	              <div class="flex flex-wrap gap-2">
-	                <button class="btn-secondary" @click="beginEditCampaign(campaign)">编辑内容</button>
-	                <button class="btn-secondary" @click="changeStatus(campaign, 'active')">开始/恢复</button>
-	                <button class="btn-secondary" @click="changeStatus(campaign, 'paused')">暂停</button>
-	                <button class="btn-secondary" @click="changeStatus(campaign, 'ended')">结束</button>
-	                <button class="btn-secondary" @click="loadReservations(campaign.id)">记录</button>
-	              </div>
-	            </div>
-	            <div v-if="editingCampaignId === campaign.id" class="mt-4 rounded-lg border border-themed bg-themed p-4">
-	              <div class="grid gap-4 lg:grid-cols-4">
-	                <label class="space-y-1">
-	                  <span class="text-sm text-themed-muted">活动名称</span>
-	                  <input v-model="timeForm.name" class="input" />
-	                </label>
-	                <label class="space-y-1">
-	                  <span class="text-sm text-themed-muted">开始时间</span>
-	                  <input v-model="timeForm.startAt" type="datetime-local" class="input" />
-	                </label>
-	                <label class="space-y-1">
-	                  <span class="text-sm text-themed-muted">结束时间</span>
-	                  <input v-model="timeForm.endAt" type="datetime-local" class="input" />
-	                </label>
-	                <label class="space-y-1">
-	                  <span class="text-sm text-themed-muted">活动总限购</span>
-	                  <input v-model.number="timeForm.maxPerUser" type="number" min="1" step="1" class="input" />
-	                </label>
-	                <label class="space-y-1">
-	                  <span class="text-sm text-themed-muted">账号最小时长（小时）</span>
-	                  <input v-model.number="timeForm.minAccountAgeHours" type="number" min="0" step="1" class="input" />
-	                </label>
-	                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
-	                  <input v-model="timeForm.requireTurnstile" type="checkbox" />
-	                  强制人机验证
-	                </label>
-	                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
-	                  <input v-model="timeForm.requireEmail" type="checkbox" />
-	                  必须绑定邮箱
-	                </label>
-	                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
-	                  <input v-model="timeForm.blockRiskRestricted" type="checkbox" />
-	                  拦截风控限单
-	                </label>
-	              </div>
-	              <textarea v-model="timeForm.description" class="input mt-4 min-h-20" placeholder="活动说明，可选" />
-	              <textarea v-model="timeForm.notes" class="input mt-3 min-h-16" placeholder="内部备注，可选" />
-	              <div class="mt-4 flex justify-end gap-2">
-	                <button class="btn-primary" :disabled="editSaving" @click="saveCampaignContent(campaign)">
-	                  {{ editSaving ? '保存中...' : '保存内容' }}
-	                </button>
-	                <button class="btn-secondary" :disabled="editSaving" @click="cancelEditCampaign">取消</button>
-	              </div>
-	              <p class="mt-2 text-xs text-themed-muted">已开始的活动可以修改内容和时间；已有订单记录不回改，后续购买按新配置执行。</p>
-	            </div>
-	            <div class="mt-4 grid gap-3 lg:grid-cols-2">
-	              <div v-for="item in campaign.items" :key="item.id" class="rounded-lg border border-themed bg-themed p-4">
-	                <div class="flex items-start justify-between gap-3">
-	                  <div>
-	                    <div class="font-medium text-themed">{{ item.plan.package.name }} / {{ item.plan.name }}</div>
-	                    <div class="mt-1 text-xs text-themed-muted">库存 {{ item.remainingStock }} / {{ item.totalStock }}，已售 {{ item.soldCount }}，失败 {{ item.failedCount }}，限购 {{ item.perUserLimit }}</div>
-	                  </div>
-	                  <div class="text-right">
-	                    <div class="font-semibold text-themed">{{ formatMoneyCents(item.flashPrice) }}</div>
-	                    <button class="mt-2 text-xs text-accent" @click="beginEditItem(item)">编辑商品</button>
-	                  </div>
-	                </div>
-	                <div v-if="editingItemId === item.id" class="mt-4 rounded-lg border border-themed bg-themed-surface p-3">
-	                  <div class="grid gap-3 md:grid-cols-3">
-	                    <label class="space-y-1">
-	                      <span class="text-xs text-themed-muted">秒杀价（元）</span>
-	                      <input v-model.number="itemForm.flashPrice" type="number" min="0.01" :max="Math.max(0.01, item.originalPriceSnapshot / 100 - 0.01)" step="0.01" class="input" />
-	                    </label>
-	                    <label class="space-y-1">
-	                      <span class="text-xs text-themed-muted">总库存</span>
-	                      <input v-model.number="itemForm.totalStock" type="number" min="0" step="1" class="input" />
-	                    </label>
-	                    <label class="space-y-1">
-	                      <span class="text-xs text-themed-muted">每人限购</span>
-	                      <input v-model.number="itemForm.perUserLimit" type="number" min="1" step="1" class="input" />
-	                    </label>
-	                  </div>
-	                  <div class="mt-3 flex flex-wrap items-center gap-4 text-sm text-themed">
-	                    <label class="inline-flex items-center gap-2">
-	                      <input v-model="itemForm.allowCoupon" type="checkbox" />
-	                      允许优惠码
-	                    </label>
-	                    <label class="inline-flex items-center gap-2">
-	                      <input v-model="itemForm.allowAff" type="checkbox" />
-	                      允许 AFF
-	                    </label>
-	                  </div>
-	                  <div class="mt-3 flex justify-end gap-2">
-	                    <button class="btn-primary" :disabled="editSaving" @click="saveItemContent(item)">
-	                      {{ editSaving ? '保存中...' : '保存商品' }}
-	                    </button>
-	                    <button class="btn-secondary" :disabled="editSaving" @click="cancelEditItem">取消</button>
-	                  </div>
-	                  <p class="mt-2 text-xs text-themed-muted">库存不能低于已售和锁定数量；价格修改只影响后续购买。</p>
-	                </div>
-	              </div>
-	            </div>
+              <div class="flex flex-wrap gap-2">
+                <button class="btn btn-secondary btn-sm" @click="beginEditCampaign(campaign)">编辑内容</button>
+                <button class="btn btn-secondary btn-sm" @click="changeStatus(campaign, 'active')">开始/恢复</button>
+                <button class="btn btn-secondary btn-sm" @click="changeStatus(campaign, 'paused')">暂停</button>
+                <button class="btn btn-secondary btn-sm" @click="changeStatus(campaign, 'ended')">结束</button>
+                <button class="btn btn-secondary btn-sm" @click="loadReservations(campaign.id)">记录</button>
+              </div>
+            </div>
+            <div v-if="editingCampaignId === campaign.id" class="mt-4 rounded-lg border border-themed bg-themed p-4">
+              <div class="grid gap-4 lg:grid-cols-4">
+                <label class="space-y-1.5">
+                  <span class="nimbus-field-label">活动名称</span>
+                  <input v-model="timeForm.name" class="input" />
+                </label>
+                <label class="space-y-1.5">
+                  <span class="nimbus-field-label">开始时间</span>
+                  <input v-model="timeForm.startAt" type="datetime-local" class="input" />
+                </label>
+                <label class="space-y-1.5">
+                  <span class="nimbus-field-label">结束时间</span>
+                  <input v-model="timeForm.endAt" type="datetime-local" class="input" />
+                </label>
+                <label class="space-y-1.5">
+                  <span class="nimbus-field-label">活动总限购</span>
+                  <input v-model.number="timeForm.maxPerUser" type="number" min="1" step="1" class="input" />
+                </label>
+                <label class="space-y-1.5">
+                  <span class="nimbus-field-label">账号最小时长（小时）</span>
+                  <input v-model.number="timeForm.minAccountAgeHours" type="number" min="0" step="1" class="input" />
+                </label>
+                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
+                  <input v-model="timeForm.requireTurnstile" type="checkbox" />
+                  强制人机验证
+                </label>
+                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
+                  <input v-model="timeForm.requireEmail" type="checkbox" />
+                  必须绑定邮箱
+                </label>
+                <label class="flex items-center gap-2 pt-7 text-sm text-themed">
+                  <input v-model="timeForm.blockRiskRestricted" type="checkbox" />
+                  拦截风控限单
+                </label>
+              </div>
+              <textarea v-model="timeForm.description" class="input mt-4 min-h-20" placeholder="活动说明，可选" />
+              <textarea v-model="timeForm.notes" class="input mt-3 min-h-16" placeholder="内部备注，可选" />
+              <div class="mt-4 flex justify-end gap-2">
+                <button class="btn btn-primary" :disabled="editSaving" @click="saveCampaignContent(campaign)">
+                  {{ editSaving ? '保存中...' : '保存内容' }}
+                </button>
+                <button class="btn btn-secondary" :disabled="editSaving" @click="cancelEditCampaign">取消</button>
+              </div>
+              <p class="mt-2 text-xs text-themed-muted">已开始的活动可以修改内容和时间；已有订单记录不回改，后续购买按新配置执行。</p>
+            </div>
+            <div class="mt-4 grid gap-3 lg:grid-cols-2">
+              <div v-for="item in campaign.items" :key="item.id" class="rounded-lg border border-themed bg-themed p-4">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="font-medium text-themed">{{ item.plan.package.name }} / {{ item.plan.name }}</div>
+                    <div class="mt-1 text-xs text-themed-muted">库存 {{ item.remainingStock }} / {{ item.totalStock }}，已售 {{ item.soldCount }}，失败 {{ item.failedCount }}，限购 {{ item.perUserLimit }}</div>
+                  </div>
+                  <div class="text-right">
+                    <div class="font-semibold tabular-nums text-themed">{{ formatMoneyCents(item.flashPrice) }}</div>
+                    <button class="mt-2 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400" @click="beginEditItem(item)">编辑商品</button>
+                  </div>
+                </div>
+                <div v-if="editingItemId === item.id" class="mt-4 rounded-lg border border-themed bg-themed-surface p-3">
+                  <div class="grid gap-3 md:grid-cols-3">
+                    <label class="space-y-1">
+                      <span class="nimbus-field-label">秒杀价（元）</span>
+                      <input v-model.number="itemForm.flashPrice" type="number" min="0.01" :max="Math.max(0.01, item.originalPriceSnapshot / 100 - 0.01)" step="0.01" class="input" />
+                    </label>
+                    <label class="space-y-1">
+                      <span class="nimbus-field-label">总库存</span>
+                      <input v-model.number="itemForm.totalStock" type="number" min="0" step="1" class="input" />
+                    </label>
+                    <label class="space-y-1">
+                      <span class="nimbus-field-label">每人限购</span>
+                      <input v-model.number="itemForm.perUserLimit" type="number" min="1" step="1" class="input" />
+                    </label>
+                  </div>
+                  <div class="mt-3 flex flex-wrap items-center gap-4 text-sm text-themed">
+                    <label class="inline-flex items-center gap-2">
+                      <input v-model="itemForm.allowCoupon" type="checkbox" />
+                      允许优惠码
+                    </label>
+                    <label class="inline-flex items-center gap-2">
+                      <input v-model="itemForm.allowAff" type="checkbox" />
+                      允许 AFF
+                    </label>
+                  </div>
+                  <div class="mt-3 flex justify-end gap-2">
+                    <button class="btn btn-primary" :disabled="editSaving" @click="saveItemContent(item)">
+                      {{ editSaving ? '保存中...' : '保存商品' }}
+                    </button>
+                    <button class="btn btn-secondary" :disabled="editSaving" @click="cancelEditItem">取消</button>
+                  </div>
+                  <p class="mt-2 text-xs text-themed-muted">库存不能低于已售和锁定数量；价格修改只影响后续购买。</p>
+                </div>
+              </div>
+            </div>
           </article>
         </div>
       </section>
 
-      <section v-if="selectedCampaign" class="mt-6 rounded-lg border border-themed bg-themed-surface">
+      <section v-if="selectedCampaign" class="card mt-6 overflow-hidden">
         <div class="flex items-center justify-between border-b border-themed px-5 py-4">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">抢购记录：{{ selectedCampaign.name }}</h2>
-            <p class="mt-1 text-sm text-themed-muted">最近 50 条记录。</p>
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-6 4h6m4 5H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.586a1 1 0 0 1 .707.293l4.414 4.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" />
+            </svg>
+            <div>
+              <h2 class="text-base font-semibold text-themed">抢购记录：{{ selectedCampaign.name }}</h2>
+              <p class="mt-1 text-sm text-themed-muted">最近 50 条记录。</p>
+            </div>
           </div>
-          <button class="btn-secondary" :disabled="reservationsLoading" @click="loadReservations(selectedCampaign.id)">刷新记录</button>
+          <button class="btn btn-secondary" :disabled="reservationsLoading" @click="loadReservations(selectedCampaign.id)">刷新记录</button>
         </div>
         <div v-if="reservations.length === 0" class="px-5 py-8 text-center text-themed-muted">暂无记录</div>
         <template v-else>
@@ -727,7 +757,7 @@ onMounted(async () => {
                   <div class="truncate font-medium text-themed">{{ record.user?.username || `UID ${record.userId}` }}</div>
                   <div class="mt-1 truncate text-xs text-themed-muted">{{ record.packageName }} / {{ record.planName }}</div>
                 </div>
-                <div class="shrink-0 text-sm font-semibold text-themed">¥{{ record.amount.toFixed(2) }}</div>
+                <div class="shrink-0 text-sm font-semibold tabular-nums text-themed">¥{{ record.amount.toFixed(2) }}</div>
               </div>
               <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
                 <div>
@@ -736,7 +766,7 @@ onMounted(async () => {
                 </div>
                 <div>
                   <div class="text-themed-muted">状态</div>
-                  <div class="mt-1 font-medium text-themed">{{ record.status }}</div>
+                  <div class="mt-1"><span class="nimbus-pill text-themed-muted"><span class="dot"></span>{{ record.status }}</span></div>
                 </div>
                 <div class="col-span-2">
                   <div class="text-themed-muted">时间</div>
@@ -746,24 +776,24 @@ onMounted(async () => {
             </div>
           </div>
           <div class="hidden overflow-hidden lg:block">
-            <table class="w-full table-fixed divide-y divide-themed text-sm">
-              <thead class="text-left text-xs text-themed-muted">
-                <tr>
-                  <th class="w-[18%] px-5 py-3">用户</th>
-                  <th class="w-[24%] px-5 py-3">套餐</th>
-                  <th class="w-[18%] px-5 py-3">实例</th>
-                  <th class="w-[12%] px-5 py-3">金额</th>
-                  <th class="w-[10%] px-5 py-3">状态</th>
-                  <th class="w-[18%] px-5 py-3">时间</th>
+            <table class="w-full table-fixed text-sm">
+              <thead>
+                <tr class="border-b border-themed">
+                  <th class="nimbus-th w-[16%]">用户</th>
+                  <th class="nimbus-th w-[24%]">套餐</th>
+                  <th class="nimbus-th w-[18%]">实例</th>
+                  <th class="nimbus-th w-[12%]">金额</th>
+                  <th class="nimbus-th w-[12%]">状态</th>
+                  <th class="nimbus-th w-[18%]">时间</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-themed">
-                <tr v-for="record in reservations" :key="record.id">
+              <tbody>
+                <tr v-for="record in reservations" :key="record.id" class="nimbus-row border-b border-themed">
                   <td class="truncate px-5 py-3 text-themed">{{ record.user?.username || `UID ${record.userId}` }}</td>
                   <td class="truncate px-5 py-3 text-themed-muted">{{ record.packageName }} / {{ record.planName }}</td>
                   <td class="truncate px-5 py-3 text-themed-muted">{{ record.instance?.name || '-' }}</td>
-                  <td class="px-5 py-3 text-themed">¥{{ record.amount.toFixed(2) }}</td>
-                  <td class="truncate px-5 py-3 text-themed-muted">{{ record.status }}</td>
+                  <td class="px-5 py-3 tabular-nums text-themed">¥{{ record.amount.toFixed(2) }}</td>
+                  <td class="px-5 py-3"><span class="nimbus-pill text-themed-muted"><span class="dot"></span>{{ record.status }}</span></td>
                   <td class="truncate px-5 py-3 text-themed-muted">{{ formatDate(record.createdAt) }}</td>
                 </tr>
               </tbody>
@@ -774,3 +804,102 @@ onMounted(async () => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.nimbus-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  color: var(--kawaii-primary);
+  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 28%, transparent);
+}
+
+.nimbus-stat {
+  position: relative;
+  overflow: hidden;
+}
+
+.nimbus-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2.25rem;
+  height: 2px;
+  background: var(--kawaii-primary);
+  border-radius: 0 0 2px 0;
+}
+
+.nimbus-stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+}
+
+.nimbus-stat-value {
+  margin-top: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--kawaii-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.nimbus-th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+  white-space: nowrap;
+}
+
+.nimbus-row {
+  transition: background-color 0.12s ease;
+}
+
+.nimbus-row:hover {
+  background: color-mix(in srgb, var(--kawaii-primary) 5%, transparent);
+}
+
+.nimbus-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.nimbus-pill .dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: currentColor;
+}
+
+.nimbus-field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--kawaii-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-row {
+    transition: none;
+  }
+}
+</style>

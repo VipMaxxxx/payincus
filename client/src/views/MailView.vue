@@ -312,25 +312,27 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
   <div class="kawaii-page animate-fade-in">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h1 class="page-title">{{ t('mail.title') }}</h1>
-      <p class="text-sm text-themed-muted mt-1">{{ t('mail.description') }}</p>
+      <div class="min-w-0">
+        <h1 class="page-title">{{ t('mail.title') }}</h1>
+        <p class="page-description">{{ t('mail.description') }}</p>
+      </div>
     </div>
 
     <!-- TAB 切换 -->
-    <div class="flex border-b border-themed mb-6">
+    <div class="flex items-center gap-6 border-b border-themed mb-6 overflow-x-auto">
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
+        class="relative -mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'my'
-          ? 'border-gray-900 dark:border-gray-100 text-themed'
+          ? 'border-primary-500 text-themed'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="activeTab = 'my'"
       >
         {{ t('mail.tabs.my') }}
       </button>
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
+        class="relative -mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'buy'
-          ? 'border-gray-900 dark:border-gray-100 text-themed'
+          ? 'border-primary-500 text-themed'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="activeTab = 'buy'"
       >
@@ -340,7 +342,7 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
 
     <!-- 加载状态 -->
     <div v-if="loading" class="flex justify-center py-12">
-      <span class="loading loading-spinner loading-lg"></span>
+      <span class="nimbus-spinner nimbus-spinner--lg text-themed-muted"></span>
     </div>
 
     <!-- 我的域名邮箱 TAB -->
@@ -365,8 +367,8 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
         <div class="card p-6">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-base font-medium text-themed">{{ t('mail.subscriptionOverview') }}</h3>
-            <span :class="['badge', getStatusBadge(subscription.status)]">
-              {{ t('mail.status.' + subscription.status) }}
+            <span class="nimbus-pill font-mono" :class="getStatusBadge(subscription.status)">
+              <span class="nimbus-dot"></span>{{ t('mail.status.' + subscription.status) }}
             </span>
           </div>
           
@@ -417,7 +419,7 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
               <span class="text-xs font-medium text-themed">
                 {{ t(subscription.autoRenew ? 'mail.autoRenewOn' : 'mail.autoRenewOff') }}
               </span>
-              <button class="btn btn-sm btn-outline" @click="openRenewModal">
+              <button class="btn btn-sm btn-secondary" @click="openRenewModal">
                 {{ t('mail.renew') }}
               </button>
             </div>
@@ -425,10 +427,10 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
         </div>
 
         <!-- 我的域名 -->
-        <div class="card">
-          <div class="flex items-center justify-between p-4 border-b border-themed">
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
             <h3 class="text-base font-medium text-themed">{{ t('mail.myDomains') }}</h3>
-            <button 
+            <button
               class="btn btn-sm btn-primary"
               :disabled="subscription.usage.domainCount >= subscription.plan.domainLimit"
               @click="openAddDomainModal"
@@ -436,28 +438,28 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
               + {{ t('mail.addDomain') }}
             </button>
           </div>
-          
-          <div v-if="subscription.domains.length === 0" class="p-8 text-center text-themed-muted">
+
+          <div v-if="subscription.domains.length === 0" class="card p-8 text-center text-themed-muted">
             {{ t('mail.noDomains') }}
           </div>
-          
-          <div v-else class="divide-y divide-themed">
-            <div 
-              v-for="domain in subscription.domains" 
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="domain in subscription.domains"
               :key="domain.id"
-              class="p-4 hover:bg-themed-secondary cursor-pointer transition-colors"
+              class="card-interactive p-4"
               @click="goToDomain(domain.id)"
             >
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium text-themed">{{ domain.domain }}</span>
-                    <span :class="['badge badge-sm', getStatusBadge(domain.status)]">
-                      {{ t('mail.domainStatus.' + domain.status) }}
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-medium text-themed truncate">{{ domain.domain }}</span>
+                    <span class="nimbus-pill font-mono" :class="getStatusBadge(domain.status)">
+                      <span class="nimbus-dot"></span>{{ t('mail.domainStatus.' + domain.status) }}
                     </span>
                   </div>
                 </div>
-                <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-themed-muted flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
               </div>
@@ -474,7 +476,7 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
         <!-- Step 1: 选择服务地区 -->
         <div class="card p-5">
           <div class="flex items-center gap-2.5 mb-4">
-            <span class="w-6 h-6 rounded-full bg-accent text-white dark:text-black text-xs font-bold flex items-center justify-center">1</span>
+            <span class="nimbus-step">1</span>
             <h3 class="text-sm font-semibold text-themed">{{ t('mail.selectRegion') }}</h3>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -482,10 +484,10 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
               v-for="source in sources"
               :key="source.id"
               :class="[
-                'relative p-4 rounded-xl border-2 transition-all cursor-pointer group',
+                'nimbus-select relative p-4 rounded-xl border cursor-pointer group',
                 selectedSourceId === source.id
-                  ? 'border-accent bg-themed-secondary'
-                  : 'border-themed hover:border-gray-400 dark:hover:border-gray-500'
+                  ? 'border-primary-500 ring-1 ring-primary-500/30 bg-themed-secondary'
+                  : 'border-themed hover:border-themed-secondary'
               ]"
               @click="selectSource(source.id)"
             >
@@ -499,15 +501,15 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
                   <div class="text-xs text-yellow-600 dark:text-yellow-400 mt-0.5">{{ t('mail.nodeStatus.limited') }}</div>
                 </div>
                 <!-- 选中指示器 -->
-                <div 
+                <div
                   :class="[
                     'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all',
                     selectedSourceId === source.id
-                      ? 'border-accent bg-accent'
+                      ? 'border-primary-500 bg-primary-500'
                       : 'border-gray-300 dark:border-gray-600 group-hover:border-gray-400 dark:group-hover:border-gray-500'
                   ]"
                 >
-                  <svg v-if="selectedSourceId === source.id" class="w-3 h-3 text-white dark:text-black" fill="currentColor" viewBox="0 0 20 20">
+                  <svg v-if="selectedSourceId === source.id" class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                   </svg>
                 </div>
@@ -538,17 +540,17 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
         <!-- Step 2: 方案配置详情 -->
         <div v-if="selectedSource && !hasSubscriptionInSelectedRegion" class="card p-5">
           <div class="flex items-center gap-2.5 mb-4">
-            <span class="w-6 h-6 rounded-full bg-accent text-white dark:text-black text-xs font-bold flex items-center justify-center">2</span>
+            <span class="nimbus-step">2</span>
             <h3 class="text-sm font-semibold text-themed">{{ t('mail.planDetails') }}</h3>
           </div>
-          
+
           <div v-for="plan in selectedSource.plans" :key="plan.id" class="mb-4 last:mb-0">
             <div
               :class="[
-                'relative p-5 rounded-xl border-2 transition-all cursor-pointer',
+                'nimbus-select relative p-5 rounded-xl border cursor-pointer',
                 selectedPlanId === plan.id
-                  ? 'border-accent bg-themed-secondary'
-                  : 'border-themed hover:border-gray-400 dark:hover:border-gray-500'
+                  ? 'border-primary-500 ring-1 ring-primary-500/30 bg-themed-secondary'
+                  : 'border-themed hover:border-themed-secondary'
               ]"
               @click="selectPlan(plan.id)"
             >
@@ -605,11 +607,11 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
               </div>
               
               <!-- 选中指示器 -->
-              <div 
+              <div
                 v-if="selectedPlanId === plan.id"
-                class="absolute bottom-4 right-4 w-6 h-6 rounded-full bg-accent flex items-center justify-center"
+                class="absolute bottom-4 right-4 w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center"
               >
-                <svg class="w-4 h-4 text-white dark:text-black" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                 </svg>
               </div>
@@ -620,27 +622,27 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
         <!-- Step 3: 其他选项 (优惠码) -->
         <div v-if="selectedPlan && !hasSubscriptionInSelectedRegion" class="card p-5">
           <div class="flex items-center gap-2.5 mb-4">
-            <span class="w-6 h-6 rounded-full bg-accent text-white dark:text-black text-xs font-bold flex items-center justify-center">3</span>
+            <span class="nimbus-step">3</span>
             <h3 class="text-sm font-semibold text-themed">{{ t('mail.otherOptions') }}</h3>
           </div>
-          
+
           <div>
             <label class="text-xs font-medium text-themed-muted mb-2 block">{{ t('aff.promoCodeOptional') }}</label>
             <div class="flex gap-2">
-              <input 
-                v-model="affCode" 
-                type="text" 
-                class="input flex-1" 
+              <input
+                v-model="affCode"
+                type="text"
+                class="input flex-1"
                 :placeholder="t('aff.promoCodeInputPlaceholder')"
                 :disabled="affCodeVerifying"
                 @keyup.enter="verifyAffCode"
               />
-              <button 
-                class="btn btn-outline px-4"
+              <button
+                class="btn btn-secondary px-4"
                 :disabled="affCodeVerifying || !affCode.trim()"
                 @click="verifyAffCode"
               >
-                <span v-if="affCodeVerifying" class="loading loading-spinner loading-sm"></span>
+                <span v-if="affCodeVerifying" class="nimbus-spinner nimbus-spinner--sm"></span>
                 <span v-else>{{ t('mail.verify') }}</span>
               </button>
             </div>
@@ -700,7 +702,7 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
             :disabled="buyLoading"
             @click="purchaseSubscription"
           >
-            <span v-if="buyLoading" class="loading loading-spinner loading-sm mr-2"></span>
+            <span v-if="buyLoading" class="nimbus-spinner nimbus-spinner--sm mr-2"></span>
             {{ configStore.freeSiteMode ? freeSiteCopy.mailCheckoutConfirm : t('mail.checkout.confirm') }}
           </button>
           
@@ -759,7 +761,7 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
               :disabled="buyLoading"
               @click="purchaseSubscription"
             >
-              <span v-if="buyLoading" class="loading loading-spinner loading-sm mr-2"></span>
+              <span v-if="buyLoading" class="nimbus-spinner nimbus-spinner--sm mr-2"></span>
               {{ configStore.freeSiteMode ? freeSiteCopy.mailCheckoutConfirm : t('mail.checkout.confirm') }}
               <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -823,7 +825,7 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
               :disabled="addDomainLoading || !newDomain.trim()"
               @click="addDomain"
             >
-              <span v-if="addDomainLoading" class="loading-spinner w-4 h-4 mr-2"></span>
+              <span v-if="addDomainLoading" class="nimbus-spinner nimbus-spinner--sm mr-2"></span>
               {{ t('common.confirm') }}
             </button>
           </div>
@@ -898,7 +900,7 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
               :disabled="renewLoading"
               @click="renewSubscription"
             >
-              <span v-if="renewLoading" class="loading-spinner w-4 h-4 mr-2"></span>
+              <span v-if="renewLoading" class="nimbus-spinner nimbus-spinner--sm mr-2"></span>
               {{ t('mail.confirmRenew') }}
             </button>
           </div>
@@ -907,3 +909,75 @@ function getBillingCycleSuffix(cycle: string | null | undefined) {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* Nimbus kit — shared with MailDomainView */
+.nimbus-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.1rem;
+  letter-spacing: 0.01em;
+}
+.nimbus-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.7;
+  flex: none;
+}
+.nimbus-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: var(--kawaii-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex: none;
+}
+.nimbus-select {
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.nimbus-select:hover {
+  transform: translateY(-2px);
+}
+.nimbus-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 9999px;
+  animation: nimbus-spin 0.6s linear infinite;
+  vertical-align: -0.125em;
+}
+.nimbus-spinner--sm {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+.nimbus-spinner--lg {
+  width: 2rem;
+  height: 2rem;
+  border-width: 3px;
+}
+@keyframes nimbus-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+</style>

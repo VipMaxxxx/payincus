@@ -19,7 +19,7 @@
     --text-primary: #eef1f6;
     --text-secondary: #98a1b0;
     --text-tertiary: #6b7280;
-    --accent: #8b87ff;
+    --accent: #8b8ff5;
     --success: #3ad07f;
     --warning: #e0a13a;
     --error: #f2686c;
@@ -36,7 +36,7 @@
     --text-primary: #0b0e14;
     --text-secondary: #525a68;
     --text-tertiary: #868e9c;
-    --accent: #4f46e5;
+    --accent: #5e6ad2;
     --success: #16a34a;
     --warning: #c2770b;
     --error: #e5484d;
@@ -52,6 +52,14 @@
     color: var(--text-primary);
     font-family: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Linear 式标题字距收紧 */
+  h1,
+  h2,
+  .page-title,
+  .modal-title {
+    letter-spacing: -0.02em;
   }
 
   /* 极简滚动条 */
@@ -197,6 +205,7 @@
   /* ============ 卡片 - 极简边框 ============ */
   .card {
     @apply rounded-lg;
+    box-shadow: var(--kawaii-shadow);
   }
 
   .dark .card {
@@ -204,7 +213,7 @@
   }
 
   .light .card {
-    @apply bg-white border border-gray-200 shadow-sm;
+    @apply bg-white border border-gray-200;
   }
 
   .card-hover {
@@ -804,11 +813,13 @@
 
 /* ============ 输入框聚焦效果 ============ */
 .dark .input:focus {
-  box-shadow: 0 0 0 3px rgba(139, 135, 255, 0.22);
+  border-color: #8b8ff5;
+  box-shadow: 0 0 0 1px #8b8ff5, 0 0 0 4px rgba(139, 143, 245, 0.2);
 }
 
 .light .input:focus {
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+  border-color: #5e6ad2;
+  box-shadow: 0 0 0 1px #5e6ad2, 0 0 0 4px rgba(94, 106, 210, 0.14);
 }
 
 /* ============ 按钮点击效果 ============ */
@@ -893,12 +904,10 @@
   transform: translateY(-2px);
 }
 
-.light .card-interactive:hover {
-  box-shadow: 0 10px 24px -6px rgba(16, 24, 40, 0.12), 0 4px 8px -4px rgba(16, 24, 40, 0.06);
-}
-
+.light .card-interactive:hover,
 .dark .card-interactive:hover {
-  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.55);
+  border-color: color-mix(in srgb, var(--kawaii-primary) 40%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 40%, transparent), 0 4px 20px -6px color-mix(in srgb, var(--kawaii-primary) 30%, transparent) !important;
 }
 
 /* ============ 数字徽章动画 ============ */
@@ -1239,7 +1248,7 @@
   -webkit-backdrop-filter: none !important;
 }
 
-/* 5) 阴影收敛为细微中性 */
+/* 5) 阴影升级为 Linear 多层 + 发丝线（明暗随 --kawaii-shadow 切换） */
 .kawaii-topbar,
 .kawaii-sidebar,
 .kawaii-menu-panel,
@@ -1251,43 +1260,43 @@
 .kawaii-instance-card,
 .card,
 .kawaii-brand-mark {
-  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 6px 16px rgb(16 24 40 / 0.05) !important;
+  box-shadow: var(--kawaii-shadow) !important;
 }
 
-/* 6) 渐变 CTA / 主按钮 / 选中态 → Nimbus 靛蓝（明暗各一，靛蓝微光） */
+/* 6) 渐变 CTA / 主按钮 / 选中态 → Linear 靛紫（明暗各一，accent 微光） */
 .kawaii-header-cta,
 .kawaii-primary-button,
 .btn-primary {
   background-image: none !important;
-  box-shadow: 0 1px 2px rgb(79 70 229 / 0.28), 0 6px 18px rgb(79 70 229 / 0.26) !important;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 6px 18px -6px color-mix(in srgb, var(--kawaii-primary) 45%, transparent) !important;
 }
 .dark .kawaii-header-cta,
 .dark .kawaii-primary-button,
 .dark .btn-primary {
-  background-color: #8b87ff !important;
-  color: #0a0a1a !important;
+  background-color: #8b8ff5 !important;
+  color: #0a0b0d !important;
 }
 .light .kawaii-header-cta,
 .light .kawaii-primary-button,
 .light .btn-primary {
-  background-color: #4f46e5 !important;
+  background-color: #5e6ad2 !important;
   color: #ffffff !important;
 }
 .dark .kawaii-header-cta:hover,
 .dark .kawaii-primary-button:hover,
 .dark .btn-primary:hover {
-  background-color: #a6a2ff !important;
+  background-color: #a3a6f8 !important;
 }
 .light .kawaii-header-cta:hover,
 .light .kawaii-primary-button:hover,
 .light .btn-primary:hover {
-  background-color: #4338ca !important;
+  background-color: #4f5bc9 !important;
 }
 .kawaii-header-cta:hover,
 .kawaii-primary-button:hover,
 .btn-primary:hover {
   filter: none !important;
-  transform: none !important;
+  transform: translateY(-1px) !important;
 }
 .kawaii-public-nav-link.is-active,
 .kawaii-menu-item.is-active,

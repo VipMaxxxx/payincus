@@ -737,39 +737,76 @@ onMounted(() => {
 
 <template>
   <div class="kawaii-page space-y-6 p-6 animate-fade-in">
-    <header class="flex flex-col gap-4 border-b border-themed pb-5 lg:flex-row lg:items-end lg:justify-between">
+    <header class="page-header">
       <div>
         <h1 class="page-title">资源风控</h1>
-        <p class="mt-1 text-sm text-themed-muted">实例级评分、QoS 降档、CPU/发包监控与账号下单审核。</p>
+        <p class="page-description">实例级评分、QoS 降档、CPU/发包监控与账号下单审核。</p>
       </div>
-      <button class="btn-secondary" :disabled="loading" @click="loadAll">刷新</button>
+      <div class="flex items-center gap-2">
+        <button class="btn-secondary btn-sm" :disabled="loading" @click="loadAll">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          刷新
+        </button>
+      </div>
     </header>
 
-    <div v-if="loading" class="py-16 text-center text-themed-muted">加载中...</div>
+    <div v-if="loading" class="flex items-center justify-center gap-3 py-16 text-sm text-themed-muted">
+      <svg class="h-5 w-5 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      </svg>
+      加载中...
+    </div>
 
     <template v-else>
       <section class="grid gap-3 md:grid-cols-3">
-        <div class="card p-4">
-          <div class="text-xs text-themed-muted">纳入评分实例</div>
-          <div class="mt-2 text-2xl font-semibold text-themed">{{ overview?.totalStates || 0 }}</div>
+        <div class="card p-4 sm:p-5">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <rect x="3" y="4" width="18" height="6" rx="1.5" />
+                <rect x="3" y="14" width="18" height="6" rx="1.5" />
+                <path stroke-linecap="round" d="M7 7h.01M7 17h.01" />
+              </svg>
+            </div>
+            <div class="text-[11px] font-medium uppercase tracking-wider text-themed-faint">纳入评分实例</div>
+          </div>
+          <div class="mt-3 font-mono text-2xl font-semibold tabular-nums text-themed">{{ overview?.totalStates || 0 }}</div>
         </div>
-        <div class="card p-4">
-          <div class="text-xs text-themed-muted">高风险实例</div>
-          <div class="mt-2 text-2xl font-semibold text-amber-600">{{ highRiskCount }}</div>
+        <div class="card p-4 sm:p-5">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14A2 2 0 004 21h16a2 2 0 001.71-3.14l-8.18-14a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div class="text-[11px] font-medium uppercase tracking-wider text-themed-faint">高风险实例</div>
+          </div>
+          <div class="mt-3 font-mono text-2xl font-semibold tabular-nums text-amber-600 dark:text-amber-400">{{ highRiskCount }}</div>
         </div>
-        <div class="card p-4">
-          <div class="text-xs text-themed-muted">限制下单账号</div>
-          <div class="mt-2 text-2xl font-semibold text-rose-600 dark:text-rose-400">{{ activeRestrictionCount }}</div>
+        <div class="card p-4 sm:p-5">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <circle cx="12" cy="12" r="9" />
+                <path stroke-linecap="round" d="M5.64 5.64l12.72 12.72" />
+              </svg>
+            </div>
+            <div class="text-[11px] font-medium uppercase tracking-wider text-themed-faint">限制下单账号</div>
+          </div>
+          <div class="mt-3 font-mono text-2xl font-semibold tabular-nums text-rose-600 dark:text-rose-400">{{ activeRestrictionCount }}</div>
         </div>
       </section>
 
-      <nav class="flex flex-wrap gap-2 border-b border-themed">
+      <nav class="flex flex-wrap gap-1 border-b border-themed">
         <button
           v-for="tab in tabs"
           :key="tab.key"
           :class="[
-            'px-3 py-2 text-sm font-medium',
-            activeTab === tab.key ? 'border-b-2 border-accent text-accent' : 'text-themed-muted hover:text-themed'
+            'border-b-2 -mb-px whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors',
+            activeTab === tab.key ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400' : 'border-transparent text-themed-muted hover:text-themed'
           ]"
           @click="setActiveTab(tab.key)"
         >
@@ -777,69 +814,67 @@ onMounted(() => {
         </button>
       </nav>
 
-      <section v-if="activeTab === 'instances'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-if="activeTab === 'instances'" class="overflow-hidden rounded-xl border border-themed bg-themed-surface">
         <div class="space-y-3 p-4 lg:hidden">
-          <div v-if="instances.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
-            暂无实例风险状态。
-          </div>
-          <div v-for="item in instances" :key="item.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+          <div v-if="instances.length === 0" class="empty-state py-10">暂无实例风险状态。</div>
+          <div v-for="item in instances" :key="item.id" class="rounded-xl border border-themed bg-themed-secondary p-4 text-sm transition-colors hover:border-themed">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <div class="font-semibold text-themed">{{ item.instance?.name || item.instanceId }}</div>
-                <div class="mt-1 text-xs text-themed-muted">
+                <div class="truncate font-medium text-themed">{{ item.instance?.name || item.instanceId }}</div>
+                <div class="mt-1 font-mono text-xs tabular-nums text-themed-muted">
                   {{ item.user?.username || item.userId }} · {{ item.host?.name || item.hostId }}
                 </div>
               </div>
-              <span :class="badgeClass(item.level)">{{ item.score }}</span>
+              <span :class="badgeClass(item.level)"><span class="font-mono tabular-nums">{{ item.score }}</span></span>
             </div>
-            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">状态</div>
+            <div class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+              <div class="rounded-lg bg-themed-surface p-2.5">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">状态</div>
                 <div class="mt-1 text-themed">{{ item.status }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">限速</div>
-                <div class="mt-1 text-themed">{{ item.currentBandwidthLimit || '-' }}</div>
+              <div class="rounded-lg bg-themed-surface p-2.5">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">限速</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">{{ item.currentBandwidthLimit || '-' }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
-                <div class="text-themed-muted">原因</div>
+              <div class="rounded-lg bg-themed-surface p-2.5 sm:col-span-2">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">原因</div>
                 <div class="mt-1 break-words text-themed">{{ item.reason || '-' }}</div>
               </div>
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
-              <button class="btn-secondary px-3 py-1 text-xs" @click="openEvidence(item)">证据</button>
-              <button class="btn-secondary px-3 py-1 text-xs" @click="evaluateInstance(item)">评估</button>
+              <button class="btn-secondary btn-sm" @click="openEvidence(item)">证据</button>
+              <button class="btn-secondary btn-sm" @click="evaluateInstance(item)">评估</button>
               <button
                 v-if="!isSuspendedRisk(item)"
-                class="btn-secondary px-3 py-1 text-xs"
+                class="btn-secondary btn-sm"
                 @click="manualQos(item)"
               >
                 限速
               </button>
               <button
                 v-if="isSuspendedRisk(item)"
-                class="btn-primary px-3 py-1 text-xs"
+                class="btn-primary btn-sm"
                 @click="manualUnsuspend(item)"
               >
                 解除封禁
               </button>
               <button
                 v-else
-                class="btn-danger px-3 py-1 text-xs"
+                class="btn-danger btn-sm"
                 @click="manualSuspend(item)"
               >
                 封禁
               </button>
               <button
                 v-if="hasActiveOrderRestriction(item)"
-                class="btn-primary px-3 py-1 text-xs"
+                class="btn-primary btn-sm"
                 @click="releaseOrderRestrictionFromState(item)"
               >
                 解除限单
               </button>
               <button
                 v-else-if="hasOtherActiveOrderRestriction(item)"
-                class="btn-secondary px-3 py-1 text-xs"
+                class="btn-secondary btn-sm"
                 disabled
                 title="该账号存在其他实例触发的下单限制，请到下单限制列表按来源实例处理"
               >
@@ -847,13 +882,13 @@ onMounted(() => {
               </button>
               <button
                 v-else
-                class="btn-secondary px-3 py-1 text-xs"
+                class="btn-secondary btn-sm"
                 @click="manualOrderRestrict(item)"
               >
                 限单
               </button>
               <button
-                class="btn-secondary px-3 py-1 text-xs"
+                class="btn-secondary btn-sm"
                 :disabled="isNormalRisk(item)"
                 @click="releaseInstance(item)"
               >
@@ -874,64 +909,64 @@ onMounted(() => {
               <col class="w-[18%]" />
               <col class="w-[24%]" />
             </colgroup>
-            <thead class="bg-themed-secondary text-themed-muted">
+            <thead class="border-b border-themed bg-themed-secondary">
               <tr>
-                <th class="p-3 text-left">实例</th>
-                <th class="p-3 text-left">用户</th>
-                <th class="p-3 text-left">节点</th>
-                <th class="p-3 text-left">评分</th>
-                <th class="p-3 text-left">状态</th>
-                <th class="p-3 text-left">限速</th>
-                <th class="p-3 text-left">原因</th>
-                <th class="p-3 text-right">操作</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">实例</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">用户</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">节点</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">评分</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">状态</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">限速</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">原因</th>
+                <th class="px-4 py-2.5 text-right text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">操作</th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="item in instances" :key="item.id" class="border-t border-themed">
-                <td class="p-3 font-medium text-themed">{{ item.instance?.name || item.instanceId }}</td>
-                <td class="p-3 text-themed-secondary">{{ item.user?.username || item.userId }}</td>
-                <td class="p-3 text-themed-secondary">{{ item.host?.name || item.hostId }}</td>
-                <td class="p-3">
-                  <span :class="badgeClass(item.level)">{{ item.score }}</span>
+            <tbody class="divide-themed divide-y">
+              <tr v-for="item in instances" :key="item.id" class="transition-colors hover:bg-themed-hover">
+                <td class="truncate px-4 py-3 text-[13px] font-medium text-themed">{{ item.instance?.name || item.instanceId }}</td>
+                <td class="truncate px-4 py-3 text-[13px] text-themed-secondary">{{ item.user?.username || item.userId }}</td>
+                <td class="truncate px-4 py-3 text-[13px] text-themed-secondary">{{ item.host?.name || item.hostId }}</td>
+                <td class="px-4 py-3">
+                  <span :class="badgeClass(item.level)"><span class="font-mono tabular-nums">{{ item.score }}</span></span>
                 </td>
-                <td class="p-3 text-themed-secondary">{{ item.status }}</td>
-                <td class="p-3 text-themed-secondary">{{ item.currentBandwidthLimit || '-' }}</td>
-                <td class="break-words p-3 text-themed-muted">{{ item.reason || '-' }}</td>
-                <td class="p-3">
+                <td class="px-4 py-3 text-[13px] text-themed-secondary">{{ item.status }}</td>
+                <td class="px-4 py-3 font-mono text-[13px] tabular-nums text-themed-secondary">{{ item.currentBandwidthLimit || '-' }}</td>
+                <td class="break-words px-4 py-3 text-[13px] text-themed-muted">{{ item.reason || '-' }}</td>
+                <td class="px-4 py-3">
                   <div class="flex flex-wrap justify-end gap-2">
-                    <button class="btn-secondary px-3 py-1 text-xs" @click="openEvidence(item)">证据</button>
-                    <button class="btn-secondary px-3 py-1 text-xs" @click="evaluateInstance(item)">评估</button>
+                    <button class="btn-secondary btn-sm" @click="openEvidence(item)">证据</button>
+                    <button class="btn-secondary btn-sm" @click="evaluateInstance(item)">评估</button>
                     <button
                       v-if="!isSuspendedRisk(item)"
-                      class="btn-secondary px-3 py-1 text-xs"
+                      class="btn-secondary btn-sm"
                       @click="manualQos(item)"
                     >
                       限速
                     </button>
                     <button
                       v-if="isSuspendedRisk(item)"
-                      class="btn-primary px-3 py-1 text-xs"
+                      class="btn-primary btn-sm"
                       @click="manualUnsuspend(item)"
                     >
                       解除封禁
                     </button>
                     <button
                       v-else
-                      class="btn-danger px-3 py-1 text-xs"
+                      class="btn-danger btn-sm"
                       @click="manualSuspend(item)"
                     >
                       封禁
                     </button>
                     <button
                       v-if="hasActiveOrderRestriction(item)"
-                      class="btn-primary px-3 py-1 text-xs"
+                      class="btn-primary btn-sm"
                       @click="releaseOrderRestrictionFromState(item)"
                     >
                       解除限单
                     </button>
                     <button
                       v-else-if="hasOtherActiveOrderRestriction(item)"
-                      class="btn-secondary px-3 py-1 text-xs"
+                      class="btn-secondary btn-sm"
                       disabled
                       title="该账号存在其他实例触发的下单限制，请到下单限制列表按来源实例处理"
                     >
@@ -939,13 +974,13 @@ onMounted(() => {
                     </button>
                     <button
                       v-else
-                      class="btn-secondary px-3 py-1 text-xs"
+                      class="btn-secondary btn-sm"
                       @click="manualOrderRestrict(item)"
                     >
                       限单
                     </button>
                     <button
-                      class="btn-secondary px-3 py-1 text-xs"
+                      class="btn-secondary btn-sm"
                       :disabled="isNormalRisk(item)"
                       @click="releaseInstance(item)"
                     >
@@ -955,24 +990,24 @@ onMounted(() => {
                 </td>
               </tr>
               <tr v-if="instances.length === 0">
-                <td colspan="8" class="p-8 text-center text-themed-muted">暂无实例风险状态。</td>
+                <td colspan="8" class="px-4 py-10 text-center text-themed-muted">暂无实例风险状态。</td>
               </tr>
             </tbody>
           </table>
         </div>
         <div class="flex flex-col gap-3 border-t border-themed px-4 py-3 text-sm text-themed-muted md:flex-row md:items-center md:justify-between">
-          <span>{{ pageSummary(instancesPage) }}</span>
+          <span class="font-mono tabular-nums">{{ pageSummary(instancesPage) }}</span>
           <div class="flex items-center gap-2">
             <button
-              class="btn-secondary px-3 py-1 text-xs"
+              class="btn-secondary btn-sm"
               :disabled="instancesPage.page <= 1"
               @click="changeInstancesPage(instancesPage.page - 1)"
             >
               上一页
             </button>
-            <span>第 {{ instancesPage.page }} / {{ totalPages(instancesPage) }} 页</span>
+            <span class="font-mono tabular-nums">第 {{ instancesPage.page }} / {{ totalPages(instancesPage) }} 页</span>
             <button
-              class="btn-secondary px-3 py-1 text-xs"
+              class="btn-secondary btn-sm"
               :disabled="instancesPage.page >= totalPages(instancesPage)"
               @click="changeInstancesPage(instancesPage.page + 1)"
             >
@@ -982,34 +1017,32 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'events'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'events'" class="overflow-hidden rounded-xl border border-themed bg-themed-surface">
         <div class="space-y-3 p-4 lg:hidden">
-          <div v-if="events.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
-            暂无风险事件。
-          </div>
-          <div v-for="event in events" :key="event.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+          <div v-if="events.length === 0" class="empty-state py-10">暂无风险事件。</div>
+          <div v-for="event in events" :key="event.id" class="rounded-xl border border-themed bg-themed-secondary p-4 text-sm">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <div class="font-semibold text-themed">{{ event.instance?.name || event.instanceId }}</div>
-                <div class="mt-1 text-xs text-themed-muted">{{ formatDate(event.createdAt) }}</div>
+                <div class="truncate font-medium text-themed">{{ event.instance?.name || event.instanceId }}</div>
+                <div class="mt-1 font-mono text-xs tabular-nums text-themed-muted">{{ formatDate(event.createdAt) }}</div>
               </div>
               <span :class="badgeClass(event.severity)">{{ event.severity }}</span>
             </div>
-            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">类型</div>
+            <div class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+              <div class="rounded-lg bg-themed-surface p-2.5">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">类型</div>
                 <div class="mt-1 text-themed">{{ event.type }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">评分</div>
-                <div class="mt-1 text-themed">{{ event.scoreAfter }} / {{ event.scoreDelta >= 0 ? '+' : '' }}{{ event.scoreDelta }}</div>
+              <div class="rounded-lg bg-themed-surface p-2.5">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">评分</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">{{ event.scoreAfter }} / {{ event.scoreDelta >= 0 ? '+' : '' }}{{ event.scoreDelta }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">动作</div>
+              <div class="rounded-lg bg-themed-surface p-2.5">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">动作</div>
                 <div class="mt-1 text-themed">{{ event.actionTaken || '-' }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
-                <div class="text-themed-muted">说明</div>
+              <div class="rounded-lg bg-themed-surface p-2.5 sm:col-span-2">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">说明</div>
                 <div class="mt-1 break-words text-themed">{{ event.message }}</div>
               </div>
             </div>
@@ -1026,46 +1059,46 @@ onMounted(() => {
               <col class="w-[13%]" />
               <col class="w-[24%]" />
             </colgroup>
-            <thead class="bg-themed-secondary text-themed-muted">
+            <thead class="border-b border-themed bg-themed-secondary">
               <tr>
-                <th class="p-3 text-left">时间</th>
-                <th class="p-3 text-left">实例</th>
-                <th class="p-3 text-left">类型</th>
-                <th class="p-3 text-left">等级</th>
-                <th class="p-3 text-left">评分</th>
-                <th class="p-3 text-left">动作</th>
-                <th class="p-3 text-left">说明</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">时间</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">实例</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">类型</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">等级</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">评分</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">动作</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">说明</th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="event in events" :key="event.id" class="border-t border-themed">
-                <td class="p-3 text-themed-muted">{{ formatDate(event.createdAt) }}</td>
-                <td class="p-3 text-themed">{{ event.instance?.name || event.instanceId }}</td>
-                <td class="p-3 text-themed-secondary">{{ event.type }}</td>
-                <td class="p-3"><span :class="badgeClass(event.severity)">{{ event.severity }}</span></td>
-                <td class="p-3 text-themed-secondary">{{ event.scoreAfter }} / {{ event.scoreDelta >= 0 ? '+' : '' }}{{ event.scoreDelta }}</td>
-                <td class="p-3 text-themed-secondary">{{ event.actionTaken || '-' }}</td>
-                <td class="break-words p-3 text-themed-muted">{{ event.message }}</td>
+            <tbody class="divide-themed divide-y">
+              <tr v-for="event in events" :key="event.id" class="transition-colors hover:bg-themed-hover">
+                <td class="px-4 py-3 font-mono text-[13px] tabular-nums text-themed-muted">{{ formatDate(event.createdAt) }}</td>
+                <td class="truncate px-4 py-3 text-[13px] text-themed">{{ event.instance?.name || event.instanceId }}</td>
+                <td class="truncate px-4 py-3 text-[13px] text-themed-secondary">{{ event.type }}</td>
+                <td class="px-4 py-3"><span :class="badgeClass(event.severity)">{{ event.severity }}</span></td>
+                <td class="px-4 py-3 font-mono text-[13px] tabular-nums text-themed-secondary">{{ event.scoreAfter }} / {{ event.scoreDelta >= 0 ? '+' : '' }}{{ event.scoreDelta }}</td>
+                <td class="truncate px-4 py-3 text-[13px] text-themed-secondary">{{ event.actionTaken || '-' }}</td>
+                <td class="break-words px-4 py-3 text-[13px] text-themed-muted">{{ event.message }}</td>
               </tr>
               <tr v-if="events.length === 0">
-                <td colspan="7" class="p-8 text-center text-themed-muted">暂无风险事件。</td>
+                <td colspan="7" class="px-4 py-10 text-center text-themed-muted">暂无风险事件。</td>
               </tr>
             </tbody>
           </table>
         </div>
         <div class="flex flex-col gap-3 border-t border-themed px-4 py-3 text-sm text-themed-muted md:flex-row md:items-center md:justify-between">
-          <span>{{ pageSummary(eventsPage) }}</span>
+          <span class="font-mono tabular-nums">{{ pageSummary(eventsPage) }}</span>
           <div class="flex items-center gap-2">
             <button
-              class="btn-secondary px-3 py-1 text-xs"
+              class="btn-secondary btn-sm"
               :disabled="eventsPage.page <= 1"
               @click="changeEventsPage(eventsPage.page - 1)"
             >
               上一页
             </button>
-            <span>第 {{ eventsPage.page }} / {{ totalPages(eventsPage) }} 页</span>
+            <span class="font-mono tabular-nums">第 {{ eventsPage.page }} / {{ totalPages(eventsPage) }} 页</span>
             <button
-              class="btn-secondary px-3 py-1 text-xs"
+              class="btn-secondary btn-sm"
               :disabled="eventsPage.page >= totalPages(eventsPage)"
               @click="changeEventsPage(eventsPage.page + 1)"
             >
@@ -1075,35 +1108,33 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'restrictions'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'restrictions'" class="overflow-hidden rounded-xl border border-themed bg-themed-surface">
         <div class="space-y-3 p-4 lg:hidden">
-          <div v-if="restrictions.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
-            暂无下单限制。
-          </div>
-          <div v-for="item in restrictions" :key="item.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+          <div v-if="restrictions.length === 0" class="empty-state py-10">暂无下单限制。</div>
+          <div v-for="item in restrictions" :key="item.id" class="rounded-xl border border-themed bg-themed-secondary p-4 text-sm">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <div class="font-semibold text-themed">{{ item.user?.username || item.userId }}</div>
+                <div class="truncate font-medium text-themed">{{ item.user?.username || item.userId }}</div>
                 <div class="mt-1 text-xs text-themed-muted">{{ item.sourceInstance?.name || item.sourceInstanceId || '-' }}</div>
               </div>
               <span :class="item.status === 'active' ? 'badge badge-error' : 'badge badge-success'">{{ item.status }}</span>
             </div>
-            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">工单</div>
-                <div class="mt-1 text-themed">{{ item.ticketId ? `#${item.ticketId}` : '-' }}</div>
+            <div class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+              <div class="rounded-lg bg-themed-surface p-2.5">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">工单</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">{{ item.ticketId ? `#${item.ticketId}` : '-' }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">创建时间</div>
-                <div class="mt-1 text-themed">{{ formatDate(item.createdAt) }}</div>
+              <div class="rounded-lg bg-themed-surface p-2.5">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">创建时间</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">{{ formatDate(item.createdAt) }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
-                <div class="text-themed-muted">原因</div>
+              <div class="rounded-lg bg-themed-surface p-2.5 sm:col-span-2">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">原因</div>
                 <div class="mt-1 break-words text-themed">{{ item.reason }}</div>
               </div>
             </div>
             <div class="mt-3 flex justify-end">
-              <button class="btn-primary px-3 py-1 text-xs" :disabled="item.status !== 'active'" @click="releaseRestriction(item)">解除</button>
+              <button class="btn-primary btn-sm" :disabled="item.status !== 'active'" @click="releaseRestriction(item)">解除</button>
             </div>
           </div>
         </div>
@@ -1118,48 +1149,48 @@ onMounted(() => {
               <col class="w-[16%]" />
               <col class="w-[14%]" />
             </colgroup>
-            <thead class="bg-themed-secondary text-themed-muted">
+            <thead class="border-b border-themed bg-themed-secondary">
               <tr>
-                <th class="p-3 text-left">用户</th>
-                <th class="p-3 text-left">来源实例</th>
-                <th class="p-3 text-left">状态</th>
-                <th class="p-3 text-left">工单</th>
-                <th class="p-3 text-left">原因</th>
-                <th class="p-3 text-left">创建时间</th>
-                <th class="p-3 text-right">操作</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">用户</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">来源实例</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">状态</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">工单</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">原因</th>
+                <th class="px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">创建时间</th>
+                <th class="px-4 py-2.5 text-right text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">操作</th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="item in restrictions" :key="item.id" class="border-t border-themed">
-                <td class="p-3 font-medium text-themed">{{ item.user?.username || item.userId }}</td>
-                <td class="p-3 text-themed-secondary">{{ item.sourceInstance?.name || item.sourceInstanceId || '-' }}</td>
-                <td class="p-3"><span :class="item.status === 'active' ? 'badge badge-error' : 'badge badge-success'">{{ item.status }}</span></td>
-                <td class="p-3 text-themed-secondary">{{ item.ticketId ? `#${item.ticketId}` : '-' }}</td>
-                <td class="break-words p-3 text-themed-muted">{{ item.reason }}</td>
-                <td class="p-3 text-themed-muted">{{ formatDate(item.createdAt) }}</td>
-                <td class="p-3 text-right">
-                  <button class="btn-primary px-3 py-1 text-xs" :disabled="item.status !== 'active'" @click="releaseRestriction(item)">解除</button>
+            <tbody class="divide-themed divide-y">
+              <tr v-for="item in restrictions" :key="item.id" class="transition-colors hover:bg-themed-hover">
+                <td class="truncate px-4 py-3 text-[13px] font-medium text-themed">{{ item.user?.username || item.userId }}</td>
+                <td class="truncate px-4 py-3 text-[13px] text-themed-secondary">{{ item.sourceInstance?.name || item.sourceInstanceId || '-' }}</td>
+                <td class="px-4 py-3"><span :class="item.status === 'active' ? 'badge badge-error' : 'badge badge-success'">{{ item.status }}</span></td>
+                <td class="px-4 py-3 font-mono text-[13px] tabular-nums text-themed-secondary">{{ item.ticketId ? `#${item.ticketId}` : '-' }}</td>
+                <td class="break-words px-4 py-3 text-[13px] text-themed-muted">{{ item.reason }}</td>
+                <td class="px-4 py-3 font-mono text-[13px] tabular-nums text-themed-muted">{{ formatDate(item.createdAt) }}</td>
+                <td class="px-4 py-3 text-right">
+                  <button class="btn-primary btn-sm" :disabled="item.status !== 'active'" @click="releaseRestriction(item)">解除</button>
                 </td>
               </tr>
               <tr v-if="restrictions.length === 0">
-                <td colspan="7" class="p-8 text-center text-themed-muted">暂无下单限制。</td>
+                <td colspan="7" class="px-4 py-10 text-center text-themed-muted">暂无下单限制。</td>
               </tr>
             </tbody>
           </table>
         </div>
         <div class="flex flex-col gap-3 border-t border-themed px-4 py-3 text-sm text-themed-muted md:flex-row md:items-center md:justify-between">
-          <span>{{ pageSummary(restrictionsPage) }}</span>
+          <span class="font-mono tabular-nums">{{ pageSummary(restrictionsPage) }}</span>
           <div class="flex items-center gap-2">
             <button
-              class="btn-secondary px-3 py-1 text-xs"
+              class="btn-secondary btn-sm"
               :disabled="restrictionsPage.page <= 1"
               @click="changeRestrictionsPage(restrictionsPage.page - 1)"
             >
               上一页
             </button>
-            <span>第 {{ restrictionsPage.page }} / {{ totalPages(restrictionsPage) }} 页</span>
+            <span class="font-mono tabular-nums">第 {{ restrictionsPage.page }} / {{ totalPages(restrictionsPage) }} 页</span>
             <button
-              class="btn-secondary px-3 py-1 text-xs"
+              class="btn-secondary btn-sm"
               :disabled="restrictionsPage.page >= totalPages(restrictionsPage)"
               @click="changeRestrictionsPage(restrictionsPage.page + 1)"
             >
@@ -1169,121 +1200,130 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <label class="flex items-center gap-2 text-sm text-themed">
-            <input v-model="policyForm.enabled" type="checkbox" />
-            启用资源风控
-          </label>
-          <label class="flex items-center gap-2 text-sm text-themed">
-            <input v-model="policyForm.accountOrderRestrictEnabled" type="checkbox" />
-            高风险后限制账号下单
-          </label>
-          <label class="flex items-center gap-2 text-sm text-themed">
-            <input v-model="policyForm.autoSuspendEnabled" type="checkbox" />
-            达严重分自动暂停实例
-          </label>
+      <section v-else class="space-y-5">
+        <div class="card space-y-5 p-4 sm:p-5">
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-themed bg-themed-secondary px-3 py-2.5 text-sm text-themed transition-colors hover:bg-themed-hover">
+              <input v-model="policyForm.enabled" type="checkbox" class="h-4 w-4 shrink-0 accent-primary-600" />
+              启用资源风控
+            </label>
+            <label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-themed bg-themed-secondary px-3 py-2.5 text-sm text-themed transition-colors hover:bg-themed-hover">
+              <input v-model="policyForm.accountOrderRestrictEnabled" type="checkbox" class="h-4 w-4 shrink-0 accent-primary-600" />
+              高风险后限制账号下单
+            </label>
+            <label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-themed bg-themed-secondary px-3 py-2.5 text-sm text-themed transition-colors hover:bg-themed-hover">
+              <input v-model="policyForm.autoSuspendEnabled" type="checkbox" class="h-4 w-4 shrink-0 accent-primary-600" />
+              达严重分自动暂停实例
+            </label>
+          </div>
 
-          <label class="space-y-1">
-            <span class="label">带宽观察窗口（分钟）</span>
-            <input v-model.number="policyForm.bandwidthWindowMinutes" class="input w-full" type="number" min="5" />
-          </label>
-          <label class="space-y-1">
-            <span class="label">带宽触发分钟</span>
-            <input v-model.number="policyForm.bandwidthActiveMinutes" class="input w-full" type="number" min="1" />
-          </label>
-          <label class="space-y-1">
-            <span class="label">带宽阈值 Mbps</span>
-            <input v-model.number="policyForm.bandwidthThresholdMbps" class="input w-full" type="number" min="1" />
-          </label>
-          <label class="space-y-1">
-            <span class="label">CPU 观察窗口（分钟）</span>
-            <input v-model.number="policyForm.cpuWindowMinutes" class="input w-full" type="number" min="5" />
-          </label>
-          <label class="space-y-1">
-            <span class="label">CPU 触发分钟</span>
-            <input v-model.number="policyForm.cpuActiveMinutes" class="input w-full" type="number" min="1" />
-          </label>
-          <label class="space-y-1">
-            <span class="label">CPU 阈值 %</span>
-            <input v-model.number="policyForm.cpuThresholdPercent" class="input w-full" type="number" min="1" />
-          </label>
-          <label class="space-y-1">
-            <span class="label">PPS 阈值</span>
-            <input v-model.number="policyForm.ppsThreshold" class="input w-full" type="number" min="1" />
-          </label>
-          <label class="space-y-1">
-            <span class="label">限制下单分数</span>
-            <input v-model.number="policyForm.orderRestrictScore" class="input w-full" type="number" min="1" max="100" />
-          </label>
-          <label class="space-y-1">
-            <span class="label">自动暂停分数</span>
-            <input v-model.number="policyForm.autoSuspendScore" class="input w-full" type="number" min="1" max="100" />
-          </label>
+          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label class="space-y-1.5">
+              <span class="label">带宽观察窗口（分钟）</span>
+              <input v-model.number="policyForm.bandwidthWindowMinutes" class="input w-full font-mono tabular-nums" type="number" min="5" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="label">带宽触发分钟</span>
+              <input v-model.number="policyForm.bandwidthActiveMinutes" class="input w-full font-mono tabular-nums" type="number" min="1" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="label">带宽阈值 Mbps</span>
+              <input v-model.number="policyForm.bandwidthThresholdMbps" class="input w-full font-mono tabular-nums" type="number" min="1" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="label">CPU 观察窗口（分钟）</span>
+              <input v-model.number="policyForm.cpuWindowMinutes" class="input w-full font-mono tabular-nums" type="number" min="5" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="label">CPU 触发分钟</span>
+              <input v-model.number="policyForm.cpuActiveMinutes" class="input w-full font-mono tabular-nums" type="number" min="1" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="label">CPU 阈值 %</span>
+              <input v-model.number="policyForm.cpuThresholdPercent" class="input w-full font-mono tabular-nums" type="number" min="1" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="label">PPS 阈值</span>
+              <input v-model.number="policyForm.ppsThreshold" class="input w-full font-mono tabular-nums" type="number" min="1" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="label">限制下单分数</span>
+              <input v-model.number="policyForm.orderRestrictScore" class="input w-full font-mono tabular-nums" type="number" min="1" max="100" />
+            </label>
+            <label class="space-y-1.5">
+              <span class="label">自动暂停分数</span>
+              <input v-model.number="policyForm.autoSuspendScore" class="input w-full font-mono tabular-nums" type="number" min="1" max="100" />
+            </label>
+          </div>
         </div>
 
-        <div class="mt-5 space-y-3">
+        <div class="card space-y-3 p-4 sm:p-5">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <h2 class="text-sm font-semibold text-themed">QoS 档位</h2>
+              <h2 class="text-base font-semibold text-themed">QoS 档位</h2>
               <p class="mt-1 text-xs text-themed-muted">每行都是独立降档规则，触发分数越高限制越严格；恢复分数用于自动解除限速。</p>
             </div>
-            <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="addQosTier">新增档位</button>
+            <button class="btn-secondary btn-sm" type="button" @click="addQosTier">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
+              </svg>
+              新增档位
+            </button>
           </div>
 
           <div class="space-y-3 lg:hidden">
             <div
               v-for="(tier, index) in policyForm.qosTiers"
               :key="index"
-              class="rounded-lg border border-themed bg-themed p-4 text-sm"
+              class="rounded-xl border border-themed bg-themed-secondary p-4 text-sm"
             >
               <div class="flex items-center justify-between gap-3">
-                <div class="font-semibold text-themed">QoS 档位 #{{ index + 1 }}</div>
-                <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="removeQosTier(index)">删除</button>
+                <div class="font-mono font-semibold tabular-nums text-themed">QoS 档位 #{{ index + 1 }}</div>
+                <button class="btn-secondary btn-sm" type="button" @click="removeQosTier(index)">删除</button>
               </div>
               <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                <label class="space-y-1">
+                <label class="space-y-1.5">
                   <span class="label">档位</span>
-                  <input v-model.number="tier.level" class="input w-full" type="number" min="1" />
+                  <input v-model.number="tier.level" class="input w-full font-mono tabular-nums" type="number" min="1" />
                 </label>
-                <label class="space-y-1">
+                <label class="space-y-1.5">
                   <span class="label">限速 Mbps</span>
-                  <input v-model.number="tier.bandwidthMbps" class="input w-full" type="number" min="1" />
+                  <input v-model.number="tier.bandwidthMbps" class="input w-full font-mono tabular-nums" type="number" min="1" />
                 </label>
-                <label class="space-y-1">
+                <label class="space-y-1.5">
                   <span class="label">触发分数</span>
-                  <input v-model.number="tier.score" class="input w-full" type="number" min="1" max="100" />
+                  <input v-model.number="tier.score" class="input w-full font-mono tabular-nums" type="number" min="1" max="100" />
                 </label>
-                <label class="space-y-1">
+                <label class="space-y-1.5">
                   <span class="label">恢复分数</span>
-                  <input v-model.number="tier.recoverScore" class="input w-full" type="number" min="0" max="99" />
+                  <input v-model.number="tier.recoverScore" class="input w-full font-mono tabular-nums" type="number" min="0" max="99" />
                 </label>
-                <label class="space-y-1">
+                <label class="space-y-1.5">
                   <span class="label">最短限速</span>
-                  <input v-model.number="tier.minDurationMinutes" class="input w-full" type="number" min="1" />
+                  <input v-model.number="tier.minDurationMinutes" class="input w-full font-mono tabular-nums" type="number" min="1" />
                 </label>
-                <label class="space-y-1">
+                <label class="space-y-1.5">
                   <span class="label">降档冷却</span>
-                  <input v-model.number="tier.cooldownMinutes" class="input w-full" type="number" min="1" />
+                  <input v-model.number="tier.cooldownMinutes" class="input w-full font-mono tabular-nums" type="number" min="1" />
                 </label>
               </div>
               <div class="mt-3 grid gap-2 text-sm text-themed sm:grid-cols-3">
                 <label class="flex items-center gap-2">
-                  <input v-model="tier.allowFurtherDowngrade" type="checkbox" />
+                  <input v-model="tier.allowFurtherDowngrade" type="checkbox" class="h-4 w-4 accent-primary-600" />
                   继续降档
                 </label>
                 <label class="flex items-center gap-2">
-                  <input v-model="tier.notifyUser" type="checkbox" />
+                  <input v-model="tier.notifyUser" type="checkbox" class="h-4 w-4 accent-primary-600" />
                   通知用户
                 </label>
                 <label class="flex items-center gap-2">
-                  <input v-model="tier.restrictOrders" type="checkbox" />
+                  <input v-model="tier.restrictOrders" type="checkbox" class="h-4 w-4 accent-primary-600" />
                   限单
                 </label>
               </div>
             </div>
           </div>
-          <div class="hidden overflow-hidden rounded-lg border border-themed lg:block">
+          <div class="hidden overflow-hidden rounded-xl border border-themed lg:block">
             <table class="w-full table-fixed text-sm">
               <colgroup>
                 <col class="w-[8%]" />
@@ -1297,51 +1337,51 @@ onMounted(() => {
                 <col class="w-[8%]" />
                 <col class="w-[13%]" />
               </colgroup>
-              <thead class="bg-themed-secondary text-themed-muted">
+              <thead class="border-b border-themed bg-themed-secondary">
                 <tr>
-                  <th class="p-3 text-left">档位</th>
-                  <th class="p-3 text-left">限速 Mbps</th>
-                  <th class="p-3 text-left">触发分数</th>
-                  <th class="p-3 text-left">恢复分数</th>
-                  <th class="p-3 text-left">最短限速</th>
-                  <th class="p-3 text-left">降档冷却</th>
-                  <th class="p-3 text-left">继续降档</th>
-                  <th class="p-3 text-left">通知</th>
-                  <th class="p-3 text-left">限单</th>
-                  <th class="p-3 text-right">操作</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">档位</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">限速 Mbps</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">触发分数</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">恢复分数</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">最短限速</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">降档冷却</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">继续降档</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">通知</th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">限单</th>
+                  <th class="px-3 py-2.5 text-right text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">操作</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr v-for="(tier, index) in policyForm.qosTiers" :key="index" class="border-t border-themed">
-                  <td class="p-3">
-                    <input v-model.number="tier.level" class="input w-full" type="number" min="1" />
+              <tbody class="divide-themed divide-y">
+                <tr v-for="(tier, index) in policyForm.qosTiers" :key="index" class="transition-colors hover:bg-themed-hover">
+                  <td class="px-3 py-3">
+                    <input v-model.number="tier.level" class="input w-full font-mono tabular-nums" type="number" min="1" />
                   </td>
-                  <td class="p-3">
-                    <input v-model.number="tier.bandwidthMbps" class="input w-full" type="number" min="1" />
+                  <td class="px-3 py-3">
+                    <input v-model.number="tier.bandwidthMbps" class="input w-full font-mono tabular-nums" type="number" min="1" />
                   </td>
-                  <td class="p-3">
-                    <input v-model.number="tier.score" class="input w-full" type="number" min="1" max="100" />
+                  <td class="px-3 py-3">
+                    <input v-model.number="tier.score" class="input w-full font-mono tabular-nums" type="number" min="1" max="100" />
                   </td>
-                  <td class="p-3">
-                    <input v-model.number="tier.recoverScore" class="input w-full" type="number" min="0" max="99" />
+                  <td class="px-3 py-3">
+                    <input v-model.number="tier.recoverScore" class="input w-full font-mono tabular-nums" type="number" min="0" max="99" />
                   </td>
-                  <td class="p-3">
-                    <input v-model.number="tier.minDurationMinutes" class="input w-full" type="number" min="1" />
+                  <td class="px-3 py-3">
+                    <input v-model.number="tier.minDurationMinutes" class="input w-full font-mono tabular-nums" type="number" min="1" />
                   </td>
-                  <td class="p-3">
-                    <input v-model.number="tier.cooldownMinutes" class="input w-full" type="number" min="1" />
+                  <td class="px-3 py-3">
+                    <input v-model.number="tier.cooldownMinutes" class="input w-full font-mono tabular-nums" type="number" min="1" />
                   </td>
-                  <td class="p-3">
-                    <input v-model="tier.allowFurtherDowngrade" type="checkbox" />
+                  <td class="px-3 py-3">
+                    <input v-model="tier.allowFurtherDowngrade" type="checkbox" class="h-4 w-4 accent-primary-600" />
                   </td>
-                  <td class="p-3">
-                    <input v-model="tier.notifyUser" type="checkbox" />
+                  <td class="px-3 py-3">
+                    <input v-model="tier.notifyUser" type="checkbox" class="h-4 w-4 accent-primary-600" />
                   </td>
-                  <td class="p-3">
-                    <input v-model="tier.restrictOrders" type="checkbox" />
+                  <td class="px-3 py-3">
+                    <input v-model="tier.restrictOrders" type="checkbox" class="h-4 w-4 accent-primary-600" />
                   </td>
-                  <td class="p-3 text-right">
-                    <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="removeQosTier(index)">删除</button>
+                  <td class="px-3 py-3 text-right">
+                    <button class="btn-secondary btn-sm" type="button" @click="removeQosTier(index)">删除</button>
                   </td>
                 </tr>
               </tbody>
@@ -1349,39 +1389,39 @@ onMounted(() => {
           </div>
         </div>
 
-        <section v-if="policySimulation" class="mt-5 rounded-lg border border-themed bg-themed-muted/30 p-4">
+        <section v-if="policySimulation" class="card p-4 sm:p-5">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h2 class="text-sm font-semibold text-themed">策略试运行结果</h2>
+              <h2 class="text-base font-semibold text-themed">策略试运行结果</h2>
               <p class="mt-1 text-xs text-themed-muted">仅基于最近采样数据模拟，不会写入评分、限速、限单或暂停实例。</p>
             </div>
             <div class="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
-              <div class="rounded border border-themed bg-themed-surface p-3">
-                <div class="text-xs text-themed-muted">样本实例</div>
-                <div class="mt-1 font-semibold text-themed">{{ policySimulation.sampledInstances }}</div>
+              <div class="rounded-lg border border-themed bg-themed-secondary p-3">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">样本实例</div>
+                <div class="mt-1 font-mono text-lg font-semibold tabular-nums text-themed">{{ policySimulation.sampledInstances }}</div>
               </div>
-              <div class="rounded border border-themed bg-themed-surface p-3">
-                <div class="text-xs text-themed-muted">会触发</div>
-                <div class="mt-1 font-semibold text-amber-600">{{ policySimulation.wouldTrigger }}</div>
+              <div class="rounded-lg border border-themed bg-themed-secondary p-3">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">会触发</div>
+                <div class="mt-1 font-mono text-lg font-semibold tabular-nums text-amber-600 dark:text-amber-400">{{ policySimulation.wouldTrigger }}</div>
               </div>
-              <div class="rounded border border-themed bg-themed-surface p-3">
-                <div class="text-xs text-themed-muted">会限速</div>
-                <div class="mt-1 font-semibold text-themed">{{ policySimulation.wouldQosLimit }}</div>
+              <div class="rounded-lg border border-themed bg-themed-secondary p-3">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">会限速</div>
+                <div class="mt-1 font-mono text-lg font-semibold tabular-nums text-themed">{{ policySimulation.wouldQosLimit }}</div>
               </div>
-              <div class="rounded border border-themed bg-themed-surface p-3">
-                <div class="text-xs text-themed-muted">会限单</div>
-                <div class="mt-1 font-semibold text-rose-600 dark:text-rose-400">{{ policySimulation.wouldRestrictOrders }}</div>
+              <div class="rounded-lg border border-themed bg-themed-secondary p-3">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">会限单</div>
+                <div class="mt-1 font-mono text-lg font-semibold tabular-nums text-rose-600 dark:text-rose-400">{{ policySimulation.wouldRestrictOrders }}</div>
               </div>
-              <div class="rounded border border-themed bg-themed-surface p-3">
-                <div class="text-xs text-themed-muted">会暂停</div>
-                <div class="mt-1 font-semibold text-rose-700 dark:text-rose-300">{{ policySimulation.wouldAutoSuspend }}</div>
+              <div class="rounded-lg border border-themed bg-themed-secondary p-3">
+                <div class="text-[11px] uppercase tracking-wider text-themed-faint">会暂停</div>
+                <div class="mt-1 font-mono text-lg font-semibold tabular-nums text-rose-700 dark:text-rose-300">{{ policySimulation.wouldAutoSuspend }}</div>
               </div>
             </div>
           </div>
 
           <div class="mt-4 grid gap-4 xl:grid-cols-2">
-            <div class="rounded border border-themed bg-themed-surface p-3">
-              <h3 class="text-xs font-semibold text-themed-muted">档位命中</h3>
+            <div class="rounded-lg border border-themed bg-themed-secondary p-3">
+              <h3 class="text-[11px] font-medium uppercase tracking-wider text-themed-faint">档位命中</h3>
               <div v-if="policySimulation.tierHits.length" class="mt-2 flex flex-wrap gap-2">
                 <span v-for="tier in policySimulation.tierHits" :key="tier.level" class="badge badge-info">
                   L{{ tier.level }} · {{ tier.bandwidthMbps }} Mbps · {{ tier.count }} 台
@@ -1390,12 +1430,12 @@ onMounted(() => {
               <div v-else class="mt-2 text-xs text-themed-muted">暂无档位命中。</div>
             </div>
 
-            <div class="rounded border border-themed bg-themed-surface p-3">
-              <h3 class="text-xs font-semibold text-themed-muted">高分实例预览</h3>
+            <div class="rounded-lg border border-themed bg-themed-secondary p-3">
+              <h3 class="text-[11px] font-medium uppercase tracking-wider text-themed-faint">高分实例预览</h3>
               <div class="mt-2 max-h-48 overflow-y-auto divide-y divide-themed text-xs">
                 <div v-for="item in policySimulation.topInstances.slice(0, 8)" :key="item.instanceId" class="flex items-center justify-between gap-3 py-2">
                   <span class="truncate text-themed">{{ item.name }} · #{{ item.instanceId }}</span>
-                  <span class="shrink-0 text-themed-muted">
+                  <span class="shrink-0 font-mono tabular-nums text-themed-muted">
                     {{ item.previousScore }} → {{ item.projectedScore }}
                     <template v-if="item.targetQosLevel"> · L{{ item.targetQosLevel }}</template>
                   </span>
@@ -1406,7 +1446,7 @@ onMounted(() => {
           </div>
         </section>
 
-        <div class="mt-5 flex justify-end gap-2">
+        <div class="flex justify-end gap-2">
           <button class="btn-secondary" :disabled="simulating || saving" @click="simulatePolicy">
             {{ simulating ? '试运行中...' : '试运行策略' }}
           </button>
@@ -1419,53 +1459,59 @@ onMounted(() => {
 
     <div
       v-if="manualAction"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      class="modal-overlay bg-black/50 backdrop-blur-sm"
       @click.self="() => closeManualAction()"
     >
       <form
-        class="w-full max-w-xl rounded-lg border border-themed bg-themed-surface shadow-xl"
+        class="modal-content w-full max-w-xl"
         @submit.prevent="submitManualAction"
       >
-        <div class="border-b border-themed px-5 py-4">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <h2 class="text-lg font-semibold text-themed">{{ manualAction.title }}</h2>
-              <p class="mt-1 text-sm text-themed-muted">{{ manualAction.description }}</p>
-            </div>
-            <button class="btn-secondary px-2 py-1 text-xs" type="button" :disabled="manualSubmitting" @click="() => closeManualAction()">
-              关闭
-            </button>
+        <div class="modal-header items-start">
+          <div>
+            <h2 class="modal-title">{{ manualAction.title }}</h2>
+            <p class="mt-1 text-sm text-themed-muted">{{ manualAction.description }}</p>
           </div>
+          <button
+            class="-mr-1 shrink-0 rounded-lg p-1.5 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed disabled:opacity-50"
+            type="button"
+            :disabled="manualSubmitting"
+            @click="() => closeManualAction()"
+          >
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span class="sr-only">关闭</span>
+          </button>
         </div>
 
-        <div class="space-y-4 px-5 py-4">
-          <div class="rounded-lg border border-themed bg-themed-muted/30 p-3 text-sm">
-            <div class="text-xs text-themed-muted">处置对象</div>
+        <div class="modal-body space-y-4">
+          <div class="rounded-lg border border-themed bg-themed-secondary p-3 text-sm">
+            <div class="text-[11px] uppercase tracking-wider text-themed-faint">处置对象</div>
             <div class="mt-1 font-medium text-themed">{{ manualActionTargetLabel }}</div>
           </div>
 
-          <label v-if="manualAction.type === 'qos'" class="block space-y-1">
+          <label v-if="manualAction.type === 'qos'" class="block space-y-1.5">
             <span class="label">人工限速 Mbps</span>
-            <input v-model.number="manualBandwidthMbps" class="input w-full" type="number" min="1" required />
+            <input v-model.number="manualBandwidthMbps" class="input w-full font-mono tabular-nums" type="number" min="1" required />
           </label>
 
           <label
             v-if="manualAction.type === 'qos' || manualAction.type === 'suspend'"
-            class="flex items-center gap-2 text-sm text-themed"
+            class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-themed bg-themed-secondary px-3 py-2.5 text-sm text-themed"
           >
-            <input v-model="manualRestrictOrders" type="checkbox" />
+            <input v-model="manualRestrictOrders" type="checkbox" class="h-4 w-4 shrink-0 accent-primary-600" />
             同时限制该账号继续下单
           </label>
 
           <label
             v-if="manualAction.type === 'suspend' || manualAction.type === 'unsuspend'"
-            class="flex items-center gap-2 text-sm text-themed"
+            class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-themed bg-themed-secondary px-3 py-2.5 text-sm text-themed"
           >
-            <input v-model="manualNotifyUser" type="checkbox" />
+            <input v-model="manualNotifyUser" type="checkbox" class="h-4 w-4 shrink-0 accent-primary-600" />
             同步通知用户
           </label>
 
-          <label class="block space-y-1">
+          <label class="block space-y-1.5">
             <span class="label">操作原因</span>
             <textarea
               v-model="manualReason"
@@ -1476,12 +1522,12 @@ onMounted(() => {
           </label>
 
           <div v-if="manualReasonTemplates.length" class="space-y-2">
-            <div class="text-xs text-themed-muted">原因模板</div>
-            <div class="flex flex-wrap gap-2">
+            <div class="text-[11px] uppercase tracking-wider text-themed-faint">原因模板</div>
+            <div class="flex flex-col gap-2">
               <button
                 v-for="template in manualReasonTemplates"
                 :key="template"
-                class="btn-secondary px-3 py-1 text-xs"
+                class="btn-secondary btn-sm w-full justify-start whitespace-normal text-left"
                 type="button"
                 @click="applyManualReasonTemplate(template)"
               >
@@ -1490,13 +1536,13 @@ onMounted(() => {
             </div>
           </div>
 
-          <label class="flex items-start gap-2 rounded-lg border border-themed bg-themed-muted/30 p-3 text-sm text-themed">
-            <input v-model="manualConfirmChecked" class="mt-1" type="checkbox" />
+          <label class="flex items-start gap-2.5 rounded-lg border border-themed bg-themed-secondary p-3 text-sm text-themed">
+            <input v-model="manualConfirmChecked" class="mt-0.5 h-4 w-4 shrink-0 accent-primary-600" type="checkbox" />
             <span>确认本次操作会写入资源风控事件和后台审计，且已核对来源实例、账号和工单审核结论。</span>
           </label>
         </div>
 
-        <div class="flex justify-end gap-2 border-t border-themed px-5 py-4">
+        <div class="modal-footer">
           <button class="btn-secondary" type="button" :disabled="manualSubmitting" @click="() => closeManualAction()">取消</button>
           <button
             :class="manualAction.danger ? 'btn-danger' : 'btn-primary'"
@@ -1525,13 +1571,16 @@ onMounted(() => {
           <div class="flex items-center gap-2">
             <button
               v-if="evidenceDetail"
-              class="btn-secondary px-3 py-1 text-xs"
+              class="btn-secondary btn-sm"
               type="button"
               @click="exportEvidenceDetail"
             >
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" />
+              </svg>
               导出 JSON
             </button>
-            <button class="btn-secondary px-3 py-1 text-xs" type="button" @click="closeEvidence">关闭</button>
+            <button class="btn-secondary btn-sm" type="button" @click="closeEvidence">关闭</button>
           </div>
         </div>
 
@@ -1540,20 +1589,20 @@ onMounted(() => {
         <div v-else-if="evidenceDetail" class="space-y-5 p-5">
           <section class="grid gap-3 md:grid-cols-4">
             <div class="resource-risk-evidence-surface rounded-lg border border-gray-200 p-3 dark:border-gray-800">
-              <div class="text-xs text-themed-muted">当前评分</div>
-              <div class="mt-1 text-2xl font-semibold text-themed">{{ evidenceDetail.state.score }}</div>
+              <div class="text-[11px] uppercase tracking-wider text-themed-faint">当前评分</div>
+              <div class="mt-1 font-mono text-2xl font-semibold tabular-nums text-themed">{{ evidenceDetail.state.score }}</div>
             </div>
             <div class="resource-risk-evidence-surface rounded-lg border border-gray-200 p-3 dark:border-gray-800">
-              <div class="text-xs text-themed-muted">风险等级</div>
+              <div class="text-[11px] uppercase tracking-wider text-themed-faint">风险等级</div>
               <div class="mt-2"><span :class="badgeClass(evidenceDetail.state.level)">{{ evidenceDetail.state.level }}</span></div>
             </div>
             <div class="resource-risk-evidence-surface rounded-lg border border-gray-200 p-3 dark:border-gray-800">
-              <div class="text-xs text-themed-muted">当前状态</div>
+              <div class="text-[11px] uppercase tracking-wider text-themed-faint">当前状态</div>
               <div class="mt-1 text-themed">{{ evidenceDetail.state.status }}</div>
             </div>
             <div class="resource-risk-evidence-surface rounded-lg border border-gray-200 p-3 dark:border-gray-800">
-              <div class="text-xs text-themed-muted">限速</div>
-              <div class="mt-1 text-themed">{{ evidenceDetail.state.currentBandwidthLimit || '-' }}</div>
+              <div class="text-[11px] uppercase tracking-wider text-themed-faint">限速</div>
+              <div class="mt-1 font-mono tabular-nums text-themed">{{ evidenceDetail.state.currentBandwidthLimit || '-' }}</div>
             </div>
           </section>
 
@@ -1918,5 +1967,14 @@ onMounted(() => {
 
 .dark .resource-risk-evidence-code {
   background-color: #030712;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 </style>

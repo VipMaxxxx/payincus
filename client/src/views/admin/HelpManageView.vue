@@ -360,20 +360,20 @@ function formatDate(dateStr: string | null | undefined): string {
 </script>
 
 <template>
-  <div class="kawaii-page space-y-6 animate-fade-in">
+  <div class="kawaii-page nimbus-view space-y-6 animate-fade-in">
     <div class="page-header flex-col sm:flex-row gap-4 sm:gap-0">
       <div>
         <h1 class="page-title">{{ t('admin.helpManage.title') }}</h1>
         <p class="page-description">{{ t('admin.helpManage.description') }}</p>
       </div>
-      <div class="flex gap-2 w-full sm:w-auto">
-        <button v-if="activeTab === 'categories'" class="btn-secondary flex-1 sm:flex-none justify-center" @click="openAddCategory">
+      <div class="flex w-full gap-2 sm:w-auto">
+        <button v-if="activeTab === 'categories'" class="btn-secondary flex-1 justify-center sm:flex-none" @click="openAddCategory">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
           {{ t('admin.helpManage.addCategory') }}
         </button>
-        <button v-if="activeTab === 'articles'" class="btn-primary flex-1 sm:flex-none justify-center" @click="openCreate">
+        <button v-if="activeTab === 'articles'" class="btn-primary flex-1 justify-center sm:flex-none" @click="openCreate">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -389,56 +389,56 @@ function formatDate(dateStr: string | null | undefined): string {
           :class="[
             'pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
             activeTab === 'articles'
-              ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
-              : 'border-transparent text-themed-muted hover:text-themed-secondary'
+              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-themed-muted hover:text-themed'
           ]"
           @click="activeTab = 'articles'"
         >
           {{ t('admin.helpManage.articlesTab') }}
-          <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded bg-themed-secondary">{{ total }}</span>
+          <span class="ml-1.5 rounded-full bg-themed-secondary px-1.5 py-0.5 font-mono text-2xs tabular-nums text-themed-muted">{{ total }}</span>
         </button>
         <button
           :class="[
             'pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
             activeTab === 'categories'
-              ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
-              : 'border-transparent text-themed-muted hover:text-themed-secondary'
+              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-themed-muted hover:text-themed'
           ]"
           @click="activeTab = 'categories'"
         >
           {{ t('admin.helpManage.categoriesTab') }}
-          <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded bg-themed-secondary">{{ categories.length }}</span>
+          <span class="ml-1.5 rounded-full bg-themed-secondary px-1.5 py-0.5 font-mono text-2xs tabular-nums text-themed-muted">{{ categories.length }}</span>
         </button>
       </nav>
     </div>
 
     <!-- Categories Tab -->
     <div v-if="activeTab === 'categories'" class="space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div 
-          v-for="cat in categories" 
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div
+          v-for="cat in categories"
           :key="cat.id"
-          class="card p-4 hover:border-themed-secondary transition-colors"
+          class="nimbus-lift card p-4 hover:border-themed-secondary"
         >
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div 
-                class="w-4 h-4 rounded-full" 
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-3">
+              <div
+                class="h-4 w-4 flex-shrink-0 rounded-full ring-1 ring-inset ring-black/10 dark:ring-white/10"
                 :style="{ backgroundColor: cat.color }"
               ></div>
-              <div>
-                <div class="text-themed font-medium">{{ cat.name }}</div>
-                <div class="text-xs text-themed-muted font-mono">{{ cat.id }}</div>
+              <div class="min-w-0">
+                <div class="truncate font-medium text-themed">{{ cat.name }}</div>
+                <div class="truncate font-mono text-xs text-themed-muted">{{ cat.id }}</div>
               </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-shrink-0 items-center gap-2">
               <button class="btn-ghost btn-sm" @click="openEditCategory(cat)">{{ t('common.edit') }}</button>
               <button class="btn-ghost btn-sm text-error" @click="deleteCategory(cat)">{{ t('common.delete') }}</button>
             </div>
           </div>
         </div>
       </div>
-      
+
       <div v-if="categories.length === 0" class="card p-8 text-center text-themed-muted">
         {{ t('admin.helpManage.noCategories') }}
       </div>
@@ -452,7 +452,7 @@ function formatDate(dateStr: string | null | undefined): string {
       </svg>
       <p class="mt-2">{{ t('common.loading') }}</p>
     </div>
-    
+
     <div v-else-if="activeTab === 'articles' && articles.length === 0" class="card p-8 text-center">
       <div class="text-themed-muted text-sm mb-4">{{ t('admin.helpManage.noArticles') }}</div>
       <button class="btn-secondary btn-sm" @click="openCreate">{{ t('admin.helpManage.createFirst') }}</button>
@@ -483,9 +483,9 @@ function formatDate(dateStr: string | null | undefined): string {
                 ></span>
                 <span class="truncate text-themed-secondary">{{ getCategoryLabel(article.category) }}</span>
               </div>
-              <span>{{ formatDate(article.updated_at) }}</span>
+              <span class="font-mono tabular-nums">{{ formatDate(article.updated_at) }}</span>
             </div>
-            <div class="mt-4 flex flex-wrap gap-2">
+            <div class="mt-4 flex flex-wrap gap-2 border-t border-themed pt-3">
               <button class="btn-ghost btn-sm" @click="openEdit(article)">{{ t('common.edit') }}</button>
               <button class="btn-ghost btn-sm" @click="togglePublished(article)">
                 {{ article.published ? t('admin.helpManage.hide') : t('admin.helpManage.publish') }}
@@ -498,15 +498,15 @@ function formatDate(dateStr: string | null | undefined): string {
           <table class="w-full table-fixed">
             <thead class="bg-themed-tertiary border-b border-themed">
               <tr>
-                <th class="w-[34%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.articleTitleCol') }}</th>
-                <th class="w-[18%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.categoryCol') }}</th>
-                <th class="w-[12%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.statusCol') }}</th>
-                <th class="w-[18%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.updatedAtCol') }}</th>
-                <th class="w-[18%] text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.helpManage.actionsCol') }}</th>
+                <th class="w-[34%] text-left text-[11px] font-medium text-themed-faint uppercase tracking-[0.06em] px-4 py-3">{{ t('admin.helpManage.articleTitleCol') }}</th>
+                <th class="w-[18%] text-left text-[11px] font-medium text-themed-faint uppercase tracking-[0.06em] px-4 py-3">{{ t('admin.helpManage.categoryCol') }}</th>
+                <th class="w-[12%] text-left text-[11px] font-medium text-themed-faint uppercase tracking-[0.06em] px-4 py-3">{{ t('admin.helpManage.statusCol') }}</th>
+                <th class="w-[18%] text-left text-[11px] font-medium text-themed-faint uppercase tracking-[0.06em] px-4 py-3">{{ t('admin.helpManage.updatedAtCol') }}</th>
+                <th class="w-[18%] text-right text-[11px] font-medium text-themed-faint uppercase tracking-[0.06em] px-4 py-3">{{ t('admin.helpManage.actionsCol') }}</th>
               </tr>
             </thead>
             <tbody class="divide-themed">
-              <tr v-for="article in articles" :key="article.id" class="hover:bg-themed-hover">
+              <tr v-for="article in articles" :key="article.id" class="transition-colors hover:bg-themed-hover">
                 <td class="px-4 py-3">
                   <div class="truncate text-themed font-medium">{{ article.title }}</div>
                   <div class="truncate text-xs text-themed-muted font-mono">/help/{{ article.slug }}</div>
@@ -525,7 +525,7 @@ function formatDate(dateStr: string | null | undefined): string {
                     {{ article.published ? t('admin.helpManage.published') : t('admin.helpManage.draft') }}
                   </span>
                 </td>
-                <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(article.updated_at) }}</td>
+                <td class="truncate px-4 py-3 text-sm font-mono tabular-nums text-themed-muted">{{ formatDate(article.updated_at) }}</td>
                 <td class="px-4 py-3 text-right">
                   <div class="flex flex-wrap items-center justify-end gap-2">
                     <button class="btn-ghost btn-sm" @click="openEdit(article)">{{ t('common.edit') }}</button>
@@ -546,7 +546,7 @@ function formatDate(dateStr: string | null | undefined): string {
         <span>{{ t('admin.helpManage.totalArticles', { count: total }) }}</span>
         <div class="flex items-center gap-2">
           <button :disabled="page <= 1" class="btn-ghost btn-sm" @click="page--; loadArticles()">{{ t('admin.helpManage.prevPage') }}</button>
-          <span>{{ page }} / {{ totalPages }}</span>
+          <span class="font-mono text-xs tabular-nums">{{ page }} / {{ totalPages }}</span>
           <button :disabled="page >= totalPages" class="btn-ghost btn-sm" @click="page++; loadArticles()">{{ t('admin.helpManage.nextPage') }}</button>
         </div>
       </div>
@@ -556,79 +556,79 @@ function formatDate(dateStr: string | null | undefined): string {
     <Teleport to="body">
       <div v-if="showEditor" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showEditor = false"></div>
-        
-        <div class="relative w-full max-w-5xl h-[90vh] bg-themed border border-themed rounded-xl shadow-2xl animate-fade-in flex flex-col">
+
+        <div class="relative flex h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-themed bg-themed-surface shadow-2xl animate-fade-in">
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-themed">
-            <h3 class="text-lg font-semibold text-themed">
+          <div class="flex items-center justify-between gap-4 border-b border-themed px-6 py-4">
+            <h3 class="truncate text-lg font-semibold text-themed">
               {{ editorMode === 'create' ? t('admin.helpManage.createArticle') : t('admin.helpManage.editArticle') }}
             </h3>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-shrink-0 items-center gap-3">
               <button
                 :class="['btn-ghost btn-sm', previewMode && 'bg-themed-secondary']"
                 @click="previewMode = !previewMode"
               >
                 {{ previewMode ? t('common.edit') : t('admin.helpManage.preview') }}
               </button>
-              <button class="text-themed-muted hover:text-themed" @click="showEditor = false">
+              <button class="btn-ghost btn-sm -mr-2 p-1.5" @click="showEditor = false">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
           </div>
-          
+
           <!-- Content -->
-          <div class="flex-1 overflow-hidden flex">
+          <div class="flex flex-1 overflow-hidden">
             <!-- Left: Form -->
-            <div v-if="!previewMode" class="flex-1 overflow-y-auto p-6 space-y-4">
+            <div v-if="!previewMode" class="flex-1 space-y-5 overflow-y-auto p-6">
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm text-themed-secondary mb-1.5">{{ t('admin.helpManage.articleTitle') }} *</label>
-                  <input 
-                    v-model="form.title" 
+                  <label class="mb-1.5 block text-sm text-themed-secondary">{{ t('admin.helpManage.articleTitle') }} *</label>
+                  <input
+                    v-model="form.title"
                     type="text"
-                    class="input" 
-                    :placeholder="t('admin.helpManage.titlePlaceholder')" 
+                    class="input"
+                    :placeholder="t('admin.helpManage.titlePlaceholder')"
                     @blur="generateSlug"
                   />
                 </div>
                 <div>
-                  <label class="block text-sm text-themed-secondary mb-1.5">{{ t('admin.helpManage.urlSlug') }} *</label>
-                  <input 
-                    v-model="form.slug" 
-                    type="text" 
-                    class="input font-mono" 
+                  <label class="mb-1.5 block text-sm text-themed-secondary">{{ t('admin.helpManage.urlSlug') }} *</label>
+                  <input
+                    v-model="form.slug"
+                    type="text"
+                    class="input font-mono"
                     :placeholder="t('admin.helpManage.urlSlugPlaceholder')"
                   />
-                  <p class="text-xs text-themed-muted mt-1">{{ t('admin.helpManage.urlSlugHint') }}</p>
+                  <p class="mt-1 text-xs text-themed-muted">{{ t('admin.helpManage.urlSlugHint') }}</p>
                 </div>
               </div>
-              
+
               <div class="grid grid-cols-3 gap-4">
                 <div>
-                  <label class="block text-sm text-themed-secondary mb-1.5">{{ t('admin.helpManage.category') }}</label>
+                  <label class="mb-1.5 block text-sm text-themed-secondary">{{ t('admin.helpManage.category') }}</label>
                   <select v-model="form.category" class="input">
                     <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-sm text-themed-secondary mb-1.5">{{ t('admin.helpManage.sortOrder') }}</label>
-                  <input v-model.number="form.sortOrder" type="number" class="input" min="0" />
+                  <label class="mb-1.5 block text-sm text-themed-secondary">{{ t('admin.helpManage.sortOrder') }}</label>
+                  <input v-model.number="form.sortOrder" type="number" class="input font-mono" min="0" />
                 </div>
                 <div class="flex items-end">
-                  <label class="flex items-center gap-3 cursor-pointer select-none">
+                  <label class="flex cursor-pointer select-none items-center gap-3">
                     <div class="relative">
-                      <input 
-                        v-model="form.published" 
-                        type="checkbox" 
+                      <input
+                        v-model="form.published"
+                        type="checkbox"
                         class="sr-only peer"
                       />
-                      <div 
+                      <div
                         class="w-10 h-6 rounded-full transition-colors peer-checked:bg-accent"
                         :class="themeStore.isDark ? 'bg-gray-700' : 'bg-gray-300'"
                       ></div>
-                      <div 
+                      <div
                         class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4"
                       ></div>
                     </div>
@@ -636,20 +636,20 @@ function formatDate(dateStr: string | null | undefined): string {
                       {{ form.published ? t('admin.helpManage.published') : t('admin.helpManage.draft') }}
                     </span>
                   </label>
-                  
+
                   <!-- 置顶开关 -->
-                  <label class="flex items-center gap-3 cursor-pointer select-none ml-4">
+                  <label class="ml-4 flex cursor-pointer select-none items-center gap-3">
                     <div class="relative">
                       <input
                         v-model="form.pinned"
                         type="checkbox"
                         class="sr-only peer"
                       />
-                      <div 
+                      <div
                         class="w-10 h-6 rounded-full transition-colors peer-checked:bg-accent"
                         :class="themeStore.isDark ? 'bg-gray-700' : 'bg-gray-300'"
                       ></div>
-                      <div 
+                      <div
                         class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4"
                       ></div>
                     </div>
@@ -659,58 +659,58 @@ function formatDate(dateStr: string | null | undefined): string {
                   </label>
                 </div>
               </div>
-              
+
               <div class="flex-1">
-                <div class="flex items-center justify-between mb-1.5">
+                <div class="mb-1.5 flex items-center justify-between">
                   <label class="block text-sm text-themed-secondary">{{ t('admin.helpManage.contentMarkdown') }} *</label>
-                  <button 
+                  <button
                     type="button"
-                    class="text-xs text-themed-muted hover:text-themed transition-colors"
+                    class="text-xs text-themed-muted transition-colors hover:text-themed"
                     @click="showMarkdownHelp = !showMarkdownHelp"
                   >
                     {{ showMarkdownHelp ? t('admin.helpManage.hideMarkdownHelp') : t('admin.helpManage.showMarkdownHelp') }}
                   </button>
                 </div>
-                
+
                 <!-- Markdown 语法帮助 -->
-                <div v-if="showMarkdownHelp" class="mb-3 p-3 bg-themed-tertiary rounded-lg text-xs text-themed-secondary space-y-2">
+                <div v-if="showMarkdownHelp" class="mb-3 space-y-2 rounded-lg border border-themed bg-themed-tertiary p-3 text-xs text-themed-secondary">
                   <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-                    <div><code class="bg-themed-secondary px-1 rounded"># Title</code> {{ t('admin.helpManage.markdownHeading1') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">## Title</code> {{ t('admin.helpManage.markdownHeading2') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">**bold**</code> {{ t('admin.helpManage.markdownBold') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">*italic*</code> {{ t('admin.helpManage.markdownItalic') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">[link](url)</code> {{ t('admin.helpManage.markdownLink') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">![image](url)</code> {{ t('admin.helpManage.markdownImage') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">- item</code> {{ t('admin.helpManage.markdownUnorderedList') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">1. item</code> {{ t('admin.helpManage.markdownOrderedList') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">`code`</code> {{ t('admin.helpManage.markdownInlineCode') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">```code```</code> {{ t('admin.helpManage.markdownCodeBlock') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">> quote</code> {{ t('admin.helpManage.markdownQuote') }}</div>
-                    <div><code class="bg-themed-secondary px-1 rounded">---</code> {{ t('admin.helpManage.markdownHr') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono"># Title</code> {{ t('admin.helpManage.markdownHeading1') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">## Title</code> {{ t('admin.helpManage.markdownHeading2') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">**bold**</code> {{ t('admin.helpManage.markdownBold') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">*italic*</code> {{ t('admin.helpManage.markdownItalic') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">[link](url)</code> {{ t('admin.helpManage.markdownLink') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">![image](url)</code> {{ t('admin.helpManage.markdownImage') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">- item</code> {{ t('admin.helpManage.markdownUnorderedList') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">1. item</code> {{ t('admin.helpManage.markdownOrderedList') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">`code`</code> {{ t('admin.helpManage.markdownInlineCode') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">```code```</code> {{ t('admin.helpManage.markdownCodeBlock') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">> quote</code> {{ t('admin.helpManage.markdownQuote') }}</div>
+                    <div><code class="rounded bg-themed-secondary px-1 font-mono">---</code> {{ t('admin.helpManage.markdownHr') }}</div>
                   </div>
-                  <div class="pt-2 border-t border-themed">
-                    <div class="font-medium text-themed mb-1">{{ t('admin.helpManage.customAlerts') }}</div>
+                  <div class="border-t border-themed pt-2">
+                    <div class="mb-1 font-medium text-themed">{{ t('admin.helpManage.customAlerts') }}</div>
                     <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-                      <div><code class="bg-themed-secondary px-1 rounded">?{info}[text]</code> {{ t('admin.helpManage.alertInfo') }}</div>
-                      <div><code class="bg-themed-secondary px-1 rounded">?{success}[text]</code> {{ t('admin.helpManage.alertSuccess') }}</div>
-                      <div><code class="bg-themed-secondary px-1 rounded">?{warning}[text]</code> {{ t('admin.helpManage.alertWarning') }}</div>
-                      <div><code class="bg-themed-secondary px-1 rounded">?{danger}[text]</code> {{ t('admin.helpManage.alertDanger') }}</div>
-                      <div><code class="bg-themed-secondary px-1 rounded">?{note}[text]</code> {{ t('admin.helpManage.alertNote') }}</div>
+                      <div><code class="rounded bg-themed-secondary px-1 font-mono">?{info}[text]</code> {{ t('admin.helpManage.alertInfo') }}</div>
+                      <div><code class="rounded bg-themed-secondary px-1 font-mono">?{success}[text]</code> {{ t('admin.helpManage.alertSuccess') }}</div>
+                      <div><code class="rounded bg-themed-secondary px-1 font-mono">?{warning}[text]</code> {{ t('admin.helpManage.alertWarning') }}</div>
+                      <div><code class="rounded bg-themed-secondary px-1 font-mono">?{danger}[text]</code> {{ t('admin.helpManage.alertDanger') }}</div>
+                      <div><code class="rounded bg-themed-secondary px-1 font-mono">?{note}[text]</code> {{ t('admin.helpManage.alertNote') }}</div>
                     </div>
                   </div>
                 </div>
-                
-                <textarea 
-                  v-model="form.content" 
+
+                <textarea
+                  v-model="form.content"
                   class="input w-full font-mono text-sm resize-none"
                   style="height: calc(100vh - 400px); min-height: 300px;"
                   placeholder="# 标题&#10;&#10;正文内容...&#10;&#10;```javascript&#10;// 代码示例&#10;console.log('Hello')&#10;```&#10;&#10;?{info}[提示信息]&#10;?{success}[成功信息]&#10;?{warning}[警告信息]&#10;?{danger}[危险信息]"
                 ></textarea>
               </div>
-              
+
               <div v-if="formError" class="text-sm text-error">{{ formError }}</div>
             </div>
-            
+
             <!-- Right: Preview -->
             <div v-else class="flex-1 overflow-y-auto p-6">
               <div class="prose prose-invert max-w-none">
@@ -719,9 +719,9 @@ function formatDate(dateStr: string | null | undefined): string {
               </div>
             </div>
           </div>
-          
+
           <!-- Footer -->
-          <div class="flex justify-end gap-3 px-6 py-4 border-t border-themed">
+          <div class="flex justify-end gap-3 border-t border-themed px-6 py-4">
             <button class="btn-secondary" @click="showEditor = false">{{ t('common.cancel') }}</button>
             <button :disabled="formLoading" class="btn-primary" @click="saveArticle">
               {{ formLoading ? t('common.loading') : t('common.save') }}
@@ -735,60 +735,60 @@ function formatDate(dateStr: string | null | undefined): string {
     <Teleport to="body">
       <div v-if="showCategoryModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showCategoryModal = false"></div>
-        
-        <div class="relative w-full max-w-md bg-themed border border-themed rounded-xl shadow-2xl animate-fade-in">
-          <div class="flex items-center justify-between px-6 py-4 border-b border-themed">
-            <h3 class="text-lg font-semibold text-themed">
+
+        <div class="relative w-full max-w-md rounded-xl border border-themed bg-themed-surface shadow-2xl animate-fade-in">
+          <div class="flex items-center justify-between gap-4 border-b border-themed px-6 py-4">
+            <h3 class="truncate text-lg font-semibold text-themed">
               {{ categoryMode === 'create' ? t('admin.helpManage.addCategory') : t('common.edit') }}
             </h3>
-            <button class="text-themed-muted hover:text-themed" @click="showCategoryModal = false">
+            <button class="btn-ghost btn-sm -mr-2 p-1.5" @click="showCategoryModal = false">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          
-          <div class="p-6 space-y-4">
+
+          <div class="space-y-4 p-6">
             <div>
-              <label class="block text-sm text-themed-secondary mb-1.5">{{ t('admin.helpManage.categoryId') }} *</label>
-              <input 
-                v-model="categoryForm.id" 
-                type="text" 
-                class="input font-mono" 
+              <label class="mb-1.5 block text-sm text-themed-secondary">{{ t('admin.helpManage.categoryId') }} *</label>
+              <input
+                v-model="categoryForm.id"
+                type="text"
+                class="input font-mono"
                 placeholder="getting-started"
                 :disabled="categoryMode === 'edit'"
               />
-              <p class="text-xs text-themed-muted mt-1">{{ t('admin.helpManage.categoryIdHint') }}</p>
+              <p class="mt-1 text-xs text-themed-muted">{{ t('admin.helpManage.categoryIdHint') }}</p>
             </div>
-            
+
             <div>
-              <label class="block text-sm text-themed-secondary mb-1.5">{{ t('admin.helpManage.categoryName') }} *</label>
-              <input 
-                v-model="categoryForm.name" 
-                type="text" 
-                class="input" 
+              <label class="mb-1.5 block text-sm text-themed-secondary">{{ t('admin.helpManage.categoryName') }} *</label>
+              <input
+                v-model="categoryForm.name"
+                type="text"
+                class="input"
                 placeholder="Getting Started"
               />
             </div>
-            
+
             <div>
-              <label class="block text-sm text-themed-secondary mb-1.5">{{ t('admin.helpManage.categoryColor') }}</label>
+              <label class="mb-1.5 block text-sm text-themed-secondary">{{ t('admin.helpManage.categoryColor') }}</label>
               <div class="flex flex-wrap gap-2">
                 <button
                   v-for="color in categoryColors"
                   :key="color"
-                  class="w-8 h-8 rounded-lg transition-all"
-                  :class="categoryForm.color === color ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900' : ''"
+                  class="h-8 w-8 rounded-lg ring-1 ring-inset ring-black/10 transition-all dark:ring-white/10"
+                  :class="categoryForm.color === color ? 'ring-2 ring-offset-2 ring-primary-500 ring-offset-white dark:ring-offset-gray-950' : ''"
                   :style="{ backgroundColor: color }"
                   @click="categoryForm.color = color"
                 ></button>
               </div>
             </div>
-            
+
             <div v-if="categoryError" class="text-sm text-error">{{ categoryError }}</div>
           </div>
-          
-          <div class="flex justify-end gap-3 px-6 py-4 border-t border-themed">
+
+          <div class="flex justify-end gap-3 border-t border-themed px-6 py-4">
             <button class="btn-secondary" @click="showCategoryModal = false">{{ t('common.cancel') }}</button>
             <button class="btn-primary" @click="saveCategory">{{ t('common.save') }}</button>
           </div>
@@ -797,6 +797,28 @@ function formatDate(dateStr: string | null | undefined): string {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.nimbus-lift {
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.nimbus-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -10px rgb(16 24 40 / 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-view *,
+  .nimbus-view *::before,
+  .nimbus-view *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+  .nimbus-lift:hover {
+    transform: none;
+  }
+}
+</style>
 
 <style>
 /* ============ Markdown 基础样式 ============ */

@@ -122,23 +122,28 @@ async function sendBroadcast() {
 </script>
 
 <template>
-  <div class="kawaii-page space-y-6 animate-fade-in">
+  <div class="kawaii-page nimbus-view space-y-6 animate-fade-in">
     <!-- 页面标题 -->
-    <div>
-      <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
-        {{ t('admin.broadcast.title') }}
-      </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        {{ t('admin.broadcast.description') }}
-      </p>
-    </div>
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex items-start gap-3">
+        <span class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500 sm:flex">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-xl font-semibold text-themed sm:text-2xl">{{ t('admin.broadcast.title') }}</h1>
+          <p class="mt-1 text-sm text-themed-muted">{{ t('admin.broadcast.description') }}</p>
+        </div>
+      </div>
+    </header>
 
     <!-- 发送表单 -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <form class="space-y-4" @submit.prevent="sendBroadcast">
+    <div class="nimbus-card rounded-xl border border-themed bg-themed-surface p-5 sm:p-6">
+      <form class="space-y-5" @submit.prevent="sendBroadcast">
         <!-- 标题 -->
         <div>
-          <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label for="title" class="mb-1.5 block text-sm font-medium text-themed">
             {{ t('admin.broadcast.messageTitle') }}
           </label>
           <input
@@ -147,18 +152,16 @@ async function sendBroadcast() {
             type="text"
             maxlength="200"
             :placeholder="t('admin.broadcast.titlePlaceholder')"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                   focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent"
+            class="input"
           />
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p class="mt-1 text-right font-mono text-2xs tabular-nums text-themed-muted">
             {{ title.length }}/200
           </p>
         </div>
 
         <!-- 内容 -->
         <div>
-          <label for="content" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label for="content" class="mb-1.5 block text-sm font-medium text-themed">
             {{ t('admin.broadcast.messageContent') }}
           </label>
           <textarea
@@ -167,12 +170,9 @@ async function sendBroadcast() {
             rows="8"
             maxlength="5000"
             :placeholder="t('admin.broadcast.contentPlaceholder')"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                   focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent
-                   resize-none"
+            class="input resize-none"
           />
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p class="mt-1 text-right font-mono text-2xs tabular-nums text-themed-muted">
             {{ content.length }}/5000
           </p>
         </div>
@@ -182,121 +182,113 @@ async function sendBroadcast() {
           <button
             type="submit"
             :disabled="sending || !title.trim() || !content.trim()"
-            class="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-md
-                   hover:bg-gray-800 dark:hover:bg-gray-200
-                   disabled:opacity-50 disabled:cursor-not-allowed
-                   transition-colors duration-200"
+            class="btn-primary"
           >
-            <span v-if="sending">{{ t('common.sending') }}</span>
-            <span v-else>{{ t('admin.broadcast.send') }}</span>
+            <span v-if="sending" class="loading-spinner h-4 w-4"></span>
+            {{ sending ? t('common.sending') : t('admin.broadcast.send') }}
           </button>
         </div>
       </form>
     </div>
 
     <!-- 提示信息 -->
-    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-      <div class="flex">
-        <svg class="w-5 h-5 text-blue-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-        </svg>
-        <div class="ml-3">
-          <p class="text-sm text-blue-700 dark:text-blue-300">
-            {{ t('admin.broadcast.hint') }}
-          </p>
-        </div>
-      </div>
+    <div class="flex gap-3 rounded-xl border border-primary-500/20 bg-primary-500/5 p-4">
+      <svg class="mt-0.5 h-5 w-5 shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <p class="text-sm text-themed-secondary">{{ t('admin.broadcast.hint') }}</p>
     </div>
 
     <!-- 历史记录 -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+    <div class="overflow-hidden rounded-xl border border-themed bg-themed-surface">
       <!-- 标题栏 -->
       <button
         type="button"
-        class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        class="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-themed-hover"
         @click="toggleHistory"
       >
         <div class="flex items-center gap-2">
-          <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg class="h-5 w-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span class="font-medium text-gray-900 dark:text-white">{{ t('admin.broadcast.history') }}</span>
-          <span v-if="historyTotal > 0" class="text-sm text-gray-500 dark:text-gray-400">({{ historyTotal }})</span>
+          <span class="font-medium text-themed">{{ t('admin.broadcast.history') }}</span>
+          <span v-if="historyTotal > 0" class="font-mono text-xs tabular-nums text-themed-muted">({{ historyTotal }})</span>
         </div>
         <svg
-          class="w-5 h-5 text-gray-400 transition-transform duration-200"
+          class="h-5 w-5 text-themed-muted transition-transform duration-200"
           :class="{ 'rotate-180': showHistory }"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       <!-- 列表内容 -->
-      <div v-if="showHistory" class="border-t border-gray-200 dark:border-gray-700">
+      <div v-if="showHistory" class="border-t border-themed">
         <!-- 加载中 -->
-        <div v-if="historyLoading" class="p-8 flex justify-center">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+        <div v-if="historyLoading" class="flex justify-center p-8">
+          <div class="loading-spinner h-8 w-8 text-primary-500"></div>
         </div>
 
         <!-- 空状态 -->
-        <div v-else-if="historyList.length === 0" class="p-8 text-center text-gray-500 dark:text-gray-400">
+        <div v-else-if="historyList.length === 0" class="p-10 text-center text-sm text-themed-muted">
+          <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+            </svg>
+          </span>
           {{ t('admin.broadcast.noHistory') }}
         </div>
 
         <!-- 列表 -->
         <div v-else>
-          <div class="divide-y divide-gray-200 dark:divide-gray-700">
+          <div class="divide-y divide-themed">
             <div
               v-for="item in historyList"
               :key="item.id"
-              class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+              class="cursor-pointer px-5 py-4 transition-colors hover:bg-themed-hover"
               @click="viewDetail(item)"
             >
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
                     <span
-                      class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                      class="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-medium"
                       :class="getTypeBadgeClass(item.type)"
                     >
                       {{ t(`admin.broadcast.types.${item.type}`) }}
                     </span>
-                    <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ item.title }}</h4>
+                    <h4 class="truncate text-sm font-medium text-themed">{{ item.title }}</h4>
                   </div>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400 truncate">{{ item.content }}</p>
+                  <p class="mt-1 truncate text-sm text-themed-muted">{{ item.content }}</p>
                 </div>
-                <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 shrink-0">
-                  <span>{{ t('admin.broadcast.recipients', { count: item.recipientCount }) }}</span>
-                  <span class="hidden sm:inline">{{ d(new Date(item.createdAt), 'short') }}</span>
+                <div class="flex shrink-0 items-center gap-4 text-xs text-themed-muted">
+                  <span class="font-mono tabular-nums">{{ t('admin.broadcast.recipients', { count: item.recipientCount }) }}</span>
+                  <span class="hidden font-mono tabular-nums sm:inline">{{ d(new Date(item.createdAt), 'short') }}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- 分页 -->
-          <div v-if="historyTotalPages > 1" class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div v-if="historyTotalPages > 1" class="flex items-center justify-between border-t border-themed px-5 py-4">
             <button
               type="button"
               :disabled="historyPage <= 1"
-              class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md
-                     text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700
-                     disabled:opacity-50 disabled:cursor-not-allowed"
+              class="btn-secondary btn-sm"
               @click="loadHistory(historyPage - 1)"
             >
               {{ t('common.previous') }}
             </button>
-            <span class="text-sm text-gray-500 dark:text-gray-400">
+            <span class="font-mono text-xs tabular-nums text-themed-muted">
               {{ historyPage }} / {{ historyTotalPages }}
             </span>
             <button
               type="button"
               :disabled="historyPage >= historyTotalPages"
-              class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md
-                     text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700
-                     disabled:opacity-50 disabled:cursor-not-allowed"
+              class="btn-secondary btn-sm"
               @click="loadHistory(historyPage + 1)"
             >
               {{ t('common.next') }}
@@ -310,50 +302,47 @@ async function sendBroadcast() {
     <Teleport to="body">
       <div
         v-if="selectedAnnouncement"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         @click.self="closeDetail"
       >
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+        <div class="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-themed bg-themed-surface shadow-2xl">
           <!-- 弹窗头部 -->
-          <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <div class="flex items-center gap-2">
+          <div class="flex items-center justify-between gap-3 border-b border-themed px-6 py-4">
+            <div class="flex min-w-0 items-center gap-2">
               <span
-                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                class="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-medium"
                 :class="getTypeBadgeClass(selectedAnnouncement.type)"
               >
                 {{ t(`admin.broadcast.types.${selectedAnnouncement.type}`) }}
               </span>
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ selectedAnnouncement.title }}</h3>
+              <h3 class="truncate text-base font-semibold text-themed">{{ selectedAnnouncement.title }}</h3>
             </div>
             <button
               type="button"
-              class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+              class="btn-ghost btn-sm -mr-2 p-1.5"
               @click="closeDetail"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
           <!-- 弹窗内容 -->
-          <div class="px-6 py-4 overflow-y-auto max-h-[60vh]">
-            <div class="mb-4 flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
+          <div class="overflow-y-auto px-6 py-4">
+            <div class="mb-4 flex flex-wrap gap-4 text-xs text-themed-muted">
               <span>{{ t('admin.broadcast.sender') }}: {{ selectedAnnouncement.sender.username }}</span>
-              <span>{{ t('admin.broadcast.recipients', { count: selectedAnnouncement.recipientCount }) }}</span>
-              <span>{{ d(new Date(selectedAnnouncement.createdAt), 'long') }}</span>
+              <span class="font-mono tabular-nums">{{ t('admin.broadcast.recipients', { count: selectedAnnouncement.recipientCount }) }}</span>
+              <span class="font-mono tabular-nums">{{ d(new Date(selectedAnnouncement.createdAt), 'long') }}</span>
             </div>
-            <div class="prose dark:prose-invert max-w-none">
-              <pre class="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-normal">{{ selectedAnnouncement.content }}</pre>
-            </div>
+            <pre class="whitespace-pre-wrap break-words font-sans text-sm text-themed-secondary">{{ selectedAnnouncement.content }}</pre>
           </div>
 
           <!-- 弹窗底部 -->
-          <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+          <div class="flex justify-end border-t border-themed px-6 py-4">
             <button
               type="button"
-              class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md
-                     hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              class="btn-secondary"
               @click="closeDetail"
             >
               {{ t('common.close') }}
@@ -364,3 +353,18 @@ async function sendBroadcast() {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.nimbus-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-view *,
+  .nimbus-view *::before,
+  .nimbus-view *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+</style>

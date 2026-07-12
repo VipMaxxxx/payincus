@@ -600,7 +600,7 @@ onActivated(async () => {
                   <div
                     v-for="friend in paginatedFilteredFriends"
                     :key="friend.id"
-                    class="card p-3 cursor-pointer transition-all"
+                    class="card nimbus-lift p-3 cursor-pointer transition-all"
                     :class="[
                       selectedFriend?.id === friend.id
                         ? 'border-accent bg-themed-secondary'
@@ -1047,12 +1047,13 @@ onActivated(async () => {
                 </div>
                 <div class="flex flex-row sm:flex-col items-center sm:items-end gap-1 flex-shrink-0">
                   <span
-                    class="text-xs px-2 py-1 rounded-full whitespace-nowrap"
+                    class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full whitespace-nowrap"
                     :class="record.status === 'accepted'
                       ? (themeStore.isDark ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-700')
                       : (themeStore.isDark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600')
                     "
                   >
+                    <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>
                     {{ record.status === 'accepted' ? t('friends.statusAccepted') : t('friends.statusRejected') }}
                   </span>
                   <span class="text-xs text-themed-muted whitespace-nowrap">
@@ -1295,3 +1296,21 @@ onActivated(async () => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* 可点击好友行：悬浮微抬升（accent 微光由全局 .card:hover 提供） */
+.nimbus-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.nimbus-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgb(16 24 40 / 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-lift,
+  .nimbus-lift:hover {
+    transition: none;
+    transform: none;
+  }
+}
+</style>

@@ -51,7 +51,7 @@ onMounted(async (): Promise<void> => {
       api.systemConfig.getPublic(),
       api.oauth.getProviders()
     ])
-    
+
     turnstileEnabled.value = configResponse.turnstileEnabled || false
     turnstileSiteKey.value = configResponse.turnstileSiteKey || ''
     footerContactEmail.value = configResponse.footerContactEmail || null
@@ -71,7 +71,7 @@ function onTurnstileExpire() {
 function checkOAuthErrors(): void {
   const urlError = route.query.error as string | undefined
   const provider = route.query.provider as string | undefined
-  
+
   if (urlError) {
     const errorMessages: Record<string, string> = {
       'not_bound': t('auth.oauthNotBound', { provider: (provider || '').toUpperCase() }),
@@ -82,7 +82,7 @@ function checkOAuthErrors(): void {
       'oauth_error': t('auth.oauthError')
     }
     error.value = errorMessages[urlError] || t('auth.loginFailed') + ': ' + urlError
-    
+
     // 清除 URL 参数
     router.replace({ query: {} })
   }
@@ -106,13 +106,13 @@ async function handleLogin(): Promise<void> {
   try {
     // 始终发送2FA代码（如果有），后端会根据用户是否启用2FA来决定是否验证
     await authStore.login(
-      username.value, 
-      password.value, 
+      username.value,
+      password.value,
       !useRecoveryCode.value && totpCode.value ? totpCode.value : undefined,
       useRecoveryCode.value && recoveryCode.value ? recoveryCode.value : undefined,
       turnstileEnabled.value ? turnstileToken.value : undefined
     )
-    
+
     if (!authStore.isAdmin) {
       await authStore.logout()
       error.value = '该入口仅限管理员登录'
@@ -184,43 +184,29 @@ function getProviderInfo(provider: string): ProviderInfo {
 </script>
 
 <template>
-  <div class="kawaii-public-shell kawaii-auth-shell min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-sm">
-      <!-- Logo -->
-      <div class="text-center mb-8">
-        <img
-          :src="brand.brandLogoUrl"
-          :alt="brand.brandName"
-          class="w-16 h-16 mx-auto mb-2 rounded-xl"
-        />
-        <h2 
-          class="text-lg font-semibold mb-1"
-          :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
-        >
+  <div class="admin-auth kawaii-public-shell min-h-screen flex items-center justify-center p-4">
+    <div class="admin-auth-wrap w-full max-w-sm">
+      <!-- Brand -->
+      <div class="mb-8 text-center">
+        <div class="admin-auth-logo mx-auto mb-4">
+          <img :src="brand.brandLogoUrl" :alt="brand.brandName" class="h-14 w-14 rounded-2xl" />
+        </div>
+        <h2 class="text-xl font-semibold tracking-[-0.02em] text-themed">
           后台管理系统
         </h2>
-        <p
-          class="text-xs font-medium mb-1"
-          :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'"
-        >
+        <p class="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400">
           {{ brand.brandName }} Admin
         </p>
-        <p 
-          class="text-sm"
-          :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-600'"
-        >
+        <p class="mt-2 text-sm text-themed-muted">
           {{ $t('auth.loginTo') }}
         </p>
       </div>
 
       <!-- 登录表单 -->
-      <div class="card p-6">
+      <div class="admin-auth-card card p-6">
         <form class="space-y-4" @submit.prevent="handleLogin">
           <div>
-            <label 
-              class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
-            >{{ $t('auth.usernameOrEmail') }}</label>
+            <label class="admin-auth-label">{{ $t('auth.usernameOrEmail') }}</label>
             <input
               v-model="username"
               type="text"
@@ -231,10 +217,7 @@ function getProviderInfo(provider: string): ProviderInfo {
           </div>
 
           <div>
-            <label 
-              class="block text-sm mb-1.5"
-              :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
-            >{{ $t('auth.password') }}</label>
+            <label class="admin-auth-label">{{ $t('auth.password') }}</label>
             <input
               v-model="password"
               type="password"
@@ -248,12 +231,9 @@ function getProviderInfo(provider: string): ProviderInfo {
           <div>
             <!-- TOTP 验证码 -->
             <div v-if="!useRecoveryCode">
-              <label 
-                class="block text-sm mb-1.5"
-                :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
-              >
+              <label class="admin-auth-label flex items-center">
                 {{ $t('auth.twoFactorCode') }}
-                <span class="ml-2 text-xs" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-400'">
+                <span class="ml-2 text-xs font-normal normal-case tracking-normal text-themed-faint">
                   ({{ $t('auth.twoFactorOptional') }})
                 </span>
               </label>
@@ -261,35 +241,31 @@ function getProviderInfo(provider: string): ProviderInfo {
                 v-model="totpCode"
                 type="text"
                 maxlength="6"
-                class="input"
+                class="input font-mono tracking-[0.3em]"
                 :placeholder="$t('auth.twoFactorCodePlaceholder')"
                 autocomplete="one-time-code"
               />
-              <p class="text-xs mt-1" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+              <p class="mt-1.5 text-xs text-themed-faint">
                 {{ $t('auth.twoFactorOptionalHint') }}
               </p>
             </div>
             <!-- 恢复码 -->
             <div v-else>
-              <label 
-                class="block text-sm mb-1.5"
-                :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'"
-              >{{ $t('auth.recoveryCode') }}</label>
+              <label class="admin-auth-label">{{ $t('auth.recoveryCode') }}</label>
               <input
                 v-model="recoveryCode"
                 type="text"
-                class="input"
+                class="input font-mono"
                 :placeholder="$t('auth.recoveryCodePlaceholder')"
               />
-              <p class="text-xs mt-1" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+              <p class="mt-1.5 text-xs text-themed-faint">
                 {{ $t('auth.recoveryCodeHint') }}
               </p>
             </div>
             <!-- 切换按钮 -->
             <button
               type="button"
-              class="text-xs mt-2 transition-colors"
-              :class="themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'"
+              class="mt-2 text-xs font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
               @click="useRecoveryCode = !useRecoveryCode; totpCode = ''; recoveryCode = ''"
             >
               {{ useRecoveryCode ? $t('auth.useTotpCode') : $t('auth.useRecoveryCode') }}
@@ -307,63 +283,53 @@ function getProviderInfo(provider: string): ProviderInfo {
           />
 
           <!-- 错误提示 -->
-          <div v-if="error" class="text-sm text-red-500">
-            {{ error }}
+          <div v-if="error" class="admin-auth-error">
+            <svg class="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3.75m0 3.75h.008M10.34 3.94 1.9 18.06A1.5 1.5 0 0 0 3.2 20.3h17.6a1.5 1.5 0 0 0 1.3-2.24L13.66 3.94a1.5 1.5 0 0 0-2.6 0Z" />
+            </svg>
+            <span>{{ error }}</span>
           </div>
 
           <button
             type="submit"
             :disabled="loading"
-            class="btn-primary w-full"
+            class="admin-auth-submit"
           >
+            <span v-if="loading" class="admin-auth-spinner"></span>
             {{ loading ? $t('auth.loggingIn') : $t('auth.continue') }}
           </button>
 
-          <div
-            v-if="demoAccount"
-            class="rounded-lg border p-3 text-sm"
-            :class="themeStore.isDark ? 'border-gray-800 bg-gray-900/60 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-700'"
-          >
+          <div v-if="demoAccount" class="admin-auth-demo">
             <div class="mb-2 flex items-center justify-between gap-3">
-              <span class="font-medium" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+              <span class="font-medium text-themed">
                 {{ demoAccount.label }}
               </span>
               <button
                 type="button"
                 :disabled="loading"
-                class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                :class="themeStore.isDark ? 'bg-gray-100 text-gray-950 hover:bg-white disabled:opacity-60' : 'bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60'"
+                class="rounded-md bg-primary-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary-600 disabled:opacity-60"
                 @click="loginWithDemoAccount"
               >
                 一键登录
               </button>
             </div>
             <div class="grid grid-cols-[52px_1fr] gap-x-2 gap-y-1 font-mono text-xs">
-              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">账号</span>
-              <span>{{ demoAccount.username }}</span>
-              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">邮箱</span>
-              <span>{{ demoAccount.email }}</span>
-              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">密码</span>
-              <span>{{ demoAccount.password }}</span>
+              <span class="text-themed-faint">账号</span>
+              <span class="text-themed">{{ demoAccount.username }}</span>
+              <span class="text-themed-faint">邮箱</span>
+              <span class="text-themed">{{ demoAccount.email }}</span>
+              <span class="text-themed-faint">密码</span>
+              <span class="text-themed">{{ demoAccount.password }}</span>
             </div>
           </div>
         </form>
 
         <!-- OAuth Quick Login -->
         <div v-if="oauthProviders.length > 0" class="mt-6">
-          <div class="relative">
-            <div class="absolute inset-0 flex items-center">
-              <div 
-                class="w-full border-t"
-                :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'"
-              ></div>
-            </div>
-            <div class="relative flex justify-center text-sm">
-              <span 
-                class="px-2"
-                :class="themeStore.isDark ? 'bg-gray-900 text-gray-500' : 'bg-white text-gray-500'"
-              >{{ $t('auth.orUse') }}</span>
-            </div>
+          <div class="admin-auth-divider">
+            <span class="line"></span>
+            <span class="label">{{ $t('auth.orUse') }}</span>
+            <span class="line"></span>
           </div>
 
           <div class="mt-4 grid gap-3" :class="oauthProviders.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
@@ -381,62 +347,207 @@ function getProviderInfo(provider: string): ProviderInfo {
               {{ getProviderInfo(provider).name }}
             </button>
           </div>
-          
-          <p 
-            class="mt-3 text-xs text-center"
-            :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
-          >
+
+          <p class="mt-3 text-center text-xs text-themed-faint">
             {{ $t('auth.oauthBindHint') }}
           </p>
         </div>
       </div>
 
-      <div class="mt-6 text-center text-sm">
-        <p :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'">
-          仅限管理员账号登录
-        </p>
-      </div>
+      <p class="mt-6 text-center text-sm text-themed-faint">
+        仅限管理员账号登录
+      </p>
+    </div>
 
-      <!-- 右下角操作按钮 -->
-      <div class="fixed bottom-4 right-4 z-10 flex items-center gap-2">
-        <a
-          v-if="contactEmailHref"
-          :href="contactEmailHref"
-          class="p-2 rounded-lg transition-colors"
-          :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'"
-          :title="$t('auth.contactEmail')"
-          :aria-label="$t('auth.contactEmail')"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.5"
-              d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-            />
-          </svg>
-        </a>
+    <!-- 右下角操作按钮 -->
+    <div class="fixed bottom-4 right-4 z-10 flex items-center gap-2">
+      <a
+        v-if="contactEmailHref"
+        :href="contactEmailHref"
+        class="rounded-lg p-2 text-themed-faint transition-colors hover:bg-themed-hover hover:text-themed"
+        :title="$t('auth.contactEmail')"
+        :aria-label="$t('auth.contactEmail')"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+          />
+        </svg>
+      </a>
 
-        <button
-          class="p-2 rounded-lg transition-colors"
-          :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'"
-          :title="themeStore.mode === 'dark' ? $t('theme.dark') : themeStore.mode === 'light' ? $t('theme.light') : $t('theme.system')"
-          @click="themeStore.toggleTheme"
-        >
-          <!-- 深色图标 -->
-          <svg v-if="themeStore.mode === 'dark'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-          <!-- 浅色图标 -->
-          <svg v-else-if="themeStore.mode === 'light'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <!-- 系统图标 -->
-          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        </button>
-      </div>
+      <button
+        class="rounded-lg p-2 text-themed-faint transition-colors hover:bg-themed-hover hover:text-themed"
+        :title="themeStore.mode === 'dark' ? $t('theme.dark') : themeStore.mode === 'light' ? $t('theme.light') : $t('theme.system')"
+        @click="themeStore.toggleTheme"
+      >
+        <!-- 深色图标 -->
+        <svg v-if="themeStore.mode === 'dark'" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+        <!-- 浅色图标 -->
+        <svg v-else-if="themeStore.mode === 'light'" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <!-- 系统图标 -->
+        <svg v-else class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      </button>
     </div>
   </div>
 </template>
+
+<style scoped>
+.admin-auth {
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-auth::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(130% 90% at 50% -20%, color-mix(in srgb, var(--kawaii-primary) 16%, transparent), transparent 55%),
+    radial-gradient(80% 60% at 100% 100%, color-mix(in srgb, var(--kawaii-primary) 8%, transparent), transparent 60%);
+}
+
+.admin-auth-wrap {
+  position: relative;
+  z-index: 1;
+  animation: adminAuthRise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.admin-auth-logo {
+  display: inline-flex;
+  padding: 6px;
+  border-radius: 1.35rem;
+  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 32%, transparent);
+}
+
+.admin-auth-card {
+  box-shadow: 0 24px 60px -32px color-mix(in srgb, var(--kawaii-primary) 45%, transparent);
+}
+
+.admin-auth-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kawaii-muted);
+}
+
+.admin-auth-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border-radius: 0.6rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--kawaii-primary);
+  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--kawaii-primary) 75%, transparent);
+  transition: filter 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.admin-auth-submit:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 14px 30px -12px color-mix(in srgb, var(--kawaii-primary) 85%, transparent);
+}
+
+.admin-auth-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.admin-auth-submit:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.admin-auth-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.55rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: #dc2626;
+  background: color-mix(in srgb, #dc2626 9%, transparent);
+  border: 1px solid color-mix(in srgb, #dc2626 24%, transparent);
+}
+
+:global(.dark) .admin-auth-error {
+  color: #f87171;
+}
+
+.admin-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.admin-auth-divider .line {
+  flex: 1;
+  height: 1px;
+  background: var(--kawaii-line);
+}
+
+.admin-auth-divider .label {
+  font-size: 0.8125rem;
+  color: var(--kawaii-faint);
+}
+
+.admin-auth-demo {
+  border-radius: 0.65rem;
+  border: 1px solid var(--kawaii-line);
+  background: var(--kawaii-surface-soft);
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.admin-auth-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  animation: adminAuthSpin 0.7s linear infinite;
+}
+
+@keyframes adminAuthRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes adminAuthSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-auth-wrap {
+    animation: none;
+  }
+  .admin-auth-spinner {
+    animation: none;
+  }
+}
+</style>

@@ -2532,10 +2532,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
         <div class="flex items-center gap-3 sm:gap-4 min-w-0">
           <RouterLink
             :to="getReturnPath()"
-            class="flex h-11 w-11 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-lg border transition-all duration-200"
-            :class="themeStore.isDark
-              ? 'border-gray-800 bg-gray-950 text-gray-500 hover:border-gray-700 hover:bg-gray-900 hover:text-gray-200'
-              : 'border-gray-200 bg-white text-gray-400 shadow-sm hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700'"
+            class="nimbus-back flex h-11 w-11 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl border border-themed bg-themed-surface text-themed-muted shadow-sm transition-all duration-200 hover:text-themed hover:bg-themed-hover"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7" />
@@ -2543,17 +2540,11 @@ function formatShortDate(dateStr: string | null | undefined): string {
           </RouterLink>
 
           <div class="relative flex-shrink-0">
-            <div
-              class="absolute inset-0 rounded-[1.4rem] blur-xl opacity-70"
-              :class="themeStore.isDark ? 'bg-blue-500/15' : 'bg-blue-200/70'"
-            />
+            <div class="nimbus-icon-glow absolute inset-0 rounded-[1.4rem] blur-xl" />
             <button
               v-if="!isAdminEntry"
               type="button"
-              class="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[1.4rem] border shadow-sm transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-              :class="themeStore.isDark
-                ? 'border-gray-800 bg-gray-900 hover:border-gray-700'
-                : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'"
+              class="nimbus-icon-btn relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[1.4rem] border border-themed bg-themed-surface shadow-sm transition-all duration-200 hover:bg-themed-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60"
               :aria-label="$t('instance.badgeModal.open')"
               :title="$t('instance.badgeModal.open')"
               @click="showInstanceBadgeModal = true"
@@ -2567,10 +2558,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
             </button>
             <div
               v-else
-              class="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[1.4rem] border shadow-sm"
-              :class="themeStore.isDark
-                ? 'border-gray-800 bg-gray-900'
-                : 'border-gray-200 bg-white'"
+              class="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-[1.4rem] border border-themed bg-themed-surface shadow-sm"
             >
               <InstanceDisplayIcon
                 :badge-id="instance.iconBadgeId"
@@ -2580,10 +2568,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
               />
             </div>
             <div
-              class="absolute -bottom-1 -right-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shadow-sm"
-              :class="themeStore.isDark
-                ? 'border-gray-800 bg-gray-950 text-gray-300'
-                : 'border-gray-200 bg-white text-gray-700'"
+              class="absolute -bottom-1 -right-1 rounded-full border border-themed bg-themed-surface px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-themed-muted shadow-sm"
             >
               {{ $t(`common.instanceType.${instance.instanceType}`) }}
             </div>
@@ -2591,13 +2576,13 @@ function formatShortDate(dateStr: string | null | undefined): string {
 
           <div class="min-w-0">
             <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <div :class="['w-2.5 h-2.5 rounded-full flex-shrink-0', getStatusInfo(instance.status, t).dot]"></div>
               <h1 class="page-title max-w-full truncate">{{ instance.name }}</h1>
-              <span :class="['badge', getStatusInfo(instance.status, t).class]">
+              <span :class="['badge nimbus-status-pill gap-1.5 font-mono tabular-nums', getStatusInfo(instance.status, t).class]">
+                <span :class="['nimbus-status-dot', getStatusInfo(instance.status, t).dot]"></span>
                 {{ getStatusInfo(instance.status, t).label }}
               </span>
             </div>
-            <p class="page-description mt-0.5">{{ formatImageName(instance.image, (instance as any).imageName) }} · <span class="uppercase">{{ (instance as any).host?.name || (instance as any).host || '-' }}</span></p>
+            <p class="page-description mt-0.5 font-mono tabular-nums">{{ formatImageName(instance.image, (instance as any).imageName) }} · <span class="uppercase">{{ (instance as any).host?.name || (instance as any).host || '-' }}</span></p>
           </div>
         </div>
 
@@ -2866,32 +2851,31 @@ function formatShortDate(dateStr: string | null | undefined): string {
       </div>
 
       <!-- Tab Navigation -->
-      <div
-        class="flex gap-1 p-1 rounded-lg w-full sm:w-fit overflow-x-auto"
-        :class="themeStore.isDark ? 'bg-gray-900' : 'bg-gray-100'"
-      >
-        <button
-          v-for="tab in visibleTabs"
-          :key="tab.key"
-          :class="[
-            'flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap',
-            activeTab === tab.key
-              ? (themeStore.isDark ? 'bg-gray-800 text-white' : 'bg-white text-gray-900 shadow-sm')
-              : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900')
-          ]"
-          @click="activeTab = tab.key as TabType"
-        >
-          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" :d="tab.icon" />
-          </svg>
-          <span class="hidden sm:inline">{{ $t(tab.labelKey) }}</span>
-        </button>
+      <div class="nimbus-tabs -mt-1 overflow-x-auto border-b border-themed">
+        <div class="flex min-w-max gap-1 sm:gap-2">
+          <button
+            v-for="tab in visibleTabs"
+            :key="tab.key"
+            :class="[
+              'nimbus-tab group relative -mb-px flex items-center gap-1.5 sm:gap-2 whitespace-nowrap border-b-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium transition-colors',
+              activeTab === tab.key
+                ? 'border-primary-500 text-themed font-semibold'
+                : 'border-transparent text-themed-muted hover:text-themed'
+            ]"
+            @click="activeTab = tab.key as TabType"
+          >
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" :d="tab.icon" />
+            </svg>
+            <span class="hidden sm:inline">{{ $t(tab.labelKey) }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- Error State Banner -->
       <div
         v-if="instance && isError"
-        class="rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4"
+        class="nimbus-alert rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4"
         :class="themeStore.isDark
           ? 'bg-red-500/10 border border-red-500/30'
           : 'bg-red-50 border border-red-200'"
@@ -3179,15 +3163,15 @@ function formatShortDate(dateStr: string | null | undefined): string {
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div class="min-w-0">
-                        <div class="text-[11px]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+                        <div class="text-[11px] uppercase tracking-[0.06em]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
                           {{ configStore.freeSiteMode ? freeSiteCopy.renewPrice : $t('instance.subscription.renewPrice') }}
                         </div>
                         <div class="mt-1.5 flex items-end gap-1.5">
                           <span
-                            class="text-3xl font-semibold leading-none"
+                            class="text-3xl font-semibold leading-none tracking-tight tabular-nums"
                             :class="themeStore.isDark ? 'text-white' : 'text-gray-900'"
                           >
-                            ¥{{ getRenewPrice(instance).toFixed(2) }}
+                            <span class="align-[0.14em] text-[0.62em] font-medium text-themed-muted">¥</span>{{ getRenewPrice(instance).toFixed(2) }}
                           </span>
                           <span
                             class="pb-0.5 text-xs"
@@ -3225,10 +3209,10 @@ function formatShortDate(dateStr: string | null | undefined): string {
                     class="min-h-[84px] rounded-xl border p-3"
                     :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50/80'"
                   >
-                    <div class="text-[11px]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+                    <div class="text-[11px] uppercase tracking-[0.06em]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
                       {{ $t('instance.subscription.expiresAt') }}
                     </div>
-                    <div class="mt-1.5 text-sm font-medium" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">
+                    <div class="mt-1.5 text-sm font-medium tabular-nums" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">
                       {{ formatShortDate(instance.expires_at) }}
                     </div>
                   </div>
@@ -3237,10 +3221,10 @@ function formatShortDate(dateStr: string | null | undefined): string {
                     class="min-h-[84px] rounded-xl border p-3"
                     :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50/80'"
                   >
-                    <div class="text-[11px]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+                    <div class="text-[11px] uppercase tracking-[0.06em]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
                       {{ $t('instance.subscription.expiresIn') }}
                     </div>
-                    <div class="mt-1.5 text-sm font-medium" :class="subscriptionRemainingDisplay.className">
+                    <div class="mt-1.5 text-sm font-medium tabular-nums" :class="subscriptionRemainingDisplay.className">
                       {{ subscriptionRemainingDisplay.text }}
                     </div>
                   </div>
@@ -3249,7 +3233,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
                     class="min-h-[84px] rounded-xl border p-3"
                     :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50/80'"
                   >
-                    <div class="text-[11px]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+                    <div class="text-[11px] uppercase tracking-[0.06em]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
                       {{ configStore.freeSiteMode ? freeSiteCopy.billingCycle : $t('instance.subscription.billingCycle') }}
                     </div>
                     <div class="mt-1.5 text-sm font-medium" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">
@@ -3261,7 +3245,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
                     class="min-h-[84px] rounded-xl border p-3"
                     :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50/80'"
                   >
-                    <div class="text-[11px]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
+                    <div class="text-[11px] uppercase tracking-[0.06em]" :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">
                       {{ $t('instance.subscription.autoRenew') }}
                     </div>
                     <div
@@ -4014,3 +3998,116 @@ function formatShortDate(dateStr: string | null | undefined): string {
     />
   </div>
 </template>
+
+<style scoped>
+/* ============================================================
+   Nimbus polish for the instance detail view.
+   Motion is subtle and always disabled under reduced-motion.
+   ============================================================ */
+
+/* Back affordance + instance icon: gentle hover lift */
+.nimbus-back,
+.nimbus-icon-btn {
+  will-change: transform;
+}
+.nimbus-back:hover,
+.nimbus-icon-btn:hover {
+  transform: translateY(-1px);
+}
+.nimbus-back:active,
+.nimbus-icon-btn:active {
+  transform: translateY(0);
+}
+
+/* Indigo ambient glow behind the instance icon */
+.nimbus-icon-glow {
+  background: radial-gradient(closest-side, rgba(79, 70, 229, 0.30), transparent 78%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Status pill dot (colour comes from getStatusInfo utility classes) */
+.nimbus-status-pill {
+  line-height: 1.1;
+}
+.nimbus-status-dot {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+/* Underline tab bar: hide the horizontal scrollbar, keep it swipeable */
+.nimbus-tabs {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.nimbus-tabs::-webkit-scrollbar {
+  display: none;
+}
+.nimbus-tab {
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+.nimbus-tab:focus-visible {
+  outline: none;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  box-shadow: inset 0 0 0 2px rgba(79, 70, 229, 0.45);
+}
+
+/* Error banner entrance */
+.nimbus-alert {
+  animation: nimbus-fade-in 0.28s ease both;
+}
+
+/* Tab content cross-fade (Vue <Transition name="tab" mode="out-in">) */
+.tab-enter-active,
+.tab-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.tab-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.tab-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@keyframes nimbus-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-back,
+  .nimbus-icon-btn,
+  .nimbus-tab {
+    transition: none;
+  }
+  .nimbus-back:hover,
+  .nimbus-icon-btn:hover,
+  .nimbus-back:active,
+  .nimbus-icon-btn:active {
+    transform: none;
+  }
+  .nimbus-alert {
+    animation: none;
+  }
+  .tab-enter-active,
+  .tab-leave-active {
+    transition: none;
+  }
+  .tab-enter-from,
+  .tab-leave-to {
+    transform: none;
+  }
+}
+</style>

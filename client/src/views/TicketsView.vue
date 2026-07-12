@@ -933,15 +933,15 @@ function formatDateShort(dateString: string) {
   <div ref="revealRoot" class="kawaii-page min-h-screen animate-fade-in">
     <div class="space-y-6 py-6">
       <!-- Header -->
-      <div data-reveal class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
-        <div class="flex items-center gap-3">
-          <button v-if="viewMode !== 'list'" class="kawaii-action-button p-2 transition-colors" @click="backToList">
-            <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div data-reveal class="page-header">
+        <div class="flex min-w-0 items-center gap-3">
+          <button v-if="viewMode !== 'list'" class="btn btn-secondary btn-sm shrink-0" @click="backToList">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <div>
-            <h1 class="page-title text-lg sm:text-xl">
+          <div class="min-w-0">
+            <h1 class="page-title">
               {{ viewMode === 'detail' ? t('tickets.ticketDetails') : viewMode === 'create' ? t('tickets.newTicket') : t('tickets.title') }}
             </h1>
             <p class="page-description">{{ t('tickets.subtitle') }}</p>
@@ -949,7 +949,7 @@ function formatDateShort(dateString: string) {
         </div>
         
         <!-- 管理员不显示"创建工单"按钮 -->
-        <button v-if="viewMode === 'list' && !authStore.isAdmin && configStore.ticketEnabled" class="btn btn-primary w-full justify-center sm:w-auto" @click="openCreateForm">
+        <button v-if="viewMode === 'list' && !authStore.isAdmin && configStore.ticketEnabled" class="btn btn-primary shrink-0" @click="openCreateForm">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -962,19 +962,25 @@ function formatDateShort(dateString: string) {
       <!-- List View -->
       <template v-if="viewMode === 'list'">
         <!-- Tabs -->
-        <div data-reveal class="kawaii-panel mb-6 flex w-full gap-1 overflow-x-auto rounded-2xl p-1 sm:w-fit">
+        <div data-reveal class="mb-6 flex items-center gap-6 overflow-x-auto border-b border-themed">
           <!-- 普通用户显示"我的工单"标签，管理员不显示 -->
-          <button v-if="!authStore.isAdmin" :class="['kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all', activeTab === 'my' ? 'active' : '']" @click="switchTab('my')">
+          <button
+            v-if="!authStore.isAdmin"
+            class="relative -mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors"
+            :class="activeTab === 'my' ? 'border-primary-500 text-themed' : 'border-transparent text-themed-muted hover:text-themed'"
+            @click="switchTab('my')"
+          >
             {{ t('tickets.myTickets') }}
-            <span v-if="pendingCount.userTickets > 0" class="ml-2 px-2 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full">
-              {{ pendingCount.userTickets }}
-            </span>
+            <span v-if="pendingCount.userTickets > 0" class="count-badge has-count">{{ pendingCount.userTickets }}</span>
           </button>
-          <button v-if="isHostOwner" :class="['kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all', activeTab === 'host' ? 'active' : '']" @click="switchTab('host')">
+          <button
+            v-if="isHostOwner"
+            class="relative -mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors"
+            :class="activeTab === 'host' ? 'border-primary-500 text-themed' : 'border-transparent text-themed-muted hover:text-themed'"
+            @click="switchTab('host')"
+          >
             {{ t('tickets.hostTickets') }}
-            <span v-if="pendingCount.hostTickets > 0" class="ml-2 px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-              {{ pendingCount.hostTickets }}
-            </span>
+            <span v-if="pendingCount.hostTickets > 0" class="count-badge">{{ pendingCount.hostTickets }}</span>
           </button>
         </div>
         
@@ -982,13 +988,13 @@ function formatDateShort(dateString: string) {
         <div data-reveal class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 mb-4">
           <!-- Status Filter - 分段按钮组 -->
           <div class="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex-shrink-0">
-            <div class="inline-flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <div class="inline-flex items-center gap-1 p-1 bg-themed-secondary rounded-lg">
               <button
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap',
                   statusFilter === 'active'
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    ? 'bg-themed-surface text-themed shadow-sm'
+                    : 'text-themed-muted hover:text-themed'
                 ]"
                 @click="statusFilter = 'active'"
               >
@@ -1000,8 +1006,8 @@ function formatDateShort(dateString: string) {
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap',
                   statusFilter === status
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    ? 'bg-themed-surface text-themed shadow-sm'
+                    : 'text-themed-muted hover:text-themed'
                 ]"
                 @click="statusFilter = status"
               >
@@ -1011,8 +1017,8 @@ function formatDateShort(dateString: string) {
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap',
                   statusFilter === 'all'
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    ? 'bg-themed-surface text-themed shadow-sm'
+                    : 'text-themed-muted hover:text-themed'
                 ]"
                 @click="statusFilter = 'all'"
               >
@@ -1022,15 +1028,15 @@ function formatDateShort(dateString: string) {
           </div>
 
           <div v-if="activeTab === 'host' && authStore.isAdmin" class="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex-shrink-0">
-            <div class="inline-flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <div class="inline-flex items-center gap-1 p-1 bg-themed-secondary rounded-lg">
               <button
                 v-for="sourceType in ['all', 'user', 'official', 'hosted']"
                 :key="sourceType"
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap',
                   hostTicketSourceFilter === sourceType
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    ? 'bg-themed-surface text-themed shadow-sm'
+                    : 'text-themed-muted hover:text-themed'
                 ]"
                 @click="hostTicketSourceFilter = sourceType as HostTicketSourceType"
               >
@@ -1040,15 +1046,15 @@ function formatDateShort(dateString: string) {
           </div>
 
           <div v-if="activeTab === 'host' && authStore.isAdmin" class="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex-shrink-0">
-            <div class="inline-flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <div class="inline-flex items-center gap-1 p-1 bg-themed-secondary rounded-lg">
               <button
                 v-for="queue in ['all', 'pending', 'due_soon', 'overdue', 'waiting_user', 'waiting_internal']"
                 :key="queue"
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap',
                   queueFilter === queue
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    ? 'bg-themed-surface text-themed shadow-sm'
+                    : 'text-themed-muted hover:text-themed'
                 ]"
                 @click="queueFilter = queue as TicketQueueFilter"
               >
@@ -1060,19 +1066,19 @@ function formatDateShort(dateString: string) {
           <!-- Search Box -->
           <div class="flex-1 max-w-xs">
             <div class="relative">
-              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 v-model="searchQuery"
                 type="text"
                 :placeholder="t('tickets.searchPlaceholder')"
-                class="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent"
+                class="input pl-10 pr-9"
                 @input="handleSearchInput"
               />
               <button
                 v-if="searchQuery"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-themed-muted hover:text-themed"
                 @click="searchQuery = ''; handleSearchInput()"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1091,13 +1097,15 @@ function formatDateShort(dateString: string) {
         <!-- Empty State -->
         <template v-else-if="tickets.length === 0">
           <div class="text-center py-16">
-            <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-themed-secondary">
+              <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-medium text-themed mb-2">
               {{ activeTab === 'my' ? t('tickets.noTickets') : hostEmptyState.title }}
             </h3>
-            <p class="text-gray-500 dark:text-gray-400">
+            <p class="text-themed-muted">
               {{ activeTab === 'my' ? t('tickets.noTicketsHint') : hostEmptyState.hint }}
             </p>
           </div>
@@ -1106,7 +1114,7 @@ function formatDateShort(dateString: string) {
         <!-- Ticket List -->
         <template v-else>
           <div class="space-y-3">
-            <div v-for="ticket in tickets" :key="ticket.id" :class="['bg-white dark:bg-gray-800 rounded-xl border p-4 cursor-pointer transition-colors', ticket.needsReply ? 'border-orange-300 dark:border-orange-600 hover:border-orange-400 dark:hover:border-orange-500 ring-1 ring-orange-100 dark:ring-orange-900/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600']" @click="viewTicket(ticket)">
+            <div v-for="ticket in tickets" :key="ticket.id" class="card-interactive p-4 cursor-pointer" :class="ticket.needsReply ? 'ticket-needs-reply' : ''" @click="viewTicket(ticket)">
               <div class="flex flex-col sm:flex-row sm:items-center gap-3">
                 <!-- User avatar (for host tab) -->
                 <UserAvatar
@@ -1122,36 +1130,36 @@ function formatDateShort(dateString: string) {
                 <div class="flex-1 min-w-0">
                   <div class="flex flex-wrap items-center gap-2 mb-1">
                     <!-- 需要回复标记 -->
-                    <span v-if="ticket.needsReply" class="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 flex items-center gap-1">
+                    <span v-if="ticket.needsReply" class="nimbus-pill bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                       <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                       </svg>
                       {{ t('tickets.needsReply') }}
                     </span>
-                    <span :class="['px-2 py-0.5 text-xs font-medium rounded-full', statusColors[ticket.status]]">
-                      {{ t(`tickets.status.${ticket.status}`) }}
+                    <span class="nimbus-pill font-mono" :class="statusColors[ticket.status]">
+                      <span class="nimbus-dot"></span>{{ t(`tickets.status.${ticket.status}`) }}
                     </span>
-                    <span :class="['px-2 py-0.5 text-xs rounded-full', priorityColors[ticket.priority]]">
-                      {{ t(`tickets.priority.${ticket.priority}`) }}
+                    <span class="nimbus-pill font-mono" :class="priorityColors[ticket.priority]">
+                      <span class="nimbus-dot"></span>{{ t(`tickets.priority.${ticket.priority}`) }}
                     </span>
-                    <span v-if="authStore.isAdmin && ticket.slaStatus" :class="['px-2 py-0.5 text-xs rounded-full', slaStatusColors[ticket.slaStatus]]">
-                      {{ t(`tickets.support.slaStatus.${ticket.slaStatus}`) }}
+                    <span v-if="authStore.isAdmin && ticket.slaStatus" class="nimbus-pill font-mono" :class="slaStatusColors[ticket.slaStatus]">
+                      <span class="nimbus-dot"></span>{{ t(`tickets.support.slaStatus.${ticket.slaStatus}`) }}
                     </span>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                    <span class="text-xs text-themed-muted font-mono">
                       #{{ ticket.id }}
                     </span>
                   </div>
-                  <h3 class="font-medium text-gray-900 dark:text-white truncate">
+                  <h3 class="font-medium text-themed truncate">
                     {{ ticket.subject }}
                   </h3>
-                  <div class="flex flex-wrap items-center gap-2 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  <div class="flex flex-wrap items-center gap-2 mt-1 text-sm text-themed-muted">
                     <span v-if="activeTab === 'host' && ticket.user">
                       {{ t('tickets.from') }}: {{ ticket.user.username }}
                     </span>
                     <span v-if="ticket.host">
                       {{ ticket.host.name }}
                     </span>
-                    <span v-if="ticket.instance" class="inline-flex items-center gap-1.5 text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                    <span v-if="ticket.instance" class="inline-flex items-center gap-1.5 text-xs bg-themed-secondary text-themed-muted px-2 py-0.5 rounded">
                       <InstanceDisplayIcon
                         v-if="ticket.instance.iconBadgeId"
                         :badge-id="ticket.instance.iconBadgeId"
@@ -1164,9 +1172,9 @@ function formatDateShort(dateString: string) {
                 </div>
                 
                 <!-- Meta -->
-                <div class="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1 text-sm text-gray-500 dark:text-gray-400">
-                  <span>{{ formatDateShort(ticket.createdAt) }}</span>
-                  <span v-if="ticket.messageCount" class="flex items-center gap-1">
+                <div class="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1 text-sm text-themed-muted">
+                  <span class="font-mono">{{ formatDateShort(ticket.createdAt) }}</span>
+                  <span v-if="ticket.messageCount" class="flex items-center gap-1 font-mono">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
@@ -1180,11 +1188,11 @@ function formatDateShort(dateString: string) {
           <!-- Pagination -->
           <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
             <!-- Page Size Selector -->
-            <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <div class="flex items-center gap-2 text-sm text-themed-muted">
               <span>{{ t('tickets.perPage') }}</span>
               <select
                 :value="pageSize"
-                class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent"
+                class="input w-auto py-1"
                 @change="handlePageSizeChange(Number(($event.target as HTMLSelectElement).value))"
               >
                 <option v-for="size in pageSizeOptions" :key="size" :value="size">
@@ -1196,15 +1204,15 @@ function formatDateShort(dateString: string) {
             
             <!-- Page Navigation -->
             <nav v-if="totalPages > 1" class="flex items-center gap-1">
-              <button :disabled="page === 1" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700" @click="handlePageChange(page - 1)">
+              <button :disabled="page === 1" class="btn btn-secondary btn-sm" @click="handlePageChange(page - 1)">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <span class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">
+              <span class="px-4 py-2 text-sm text-themed-muted font-mono">
                 {{ page }} / {{ totalPages }}
               </span>
-              <button :disabled="page === totalPages" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700" @click="handlePageChange(page + 1)">
+              <button :disabled="page === totalPages" class="btn btn-secondary btn-sm" @click="handlePageChange(page + 1)">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
@@ -1216,30 +1224,30 @@ function formatDateShort(dateString: string) {
       
       <!-- Detail View -->
       <template v-else-if="viewMode === 'detail' && selectedTicket">
-        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <div class="card overflow-hidden">
           <!-- Header -->
-          <div class="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+          <div class="p-4 sm:p-6 border-b border-themed">
             <div class="flex flex-wrap items-center gap-2 mb-2">
-              <span :class="['px-2 py-0.5 text-xs font-medium rounded-full', statusColors[selectedTicket.status]]">
-                {{ t(`tickets.status.${selectedTicket.status}`) }}
+              <span class="nimbus-pill font-mono" :class="statusColors[selectedTicket.status]">
+                <span class="nimbus-dot"></span>{{ t(`tickets.status.${selectedTicket.status}`) }}
               </span>
-              <span :class="['px-2 py-0.5 text-xs rounded-full', priorityColors[selectedTicket.priority]]">
-                {{ t(`tickets.priority.${selectedTicket.priority}`) }}
+              <span class="nimbus-pill font-mono" :class="priorityColors[selectedTicket.priority]">
+                <span class="nimbus-dot"></span>{{ t(`tickets.priority.${selectedTicket.priority}`) }}
               </span>
-              <span class="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
-                {{ t(`tickets.category.${selectedTicket.category}`) }}
+              <span class="nimbus-pill font-mono bg-themed-secondary text-themed-muted">
+                <span class="nimbus-dot"></span>{{ t(`tickets.category.${selectedTicket.category}`) }}
               </span>
-              <span v-if="authStore.isAdmin && selectedTicket.slaStatus" :class="['px-2 py-0.5 text-xs rounded-full', slaStatusColors[selectedTicket.slaStatus]]">
-                {{ t(`tickets.support.slaStatus.${selectedTicket.slaStatus}`) }}
+              <span v-if="authStore.isAdmin && selectedTicket.slaStatus" class="nimbus-pill font-mono" :class="slaStatusColors[selectedTicket.slaStatus]">
+                <span class="nimbus-dot"></span>{{ t(`tickets.support.slaStatus.${selectedTicket.slaStatus}`) }}
               </span>
             </div>
             <div class="flex items-center gap-3 mb-3">
-              <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+              <h2 class="text-xl font-semibold text-themed">
                 {{ selectedTicket.subject }}
               </h2>
-              <span class="text-sm text-gray-500 dark:text-gray-400 font-mono">#{{ selectedTicket.id }}</span>
+              <span class="text-sm text-themed-muted font-mono">#{{ selectedTicket.id }}</span>
             </div>
-            <div class="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
+            <div class="flex flex-wrap gap-4 text-sm text-themed-muted">
               <span v-if="selectedTicket.user" class="inline-flex items-center gap-2">
                 <span>{{ t('tickets.from') }}:</span>
                 <UserAvatar
@@ -1248,10 +1256,10 @@ function formatDateShort(dateString: string) {
                   :badge-id="selectedTicket.user.avatarBadgeId || null"
                   :size="24"
                 />
-                <span class="text-gray-900 dark:text-white">{{ selectedTicket.user.username }}</span>
+                <span class="text-themed">{{ selectedTicket.user.username }}</span>
               </span>
               <span v-if="selectedTicket.host">
-                {{ t('tickets.host') }}: <span class="text-gray-900 dark:text-white">{{ selectedTicket.host.name }}</span>
+                {{ t('tickets.host') }}: <span class="text-themed">{{ selectedTicket.host.name }}</span>
               </span>
               <span v-if="selectedTicket.instance" class="inline-flex items-center gap-2">
                 <span>{{ t('tickets.instance') }}:</span>
@@ -1261,16 +1269,16 @@ function formatDateShort(dateString: string) {
                   :alt="selectedTicket.instance.name"
                   :size="24"
                 />
-                <span class="text-gray-900 dark:text-white">{{ selectedTicket.instance.name }}</span>
+                <span class="text-themed">{{ selectedTicket.instance.name }}</span>
               </span>
               <span>
-                {{ t('tickets.createdAt') }}: {{ formatDate(selectedTicket.createdAt) }}
+                {{ t('tickets.createdAt') }}: <span class="font-mono">{{ formatDate(selectedTicket.createdAt) }}</span>
               </span>
               <span v-if="authStore.isAdmin && selectedTicket.firstResponseDueAt">
-                {{ t('tickets.support.firstResponseDue') }}: {{ formatDate(selectedTicket.firstResponseDueAt) }}
+                {{ t('tickets.support.firstResponseDue') }}: <span class="font-mono">{{ formatDate(selectedTicket.firstResponseDueAt) }}</span>
               </span>
               <span v-if="authStore.isAdmin && selectedTicket.resolutionDueAt">
-                {{ t('tickets.support.resolutionDue') }}: {{ formatDate(selectedTicket.resolutionDueAt) }}
+                {{ t('tickets.support.resolutionDue') }}: <span class="font-mono">{{ formatDate(selectedTicket.resolutionDueAt) }}</span>
               </span>
             </div>
             
@@ -1281,189 +1289,189 @@ function formatDateShort(dateString: string) {
             
             <!-- Owner Actions -->
             <div v-if="isOwner && selectedTicket.status !== 'closed'" class="flex flex-wrap gap-2 mt-4">
-              <button v-if="selectedTicket.status === 'open'" class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" @click="updateStatus('in_progress')">
+              <button v-if="selectedTicket.status === 'open'" class="btn btn-secondary btn-sm" @click="updateStatus('in_progress')">
                 {{ t('tickets.markInProgress') }}
               </button>
-              <button v-if="selectedTicket.status !== 'resolved'" class="px-3 py-1.5 text-sm bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors" @click="updateStatus('resolved')">
+              <button v-if="selectedTicket.status !== 'resolved'" class="btn btn-secondary btn-sm" @click="updateStatus('resolved')">
                 {{ t('tickets.markResolved') }}
               </button>
-              <button class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" @click="closeTicket">
+              <button class="btn btn-secondary btn-sm" @click="closeTicket">
                 {{ t('tickets.close') }}
               </button>
             </div>
             <div v-else-if="isCreator && selectedTicket.status !== 'closed'" class="mt-4">
-              <button class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" @click="closeTicket">
+              <button class="btn btn-secondary btn-sm" @click="closeTicket">
                 {{ t('tickets.close') }}
               </button>
             </div>
             <div v-else-if="isCreator && selectedTicket.status === 'closed'" class="mt-4">
-              <button class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" @click="reopenTicket">
+              <button class="btn btn-secondary btn-sm" @click="reopenTicket">
                 {{ t('tickets.reopen') }}
               </button>
             </div>
           </div>
 
-          <div v-if="authStore.isAdmin" class="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+          <div v-if="authStore.isAdmin" class="p-4 sm:p-6 border-b border-themed bg-themed-secondary">
             <div v-if="supportContextLoading" class="py-4">
               <SkeletonLoader type="list" :count="2" />
             </div>
             <div v-else-if="supportContext" class="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-              <section class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+              <section class="card p-4">
                 <div class="flex items-center justify-between gap-3 mb-3">
-                  <h3 class="font-semibold text-gray-900 dark:text-white">{{ t('tickets.support.userContext') }}</h3>
-                  <button class="text-sm text-blue-600 dark:text-blue-400 hover:underline" @click="openAdminPath(supportContext.quickActions.userPath)">
+                  <h3 class="font-semibold text-themed">{{ t('tickets.support.userContext') }}</h3>
+                  <button class="text-sm text-primary-500 hover:underline" @click="openAdminPath(supportContext.quickActions.userPath)">
                     {{ t('tickets.support.openUser') }}
                   </button>
                 </div>
                 <div v-if="supportContext.userContext" class="grid gap-3 sm:grid-cols-2 text-sm">
                   <div>
-                    <p class="text-gray-500 dark:text-gray-400">{{ t('tickets.support.account') }}</p>
-                    <p class="font-medium text-gray-900 dark:text-white">{{ supportContext.userContext.username }} · {{ supportContext.userContext.status }}</p>
-                    <p class="text-gray-500 dark:text-gray-400">{{ supportContext.userContext.emailMasked || '-' }}</p>
+                    <p class="text-themed-muted">{{ t('tickets.support.account') }}</p>
+                    <p class="font-medium text-themed">{{ supportContext.userContext.username }} · {{ supportContext.userContext.status }}</p>
+                    <p class="text-themed-muted">{{ supportContext.userContext.emailMasked || '-' }}</p>
                   </div>
                   <div>
-                    <p class="text-gray-500 dark:text-gray-400">{{ t('tickets.support.balance') }}</p>
-                    <p class="font-medium text-gray-900 dark:text-white">¥{{ supportContext.userContext.balance || '0.00' }}</p>
-                    <p class="text-gray-500 dark:text-gray-400">{{ t('tickets.support.registeredAt') }} {{ formatDateShort(supportContext.userContext.createdAt) }}</p>
+                    <p class="text-themed-muted">{{ t('tickets.support.balance') }}</p>
+                    <p class="font-medium text-themed font-mono">¥{{ supportContext.userContext.balance || '0.00' }}</p>
+                    <p class="text-themed-muted">{{ t('tickets.support.registeredAt') }} <span class="font-mono">{{ formatDateShort(supportContext.userContext.createdAt) }}</span></p>
                   </div>
                   <div class="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-2">
-                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('tickets.support.instances') }}</p>
-                      <p class="font-semibold">{{ supportContext.userContext.counts.instances }}</p>
+                    <div class="rounded-lg bg-themed-secondary p-2">
+                      <p class="text-xs text-themed-muted">{{ t('tickets.support.instances') }}</p>
+                      <p class="font-semibold font-mono text-themed">{{ supportContext.userContext.counts.instances }}</p>
                     </div>
-                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-2">
-                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('tickets.support.tickets') }}</p>
-                      <p class="font-semibold">{{ supportContext.userContext.counts.ticketsCreated }}</p>
+                    <div class="rounded-lg bg-themed-secondary p-2">
+                      <p class="text-xs text-themed-muted">{{ t('tickets.support.tickets') }}</p>
+                      <p class="font-semibold font-mono text-themed">{{ supportContext.userContext.counts.ticketsCreated }}</p>
                     </div>
-                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-2">
-                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('tickets.support.orders') }}</p>
-                      <p class="font-semibold">{{ supportContext.userContext.counts.rechargeRecords }}</p>
+                    <div class="rounded-lg bg-themed-secondary p-2">
+                      <p class="text-xs text-themed-muted">{{ t('tickets.support.orders') }}</p>
+                      <p class="font-semibold font-mono text-themed">{{ supportContext.userContext.counts.rechargeRecords }}</p>
                     </div>
-                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-2">
-                      <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('tickets.support.ledger') }}</p>
-                      <p class="font-semibold">{{ supportContext.userContext.counts.balanceLogs }}</p>
+                    <div class="rounded-lg bg-themed-secondary p-2">
+                      <p class="text-xs text-themed-muted">{{ t('tickets.support.ledger') }}</p>
+                      <p class="font-semibold font-mono text-themed">{{ supportContext.userContext.counts.balanceLogs }}</p>
                     </div>
                   </div>
                 </div>
                 <div class="mt-4 grid gap-3 md:grid-cols-2">
                   <div>
-                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">{{ t('tickets.support.recentOrders') }}</h4>
+                    <h4 class="text-sm font-medium text-themed mb-2">{{ t('tickets.support.recentOrders') }}</h4>
                     <div class="space-y-2">
-                      <div v-for="order in supportContext.recentOrders" :key="displayValue(order, 'id')" class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-sm">
+                      <div v-for="order in supportContext.recentOrders" :key="displayValue(order, 'id')" class="rounded-lg border border-themed p-2 text-sm">
                         <div class="flex justify-between gap-2">
-                          <span class="font-medium text-gray-900 dark:text-white">{{ displayValue(order, 'orderNo') }}</span>
-                          <span>{{ displayValue(order, 'status') }}</span>
+                          <span class="font-medium text-themed font-mono">{{ displayValue(order, 'orderNo') }}</span>
+                          <span class="text-themed-muted">{{ displayValue(order, 'status') }}</span>
                         </div>
-                        <p class="text-gray-500 dark:text-gray-400">¥{{ displayValue(order, 'amount') }} · {{ displayDateValue(order, 'createdAt') }}</p>
+                        <p class="text-themed-muted"><span class="font-mono">¥{{ displayValue(order, 'amount') }}</span> · <span class="font-mono">{{ displayDateValue(order, 'createdAt') }}</span></p>
                       </div>
-                      <p v-if="supportContext.recentOrders.length === 0" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.noData') }}</p>
+                      <p v-if="supportContext.recentOrders.length === 0" class="text-sm text-themed-muted">{{ t('common.noData') }}</p>
                     </div>
                   </div>
                   <div>
-                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">{{ t('tickets.support.recentInstances') }}</h4>
+                    <h4 class="text-sm font-medium text-themed mb-2">{{ t('tickets.support.recentInstances') }}</h4>
                     <div class="space-y-2">
-                      <div v-for="instance in supportContext.recentInstances" :key="displayValue(instance, 'id')" class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-sm">
+                      <div v-for="instance in supportContext.recentInstances" :key="displayValue(instance, 'id')" class="rounded-lg border border-themed p-2 text-sm">
                         <div class="flex justify-between gap-2">
-                          <span class="font-medium text-gray-900 dark:text-white">{{ displayValue(instance, 'name') }}</span>
-                          <span>{{ displayValue(instance, 'status') }}</span>
+                          <span class="font-medium text-themed">{{ displayValue(instance, 'name') }}</span>
+                          <span class="text-themed-muted">{{ displayValue(instance, 'status') }}</span>
                         </div>
-                        <p class="text-gray-500 dark:text-gray-400">#{{ displayValue(instance, 'id') }} · {{ displayDateValue(instance, 'createdAt') }}</p>
+                        <p class="text-themed-muted"><span class="font-mono">#{{ displayValue(instance, 'id') }}</span> · <span class="font-mono">{{ displayDateValue(instance, 'createdAt') }}</span></p>
                       </div>
-                      <p v-if="supportContext.recentInstances.length === 0" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.noData') }}</p>
+                      <p v-if="supportContext.recentInstances.length === 0" class="text-sm text-themed-muted">{{ t('common.noData') }}</p>
                     </div>
                   </div>
                 </div>
               </section>
 
               <section class="space-y-4">
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-                  <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.quickActions') }}</h3>
+                <div class="card p-4">
+                  <h3 class="font-semibold text-themed mb-3">{{ t('tickets.support.quickActions') }}</h3>
                   <div class="grid grid-cols-2 gap-2">
-                    <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket" @click="generateAiDraft">
+                    <button class="btn btn-secondary btn-sm" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket" @click="generateAiDraft">
                       {{ aiDraftLoading ? t('tickets.support.aiDraftGenerating') : t('tickets.support.generateAiDraft') }}
                     </button>
-                    <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket || !replyContent.trim()" @click="sendAiReply">
+                    <button class="btn btn-secondary btn-sm" :disabled="aiDraftLoading || aiReplyLoading || !selectedTicket || !replyContent.trim()" @click="sendAiReply">
                       {{ aiReplyLoading ? t('tickets.support.aiReplySending') : t('tickets.support.sendAiReply') }}
                     </button>
-                    <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700" @click="openAdminPath(supportContext.quickActions.balanceAdjustmentPath)">
+                    <button class="btn btn-secondary btn-sm" @click="openAdminPath(supportContext.quickActions.balanceAdjustmentPath)">
                       {{ t('tickets.support.adjustment') }}
                     </button>
-                    <button class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700" @click="openAdminPath(supportContext.quickActions.deliveryCenterPath)">
+                    <button class="btn btn-secondary btn-sm" @click="openAdminPath(supportContext.quickActions.deliveryCenterPath)">
                       {{ t('tickets.support.delivery') }}
                     </button>
-                    <button :disabled="!supportContext.quickActions.instancePath" class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" @click="openAdminPath(supportContext.quickActions.instancePath)">
+                    <button :disabled="!supportContext.quickActions.instancePath" class="btn btn-secondary btn-sm" @click="openAdminPath(supportContext.quickActions.instancePath)">
                       {{ t('tickets.support.openInstance') }}
                     </button>
-                    <button :disabled="!supportContext.quickActions.hostPath" class="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50" @click="openAdminPath(supportContext.quickActions.hostPath)">
+                    <button :disabled="!supportContext.quickActions.hostPath" class="btn btn-secondary btn-sm" @click="openAdminPath(supportContext.quickActions.hostPath)">
                       {{ t('tickets.support.openHost') }}
                     </button>
                   </div>
                   <div class="mt-3 space-y-2">
-                    <textarea v-model="notifyContent" rows="2" :placeholder="t('tickets.support.notifyPlaceholder')" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none" />
-                    <button :disabled="notifySubmitting || !notifyContent.trim()" class="w-full px-3 py-2 text-sm rounded-lg bg-black dark:bg-white text-white dark:text-black disabled:opacity-50" @click="submitNotifyUser">
+                    <textarea v-model="notifyContent" rows="2" :placeholder="t('tickets.support.notifyPlaceholder')" class="input resize-none" />
+                    <button :disabled="notifySubmitting || !notifyContent.trim()" class="btn btn-primary btn-sm w-full" @click="submitNotifyUser">
                       {{ notifySubmitting ? t('common.sending') : t('tickets.support.sendNotice') }}
                     </button>
                   </div>
                 </div>
 
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-                  <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.linkedObjects') }}</h3>
+                <div class="card p-4">
+                  <h3 class="font-semibold text-themed mb-3">{{ t('tickets.support.linkedObjects') }}</h3>
                   <div class="flex gap-2">
-                    <select v-model="linkForm.objectType" class="w-40 px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800">
+                    <select v-model="linkForm.objectType" class="input w-40">
                       <option v-for="type in ticketLinkTypes" :key="type" :value="type">{{ t(`tickets.support.linkType.${type}`) }}</option>
                     </select>
-                    <input v-model="linkForm.objectId" type="number" min="1" class="flex-1 px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800" :placeholder="t('tickets.support.objectId')" />
-                    <button :disabled="linkSubmitting" class="px-3 py-2 text-sm rounded-lg bg-black dark:bg-white text-white dark:text-black disabled:opacity-50" @click="submitLinkObject">
+                    <input v-model="linkForm.objectId" type="number" min="1" class="input flex-1" :placeholder="t('tickets.support.objectId')" />
+                    <button :disabled="linkSubmitting" class="btn btn-primary btn-sm" @click="submitLinkObject">
                       {{ t('tickets.support.addLink') }}
                     </button>
                   </div>
                   <div class="mt-3 space-y-2">
-                    <div v-for="link in supportContext.links" :key="link.id" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-sm">
-                      <span class="font-medium">{{ t(`tickets.support.linkType.${link.objectType}`) }}</span>
-                      <span class="text-gray-500 dark:text-gray-400"> · {{ link.objectLabel || `#${link.objectId}` }}</span>
+                    <div v-for="link in supportContext.links" :key="link.id" class="rounded-lg bg-themed-secondary px-3 py-2 text-sm">
+                      <span class="font-medium text-themed">{{ t(`tickets.support.linkType.${link.objectType}`) }}</span>
+                      <span class="text-themed-muted"> · {{ link.objectLabel || `#${link.objectId}` }}</span>
                     </div>
-                    <p v-if="supportContext.links.length === 0" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.noData') }}</p>
+                    <p v-if="supportContext.links.length === 0" class="text-sm text-themed-muted">{{ t('common.noData') }}</p>
                   </div>
                 </div>
               </section>
 
-              <section class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:col-span-2">
+              <section class="card p-4 lg:col-span-2">
                 <div class="grid gap-4 lg:grid-cols-3">
                   <div>
-                    <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.knowledge') }}</h3>
+                    <h3 class="font-semibold text-themed mb-3">{{ t('tickets.support.knowledge') }}</h3>
                     <div class="space-y-3">
-                      <div v-for="item in supportContext.knowledgeSuggestions" :key="item.title" class="rounded-lg bg-gray-100 dark:bg-gray-700 p-3 text-sm">
-                        <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
-                        <ul class="mt-2 space-y-1 text-gray-600 dark:text-gray-300">
+                      <div v-for="item in supportContext.knowledgeSuggestions" :key="item.title" class="rounded-lg bg-themed-secondary p-3 text-sm">
+                        <p class="font-medium text-themed">{{ item.title }}</p>
+                        <ul class="mt-2 space-y-1 text-themed-muted">
                           <li v-for="step in item.steps" :key="step">- {{ step }}</li>
                         </ul>
                       </div>
                     </div>
                   </div>
                   <div>
-                    <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.internalNotes') }}</h3>
-                    <textarea v-model="internalNoteContent" rows="3" :placeholder="t('tickets.support.notePlaceholder')" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none" />
-                    <button :disabled="internalNoteSubmitting || !internalNoteContent.trim()" class="mt-2 w-full px-3 py-2 text-sm rounded-lg bg-black dark:bg-white text-white dark:text-black disabled:opacity-50" @click="submitInternalNote">
+                    <h3 class="font-semibold text-themed mb-3">{{ t('tickets.support.internalNotes') }}</h3>
+                    <textarea v-model="internalNoteContent" rows="3" :placeholder="t('tickets.support.notePlaceholder')" class="input resize-none" />
+                    <button :disabled="internalNoteSubmitting || !internalNoteContent.trim()" class="btn btn-primary btn-sm mt-2 w-full" @click="submitInternalNote">
                       {{ internalNoteSubmitting ? t('common.saving') : t('tickets.support.saveNote') }}
                     </button>
                     <div class="mt-3 max-h-48 overflow-y-auto space-y-2">
                       <div v-for="note in supportContext.internalNotes" :key="note.id" class="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-2 text-sm">
-                        <p class="text-gray-900 dark:text-white whitespace-pre-wrap">{{ note.content }}</p>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ note.actorUsername }} · {{ formatDateShort(note.createdAt) }}</p>
+                        <p class="text-themed whitespace-pre-wrap">{{ note.content }}</p>
+                        <p class="mt-1 text-xs text-themed-muted">{{ note.actorUsername }} · <span class="font-mono">{{ formatDateShort(note.createdAt) }}</span></p>
                       </div>
-                      <p v-if="supportContext.internalNotes.length === 0" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.noData') }}</p>
+                      <p v-if="supportContext.internalNotes.length === 0" class="text-sm text-themed-muted">{{ t('common.noData') }}</p>
                     </div>
                   </div>
                   <div>
-                    <h3 class="font-semibold text-gray-900 dark:text-white mb-3">{{ t('tickets.support.timeline') }}</h3>
+                    <h3 class="font-semibold text-themed mb-3">{{ t('tickets.support.timeline') }}</h3>
                     <div class="max-h-80 overflow-y-auto space-y-2">
-                      <div v-for="item in supportContext.timeline" :key="`${item.type}-${item.id}-${item.createdAt}`" class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-sm">
+                      <div v-for="item in supportContext.timeline" :key="`${item.type}-${item.id}-${item.createdAt}`" class="rounded-lg border border-themed p-2 text-sm">
                         <div class="flex justify-between gap-2">
-                          <span class="font-medium text-gray-900 dark:text-white">{{ item.title }}</span>
-                          <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatDateShort(item.createdAt) }}</span>
+                          <span class="font-medium text-themed">{{ item.title }}</span>
+                          <span class="text-xs text-themed-muted font-mono">{{ formatDateShort(item.createdAt) }}</span>
                         </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ item.actor }}</p>
-                        <p class="mt-1 text-gray-700 dark:text-gray-300 line-clamp-2">{{ item.content }}</p>
+                        <p class="text-xs text-themed-muted">{{ item.actor }}</p>
+                        <p class="mt-1 text-themed-secondary line-clamp-2">{{ item.content }}</p>
                       </div>
                     </div>
                   </div>
@@ -1476,7 +1484,7 @@ function formatDateShort(dateString: string) {
           <div id="messages-container" class="max-h-96 overflow-y-auto p-4 sm:p-6 space-y-4">
             <!-- Load More Button (at top) -->
             <div v-if="messagesTotalPages > 1 && messagesPage < messagesTotalPages" class="flex justify-center">
-              <button :disabled="messagesLoadingMore" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors" @click="loadMoreMessages">
+              <button :disabled="messagesLoadingMore" class="btn btn-secondary btn-sm" @click="loadMoreMessages">
                 <span v-if="messagesLoadingMore" class="flex items-center gap-2">
                   <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -1496,19 +1504,19 @@ function formatDateShort(dateString: string) {
                 <UserAvatar :username="message.sender?.username || ''" :avatar-style="message.sender?.avatarStyle" :badge-id="message.sender?.avatarBadgeId || null" :size="32" />
                 <div :class="['flex-1 max-w-[80%]', message.senderId === authStore.user?.id ? 'text-right' : '']">
                   <div class="flex items-center gap-2 mb-1" :class="message.senderId === authStore.user?.id ? 'justify-end' : ''">
-                    <span class="font-medium text-sm text-gray-900 dark:text-white">
+                    <span class="font-medium text-sm text-themed">
                       {{ message.sender?.username }}
                     </span>
-                    <span v-if="message.isFromOwner" class="text-xs text-blue-600 dark:text-blue-400">
+                    <span v-if="message.isFromOwner" class="text-xs text-primary-500">
                       {{ t('tickets.ownerReply') }}
                     </span>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                    <span class="text-xs text-themed-muted font-mono">
                       {{ formatDate(message.createdAt) }}
                     </span>
                     <!-- 管理员删除按钮 -->
                     <button
                       v-if="authStore.isAdmin"
-                      class="p-1 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors"
+                      class="p-1 text-themed-faint hover:text-red-500 transition-colors"
                       :title="t('tickets.deleteMessage')"
                       @click="confirmDeleteMessage(message)"
                     >
@@ -1517,7 +1525,7 @@ function formatDateShort(dateString: string) {
                       </svg>
                     </button>
                   </div>
-                  <div :class="['inline-block max-w-full p-3 rounded-lg text-sm', message.senderId === authStore.user?.id ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white']">
+                  <div :class="['inline-block max-w-full rounded-2xl px-3.5 py-2.5 text-sm', message.senderId === authStore.user?.id ? 'bg-primary-600 text-white' : 'bg-themed-secondary text-themed']">
                     <p v-if="message.content" class="whitespace-pre-wrap text-left">{{ message.content }}</p>
                     <div v-if="message.attachments.length > 0" :class="['grid gap-2', message.content ? 'mt-3' : '', message.attachments.length === 1 ? 'grid-cols-1 max-w-xs' : 'grid-cols-2']">
                       <button
@@ -1534,7 +1542,7 @@ function formatDateShort(dateString: string) {
                           :alt="attachment.originalName"
                           class="h-32 w-full object-cover"
                         >
-                        <div v-else class="flex h-32 w-full items-center justify-center text-xs text-gray-500 dark:text-gray-400">
+                        <div v-else class="flex h-32 w-full items-center justify-center text-xs text-themed-muted">
                           {{ attachmentLoadingIds[attachment.id] ? t('common.loading') : t('tickets.images.loadFailed') }}
                         </div>
                       </button>
@@ -1546,21 +1554,21 @@ function formatDateShort(dateString: string) {
           </div>
           
           <!-- Reply Box -->
-          <div class="p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700">
+          <div class="p-4 sm:p-6 border-t border-themed">
             <template v-if="selectedTicket.status === 'closed'">
-              <p class="text-center text-gray-500 dark:text-gray-400">
+              <p class="text-center text-themed-muted">
                 {{ t('tickets.ticketClosed') }}
               </p>
             </template>
             <template v-else>
               <div class="flex gap-3">
-                <textarea id="ticket-reply-textarea" v-model="replyContent" :placeholder="t('tickets.replyPlaceholder')" rows="3" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent resize-none" />
+                <textarea id="ticket-reply-textarea" v-model="replyContent" :placeholder="t('tickets.replyPlaceholder')" rows="3" class="input flex-1 resize-none" />
               </div>
               <div class="mt-4">
                 <TicketImageUploader v-model="replyAttachments" :disabled="replying" />
               </div>
               <div class="flex justify-end mt-3">
-                <button :disabled="replying || (!replyContent.trim() && replyAttachments.length === 0)" class="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium" @click="handleReply">
+                <button :disabled="replying || (!replyContent.trim() && replyAttachments.length === 0)" class="btn btn-primary" @click="handleReply">
                   {{ replying ? t('common.sending') : t('tickets.reply') }}
                 </button>
               </div>
@@ -1571,11 +1579,11 @@ function formatDateShort(dateString: string) {
       
       <!-- Create View -->
       <template v-else-if="viewMode === 'create'">
-        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+        <div class="card p-4 sm:p-6">
           <form class="space-y-6" @submit.prevent="submitCreate">
             <!-- Instance -->
             <div>
-              <label class="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+              <label class="block text-sm font-medium text-themed mb-2">
                 {{ t('tickets.selectInstance') }}
               </label>
               <InstanceSelector
@@ -1583,36 +1591,36 @@ function formatDateShort(dateString: string) {
                 :instances="formattedInstances"
                 :placeholder="t('tickets.selectInstanceHint')"
               />
-              <p v-if="availableInstances.length === 0 && !instancesLoading" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              <p v-if="availableInstances.length === 0 && !instancesLoading" class="mt-2 text-sm text-themed-muted">
                 {{ t('tickets.noInstancesHint') }}
               </p>
             </div>
             
             <!-- Subject -->
             <div>
-              <label class="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+              <label class="block text-sm font-medium text-themed mb-2">
                 {{ t('tickets.subject') }} *
               </label>
-              <input v-model="createForm.subject" type="text" required minlength="2" maxlength="200" :placeholder="t('tickets.subjectPlaceholder')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent" />
+              <input v-model="createForm.subject" type="text" required minlength="2" maxlength="200" :placeholder="t('tickets.subjectPlaceholder')" class="input" />
             </div>
             
             <!-- Category & Priority -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                <label class="block text-sm font-medium text-themed mb-2">
                   {{ t('tickets.selectCategory') }}
                 </label>
-                <select v-model="createForm.category" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent">
+                <select v-model="createForm.category" class="input">
                   <option v-for="cat in categories" :key="cat" :value="cat">
                     {{ t(`tickets.category.${cat}`) }}
                   </option>
                 </select>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                <label class="block text-sm font-medium text-themed mb-2">
                   {{ t('tickets.selectPriority') }}
                 </label>
-                <select v-model="createForm.priority" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent">
+                <select v-model="createForm.priority" class="input">
                   <option v-for="p in priorities" :key="p" :value="p">
                     {{ t(`tickets.priority.${p}`) }}
                   </option>
@@ -1622,17 +1630,17 @@ function formatDateShort(dateString: string) {
             
             <!-- Content -->
             <div>
-              <label class="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+              <label class="block text-sm font-medium text-themed mb-2">
                 {{ t('tickets.content') }}
               </label>
-              <textarea v-model="createForm.content" maxlength="5000" rows="6" :placeholder="t('tickets.contentPlaceholder')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent resize-none" />
+              <textarea v-model="createForm.content" maxlength="5000" rows="6" :placeholder="t('tickets.contentPlaceholder')" class="input resize-none" />
             </div>
 
             <TicketImageUploader v-model="createAttachments" :disabled="creating" />
             
             <!-- 托管实例提示 -->
             <div class="flex items-start gap-3 p-4 rounded-xl bg-themed-secondary border border-themed">
-              <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100 dark:bg-gray-700">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-themed-tertiary">
                 <svg class="w-4 h-4 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -1649,10 +1657,10 @@ function formatDateShort(dateString: string) {
             
             <!-- Submit -->
             <div class="flex justify-end gap-3">
-              <button type="button" class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors" @click="backToList">
+              <button type="button" class="btn btn-ghost" @click="backToList">
                 {{ t('common.cancel') }}
               </button>
-              <button type="submit" :disabled="creating" class="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium">
+              <button type="submit" :disabled="creating" class="btn btn-primary">
                 {{ creating ? t('common.processing') : t('tickets.createTicket') }}
               </button>
             </div>
@@ -1668,3 +1676,38 @@ function formatDateShort(dateString: string) {
     />
   </div>
 </template>
+
+<style scoped>
+.nimbus-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.1rem;
+  letter-spacing: 0.01em;
+}
+
+.nimbus-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.7;
+  flex: none;
+}
+
+.card-interactive.ticket-needs-reply {
+  border-color: rgb(245 158 11 / 0.6);
+  box-shadow: inset 0 0 0 1px rgb(245 158 11 / 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+</style>

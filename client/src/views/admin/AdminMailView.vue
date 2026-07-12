@@ -380,43 +380,52 @@ const regionOptions = [
   <div class="kawaii-page space-y-6 animate-fade-in">
     <!-- Header -->
     <div class="page-header">
-      <h1 class="page-title">{{ t('admin.mail.title') }}</h1>
-      <p class="page-description">{{ t('admin.mail.description') }}</p>
+      <div class="flex items-center gap-3">
+        <span class="nimbus-title-icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M3 8.25V18a1.5 1.5 0 0 0 1.5 1.5h15a1.5 1.5 0 0 0 1.5-1.5V8.25m-18 0A1.5 1.5 0 0 1 4.5 6.75h15A1.5 1.5 0 0 1 21 8.25m-18 0 8.303 5.19a1.5 1.5 0 0 0 1.594 0L21 8.25" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="page-title">{{ t('admin.mail.title') }}</h1>
+          <p class="page-description">{{ t('admin.mail.description') }}</p>
+        </div>
+      </div>
     </div>
 
     <!-- TAB 切换 -->
-    <div class="flex border-b border-themed">
+    <div class="flex flex-wrap gap-1 border-b border-themed">
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-        :class="activeTab === 'sources' 
-          ? 'border-accent text-accent'
+        class="-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'sources'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('sources')"
       >
         {{ t('admin.mail.tabs.sources') }}
       </button>
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-        :class="activeTab === 'plans' 
-          ? 'border-accent text-accent'
+        class="-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'plans'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('plans')"
       >
         {{ t('admin.mail.tabs.plans') }}
       </button>
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-        :class="activeTab === 'subscriptions' 
-          ? 'border-accent text-accent'
+        class="-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'subscriptions'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('subscriptions')"
       >
         {{ t('admin.mail.tabs.subscriptions') }}
       </button>
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px"
-        :class="activeTab === 'domains' 
-          ? 'border-accent text-accent'
+        class="-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'domains'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('domains')"
       >
@@ -434,7 +443,10 @@ const regionOptions = [
     <div v-else-if="activeTab === 'sources'" class="space-y-4">
       <div class="flex justify-end">
         <button class="btn btn-primary btn-sm" @click="openCreateSourceModal">
-          + {{ t('admin.mail.createSource') }}
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          {{ t('admin.mail.createSource') }}
         </button>
       </div>
 
@@ -477,31 +489,31 @@ const regionOptions = [
         <div class="card hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
           <thead>
-            <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="w-[12%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.region') }}</th>
-              <th class="w-[22%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.name') }}</th>
-              <th class="w-[38%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.apiEndpoint') }}</th>
-              <th class="w-[12%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.plans') }}</th>
-              <th class="w-[16%] px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
+            <tr class="border-b border-themed">
+              <th class="nimbus-th w-[12%]">{{ t('admin.mail.region') }}</th>
+              <th class="nimbus-th w-[22%]">{{ t('common.name') }}</th>
+              <th class="nimbus-th w-[38%]">{{ t('admin.mail.apiEndpoint') }}</th>
+              <th class="nimbus-th w-[12%]">{{ t('admin.mail.plans') }}</th>
+              <th class="nimbus-th nimbus-th-right w-[16%]">{{ t('common.actions') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="source in sources" :key="source.id">
+          <tbody>
+            <tr v-for="source in sources" :key="source.id" class="nimbus-row border-b border-themed">
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
                   <FlagIcon :code="source.code" class="w-5 h-5" />
-                  <span class="text-sm text-themed">{{ source.code.toUpperCase() }}</span>
+                  <span class="text-sm font-medium text-themed">{{ source.code.toUpperCase() }}</span>
                 </div>
               </td>
               <td class="px-4 py-3 text-sm text-themed truncate">{{ source.name }}</td>
               <td class="px-4 py-3 font-mono text-xs text-themed-muted truncate" :title="source.apiUrl">{{ source.apiUrl }}</td>
-              <td class="px-4 py-3 text-sm text-themed">{{ source.planCount || 0 }}</td>
+              <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ source.planCount || 0 }}</td>
               <td class="px-4 py-3 text-right">
                 <button class="btn btn-ghost btn-xs" @click="openEditSourceModal(source)">
                   {{ t('common.edit') }}
                 </button>
-                <button 
-                  class="btn btn-ghost btn-xs text-error" 
+                <button
+                  class="btn btn-ghost btn-xs text-error"
                   :disabled="actionLoading === `delete-source-${source.id}`"
                   @click="deleteSource(source)"
                 >
@@ -520,7 +532,10 @@ const regionOptions = [
     <div v-else-if="activeTab === 'plans'" class="space-y-4">
       <div class="flex justify-end">
         <button class="btn btn-primary btn-sm" @click="openCreatePlanModal">
-          + {{ t('admin.mail.createPlan') }}
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          {{ t('admin.mail.createPlan') }}
         </button>
       </div>
 
@@ -573,33 +588,33 @@ const regionOptions = [
         <div class="card hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
           <thead>
-            <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="w-[26%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.name') }}</th>
-              <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.source') }}</th>
-              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.domainLimit') }}</th>
-              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.diskLimit') }}</th>
-              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.price') }}</th>
-              <th class="w-[14%] px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
+            <tr class="border-b border-themed">
+              <th class="nimbus-th w-[26%]">{{ t('common.name') }}</th>
+              <th class="nimbus-th w-[18%]">{{ t('admin.mail.source') }}</th>
+              <th class="nimbus-th w-[14%]">{{ t('admin.mail.domainLimit') }}</th>
+              <th class="nimbus-th w-[14%]">{{ t('admin.mail.diskLimit') }}</th>
+              <th class="nimbus-th w-[14%]">{{ t('admin.mail.price') }}</th>
+              <th class="nimbus-th nimbus-th-right w-[14%]">{{ t('common.actions') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="plan in plans" :key="plan.id">
+          <tbody>
+            <tr v-for="plan in plans" :key="plan.id" class="nimbus-row border-b border-themed">
               <td class="px-4 py-3">
                 <div class="text-sm font-medium text-themed">{{ plan.name }}</div>
-                <div v-if="plan.description" class="text-xs text-themed-muted">{{ plan.description }}</div>
+                <div v-if="plan.description" class="text-xs text-themed-muted truncate">{{ plan.description }}</div>
               </td>
               <td class="px-4 py-3 text-sm text-themed truncate">{{ plan.source?.name || '-' }}</td>
-              <td class="px-4 py-3 text-sm text-themed">{{ plan.domainLimit }}</td>
-              <td class="px-4 py-3 text-sm text-themed">{{ plan.diskLimitGb }} GB</td>
-              <td class="px-4 py-3 text-sm text-themed">
+              <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ plan.domainLimit }}</td>
+              <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ plan.diskLimitGb }} GB</td>
+              <td class="px-4 py-3 text-sm font-medium text-themed tabular-nums">
                 {{ formatPrice(plan.price) }}/{{ plan.billingCycle === 'monthly' ? t('mail.month') : t('mail.year') }}
               </td>
               <td class="px-4 py-3 text-right">
                 <button class="btn btn-ghost btn-xs" @click="openEditPlanModal(plan)">
                   {{ t('common.edit') }}
                 </button>
-                <button 
-                  class="btn btn-ghost btn-xs text-error" 
+                <button
+                  class="btn btn-ghost btn-xs text-error"
                   :disabled="actionLoading === `delete-plan-${plan.id}`"
                   @click="deletePlan(plan)"
                 >
@@ -689,17 +704,17 @@ const regionOptions = [
         <div class="card hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
           <thead>
-            <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="w-[30%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.user') }}</th>
-              <th class="w-[18%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.plan') }}</th>
-              <th class="w-[12%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.status') }}</th>
-              <th class="w-[16%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.expiresAt') }}</th>
-              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.createdAt') }}</th>
-              <th class="w-[10%] px-4 py-3 text-right text-xs font-medium text-themed-muted uppercase">{{ t('common.actions') }}</th>
+            <tr class="border-b border-themed">
+              <th class="nimbus-th w-[30%]">{{ t('admin.mail.user') }}</th>
+              <th class="nimbus-th w-[18%]">{{ t('admin.mail.plan') }}</th>
+              <th class="nimbus-th w-[12%]">{{ t('common.status') }}</th>
+              <th class="nimbus-th w-[16%]">{{ t('admin.mail.expiresAt') }}</th>
+              <th class="nimbus-th w-[14%]">{{ t('common.createdAt') }}</th>
+              <th class="nimbus-th nimbus-th-right w-[10%]">{{ t('common.actions') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="sub in subscriptions" :key="sub.id">
+          <tbody>
+            <tr v-for="sub in subscriptions" :key="sub.id" class="nimbus-row border-b border-themed">
               <td class="px-4 py-3">
                 <div class="flex items-center gap-3">
                   <UserAvatar :username="sub.user?.username || ''" :email="sub.user?.email" :avatar-style="sub.user?.avatarStyle" :badge-id="sub.user?.avatarBadgeId || null" :size="32" />
@@ -715,11 +730,11 @@ const regionOptions = [
                   {{ t('mail.status.' + sub.status) }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-sm text-themed">{{ formatDate(sub.expiresAt) }}</td>
-              <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(sub.createdAt) }}</td>
+              <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ formatDate(sub.expiresAt) }}</td>
+              <td class="px-4 py-3 text-sm text-themed-muted tabular-nums">{{ formatDate(sub.createdAt) }}</td>
               <td class="px-4 py-3 text-right">
-                <button 
-                  class="btn btn-ghost btn-xs text-error" 
+                <button
+                  class="btn btn-ghost btn-xs text-error"
                   :disabled="actionLoading === 'unsub'"
                   @click="openUnsubModal(sub)"
                 >
@@ -814,17 +829,17 @@ const regionOptions = [
         <div class="card hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
           <thead>
-            <tr :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'">
-              <th class="w-[26%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.domain') }}</th>
-              <th class="w-[32%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.user') }}</th>
-              <th class="w-[14%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.status') }}</th>
-              <th class="w-[12%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('admin.mail.accounts') }}</th>
-              <th class="w-[16%] px-4 py-3 text-left text-xs font-medium text-themed-muted uppercase">{{ t('common.createdAt') }}</th>
+            <tr class="border-b border-themed">
+              <th class="nimbus-th w-[26%]">{{ t('admin.mail.domain') }}</th>
+              <th class="nimbus-th w-[32%]">{{ t('admin.mail.user') }}</th>
+              <th class="nimbus-th w-[14%]">{{ t('common.status') }}</th>
+              <th class="nimbus-th w-[12%]">{{ t('admin.mail.accounts') }}</th>
+              <th class="nimbus-th w-[16%]">{{ t('common.createdAt') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="domain in domains" :key="domain.id">
-              <td class="px-4 py-3 text-sm font-medium text-themed truncate" :title="domain.domain">{{ domain.domain }}</td>
+          <tbody>
+            <tr v-for="domain in domains" :key="domain.id" class="nimbus-row border-b border-themed">
+              <td class="px-4 py-3 font-mono text-sm font-medium text-themed truncate" :title="domain.domain">{{ domain.domain }}</td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-3">
                   <UserAvatar :username="domain.subscription?.user?.username || ''" :email="domain.subscription?.user?.email" :avatar-style="domain.subscription?.user?.avatarStyle" :badge-id="domain.subscription?.user?.avatarBadgeId || null" :size="32" />
@@ -839,8 +854,8 @@ const regionOptions = [
                   {{ t('mail.domainStatus.' + domain.status) }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-sm text-themed">{{ domain._count?.accounts || 0 }}</td>
-              <td class="px-4 py-3 text-sm text-themed-muted">{{ formatDate(domain.createdAt) }}</td>
+              <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ domain._count?.accounts || 0 }}</td>
+              <td class="px-4 py-3 text-sm text-themed-muted tabular-nums">{{ formatDate(domain.createdAt) }}</td>
             </tr>
           </tbody>
         </table>
@@ -876,7 +891,10 @@ const regionOptions = [
         <div class="modal-backdrop" @click="showSourceModal = false"></div>
         <div class="modal-content max-w-lg">
           <div class="modal-header">
-            <h3 class="modal-title">
+            <h3 class="modal-title flex items-center gap-2">
+              <svg class="h-5 w-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M3 8.25V18a1.5 1.5 0 0 0 1.5 1.5h15a1.5 1.5 0 0 0 1.5-1.5V8.25m-18 0A1.5 1.5 0 0 1 4.5 6.75h15A1.5 1.5 0 0 1 21 8.25m-18 0 8.303 5.19a1.5 1.5 0 0 0 1.594 0L21 8.25" />
+              </svg>
               {{ editingSource ? t('admin.mail.editSource') : t('admin.mail.createSource') }}
             </h3>
             <button class="btn btn-ghost btn-sm" @click="showSourceModal = false">
@@ -885,36 +903,36 @@ const regionOptions = [
               </svg>
             </button>
           </div>
-          <div class="modal-body">
-            <div>
-              <label class="label">{{ t('common.name') }} *</label>
+          <div class="modal-body space-y-4">
+            <label class="block space-y-1.5">
+              <span class="nimbus-field-label">{{ t('common.name') }} *</span>
               <input v-model="sourceForm.name" type="text" class="input w-full" :placeholder="t('admin.mail.sourcePlaceholder')" />
-            </div>
-            <div>
-              <label class="label">{{ t('admin.mail.region') }} *</label>
+            </label>
+            <label class="block space-y-1.5">
+              <span class="nimbus-field-label">{{ t('admin.mail.region') }} *</span>
               <select v-model="sourceForm.code" class="input w-full">
                 <option v-for="opt in regionOptions" :key="opt.code" :value="opt.code">
                   {{ opt.name }} ({{ opt.code.toUpperCase() }})
                 </option>
               </select>
-            </div>
-            <div>
-              <label class="label">{{ t('admin.mail.apiEndpoint') }} *</label>
+            </label>
+            <label class="block space-y-1.5">
+              <span class="nimbus-field-label">{{ t('admin.mail.apiEndpoint') }} *</span>
               <input v-model="sourceForm.apiUrl" type="text" class="input w-full" placeholder="https://api.cranemail.com" />
-            </div>
-            <div>
-              <label class="label">{{ t('admin.mail.apiKey') }}</label>
+            </label>
+            <label class="block space-y-1.5">
+              <span class="nimbus-field-label">{{ t('admin.mail.apiKey') }}</span>
               <input
                 v-model="sourceForm.apiKey"
                 type="password"
                 class="input w-full"
                 :placeholder="editingSource ? '留空表示不更改 API Key' : ''"
               />
-            </div>
-            <div>
-              <label class="label">{{ t('admin.mail.webmailUrl') }}</label>
+            </label>
+            <label class="block space-y-1.5">
+              <span class="nimbus-field-label">{{ t('admin.mail.webmailUrl') }}</span>
               <input v-model="sourceForm.smarterMailUrl" type="text" class="input w-full" placeholder="https://smartermail.example.com" />
-            </div>
+            </label>
           </div>
           <div class="modal-footer">
             <button class="btn btn-ghost" @click="showSourceModal = false">{{ t('common.cancel') }}</button>
@@ -937,7 +955,10 @@ const regionOptions = [
         <div class="modal-backdrop" @click="showPlanModal = false"></div>
         <div class="modal-content max-w-lg">
           <div class="modal-header">
-            <h3 class="modal-title">
+            <h3 class="modal-title flex items-center gap-2">
+              <svg class="h-5 w-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" />
+              </svg>
               {{ editingPlan ? t('admin.mail.editPlan') : t('admin.mail.createPlan') }}
             </h3>
             <button class="btn btn-ghost btn-sm" @click="showPlanModal = false">
@@ -946,45 +967,45 @@ const regionOptions = [
               </svg>
             </button>
           </div>
-          <div class="modal-body">
-            <div>
-              <label class="label">{{ t('admin.mail.source') }} *</label>
+          <div class="modal-body space-y-4">
+            <label class="block space-y-1.5">
+              <span class="nimbus-field-label">{{ t('admin.mail.source') }} *</span>
               <select v-model="planForm.sourceId" class="input w-full">
                 <option v-for="source in sources" :key="source.id" :value="source.id">
                   {{ source.name }}
                 </option>
               </select>
-            </div>
-            <div>
-              <label class="label">{{ t('common.name') }} *</label>
+            </label>
+            <label class="block space-y-1.5">
+              <span class="nimbus-field-label">{{ t('common.name') }} *</span>
               <input v-model="planForm.name" type="text" class="input w-full" :placeholder="t('admin.mail.planPlaceholder')" />
-            </div>
-            <div>
-              <label class="label">{{ t('common.description') }}</label>
+            </label>
+            <label class="block space-y-1.5">
+              <span class="nimbus-field-label">{{ t('common.description') }}</span>
               <textarea v-model="planForm.description" class="input w-full" rows="2"></textarea>
-            </div>
+            </label>
             <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="label">{{ t('admin.mail.domainLimit') }} *</label>
+              <label class="block space-y-1.5">
+                <span class="nimbus-field-label">{{ t('admin.mail.domainLimit') }} *</span>
                 <input v-model.number="planForm.domainLimit" type="number" min="1" class="input w-full" />
-              </div>
-              <div>
-                <label class="label">{{ t('admin.mail.diskLimitGb') }} *</label>
+              </label>
+              <label class="block space-y-1.5">
+                <span class="nimbus-field-label">{{ t('admin.mail.diskLimitGb') }} *</span>
                 <input v-model.number="planForm.diskLimitGb" type="number" min="1" class="input w-full" />
-              </div>
+              </label>
             </div>
             <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="label">{{ t('admin.mail.price') }} (¥) *</label>
+              <label class="block space-y-1.5">
+                <span class="nimbus-field-label">{{ t('admin.mail.price') }} (¥) *</span>
                 <input v-model.number="planForm.price" type="number" min="0" step="0.01" class="input w-full" />
-              </div>
-              <div>
-                <label class="label">{{ t('admin.mail.billingCycle') }} *</label>
+              </label>
+              <label class="block space-y-1.5">
+                <span class="nimbus-field-label">{{ t('admin.mail.billingCycle') }} *</span>
                 <select v-model="planForm.billingCycle" class="input w-full">
                   <option value="monthly">{{ t('mail.monthly') }}</option>
                   <option value="yearly">{{ t('mail.yearly') }}</option>
                 </select>
-              </div>
+              </label>
             </div>
           </div>
           <div class="modal-footer">
@@ -1008,7 +1029,12 @@ const regionOptions = [
         <div class="modal-backdrop" @click="showUnsubModal = false"></div>
         <div class="modal-content max-w-lg">
           <div class="modal-header">
-            <h3 class="modal-title">{{ t('admin.mail.unsub.title') }}</h3>
+            <h3 class="modal-title flex items-center gap-2">
+              <svg class="h-5 w-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              {{ t('admin.mail.unsub.title') }}
+            </h3>
             <button class="btn btn-ghost btn-sm" @click="showUnsubModal = false">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -1040,7 +1066,7 @@ const regionOptions = [
 
             <!-- 退款方式 -->
             <div class="mb-4">
-              <label class="label">{{ t('admin.mail.unsub.refundType') }}</label>
+              <span class="nimbus-field-label mb-2 block">{{ t('admin.mail.unsub.refundType') }}</span>
               <div class="space-y-2">
                 <label class="flex items-center gap-3 p-2 rounded-lg cursor-pointer" :class="themeStore.isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'">
                   <input v-model="unsubForm.refundType" type="radio" value="none" class="radio radio-sm" />
@@ -1068,8 +1094,8 @@ const regionOptions = [
 
             <!-- 退款原因 -->
             <div v-if="unsubForm.refundType !== 'none'">
-              <label class="label">{{ t('admin.mail.unsub.reason') }} *</label>
-              <textarea 
+              <span class="nimbus-field-label mb-2 block">{{ t('admin.mail.unsub.reason') }} *</span>
+              <textarea
                 v-model="unsubForm.reason" 
                 class="input w-full" 
                 rows="3" 
@@ -1093,3 +1119,53 @@ const regionOptions = [
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.nimbus-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  color: var(--kawaii-primary);
+  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 28%, transparent);
+}
+
+.nimbus-th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+  white-space: nowrap;
+}
+
+.nimbus-th-right {
+  text-align: right;
+}
+
+.nimbus-row {
+  transition: background-color 0.12s ease;
+}
+
+.nimbus-row:hover {
+  background: color-mix(in srgb, var(--kawaii-primary) 5%, transparent);
+}
+
+.nimbus-field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--kawaii-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-row {
+    transition: none;
+  }
+}
+</style>

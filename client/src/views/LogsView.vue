@@ -228,27 +228,30 @@ onMounted(async () => {
   <div class="kawaii-page space-y-6 animate-fade-in">
     <div class="page-header">
       <h1 class="page-title">{{ $t('logs.title') }}</h1>
-      <button v-if="canAccessAudit" class="btn-primary" @click="exportAuditCsv">
+      <button v-if="canAccessAudit" class="btn btn-primary" @click="exportAuditCsv">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-5l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
         {{ $t('logs.exportAudit') }}
       </button>
     </div>
 
     <div class="grid gap-3" :class="canAccessAudit ? 'md:grid-cols-4' : 'md:grid-cols-3'">
       <div v-if="canAccessAudit" class="card p-4">
-        <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.riskDefinitions') }}</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ riskDefinitions.length }}</div>
+        <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ $t('logs.auditSummary.riskDefinitions') }}</div>
+        <div class="mt-2 font-mono text-2xl font-semibold tabular-nums text-themed">{{ riskDefinitions.length }}</div>
       </div>
       <div class="card p-4">
-        <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.highRiskCurrentPage') }}</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ highRiskLogs.length }}</div>
+        <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ $t('logs.auditSummary.highRiskCurrentPage') }}</div>
+        <div class="mt-2 font-mono text-2xl font-semibold tabular-nums text-themed">{{ highRiskLogs.length }}</div>
       </div>
       <div class="card p-4">
-        <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.approvalRequired') }}</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ approvalRequiredCount }}</div>
+        <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ $t('logs.auditSummary.approvalRequired') }}</div>
+        <div class="mt-2 font-mono text-2xl font-semibold tabular-nums text-themed">{{ approvalRequiredCount }}</div>
       </div>
       <div class="card p-4">
-        <div class="text-xs text-themed-muted">{{ $t('logs.auditSummary.verificationRequired') }}</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ verificationRequiredCount }}</div>
+        <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ $t('logs.auditSummary.verificationRequired') }}</div>
+        <div class="mt-2 font-mono text-2xl font-semibold tabular-nums text-themed">{{ verificationRequiredCount }}</div>
       </div>
     </div>
 
@@ -290,8 +293,13 @@ onMounted(async () => {
     <SkeletonLoader v-if="loading" type="table" />
 
     <template v-else>
-      <div v-if="logs.length === 0" class="card p-8 text-center text-themed-secondary">
-        {{ $t('logs.noLogs') }}
+      <div v-if="logs.length === 0" class="card p-12 text-center">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-themed-secondary">
+          <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <p class="text-themed-secondary">{{ $t('logs.noLogs') }}</p>
       </div>
 
       <div v-else class="space-y-3 lg:hidden">
@@ -303,7 +311,7 @@ onMounted(async () => {
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="truncate text-sm font-semibold text-themed">{{ formatAction(log.action) }}</div>
-              <div class="mt-1 text-xs text-themed-muted">{{ formatDate(log.created_at) }}</div>
+              <div class="mt-1 font-mono text-xs text-themed-muted">{{ formatDate(log.created_at) }}</div>
             </div>
             <span :class="['badge shrink-0 whitespace-nowrap', getResultClass(log.result)]">
               {{ formatResult(log.result) }}
@@ -446,7 +454,7 @@ onMounted(async () => {
               :key="log.id"
               class="border-b border-themed hover:bg-themed/5 transition-colors"
             >
-              <td class="py-3 px-4 text-sm text-themed-secondary whitespace-nowrap">
+              <td class="py-3 px-4 font-mono text-sm text-themed-secondary whitespace-nowrap">
                 {{ formatDate(log.created_at) }}
               </td>
               <td class="py-3 px-4 text-sm text-themed">
@@ -586,3 +594,18 @@ onMounted(async () => {
     </template>
   </div>
 </template>
+
+<style scoped>
+/* Linear finish: uppercase micro-label audit-table headers (consistent with MyHostsView) */
+thead th {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+</style>

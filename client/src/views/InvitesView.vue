@@ -160,7 +160,10 @@ function nextPage(): void {
         <h1 class="page-title">{{ t('invites.title') }}</h1>
         <p class="page-description">{{ t('invites.description') }}</p>
       </div>
-      <RouterLink :to="dashboardPath()" class="btn-ghost w-full justify-center sm:w-auto">
+      <RouterLink :to="dashboardPath()" class="btn btn-secondary w-full justify-center sm:w-auto">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
         {{ t('invites.backToOverview') }}
       </RouterLink>
     </div>
@@ -176,44 +179,74 @@ function nextPage(): void {
 
     <template v-else>
       <div class="grid gap-3 md:grid-cols-3">
-        <div class="card p-5">
-          <p class="text-sm text-themed-muted">{{ t('invites.stats.generated') }}</p>
-          <p class="mt-2 text-3xl font-bold text-themed">{{ summary?.stats.total || 0 }}</p>
+        <div class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-5">
+          <div class="flex items-center gap-3">
+            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-300">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 010 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 010-4V7a2 2 0 00-2-2H5z" />
+              </svg>
+            </span>
+            <p class="text-sm text-themed-muted">{{ t('invites.stats.generated') }}</p>
+          </div>
+          <p class="invite-stat-num mt-3 font-mono text-3xl font-semibold tabular-nums text-themed">{{ summary?.stats.total || 0 }}</p>
         </div>
-        <div class="card p-5">
-          <p class="text-sm text-themed-muted">{{ t('invites.stats.used') }}</p>
-          <p class="mt-2 text-3xl font-bold text-themed">{{ summary?.stats.used || 0 }}</p>
+        <div class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-5">
+          <div class="flex items-center gap-3">
+            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-300">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </span>
+            <p class="text-sm text-themed-muted">{{ t('invites.stats.used') }}</p>
+          </div>
+          <p class="invite-stat-num mt-3 font-mono text-3xl font-semibold tabular-nums text-themed">{{ summary?.stats.used || 0 }}</p>
         </div>
-        <div class="card p-5">
-          <p class="text-sm text-themed-muted">{{ t('invites.stats.usageRate') }}</p>
-          <p class="mt-2 text-3xl font-bold text-themed">{{ summary?.stats.usageRate || 0 }}%</p>
+        <div class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-5">
+          <div class="flex items-center gap-3">
+            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-300">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M19 5L5 19M7.5 8.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm9 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+              </svg>
+            </span>
+            <p class="text-sm text-themed-muted">{{ t('invites.stats.usageRate') }}</p>
+          </div>
+          <p class="invite-stat-num mt-3 font-mono text-3xl font-semibold tabular-nums text-themed">{{ summary?.stats.usageRate || 0 }}%</p>
         </div>
       </div>
 
       <div class="card p-5">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div class="min-w-0 flex-1">
-            <h2 class="text-base font-semibold text-themed">{{ t('invites.generateTitle') }}</h2>
-            <p class="mt-1 text-sm text-themed-muted">{{ t('invites.generateDescription') }}</p>
+            <div class="flex items-center gap-3">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-300">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              </span>
+              <div class="min-w-0">
+                <h2 class="text-base font-semibold text-themed">{{ t('invites.generateTitle') }}</h2>
+                <p class="mt-0.5 text-sm text-themed-muted">{{ t('invites.generateDescription') }}</p>
+              </div>
+            </div>
 
             <div v-if="enabledCostOptions.length > 0" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <button
                 v-for="option in enabledCostOptions"
                 :key="option.resource"
                 type="button"
-                class="rounded-lg border p-4 text-left transition-all"
+                class="nimbus-lift rounded-xl border p-4 text-left transition-all"
                 :class="selectedCostResource === option.resource
                   ? (themeStore.isDark ? 'border-white bg-white/5' : 'border-gray-900 bg-gray-50')
                   : (themeStore.isDark ? 'border-gray-800 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300')"
                 @click="selectedCostResource = option.resource"
               >
                 <div class="flex items-start justify-between gap-3">
-                  <div>
+                  <div class="min-w-0">
                     <p class="text-sm font-semibold text-themed">{{ option.label }}</p>
-                    <p class="mt-1 text-2xl font-bold text-themed">{{ option.displayAmount }}</p>
+                    <p class="mt-1 font-mono text-2xl font-semibold tabular-nums text-themed">{{ option.displayAmount }}</p>
                   </div>
                   <span
-                    class="badge"
+                    class="badge shrink-0"
                     :class="hasEnoughResource(option) ? 'badge-success' : 'badge-error'"
                   >
                     {{ getBalanceLabel(option.resource) }}
@@ -222,14 +255,14 @@ function nextPage(): void {
               </button>
             </div>
 
-            <div v-else class="mt-4 rounded-lg border border-themed bg-themed-secondary/40 p-4 text-sm text-themed-muted">
+            <div v-else class="mt-4 rounded-xl border border-themed bg-themed-secondary/40 p-4 text-sm text-themed-muted">
               {{ t('invites.noCostOptions') }}
             </div>
           </div>
 
           <button
             type="button"
-            class="btn-primary w-full justify-center lg:w-auto"
+            class="btn btn-primary w-full justify-center lg:w-auto"
             :disabled="!canGenerate"
             @click="generateInvite"
           >
@@ -237,18 +270,21 @@ function nextPage(): void {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
             </svg>
+            <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 4v16m8-8H4" />
+            </svg>
             <span>{{ generating ? t('invites.generating') : t('invites.generate') }}</span>
           </button>
         </div>
 
-        <div v-if="generatedInvites.length > 0" class="mt-5 rounded-lg border border-themed bg-themed-secondary/40 p-4">
+        <div v-if="generatedInvites.length > 0" class="mt-5 rounded-xl border border-themed bg-themed-secondary/40 p-4">
           <p class="text-sm font-medium text-themed">{{ t('invites.justGenerated') }}</p>
           <div class="mt-3 space-y-2">
-            <div v-for="invite in generatedInvites" :key="invite.id" class="flex flex-col gap-2 rounded-lg bg-themed p-3 sm:flex-row sm:items-center sm:justify-between">
-              <code class="text-sm text-themed-secondary">{{ invite.code }}</code>
+            <div v-for="invite in generatedInvites" :key="invite.id" class="flex flex-col gap-2 rounded-lg border border-themed bg-themed-surface p-3 sm:flex-row sm:items-center sm:justify-between">
+              <code class="font-mono text-sm text-themed-secondary">{{ invite.code }}</code>
               <div class="flex gap-2">
-                <button class="btn-ghost btn-sm" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
-                <button class="btn-secondary btn-sm" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
+                <button class="btn btn-ghost btn-sm" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
+                <button class="btn btn-secondary btn-sm" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
               </div>
             </div>
           </div>
@@ -261,12 +297,22 @@ function nextPage(): void {
             <h2 class="text-base font-semibold text-themed">{{ t('invites.myInvites') }}</h2>
             <p class="text-sm text-themed-muted">{{ t('invites.myInvitesDescription') }}</p>
           </div>
-          <button class="btn-ghost btn-sm" :disabled="listLoading" @click="loadInvites">{{ t('common.refresh') }}</button>
+          <button class="btn btn-ghost btn-sm" :disabled="listLoading" @click="loadInvites">
+            <svg class="h-4 w-4" :class="{ 'animate-spin': listLoading }" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {{ t('common.refresh') }}
+          </button>
         </div>
 
         <div v-if="listLoading" class="p-8 text-center text-themed-muted">{{ t('common.loading') }}</div>
-        <div v-else-if="invites.length === 0" class="p-8 text-center text-themed-muted">
-          {{ t('invites.empty') }}
+        <div v-else-if="invites.length === 0" class="flex flex-col items-center gap-3 p-10 text-center">
+          <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-themed-secondary text-themed-faint">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 010 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 010-4V7a2 2 0 00-2-2H5z" />
+            </svg>
+          </span>
+          <p class="text-sm text-themed-muted">{{ t('invites.empty') }}</p>
         </div>
         <div v-else class="space-y-3 p-4 lg:hidden">
           <div
@@ -276,7 +322,7 @@ function nextPage(): void {
           >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <code class="block truncate text-sm font-semibold text-themed-secondary" :title="invite.code">
+                <code class="block truncate font-mono text-sm font-semibold text-themed-secondary" :title="invite.code">
                   {{ invite.code }}
                 </code>
                 <div class="mt-1 text-xs text-themed-muted">
@@ -313,8 +359,8 @@ function nextPage(): void {
             </div>
 
             <div class="mt-4 grid grid-cols-2 gap-2">
-              <button class="btn-ghost btn-sm justify-center" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
-              <button class="btn-secondary btn-sm justify-center" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
+              <button class="btn btn-ghost btn-sm justify-center" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
+              <button class="btn btn-secondary btn-sm justify-center" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
             </div>
           </div>
         </div>
@@ -331,9 +377,9 @@ function nextPage(): void {
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
-              <tr v-for="invite in invites" :key="invite.id" class="hover:bg-themed-hover">
+              <tr v-for="invite in invites" :key="invite.id" class="transition-colors hover:bg-themed-hover">
                 <td class="px-4 py-3">
-                  <code class="block truncate text-sm text-themed-secondary" :title="invite.code">{{ invite.code }}</code>
+                  <code class="block truncate font-mono text-sm text-themed-secondary" :title="invite.code">{{ invite.code }}</code>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
                   <span class="badge" :class="getStatus(invite).className">{{ getStatus(invite).label }}</span>
@@ -364,8 +410,8 @@ function nextPage(): void {
                 </td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
                   <div class="inline-flex justify-end gap-2">
-                    <button class="btn-ghost btn-sm" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
-                    <button class="btn-secondary btn-sm" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
+                    <button class="btn btn-ghost btn-sm" @click="copyText(invite.code, t('invites.codeCopied'))">{{ t('invites.copyCode') }}</button>
+                    <button class="btn btn-secondary btn-sm" @click="copyText(getInviteLink(invite), t('invites.linkCopied'))">{{ t('invites.copyLink') }}</button>
                   </div>
                 </td>
               </tr>
@@ -376,12 +422,37 @@ function nextPage(): void {
         <div v-if="total > 0" class="flex flex-col gap-3 border-t border-themed px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p class="text-sm text-themed-muted">{{ t('invites.total', { total }) }}</p>
           <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex">
-            <button class="btn-ghost btn-sm justify-center" :disabled="page <= 1" @click="previousPage">{{ t('common.prevPage') }}</button>
-            <span class="min-w-[72px] text-center text-sm text-themed-muted">{{ page }} / {{ totalPages }}</span>
-            <button class="btn-ghost btn-sm justify-center" :disabled="page >= totalPages" @click="nextPage">{{ t('common.nextPage') }}</button>
+            <button class="btn btn-ghost btn-sm justify-center" :disabled="page <= 1" @click="previousPage">{{ t('common.prevPage') }}</button>
+            <span class="min-w-[72px] text-center font-mono text-sm tabular-nums text-themed-muted">{{ page }} / {{ totalPages }}</span>
+            <button class="btn btn-ghost btn-sm justify-center" :disabled="page >= totalPages" @click="nextPage">{{ t('common.nextPage') }}</button>
           </div>
         </div>
       </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+/* Tighten large stat numerals to match the Linear display scale */
+.invite-stat-num {
+  letter-spacing: -0.02em;
+}
+
+/* Nimbus — subtle lift for stat tiles and interactive cost cards */
+.nimbus-lift {
+  transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 200ms ease, border-color 200ms ease;
+}
+.nimbus-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px -18px rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-lift {
+    transition: none;
+  }
+  .nimbus-lift:hover {
+    transform: none;
+  }
+}
+</style>

@@ -719,69 +719,7 @@ function getBillingCycleLabel(months: number): string {
         <h1 class="page-title">{{ t('resources.packages.title') }}</h1>
         <p class="page-description">{{ t('resources.packages.description') }}</p>
       </div>
-    </div>
-
-    <!-- 工具栏 -->
-    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-      <div class="flex items-center gap-3 flex-wrap">
-        <!-- 搜索框 -->
-        <div class="relative flex-1 sm:flex-none sm:w-48">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            v-model="searchQuery"
-            type="text"
-            class="input pl-10 pr-8 w-full"
-            :placeholder="t('resources.packages.searchPlaceholder')"
-            @input="onSearchChange"
-          />
-          <button
-            v-if="searchQuery"
-            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded transition-colors"
-            :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
-            @click="clearSearch"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <!-- 管理员专用：套餐范围切换器 -->
-        <div v-if="isAdmin" class="inline-flex rounded-lg p-1" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'">
-          <button
-            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-            :class="scope === 'mine' 
-              ? (themeStore.isDark ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow-sm') 
-              : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-            @click="switchScope('mine')"
-          >
-            {{ t('resources.packages.mine') }}
-          </button>
-          <button
-            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-            :class="scope === 'hosted' 
-              ? (themeStore.isDark ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow-sm') 
-              : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-            @click="switchScope('hosted')"
-          >
-            {{ t('resources.packages.hosted') }}
-          </button>
-        </div>
-        <!-- 托管套餐用户ID筛选 -->
-        <div v-if="isAdmin && scope === 'hosted'" class="relative sm:w-36">
-          <input
-            v-model="filterUserId"
-            type="text"
-            :placeholder="t('resources.packages.filterByUserId')"
-            class="input pl-9 w-full"
-          />
-          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 icon-themed" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-        </div>
-      </div>
-      <button v-if="scope === 'mine'" class="btn-primary" @click="openCreate">
+      <button v-if="scope === 'mine'" class="btn-primary btn-sm sm:btn" @click="openCreate">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
@@ -789,17 +727,70 @@ function getBillingCycleLabel(months: number): string {
       </button>
     </div>
 
+    <!-- 工具栏 -->
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+      <!-- 搜索框 -->
+      <div class="relative flex-1 sm:max-w-xs">
+        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="input pl-10 pr-8 w-full"
+          :placeholder="t('resources.packages.searchPlaceholder')"
+          @input="onSearchChange"
+        />
+        <button
+          v-if="searchQuery"
+          class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
+          @click="clearSearch"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <!-- 管理员专用：套餐范围切换器 -->
+      <div v-if="isAdmin" class="inline-flex rounded-lg border border-themed bg-themed-secondary p-1">
+        <button
+          class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+          :class="scope === 'mine' ? 'bg-themed-surface text-themed shadow-sm' : 'text-themed-muted hover:text-themed'"
+          @click="switchScope('mine')"
+        >
+          {{ t('resources.packages.mine') }}
+        </button>
+        <button
+          class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+          :class="scope === 'hosted' ? 'bg-themed-surface text-themed shadow-sm' : 'text-themed-muted hover:text-themed'"
+          @click="switchScope('hosted')"
+        >
+          {{ t('resources.packages.hosted') }}
+        </button>
+      </div>
+      <!-- 托管套餐用户ID筛选 -->
+      <div v-if="isAdmin && scope === 'hosted'" class="relative sm:w-40">
+        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        <input
+          v-model="filterUserId"
+          type="text"
+          :placeholder="t('resources.packages.filterByUserId')"
+          class="input pl-9 w-full"
+        />
+      </div>
+    </div>
+
     <!-- 套餐列表 -->
     <SkeletonLoader v-if="loading" type="list" />
 
     <div v-else-if="filteredPackages.length === 0" class="card p-12 text-center">
-      <svg
-        class="w-12 h-12 mx-auto mb-4"
-        :class="themeStore.isDark ? 'text-gray-700' : 'text-gray-300'"
-        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-      </svg>
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-themed-secondary">
+        <svg class="h-7 w-7 icon-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+      </div>
       <template v-if="searchQuery">
         <p class="text-themed-secondary">{{ t('resources.packages.noSearchResults') }}</p>
         <button class="text-xs text-primary hover:underline mt-2" @click="clearSearch">{{ t('resources.packages.clearSearch') }}</button>
@@ -822,10 +813,10 @@ function getBillingCycleLabel(months: number): string {
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex min-w-0 items-center gap-2">
-                  <span class="truncate text-sm font-medium" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">{{ pkg.name }}</span>
+                  <span class="truncate text-sm font-medium" :class="'text-themed'">{{ pkg.name }}</span>
                   <span
                     v-if="isPackagePublic(pkg)"
-                    class="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700"
+                    class="inline-flex shrink-0 items-center rounded-full border border-themed bg-themed-secondary px-2 py-0.5 text-xs font-medium text-themed-secondary"
                   >
                     {{ t('resources.packages.publicBadge') }}
                   </span>
@@ -875,7 +866,7 @@ function getBillingCycleLabel(months: number): string {
                 v-if="!isAdminEntry"
                 type="button"
                 class="p-1.5 transition-colors rounded"
-                :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                :class="'text-themed-muted hover:bg-themed-hover hover:text-themed'"
                 :title="t('resources.packages.copyShareLink')"
                 @click="copyShareLink(pkg)"
               >
@@ -885,7 +876,7 @@ function getBillingCycleLabel(months: number): string {
               </button>
               <button
                 class="p-1.5 transition-colors rounded"
-                :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                :class="'text-themed-muted hover:bg-themed-hover hover:text-themed'"
                 :title="t('resources.plans.manage')"
                 @click="openPlansModal(pkg)"
               >
@@ -895,7 +886,7 @@ function getBillingCycleLabel(months: number): string {
               </button>
               <button
                 class="p-1.5 transition-colors rounded"
-                :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                :class="'text-themed-muted hover:bg-themed-hover hover:text-themed'"
                 :title="t('quotaRelease.title')"
                 @click="openQuotaReleaseModal(pkg)"
               >
@@ -905,7 +896,7 @@ function getBillingCycleLabel(months: number): string {
               </button>
               <button
                 class="p-1.5 transition-colors rounded"
-                :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                :class="'text-themed-muted hover:bg-themed-hover hover:text-themed'"
                 :title="t('common.edit')"
                 @click="openEdit(pkg)"
               >
@@ -927,7 +918,7 @@ function getBillingCycleLabel(months: number): string {
               </button>
               <button
                 class="p-1.5 transition-colors rounded"
-                :class="themeStore.isDark ? 'text-gray-500 hover:text-error hover:bg-gray-800' : 'text-gray-400 hover:text-error hover:bg-gray-100'"
+                :class="'text-themed-muted hover:bg-rose-500/10 hover:text-error'"
                 :title="t('common.delete')"
                 @click="deletePackage(pkg)"
               >
@@ -942,7 +933,7 @@ function getBillingCycleLabel(months: number): string {
         <div class="hidden overflow-hidden lg:block">
           <table class="w-full table-fixed text-sm">
             <thead>
-              <tr :class="themeStore.isDark ? 'bg-gray-800/50 border-b border-gray-700' : 'bg-gray-50 border-b border-gray-200'">
+              <tr class="border-b border-themed bg-themed-secondary">
                 <th class="w-[18%] text-left px-4 py-3 font-medium text-themed-muted">{{ t('admin.packages.name') }}</th>
                 <th v-if="isAdmin && scope === 'hosted'" class="w-[20%] text-left px-4 py-3 font-medium text-themed-muted">{{ t('resources.packages.owner') }}</th>
                 <th class="w-[9%] text-left px-4 py-3 font-medium text-themed-muted">{{ t('admin.packages.status') }}</th>
@@ -958,19 +949,16 @@ function getBillingCycleLabel(months: number): string {
               <tr
                 v-for="pkg in paginatedPackages"
                 :key="pkg.id"
-                class="border-b transition-colors"
-                :class="[
-                  themeStore.isDark ? 'border-gray-800 hover:bg-gray-800/30' : 'border-gray-100 hover:bg-gray-50',
-                  pkg.active !== 1 ? 'opacity-60' : ''
-                ]"
+                class="border-b border-themed transition-colors hover:bg-themed-hover"
+                :class="pkg.active !== 1 ? 'opacity-60' : ''"
               >
                 <!-- 套餐名称 -->
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2 min-w-0">
-                    <span class="font-medium truncate" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">{{ pkg.name }}</span>
+                    <span class="font-medium truncate" :class="'text-themed'">{{ pkg.name }}</span>
                     <span
                       v-if="isPackagePublic(pkg)"
-                      class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 bg-gray-100 text-gray-700 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700"
+                      class="inline-flex shrink-0 items-center rounded-full border border-themed bg-themed-secondary px-2 py-0.5 text-xs font-medium text-themed-secondary"
                     >
                       {{ t('resources.packages.publicBadge') }}
                     </span>
@@ -994,17 +982,17 @@ function getBillingCycleLabel(months: number): string {
                   <span v-else class="badge badge-default text-xs" :title="t('admin.packages.archivedHint')">{{ t('admin.packages.inactive') }}</span>
                 </td>
                 <!-- 网络模式 -->
-                <td class="px-4 py-3" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
+                <td class="px-4 py-3" :class="'text-themed-secondary'">
                   <div class="truncate">{{ getPackageNetworkModeLabel(pkg) }}</div>
                 </td>
                 <!-- 实例类型 -->
-                <td class="px-4 py-3" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
+                <td class="px-4 py-3" :class="'text-themed-secondary'">
                   <div class="truncate">{{ getPackageInstanceTypeLabel(pkg) }}</div>
                 </td>
                 <!-- 流量倍率 -->
                 <td
                   class="px-4 py-3 text-right font-mono whitespace-nowrap"
-                  :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'"
+                  :class="'text-themed-secondary'"
                   :title="getPackageTrafficMultiplierTitle(pkg)"
                 >
                   {{ getPackageTrafficMultiplierLabel(pkg) }}
@@ -1014,7 +1002,7 @@ function getBillingCycleLabel(months: number): string {
                   <span class="block truncate text-xs text-themed-muted">{{ getHostNames(pkg) }}</span>
                 </td>
                 <!-- 套餐下实例数 -->
-                <td class="px-4 py-3 text-right font-mono whitespace-nowrap" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'">
+                <td class="px-4 py-3 text-right font-mono whitespace-nowrap" :class="'text-themed-secondary'">
                   {{ pkg.instance_count || 0 }}
                 </td>
                 <!-- 操作 -->
@@ -1025,7 +1013,7 @@ function getBillingCycleLabel(months: number): string {
                       v-if="!isAdminEntry"
                       type="button"
                       class="p-1.5 transition-colors rounded"
-                      :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                      :class="'text-themed-muted hover:bg-themed-hover hover:text-themed'"
                       :title="t('resources.packages.copyShareLink')"
                       @click="copyShareLink(pkg)"
                     >
@@ -1035,7 +1023,7 @@ function getBillingCycleLabel(months: number): string {
                     </button>
                     <button
                       class="p-1.5 transition-colors rounded"
-                      :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                      :class="'text-themed-muted hover:bg-themed-hover hover:text-themed'"
                       :title="t('resources.plans.manage')"
                       @click="openPlansModal(pkg)"
                     >
@@ -1045,7 +1033,7 @@ function getBillingCycleLabel(months: number): string {
                     </button>
                     <button
                       class="p-1.5 transition-colors rounded"
-                      :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                      :class="'text-themed-muted hover:bg-themed-hover hover:text-themed'"
                       :title="t('quotaRelease.title')"
                       @click="openQuotaReleaseModal(pkg)"
                     >
@@ -1055,7 +1043,7 @@ function getBillingCycleLabel(months: number): string {
                     </button>
                     <button
                       class="p-1.5 transition-colors rounded"
-                      :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+                      :class="'text-themed-muted hover:bg-themed-hover hover:text-themed'"
                       :title="t('common.edit')"
                       @click="openEdit(pkg)"
                     >
@@ -1077,7 +1065,7 @@ function getBillingCycleLabel(months: number): string {
                     </button>
                     <button
                       class="p-1.5 transition-colors rounded"
-                      :class="themeStore.isDark ? 'text-gray-500 hover:text-error hover:bg-gray-800' : 'text-gray-400 hover:text-error hover:bg-gray-100'"
+                      :class="'text-themed-muted hover:bg-rose-500/10 hover:text-error'"
                       :title="t('common.delete')"
                       @click="deletePackage(pkg)"
                     >
@@ -1093,7 +1081,7 @@ function getBillingCycleLabel(months: number): string {
         </div>
 
         <!-- 分页控件 -->
-        <div v-if="packagesTotalPages > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 text-sm text-themed-muted border-t" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-100'">
+        <div v-if="packagesTotalPages > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-themed px-4 py-3 text-sm text-themed-muted">
           <span>{{ t('common.total') }} {{ filteredPackages.length }} {{ t('common.items') }}</span>
           <div class="flex items-center gap-1 flex-wrap justify-center">
             <button :disabled="packagesPage <= 1" class="btn-ghost btn-sm" :class="packagesPage <= 1 ? 'cursor-not-allowed' : ''" @click="goToPackagesPage(packagesPage - 1)">{{ t('instance.prevPage') }}</button>
@@ -1101,12 +1089,8 @@ function getBillingCycleLabel(months: number): string {
               <span v-if="p === '...'" class="px-2 py-1 text-themed-muted">…</span>
               <button
                 v-else
-                class="min-w-[32px] px-2 py-1 rounded transition-colors"
-                :class="[
-                  p === packagesPage
-                    ? (themeStore.isDark ? 'bg-accent text-white dark:text-black' : 'bg-accent text-white dark:text-black')
-                    : (themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100')
-                ]"
+                class="min-w-[32px] rounded-md px-2 py-1 text-sm font-mono tabular-nums transition-colors"
+                :class="p === packagesPage ? 'bg-primary-500 text-white' : 'text-themed-secondary hover:bg-themed-hover'"
                 @click="goToPackagesPage(p)"
               >
                 {{ p }}
@@ -1136,15 +1120,15 @@ function getBillingCycleLabel(months: number): string {
           <div class="modal-content max-w-3xl">
             <div class="modal-header">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-indigo-500/20' : 'bg-indigo-100'">
-                  <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-indigo-400' : 'text-indigo-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500/15">
+                  <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
                 </div>
                 <div>
                   <div class="flex items-center gap-2">
                     <h3 class="modal-title">{{ t('resources.plans.title') }}</h3>
-                    <span v-if="plans.length > 0" class="text-xs px-2 py-0.5 rounded-full" :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'">
+                    <span v-if="plans.length > 0" class="rounded-full bg-themed-secondary px-2 py-0.5 text-xs font-mono tabular-nums text-themed-secondary">
                       {{ plans.length }}
                     </span>
                   </div>
@@ -1153,7 +1137,7 @@ function getBillingCycleLabel(months: number): string {
                   </p>
                 </div>
               </div>
-              <button class="p-1.5 rounded-lg transition-colors" :class="themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'" @click="showPlansModal = false">
+              <button class="p-1.5 rounded-lg transition-colors hover:bg-themed-hover" @click="showPlansModal = false">
                 <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -1163,8 +1147,8 @@ function getBillingCycleLabel(months: number): string {
             <div class="modal-body">
               <SkeletonLoader v-if="plansLoading" type="list" />
               <div v-else-if="plans.length === 0" class="text-center py-12">
-                <div class="w-20 h-20 mx-auto mb-4 rounded-2xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'">
-                  <svg class="w-10 h-10" :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-themed-secondary">
+                  <svg class="w-10 h-10 icon-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                 </div>
@@ -1177,51 +1161,51 @@ function getBillingCycleLabel(months: number): string {
                   :key="plan.id"
                   class="rounded-xl border p-4 transition-colors"
                   :class="[
-                    themeStore.isDark ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50/50',
+                    'border-themed bg-themed-tertiary',
                     getPlanStatus(plan) !== 'active' ? 'opacity-70' : ''
                   ]"
                 >
                   <div class="flex items-start justify-between gap-4">
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
-                        <span class="font-medium" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'">{{ plan.name }}</span>
+                        <span class="font-medium" :class="'text-themed'">{{ plan.name }}</span>
                         <span class="badge text-xs" :class="getPlanStatusBadgeClass(plan)">{{ getPlanStatusLabel(plan) }}</span>
                       </div>
                       <p v-if="plan.description" class="text-xs text-themed-muted mb-2">{{ plan.description }}</p>
                       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                         <div>
                           <span class="text-themed-muted">{{ t('admin.packages.cpu') }}:</span>
-                          <span class="ml-1 font-mono" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ plan.cpu }}%</span>
+                          <span class="ml-1 font-mono tabular-nums text-themed-secondary">{{ plan.cpu }}%</span>
                         </div>
                         <div>
                           <span class="text-themed-muted">{{ t('admin.packages.memory') }}:</span>
-                          <span class="ml-1 font-mono" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ formatMemory(plan.memory) }}</span>
+                          <span class="ml-1 font-mono tabular-nums text-themed-secondary">{{ formatMemory(plan.memory) }}</span>
                         </div>
                         <div>
                           <span class="text-themed-muted">{{ t('admin.packages.disk') }}:</span>
-                          <span class="ml-1 font-mono" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ formatDisk(plan.disk) }}</span>
+                          <span class="ml-1 font-mono tabular-nums text-themed-secondary">{{ formatDisk(plan.disk) }}</span>
                         </div>
                         <div>
                           <span class="text-themed-muted">{{ t('resources.plans.price') }}:</span>
-                          <span class="ml-1 font-medium" :class="themeStore.isDark ? 'text-green-400' : 'text-green-600'">¥{{ formatPrice(plan.price) }}/{{ getBillingCycleLabel(plan.billingCycle) }}</span>
+                          <span class="ml-1 font-medium text-green-600 dark:text-green-400">¥{{ formatPrice(plan.price) }}/{{ getBillingCycleLabel(plan.billingCycle) }}</span>
                         </div>
                       </div>
                       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mt-2">
                         <div>
                           <span class="text-themed-muted">{{ t('resources.plans.portLimit') }}:</span>
-                          <span class="ml-1 font-mono" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ plan.portLimit }}</span>
+                          <span class="ml-1 font-mono tabular-nums text-themed-secondary">{{ plan.portLimit }}</span>
                         </div>
                         <div>
                           <span class="text-themed-muted">{{ t('resources.plans.snapshotLimit') }}:</span>
-                          <span class="ml-1 font-mono" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ plan.snapshotLimit }}</span>
+                          <span class="ml-1 font-mono tabular-nums text-themed-secondary">{{ plan.snapshotLimit }}</span>
                         </div>
                         <div v-if="plansPackage?.instance_type !== 'vm'">
                           <span class="text-themed-muted">{{ t('resources.plans.swapSize') }}:</span>
-                          <span class="ml-1 font-mono" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ plan.swapSize > 0 ? `${plan.swapSize} MB` : '-' }}</span>
+                          <span class="ml-1 font-mono tabular-nums text-themed-secondary">{{ plan.swapSize > 0 ? `${plan.swapSize} MB` : '-' }}</span>
                         </div>
                         <div>
                           <span class="text-themed-muted">{{ t('resources.plans.siteLimit') }}:</span>
-                          <span class="ml-1 font-mono" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'">{{ plan.siteLimit }}</span>
+                          <span class="ml-1 font-mono tabular-nums text-themed-secondary">{{ plan.siteLimit }}</span>
                         </div>
                       </div>
                       <div v-if="plan.slaGuarantee !== null" class="mt-2 text-xs">
@@ -1231,8 +1215,7 @@ function getBillingCycleLabel(months: number): string {
                     </div>
                     <div class="flex items-center gap-1 flex-shrink-0">
                       <button
-                        class="p-2 rounded-lg transition-colors"
-                        :class="themeStore.isDark ? 'hover:bg-gray-700 text-gray-400 hover:text-blue-400' : 'hover:bg-gray-200 text-gray-500 hover:text-blue-600'"
+                        class="rounded-lg p-2 text-themed-muted transition-colors hover:bg-themed-hover hover:text-primary-500"
                         :title="t('common.edit')"
                         @click="openEditPlanModal(plan)"
                       >
@@ -1241,8 +1224,7 @@ function getBillingCycleLabel(months: number): string {
                         </svg>
                       </button>
                       <button
-                        class="p-2 rounded-lg transition-colors"
-                        :class="themeStore.isDark ? 'hover:bg-red-500/20 text-gray-400 hover:text-red-400' : 'hover:bg-red-50 text-gray-500 hover:text-red-500'"
+                        class="rounded-lg p-2 text-themed-muted transition-colors hover:bg-rose-500/10 hover:text-error"
                         :title="t('common.delete')"
                         @click="deletePlan(plan)"
                       >
@@ -1278,8 +1260,8 @@ function getBillingCycleLabel(months: number): string {
           <div class="modal-content max-w-2xl">
             <div class="modal-header">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center" :class="themeStore.isDark ? 'bg-indigo-500/20' : 'bg-indigo-100'">
-                  <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-indigo-400' : 'text-indigo-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500/15">
+                  <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                 </div>
@@ -1288,7 +1270,7 @@ function getBillingCycleLabel(months: number): string {
                   <p v-if="plansPackage" class="text-xs text-themed-muted mt-0.5">{{ plansPackage.name }}</p>
                 </div>
               </div>
-              <button class="p-1.5 rounded-lg transition-colors" :class="themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'" @click="showPlanFormModal = false">
+              <button class="p-1.5 rounded-lg transition-colors hover:bg-themed-hover" @click="showPlanFormModal = false">
                 <svg class="w-5 h-5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -1310,8 +1292,8 @@ function getBillingCycleLabel(months: number): string {
               <p class="text-xs text-orange-500 dark:text-orange-400 -mt-2">{{ t('common.noIncudalHint') }}</p>
 
               <!-- 资源配置 -->
-              <div class="rounded-xl p-4" :class="themeStore.isDark ? 'bg-gray-800/50 border border-gray-700' : 'bg-gray-50 border border-gray-200'">
-                <h4 class="text-sm font-medium mb-3" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-700'">{{ t('resources.plans.resourceConfig') }}</h4>
+              <div class="rounded-xl border border-themed bg-themed-tertiary p-4">
+                <h4 class="text-sm font-medium mb-3 text-themed">{{ t('resources.plans.resourceConfig') }}</h4>
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <div>
                     <label class="block text-xs font-medium text-themed-muted mb-1.5">CPU (%)</label>
@@ -1353,8 +1335,8 @@ function getBillingCycleLabel(months: number): string {
               </div>
 
               <!-- 计费配置 -->
-              <div class="rounded-xl p-4" :class="themeStore.isDark ? 'bg-gray-800/50 border border-gray-700' : 'bg-gray-50 border border-gray-200'">
-                <h4 class="text-sm font-medium mb-3" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-700'">{{ t('resources.plans.billingConfig') }}</h4>
+              <div class="rounded-xl border border-themed bg-themed-tertiary p-4">
+                <h4 class="text-sm font-medium mb-3 text-themed">{{ t('resources.plans.billingConfig') }}</h4>
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <div>
                     <label class="block text-xs font-medium text-themed-muted mb-1.5">{{ t('resources.plans.price') }} (元)</label>
@@ -1383,10 +1365,7 @@ function getBillingCycleLabel(months: number): string {
               <div class="grid gap-4 sm:grid-cols-3 sm:items-start">
                 <div class="min-w-0 sm:col-span-2">
                   <label class="block text-xs font-medium text-themed-muted mb-1.5">{{ t('resources.plans.status') }}</label>
-                  <div
-                    class="h-10 rounded-lg border p-0.5"
-                    :class="themeStore.isDark ? 'border-gray-700 bg-gray-900/60' : 'border-gray-200 bg-gray-100/70'"
-                  >
+                  <div class="h-10 rounded-lg border border-themed bg-themed-secondary p-0.5">
                     <div class="grid h-full grid-cols-3 gap-0.5">
                       <button
                         v-for="option in planStatusOptions"
@@ -1431,3 +1410,18 @@ function getBillingCycleLabel(months: number): string {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* Linear finish: uppercase micro-label table headers (consistent with MyHostsView) */
+thead th {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+</style>

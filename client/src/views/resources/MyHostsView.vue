@@ -379,60 +379,9 @@ onActivated(() => {
         <h1 class="page-title">{{ t('resources.hosts.title') }}</h1>
         <p class="page-description">{{ t('resources.hosts.description') }}</p>
       </div>
-    </div>
-
-    <!-- 工具栏 -->
-    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="relative flex-1 sm:flex-none sm:w-48">
-          <input
-            v-model="search"
-            type="text"
-            :placeholder="t('admin.hosts.searchPlaceholder')"
-            class="input pl-9 w-full"
-          />
-          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 icon-themed" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-        <!-- 管理员专用：节点范围切换器 -->
-        <div v-if="isAdmin" class="inline-flex rounded-lg p-1" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'">
-          <button
-            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-            :class="scope === 'mine' 
-              ? (themeStore.isDark ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow-sm') 
-              : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-            @click="switchScope('mine')"
-          >
-            {{ t('resources.hosts.mine') }}
-          </button>
-          <button
-            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-            :class="scope === 'hosted' 
-              ? (themeStore.isDark ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow-sm') 
-              : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-            @click="switchScope('hosted')"
-          >
-            {{ t('resources.hosts.hosted') }}
-          </button>
-        </div>
-        <!-- 托管节点用户ID筛选 -->
-        <div v-if="isAdmin && scope === 'hosted'" class="relative sm:w-36">
-          <input
-            v-model="filterUserId"
-            type="text"
-            :placeholder="t('resources.hosts.filterByUserId')"
-            class="input pl-9 w-full"
-          />
-          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 icon-themed" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-        </div>
-      </div>
-      <div class="flex items-center gap-2 w-full sm:w-auto">
+      <div v-if="scope === 'mine'" class="flex items-center gap-2">
         <button
-          v-if="scope === 'mine'"
-          class="btn-secondary flex-1 sm:flex-none justify-center"
+          class="btn-secondary btn-sm sm:btn"
           :disabled="calibratingAll || onlineHostsCount === 0"
           @click="calibrateAll"
         >
@@ -445,7 +394,7 @@ onActivated(() => {
           </svg>
           {{ t('resources.hosts.calibrateAll') }}
         </button>
-        <button v-if="scope === 'mine'" class="btn-primary flex-1 sm:flex-none justify-center" @click="goToCreate">
+        <button class="btn-primary btn-sm sm:btn" @click="goToCreate">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -454,17 +403,59 @@ onActivated(() => {
       </div>
     </div>
 
+    <!-- 工具栏 -->
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+      <div class="relative flex-1 sm:max-w-xs">
+        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          v-model="search"
+          type="text"
+          :placeholder="t('admin.hosts.searchPlaceholder')"
+          class="input pl-9 w-full"
+        />
+      </div>
+      <!-- 管理员专用：节点范围切换器 -->
+      <div v-if="isAdmin" class="inline-flex rounded-lg border border-themed bg-themed-secondary p-1">
+        <button
+          class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+          :class="scope === 'mine' ? 'bg-themed-surface text-themed shadow-sm' : 'text-themed-muted hover:text-themed'"
+          @click="switchScope('mine')"
+        >
+          {{ t('resources.hosts.mine') }}
+        </button>
+        <button
+          class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+          :class="scope === 'hosted' ? 'bg-themed-surface text-themed shadow-sm' : 'text-themed-muted hover:text-themed'"
+          @click="switchScope('hosted')"
+        >
+          {{ t('resources.hosts.hosted') }}
+        </button>
+      </div>
+      <!-- 托管节点用户ID筛选 -->
+      <div v-if="isAdmin && scope === 'hosted'" class="relative sm:w-40">
+        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        <input
+          v-model="filterUserId"
+          type="text"
+          :placeholder="t('resources.hosts.filterByUserId')"
+          class="input pl-9 w-full"
+        />
+      </div>
+    </div>
+
     <!-- 宿主机列表 -->
     <SkeletonLoader v-if="loading" type="table" />
 
     <div v-else-if="hosts.length === 0" class="card p-12 text-center">
-      <svg
-        class="w-12 h-12 mx-auto mb-4"
-        :class="themeStore.isDark ? 'text-gray-700' : 'text-gray-300'"
-        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-      </svg>
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-themed-secondary">
+        <svg class="h-7 w-7 icon-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+        </svg>
+      </div>
       <p class="text-themed-secondary">{{ t('resources.hosts.noHosts') }}</p>
       <p class="text-xs text-themed-muted mt-2">{{ t('resources.hosts.noHostsHint') }}</p>
     </div>
@@ -476,7 +467,7 @@ onActivated(() => {
           :key="host.id"
           role="button"
           tabindex="0"
-          class="w-full rounded-lg border border-themed bg-themed-surface p-4 text-left shadow-sm transition-colors hover:bg-themed-hover"
+          class="nimbus-card w-full rounded-xl border border-themed bg-themed-surface p-4 text-left transition-all hover:bg-themed-hover"
           @click="goToDetail(host)"
           @keydown.enter.prevent="goToDetail(host)"
           @keydown.space.prevent="goToDetail(host)"
@@ -488,18 +479,18 @@ onActivated(() => {
                 <div class="truncate text-sm font-semibold text-themed">
                   {{ host.name?.toUpperCase() || host.name }}
                 </div>
-                <div class="mt-1 truncate text-xs text-themed-muted">
+                <div class="mt-0.5 truncate font-mono text-xs text-themed-muted">
                   {{ host.location || host.url }}
                 </div>
               </div>
             </div>
-            <span class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-themed px-2 py-1 text-xs text-themed-secondary">
-              <span :class="['h-2 w-2 rounded-full', getStatusClass(host.status)]"></span>
+            <span class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-themed px-2 py-1 text-xs font-mono text-themed-secondary">
+              <span :class="['h-1.5 w-1.5 rounded-full', getStatusClass(host.status)]"></span>
               {{ host.status }}
             </span>
           </div>
 
-          <div v-if="isAdmin && scope === 'hosted'" class="mt-4 rounded-lg bg-themed-secondary px-3 py-2">
+          <div v-if="isAdmin && scope === 'hosted'" class="mt-4 rounded-lg border border-themed bg-themed-secondary px-3 py-2">
             <div class="mb-1 text-[11px] font-medium uppercase tracking-wide text-themed-muted">
               {{ t('resources.hosts.owner') }}
             </div>
@@ -507,28 +498,28 @@ onActivated(() => {
               <UserAvatar :avatar-style="host.owner.avatarStyle" :badge-id="host.owner.avatarBadgeId || null" :size="28" :username="host.owner.username" />
               <div class="min-w-0">
                 <div class="truncate text-sm font-medium text-themed">{{ host.owner.username }}</div>
-                <div class="text-xs text-themed-muted">UID: {{ host.owner.id }}</div>
+                <div class="font-mono text-xs text-themed-muted">UID: {{ host.owner.id }}</div>
               </div>
             </div>
             <span v-else class="text-sm text-themed-muted">-</span>
           </div>
 
           <div class="mt-4 grid grid-cols-3 gap-2 text-sm">
-            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+            <div class="rounded-lg border border-themed bg-themed-secondary px-3 py-2">
               <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ t('admin.hosts.cpu') }}</div>
-              <div class="mt-1 font-semibold text-themed">{{ host.cpuAllowanceMax || 0 }}%</div>
+              <div class="mt-1 font-mono font-semibold tabular-nums text-themed">{{ host.cpuAllowanceMax || 0 }}%</div>
             </div>
-            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+            <div class="rounded-lg border border-themed bg-themed-secondary px-3 py-2">
               <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ t('admin.hosts.memory') }}</div>
-              <div class="mt-1 font-semibold text-themed">{{ formatMemory(host.memoryMax || 0) }}</div>
+              <div class="mt-1 font-mono font-semibold tabular-nums text-themed">{{ formatMemory(host.memoryMax || 0) }}</div>
             </div>
-            <div class="rounded-lg bg-themed-secondary px-3 py-2">
+            <div class="rounded-lg border border-themed bg-themed-secondary px-3 py-2">
               <div class="text-[11px] font-medium uppercase tracking-wide text-themed-muted">{{ t('admin.hosts.instances') }}</div>
-              <div class="mt-1 font-semibold text-themed">{{ host.instanceCount }}</div>
+              <div class="mt-1 font-mono font-semibold tabular-nums text-themed">{{ host.instanceCount }}</div>
             </div>
           </div>
 
-          <div v-if="scope === 'mine' || (isAdmin && scope === 'hosted')" class="mt-4 flex items-center justify-end gap-2" @click.stop>
+          <div v-if="scope === 'mine' || (isAdmin && scope === 'hosted')" class="mt-4 flex items-center justify-end gap-2 border-t border-themed pt-3" @click.stop>
             <template v-if="scope === 'mine'">
               <button type="button" class="btn-ghost btn-sm" @click.stop="testHost(host)">{{ t('admin.hosts.test') }}</button>
               <button type="button" class="btn-ghost btn-sm text-error" @click.stop="deleteHost(host)">{{ t('admin.hosts.delete') }}</button>
@@ -549,10 +540,7 @@ onActivated(() => {
 
       <div class="card hidden overflow-hidden lg:block">
         <table class="w-full table-fixed">
-          <thead
-            class="border-b"
-            :class="themeStore.isDark ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-50 border-gray-200'"
-          >
+          <thead class="border-b border-themed bg-themed-secondary">
             <tr>
               <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.hosts.name') }}</th>
               <th v-if="isAdmin && scope === 'hosted'" class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('resources.hosts.owner') }}</th>
@@ -562,31 +550,21 @@ onActivated(() => {
               <th v-if="scope === 'mine' || (isAdmin && scope === 'hosted')" class="text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.hosts.actions') }}</th>
             </tr>
           </thead>
-          <tbody
-            class="divide-y"
-            :class="themeStore.isDark ? 'divide-gray-800' : 'divide-gray-100'"
-          >
+          <tbody class="divide-y divide-themed">
             <tr
               v-for="host in hosts"
               :key="host.id"
-              class="transition-colors cursor-pointer"
-              :class="themeStore.isDark ? 'hover:bg-gray-900/30' : 'hover:bg-gray-50'"
+              class="cursor-pointer transition-colors hover:bg-themed-hover"
               @click="goToDetail(host)"
             >
               <td class="px-4 py-3 whitespace-nowrap">
                 <div class="flex items-center gap-2">
                   <FlagIcon :code="host.countryCode" size="sm" />
-                  <div>
-                    <div
-                      class="font-medium"
-                      :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-900'"
-                    >
+                  <div class="min-w-0">
+                    <div class="truncate font-medium text-themed">
                       {{ host.name?.toUpperCase() || host.name }}
                     </div>
-                    <div
-                      class="text-xs"
-                      :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-500'"
-                    >
+                    <div class="truncate font-mono text-xs text-themed-muted">
                       {{ host.location || host.url }}
                     </div>
                   </div>
@@ -596,28 +574,28 @@ onActivated(() => {
               <td v-if="isAdmin && scope === 'hosted'" class="px-4 py-3 whitespace-nowrap">
                 <div v-if="host.owner" class="flex items-center gap-2">
                   <UserAvatar :avatar-style="host.owner.avatarStyle" :badge-id="host.owner.avatarBadgeId || null" :size="28" :username="host.owner.username" />
-                  <div>
-                    <div class="text-sm font-medium text-themed">{{ host.owner.username }}</div>
-                    <div class="text-xs text-themed-muted">UID: {{ host.owner.id }}</div>
+                  <div class="min-w-0">
+                    <div class="truncate text-sm font-medium text-themed">{{ host.owner.username }}</div>
+                    <div class="font-mono text-xs text-themed-muted">UID: {{ host.owner.id }}</div>
                   </div>
                 </div>
                 <span v-else class="text-themed-muted">-</span>
               </td>
               <td class="px-4 py-3 whitespace-nowrap">
-                <span class="inline-flex items-center gap-1.5">
-                  <span :class="['w-2 h-2 rounded-full', getStatusClass(host.status)]"></span>
-                  <span class="text-sm text-themed-secondary">{{ host.status }}</span>
+                <span class="inline-flex items-center gap-1.5 rounded-full border border-themed px-2 py-0.5 text-xs font-mono text-themed-secondary">
+                  <span :class="['h-1.5 w-1.5 rounded-full', getStatusClass(host.status)]"></span>
+                  {{ host.status }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-sm text-themed-secondary whitespace-nowrap">
-                <div>
+              <td class="px-4 py-3 text-themed-secondary whitespace-nowrap">
+                <div class="font-mono text-xs tabular-nums">
                   {{ t('admin.hosts.cpu') }}: {{ host.cpuAllowanceMax || 0 }}%
                 </div>
-                <div>
+                <div class="font-mono text-xs tabular-nums">
                   {{ t('admin.hosts.memory') }}: {{ formatMemory(host.memoryMax || 0) }}
                 </div>
               </td>
-              <td class="px-4 py-3 text-sm text-themed-secondary whitespace-nowrap">{{ host.instanceCount }}</td>
+              <td class="px-4 py-3 text-sm font-mono tabular-nums text-themed-secondary whitespace-nowrap">{{ host.instanceCount }}</td>
               <td v-if="scope === 'mine' || (isAdmin && scope === 'hosted')" class="px-4 py-3 text-right whitespace-nowrap" @click.stop>
                 <div class="flex items-center justify-end gap-2">
                   <template v-if="scope === 'mine'">
@@ -638,7 +616,7 @@ onActivated(() => {
             </tr>
           </tbody>
         </table>
-    </div>
+      </div>
     </template>
 
     <!-- 分页 -->
@@ -647,10 +625,7 @@ onActivated(() => {
         <span>{{ t('admin.users.totalRecords', { count: total }) }}</span>
         <select
           v-model="pageSize"
-          class="text-sm rounded-md border-0 py-1 pl-2 pr-7 ring-1 ring-inset focus:ring-2 focus:ring-primary cursor-pointer"
-          :class="themeStore.isDark 
-            ? 'bg-gray-800 text-gray-300 ring-gray-700' 
-            : 'bg-gray-50 text-gray-700 ring-gray-200'"
+          class="cursor-pointer rounded-md border border-themed bg-themed-surface py-1 pl-2 pr-7 text-sm text-themed-secondary focus:outline-none focus:ring-2 focus:ring-primary-500"
           @change="handlePageSizeChange"
         >
           <option :value="10">10 / {{ t('common.page') }}</option>
@@ -663,37 +638,31 @@ onActivated(() => {
         <!-- 上一页 -->
         <button
           :disabled="page <= 1"
-          class="px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          :class="themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'"
+          class="rounded-md p-1.5 transition-colors hover:bg-themed-hover disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           @click="goToPage(page - 1)"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        
+
         <!-- 页码按钮 -->
         <template v-for="(p, idx) in pageNumbers" :key="idx">
           <span v-if="p === '...'" class="px-2 py-1 text-themed-muted">…</span>
           <button
             v-else
-            class="min-w-[32px] px-2 py-1 rounded transition-colors"
-            :class="[
-              p === page
-                ? (themeStore.isDark ? 'bg-accent text-white dark:text-black' : 'bg-accent text-white dark:text-black')
-                : (themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100')
-            ]"
+            class="min-w-[32px] rounded-md px-2 py-1 text-sm font-mono tabular-nums transition-colors"
+            :class="p === page ? 'bg-primary-500 text-white' : 'text-themed-secondary hover:bg-themed-hover'"
             @click="goToPage(p)"
           >
             {{ p }}
           </button>
         </template>
-        
+
         <!-- 下一页 -->
         <button
           :disabled="page >= totalPages"
-          class="px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          :class="themeStore.isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'"
+          class="rounded-md p-1.5 transition-colors hover:bg-themed-hover disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           @click="goToPage(page + 1)"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -707,16 +676,16 @@ onActivated(() => {
   <!-- 托管准入条件不满足弹窗 -->
   <div
     v-if="showAccessDeniedModal"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     @click.self="showAccessDeniedModal = false"
   >
-    <div
-      class="w-full max-w-md mx-4 p-6 rounded-xl shadow-xl"
-      :class="themeStore.isDark ? 'bg-gray-900' : 'bg-white'"
-    >
+    <div class="w-full max-w-md rounded-xl border border-themed bg-themed-surface p-6 shadow-2xl">
       <div class="flex items-center gap-3 mb-4">
-        <div class="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-          <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div
+          class="flex h-10 w-10 items-center justify-center rounded-full"
+          :class="themeStore.isDark ? 'bg-amber-500/15' : 'bg-amber-100'"
+        >
+          <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
         </div>
@@ -727,13 +696,8 @@ onActivated(() => {
 
       <div class="space-y-3 mb-6">
         <!-- 条件：至少拥有过1台实例 -->
-        <div
-          class="flex items-center gap-3 p-3 rounded-lg"
-          :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'"
-        >
-          <div
-            class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-gray-300 dark:bg-gray-600"
-          >
+        <div class="flex items-center gap-3 rounded-lg border border-themed bg-themed-secondary p-3">
+          <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-themed-hover text-themed-muted">
             <span class="text-xs font-medium">!</span>
           </div>
           <div class="flex-1">
@@ -756,3 +720,25 @@ onActivated(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Nimbus interactive card: subtle hover-lift */
+.nimbus-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.nimbus-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgb(16 24 40 / 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-card {
+    transition: none;
+  }
+
+  .nimbus-card:hover {
+    transform: none;
+  }
+}
+</style>

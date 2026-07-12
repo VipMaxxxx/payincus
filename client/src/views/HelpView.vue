@@ -239,24 +239,24 @@ function formatDate(dateStr: string | null | undefined): string {
         <div>
           <!-- 详情视图加载中时显示返回按钮和骨架屏 -->
           <template v-if="isDetailView && !articleLoaded">
-            <div class="mb-2">
-              <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="mb-3">
+              <button class="btn btn-secondary btn-sm" @click="goBack">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
-                <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+                {{ $t('help.backToHelp') }}
               </button>
             </div>
             <div class="h-7 w-48 bg-themed-tertiary rounded animate-pulse"></div>
           </template>
           <!-- 详情视图加载完成后显示文章标题 -->
           <template v-else-if="isDetailView && currentArticle">
-            <div class="mb-2">
-              <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="mb-3">
+              <button class="btn btn-secondary btn-sm" @click="goBack">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
-                <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+                {{ $t('help.backToHelp') }}
               </button>
             </div>
             <h1 class="page-title">{{ currentArticle.title }}</h1>
@@ -271,12 +271,12 @@ function formatDate(dateStr: string | null | undefined): string {
           </template>
           <!-- 详情视图 404 情况 -->
           <template v-else-if="isDetailView && articleLoaded && !currentArticle">
-            <div class="mb-2">
-              <button class="flex items-center gap-2 text-themed-muted hover:text-themed transition-colors" @click="goBack">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="mb-3">
+              <button class="btn btn-secondary btn-sm" @click="goBack">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
-                <span class="text-sm">{{ $t('help.backToHelp') }}</span>
+                {{ $t('help.backToHelp') }}
               </button>
             </div>
             <h1 class="page-title">{{ $t('help.title') }}</h1>
@@ -297,8 +297,8 @@ function formatDate(dateStr: string | null | undefined): string {
               :placeholder="$t('help.search')"
             />
             <div class="flex gap-2">
-              <button class="btn-primary flex-1 sm:flex-none" type="submit">{{ $t('common.search') }}</button>
-              <button v-if="searchQuery" class="btn-secondary flex-1 sm:flex-none" type="button" @click="clearSearch">{{ $t('help.clearSearch') }}</button>
+              <button class="btn btn-primary flex-1 sm:flex-none" type="submit">{{ $t('common.search') }}</button>
+              <button v-if="searchQuery" class="btn btn-secondary flex-1 sm:flex-none" type="button" @click="clearSearch">{{ $t('help.clearSearch') }}</button>
             </div>
           </div>
         </form>
@@ -325,7 +325,7 @@ function formatDate(dateStr: string | null | undefined): string {
         <div v-if="loadError" class="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-500">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>{{ loadError }}</span>
-            <button class="btn-secondary btn-sm" @click="loadArticles">{{ $t('common.retry') }}</button>
+            <button class="btn btn-secondary btn-sm" @click="loadArticles">{{ $t('common.retry') }}</button>
           </div>
         </div>
 
@@ -339,8 +339,13 @@ function formatDate(dateStr: string | null | undefined): string {
         </div>
       
         <!-- Empty -->
-        <div v-else-if="articles.length === 0" class="card p-8 text-center text-themed-muted">
-          {{ searchQuery.trim() ? $t('help.noSearchResults') : $t('help.noArticles') }}
+        <div v-else-if="articles.length === 0" class="card p-12 text-center">
+          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-themed-secondary">
+            <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          </div>
+          <p class="text-sm text-themed-muted">{{ searchQuery.trim() ? $t('help.noSearchResults') : $t('help.noArticles') }}</p>
         </div>
 
         <!-- Article List -->
@@ -354,17 +359,15 @@ function formatDate(dateStr: string | null | undefined): string {
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <h3 class="break-words text-themed font-medium hover:text-accent transition-colors">{{ article.title }}</h3>
-                <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-themed-muted">
-                  <span 
-                    class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-themed-tertiary rounded text-xs"
-                  >
-                    <span 
-                      class="w-2 h-2 rounded-full" 
+                <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-themed-muted">
+                  <span class="inline-flex items-center gap-1.5 rounded-full bg-themed-secondary px-2.5 py-0.5 text-xs font-medium text-themed-secondary">
+                    <span
+                      class="h-1.5 w-1.5 rounded-full"
                       :style="{ backgroundColor: getCategoryColor(article.category) }"
                     ></span>
                     {{ getCategoryLabel(article.category) }}
                   </span>
-                  <span>{{ formatDate(article.updated_at) }}</span>
+                  <span class="font-mono text-xs tabular-nums">{{ formatDate(article.updated_at) }}</span>
                 </div>
               </div>
               <svg class="mt-0.5 h-5 w-5 shrink-0 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -378,9 +381,9 @@ function formatDate(dateStr: string | null | undefined): string {
         <div v-if="totalPages > 1" class="flex flex-col gap-3 text-sm text-themed-muted sm:flex-row sm:items-center sm:justify-between">
           <span>{{ $t('help.totalArticles', { count: total }) }}</span>
           <div class="flex items-center gap-2">
-            <button :disabled="page <= 1" class="btn-ghost btn-sm" @click="page--; loadArticles()">{{ $t('instance.prevPage') }}</button>
-            <span>{{ page }} / {{ totalPages }}</span>
-            <button :disabled="page >= totalPages" class="btn-ghost btn-sm" @click="page++; loadArticles()">{{ $t('instance.nextPage') }}</button>
+            <button :disabled="page <= 1" class="btn btn-ghost btn-sm" @click="page--; loadArticles()">{{ $t('instance.prevPage') }}</button>
+            <span class="font-mono tabular-nums">{{ page }} / {{ totalPages }}</span>
+            <button :disabled="page >= totalPages" class="btn btn-ghost btn-sm" @click="page++; loadArticles()">{{ $t('instance.nextPage') }}</button>
           </div>
         </div>
       </template>
@@ -402,7 +405,7 @@ function formatDate(dateStr: string | null | undefined): string {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p class="text-themed-muted mb-4">{{ articleError || $t('help.articleNotFound') }}</p>
-          <button class="btn-secondary" @click="goBack">{{ $t('help.backToHelp') }}</button>
+          <button class="btn btn-secondary" @click="goBack">{{ $t('help.backToHelp') }}</button>
         </div>
 
         <!-- Article Content -->
@@ -514,9 +517,10 @@ function formatDate(dateStr: string | null | undefined): string {
 .markdown-body code {
   background: var(--bg-tertiary);
   padding: 0.2em 0.4em;
-  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
   font-size: 0.9em;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
 }
 
 /* 代码块 */
@@ -532,6 +536,7 @@ function formatDate(dateStr: string | null | undefined): string {
 .markdown-body pre code {
   background: none;
   padding: 0;
+  border: none;
   font-size: 0.875em;
   line-height: 1.6;
 }
@@ -599,7 +604,7 @@ function formatDate(dateStr: string | null | undefined): string {
   display: inline-block;
   padding: 0.2em 0.4em;
   font-size: 0.85em;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -807,26 +812,26 @@ function formatDate(dateStr: string | null | undefined): string {
 </style>
 
 <style scoped>
-/* 帮助中心列表：与门面统一的分类 chip 与文章卡（纯黑白 Apple） */
+/* 帮助中心分类 chip —— Nimbus 段式胶囊（干净靛蓝/白） */
 .help-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
+  height: 32px;
   padding: 0 14px;
-  border-radius: 10px;
+  border-radius: 9999px;
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 .help-chip:hover {
   border-color: var(--border-hover);
   color: var(--text-primary);
 }
-/* 选中态用 accent 反色文字，深浅色都可读（修复暗色白底白字） */
+/* 选中态用 accent（靛蓝）反色文字，深浅色都可读（修复暗色白底白字） */
 .help-chip.active {
   background: var(--accent);
   border-color: var(--accent);
@@ -834,14 +839,22 @@ function formatDate(dateStr: string | null | undefined): string {
 }
 .help-chip-count {
   opacity: 0.6;
-  font-size: 12px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .help-article-card {
-  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 .help-article-card:hover {
   border-color: var(--border-hover);
   transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 </style>

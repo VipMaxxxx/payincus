@@ -987,7 +987,7 @@ function _getQuotaPercent(used, limit) {
 </script>
 
 <template>
-  <div class="kawaii-page space-y-6 animate-fade-in">
+  <div class="kawaii-page nimbus-view space-y-6 animate-fade-in">
     <!-- 页面头部 -->
     <div class="page-header flex-col sm:flex-row gap-4 sm:gap-0">
       <div>
@@ -1004,13 +1004,13 @@ function _getQuotaPercent(used, limit) {
 
     <!-- Tab 切换 -->
     <div class="border-b border-themed overflow-x-auto">
-      <nav class="flex flex-nowrap gap-3 sm:gap-4 md:gap-6 min-w-max">
+      <nav class="flex flex-nowrap gap-1 sm:gap-2 min-w-max">
         <button
           :class="[
-            'pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
+            '-mb-px flex-shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
             activeTab === 'users'
-              ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
-              : 'border-transparent text-themed-muted hover:text-themed-secondary'
+              ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+              : 'border-transparent text-themed-muted hover:text-themed'
           ]"
           @click="switchTab('users')"
         >
@@ -1021,10 +1021,10 @@ function _getQuotaPercent(used, limit) {
         </button>
         <button
           :class="[
-            'pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
+            '-mb-px flex-shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
             activeTab === 'invites'
-              ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
-              : 'border-transparent text-themed-muted hover:text-themed-secondary'
+              ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+              : 'border-transparent text-themed-muted hover:text-themed'
           ]"
           @click="switchTab('invites')"
         >
@@ -1035,10 +1035,10 @@ function _getQuotaPercent(used, limit) {
         </button>
         <button
           :class="[
-            'pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
+            '-mb-px flex-shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
             activeTab === 'linkedAccounts'
-              ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
-              : 'border-transparent text-themed-muted hover:text-themed-secondary'
+              ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+              : 'border-transparent text-themed-muted hover:text-themed'
           ]"
           @click="switchTab('linkedAccounts')"
         >
@@ -1046,10 +1046,10 @@ function _getQuotaPercent(used, limit) {
         </button>
         <button
           :class="[
-            'pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
+            '-mb-px flex-shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
             activeTab === 'userVipLevels'
-              ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
-              : 'border-transparent text-themed-muted hover:text-themed-secondary'
+              ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+              : 'border-transparent text-themed-muted hover:text-themed'
           ]"
           @click="switchTab('userVipLevels')"
         >
@@ -1057,10 +1057,10 @@ function _getQuotaPercent(used, limit) {
         </button>
         <button
           :class="[
-            'pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
+            '-mb-px flex-shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
             activeTab === 'vipBenefits'
-              ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
-              : 'border-transparent text-themed-muted hover:text-themed-secondary'
+              ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+              : 'border-transparent text-themed-muted hover:text-themed'
           ]"
           @click="switchTab('vipBenefits')"
         >
@@ -1141,7 +1141,7 @@ function _getQuotaPercent(used, limit) {
                 <div class="min-w-0">
                   <div class="truncate text-sm font-medium text-themed">{{ user.username }}</div>
                   <div class="truncate text-xs text-themed-muted">{{ user.email || t('admin.users.noEmail') }}</div>
-                  <div class="mt-1 font-mono text-xs text-themed-muted">#{{ user.id }}</div>
+                  <div class="mt-1 font-mono tabular-nums text-xs text-themed-muted">#{{ user.id }}</div>
                 </div>
               </div>
               <div class="flex shrink-0 flex-col items-end gap-1">
@@ -1158,7 +1158,7 @@ function _getQuotaPercent(used, limit) {
               <div class="rounded-md bg-themed-tertiary p-2">
                 <div>{{ t('admin.users.balance') }}</div>
                 <button
-                  class="mt-1 text-left text-sm font-medium hover:text-primary"
+                  class="mt-1 text-left font-mono tabular-nums text-sm font-medium hover:text-primary"
                   :class="user.balance > 0 ? 'text-success' : 'text-themed-muted'"
                   :title="t('admin.users.viewBalance')"
                   @click="openBalanceModal(user)"
@@ -1172,7 +1172,7 @@ function _getQuotaPercent(used, limit) {
               <div class="rounded-md bg-themed-tertiary p-2">
                 <div>{{ t('admin.users.points') }}</div>
                 <button
-                  class="mt-1 text-left text-sm font-medium hover:text-primary"
+                  class="mt-1 text-left font-mono tabular-nums text-sm font-medium hover:text-primary"
                   :class="user.points > 0 ? 'text-themed' : 'text-themed-muted'"
                   :title="t('admin.users.adjustPoints')"
                   @click="openPointsModal(user)"
@@ -1186,7 +1186,7 @@ function _getQuotaPercent(used, limit) {
               <div class="rounded-md bg-themed-tertiary p-2">
                 <div>{{ t('admin.users.hostingBalance') }}</div>
                 <button
-                  class="mt-1 text-left text-sm font-medium hover:text-primary"
+                  class="mt-1 text-left font-mono tabular-nums text-sm font-medium hover:text-primary"
                   :class="user.hostingBalance > 0 ? 'text-success' : 'text-themed-muted'"
                   :title="t('admin.users.viewHostingBalance')"
                   @click="openHostingBalanceModal(user)"
@@ -1305,23 +1305,23 @@ function _getQuotaPercent(used, limit) {
           <table class="w-full min-w-[1100px]">
             <thead class="bg-themed-tertiary border-b border-themed">
               <tr>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">ID</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.userInfo') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.role') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.status') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.balance') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.points') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.hostingBalance') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.allInstances') }}</th>
-                <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('admin.users.userActivity') }}</th>
-                <th class="text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3 whitespace-nowrap">{{ t('common.actions') }}</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">ID</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('admin.users.userInfo') }}</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('admin.users.role') }}</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('admin.users.status') }}</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('admin.users.balance') }}</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('admin.users.points') }}</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('admin.users.hostingBalance') }}</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('admin.users.allInstances') }}</th>
+                <th class="text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('admin.users.userActivity') }}</th>
+                <th class="text-right text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5 whitespace-nowrap">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
               <tr v-for="user in users" :key="user.id" class="hover:bg-themed-hover transition-colors">
                 <!-- 用户 ID -->
                 <td class="px-4 py-3 whitespace-nowrap">
-                  <span class="text-sm font-mono text-themed-muted">#{{ user.id }}</span>
+                  <span class="text-sm font-mono tabular-nums text-themed-muted">#{{ user.id }}</span>
                 </td>
                 <!-- 用户信息 -->
                 <td class="px-4 py-3 whitespace-nowrap">
@@ -1355,7 +1355,7 @@ function _getQuotaPercent(used, limit) {
                 <td class="px-4 py-3 whitespace-nowrap">
                   <div class="flex flex-col gap-0.5">
                     <button 
-                      class="text-sm font-medium hover:text-primary transition-colors text-left"
+                      class="text-sm font-mono tabular-nums font-medium hover:text-primary transition-colors text-left"
                       :class="user.balance > 0 ? 'text-success' : 'text-themed-muted'"
                       :title="t('admin.users.viewBalance')"
                       @click="openBalanceModal(user)"
@@ -1375,7 +1375,7 @@ function _getQuotaPercent(used, limit) {
                 <td class="px-4 py-3 whitespace-nowrap">
                   <div class="flex flex-col gap-0.5">
                     <button 
-                      class="text-sm font-medium hover:text-primary transition-colors text-left"
+                      class="text-sm font-mono tabular-nums font-medium hover:text-primary transition-colors text-left"
                       :class="user.points > 0 ? 'text-themed' : 'text-themed-muted'"
                       :title="t('admin.users.adjustPoints')"
                       @click="openPointsModal(user)"
@@ -1395,7 +1395,7 @@ function _getQuotaPercent(used, limit) {
                 <td class="px-4 py-3 whitespace-nowrap">
                   <div class="flex flex-col gap-0.5">
                     <button 
-                      class="text-sm font-medium hover:text-primary transition-colors text-left"
+                      class="text-sm font-mono tabular-nums font-medium hover:text-primary transition-colors text-left"
                       :class="user.hostingBalance > 0 ? 'text-success' : 'text-themed-muted'"
                       :title="t('admin.users.viewHostingBalance')"
                       @click="openHostingBalanceModal(user)"
@@ -1654,7 +1654,7 @@ function _getQuotaPercent(used, limit) {
           >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <div class="font-mono text-sm font-medium text-themed break-all">{{ invite.code }}</div>
+                <div class="font-mono tabular-nums text-sm font-medium text-themed break-all">{{ invite.code }}</div>
                 <div class="mt-2">
                   <span :class="['badge whitespace-nowrap', getInviteStatus(invite).class]">{{ getInviteStatus(invite).label }}</span>
                 </div>
@@ -1718,18 +1718,18 @@ function _getQuotaPercent(used, limit) {
           <table class="w-full table-fixed">
             <thead class="bg-themed-tertiary border-b border-themed">
               <tr>
-                <th class="w-[18%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.inviteCode') }}</th>
-                <th class="w-[15%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.createdBy') }}</th>
-                <th class="w-[12%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.inviteStatus') }}</th>
-                <th class="w-[15%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.usedBy') }}</th>
-                <th class="w-[15%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.createdAt') }}</th>
-                <th class="w-[15%] text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('admin.users.usedExpireAt') }}</th>
-                <th class="w-[10%] text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ t('common.actions') }}</th>
+                <th class="w-[18%] text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5">{{ t('admin.users.inviteCode') }}</th>
+                <th class="w-[15%] text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5">{{ t('admin.users.createdBy') }}</th>
+                <th class="w-[12%] text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5">{{ t('admin.users.inviteStatus') }}</th>
+                <th class="w-[15%] text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5">{{ t('admin.users.usedBy') }}</th>
+                <th class="w-[15%] text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5">{{ t('admin.users.createdAt') }}</th>
+                <th class="w-[15%] text-left text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5">{{ t('admin.users.usedExpireAt') }}</th>
+                <th class="w-[10%] text-right text-[11px] font-mono font-medium text-themed-faint uppercase tracking-wider px-4 py-2.5">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-themed">
               <tr v-for="invite in invites" :key="invite.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 font-mono text-sm text-themed-secondary truncate" :title="invite.code">{{ invite.code }}</td>
+                <td class="px-4 py-3 font-mono tabular-nums text-sm text-themed-secondary truncate" :title="invite.code">{{ invite.code }}</td>
                 <td class="px-4 py-3 text-sm">
                   <div v-if="invite.createdByUsername" class="flex items-center gap-2">
                     <UserAvatar
@@ -1948,7 +1948,7 @@ function _getQuotaPercent(used, limit) {
                 @click="toggleIPGroup(group.ip)"
               >
                 <div class="flex items-center gap-3">
-                  <span class="font-mono text-sm text-themed">{{ group.ip }}</span>
+                  <span class="font-mono tabular-nums text-sm text-themed">{{ group.ip }}</span>
                   <span class="badge badge-warning">{{ group.userCount }} {{ t('admin.users.usersCount') }}</span>
                   <span class="text-xs text-themed-muted">{{ group.totalLogins }} {{ t('admin.users.loginsCount') }}</span>
                 </div>
@@ -1968,7 +1968,7 @@ function _getQuotaPercent(used, limit) {
                     class="px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 text-sm hover:bg-themed-hover"
                   >
                     <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <span class="font-mono text-themed-muted">#{{ user.id }}</span>
+                      <span class="font-mono tabular-nums text-themed-muted">#{{ user.id }}</span>
                       <span class="font-medium text-themed">{{ user.username }}</span>
                       <span v-if="user.email" class="text-themed-muted truncate max-w-[200px]">{{ user.email }}</span>
                       <span :class="['badge', user.status === 'active' ? 'badge-success' : 'badge-error']">{{ user.status === 'active' ? t('admin.users.active') : t('admin.users.banned') }}</span>
@@ -2021,7 +2021,7 @@ function _getQuotaPercent(used, limit) {
                     class="px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 text-sm hover:bg-themed-hover"
                   >
                     <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <span class="font-mono text-themed-muted">#{{ user.id }}</span>
+                      <span class="font-mono tabular-nums text-themed-muted">#{{ user.id }}</span>
                       <span class="font-medium text-themed">{{ user.username }}</span>
                       <span class="text-themed-secondary truncate max-w-[200px]">{{ user.email }}</span>
                       <span :class="['badge', user.status === 'active' ? 'badge-success' : 'badge-error']">{{ user.status === 'active' ? t('admin.users.active') : t('admin.users.banned') }}</span>
@@ -2074,7 +2074,7 @@ function _getQuotaPercent(used, limit) {
                     class="px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 text-sm hover:bg-themed-hover"
                   >
                     <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <span class="font-mono text-themed-muted">#{{ user.id }}</span>
+                      <span class="font-mono tabular-nums text-themed-muted">#{{ user.id }}</span>
                       <span class="font-medium text-themed">{{ user.username }}</span>
                       <span v-if="user.email" class="text-themed-muted truncate max-w-[200px]">{{ user.email }}</span>
                       <span :class="['badge', user.status === 'active' ? 'badge-success' : 'badge-error']">{{ user.status === 'active' ? t('admin.users.active') : t('admin.users.banned') }}</span>
@@ -2180,13 +2180,13 @@ function _getQuotaPercent(used, limit) {
             <div class="modal-body">
               <!-- 单个邀请码 -->
               <template v-if="newInviteCode">
-                <div class="bg-themed-tertiary rounded-lg p-4 font-mono text-lg text-center text-themed tracking-wider mb-3">
+                <div class="bg-themed-tertiary rounded-lg p-4 font-mono tabular-nums text-lg text-center text-themed tracking-wider mb-3">
                   {{ newInviteCode }}
                 </div>
               </template>
               <!-- 批量邀请码 -->
               <template v-else-if="newInviteCodes.length > 0">
-                <div class="bg-themed-tertiary rounded-lg p-3 font-mono text-sm text-themed max-h-64 overflow-y-auto mb-3">
+                <div class="bg-themed-tertiary rounded-lg p-3 font-mono tabular-nums text-sm text-themed max-h-64 overflow-y-auto mb-3">
                   <div v-for="(code, index) in newInviteCodes" :key="code" class="py-1 px-2 hover:bg-themed-hover rounded flex items-center justify-between">
                     <span>{{ index + 1 }}. {{ code }}</span>
                   </div>
@@ -2361,7 +2361,7 @@ function _getQuotaPercent(used, limit) {
                   <div class="flex items-start justify-between gap-4">
                     <div class="min-w-0 flex-1 space-y-1">
                       <!-- IP 地址 -->
-                      <div class="font-mono text-themed">{{ record.ip }}</div>
+                      <div class="font-mono tabular-nums text-themed">{{ record.ip }}</div>
                       <!-- 地理位置 -->
                       <div v-if="record.country" class="text-xs text-themed-muted">
                         {{ formatLocation(record) }}
@@ -2479,28 +2479,28 @@ function _getQuotaPercent(used, limit) {
             <div class="flex gap-1 border-b border-themed px-4">
               <button
                 class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px"
-                :class="balanceTab === 'overview' ? 'border-accent text-accent' : 'border-transparent text-themed-muted hover:text-themed'"
+                :class="balanceTab === 'overview' ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400' : 'border-transparent text-themed-muted hover:text-themed'"
                 @click="switchBalanceTab('overview')"
               >
                 {{ t('admin.users.balanceOverview') }}
               </button>
               <button
                 class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px"
-                :class="balanceTab === 'logs' ? 'border-accent text-accent' : 'border-transparent text-themed-muted hover:text-themed'"
+                :class="balanceTab === 'logs' ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400' : 'border-transparent text-themed-muted hover:text-themed'"
                 @click="switchBalanceTab('logs')"
               >
                 {{ t('admin.users.balanceLogs') }}
               </button>
               <button
                 class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px"
-                :class="balanceTab === 'recharge' ? 'border-accent text-accent' : 'border-transparent text-themed-muted hover:text-themed'"
+                :class="balanceTab === 'recharge' ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400' : 'border-transparent text-themed-muted hover:text-themed'"
                 @click="switchBalanceTab('recharge')"
               >
                 {{ t('admin.users.rechargeRecords') }}
               </button>
               <button
                 class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px"
-                :class="balanceTab === 'adjust' ? 'border-accent text-accent' : 'border-transparent text-themed-muted hover:text-themed'"
+                :class="balanceTab === 'adjust' ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400' : 'border-transparent text-themed-muted hover:text-themed'"
                 @click="switchBalanceTab('adjust')"
               >
                 {{ t('admin.users.adjustBalance') }}
@@ -2517,22 +2517,22 @@ function _getQuotaPercent(used, limit) {
                 </div>
                 <div v-else class="grid grid-cols-3 gap-4">
                   <div class="bg-themed-tertiary rounded-lg p-4 text-center">
-                    <div class="text-2xl font-semibold" :class="balanceInfo.balance > 0 ? 'text-success' : 'text-themed'">
+                    <div class="font-mono text-2xl font-semibold tabular-nums" :class="balanceInfo.balance > 0 ? 'text-success' : 'text-themed'">
                       ¥{{ balanceInfo.balance.toFixed(2) }}
                     </div>
-                    <div class="text-xs text-themed-muted mt-1">{{ t('admin.users.currentBalance') }}</div>
+                    <div class="mt-2 text-[11px] font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.users.currentBalance') }}</div>
                   </div>
                   <div class="bg-themed-tertiary rounded-lg p-4 text-center">
-                    <div class="text-2xl font-semibold text-themed">
+                    <div class="font-mono text-2xl font-semibold tabular-nums text-themed">
                       ¥{{ balanceInfo.totalRecharge.toFixed(2) }}
                     </div>
-                    <div class="text-xs text-themed-muted mt-1">{{ t('admin.users.totalRecharge') }}</div>
+                    <div class="mt-2 text-[11px] font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.users.totalRecharge') }}</div>
                   </div>
                   <div class="bg-themed-tertiary rounded-lg p-4 text-center">
-                    <div class="text-2xl font-semibold text-warning">
+                    <div class="font-mono text-2xl font-semibold tabular-nums text-warning">
                       ¥{{ balanceInfo.totalConsume.toFixed(2) }}
                     </div>
-                    <div class="text-xs text-themed-muted mt-1">{{ t('admin.users.totalConsume') }}</div>
+                    <div class="mt-2 text-[11px] font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.users.totalConsume') }}</div>
                   </div>
                 </div>
               </div>
@@ -2573,7 +2573,7 @@ function _getQuotaPercent(used, limit) {
                           <span class="badge" :class="log.amount > 0 ? 'badge-success' : 'badge-error'">
                             {{ getBalanceLogTypeLabel(log.type) }}
                           </span>
-                          <span class="font-medium" :class="log.amount > 0 ? 'text-success' : 'text-error'">
+                          <span class="font-mono tabular-nums font-medium" :class="log.amount > 0 ? 'text-success' : 'text-error'">
                             {{ log.amount > 0 ? '+' : '' }}¥{{ log.amount.toFixed(2) }}
                           </span>
                         </div>
@@ -2626,7 +2626,7 @@ function _getQuotaPercent(used, limit) {
                     >
                       <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2">
-                          <span class="font-medium text-themed">¥{{ record.amount.toFixed(2) }}</span>
+                          <span class="font-mono tabular-nums font-medium text-themed">¥{{ record.amount.toFixed(2) }}</span>
                           <span :class="['badge', getRechargeStatusStyle(record.status)]">
                             {{ t('wallet.status.' + record.status) }}
                           </span>
@@ -2760,7 +2760,7 @@ function _getQuotaPercent(used, limit) {
               <!-- 当前积分 -->
               <div class="flex items-center justify-between py-2 px-3 bg-themed-tertiary rounded-lg">
                 <span class="text-sm text-themed-muted">{{ t('admin.users.currentPoints') }}</span>
-                <span class="text-lg font-semibold text-themed">{{ pointsUser?.points || 0 }}</span>
+                <span class="font-mono tabular-nums text-lg font-semibold text-themed">{{ pointsUser?.points || 0 }}</span>
               </div>
               <!-- 调整数量 -->
               <div>
@@ -2826,21 +2826,21 @@ function _getQuotaPercent(used, limit) {
             <div class="flex gap-1 border-b border-themed px-4">
               <button
                 class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px"
-                :class="hostingBalanceTab === 'overview' ? 'border-accent text-accent' : 'border-transparent text-themed-muted hover:text-themed'"
+                :class="hostingBalanceTab === 'overview' ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400' : 'border-transparent text-themed-muted hover:text-themed'"
                 @click="switchHostingBalanceTab('overview')"
               >
                 {{ t('admin.users.hostingBalanceOverview') }}
               </button>
               <button
                 class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px"
-                :class="hostingBalanceTab === 'logs' ? 'border-accent text-accent' : 'border-transparent text-themed-muted hover:text-themed'"
+                :class="hostingBalanceTab === 'logs' ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400' : 'border-transparent text-themed-muted hover:text-themed'"
                 @click="switchHostingBalanceTab('logs')"
               >
                 {{ t('admin.users.hostingBalanceLogs') }}
               </button>
               <button
                 class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px"
-                :class="hostingBalanceTab === 'adjust' ? 'border-accent text-accent' : 'border-transparent text-themed-muted hover:text-themed'"
+                :class="hostingBalanceTab === 'adjust' ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400' : 'border-transparent text-themed-muted hover:text-themed'"
                 @click="switchHostingBalanceTab('adjust')"
               >
                 {{ t('admin.users.adjustHostingBalance') }}
@@ -2857,16 +2857,16 @@ function _getQuotaPercent(used, limit) {
                 </div>
                 <div v-else class="grid grid-cols-2 gap-4">
                   <div class="bg-themed-tertiary rounded-lg p-4 text-center">
-                    <div class="text-2xl font-semibold" :class="hostingBalanceInfo.available > 0 ? 'text-success' : 'text-themed'">
+                    <div class="font-mono text-2xl font-semibold tabular-nums" :class="hostingBalanceInfo.available > 0 ? 'text-success' : 'text-themed'">
                       ¥{{ hostingBalanceInfo.available.toFixed(2) }}
                     </div>
-                    <div class="text-xs text-themed-muted mt-1">{{ t('admin.users.availableBalance') }}</div>
+                    <div class="mt-2 text-[11px] font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.users.availableBalance') }}</div>
                   </div>
                   <div class="bg-themed-tertiary rounded-lg p-4 text-center">
-                    <div class="text-2xl font-semibold text-warning">
+                    <div class="font-mono text-2xl font-semibold tabular-nums text-warning">
                       ¥{{ hostingBalanceInfo.frozen.toFixed(2) }}
                     </div>
-                    <div class="text-xs text-themed-muted mt-1">{{ t('admin.users.frozenBalance') }}</div>
+                    <div class="mt-2 text-[11px] font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.users.frozenBalance') }}</div>
                   </div>
                 </div>
               </div>
@@ -2894,7 +2894,7 @@ function _getQuotaPercent(used, limit) {
                           <div class="mt-2 text-xs text-themed-muted">{{ new Date(log.createdAt).toLocaleString() }}</div>
                         </div>
                         <div
-                          class="shrink-0 text-right text-sm font-semibold"
+                          class="shrink-0 text-right font-mono text-sm font-semibold tabular-nums"
                           :class="log.type === 'income' || log.type === 'unfreeze' ? 'text-success' : 'text-error'"
                         >
                           {{ log.type === 'income' || log.type === 'unfreeze' ? '+' : '-' }}¥{{ log.amount.toFixed(2) }}
@@ -2910,13 +2910,13 @@ function _getQuotaPercent(used, limit) {
 
                   <div class="hidden overflow-hidden rounded-lg border border-themed lg:block">
                     <table class="w-full table-fixed text-sm">
-                      <thead class="text-xs text-themed-muted uppercase border-b border-themed">
+                      <thead class="text-[11px] font-mono uppercase tracking-wider text-themed-faint border-b border-themed">
                         <tr>
-                          <th class="w-[24%] text-left py-2 px-2">{{ t('admin.users.logTime') }}</th>
-                          <th class="w-[18%] text-left py-2 px-2">{{ t('admin.users.logType') }}</th>
-                          <th class="w-[16%] text-right py-2 px-2">{{ t('admin.users.logAmount') }}</th>
-                          <th class="w-[14%] text-left py-2 px-2">{{ t('admin.users.logStatus') }}</th>
-                          <th class="w-[28%] text-left py-2 px-2">{{ t('admin.users.logDescription') }}</th>
+                          <th class="w-[24%] text-left py-2.5 px-2 font-medium">{{ t('admin.users.logTime') }}</th>
+                          <th class="w-[18%] text-left py-2.5 px-2 font-medium">{{ t('admin.users.logType') }}</th>
+                          <th class="w-[16%] text-right py-2.5 px-2 font-medium">{{ t('admin.users.logAmount') }}</th>
+                          <th class="w-[14%] text-left py-2.5 px-2 font-medium">{{ t('admin.users.logStatus') }}</th>
+                          <th class="w-[28%] text-left py-2.5 px-2 font-medium">{{ t('admin.users.logDescription') }}</th>
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-themed">
@@ -2927,7 +2927,7 @@ function _getQuotaPercent(used, limit) {
                           <td class="py-2 px-2 whitespace-nowrap">
                             <span class="badge badge-default">{{ getHostingLogTypeLabel(log.type, log.actionType) }}</span>
                           </td>
-                          <td class="py-2 px-2 text-right whitespace-nowrap" :class="log.type === 'income' || log.type === 'unfreeze' ? 'text-success' : 'text-error'">
+                          <td class="py-2 px-2 text-right whitespace-nowrap font-mono tabular-nums" :class="log.type === 'income' || log.type === 'unfreeze' ? 'text-success' : 'text-error'">
                             {{ log.type === 'income' || log.type === 'unfreeze' ? '+' : '-' }}¥{{ log.amount.toFixed(2) }}
                           </td>
                           <td class="py-2 px-2 whitespace-nowrap">
@@ -2968,11 +2968,11 @@ function _getQuotaPercent(used, limit) {
                 <!-- 当前余额 -->
                 <div class="grid grid-cols-2 gap-4 py-2 px-3 bg-themed-tertiary rounded-lg">
                   <div class="text-center">
-                    <div class="text-lg font-semibold text-success">¥{{ hostingBalanceInfo.available.toFixed(2) }}</div>
+                    <div class="font-mono text-lg font-semibold tabular-nums text-success">¥{{ hostingBalanceInfo.available.toFixed(2) }}</div>
                     <div class="text-xs text-themed-muted">{{ t('admin.users.availableBalance') }}</div>
                   </div>
                   <div class="text-center">
-                    <div class="text-lg font-semibold text-warning">¥{{ hostingBalanceInfo.frozen.toFixed(2) }}</div>
+                    <div class="font-mono text-lg font-semibold tabular-nums text-warning">¥{{ hostingBalanceInfo.frozen.toFixed(2) }}</div>
                     <div class="text-xs text-themed-muted">{{ t('admin.users.frozenBalance') }}</div>
                   </div>
                 </div>
@@ -3053,3 +3053,14 @@ function _getQuotaPercent(used, limit) {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+</style>

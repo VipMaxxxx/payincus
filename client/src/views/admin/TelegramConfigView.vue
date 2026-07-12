@@ -549,15 +549,15 @@ async function testChannel(id: number) {
       </div>
     </div>
 
-    <div class="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700">
+    <div class="flex gap-1 overflow-x-auto border-b border-themed-border">
       <router-link
         v-for="item in systemSettingsNavigationItems"
         :key="item.path"
         :to="item.path"
-        class="shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+        class="shrink-0 border-b-2 px-4 py-3 text-sm font-medium transition-colors duration-150"
         :class="route.path === item.path
-          ? 'border-black dark:border-white text-gray-900 dark:text-white'
-          : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+          : 'border-transparent text-themed-muted hover:text-themed'"
       >
         {{ t(item.labelKey) }}
       </router-link>
@@ -572,21 +572,23 @@ async function testChannel(id: number) {
 
     <div v-else class="space-y-6">
       <div class="card p-6">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-themed font-medium">{{ t('telegramConfig.footer.title') }}</h3>
+        <div class="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-themed-border pb-4">
+          <div>
+            <h3 class="text-sm font-semibold text-themed">{{ t('telegramConfig.footer.title') }}</h3>
+            <p class="mt-1 text-sm text-themed-muted">
+              {{ t('telegramConfig.footer.description') }}
+            </p>
+          </div>
           <button
             type="button"
-            class="btn-primary text-sm px-4 py-1.5"
+            class="btn-primary btn-sm shrink-0"
             :disabled="!hasFooterTelegramLinkChanges || savingFooterTelegramLink"
             @click="saveFooterTelegramLink"
           >
             {{ savingFooterTelegramLink ? t('common.saving') : t('common.save') }}
           </button>
         </div>
-        <p class="text-sm text-themed-muted mb-6">
-          {{ t('telegramConfig.footer.description') }}
-        </p>
-        <div class="space-y-2">
+        <div class="max-w-xl space-y-2">
           <label class="block text-sm text-themed-secondary">
             {{ t('telegramConfig.footer.link') }}
           </label>
@@ -603,22 +605,24 @@ async function testChannel(id: number) {
       </div>
 
       <div class="card p-6">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-themed font-medium">{{ t('telegramConfig.bot.title') }}</h3>
+        <div class="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-themed-border pb-4">
+          <div>
+            <h3 class="text-sm font-semibold text-themed">{{ t('telegramConfig.bot.title') }}</h3>
+            <p class="mt-1 text-sm text-themed-muted">
+              {{ t('telegramConfig.bot.description') }}
+            </p>
+          </div>
           <button
             type="button"
-            class="btn-primary text-sm px-4 py-1.5"
+            class="btn-primary btn-sm shrink-0"
             :disabled="!hasTelegramBotChanges || savingTelegramBot"
             @click="saveTelegramBot"
           >
             {{ savingTelegramBot ? t('common.saving') : t('common.save') }}
           </button>
         </div>
-        <p class="text-sm text-themed-muted mb-6">
-          {{ t('telegramConfig.bot.description') }}
-        </p>
 
-        <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50 mb-6">
+        <div class="mb-6 flex items-center justify-between gap-4 rounded-xl border border-themed-border bg-themed-secondary/30 p-4">
           <div class="flex-1">
               <label class="text-sm font-medium text-themed">{{ t('telegramConfig.bot.enableBinding') }}</label>
             <p class="text-xs text-themed-muted mt-1">
@@ -672,7 +676,7 @@ async function testChannel(id: number) {
             <input
               v-model="form.telegram_bot_token"
               type="password"
-              class="input"
+              class="input font-mono"
               placeholder="********"
             />
             <p class="text-xs text-themed-muted">{{ t('telegramConfig.bot.tokenHint') }}</p>
@@ -685,12 +689,12 @@ async function testChannel(id: number) {
               <input
                 v-model="form.telegram_webhook_secret"
                 type="password"
-                class="input flex-1"
+                class="input flex-1 font-mono"
                 placeholder="********"
               />
               <button
                 type="button"
-                class="btn-secondary text-sm px-4 py-2 whitespace-nowrap"
+                class="btn-secondary btn-sm whitespace-nowrap"
                 @click="generateTelegramWebhookSecret"
               >
                 {{ t('telegramConfig.bot.generateSecret') }}
@@ -705,16 +709,16 @@ async function testChannel(id: number) {
           </div>
         </div>
 
-        <div class="mt-4 p-3 rounded-lg bg-themed-secondary/50 border border-themed">
+        <div class="mt-5 rounded-xl border border-themed-border bg-themed-secondary/30 p-4">
           <p class="text-sm text-themed-muted">
-              {{ t('telegramConfig.webhook.address') }}<code class="px-1 py-0.5 rounded bg-black/20">{{ telegramWebhookUrl }}</code>
+              {{ t('telegramConfig.webhook.address') }}<code class="rounded bg-themed-tertiary px-1.5 py-0.5 font-mono text-xs text-themed">{{ telegramWebhookUrl }}</code>
           </p>
           <p class="text-xs text-themed-muted mt-1">
               {{ t('telegramConfig.webhook.addressHint') }}
           </p>
         </div>
 
-        <div class="mt-4 p-4 rounded-lg bg-themed-secondary/40 border border-themed">
+        <div class="mt-4 rounded-xl border border-themed-border bg-themed-secondary/30 p-4">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
             <div>
               <h4 class="text-sm font-medium text-themed">{{ t('telegramConfig.webhook.title') }}</h4>
@@ -725,7 +729,7 @@ async function testChannel(id: number) {
             <div class="flex flex-wrap gap-2">
               <button
                 type="button"
-                class="btn-secondary text-sm px-3 py-1.5"
+                class="btn-secondary btn-sm"
                 :disabled="!canManageTelegramWebhook || settingTelegramWebhook"
                 @click="setupTelegramWebhook"
               >
@@ -733,7 +737,7 @@ async function testChannel(id: number) {
               </button>
               <button
                 type="button"
-                class="btn-ghost text-sm px-3 py-1.5"
+                class="btn-ghost btn-sm"
                 :disabled="!form.telegram_bot_token || checkingTelegramWebhook"
                 @click="() => checkTelegramWebhook()"
               >
@@ -741,7 +745,7 @@ async function testChannel(id: number) {
               </button>
               <button
                 type="button"
-                class="btn-ghost text-sm px-3 py-1.5 text-error"
+                class="btn-ghost btn-sm text-error"
                 :disabled="!form.telegram_bot_token || deletingTelegramWebhook"
                 @click="deleteTelegramWebhook"
               >
@@ -753,7 +757,7 @@ async function testChannel(id: number) {
           <div v-if="telegramWebhookInfo" class="space-y-2 text-xs text-themed-muted">
             <p>
                 {{ t('telegramConfig.webhook.currentAddress') }}
-                <span class="text-themed break-all">{{ telegramWebhookInfo.url || t('common.notSet') }}</span>
+                <span class="text-themed break-all font-mono">{{ telegramWebhookInfo.url || t('common.notSet') }}</span>
             </p>
               <p>{{ t('telegramConfig.webhook.pendingUpdates', { count: telegramWebhookInfo.pending_update_count ?? 0 }) }}</p>
             <p v-if="telegramWebhookInfo.max_connections">
@@ -771,7 +775,7 @@ async function testChannel(id: number) {
           </div>
         </div>
 
-        <div class="mt-4 p-4 rounded-lg bg-themed-secondary/40 border border-themed">
+        <div class="mt-4 rounded-xl border border-themed-border bg-themed-secondary/30 p-4">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
             <div>
               <h4 class="text-sm font-medium text-themed">{{ t('telegramConfig.group.title') }}</h4>
@@ -814,7 +818,7 @@ async function testChannel(id: number) {
               <input
                 v-model="form.telegram_group_chat_id"
                 type="text"
-                class="input"
+                class="input font-mono"
                 placeholder="-1001234567890"
               />
               <p class="text-xs text-themed-muted">
@@ -844,7 +848,7 @@ async function testChannel(id: number) {
                   type="number"
                   min="0"
                   step="0.01"
-                  class="input pl-8"
+                  class="input pl-8 tabular-nums"
                   placeholder="0.00"
                 />
               </div>
@@ -860,7 +864,7 @@ async function testChannel(id: number) {
                   type="number"
                   min="0"
                   step="0.01"
-                  class="input pl-8"
+                  class="input pl-8 tabular-nums"
                   placeholder="0.00"
                 />
               </div>
@@ -876,7 +880,7 @@ async function testChannel(id: number) {
                   min="1"
                   max="10080"
                   step="1"
-                  class="input pr-16"
+                  class="input pr-16 tabular-nums"
                   placeholder="30"
                 />
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">
@@ -890,7 +894,7 @@ async function testChannel(id: number) {
           </div>
         </div>
 
-        <div class="mt-4 p-4 rounded-lg bg-themed-secondary/40 border border-themed">
+        <div class="mt-4 rounded-xl border border-themed-border bg-themed-secondary/30 p-4">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
             <div>
               <h4 class="text-sm font-medium text-themed">{{ t('telegramConfig.vipGroup.title') }}</h4>
@@ -933,7 +937,7 @@ async function testChannel(id: number) {
               <input
                 v-model="form.telegram_vip_group_chat_id"
                 type="text"
-                class="input"
+                class="input font-mono"
                 placeholder="-1001234567890"
               />
               <p class="text-xs text-themed-muted">
@@ -963,7 +967,7 @@ async function testChannel(id: number) {
                   type="number"
                   min="0"
                   step="0.01"
-                  class="input pl-8"
+                  class="input pl-8 tabular-nums"
                   placeholder="0.00"
                 />
               </div>
@@ -979,7 +983,7 @@ async function testChannel(id: number) {
                   type="number"
                   min="0"
                   step="0.01"
-                  class="input pl-8"
+                  class="input pl-8 tabular-nums"
                   placeholder="0.00"
                 />
               </div>
@@ -995,7 +999,7 @@ async function testChannel(id: number) {
                   min="1"
                   max="10080"
                   step="1"
-                  class="input pr-16"
+                  class="input pr-16 tabular-nums"
                   placeholder="30"
                 />
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">
@@ -1011,16 +1015,16 @@ async function testChannel(id: number) {
       </div>
 
       <div class="card p-4">
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-3">
+        <div class="flex flex-col gap-3 border-b border-themed-border pb-4 mb-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h3 class="text-themed font-medium">{{ t('telegramConfig.bindings.title') }}</h3>
+            <h3 class="text-sm font-semibold text-themed">{{ t('telegramConfig.bindings.title') }}</h3>
             <p class="text-sm text-themed-muted mt-1">
               {{ t('telegramConfig.bindings.description') }}
             </p>
           </div>
           <button
             type="button"
-            class="btn-secondary text-xs px-3 py-1.5"
+            class="btn-secondary btn-sm shrink-0"
             :disabled="bindingLoading"
             @click="() => loadTelegramBindings()"
           >
@@ -1038,7 +1042,7 @@ async function testChannel(id: number) {
           />
           <button
             type="button"
-            class="btn-primary text-xs px-3 py-2"
+            class="btn-primary btn-sm"
             :disabled="bindingLoading"
             @click="searchTelegramBindings"
           >
@@ -1046,7 +1050,7 @@ async function testChannel(id: number) {
           </button>
           <button
             type="button"
-            class="btn-ghost text-xs px-3 py-2"
+            class="btn-ghost btn-sm"
             :disabled="bindingLoading || !bindingSearch"
             @click="resetTelegramBindingSearch"
           >
@@ -1068,8 +1072,13 @@ async function testChannel(id: number) {
         <div v-if="bindingLoading" class="text-sm text-themed-muted p-3 rounded-lg bg-themed-secondary/30">
           {{ t('common.loading') }}
         </div>
-        <div v-else-if="telegramBindings.length === 0" class="text-sm text-themed-muted p-3 rounded-lg bg-themed-secondary/30">
-          {{ t('telegramConfig.bindings.empty') }}
+        <div v-else-if="telegramBindings.length === 0" class="flex flex-col items-center gap-2 rounded-lg bg-themed-secondary/30 px-4 py-8 text-center">
+          <span class="flex h-10 w-10 items-center justify-center rounded-full bg-themed-tertiary text-themed-muted">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+            </svg>
+          </span>
+          <p class="text-sm text-themed-muted">{{ t('telegramConfig.bindings.empty') }}</p>
         </div>
         <div v-else class="space-y-2">
           <div
@@ -1091,13 +1100,13 @@ async function testChannel(id: number) {
                     {{ binding.user.status === 'active' ? t('telegramConfig.bindings.active') : t('telegramConfig.bindings.banned') }}
                   </span>
                   <span class="text-xs text-themed-muted">{{ t('telegramConfig.bindings.userId', { id: binding.userId }) }}</span>
-                  <span class="text-xs text-themed-muted">Telegram {{ formatTelegramName(binding) }}</span>
-                  <span class="text-xs text-themed-muted">ID {{ binding.telegramUserId }}</span>
+                  <span class="text-xs text-themed-muted font-mono">Telegram {{ formatTelegramName(binding) }}</span>
+                  <span class="text-xs text-themed-muted font-mono">ID {{ binding.telegramUserId }}</span>
                 </div>
                 <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-themed-muted">
                   <span v-if="binding.user?.email" class="break-all">{{ binding.user.email }}</span>
-                  <span>{{ t('telegramConfig.bindings.recharge', { amount: formatMoney(binding.stats.totalRecharge) }) }}</span>
-                  <span>{{ t('telegramConfig.bindings.consume', { amount: formatMoney(binding.stats.totalConsume) }) }}</span>
+                  <span class="tabular-nums">{{ t('telegramConfig.bindings.recharge', { amount: formatMoney(binding.stats.totalRecharge) }) }}</span>
+                  <span class="tabular-nums">{{ t('telegramConfig.bindings.consume', { amount: formatMoney(binding.stats.totalConsume) }) }}</span>
                   <span>{{ t('telegramConfig.bindings.boundAt', { time: formatDate(binding.boundAt) }) }}</span>
                 </div>
               </div>
@@ -1137,7 +1146,7 @@ async function testChannel(id: number) {
           <div class="flex gap-2">
             <button
               type="button"
-              class="btn-ghost text-xs px-3 py-1.5"
+              class="btn-ghost btn-sm"
               :disabled="bindingLoading || telegramBindingsPage <= 1"
               @click="goTelegramBindingsPage(telegramBindingsPage - 1)"
             >
@@ -1145,7 +1154,7 @@ async function testChannel(id: number) {
             </button>
             <button
               type="button"
-              class="btn-ghost text-xs px-3 py-1.5"
+              class="btn-ghost btn-sm"
               :disabled="bindingLoading || telegramBindingsPage >= telegramBindingsTotalPages"
               @click="goTelegramBindingsPage(telegramBindingsPage + 1)"
             >
@@ -1156,15 +1165,22 @@ async function testChannel(id: number) {
       </div>
 
       <div class="card p-6">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-themed font-medium">{{ t('telegramConfig.channels.title') }}</h3>
-          <button type="button" class="btn-primary text-sm px-4 py-1.5" @click="openCreateChannelForm">{{ t('telegramConfig.channels.add') }}</button>
+        <div class="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-themed-border pb-4">
+          <div>
+            <h3 class="text-sm font-semibold text-themed">{{ t('telegramConfig.channels.title') }}</h3>
+            <p class="mt-1 text-sm text-themed-muted">{{ t('telegramConfig.channels.description') }}</p>
+          </div>
+          <button type="button" class="btn-primary btn-sm shrink-0" @click="openCreateChannelForm">{{ t('telegramConfig.channels.add') }}</button>
         </div>
-        <p class="text-sm text-themed-muted mb-4">{{ t('telegramConfig.channels.description') }}</p>
 
         <div v-if="channelLoading" class="text-sm text-themed-muted">{{ t('common.loading') }}</div>
-        <div v-else-if="globalChannels.length === 0" class="text-sm text-themed-muted p-3 rounded-lg bg-themed-secondary/30">
-          {{ t('telegramConfig.channels.empty') }}
+        <div v-else-if="globalChannels.length === 0" class="flex flex-col items-center gap-2 rounded-lg bg-themed-secondary/30 px-4 py-8 text-center">
+          <span class="flex h-10 w-10 items-center justify-center rounded-full bg-themed-tertiary text-themed-muted">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+            </svg>
+          </span>
+          <p class="text-sm text-themed-muted">{{ t('telegramConfig.channels.empty') }}</p>
         </div>
         <div v-else class="space-y-3">
           <div
@@ -1183,7 +1199,7 @@ async function testChannel(id: number) {
                 </span>
                 <span class="text-xs text-themed-muted">{{ t('telegramConfig.channels.boundPackages', { count: ch.boundPackages }) }}</span>
               </div>
-              <p class="text-xs text-themed-muted mt-0.5">{{ ch.configPreview }}</p>
+              <p class="text-xs text-themed-muted mt-0.5 font-mono">{{ ch.configPreview }}</p>
             </div>
             <div class="flex items-center gap-2 md:ml-4">
               <button
@@ -1217,12 +1233,12 @@ async function testChannel(id: number) {
             </div>
             <div class="space-y-1">
               <label class="block text-xs text-themed-muted">Chat ID *</label>
-              <input v-model="channelForm.chatId" type="text" class="input" :placeholder="t('telegramConfig.channels.chatIdPlaceholder')" />
+              <input v-model="channelForm.chatId" type="text" class="input font-mono" :placeholder="t('telegramConfig.channels.chatIdPlaceholder')" />
               <p class="text-xs text-themed-muted">{{ t('telegramConfig.channels.chatIdHint') }}</p>
             </div>
             <div class="md:col-span-2 space-y-1">
               <label class="block text-xs text-themed-muted">Bot Token {{ editingChannel ? t('telegramConfig.channels.keepUnchanged') : '*' }}</label>
-              <input v-model="channelForm.botToken" type="password" class="input" :placeholder="t('telegramConfig.channels.tokenPlaceholder')" />
+              <input v-model="channelForm.botToken" type="password" class="input font-mono" :placeholder="t('telegramConfig.channels.tokenPlaceholder')" />
             </div>
             <div class="md:col-span-2 flex items-center gap-2">
               <input id="telegramChannelEnabled" v-model="channelForm.enabled" type="checkbox" class="w-4 h-4 rounded" />
@@ -1237,7 +1253,7 @@ async function testChannel(id: number) {
           </div>
         </div>
 
-        <div class="mt-4 p-3 rounded-lg bg-themed-secondary/50 border border-themed">
+        <div class="mt-4 p-3 rounded-lg bg-themed-secondary/30 border border-themed-border">
           <p class="text-sm text-themed-muted">
             {{ t('telegramConfig.channels.needToken') }}
             <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" class="underline hover:text-themed">@BotFather</a>
@@ -1248,3 +1264,19 @@ async function testChannel(id: number) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.card {
+  transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+
+  .animate-fade-in {
+    animation: none;
+  }
+}
+</style>

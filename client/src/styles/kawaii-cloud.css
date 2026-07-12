@@ -6,39 +6,39 @@
      - 状态色 mint/amber 语义保留；中性色带冷 slate 偏色（刻意选，非默认灰）。
      ============================================================ */
   .light {
-    --kawaii-bg: #f5f6f8;
+    --kawaii-bg: #fbfbfc;
     --kawaii-surface: #ffffff;
-    --kawaii-surface-soft: #f1f4f6;
+    --kawaii-surface-soft: #f4f5f7;
     --kawaii-line: #e9ebf0;
     --kawaii-line-strong: #dfe2e9;
     --kawaii-text: #0b0e14;
     --kawaii-muted: #525a68;
-    --kawaii-primary: #4f46e5;
-    --kawaii-primary-strong: #4338ca;
+    --kawaii-primary: #5e6ad2;
+    --kawaii-primary-strong: #4f5bc9;
     --kawaii-pink: var(--kawaii-primary);
     --kawaii-mint: #16a34a;
     --kawaii-lavender: var(--kawaii-primary);
     --kawaii-amber: #c2770b;
     --kawaii-faint: #868e9c;
-    --kawaii-shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 4px 12px rgb(16 24 40 / 0.05);
+    --kawaii-shadow: 0 0 0 1px rgb(17 17 26 / .04), 0 1px 2px rgb(17 17 26 / .04), 0 8px 24px -14px rgb(17 17 26 / .12);
   }
 
   .dark {
-    --kawaii-bg: #08090c;
-    --kawaii-surface: #111319;
-    --kawaii-surface-soft: #171a21;
+    --kawaii-bg: #08090a;
+    --kawaii-surface: #131417;
+    --kawaii-surface-soft: #17181b;
     --kawaii-line: #1e222b;
     --kawaii-line-strong: #2a303b;
     --kawaii-text: #eef1f6;
     --kawaii-muted: #98a1b0;
-    --kawaii-primary: #8b87ff;
-    --kawaii-primary-strong: #a6a2ff;
+    --kawaii-primary: #8b8ff5;
+    --kawaii-primary-strong: #a3a6f8;
     --kawaii-pink: var(--kawaii-primary);
     --kawaii-mint: #3ad07f;
     --kawaii-lavender: var(--kawaii-primary);
     --kawaii-amber: #e0a13a;
     --kawaii-faint: #6b7280;
-    --kawaii-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 10px 30px rgb(0 0 0 / 0.4);
+    --kawaii-shadow: 0 0 0 1px rgb(255 255 255 / .05), 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px -14px rgb(0 0 0 / .6);
   }
 }
 
@@ -55,20 +55,12 @@
     --text-secondary: var(--kawaii-muted);
     --text-tertiary: color-mix(in srgb, var(--kawaii-muted) 78%, transparent);
     --accent: var(--kawaii-primary);
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.84), rgb(247 251 255 / 0.96) 34%, var(--kawaii-bg)),
-      radial-gradient(circle at 16% 8%, rgb(191 219 254 / 0.7), transparent 28%),
-      radial-gradient(circle at 86% 18%, rgb(251 207 232 / 0.48), transparent 24%);
-    background-size: 100% 100%, 130% 130%, 140% 140%;
-    animation: kawaii-bg-drift 20s ease-in-out infinite alternate;
+    background: var(--kawaii-bg);
   }
 
   .dark .kawaii-public-shell,
   .dark .kawaii-app-shell {
-    background:
-      linear-gradient(180deg, rgb(8 18 34 / 0.96), rgb(7 17 31 / 0.98) 44%, var(--kawaii-bg)),
-      radial-gradient(circle at 18% 10%, rgb(37 99 235 / 0.28), transparent 30%),
-      radial-gradient(circle at 82% 16%, rgb(139 92 246 / 0.22), transparent 26%);
+    background: var(--kawaii-bg);
   }
 
   .kawaii-public-glow {
@@ -94,7 +86,7 @@
   .kawaii-footer-logo {
     border-color: var(--kawaii-line) !important;
     background: linear-gradient(135deg, color-mix(in srgb, var(--kawaii-surface) 90%, transparent), color-mix(in srgb, var(--kawaii-surface-soft) 88%, transparent)) !important;
-    box-shadow: 0 10px 24px rgb(59 130 246 / 0.12);
+    box-shadow: 0 10px 24px rgb(17 17 26 / 0.12);
   }
 
   .kawaii-public-nav-link,
@@ -120,7 +112,7 @@
   .kawaii-menu-panel {
     border-color: var(--kawaii-line) !important;
     background: var(--kawaii-surface) !important;
-    box-shadow: 0 18px 46px rgb(59 130 246 / 0.18);
+    box-shadow: 0 18px 46px rgb(17 17 26 / 0.18);
     backdrop-filter: blur(18px) saturate(1.05);
     overflow: hidden;
   }
@@ -128,7 +120,7 @@
   .kawaii-header-cta {
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender)) !important;
     color: #fff !important;
-    box-shadow: 0 10px 26px rgb(59 130 246 / 0.24);
+    box-shadow: 0 10px 26px rgb(17 17 26 / 0.24);
   }
 
   .kawaii-header-cta:hover {
@@ -166,16 +158,16 @@
     inset: 0;
     pointer-events: none;
     background-image:
-      linear-gradient(rgb(59 130 246 / 0.055) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(59 130 246 / 0.045) 1px, transparent 1px);
+      linear-gradient(rgb(17 17 26 / 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(17 17 26 / 0.025) 1px, transparent 1px);
     background-size: 42px 42px;
     mask-image: radial-gradient(circle at 50% 36%, rgb(0 0 0 / 0.78), transparent 68%);
   }
 
   .dark .kawaii-auth-shell::before {
     background-image:
-      linear-gradient(rgb(147 197 253 / 0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(147 197 253 / 0.06) 1px, transparent 1px);
+      linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.03) 1px, transparent 1px);
   }
 
   .kawaii-page {
@@ -188,16 +180,16 @@
     inset: 0;
     pointer-events: none;
     background-image:
-      linear-gradient(rgb(59 130 246 / 0.055) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(59 130 246 / 0.045) 1px, transparent 1px);
+      linear-gradient(rgb(17 17 26 / 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(17 17 26 / 0.025) 1px, transparent 1px);
     background-size: 42px 42px;
     mask-image: linear-gradient(180deg, rgb(0 0 0 / 0.78), transparent 72%);
   }
 
   .dark .kawaii-page::before {
     background-image:
-      linear-gradient(rgb(147 197 253 / 0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(147 197 253 / 0.06) 1px, transparent 1px);
+      linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.03) 1px, transparent 1px);
   }
 
   .kawaii-card {
@@ -211,24 +203,24 @@
   .kawaii-card-soft {
     border: 1px solid var(--kawaii-line);
     background: color-mix(in srgb, var(--kawaii-surface-soft) 82%, transparent);
-    box-shadow: 0 10px 28px rgb(59 130 246 / 0.08);
+    box-shadow: var(--kawaii-shadow);
     transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background-color 180ms ease;
   }
 
   .dark .kawaii-card-soft {
-    box-shadow: 0 10px 30px rgb(0 0 0 / 0.22);
+    box-shadow: var(--kawaii-shadow);
   }
 
   .kawaii-card:hover,
   .kawaii-card-soft:hover {
-    border-color: var(--kawaii-line-strong);
-    box-shadow: 0 18px 44px rgb(59 130 246 / 0.14);
-    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--kawaii-primary) 40%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 40%, transparent), 0 4px 20px -6px color-mix(in srgb, var(--kawaii-primary) 30%, transparent) !important;
+    transform: translateY(-2px);
   }
 
   .dark .kawaii-card:hover,
   .dark .kawaii-card-soft:hover {
-    box-shadow: 0 18px 48px rgb(0 0 0 / 0.32);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 40%, transparent), 0 4px 20px -6px color-mix(in srgb, var(--kawaii-primary) 30%, transparent) !important;
   }
 
   .kawaii-topbar {
@@ -238,7 +230,7 @@
     background: color-mix(in srgb, var(--kawaii-surface) 78%, transparent) !important;
     color: var(--kawaii-text);
     backdrop-filter: blur(18px);
-    box-shadow: 0 10px 30px rgb(59 130 246 / 0.06);
+    box-shadow: 0 10px 30px rgb(17 17 26 / 0.06);
   }
 
   .dark .kawaii-topbar {
@@ -250,7 +242,7 @@
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--kawaii-surface) 94%, transparent), color-mix(in srgb, var(--kawaii-surface-soft) 70%, transparent)) !important;
     color: var(--kawaii-text);
-    box-shadow: 12px 0 34px rgb(59 130 246 / 0.08);
+    box-shadow: 12px 0 34px rgb(17 17 26 / 0.08);
     backdrop-filter: blur(18px);
     transition: width 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
   }
@@ -367,16 +359,16 @@
     inset: 3.5rem 0 0 0;
     pointer-events: none;
     background-image:
-      linear-gradient(rgb(59 130 246 / 0.045) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(59 130 246 / 0.035) 1px, transparent 1px);
+      linear-gradient(rgb(17 17 26 / 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(17 17 26 / 0.025) 1px, transparent 1px);
     background-size: 42px 42px;
     mask-image: linear-gradient(180deg, rgb(0 0 0 / 0.52), transparent 68%);
   }
 
   .dark .kawaii-workspace::before {
     background-image:
-      linear-gradient(rgb(147 197 253 / 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(147 197 253 / 0.045) 1px, transparent 1px);
+      linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.03) 1px, transparent 1px);
   }
 
   .kawaii-workspace > div {
@@ -406,7 +398,7 @@
     border: 1px solid var(--kawaii-line) !important;
     border-radius: 16px;
     background: color-mix(in srgb, var(--kawaii-surface) 90%, transparent) !important;
-    box-shadow: 0 12px 34px rgb(59 130 246 / 0.08);
+    box-shadow: 0 12px 34px rgb(17 17 26 / 0.08);
     backdrop-filter: blur(16px);
   }
 
@@ -423,7 +415,7 @@
   }
 
   .kawaii-auth-shell img {
-    box-shadow: 0 12px 30px rgb(59 130 246 / 0.16);
+    box-shadow: 0 12px 30px rgb(17 17 26 / 0.16);
   }
 
   .kawaii-app-shell .card-hover,
@@ -436,7 +428,7 @@
   .kawaii-app-shell .card-hover:hover,
   .kawaii-app-shell .card-interactive:hover {
     border-color: var(--kawaii-line-strong) !important;
-    box-shadow: 0 16px 40px rgb(59 130 246 / 0.12);
+    box-shadow: 0 16px 40px rgb(17 17 26 / 0.12);
     transform: translateY(-1px);
   }
 
@@ -482,7 +474,7 @@
     border-color: transparent !important;
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender)) !important;
     color: #fff !important;
-    box-shadow: 0 10px 24px rgb(59 130 246 / 0.18);
+    box-shadow: 0 10px 24px rgb(17 17 26 / 0.18);
   }
 
   .kawaii-auth-shell .btn-primary {
@@ -490,7 +482,7 @@
     border-radius: 14px !important;
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender)) !important;
     color: #fff !important;
-    box-shadow: 0 12px 26px rgb(59 130 246 / 0.22);
+    box-shadow: 0 12px 26px rgb(17 17 26 / 0.22);
   }
 
   .kawaii-app-shell .btn-secondary,
@@ -584,7 +576,7 @@
     border-color: transparent !important;
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender)) !important;
     color: #fff !important;
-    box-shadow: 0 12px 26px rgb(59 130 246 / 0.22) !important;
+    box-shadow: 0 12px 26px rgb(17 17 26 / 0.22) !important;
   }
 
   .modal-content .btn-secondary,
@@ -863,7 +855,7 @@
   .kawaii-primary-button {
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender));
     color: #fff;
-    box-shadow: 0 10px 26px rgb(59 130 246 / 0.26);
+    box-shadow: 0 10px 26px rgb(17 17 26 / 0.26);
     position: relative;
     overflow: hidden;
     isolation: isolate;
@@ -1069,7 +1061,7 @@
     border-radius: 0.68rem;
     background: rgb(255 255 255 / 0.74);
     box-shadow:
-      0 10px 26px rgb(59 130 246 / 0.13),
+      0 10px 26px rgb(17 17 26 / 0.13),
       inset 0 0 0 1px rgb(255 255 255 / 0.6);
     color: var(--kawaii-primary-strong);
     font-size: 0.68rem;
@@ -1156,14 +1148,14 @@
     min-height: 6.5rem;
     border: 1px solid color-mix(in srgb, var(--kawaii-line-strong) 72%, transparent);
     background: color-mix(in srgb, var(--kawaii-surface) 82%, transparent);
-    box-shadow: 0 14px 34px rgb(59 130 246 / 0.1);
+    box-shadow: 0 14px 34px rgb(17 17 26 / 0.1);
     backdrop-filter: blur(18px);
     transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
   }
 
   .kawaii-hero-feature-card:hover {
     border-color: color-mix(in srgb, var(--kawaii-primary) 34%, var(--kawaii-line));
-    box-shadow: 0 18px 42px rgb(59 130 246 / 0.16);
+    box-shadow: 0 18px 42px rgb(17 17 26 / 0.16);
     transform: translateY(-2px);
   }
 
@@ -1178,7 +1170,7 @@
     background:
       linear-gradient(145deg, rgb(255 255 255 / 0.94), rgb(231 242 255 / 0.82));
     color: var(--kawaii-primary-strong);
-    box-shadow: 0 8px 20px rgb(59 130 246 / 0.12);
+    box-shadow: 0 8px 20px rgb(17 17 26 / 0.12);
   }
 
   .dark .kawaii-hero-feature-icon {
@@ -1371,7 +1363,7 @@
   .kawaii-mini-cloud {
     border: 1px solid var(--kawaii-line);
     background: color-mix(in srgb, var(--kawaii-surface) 84%, transparent);
-    box-shadow: 0 12px 30px rgb(59 130 246 / 0.12);
+    box-shadow: 0 12px 30px rgb(17 17 26 / 0.12);
   }
 
   .kawaii-dashboard-hero {
@@ -1431,7 +1423,7 @@
     border-color: var(--kawaii-primary) !important;
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender)) !important;
     color: #fff !important;
-    box-shadow: 0 10px 24px rgb(59 130 246 / 0.2);
+    box-shadow: 0 10px 24px rgb(17 17 26 / 0.2);
   }
 
   .kawaii-tab-idle {
@@ -1455,7 +1447,7 @@
   .kawaii-stat-tile {
     border: 1px solid var(--kawaii-line);
     background: color-mix(in srgb, var(--kawaii-surface-soft) 72%, var(--kawaii-surface));
-    box-shadow: 0 8px 22px rgb(59 130 246 / 0.08);
+    box-shadow: 0 8px 22px rgb(17 17 26 / 0.08);
   }
 
   .kawaii-terminal-card {
@@ -1554,7 +1546,7 @@
       linear-gradient(112deg, color-mix(in srgb, var(--kawaii-primary) 7%, transparent) 0 18%, transparent 18% 100%),
       linear-gradient(145deg, transparent 0 62%, color-mix(in srgb, var(--kawaii-pink) 10%, transparent) 62% 100%),
       linear-gradient(135deg, color-mix(in srgb, var(--kawaii-surface) 90%, transparent), color-mix(in srgb, var(--kawaii-surface-soft) 68%, transparent));
-    box-shadow: 0 28px 76px rgb(59 130 246 / 0.13);
+    box-shadow: 0 28px 76px rgb(17 17 26 / 0.13);
     padding: clamp(1.5rem, 3vw, 3rem);
     backdrop-filter: blur(18px);
     animation: kawaii-card-reveal 560ms ease both;
@@ -1589,7 +1581,7 @@
     border: 1px solid color-mix(in srgb, var(--kawaii-primary) 24%, var(--kawaii-line));
     border-radius: 999px;
     background: color-mix(in srgb, var(--kawaii-surface) 76%, transparent);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.46), 0 10px 24px rgb(59 130 246 / 0.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.46), 0 10px 24px rgb(17 17 26 / 0.08);
     color: var(--kawaii-primary-strong);
     font-size: 0.75rem;
     font-weight: 800;
@@ -1635,7 +1627,7 @@
     z-index: 3;
     border: 1px solid var(--kawaii-line);
     background: color-mix(in srgb, var(--kawaii-surface) 82%, transparent);
-    box-shadow: 0 18px 42px rgb(59 130 246 / 0.14);
+    box-shadow: 0 18px 42px rgb(17 17 26 / 0.14);
     color: var(--kawaii-text);
     backdrop-filter: blur(18px);
   }
@@ -1709,7 +1701,7 @@
     border: 1px solid color-mix(in srgb, var(--kawaii-primary) 30%, var(--kawaii-line));
     border-radius: 0.95rem;
     background: color-mix(in srgb, var(--kawaii-surface) 84%, transparent);
-    box-shadow: 0 12px 32px rgb(59 130 246 / 0.13);
+    box-shadow: 0 12px 32px rgb(17 17 26 / 0.13);
     color: var(--kawaii-text);
     padding: 0.52rem 0.72rem;
     text-align: center;
@@ -1796,7 +1788,7 @@
     border: 1px solid color-mix(in srgb, var(--kawaii-primary) 20%, var(--kawaii-line));
     border-radius: 1.35rem;
     background: color-mix(in srgb, var(--kawaii-surface) 82%, transparent);
-    box-shadow: 0 16px 36px rgb(59 130 246 / 0.09);
+    box-shadow: 0 16px 36px rgb(17 17 26 / 0.09);
     padding: 1.15rem;
     outline: none;
     transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
@@ -1823,7 +1815,7 @@
   .kawaii-product-choice-card.is-active {
     border-color: color-mix(in srgb, var(--kawaii-primary) 46%, var(--kawaii-line));
     background: color-mix(in srgb, var(--kawaii-surface) 90%, transparent);
-    box-shadow: 0 24px 58px rgb(59 130 246 / 0.15);
+    box-shadow: 0 24px 58px rgb(17 17 26 / 0.15);
     transform: translateY(-3px);
   }
 
@@ -1897,7 +1889,7 @@
   .kawaii-product-choice-action.official {
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender));
     color: #fff;
-    box-shadow: 0 12px 26px rgb(59 130 246 / 0.18);
+    box-shadow: 0 12px 26px rgb(17 17 26 / 0.18);
   }
 
   .kawaii-product-choice-action.market {
@@ -1919,14 +1911,14 @@
 
   .kawaii-product-showcase.is-active-official .kawaii-network-node.official,
   .kawaii-product-showcase.is-active-market .kawaii-network-node.market {
-    box-shadow: 0 18px 40px rgb(59 130 246 / 0.2);
+    box-shadow: 0 18px 40px rgb(17 17 26 / 0.2);
     transform: translateY(-2px) scale(1.04);
   }
 
   .kawaii-product-showcase.is-active-official .kawaii-product-stage-terminal,
   .kawaii-product-showcase.is-active-market .kawaii-product-stage-terminal {
     border-color: color-mix(in srgb, var(--kawaii-primary) 36%, var(--kawaii-line));
-    box-shadow: 0 22px 50px rgb(59 130 246 / 0.16);
+    box-shadow: 0 22px 50px rgb(17 17 26 / 0.16);
     transform: translateY(-2px);
   }
 
@@ -1989,7 +1981,7 @@
     border: 1px solid var(--kawaii-line);
     background:
       linear-gradient(135deg, color-mix(in srgb, var(--kawaii-surface-soft) 82%, transparent), color-mix(in srgb, var(--kawaii-surface) 84%, transparent));
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.42), 0 22px 60px rgb(59 130 246 / 0.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.42), 0 22px 60px rgb(17 17 26 / 0.08);
     backdrop-filter: blur(16px);
   }
 
@@ -1999,7 +1991,7 @@
     border: 1px solid var(--kawaii-line);
     background:
       linear-gradient(135deg, color-mix(in srgb, var(--kawaii-surface) 90%, transparent), color-mix(in srgb, var(--kawaii-surface-soft) 66%, transparent));
-    box-shadow: 0 8px 22px rgb(59 130 246 / 0.08);
+    box-shadow: 0 8px 22px rgb(17 17 26 / 0.08);
     backdrop-filter: blur(14px);
     min-width: 0;
     max-width: 100%;
@@ -2033,7 +2025,7 @@
 
   .kawaii-package-card:hover {
     border-color: var(--kawaii-line-strong);
-    box-shadow: 0 16px 36px rgb(59 130 246 / 0.12);
+    box-shadow: 0 16px 36px rgb(17 17 26 / 0.12);
     transform: translateY(-3px);
   }
 
@@ -2076,7 +2068,7 @@
     background:
       linear-gradient(135deg, color-mix(in srgb, var(--kawaii-surface) 88%, transparent), color-mix(in srgb, var(--kawaii-surface-soft) 82%, transparent)),
       linear-gradient(140deg, color-mix(in srgb, var(--kawaii-primary) 14%, transparent), transparent 56%);
-    box-shadow: 0 18px 42px rgb(59 130 246 / 0.16);
+    box-shadow: 0 18px 42px rgb(17 17 26 / 0.16);
   }
 
   .kawaii-package-card > * {
@@ -2189,7 +2181,7 @@
     border: 1px solid color-mix(in srgb, var(--kawaii-primary) 26%, var(--kawaii-line));
     background: color-mix(in srgb, var(--kawaii-surface) 78%, transparent);
     color: var(--kawaii-text);
-    box-shadow: 0 10px 28px rgb(59 130 246 / 0.08);
+    box-shadow: 0 10px 28px rgb(17 17 26 / 0.08);
   }
 
   .kawaii-market-pill {
@@ -2208,7 +2200,7 @@
     border-color: transparent;
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender));
     color: #fff;
-    box-shadow: 0 8px 18px rgb(59 130 246 / 0.2);
+    box-shadow: 0 8px 18px rgb(17 17 26 / 0.2);
   }
 
   .kawaii-market-status {
@@ -2274,7 +2266,7 @@
   .kawaii-dashboard-page .rounded-2xl,
   .kawaii-dashboard-page .rounded-xl {
     background-color: color-mix(in srgb, var(--kawaii-surface-soft) 70%, transparent) !important;
-    box-shadow: 0 8px 22px rgb(59 130 246 / 0.08);
+    box-shadow: 0 8px 22px rgb(17 17 26 / 0.08);
   }
 
   .kawaii-wallet-page [class*="text-zinc-950"],
@@ -2355,7 +2347,7 @@
     border: 1px solid var(--kawaii-line);
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--kawaii-surface) 90%, transparent), color-mix(in srgb, var(--kawaii-surface-soft) 64%, transparent));
-    box-shadow: 0 10px 24px rgb(59 130 246 / 0.09);
+    box-shadow: 0 10px 24px rgb(17 17 26 / 0.09);
   }
 
   .kawaii-route-enter-active,
@@ -2497,22 +2489,11 @@
 
   /* User console kawaii refresh: keep business layout, align surfaces with the anime cloud home page. */
   .kawaii-app-shell {
-    background:
-      linear-gradient(rgb(59 130 246 / 0.042) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(59 130 246 / 0.036) 1px, transparent 1px),
-      radial-gradient(circle at 9% 6%, color-mix(in srgb, var(--kawaii-primary) 19%, transparent), transparent 28%),
-      radial-gradient(circle at 92% 10%, color-mix(in srgb, var(--kawaii-pink) 18%, transparent), transparent 26%),
-      linear-gradient(135deg, color-mix(in srgb, var(--kawaii-bg) 92%, #ffffff), color-mix(in srgb, var(--kawaii-bg) 78%, #fff7fb));
-    background-size: 52px 52px, 52px 52px, auto, auto, auto;
+    background: var(--kawaii-bg);
   }
 
   .dark .kawaii-app-shell {
-    background:
-      linear-gradient(rgb(147 197 253 / 0.052) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(147 197 253 / 0.042) 1px, transparent 1px),
-      radial-gradient(circle at 9% 6%, rgb(37 99 235 / 0.25), transparent 30%),
-      radial-gradient(circle at 92% 10%, rgb(139 92 246 / 0.18), transparent 27%),
-      linear-gradient(135deg, #07111f, #0a1628 54%, #120e1f);
+    background: var(--kawaii-bg);
   }
 
   .kawaii-workspace {
@@ -2662,7 +2643,7 @@
     height: 6.4rem;
     object-fit: contain;
     object-position: center bottom;
-    filter: drop-shadow(0 14px 22px rgb(59 130 246 / 0.16));
+    filter: drop-shadow(0 14px 22px rgb(17 17 26 / 0.16));
     animation: kawaii-float 5.5s ease-in-out infinite;
   }
 
@@ -2695,13 +2676,13 @@
     pointer-events: none;
     background: url('/images/kawaii/paya-cloud-operator-v2.png') center bottom / contain no-repeat;
     opacity: 0.22;
-    filter: drop-shadow(0 20px 34px rgb(59 130 246 / 0.16));
+    filter: drop-shadow(0 20px 34px rgb(17 17 26 / 0.16));
   }
 
   .kawaii-user-auth::before {
     background-image:
-      linear-gradient(rgb(59 130 246 / 0.055) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(59 130 246 / 0.045) 1px, transparent 1px),
+      linear-gradient(rgb(17 17 26 / 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(17 17 26 / 0.025) 1px, transparent 1px),
       url('/images/kawaii/hero-cloud-map.png');
     background-position: 0 0, 0 0, left max(2rem, calc((100vw - 1100px) / 2)) center;
     background-repeat: repeat, repeat, no-repeat;
@@ -2907,7 +2888,7 @@
     border: 1px solid var(--kawaii-line);
     border-radius: 1.125rem;
     background: color-mix(in srgb, var(--kawaii-surface) 88%, transparent);
-    box-shadow: 0 12px 34px rgb(59 130 246 / 0.08);
+    box-shadow: 0 12px 34px rgb(17 17 26 / 0.08);
     backdrop-filter: blur(16px);
   }
 
@@ -2925,7 +2906,7 @@
   .kawaii-app-shell :where(.tab.active, .tab.is-active, [role='tab'][aria-selected='true']) {
     background: linear-gradient(135deg, color-mix(in srgb, var(--kawaii-primary) 16%, var(--kawaii-surface)), color-mix(in srgb, var(--kawaii-lavender) 16%, var(--kawaii-surface))) !important;
     color: var(--kawaii-primary-strong) !important;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 24%, transparent), 0 8px 18px rgb(59 130 246 / 0.12);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 24%, transparent), 0 8px 18px rgb(17 17 26 / 0.12);
   }
 
   .kawaii-app-shell :where(.badge, .tag, [class*='badge'], [class*='Badge']) {
@@ -2945,7 +2926,7 @@
     border-color: transparent !important;
     background: linear-gradient(135deg, var(--kawaii-primary), var(--kawaii-lavender)) !important;
     color: #fff !important;
-    box-shadow: 0 10px 22px rgb(59 130 246 / 0.18);
+    box-shadow: 0 10px 22px rgb(17 17 26 / 0.18);
   }
 
   .kawaii-app-shell :where(.alert, .notice, .callout) {
@@ -2964,7 +2945,7 @@
     background:
       radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--kawaii-mint) 14%, transparent), transparent 28%),
       linear-gradient(145deg, color-mix(in srgb, var(--kawaii-surface) 88%, transparent), color-mix(in srgb, var(--kawaii-surface-soft) 72%, transparent)) !important;
-    box-shadow: 0 12px 34px rgb(59 130 246 / 0.08);
+    box-shadow: 0 12px 34px rgb(17 17 26 / 0.08);
   }
 
   .kawaii-app-shell :where(.list-row, .record-row, .activity-row) {
@@ -2975,7 +2956,7 @@
 
   .kawaii-app-shell :where(.list-row, .record-row, .activity-row):hover {
     background: color-mix(in srgb, var(--kawaii-surface-soft) 58%, transparent) !important;
-    box-shadow: 0 10px 24px rgb(59 130 246 / 0.08);
+    box-shadow: 0 10px 24px rgb(17 17 26 / 0.08);
     transform: translateY(-1px);
   }
 
@@ -3076,7 +3057,7 @@
   .modal-content :where(.btn-primary):not(.btn-danger):hover:not(:disabled) {
     filter: saturate(1.08) brightness(1.03);
     transform: translateY(-1px);
-    box-shadow: 0 14px 32px rgb(59 130 246 / 0.24);
+    box-shadow: 0 14px 32px rgb(17 17 26 / 0.24);
   }
 
   .kawaii-app-shell :where(.btn-primary, .kawaii-primary-button, .kawaii-action-button):not(.btn-danger):hover:not(:disabled)::before,
@@ -3097,7 +3078,7 @@
   .kawaii-public-shell :where(.kawaii-secondary-button):hover:not(:disabled),
   .modal-content :where(.btn-secondary, .btn-ghost, .btn-outline):not(.btn-danger):hover:not(:disabled) {
     border-color: var(--kawaii-line-strong) !important;
-    box-shadow: 0 10px 24px rgb(59 130 246 / 0.1);
+    box-shadow: 0 10px 24px rgb(17 17 26 / 0.1);
     transform: translateY(-1px);
   }
 
@@ -3115,14 +3096,14 @@
   .kawaii-route-instances :where(.kawaii-instance-card),
   .kawaii-route-instance-detail :where(.card, .kawaii-card),
   .kawaii-route-wallet :where(.card) {
-    box-shadow: 0 18px 48px rgb(59 130 246 / 0.11);
+    box-shadow: 0 18px 48px rgb(17 17 26 / 0.11);
   }
 
   .kawaii-route-exchange :where(article.kawaii-card, .kawaii-card.card):hover,
   .kawaii-route-market :where(.kawaii-package-card):hover,
   .kawaii-route-instances :where(.kawaii-instance-card):hover {
     transform: translateY(-2px);
-    box-shadow: 0 24px 58px rgb(59 130 246 / 0.16);
+    box-shadow: 0 24px 58px rgb(17 17 26 / 0.16);
   }
 
   .kawaii-app-shell :where(.badge-success, .badge-running, .status-running, [class*='text-green']) {

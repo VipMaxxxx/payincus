@@ -148,11 +148,11 @@ onMounted(loadRecords)
 </script>
 
 <template>
-  <div class="card p-5">
-    <div class="flex items-center justify-between mb-4">
+  <div class="card nimbus-section">
+    <div class="flex items-center justify-between mb-5">
       <div>
-        <h2 class="text-sm font-medium text-themed-secondary">{{ t('profile.loginHistory.title') }}</h2>
-        <p class="text-xs text-themed-faint mt-0.5">{{ t('profile.loginHistory.description') }}</p>
+        <h2 class="nimbus-section-title">{{ t('profile.loginHistory.title') }}</h2>
+        <p class="nimbus-section-desc">{{ t('profile.loginHistory.description') }}</p>
       </div>
       <button
         class="btn-ghost btn-sm"
@@ -165,7 +165,7 @@ onMounted(loadRecords)
 
     <!-- 加载中 -->
     <div v-if="loading && records.length === 0" class="py-6 text-center">
-      <div class="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+      <div class="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500"></div>
     </div>
 
     <!-- 空状态 -->
@@ -181,7 +181,7 @@ onMounted(loadRecords)
       <div
         v-for="record in records"
         :key="record.id"
-        class="p-3 bg-themed-tertiary border border-themed rounded-lg"
+        class="p-3.5 bg-themed-tertiary border border-themed rounded-xl"
       >
         <div class="flex items-start justify-between">
           <div class="flex-1 min-w-0">
@@ -192,7 +192,7 @@ onMounted(loadRecords)
                 :code="getCountryCode(record.country)!"
                 class="w-4 h-3 flex-shrink-0"
               />
-              <code class="text-sm font-mono text-themed">{{ record.ip }}</code>
+              <code class="text-sm font-mono text-themed tabular-nums">{{ record.ip }}</code>
             </div>
             
             <!-- 地理位置 -->
@@ -208,7 +208,7 @@ onMounted(loadRecords)
           </div>
           
           <!-- 时间 -->
-          <div class="text-right text-sm text-themed-muted flex-shrink-0 ml-4">
+          <div class="text-right text-sm text-themed-muted flex-shrink-0 ml-4 tabular-nums">
             {{ formatTime(record.createdAt) }}
           </div>
         </div>
@@ -223,7 +223,7 @@ onMounted(loadRecords)
         >
           {{ t('common.previous') }}
         </button>
-        <span class="text-sm text-themed-muted">
+        <span class="text-sm text-themed-muted tabular-nums">
           {{ page }} / {{ totalPages }}
         </span>
         <button
@@ -237,3 +237,23 @@ onMounted(loadRecords)
     </div>
   </div>
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+
+.nimbus-section-desc {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--kawaii-muted);
+}
+</style>

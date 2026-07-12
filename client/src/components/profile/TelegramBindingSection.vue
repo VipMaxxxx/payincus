@@ -105,11 +105,11 @@ defineExpose({ loadBinding })
 </script>
 
 <template>
-  <div class="card p-5">
-    <div class="flex items-start justify-between gap-4 mb-4">
+  <div class="card nimbus-section">
+    <div class="flex items-start justify-between gap-4 mb-5">
       <div>
-        <h2 class="text-sm font-medium text-themed-secondary">{{ t('profile.telegramBinding.title') }}</h2>
-        <p class="text-xs text-themed-faint mt-0.5">
+        <h2 class="nimbus-section-title">{{ t('profile.telegramBinding.title') }}</h2>
+        <p class="nimbus-section-desc">
           {{ t('profile.telegramBinding.description') }}
         </p>
       </div>
@@ -118,26 +118,26 @@ defineExpose({ loadBinding })
       </button>
     </div>
 
-    <div v-if="loading" class="p-4 bg-themed-tertiary border border-themed rounded-lg animate-pulse">
+    <div v-if="loading" class="p-4 bg-themed-tertiary border border-themed rounded-xl animate-pulse">
       <div class="h-4 bg-themed-secondary rounded w-1/3 mb-3"></div>
       <div class="h-3 bg-themed-secondary rounded w-2/3"></div>
     </div>
 
-    <div v-else-if="!isAvailable" class="p-4 bg-themed-tertiary border border-themed rounded-lg">
+    <div v-else-if="!isAvailable" class="p-4 bg-themed-tertiary border border-themed rounded-xl">
       <div class="text-sm text-themed font-medium">{{ t('profile.telegramBinding.unavailableTitle') }}</div>
       <p class="text-xs text-themed-muted mt-1">
         {{ t('profile.telegramBinding.unavailableDescription') }}
       </p>
     </div>
 
-    <div v-else-if="binding" class="p-4 bg-themed-tertiary border border-themed rounded-lg">
+    <div v-else-if="binding" class="p-4 bg-themed-tertiary border border-themed rounded-xl">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div class="text-sm text-themed font-medium">{{ t('profile.telegramBinding.boundTitle', { name: telegramDisplayName }) }}</div>
-          <p class="text-xs text-themed-muted mt-1">
+          <p class="text-xs text-themed-muted mt-1 tabular-nums">
             {{ t('profile.telegramBinding.telegramId', { id: binding.telegramUserId }) }}
           </p>
-          <p class="text-xs text-themed-muted mt-1">
+          <p class="text-xs text-themed-muted mt-1 tabular-nums">
             {{ t('profile.telegramBinding.boundAt', { date: formatDate(binding.boundAt) }) }}
           </p>
           <p class="text-xs text-themed-muted mt-1">
@@ -152,7 +152,7 @@ defineExpose({ loadBinding })
     </div>
 
     <div v-else class="space-y-4">
-      <div class="p-4 bg-themed-tertiary border border-themed rounded-lg">
+      <div class="p-4 bg-themed-tertiary border border-themed rounded-xl">
         <div class="text-sm text-themed font-medium">{{ t('profile.telegramBinding.unboundTitle') }}</div>
         <p class="text-xs text-themed-muted mt-1">
           {{ t('profile.telegramBinding.unboundDescription', { bot: botLabel }) }}
@@ -182,10 +182,30 @@ defineExpose({ loadBinding })
           {{ t('profile.telegramBinding.linkHint') }}
         </p>
         <p class="break-all text-xs text-themed">{{ bindUrl }}</p>
-        <p v-if="expiresAt" class="text-xs text-themed-muted mt-2">
+        <p v-if="expiresAt" class="text-xs text-themed-muted mt-2 tabular-nums">
           {{ t('profile.telegramBinding.expiresAt', { date: formatDate(expiresAt) }) }}
         </p>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+
+.nimbus-section-desc {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--kawaii-muted);
+}
+</style>

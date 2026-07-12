@@ -584,30 +584,35 @@ onMounted(async () => {
 
 <template>
   <div class="kawaii-page space-y-5 animate-fade-in">
-    <div class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
-      <div>
-        <h1 class="page-title text-lg sm:text-xl">{{ t('hostingWallet.title') }}</h1>
+    <div class="page-header flex-col gap-4 sm:flex-row sm:gap-0">
+      <div class="min-w-0">
+        <h1 class="page-title">{{ t('hostingWallet.title') }}</h1>
         <p class="page-description">{{ t('hostingWallet.description') }}</p>
       </div>
       <button
-        class="btn btn-primary w-full justify-center sm:w-auto"
+        class="btn btn-primary w-full justify-center gap-2 sm:w-auto"
         :disabled="!canWithdraw"
         @click="showWithdrawModal = true"
       >
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9l-5 5-5-5m10 6H7" />
+        </svg>
         {{ t('hostingWallet.withdraw.button') }}
       </button>
     </div>
 
-    <!-- 顶部胶囊 Tabs -->
-    <div class="flex justify-center">
-      <div
-        class="kawaii-browse-wrap inline-flex max-w-full overflow-x-auto rounded-full p-1"
-      >
+    <!-- Nimbus 下划线 Tabs -->
+    <div class="nimbus-tabs border-b border-themed">
+      <div class="flex flex-wrap gap-1 -mb-px">
         <button
           v-for="tab in tabs"
           :key="tab.key"
-          class="kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 sm:px-5"
-          :class="activeTab === tab.key ? 'active' : ''"
+          :class="[
+            'nimbus-tab whitespace-nowrap border-b-2 px-4 py-2.5 text-sm',
+            activeTab === tab.key
+              ? 'border-primary-500 font-semibold text-primary-600 dark:text-primary-300'
+              : 'border-transparent font-medium text-themed-muted hover:text-themed'
+          ]"
           @click="handleTabChange(tab.key)"
         >
           {{ tab.label }}
@@ -638,12 +643,12 @@ onMounted(async () => {
     
     <template v-else>
       <!-- 头部统计区 -->
-      <div v-if="activeTab === 'overview'" class="card rounded-2xl p-4 sm:p-6 lg:p-7">
+      <div v-if="activeTab === 'overview'" class="card nimbus-lift rounded-xl p-4 sm:p-6 lg:p-7">
         <div class="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:justify-between">
           <div class="min-w-0 flex-1">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div class="min-w-0 flex items-center gap-4">
-                <div class="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border border-themed bg-themed-tertiary p-1.5 shadow-sm">
+                <div class="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border border-themed bg-themed-secondary p-1.5">
                   <UserAvatar
                     :username="authStore.user?.username || ''"
                     :email="authStore.user?.email"
@@ -693,11 +698,11 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div class="mt-5 rounded-2xl border border-themed bg-themed-tertiary p-5 sm:p-6">
-              <div class="text-xs font-medium uppercase tracking-[0.24em] text-themed-muted">
+            <div class="mt-5 rounded-xl border border-themed bg-themed-secondary p-5 sm:p-6">
+              <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                 {{ t('hostingWallet.balance.available') }}
               </div>
-              <div class="mt-3 text-4xl font-semibold text-themed font-mono tabular-nums sm:text-5xl lg:text-6xl">
+              <div class="mt-3 text-4xl font-semibold figure-hero text-themed font-mono tabular-nums sm:text-5xl lg:text-6xl">
                 {{ formatMoney(balance?.available || 0) }}
               </div>
               <div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-themed-muted">
@@ -713,12 +718,15 @@ onMounted(async () => {
             <div
               v-for="item in headerStats"
               :key="item.key"
-              :class="['rounded-2xl border p-4 sm:p-5', getMetricCardClass(item.tone)]"
+              :class="['rounded-xl border p-4 sm:p-5', getMetricCardClass(item.tone)]"
             >
-              <div class="text-xs font-medium uppercase tracking-[0.18em] text-themed-muted">
-                {{ item.label }}
+              <div class="flex items-center gap-2">
+                <span :class="['h-1.5 w-1.5 rounded-full bg-current', getMetricValueClass(item.tone)]"></span>
+                <span class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
+                  {{ item.label }}
+                </span>
               </div>
-              <div :class="['mt-3 text-xl font-semibold font-mono tabular-nums sm:text-2xl', getMetricValueClass(item.tone)]">
+              <div :class="['mt-3 text-xl font-semibold figure-stat font-mono tabular-nums sm:text-2xl', getMetricValueClass(item.tone)]">
                 {{ item.value }}
               </div>
             </div>
@@ -726,7 +734,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-else-if="activeTab === 'logs'" class="card rounded-2xl p-4 sm:p-5 mb-4">
+      <div v-else-if="activeTab === 'logs'" class="card rounded-xl p-4 sm:p-5 mb-4">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="min-w-0">
             <div class="text-sm font-semibold text-themed">{{ t('hostingWallet.tabs.logs') }}</div>
@@ -738,10 +746,13 @@ onMounted(async () => {
               :key="item.key"
               :class="['rounded-xl border p-3 sm:p-4', getMetricCardClass(item.tone)]"
             >
-              <div class="text-[11px] font-medium uppercase tracking-[0.16em] text-themed-muted">
-                {{ item.label }}
+              <div class="flex items-center gap-1.5">
+                <span :class="['h-1.5 w-1.5 rounded-full bg-current', getMetricValueClass(item.tone)]"></span>
+                <span class="text-[11px] font-medium uppercase tracking-[0.16em] text-themed-muted">
+                  {{ item.label }}
+                </span>
               </div>
-              <div :class="['mt-2 text-base font-semibold font-mono tabular-nums sm:text-lg', getMetricValueClass(item.tone)]">
+              <div :class="['mt-2 text-base font-semibold figure-stat font-mono tabular-nums sm:text-lg', getMetricValueClass(item.tone)]">
                 {{ item.value }}
               </div>
             </div>
@@ -749,7 +760,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-else-if="activeTab === 'withdrawals'" class="card rounded-2xl p-4 sm:p-5 mb-4">
+      <div v-else-if="activeTab === 'withdrawals'" class="card rounded-xl p-4 sm:p-5 mb-4">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="min-w-0">
             <div class="text-sm font-semibold text-themed">{{ t('hostingWallet.tabs.withdrawals') }}</div>
@@ -762,10 +773,13 @@ onMounted(async () => {
                 :key="item.key"
                 :class="['rounded-xl border p-3 sm:p-4', getMetricCardClass(item.tone)]"
               >
-                <div class="text-[11px] font-medium uppercase tracking-[0.16em] text-themed-muted">
-                  {{ item.label }}
+                <div class="flex items-center gap-1.5">
+                  <span :class="['h-1.5 w-1.5 rounded-full bg-current', getMetricValueClass(item.tone)]"></span>
+                  <span class="text-[11px] font-medium uppercase tracking-[0.16em] text-themed-muted">
+                    {{ item.label }}
+                  </span>
                 </div>
-                <div :class="['mt-2 text-base font-semibold font-mono tabular-nums sm:text-lg', getMetricValueClass(item.tone)]">
+                <div :class="['mt-2 text-base font-semibold figure-stat font-mono tabular-nums sm:text-lg', getMetricValueClass(item.tone)]">
                   {{ item.value }}
                 </div>
               </div>
@@ -774,7 +788,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-else-if="activeTab === 'blocks'" class="card rounded-2xl p-4 sm:p-5 mb-4">
+      <div v-else-if="activeTab === 'blocks'" class="card rounded-xl p-4 sm:p-5 mb-4">
         <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div class="text-sm font-semibold text-themed">{{ t('hostingWallet.blocks.title') }}</div>
@@ -788,13 +802,13 @@ onMounted(async () => {
 
       <!-- 概览内容 -->
       <div v-if="activeTab === 'overview'" class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.95fr)]">
-        <div class="card rounded-2xl p-5 sm:p-6">
+        <div class="card rounded-xl p-5 sm:p-6">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 class="text-base font-semibold text-themed">{{ t('hostingWallet.overview.howItWorks') }}</h3>
               <p class="mt-1 text-sm text-themed-muted">{{ t('hostingWallet.description') }}</p>
             </div>
-            <span class="inline-flex w-fit items-center rounded-full border border-themed bg-themed-tertiary px-3 py-1 text-xs font-medium text-themed-secondary">
+            <span class="inline-flex w-fit items-center rounded-full border border-themed bg-themed-secondary px-3 py-1 text-xs font-medium text-themed-secondary">
               {{ t('hostingWallet.balance.frozenNote') }}
             </span>
           </div>
@@ -803,7 +817,7 @@ onMounted(async () => {
             <div
               v-for="(step, index) in flowSteps"
               :key="step.key"
-              :class="['rounded-2xl border p-4 sm:p-5', getFlowCardClass(index)]"
+              :class="['rounded-xl border p-4 sm:p-5', getFlowCardClass(index)]"
             >
               <div class="flex items-start gap-3">
                 <div :class="['flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold', getFlowIndexClass(index)]">
@@ -819,10 +833,10 @@ onMounted(async () => {
 
           <div
             v-if="hostingNotice"
-            class="mt-5 rounded-2xl border border-sky-200/70 bg-sky-50/70 p-4 shadow-sm shadow-sky-100/40 dark:border-sky-900/30 dark:bg-sky-500/[0.06] dark:shadow-none sm:p-5"
+            class="mt-5 rounded-xl border border-themed bg-themed-secondary p-4 sm:p-5"
           >
-            <div class="flex items-center gap-2 text-sky-700 dark:text-sky-200">
-              <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-white/90 shadow-sm dark:bg-white/[0.06]">
+            <div class="flex items-center gap-2">
+              <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-300">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
                 </svg>
@@ -830,7 +844,7 @@ onMounted(async () => {
               <div class="text-sm font-semibold text-themed">{{ t('hostingWallet.notice.title') }}</div>
             </div>
 
-            <div class="mt-3 rounded-xl border border-white/80 bg-white/85 p-4 shadow-sm shadow-sky-100/40 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none sm:p-5">
+            <div class="mt-3 rounded-lg border border-themed bg-themed p-4 sm:p-5">
               <div class="whitespace-pre-line break-words text-sm leading-7 text-themed-secondary">
                 {{ hostingNotice }}
               </div>
@@ -839,7 +853,7 @@ onMounted(async () => {
         </div>
 
         <div class="space-y-4">
-          <div class="card rounded-2xl p-5 sm:p-6">
+          <div class="card rounded-xl p-5 sm:p-6">
             <h3 class="text-base font-semibold text-themed">{{ t('hostingWallet.overview.title') }}</h3>
             <div class="mt-4 divide-y divide-themed">
               <div
@@ -853,7 +867,7 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div :class="['rounded-2xl border p-5 sm:p-6', canWithdraw ? 'border-emerald-500/20 bg-emerald-500/[0.06]' : 'border-themed bg-themed-tertiary']">
+          <div :class="['rounded-xl border p-5 sm:p-6', canWithdraw ? 'border-emerald-500/20 bg-emerald-500/[0.06]' : 'border-themed bg-themed-secondary']">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-themed">{{ t('hostingWallet.withdraw.button') }}</div>
@@ -877,7 +891,7 @@ onMounted(async () => {
       </div>
       
       <!-- 收支明细 -->
-      <div v-if="activeTab === 'logs'" class="card rounded-2xl">
+      <div v-if="activeTab === 'logs'" class="card rounded-xl">
         <!-- 搜索和筛选 -->
         <div class="border-b border-themed p-4 sm:p-5">
           <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -933,13 +947,13 @@ onMounted(async () => {
         <!-- 骨架屏加载态 -->
         <div v-if="logsLoading" class="p-4 space-y-3">
           <div v-for="i in 5" :key="i" class="animate-pulse">
-            <div class="flex items-center gap-4 p-4 bg-themed-secondary rounded-lg">
-              <div class="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+            <div class="flex items-center gap-4 p-4 bg-themed-secondary rounded-xl border border-themed">
+              <div class="w-10 h-10 bg-themed-tertiary rounded-full"></div>
               <div class="flex-1 space-y-2">
-                <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                <div class="h-4 bg-themed-tertiary rounded w-3/4"></div>
+                <div class="h-3 bg-themed-tertiary rounded w-1/2"></div>
               </div>
-              <div class="h-6 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+              <div class="h-6 bg-themed-tertiary rounded w-20"></div>
             </div>
           </div>
         </div>
@@ -1111,7 +1125,7 @@ onMounted(async () => {
       </div>
       
       <!-- 提现记录 -->
-      <div v-if="activeTab === 'withdrawals'" class="card rounded-2xl">
+      <div v-if="activeTab === 'withdrawals'" class="card rounded-xl">
         <!-- 分页控制 -->
         <div class="border-b border-themed p-4 sm:p-5">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1134,12 +1148,12 @@ onMounted(async () => {
         <!-- 骨架屏加载态 -->
         <div v-if="withdrawalsLoading" class="p-4 space-y-3">
           <div v-for="i in 3" :key="i" class="animate-pulse">
-            <div class="flex items-center gap-4 p-4 bg-themed-secondary rounded-lg">
+            <div class="flex items-center gap-4 p-4 bg-themed-secondary rounded-xl border border-themed">
               <div class="flex-1 space-y-2">
-                <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
-                <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+                <div class="h-4 bg-themed-tertiary rounded w-1/2"></div>
+                <div class="h-3 bg-themed-tertiary rounded w-1/3"></div>
               </div>
-              <div class="h-6 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
+              <div class="h-6 bg-themed-tertiary rounded w-16"></div>
             </div>
           </div>
         </div>
@@ -1182,8 +1196,8 @@ onMounted(async () => {
               </thead>
               <tbody class="divide-y divide-themed">
                 <tr v-for="w in withdrawals" :key="w.id" class="hover:bg-themed-secondary transition-colors">
-                  <td class="px-4 py-3 font-mono text-sm text-themed">{{ formatMoney(w.amount) }}</td>
-                  <td class="px-4 py-3 font-mono text-sm font-semibold text-green-600 dark:text-green-400">{{ formatMoney(w.actualAmount) }}</td>
+                  <td class="px-4 py-3 font-mono text-sm text-themed tabular-nums">{{ formatMoney(w.amount) }}</td>
+                  <td class="px-4 py-3 font-mono text-sm font-semibold text-green-600 tabular-nums dark:text-green-400">{{ formatMoney(w.actualAmount) }}</td>
                   <td class="px-4 py-3 text-sm text-themed">{{ t('hostingWallet.withdrawals.target.balance') }}</td>
                   <td class="px-4 py-3">
                     <span :class="['badge', getStatusClass(w.status)]">
@@ -1199,7 +1213,7 @@ onMounted(async () => {
           
           <!-- 移动端卡片 -->
           <div class="p-4 space-y-3 lg:hidden">
-            <div v-for="w in withdrawals" :key="w.id" class="p-4 bg-themed-secondary rounded-lg">
+            <div v-for="w in withdrawals" :key="w.id" class="p-4 bg-themed-secondary rounded-xl border border-themed">
               <div class="flex items-center justify-between mb-2">
                 <span class="font-mono font-semibold text-lg text-themed">{{ formatMoney(w.amount) }}</span>
                 <span :class="['badge', getStatusClass(w.status)]">
@@ -1243,7 +1257,7 @@ onMounted(async () => {
 
       <!-- 黑名单 -->
       <div v-if="activeTab === 'blocks'" class="space-y-4">
-        <div class="card rounded-2xl p-4 sm:p-5">
+        <div class="card rounded-xl p-4 sm:p-5">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
             <div class="flex-1">
               <label class="mb-2 block text-sm font-medium text-themed">{{ t('hostingWallet.blocks.searchLabel') }}</label>
@@ -1306,7 +1320,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="card rounded-2xl">
+        <div class="card rounded-xl">
           <div class="border-b border-themed p-4 sm:p-5">
             <div class="text-sm font-medium text-themed">{{ t('hostingWallet.blocks.blockedUsers') }}</div>
             <div class="mt-1 text-sm text-themed-muted">{{ t('hostingWallet.blocks.effectHint') }}</div>
@@ -1377,25 +1391,27 @@ onMounted(async () => {
                   type="number"
                   :min="config?.minWithdrawalAmount || 10"
                   :max="balance?.available || 0"
-                  class="input w-full pl-7 font-mono"
+                  class="input w-full pl-7 rounded-xl font-mono"
                 />
               </div>
               <div class="text-xs text-themed-muted mt-2">{{ t('hostingWallet.modal.availableNote', { amount: formatMoney(balance?.available || 0) }) }}</div>
             </div>
-            
-            <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-                <span class="text-sm font-medium">{{ t('hostingWallet.modal.targetBalance', { rate: ((config?.feeRateBalance || 0.05) * 100).toFixed(0) }) }}</span>
+
+            <div class="p-4 rounded-xl border border-themed bg-themed-secondary">
+              <div class="flex items-center gap-2">
+                <span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-300">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                </span>
+                <span class="text-sm font-medium text-themed">{{ t('hostingWallet.modal.targetBalance', { rate: ((config?.feeRateBalance || 0.05) * 100).toFixed(0) }) }}</span>
               </div>
-              <div class="text-xs text-blue-600 dark:text-blue-400 mt-2">
+              <div class="text-xs text-themed-muted mt-2">
                 {{ t('hostingWallet.modal.manualWithdrawNote') }}
               </div>
             </div>
-            
-            <div class="bg-themed-secondary rounded-lg p-4 space-y-2">
+
+            <div class="bg-themed-secondary rounded-xl border border-themed p-4 space-y-2">
               <div class="flex justify-between text-sm">
                 <span class="text-themed-muted">{{ t('hostingWallet.modal.summary.amount') }}</span>
                 <span class="font-mono text-themed">{{ formatMoney(withdrawForm.amount) }}</span>
@@ -1445,8 +1461,22 @@ onMounted(async () => {
   @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
 }
 
+/* Nimbus 下划线 Tabs：靛蓝下划线 + 平滑过渡 */
+.nimbus-tab {
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+/* 卡片轻微悬浮 */
+.nimbus-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.nimbus-lift:hover {
+  transform: translateY(-1px);
+}
+
+/* 提现 CTA：靛蓝主按钮 */
 .wallet-withdraw-btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-primary-600 px-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-primary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:pointer-events-none;
 }
 
 .wallet-withdraw-btn--hero {
@@ -1458,25 +1488,15 @@ onMounted(async () => {
 }
 
 .wallet-withdraw-btn__icon {
-  @apply flex h-8 w-8 items-center justify-center rounded-xl transition-colors duration-200;
+  @apply flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 text-white transition-colors duration-200;
 }
 
 .light .wallet-withdraw-btn {
-  @apply border-gray-900 bg-gray-900 text-white shadow-sm hover:border-gray-800 hover:bg-gray-800;
   --tw-ring-offset-color: #ffffff;
 }
 
 .dark .wallet-withdraw-btn {
-  @apply border-white bg-white text-gray-900 shadow-sm hover:bg-gray-100;
   --tw-ring-offset-color: #0a0a0a;
-}
-
-.light .wallet-withdraw-btn__icon {
-  @apply bg-white/10 text-white;
-}
-
-.dark .wallet-withdraw-btn__icon {
-  @apply bg-gray-900/10 text-gray-900;
 }
 
 .light .wallet-withdraw-btn:disabled {
@@ -1487,11 +1507,30 @@ onMounted(async () => {
   @apply border-gray-800 bg-gray-900 text-gray-500 shadow-none;
 }
 
-.light .wallet-withdraw-btn:disabled .wallet-withdraw-btn__icon {
-  @apply bg-gray-200 text-gray-400;
+.wallet-withdraw-btn:disabled .wallet-withdraw-btn__icon {
+  @apply bg-transparent;
 }
 
-.dark .wallet-withdraw-btn:disabled .wallet-withdraw-btn__icon {
-  @apply bg-white/5 text-gray-500;
+/* Linear 样板：关键 display 数字字距收紧 */
+.figure-hero {
+  letter-spacing: -0.04em;
+  font-feature-settings: 'tnum';
+}
+
+.figure-stat {
+  letter-spacing: -0.03em;
+  font-feature-settings: 'tnum';
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-tab,
+  .nimbus-lift,
+  .wallet-withdraw-btn,
+  .wallet-withdraw-btn__icon {
+    transition: none;
+  }
+  .nimbus-lift:hover {
+    transform: none;
+  }
 }
 </style>

@@ -371,18 +371,25 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
 </script>
 
 <template>
-  <div class="kawaii-page space-y-6 animate-fade-in">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">{{ t('admin.oauth.title') }}</h1>
-        <p class="page-description">{{ t('admin.oauth.description') }}</p>
+  <div class="kawaii-page nimbus-view space-y-6 animate-fade-in">
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex items-start gap-3">
+        <span class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500 sm:flex">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.909c0-.464.184-.909.513-1.237l6.706-6.706c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-xl font-semibold text-themed sm:text-2xl">{{ t('admin.oauth.title') }}</h1>
+          <p class="mt-1 text-sm text-themed-muted">{{ t('admin.oauth.description') }}</p>
+        </div>
       </div>
-    </div>
-    <ThemeTemplateSlot slot-name="admin.oauth.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+    </header>
+    <ThemeTemplateSlot slot-name="admin.oauth.banner" container-class="overflow-hidden rounded-xl border border-themed bg-themed-surface" />
 
     <!-- Loading -->
     <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div v-for="i in 2" :key="i" class="card p-6 animate-pulse">
+      <div v-for="i in 2" :key="i" class="nimbus-card rounded-xl border border-themed bg-themed-surface p-6 animate-pulse">
         <div class="h-8 bg-themed-secondary rounded w-1/3 mb-4"></div>
         <div class="h-4 bg-themed-secondary rounded w-2/3 mb-2"></div>
         <div class="h-4 bg-themed-secondary rounded w-1/2"></div>
@@ -391,18 +398,18 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
 
     <!-- Provider Cards -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div 
-        v-for="(config, provider) in configs" 
+      <div
+        v-for="(config, provider) in configs"
         :key="provider"
-        class="card p-6"
+        class="nimbus-card rounded-xl border border-themed bg-themed-surface p-6"
       >
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
-            <div 
+            <div
               class="w-12 h-12 rounded-xl flex items-center justify-center"
               :class="[
-                config.configured 
-                  ? 'bg-themed-secondary' 
+                config.configured
+                  ? 'bg-themed-secondary'
                   : (themeStore.isDark ? 'bg-gray-800' : 'bg-gray-200'),
                 provider === 'google' && !themeStore.isDark && 'bg-white'
               ]"
@@ -410,10 +417,10 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
             ></div>
             <div>
               <h3 class="text-themed font-medium">{{ providerInfo[provider]?.name }}</h3>
-              <span 
+              <span
                 :class="[
                   'text-xs',
-                  config.configured 
+                  config.configured
                     ? (config.enabled ? 'text-success' : 'text-warning')
                     : 'text-themed-muted'
                 ]"
@@ -422,14 +429,14 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
               </span>
             </div>
           </div>
-          
+
           <div class="flex gap-2">
             <button class="btn-secondary btn-sm" @click="openEdit(provider)">
               {{ config.configured ? t('admin.oauth.edit') : t('common.create') }}
             </button>
-            <button 
-              v-if="config.configured" 
-              class="btn-ghost btn-sm text-error" 
+            <button
+              v-if="config.configured"
+              class="btn-ghost btn-sm text-error"
               @click="deleteConfig(provider)"
             >
               {{ t('common.delete') }}
@@ -450,10 +457,10 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
 
         <div v-else class="text-sm text-themed-muted">
           <p>
-            {{ t('admin.oauth.notConfigured') }} 
-            <a 
-              :href="providerInfo[provider]?.docsUrl" 
-              target="_blank" 
+            {{ t('admin.oauth.notConfigured') }}
+            <a
+              :href="providerInfo[provider]?.docsUrl"
+              target="_blank"
               class="text-accent hover:underline"
             >
               {{ providerInfo[provider]?.name }} {{ t('admin.oauth.developerConsole') }}
@@ -463,9 +470,9 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
         </div>
 
         <!-- Callback URL Info -->
-        <div class="mt-4 p-3 bg-themed-tertiary rounded-lg">
-          <div class="text-xs text-themed-secondary mb-1">{{ t('admin.oauth.callbackUrl') }}</div>
-          <code class="text-xs text-themed font-mono break-all">
+        <div class="mt-4 rounded-lg bg-themed-tertiary p-3">
+          <div class="mb-1 text-2xs font-medium uppercase tracking-[0.06em] text-themed-faint">{{ t('admin.oauth.callbackUrl') }}</div>
+          <code class="block break-all font-mono text-xs text-themed">
             {{ getCallbackUrl(providerInfo[provider]?.callbackPath) }}
           </code>
         </div>
@@ -473,8 +480,8 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
     </div>
 
     <!-- Usage Guide -->
-    <div class="card p-6">
-      <h3 class="text-themed font-medium mb-4">{{ t('admin.oauth.usageGuide') }}</h3>
+    <div class="nimbus-card rounded-xl border border-themed bg-themed-surface p-6">
+      <h3 class="mb-4 font-medium text-themed">{{ t('admin.oauth.usageGuide') }}</h3>
       <div class="space-y-3 text-sm text-themed-secondary">
         <p>{{ t('admin.oauth.step1') }}</p>
         <p>{{ t('admin.oauth.step2') }}</p>
@@ -484,60 +491,69 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
       </div>
     </div>
 
-    <div class="card p-6">
-      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div class="nimbus-card overflow-hidden rounded-xl border border-themed bg-themed-surface">
+      <div class="flex flex-col gap-3 border-b border-themed px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 class="text-themed font-medium">PayIncus OAuth 服务端</h3>
+          <h3 class="font-semibold text-themed">PayIncus OAuth 服务端</h3>
           <p class="mt-1 text-sm text-themed-muted">为第三方应用创建 OAuth 应用，通过授权码换取 Bearer token 后访问 /api/v1。</p>
         </div>
-        <button class="btn-secondary" :disabled="oauthAppsLoading" @click="loadOAuthApps">
+        <button class="btn-secondary shrink-0" :disabled="oauthAppsLoading" @click="loadOAuthApps">
+          <span v-if="oauthAppsLoading" class="loading-spinner h-4 w-4"></span>
           {{ oauthAppsLoading ? '加载中...' : '刷新应用' }}
         </button>
       </div>
 
-      <div v-if="oauthAppSecret" class="mt-4 rounded-lg border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-        <div class="font-medium">Client Secret 只显示一次</div>
-        <code class="mt-2 block break-all rounded bg-white/70 p-2 font-mono text-xs">{{ oauthAppSecret }}</code>
+      <div class="px-6 pt-5">
+        <div v-if="oauthAppSecret" class="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
+          <svg class="mt-0.5 h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <div class="min-w-0 flex-1">
+            <div class="font-medium">Client Secret 只显示一次</div>
+            <code class="mt-2 block break-all rounded-lg bg-themed-surface/70 p-2 font-mono text-xs text-themed">{{ oauthAppSecret }}</code>
+          </div>
+        </div>
       </div>
 
-      <form class="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(360px,1fr)_minmax(360px,480px)]" @submit.prevent="saveOAuthApp">
+      <form class="grid min-w-0 gap-4 p-6 xl:grid-cols-[minmax(360px,1fr)_minmax(360px,480px)]" @submit.prevent="saveOAuthApp">
         <div class="grid min-w-0 gap-4 md:grid-cols-2">
           <div>
-            <label class="mb-1 block text-sm text-themed-secondary">应用名称</label>
+            <label class="mb-1.5 block text-sm text-themed-secondary">应用名称</label>
             <input v-model="oauthAppForm.name" class="input" type="text" placeholder="Flash Sale App" />
           </div>
           <div>
-            <label class="mb-1 block text-sm text-themed-secondary">状态</label>
+            <label class="mb-1.5 block text-sm text-themed-secondary">状态</label>
             <label class="flex h-10 items-center gap-2 text-sm text-themed">
               <input v-model="oauthAppForm.enabled" type="checkbox" class="h-4 w-4 rounded text-accent" />
               启用此 OAuth App
             </label>
           </div>
           <div class="md:col-span-2">
-            <label class="mb-1 block text-sm text-themed-secondary">Redirect URI，每行一个</label>
+            <label class="mb-1.5 block text-sm text-themed-secondary">Redirect URI，每行一个</label>
             <textarea v-model="oauthAppForm.redirectUris" class="input min-h-[86px]" placeholder="https://example.com/oauth/callback"></textarea>
           </div>
         </div>
 
-        <div class="min-w-0 rounded-lg border border-themed p-4">
+        <div class="min-w-0 rounded-xl border border-themed p-4">
           <div class="text-sm font-medium text-themed">授权 Scope</div>
           <div class="mt-3 grid gap-2 text-sm text-themed">
-            <label v-for="scope in availableOAuthScopes" :key="scope.scope" class="flex min-w-0 items-start gap-2 rounded border border-themed px-3 py-2">
+            <label v-for="scope in availableOAuthScopes" :key="scope.scope" class="flex min-w-0 items-start gap-2 rounded-lg border border-themed px-3 py-2 transition-colors hover:bg-themed-hover">
               <input v-model="oauthAppForm.scopes" type="checkbox" :value="scope.scope" class="mt-1 h-4 w-4 rounded text-accent" />
               <span class="min-w-0 flex-1">
                 <span class="flex flex-wrap items-center gap-2">
-                  <span class="font-mono text-xs">{{ scope.scope }}</span>
-                  <span class="rounded bg-themed-secondary px-1.5 py-0.5 text-[10px] text-themed-muted">{{ formatScopeRisk(scope.risk) }}</span>
-                  <span class="rounded bg-themed-secondary px-1.5 py-0.5 text-[10px] text-themed-muted">{{ formatScopeAccess(scope.access) }}</span>
+                  <span class="rounded bg-themed-tertiary px-1.5 py-0.5 font-mono text-xs text-themed">{{ scope.scope }}</span>
+                  <span class="rounded-full bg-themed-secondary px-1.5 py-0.5 text-2xs text-themed-muted">{{ formatScopeRisk(scope.risk) }}</span>
+                  <span class="rounded-full bg-themed-secondary px-1.5 py-0.5 text-2xs text-themed-muted">{{ formatScopeAccess(scope.access) }}</span>
                 </span>
                 <span class="mt-1 block text-xs font-medium text-themed">{{ scope.title }}</span>
                 <span class="mt-1 block break-words text-xs text-themed-muted">{{ scope.description }}</span>
-                <span class="mt-1 block break-all text-[11px] text-themed-muted">{{ scope.resources.join(', ') }}</span>
+                <span class="mt-1 block break-all font-mono text-2xs text-themed-muted">{{ scope.resources.join(', ') }}</span>
               </span>
             </label>
           </div>
           <div class="mt-4 flex gap-2">
             <button type="submit" class="btn-primary" :disabled="oauthAppSaving">
+              <span v-if="oauthAppSaving" class="loading-spinner h-4 w-4"></span>
               {{ oauthAppSaving ? '保存中...' : (oauthAppForm.id ? '更新应用' : '创建应用') }}
             </button>
             <button type="button" class="btn-secondary" @click="resetOAuthAppForm">清空</button>
@@ -546,69 +562,71 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
       </form>
 
       <div class="mt-6 space-y-3 lg:hidden">
-        <div v-if="oauthApps.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
-          暂无对外 OAuth 应用。
-        </div>
-        <div v-for="appItem in oauthApps" :key="appItem.id" class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="font-medium text-themed">{{ appItem.name }}</div>
-              <div class="mt-1 break-all font-mono text-xs text-themed-muted">{{ appItem.clientId }}</div>
-            </div>
-            <span class="shrink-0" :class="appItem.enabled ? 'text-success' : 'text-warning'">{{ appItem.enabled ? '启用' : '停用' }}</span>
+        <div class="space-y-3 px-6 pb-6">
+          <div v-if="oauthApps.length === 0" class="rounded-xl border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+            暂无对外 OAuth 应用。
           </div>
-          <div class="mt-3 space-y-2 text-xs text-themed-muted">
-            <div>
-              <div class="mb-1 font-medium text-themed">Redirect URI</div>
-              <div v-for="uri in appItem.redirectUris" :key="uri" class="break-all">{{ uri }}</div>
+          <div v-for="appItem in oauthApps" :key="appItem.id" class="rounded-xl border border-themed bg-themed-secondary p-4 text-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-medium text-themed">{{ appItem.name }}</div>
+                <div class="mt-1 break-all font-mono text-xs text-themed-muted">{{ appItem.clientId }}</div>
+              </div>
+              <span class="shrink-0 rounded-full border px-2 py-0.5 text-2xs font-medium" :class="appItem.enabled ? 'border-success/30 text-success' : 'border-warning/30 text-warning'">{{ appItem.enabled ? '启用' : '停用' }}</span>
             </div>
-            <div>
-              <div class="mb-1 font-medium text-themed">Scope</div>
-              <div class="flex flex-wrap gap-1">
-                <span v-for="scope in appItem.scopes" :key="scope" class="rounded bg-themed px-2 py-1 font-mono text-[11px] text-themed">
-                  {{ scope }}
-                </span>
+            <div class="mt-3 space-y-2 text-xs text-themed-muted">
+              <div>
+                <div class="mb-1 font-medium text-themed">Redirect URI</div>
+                <div v-for="uri in appItem.redirectUris" :key="uri" class="break-all font-mono">{{ uri }}</div>
+              </div>
+              <div>
+                <div class="mb-1 font-medium text-themed">Scope</div>
+                <div class="flex flex-wrap gap-1">
+                  <span v-for="scope in appItem.scopes" :key="scope" class="rounded-full bg-themed px-2 py-0.5 font-mono text-2xs text-themed">
+                    {{ scope }}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button class="btn-secondary btn-sm" @click="editOAuthApp(appItem)">编辑</button>
-            <button class="btn-secondary btn-sm" @click="rotateOAuthAppSecret(appItem)">轮换 Secret</button>
-            <button class="btn-ghost btn-sm text-error" @click="deleteOAuthApp(appItem)">删除</button>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button class="btn-secondary btn-sm" @click="editOAuthApp(appItem)">编辑</button>
+              <button class="btn-secondary btn-sm" @click="rotateOAuthAppSecret(appItem)">轮换 Secret</button>
+              <button class="btn-ghost btn-sm text-error" @click="deleteOAuthApp(appItem)">删除</button>
+            </div>
           </div>
         </div>
       </div>
       <div class="mt-6 hidden overflow-hidden lg:block">
         <table class="w-full table-fixed text-sm">
-          <thead class="border-b border-themed text-left text-themed-muted">
-            <tr>
-              <th class="w-[20%] py-3 pr-4">应用</th>
+          <thead>
+            <tr class="border-b border-themed text-left text-2xs font-medium uppercase tracking-[0.06em] text-themed-faint">
+              <th class="w-[20%] py-3 pr-4 pl-6">应用</th>
               <th class="w-[24%] py-3 pr-4">Redirect URI</th>
               <th class="w-[25%] py-3 pr-4">Scope</th>
               <th class="w-[9%] py-3 pr-4">状态</th>
-              <th class="w-[22%] py-3 pr-4">操作</th>
+              <th class="w-[22%] py-3 pr-6">操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="appItem in oauthApps" :key="appItem.id" class="border-b border-themed">
-              <td class="py-3 pr-4">
+            <tr v-for="appItem in oauthApps" :key="appItem.id" class="border-b border-themed transition-colors last:border-0 hover:bg-themed-hover">
+              <td class="py-3 pr-4 pl-6">
                 <div class="font-medium text-themed">{{ appItem.name }}</div>
                 <div class="break-all font-mono text-xs text-themed-muted">{{ appItem.clientId }}</div>
               </td>
-              <td class="py-3 pr-4 text-xs text-themed-muted">
+              <td class="py-3 pr-4 font-mono text-xs text-themed-muted">
                 <div v-for="uri in appItem.redirectUris" :key="uri" class="break-all">{{ uri }}</div>
               </td>
               <td class="py-3 pr-4">
                 <div class="flex flex-wrap gap-1">
-                  <span v-for="scope in appItem.scopes" :key="scope" class="rounded bg-themed-secondary px-2 py-1 font-mono text-[11px] text-themed">
+                  <span v-for="scope in appItem.scopes" :key="scope" class="rounded-full bg-themed-secondary px-2 py-0.5 font-mono text-2xs text-themed">
                     {{ scope }}
                   </span>
                 </div>
               </td>
               <td class="py-3 pr-4">
-                <span :class="appItem.enabled ? 'text-success' : 'text-warning'">{{ appItem.enabled ? '启用' : '停用' }}</span>
+                <span class="inline-flex rounded-full border px-2 py-0.5 text-2xs font-medium" :class="appItem.enabled ? 'border-success/30 text-success' : 'border-warning/30 text-warning'">{{ appItem.enabled ? '启用' : '停用' }}</span>
               </td>
-              <td class="py-3 pr-4">
+              <td class="py-3 pr-6">
                 <div class="flex flex-wrap gap-2">
                   <button class="btn-secondary btn-sm" @click="editOAuthApp(appItem)">编辑</button>
                   <button class="btn-secondary btn-sm" @click="rotateOAuthAppSecret(appItem)">轮换 Secret</button>
@@ -624,18 +642,19 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
       </div>
     </div>
 
-    <div class="card p-6">
-      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div class="nimbus-card overflow-hidden rounded-xl border border-themed bg-themed-surface">
+      <div class="flex flex-col gap-3 border-b border-themed px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 class="text-themed font-medium">OAuth 授权审计</h3>
+          <h3 class="font-semibold text-themed">OAuth 授权审计</h3>
           <p class="mt-1 text-sm text-themed-muted">按应用、用户和状态筛选第三方授权记录，可撤销授权并使关联 access token / refresh token 失效。</p>
         </div>
-        <button class="btn-secondary" :disabled="oauthAuthorizationsLoading" @click="loadOAuthAuthorizations">
+        <button class="btn-secondary shrink-0" :disabled="oauthAuthorizationsLoading" @click="loadOAuthAuthorizations">
+          <span v-if="oauthAuthorizationsLoading" class="loading-spinner h-4 w-4"></span>
           {{ oauthAuthorizationsLoading ? '加载中...' : '刷新授权' }}
         </button>
       </div>
 
-      <div class="mt-5 grid gap-3 md:grid-cols-[220px_minmax(0,1fr)_180px_auto]">
+      <div class="grid gap-3 px-6 pt-5 md:grid-cols-[220px_minmax(0,1fr)_180px_auto]">
         <select v-model="oauthAuthorizationFilters.appId" class="input">
           <option :value="null">全部 OAuth App</option>
           <option v-for="appItem in oauthApps" :key="appItem.id" :value="appItem.id">{{ appItem.name }}</option>
@@ -657,73 +676,75 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
       </div>
 
       <div class="mt-6 space-y-3 lg:hidden">
-        <div v-if="oauthAuthorizations.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
-          暂无 OAuth 授权记录。
-        </div>
-        <div
-          v-for="authorization in oauthAuthorizations"
-          :key="authorization.id"
-          class="rounded-lg border border-themed bg-themed-secondary p-4 text-sm"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="font-medium text-themed">{{ authorization.user.username }}</div>
-              <div class="mt-1 break-all text-xs text-themed-muted">#{{ authorization.user.id }} · {{ authorization.user.email || '无邮箱' }}</div>
-            </div>
-            <span class="shrink-0" :class="authorization.active ? 'text-success' : 'text-warning'">
-              {{ formatOAuthAuthorizationStatus(authorization) }}
-            </span>
+        <div class="space-y-3 px-6">
+          <div v-if="oauthAuthorizations.length === 0" class="rounded-xl border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+            暂无 OAuth 授权记录。
           </div>
-          <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
-            <div class="rounded-md bg-themed p-2">
-              <div class="text-themed-muted">应用</div>
-              <div class="mt-1 font-medium text-themed">{{ authorization.app.name }}</div>
-              <div class="mt-1 break-all font-mono">{{ authorization.app.clientId }}</div>
+          <div
+            v-for="authorization in oauthAuthorizations"
+            :key="authorization.id"
+            class="rounded-xl border border-themed bg-themed-secondary p-4 text-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-medium text-themed">{{ authorization.user.username }}</div>
+                <div class="mt-1 break-all text-xs text-themed-muted">#{{ authorization.user.id }} · {{ authorization.user.email || '无邮箱' }}</div>
+              </div>
+              <span class="shrink-0 rounded-full border px-2 py-0.5 text-2xs font-medium" :class="authorization.active ? 'border-success/30 text-success' : 'border-warning/30 text-warning'">
+                {{ formatOAuthAuthorizationStatus(authorization) }}
+              </span>
             </div>
-            <div class="rounded-md bg-themed p-2">
-              <div class="text-themed-muted">活跃 Token</div>
-              <div class="mt-1 text-themed">Access: {{ authorization.tokenStats.activeAccessTokens }}</div>
-              <div class="mt-1 text-themed">Refresh: {{ authorization.tokenStats.activeRefreshTokens }}</div>
-            </div>
-            <div class="rounded-md bg-themed p-2 sm:col-span-2">
-              <div class="text-themed-muted">Scope</div>
-              <div class="mt-1 flex flex-wrap gap-1">
-                <span v-for="scope in authorization.scopes" :key="scope" class="rounded bg-themed-secondary px-2 py-1 font-mono text-[11px] text-themed">
-                  {{ scope }}
-                </span>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-lg bg-themed p-2">
+                <div class="text-themed-muted">应用</div>
+                <div class="mt-1 font-medium text-themed">{{ authorization.app.name }}</div>
+                <div class="mt-1 break-all font-mono">{{ authorization.app.clientId }}</div>
+              </div>
+              <div class="rounded-lg bg-themed p-2">
+                <div class="text-themed-muted">活跃 Token</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">Access: {{ authorization.tokenStats.activeAccessTokens }}</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">Refresh: {{ authorization.tokenStats.activeRefreshTokens }}</div>
+              </div>
+              <div class="rounded-lg bg-themed p-2 sm:col-span-2">
+                <div class="text-themed-muted">Scope</div>
+                <div class="mt-1 flex flex-wrap gap-1">
+                  <span v-for="scope in authorization.scopes" :key="scope" class="rounded-full bg-themed-secondary px-2 py-0.5 font-mono text-2xs text-themed">
+                    {{ scope }}
+                  </span>
+                </div>
+              </div>
+              <div class="rounded-lg bg-themed p-2 sm:col-span-2">
+                <div class="text-themed-muted">最后授权</div>
+                <div class="mt-1 text-themed">{{ new Date(authorization.lastAuthorizedAt).toLocaleString() }}</div>
+                <div v-if="authorization.revokedAt" class="mt-1 text-themed-muted">撤销：{{ new Date(authorization.revokedAt).toLocaleString() }}</div>
               </div>
             </div>
-            <div class="rounded-md bg-themed p-2 sm:col-span-2">
-              <div class="text-themed-muted">最后授权</div>
-              <div class="mt-1 text-themed">{{ new Date(authorization.lastAuthorizedAt).toLocaleString() }}</div>
-              <div v-if="authorization.revokedAt" class="mt-1 text-themed-muted">撤销：{{ new Date(authorization.revokedAt).toLocaleString() }}</div>
-            </div>
+            <button
+              class="btn-ghost btn-sm mt-3 text-error"
+              :disabled="Boolean(authorization.revokedAt)"
+              @click="revokeOAuthAuthorization(authorization)"
+            >
+              撤销授权
+            </button>
           </div>
-          <button
-            class="btn-ghost btn-sm mt-3 text-error"
-            :disabled="Boolean(authorization.revokedAt)"
-            @click="revokeOAuthAuthorization(authorization)"
-          >
-            撤销授权
-          </button>
         </div>
       </div>
       <div class="mt-6 hidden overflow-hidden lg:block">
         <table class="w-full table-fixed text-sm">
-          <thead class="border-b border-themed text-left text-themed-muted">
-            <tr>
-              <th class="w-[16%] py-3 pr-4">用户</th>
+          <thead>
+            <tr class="border-b border-themed text-left text-2xs font-medium uppercase tracking-[0.06em] text-themed-faint">
+              <th class="w-[16%] py-3 pr-4 pl-6">用户</th>
               <th class="w-[16%] py-3 pr-4">应用</th>
               <th class="w-[19%] py-3 pr-4">Scope</th>
               <th class="w-[12%] py-3 pr-4">状态</th>
               <th class="w-[12%] py-3 pr-4">活跃 Token</th>
               <th class="w-[15%] py-3 pr-4">最后授权</th>
-              <th class="w-[10%] py-3 pr-4">操作</th>
+              <th class="w-[10%] py-3 pr-6">操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="authorization in oauthAuthorizations" :key="authorization.id" class="border-b border-themed">
-              <td class="py-3 pr-4">
+            <tr v-for="authorization in oauthAuthorizations" :key="authorization.id" class="border-b border-themed transition-colors last:border-0 hover:bg-themed-hover">
+              <td class="py-3 pr-4 pl-6">
                 <div class="font-medium text-themed">{{ authorization.user.username }}</div>
                 <div class="break-all text-xs text-themed-muted">#{{ authorization.user.id }} · {{ authorization.user.email || '无邮箱' }}</div>
               </td>
@@ -733,23 +754,23 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
               </td>
               <td class="py-3 pr-4">
                 <div class="flex flex-wrap gap-1">
-                  <span v-for="scope in authorization.scopes" :key="scope" class="rounded bg-themed-secondary px-2 py-1 font-mono text-[11px] text-themed">
+                  <span v-for="scope in authorization.scopes" :key="scope" class="rounded-full bg-themed-secondary px-2 py-0.5 font-mono text-2xs text-themed">
                     {{ scope }}
                   </span>
                 </div>
               </td>
               <td class="py-3 pr-4">
-                <span :class="authorization.active ? 'text-success' : 'text-warning'">
+                <span class="inline-flex rounded-full border px-2 py-0.5 text-2xs font-medium" :class="authorization.active ? 'border-success/30 text-success' : 'border-warning/30 text-warning'">
                   {{ formatOAuthAuthorizationStatus(authorization) }}
                 </span>
-                <div v-if="authorization.revokedAt" class="text-xs text-themed-muted">{{ new Date(authorization.revokedAt).toLocaleString() }}</div>
+                <div v-if="authorization.revokedAt" class="mt-1 text-xs text-themed-muted">{{ new Date(authorization.revokedAt).toLocaleString() }}</div>
               </td>
-              <td class="py-3 pr-4 text-themed">
+              <td class="py-3 pr-4 font-mono tabular-nums text-themed">
                 <div>Access: {{ authorization.tokenStats.activeAccessTokens }}</div>
                 <div>Refresh: {{ authorization.tokenStats.activeRefreshTokens }}</div>
               </td>
               <td class="py-3 pr-4 text-themed-muted">{{ new Date(authorization.lastAuthorizedAt).toLocaleString() }}</td>
-              <td class="py-3 pr-4">
+              <td class="py-3 pr-6">
                 <button
                   class="btn-ghost btn-sm text-error"
                   :disabled="Boolean(authorization.revokedAt)"
@@ -766,8 +787,8 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
         </table>
       </div>
 
-      <div class="mt-4 flex flex-col gap-3 text-sm text-themed-muted md:flex-row md:items-center md:justify-between">
-        <div>共 {{ oauthAuthorizationTotal }} 条，当前第 {{ oauthAuthorizationFilters.page }} / {{ oauthAuthorizationTotalPages }} 页</div>
+      <div class="flex flex-col gap-3 border-t border-themed px-6 py-4 text-sm text-themed-muted md:flex-row md:items-center md:justify-between">
+        <div>共 <span class="font-mono tabular-nums text-themed">{{ oauthAuthorizationTotal }}</span> 条，当前第 <span class="font-mono tabular-nums text-themed">{{ oauthAuthorizationFilters.page }}</span> / <span class="font-mono tabular-nums text-themed">{{ oauthAuthorizationTotalPages }}</span> 页</div>
         <div class="flex gap-2">
           <button class="btn-secondary btn-sm" :disabled="oauthAuthorizationFilters.page <= 1" @click="setOAuthAuthorizationPage(oauthAuthorizationFilters.page - 1)">上一页</button>
           <button class="btn-secondary btn-sm" :disabled="oauthAuthorizationFilters.page >= oauthAuthorizationTotalPages" @click="setOAuthAuthorizationPage(oauthAuthorizationFilters.page + 1)">下一页</button>
@@ -777,78 +798,98 @@ function formatScopeAccess(access: PublicApiScopeMetadata['access']): string {
 
     <!-- Edit Modal -->
     <Teleport to="body">
-      <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showModal = false"></div>
-        
-        <div class="relative w-full max-w-md bg-themed border border-themed rounded-xl p-6 shadow-2xl animate-fade-in">
-          <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-              <div 
-                class="w-10 h-10 rounded-lg flex items-center justify-center"
-                :class="[
-                  'bg-themed-secondary',
-                  editProvider === 'google' && !themeStore.isDark && 'bg-white'
-                ]"
-                v-html="editProvider ? providerInfo[editProvider]?.icon : ''"
-              ></div>
-              <h3 class="text-lg font-semibold text-themed">
-                {{ t('admin.oauth.configure') }} {{ editProvider ? providerInfo[editProvider]?.name : '' }}
-              </h3>
-            </div>
-            <button class="text-themed-secondary hover:text-themed" @click="showModal = false">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          
-          <form class="space-y-4" @submit.prevent="saveConfig">
-            <div>
-              <label class="block text-sm text-themed-secondary mb-1">{{ t('admin.oauth.clientId') }} *</label>
-              <input 
-                v-model="form.clientId" 
-                type="text" 
-                class="input" 
-                :placeholder="t('admin.oauth.enterClientId')"
-              />
-            </div>
+      <Transition name="modal">
+        <div v-if="showModal" class="modal-overlay">
+          <div class="modal-backdrop" @click="showModal = false"></div>
 
-            <div>
-              <label class="block text-sm text-themed-secondary mb-1">
-                {{ t('admin.oauth.clientSecret') }} {{ editProvider && configs[editProvider]?.configured ? t('admin.oauth.leaveEmptyUnchanged') : '*' }}
-              </label>
-              <input 
-                v-model="form.clientSecret" 
-                type="password" 
-                class="input" 
-                :placeholder="t('admin.oauth.enterClientSecret')"
-              />
-            </div>
-
-            <label class="flex items-center gap-3 cursor-pointer">
-              <input 
-                v-model="form.enabled" 
-                type="checkbox" 
-                :class="[
-                  'w-4 h-4 rounded text-accent',
-                  themeStore.isDark ? 'border-gray-600 bg-gray-800 focus:ring-offset-gray-900' : 'border-gray-300 bg-white focus:ring-offset-white'
-                ]"
-              />
-              <div>
-                <div class="text-sm text-themed">{{ t('admin.oauth.enableLogin') }}</div>
-                <div class="text-xs text-themed-muted">{{ t('admin.oauth.enableLoginHint') }}</div>
+          <div class="modal-content">
+            <div class="modal-header">
+              <div class="flex min-w-0 items-center gap-3">
+                <div
+                  class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+                  :class="[
+                    'bg-themed-secondary',
+                    editProvider === 'google' && !themeStore.isDark && 'bg-white'
+                  ]"
+                  v-html="editProvider ? providerInfo[editProvider]?.icon : ''"
+                ></div>
+                <h3 class="modal-title truncate">
+                  {{ t('admin.oauth.configure') }} {{ editProvider ? providerInfo[editProvider]?.name : '' }}
+                </h3>
               </div>
-            </label>
-
-            <div class="flex justify-end gap-3 pt-4">
-              <button type="button" class="btn-secondary" @click="showModal = false">{{ t('common.cancel') }}</button>
-              <button type="submit" :disabled="formLoading" class="btn-primary">
-                {{ formLoading ? t('admin.oauth.saving') : t('admin.oauth.save') }}
+              <button class="btn-ghost btn-sm -mr-2 p-1.5" @click="showModal = false">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-          </form>
+
+            <form @submit.prevent="saveConfig">
+              <div class="modal-body">
+                <div>
+                  <label class="block text-sm text-themed-secondary mb-1.5">{{ t('admin.oauth.clientId') }} *</label>
+                  <input
+                    v-model="form.clientId"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.oauth.enterClientId')"
+                  />
+                </div>
+
+                <div>
+                  <label class="block text-sm text-themed-secondary mb-1.5">
+                    {{ t('admin.oauth.clientSecret') }} {{ editProvider && configs[editProvider]?.configured ? t('admin.oauth.leaveEmptyUnchanged') : '*' }}
+                  </label>
+                  <input
+                    v-model="form.clientSecret"
+                    type="password"
+                    class="input"
+                    :placeholder="t('admin.oauth.enterClientSecret')"
+                  />
+                </div>
+
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input
+                    v-model="form.enabled"
+                    type="checkbox"
+                    :class="[
+                      'w-4 h-4 rounded text-accent',
+                      themeStore.isDark ? 'border-gray-600 bg-gray-800 focus:ring-offset-gray-900' : 'border-gray-300 bg-white focus:ring-offset-white'
+                    ]"
+                  />
+                  <div>
+                    <div class="text-sm text-themed">{{ t('admin.oauth.enableLogin') }}</div>
+                    <div class="text-xs text-themed-muted">{{ t('admin.oauth.enableLoginHint') }}</div>
+                  </div>
+                </label>
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" class="btn-secondary" @click="showModal = false">{{ t('common.cancel') }}</button>
+                <button type="submit" :disabled="formLoading" class="btn-primary">
+                  <span v-if="formLoading" class="loading-spinner h-4 w-4"></span>
+                  {{ formLoading ? t('admin.oauth.saving') : t('admin.oauth.save') }}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.nimbus-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-view *,
+  .nimbus-view *::before,
+  .nimbus-view *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+</style>

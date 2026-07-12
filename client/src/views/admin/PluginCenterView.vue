@@ -1662,16 +1662,23 @@ watch(() => route.query.tab, tab => {
 
 <template>
   <div class="kawaii-page p-6 space-y-6 animate-fade-in">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-themed">扩展中心</h1>
-        <p class="mt-1 text-sm text-themed-muted">上传、安装、启用和管理 PayIncus 扩展。扩展通过受控扩展点接入后台和用户端。</p>
+    <div class="page-header">
+      <div class="flex items-center gap-3">
+        <span class="nimbus-title-icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M14.25 6.087c0-.355.186-.676.401-.959.221-.29.349-.634.349-1.003 0-1.036-1.007-1.875-2.25-1.875s-2.25.84-2.25 1.875c0 .369.128.713.349 1.003.215.283.401.604.401.959a.64.64 0 0 1-.657.643 48.39 48.39 0 0 1-4.163-.3c.186 1.613.293 3.25.315 4.907a.656.656 0 0 1-.658.663c-.355 0-.676-.186-.959-.401a1.647 1.647 0 0 0-1.003-.349c-1.035 0-1.875 1.007-1.875 2.25s.84 2.25 1.875 2.25c.369 0 .713-.128 1.003-.349.283-.215.604-.401.959-.401.31 0 .555.26.532.57a48.039 48.039 0 0 1-.642 5.056c1.518.19 3.058.309 4.616.354a.64.64 0 0 0 .657-.643c0-.355-.186-.676-.401-.959a1.647 1.647 0 0 1-.349-1.003c0-1.035 1.008-1.875 2.25-1.875s2.25.84 2.25 1.875c0 .369-.128.713-.349 1.003-.215.283-.401.604-.401.959 0 .333.277.599.61.58a48.1 48.1 0 0 0 5.427-.63 48.05 48.05 0 0 0 .582-4.717.532.532 0 0 0-.533-.57c-.355 0-.676.186-.959.401-.29.221-.634.349-1.003.349-1.035 0-1.875-1.007-1.875-2.25s.84-2.25 1.875-2.25c.37 0 .713.128 1.003.349.283.215.604.401.959.401a.656.656 0 0 0 .659-.663 47.703 47.703 0 0 0-.31-4.82.658.658 0 0 0-.658-.585z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="page-title">扩展中心</h1>
+          <p class="page-description">上传、安装、启用和管理 PayIncus 扩展。扩展通过受控扩展点接入后台和用户端。</p>
+        </div>
       </div>
-      <div class="flex gap-2">
-        <button class="btn-secondary" @click="refreshAll">刷新</button>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn btn-secondary" @click="refreshAll">刷新</button>
         <button
           v-if="activeTab === 'market'"
-          class="btn-primary"
+          class="btn btn-primary"
           :disabled="marketLoading"
           @click="loadMarket"
         >
@@ -1679,7 +1686,7 @@ watch(() => route.query.tab, tab => {
         </button>
         <button
           v-else-if="activeTab === 'submissions'"
-          class="btn-primary"
+          class="btn btn-primary"
           :disabled="submissionsLoading"
           @click="loadSubmissions(submissionStatusFilter)"
         >
@@ -1687,7 +1694,7 @@ watch(() => route.query.tab, tab => {
         </button>
         <button
           v-else-if="activeTab === 'themes'"
-          class="btn-primary"
+          class="btn btn-primary"
           :disabled="themesLoading || themeMarketLoading"
           @click="refreshThemesTab"
         >
@@ -1695,7 +1702,7 @@ watch(() => route.query.tab, tab => {
         </button>
         <button
           v-else-if="activeTab === 'tasks'"
-          class="btn-primary"
+          class="btn btn-primary"
           :disabled="!selectedTask || taskLogsLoading"
           @click="loadSelectedTaskLogs"
         >
@@ -1703,7 +1710,7 @@ watch(() => route.query.tab, tab => {
         </button>
         <button
           v-else-if="activeTab === 'events'"
-          class="btn-primary"
+          class="btn btn-primary"
           :disabled="eventsLoading"
           @click="loadPluginEvents(eventResultFilter)"
         >
@@ -1711,7 +1718,7 @@ watch(() => route.query.tab, tab => {
         </button>
         <button
           v-else-if="activeTab === 'limits'"
-          class="btn-primary"
+          class="btn btn-primary"
           :disabled="actionRateLimitsLoading"
           @click="loadActionRateLimits"
         >
@@ -1719,7 +1726,7 @@ watch(() => route.query.tab, tab => {
         </button>
         <button
           v-else-if="activeTab === 'capabilities'"
-          class="btn-primary"
+          class="btn btn-primary"
           :disabled="capabilityReviewsLoading"
           @click="loadCapabilityReviews(capabilityStatusFilter)"
         >
@@ -1730,115 +1737,124 @@ watch(() => route.query.tab, tab => {
 
     <ThemeTemplateSlot slot-name="admin.extensions.header" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
-    <div class="grid gap-4 md:grid-cols-6">
-      <div class="card p-4">
-        <div class="text-sm text-themed-muted">已安装</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ stats.installed }}</div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">已安装</div>
+        <div class="nimbus-stat-value">{{ stats.installed }}</div>
       </div>
-      <div class="card p-4">
-        <div class="text-sm text-themed-muted">已启用</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ stats.enabled }}</div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">已启用</div>
+        <div class="nimbus-stat-value">{{ stats.enabled }}</div>
       </div>
-      <div class="card p-4">
-        <div class="text-sm text-themed-muted">异常</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ stats.failed }}</div>
+      <div class="card nimbus-stat p-4" :class="stats.failed > 0 ? 'nimbus-stat-danger' : ''">
+        <div class="nimbus-stat-label">异常</div>
+        <div class="nimbus-stat-value" :class="stats.failed > 0 ? 'text-rose-600 dark:text-rose-400' : ''">{{ stats.failed }}</div>
       </div>
-      <div class="card p-4">
-        <div class="text-sm text-themed-muted">市场扩展</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ stats.market }}</div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">市场扩展</div>
+        <div class="nimbus-stat-value">{{ stats.market }}</div>
       </div>
-      <div class="card p-4">
-        <div class="text-sm text-themed-muted">待审投稿</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ submissionSummary.pending }}</div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">待审投稿</div>
+        <div class="nimbus-stat-value">{{ submissionSummary.pending }}</div>
       </div>
-      <div class="card p-4">
-        <div class="text-sm text-themed-muted">主题</div>
-        <div class="mt-2 text-2xl font-semibold text-themed">{{ stats.themes }}</div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">主题</div>
+        <div class="nimbus-stat-value">{{ stats.themes }}</div>
       </div>
     </div>
 
     <div v-if="loading" class="py-16 text-center text-themed-muted">加载中...</div>
 
     <template v-else>
-      <div class="sticky top-0 z-10 overflow-hidden rounded-lg border border-themed bg-themed-surface">
-        <div class="flex flex-col gap-4 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">{{ activeTabMeta.label }}</h2>
-            <p class="mt-1 text-sm text-themed-muted">{{ activeTabMeta.description }}</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="tab in tabs"
-              :key="tab.key"
-              class="rounded border px-3 py-2 text-sm font-medium transition"
-              :class="activeTab === tab.key ? 'border-accent bg-accent' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
-              :style="activeTab === tab.key ? { color: 'var(--bg-primary)' } : {}"
-              @click="setActiveTab(tab.key)"
-            >
-              {{ tab.label }}
-            </button>
-          </div>
-        </div>
+      <div class="mb-5 flex flex-wrap gap-1 border-b border-themed">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          class="-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+          :class="activeTab === tab.key
+            ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+            : 'border-transparent text-themed-muted hover:text-themed'"
+          @click="setActiveTab(tab.key)"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+      <div class="mb-6 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h2 class="text-base font-semibold text-themed">{{ activeTabMeta.label }}</h2>
+        <p class="text-sm text-themed-muted">{{ activeTabMeta.description }}</p>
       </div>
 
       <section v-if="activeTab === 'installed'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div class="rounded-lg border border-themed bg-themed-surface p-5">
-          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <h2 class="text-lg font-semibold text-themed">已安装扩展</h2>
+        <div class="card p-5">
+          <div class="flex flex-col gap-4 border-b border-themed pb-4 md:flex-row md:items-center md:justify-between">
+            <div class="flex items-center gap-2">
+              <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25A2.25 2.25 0 0 1 8.25 10.5H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+              </svg>
+              <h2 class="text-base font-semibold text-themed">已安装扩展</h2>
+            </div>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
               <input type="file" accept=".tar.gz" class="max-w-full text-sm" @change="onFileChange" />
-              <button class="btn-primary" :disabled="!selectedFile || uploading" @click="uploadPlugin">{{ uploading ? '安装中...' : '上传安装' }}</button>
+              <button class="btn btn-primary btn-sm" :disabled="!selectedFile || uploading" @click="uploadPlugin">{{ uploading ? '安装中...' : '上传安装' }}</button>
             </div>
           </div>
-          <div class="mt-4 overflow-hidden">
+          <div class="mt-2 overflow-hidden">
             <table class="w-full table-fixed text-sm">
-              <thead class="text-left text-themed-muted">
-                <tr>
-                  <th class="py-2 pr-4">扩展</th>
-                  <th class="py-2 pr-4">版本</th>
-                  <th class="py-2 pr-4">来源</th>
-                  <th class="py-2 pr-4">状态</th>
-                  <th class="py-2 pr-4">操作</th>
+              <thead>
+                <tr class="border-b border-themed">
+                  <th class="nimbus-th w-[34%]">扩展</th>
+                  <th class="nimbus-th w-[14%]">版本</th>
+                  <th class="nimbus-th w-[12%]">来源</th>
+                  <th class="nimbus-th w-[16%]">状态</th>
+                  <th class="nimbus-th w-[24%]">操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="plugin in plugins" :key="plugin.pluginId" class="border-t border-themed">
+                <tr v-for="plugin in plugins" :key="plugin.pluginId" class="nimbus-row border-b border-themed">
                   <td class="py-3 pr-4">
-                    <button class="text-left font-medium text-themed hover:underline" @click="selectPlugin(plugin)">{{ displayPluginName(plugin) }}</button>
-                    <div class="font-mono text-xs text-themed-muted">{{ plugin.pluginId }}</div>
+                    <button class="block truncate text-left font-medium text-themed hover:underline" @click="selectPlugin(plugin)">{{ displayPluginName(plugin) }}</button>
+                    <div class="truncate font-mono text-xs text-themed-muted">{{ plugin.pluginId }}</div>
                   </td>
-                  <td class="py-3 pr-4 text-themed">{{ plugin.currentVersion || '-' }}</td>
+                  <td class="py-3 pr-4 tabular-nums text-themed">{{ plugin.currentVersion || '-' }}</td>
                   <td class="py-3 pr-4 text-themed">{{ plugin.sourceType === 'market' ? '市场' : '上传' }}</td>
                   <td class="py-3 pr-4">
-                    <span class="rounded border px-2 py-1 text-xs" :class="statusClass(plugin)">{{ statusText(plugin) }}</span>
+                    <span class="nimbus-chip" :class="statusClass(plugin)">{{ statusText(plugin) }}</span>
                   </td>
                   <td class="py-3 pr-4">
-                    <button class="btn-secondary mr-2" @click="togglePlugin(plugin)">{{ isPluginEnabled(plugin) ? t('pluginCenter.actions.disable') : t('pluginCenter.actions.enable') }}</button>
-                    <button
-                      v-if="isPluginEnabled(plugin) && hasAdminSettingsPage(plugin)"
-                      class="btn-secondary mr-2"
-                      @click="openPluginSettings(plugin)"
-                    >
-                      设置
-                    </button>
-                    <button class="btn-secondary" @click="selectPlugin(plugin)">详情</button>
+                    <div class="flex flex-wrap gap-2">
+                      <button class="btn btn-secondary btn-sm" @click="togglePlugin(plugin)">{{ isPluginEnabled(plugin) ? t('pluginCenter.actions.disable') : t('pluginCenter.actions.enable') }}</button>
+                      <button
+                        v-if="isPluginEnabled(plugin) && hasAdminSettingsPage(plugin)"
+                        class="btn btn-secondary btn-sm"
+                        @click="openPluginSettings(plugin)"
+                      >
+                        设置
+                      </button>
+                      <button class="btn btn-secondary btn-sm" @click="selectPlugin(plugin)">详情</button>
+                    </div>
                   </td>
                 </tr>
                 <tr v-if="plugins.length === 0">
-                  <td colspan="5" class="py-8 text-center text-themed-muted">暂无扩展</td>
+                  <td colspan="5" class="py-10 text-center text-themed-muted">暂无扩展</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
 
-        <aside class="rounded-lg border border-themed bg-themed-surface p-5">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <h2 class="text-lg font-semibold text-themed">扩展详情</h2>
-              <p class="mt-1 text-sm text-themed-muted">{{ selectedPlugin?.pluginId || '未选择扩展' }}</p>
+        <aside class="card p-5">
+          <div class="flex items-start justify-between gap-3 border-b border-themed pb-4">
+            <div class="flex items-center gap-2">
+              <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+              </svg>
+              <div>
+                <h2 class="text-base font-semibold text-themed">扩展详情</h2>
+                <p class="mt-0.5 font-mono text-xs text-themed-muted">{{ selectedPlugin?.pluginId || '未选择扩展' }}</p>
+              </div>
             </div>
-            <button v-if="selectedPlugin" class="btn-secondary" @click="uninstallSelectedPlugin">卸载</button>
+            <button v-if="selectedPlugin" class="btn btn-secondary btn-sm" @click="uninstallSelectedPlugin">卸载</button>
           </div>
 
           <template v-if="selectedPlugin?.latestVersion">
@@ -1874,15 +1890,15 @@ watch(() => route.query.tab, tab => {
                   <p class="mt-1 text-xs text-themed-muted">后台只读统计，不展示 key/value 或业务对象 ID。</p>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
-                  <button class="btn-secondary btn-sm" :disabled="!selectedPluginId" @click="exportPluginStorageBackup()">导出备份</button>
+                  <button class="btn btn-secondary btn-sm" :disabled="!selectedPluginId" @click="exportPluginStorageBackup()">导出备份</button>
                   <button
-                    class="btn-secondary btn-sm"
+                    class="btn btn-secondary btn-sm"
                     :disabled="!selectedPluginId || pluginStorageBackupArchiveActionId === 'create'"
                     @click="createPluginStorageBackupArchive()"
                   >
                     {{ pluginStorageBackupArchiveActionId === 'create' ? '创建中...' : '创建归档' }}
                   </button>
-                  <label class="btn-secondary btn-sm cursor-pointer">
+                  <label class="btn btn-secondary btn-sm cursor-pointer">
                     恢复备份
                     <input class="hidden" type="file" accept="application/json,.json" @change="onPluginStorageBackupSelected" />
                   </label>
@@ -1896,7 +1912,7 @@ watch(() => route.query.tab, tab => {
               </div>
 
               <div v-if="pluginStorageUsageLoading" class="mt-4 text-sm text-themed-muted">正在加载存储用量...</div>
-              <div v-else-if="pluginStorageUsageError" class="mt-4 text-sm text-red-600">{{ pluginStorageUsageError }}</div>
+              <div v-else-if="pluginStorageUsageError" class="mt-4 text-sm text-rose-600 dark:text-rose-400">{{ pluginStorageUsageError }}</div>
               <div v-else-if="pluginStorageUsage" class="mt-4 space-y-4">
                 <div class="grid grid-cols-3 gap-2 text-center text-xs">
                   <div class="rounded border border-themed bg-themed-surface p-2">
@@ -1958,7 +1974,7 @@ watch(() => route.query.tab, tab => {
                       <div class="font-medium text-themed">归档备份</div>
                       <div class="mt-1 text-themed-muted">保存在服务器 `PLUGIN_DATA_DIR`，用于恢复演练和运维保留。</div>
                     </div>
-                    <button class="btn-secondary btn-sm" :disabled="pluginStorageBackupArchivesLoading" @click="loadPluginStorageBackupArchives()">
+                    <button class="btn btn-secondary btn-sm" :disabled="pluginStorageBackupArchivesLoading" @click="loadPluginStorageBackupArchives()">
                       {{ pluginStorageBackupArchivesLoading ? '加载中...' : '刷新' }}
                     </button>
                   </div>
@@ -1993,18 +2009,18 @@ watch(() => route.query.tab, tab => {
                                 </div>
                               </div>
                               <div class="flex shrink-0 flex-wrap items-center gap-1">
-                                <button class="btn-secondary btn-xs" :disabled="pluginStorageBackupArchiveActionId === `remote-validate:${remoteArchive.id}`" @click="validatePluginStorageRemoteBackupArchiveRestore(archive, remoteArchive)">远端演练</button>
-                                <button class="btn-secondary btn-xs" :disabled="pluginStorageBackupArchiveActionId === `remote-restore:${remoteArchive.id}`" @click="restorePluginStorageRemoteBackupArchive(archive, remoteArchive)">远端恢复</button>
+                                <button class="btn btn-secondary btn-xs" :disabled="pluginStorageBackupArchiveActionId === `remote-validate:${remoteArchive.id}`" @click="validatePluginStorageRemoteBackupArchiveRestore(archive, remoteArchive)">远端演练</button>
+                                <button class="btn btn-secondary btn-xs" :disabled="pluginStorageBackupArchiveActionId === `remote-restore:${remoteArchive.id}`" @click="restorePluginStorageRemoteBackupArchive(archive, remoteArchive)">远端恢复</button>
                               </div>
                             </div>
                           </div>
                         </div>
                         <div class="flex shrink-0 flex-wrap items-center gap-2">
-                          <button class="btn-secondary btn-sm" :disabled="pluginStorageBackupArchiveActionId === archive.backupId" @click="downloadPluginStorageBackupArchive(archive)">下载</button>
-                          <button class="btn-secondary btn-sm" :disabled="pluginStorageBackupArchiveActionId === archive.backupId" @click="validatePluginStorageBackupArchiveRestore(archive)">演练</button>
-                          <button class="btn-secondary btn-sm" :disabled="pluginStorageBackupArchiveActionId === archive.backupId" @click="restorePluginStorageBackupArchive(archive)">恢复</button>
-                          <button class="btn-secondary btn-sm" :disabled="pluginStorageBackupArchiveActionId === `remote-upload:${archive.backupId}`" @click="uploadPluginStorageBackupArchiveRemote(archive)">上传远端</button>
-                          <button class="btn-danger btn-sm" :disabled="pluginStorageBackupArchiveActionId === archive.backupId" @click="deletePluginStorageBackupArchive(archive)">删除</button>
+                          <button class="btn btn-secondary btn-sm" :disabled="pluginStorageBackupArchiveActionId === archive.backupId" @click="downloadPluginStorageBackupArchive(archive)">下载</button>
+                          <button class="btn btn-secondary btn-sm" :disabled="pluginStorageBackupArchiveActionId === archive.backupId" @click="validatePluginStorageBackupArchiveRestore(archive)">演练</button>
+                          <button class="btn btn-secondary btn-sm" :disabled="pluginStorageBackupArchiveActionId === archive.backupId" @click="restorePluginStorageBackupArchive(archive)">恢复</button>
+                          <button class="btn btn-secondary btn-sm" :disabled="pluginStorageBackupArchiveActionId === `remote-upload:${archive.backupId}`" @click="uploadPluginStorageBackupArchiveRemote(archive)">上传远端</button>
+                          <button class="btn btn-danger btn-sm" :disabled="pluginStorageBackupArchiveActionId === archive.backupId" @click="deletePluginStorageBackupArchive(archive)">删除</button>
                         </div>
                       </div>
                     </div>
@@ -2019,7 +2035,7 @@ watch(() => route.query.tab, tab => {
               <p class="mt-2 text-sm leading-6 text-themed-muted">
                 该扩展的设置入口会显示在左侧菜单中，也可以从这里打开独立设置页。
               </p>
-              <button class="btn-primary mt-3" @click="openPluginSettings(selectedPlugin)">打开设置</button>
+              <button class="btn btn-primary btn-sm mt-3" @click="openPluginSettings(selectedPlugin)">打开设置</button>
             </div>
             <div v-else-if="isPluginEnabled(selectedPlugin)" class="mt-5 rounded border border-themed bg-themed p-4 text-sm text-themed-muted">
               该扩展未声明后台设置页。
@@ -2031,13 +2047,18 @@ watch(() => route.query.tab, tab => {
         </aside>
       </section>
 
-      <section v-else-if="activeTab === 'market'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'market'" class="card overflow-hidden">
         <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">扩展市场</h2>
-            <p class="mt-1 text-sm text-themed-muted">仅展示已上架扩展；安装前会校验受信下载源、SHA256 和 PayIncus 兼容范围。</p>
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+            </svg>
+            <div>
+              <h2 class="text-base font-semibold text-themed">扩展市场</h2>
+              <p class="mt-0.5 text-sm text-themed-muted">仅展示已上架扩展；安装前会校验受信下载源、SHA256 和 PayIncus 兼容范围。</p>
+            </div>
           </div>
-          <button class="btn-primary" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
+          <button class="btn btn-primary btn-sm" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
         </div>
 
         <div class="border-b border-themed px-5 py-4">
@@ -2069,25 +2090,25 @@ watch(() => route.query.tab, tab => {
             <p class="mt-2 text-sm leading-6 text-themed-muted">
               {{ marketGovernance?.unavailableReason ? '请检查市场 URL、受信主机配置或稍后重试。' : '请确认已配置扩展市场索引地址，然后刷新市场读取受信扩展包。' }}
             </p>
-            <button class="btn-secondary mt-4" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
+            <button class="btn btn-secondary btn-sm mt-4" :disabled="marketLoading" @click="loadMarket">{{ marketLoading ? '加载中...' : '刷新市场' }}</button>
           </div>
         </div>
         <div v-else class="grid gap-4 p-5 xl:grid-cols-2">
-          <article v-for="entry in market" :key="entry.id" class="flex min-h-[420px] flex-col rounded border border-themed bg-themed p-4">
+          <article v-for="entry in market" :key="entry.id" class="nimbus-card flex min-h-[420px] flex-col rounded-lg border border-themed bg-themed-surface p-4">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <h3 class="font-medium text-themed">{{ entry.name }}</h3>
+                <h3 class="font-semibold text-themed">{{ entry.name }}</h3>
                 <p class="mt-1 truncate font-mono text-xs text-themed-muted">{{ entry.id }}</p>
               </div>
-              <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ entry.latest }}</span>
+              <span class="nimbus-chip text-themed-muted">{{ entry.latest }}</span>
             </div>
 
             <div class="mt-3 flex flex-wrap gap-2">
-              <span class="rounded border px-2 py-1 text-xs" :class="reviewBadgeClass(entry)">{{ marketReviewLabels[entry.reviewStatus] }}</span>
-              <span class="rounded border px-2 py-1 text-xs" :class="marketBadgeClass(entry)">{{ marketTrustLabels[entry.trustLevel] }}</span>
-              <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ marketPricingLabels[entry.pricing.type] }}</span>
-              <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">{{ formatRating(entry) }}</span>
-              <span class="rounded border border-themed px-2 py-1 text-xs text-themed-muted">安装 {{ entry.installCount }}</span>
+              <span class="nimbus-chip" :class="reviewBadgeClass(entry)">{{ marketReviewLabels[entry.reviewStatus] }}</span>
+              <span class="nimbus-chip" :class="marketBadgeClass(entry)">{{ marketTrustLabels[entry.trustLevel] }}</span>
+              <span class="nimbus-chip text-themed-muted">{{ marketPricingLabels[entry.pricing.type] }}</span>
+              <span class="nimbus-chip text-themed-muted">{{ formatRating(entry) }}</span>
+              <span class="nimbus-chip text-themed-muted">安装 {{ entry.installCount }}</span>
             </div>
 
             <p class="mt-3 line-clamp-2 min-h-[48px] text-sm leading-6 text-themed-muted">{{ entry.description || entry.repo }}</p>
@@ -2154,29 +2175,34 @@ watch(() => route.query.tab, tab => {
                 </dd>
               </div>
             </dl>
-            <button class="btn-primary mt-auto w-full" :disabled="!canInstallMarketEntry(entry)" @click="installMarketPlugin(entry)">
+            <button class="btn btn-primary mt-auto w-full" :disabled="!canInstallMarketEntry(entry)" @click="installMarketPlugin(entry)">
               {{ canInstallMarketEntry(entry) ? '安装' : '不可安装' }}
             </button>
           </article>
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'submissions'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'submissions'" class="card overflow-hidden">
         <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">投稿审核</h2>
-            <p class="mt-1 text-sm text-themed-muted">审核第三方扩展的来源、SHA256、权限、兼容范围和风险等级。通过后仍需要发布到文档站市场目录。</p>
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            <div>
+              <h2 class="text-base font-semibold text-themed">投稿审核</h2>
+              <p class="mt-0.5 text-sm text-themed-muted">审核第三方扩展的来源、SHA256、权限、兼容范围和风险等级。通过后仍需要发布到文档站市场目录。</p>
+            </div>
           </div>
           <div class="flex flex-col gap-2 sm:items-end">
-            <button class="btn-primary" :disabled="publishingMarketIndex" @click="publishMarketIndex">
+            <button class="btn btn-primary btn-sm" :disabled="publishingMarketIndex" @click="publishMarketIndex">
               {{ publishingMarketIndex ? '发布中...' : '发布市场目录' }}
             </button>
             <div class="flex flex-wrap gap-2">
               <button
                 v-for="status in (['pending', 'listed', 'rejected', 'delisted'] as const)"
                 :key="status"
-                class="rounded border px-3 py-2 text-sm font-medium transition"
-                :class="submissionStatusFilter === status ? 'border-gray-900 bg-gray-900 text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
+                class="nimbus-seg"
+                :class="submissionStatusFilter === status ? 'nimbus-seg-active' : ''"
                 @click="loadSubmissions(status)"
               >
                 {{ submissionReviewLabels[status] }}
@@ -2207,14 +2233,14 @@ watch(() => route.query.tab, tab => {
             <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
               <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="font-medium text-themed">{{ submission.name }}</h3>
-                  <span class="rounded border px-2 py-1 text-xs" :class="submissionReviewClass(submission.reviewStatus)">
+                  <h3 class="font-semibold text-themed">{{ submission.name }}</h3>
+                  <span class="nimbus-chip" :class="submissionReviewClass(submission.reviewStatus)">
                     {{ submissionReviewLabels[submission.reviewStatus] }}
                   </span>
-                  <span class="rounded border px-2 py-1 text-xs" :class="submissionRiskClass(submission.riskLevel)">
+                  <span class="nimbus-chip" :class="submissionRiskClass(submission.riskLevel)">
                     {{ submissionRiskLabels[submission.riskLevel] }}
                   </span>
-                  <span class="rounded border px-2 py-1 text-xs" :class="submissionScanClass(submission.scanStatus)">
+                  <span class="nimbus-chip" :class="submissionScanClass(submission.scanStatus)">
                     {{ submissionScanLabels[submission.scanStatus] }}
                   </span>
                 </div>
@@ -2224,12 +2250,12 @@ watch(() => route.query.tab, tab => {
                 </p>
               </div>
               <div class="flex flex-wrap gap-2">
-                <button class="btn-secondary" :disabled="scanningSubmissionId === submission.id" @click="scanSubmission(submission)">
+                <button class="btn btn-secondary btn-sm" :disabled="scanningSubmissionId === submission.id" @click="scanSubmission(submission)">
                   {{ scanningSubmissionId === submission.id ? '扫描中...' : '扫描' }}
                 </button>
-                <button class="btn-secondary" @click="reviewSubmission(submission, 'listed', submission.riskLevel)">通过</button>
-                <button class="btn-secondary" @click="reviewSubmission(submission, 'rejected', 'high')">拒绝</button>
-                <button class="btn-secondary" @click="reviewSubmission(submission, 'delisted', 'high')">下架</button>
+                <button class="btn btn-secondary btn-sm" @click="reviewSubmission(submission, 'listed', submission.riskLevel)">通过</button>
+                <button class="btn btn-secondary btn-sm" @click="reviewSubmission(submission, 'rejected', 'high')">拒绝</button>
+                <button class="btn btn-secondary btn-sm" @click="reviewSubmission(submission, 'delisted', 'high')">下架</button>
               </div>
             </div>
 
@@ -2296,16 +2322,21 @@ watch(() => route.query.tab, tab => {
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'themes'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'themes'" class="card overflow-hidden">
         <div class="flex flex-col gap-4 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">主题系统</h2>
-            <p class="mt-1 text-sm text-themed-muted">主题包只允许 CSS、设计 token 和本地静态资源；启用后用户端会加载当前主题 CSS。</p>
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 0 0 3.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008Z" />
+            </svg>
+            <div>
+              <h2 class="text-base font-semibold text-themed">主题系统</h2>
+              <p class="mt-0.5 text-sm text-themed-muted">主题包只允许 CSS、设计 token 和本地静态资源；启用后用户端会加载当前主题 CSS。</p>
+            </div>
           </div>
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input type="file" accept=".tar.gz" class="max-w-full text-sm" @change="onThemeFileChange" />
-            <button class="btn-primary" :disabled="!selectedThemeFile || themeUploading" @click="uploadTheme">{{ themeUploading ? '安装中...' : '上传主题' }}</button>
-            <button class="btn-secondary" :disabled="!themes.some(theme => theme.enabled)" @click="rollbackDefaultTheme">回滚默认</button>
+            <button class="btn btn-primary btn-sm" :disabled="!selectedThemeFile || themeUploading" @click="uploadTheme">{{ themeUploading ? '安装中...' : '上传主题' }}</button>
+            <button class="btn btn-secondary btn-sm" :disabled="!themes.some(theme => theme.enabled)" @click="rollbackDefaultTheme">回滚默认</button>
           </div>
         </div>
 
@@ -2343,7 +2374,7 @@ watch(() => route.query.tab, tab => {
                 {{ themeMarketGovernance.unavailableReason ? '市场源不可用' : (themeMarketGovernance.indexHost || '未配置市场地址') }} · {{ themeMarketGovernance.visibleEntries }} / {{ themeMarketGovernance.totalEntries }} listed · {{ themeMarketGovernance.fingerprint.slice(0, 12) }}
               </p>
             </div>
-            <button class="btn-secondary" :disabled="themeMarketLoading" @click="loadThemeMarket">
+            <button class="btn btn-secondary btn-sm" :disabled="themeMarketLoading" @click="loadThemeMarket">
               {{ themeMarketLoading ? '加载中...' : '刷新主题市场' }}
             </button>
           </div>
@@ -2356,7 +2387,7 @@ watch(() => route.query.tab, tab => {
             <article
               v-for="entry in themeMarket"
               :key="entry.id"
-              class="rounded border border-themed bg-themed p-4"
+              class="nimbus-card rounded-lg border border-themed bg-themed-surface p-4"
             >
               <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -2364,7 +2395,7 @@ watch(() => route.query.tab, tab => {
                   <div class="mt-1 font-mono text-xs text-themed-muted">{{ entry.id }}@{{ entry.latest }}</div>
                   <p class="mt-2 text-xs leading-5 text-themed-muted">{{ entry.description || '无描述' }}</p>
                 </div>
-                <span class="w-fit rounded border px-2 py-1 text-xs" :class="themeMarketBadgeClass(entry)">{{ marketTrustLabels[entry.trustLevel] }}</span>
+                <span class="nimbus-chip" :class="themeMarketBadgeClass(entry)">{{ marketTrustLabels[entry.trustLevel] }}</span>
               </div>
               <div class="mt-3 grid gap-2 text-xs text-themed-muted md:grid-cols-2">
                 <div>开发者：{{ entry.developer.name }}</div>
@@ -2376,13 +2407,13 @@ watch(() => route.query.tab, tab => {
               </div>
               <div class="mt-3 flex flex-wrap gap-2">
                 <button
-                  class="btn-primary"
+                  class="btn btn-primary btn-sm"
                   :disabled="!canInstallThemeMarketEntry(entry) || installingThemeMarketId === entry.id || isThemeMarketEntryInstalled(entry)"
                   @click="installMarketTheme(entry)"
                 >
                   {{ installingThemeMarketId === entry.id ? '安装中...' : isThemeMarketEntryInstalled(entry) ? '已安装' : '安装主题' }}
                 </button>
-                <a v-if="entry.previewImageUrl" class="btn-secondary" :href="entry.previewImageUrl" target="_blank" rel="noreferrer">预览图</a>
+                <a v-if="entry.previewImageUrl" class="btn btn-secondary btn-sm" :href="entry.previewImageUrl" target="_blank" rel="noreferrer">预览图</a>
               </div>
             </article>
           </div>
@@ -2398,16 +2429,16 @@ watch(() => route.query.tab, tab => {
               <button
                 v-for="status in (['pending', 'listed', 'rejected', 'delisted'] as const)"
                 :key="status"
-                class="rounded border px-3 py-2 text-xs font-medium transition"
-                :class="themeSubmissionStatusFilter === status ? 'border-gray-900 bg-gray-900 text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
+                class="nimbus-seg nimbus-seg-sm"
+                :class="themeSubmissionStatusFilter === status ? 'nimbus-seg-active' : ''"
                 @click="loadThemeSubmissions(status)"
               >
                 {{ themeSubmissionReviewLabels[status] }}
               </button>
-              <button class="btn-secondary" :disabled="themeSubmissionsLoading" @click="loadThemeSubmissions(themeSubmissionStatusFilter)">
+              <button class="btn btn-secondary btn-sm" :disabled="themeSubmissionsLoading" @click="loadThemeSubmissions(themeSubmissionStatusFilter)">
                 {{ themeSubmissionsLoading ? '加载中...' : '刷新投稿' }}
               </button>
-              <button class="btn-primary" :disabled="publishingThemeMarketIndex" @click="publishThemeMarketIndex">
+              <button class="btn btn-primary btn-sm" :disabled="publishingThemeMarketIndex" @click="publishThemeMarketIndex">
                 {{ publishingThemeMarketIndex ? '发布中...' : '发布主题市场' }}
               </button>
             </div>
@@ -2436,7 +2467,7 @@ watch(() => route.query.tab, tab => {
             <article
               v-for="submission in themeSubmissions"
               :key="submission.id"
-              class="rounded border border-themed bg-themed p-4 text-sm"
+              class="nimbus-card rounded-lg border border-themed bg-themed-surface p-4 text-sm"
             >
               <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -2445,9 +2476,9 @@ watch(() => route.query.tab, tab => {
                   <p class="mt-2 text-xs leading-5 text-themed-muted">{{ submission.notes || '无说明' }}</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <span class="rounded border px-2 py-1 text-xs" :class="themeSubmissionReviewClass(submission.reviewStatus)">{{ themeSubmissionReviewLabels[submission.reviewStatus] }}</span>
-                  <span class="rounded border px-2 py-1 text-xs" :class="themeSubmissionRiskClass(submission.riskLevel)">{{ themeSubmissionRiskLabels[submission.riskLevel] }}</span>
-                  <span class="rounded border px-2 py-1 text-xs" :class="themeSubmissionScanClass(submission.scanStatus)">{{ themeSubmissionScanLabels[submission.scanStatus] }}</span>
+                  <span class="nimbus-chip" :class="themeSubmissionReviewClass(submission.reviewStatus)">{{ themeSubmissionReviewLabels[submission.reviewStatus] }}</span>
+                  <span class="nimbus-chip" :class="themeSubmissionRiskClass(submission.riskLevel)">{{ themeSubmissionRiskLabels[submission.riskLevel] }}</span>
+                  <span class="nimbus-chip" :class="themeSubmissionScanClass(submission.scanStatus)">{{ themeSubmissionScanLabels[submission.scanStatus] }}</span>
                 </div>
               </div>
               <div class="mt-3 grid gap-2 text-xs text-themed-muted md:grid-cols-2">
@@ -2468,12 +2499,12 @@ watch(() => route.query.tab, tab => {
                 </div>
               </div>
               <div class="mt-3 flex flex-wrap gap-2">
-                <button class="btn-secondary" :disabled="scanningThemeSubmissionId === submission.id" @click="scanThemeSubmission(submission)">
+                <button class="btn btn-secondary btn-sm" :disabled="scanningThemeSubmissionId === submission.id" @click="scanThemeSubmission(submission)">
                   {{ scanningThemeSubmissionId === submission.id ? '扫描中...' : '扫描' }}
                 </button>
-                <button class="btn-primary" @click="reviewThemeSubmission(submission, 'listed')">通过上架</button>
-                <button class="btn-secondary" @click="reviewThemeSubmission(submission, 'rejected')">拒绝</button>
-                <button class="btn-secondary" @click="reviewThemeSubmission(submission, 'delisted')">下架</button>
+                <button class="btn btn-primary btn-sm" @click="reviewThemeSubmission(submission, 'listed')">通过上架</button>
+                <button class="btn btn-secondary btn-sm" @click="reviewThemeSubmission(submission, 'rejected')">拒绝</button>
+                <button class="btn btn-secondary btn-sm" @click="reviewThemeSubmission(submission, 'delisted')">下架</button>
               </div>
             </article>
           </div>
@@ -2486,20 +2517,20 @@ watch(() => route.query.tab, tab => {
         </div>
         <div v-else class="overflow-hidden">
           <table class="w-full table-fixed text-sm">
-            <thead class="border-b border-themed text-left text-themed-muted">
-              <tr>
-                <th class="px-5 py-3">主题</th>
-                <th class="px-5 py-3">版本</th>
-                <th class="px-5 py-3">状态</th>
-                <th class="px-5 py-3">Token</th>
-                <th class="px-5 py-3">配置</th>
-                <th class="px-5 py-3">SHA256</th>
-                <th class="px-5 py-3">操作</th>
+            <thead>
+              <tr class="border-b border-themed">
+                <th class="nimbus-th w-[30%] px-5">主题</th>
+                <th class="nimbus-th w-[9%] px-5">版本</th>
+                <th class="nimbus-th w-[12%] px-5">状态</th>
+                <th class="nimbus-th w-[8%] px-5">Token</th>
+                <th class="nimbus-th w-[8%] px-5">配置</th>
+                <th class="nimbus-th w-[15%] px-5">SHA256</th>
+                <th class="nimbus-th w-[18%] px-5">操作</th>
               </tr>
             </thead>
             <tbody>
               <template v-for="theme in themes" :key="theme.themeId">
-                <tr class="border-b border-themed">
+                <tr class="nimbus-row border-b border-themed">
                   <td class="px-5 py-4">
                     <div class="font-medium text-themed">{{ theme.name }}</div>
                     <div class="font-mono text-xs text-themed-muted">{{ theme.themeId }}</div>
@@ -2510,22 +2541,22 @@ watch(() => route.query.tab, tab => {
                       <span class="rounded bg-themed-hover px-2 py-1">兼容 {{ theme.manifest.payincus }}</span>
                     </div>
                   </td>
-                  <td class="px-5 py-4 text-themed">{{ theme.version }}</td>
+                  <td class="px-5 py-4 tabular-nums text-themed">{{ theme.version }}</td>
                   <td class="px-5 py-4">
-                    <span class="rounded border px-2 py-1 text-xs" :class="themeStatusClass(theme)">{{ themeStatusText(theme) }}</span>
+                    <span class="nimbus-chip" :class="themeStatusClass(theme)">{{ themeStatusText(theme) }}</span>
                     <div v-if="theme.enabledAt" class="mt-2 text-xs text-themed-muted">{{ formatDate(theme.enabledAt) }}</div>
                   </td>
-                  <td class="px-5 py-4 text-themed">{{ themeTokenCount(theme) }}</td>
-                  <td class="px-5 py-4 text-themed">{{ themeConfigFieldCount(theme) }}</td>
-                  <td class="max-w-[180px] truncate px-5 py-4 font-mono text-xs text-themed">{{ theme.packageSha256 }}</td>
+                  <td class="px-5 py-4 tabular-nums text-themed">{{ themeTokenCount(theme) }}</td>
+                  <td class="px-5 py-4 tabular-nums text-themed">{{ themeConfigFieldCount(theme) }}</td>
+                  <td class="truncate px-5 py-4 font-mono text-xs text-themed">{{ theme.packageSha256 }}</td>
                   <td class="px-5 py-4">
                     <div class="flex flex-wrap gap-2">
-                      <button class="btn-secondary" @click="openThemePreview(theme)">预览</button>
-                      <button class="btn-secondary" :disabled="themeConfigFieldCount(theme) === 0" @click="openThemeConfig(theme)">
+                      <button class="btn btn-secondary btn-sm" @click="openThemePreview(theme)">预览</button>
+                      <button class="btn btn-secondary btn-sm" :disabled="themeConfigFieldCount(theme) === 0" @click="openThemeConfig(theme)">
                         {{ isEditingThemeConfig(theme) ? '收起配置' : '配置' }}
                       </button>
-                      <button class="btn-primary" :disabled="theme.enabled" @click="enableTheme(theme)">启用</button>
-                      <button class="btn-secondary" :disabled="theme.enabled" @click="uninstallTheme(theme)">卸载</button>
+                      <button class="btn btn-primary btn-sm" :disabled="theme.enabled" @click="enableTheme(theme)">启用</button>
+                      <button class="btn btn-secondary btn-sm" :disabled="theme.enabled" @click="uninstallTheme(theme)">卸载</button>
                     </div>
                   </td>
                 </tr>
@@ -2541,7 +2572,7 @@ watch(() => route.query.tab, tab => {
                             class="block rounded border border-themed bg-themed-surface p-4 text-sm"
                           >
                             <span class="font-medium text-themed">{{ field.label }}</span>
-                            <span v-if="field.required" class="ml-1 text-red-600">*</span>
+                            <span v-if="field.required" class="ml-1 text-rose-600 dark:text-rose-400">*</span>
                             <p v-if="field.description" class="mt-1 text-xs leading-5 text-themed-muted">{{ field.description }}</p>
 
                             <p v-if="field.type === 'placeholder'" class="mt-3 text-xs leading-5 text-themed-muted">{{ field.placeholder || field.label }}</p>
@@ -2616,8 +2647,8 @@ watch(() => route.query.tab, tab => {
                       </div>
                     </div>
                     <div class="mt-4 flex justify-end gap-2">
-                      <button class="btn-secondary" @click="openThemeConfig(theme)">取消</button>
-                      <button class="btn-primary" :disabled="savingThemeConfigId === theme.themeId" @click="saveThemeConfig(theme)">
+                      <button class="btn btn-secondary btn-sm" @click="openThemeConfig(theme)">取消</button>
+                      <button class="btn btn-primary btn-sm" :disabled="savingThemeConfigId === theme.themeId" @click="saveThemeConfig(theme)">
                         {{ savingThemeConfigId === theme.themeId ? '保存中...' : '保存配置' }}
                       </button>
                     </div>
@@ -2629,18 +2660,23 @@ watch(() => route.query.tab, tab => {
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'capabilities'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'capabilities'" class="card overflow-hidden">
         <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">扩展能力审核</h2>
-            <p class="mt-1 text-sm text-themed-muted">高风险和严重风险 capability 未批准时，扩展不能启用；已启用扩展不会被自动停用。</p>
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+            </svg>
+            <div>
+              <h2 class="text-base font-semibold text-themed">扩展能力审核</h2>
+              <p class="mt-0.5 text-sm text-themed-muted">高风险和严重风险 capability 未批准时，扩展不能启用；已启用扩展不会被自动停用。</p>
+            </div>
           </div>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="status in (['pending', 'approved', 'rejected', 'revoked', 'all'] as const)"
               :key="status"
-              class="rounded border px-3 py-2 text-sm font-medium transition"
-              :class="capabilityStatusFilter === status ? 'border-gray-900 bg-gray-900 text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
+              class="nimbus-seg"
+              :class="capabilityStatusFilter === status ? 'nimbus-seg-active' : ''"
               @click="loadCapabilityReviews(status)"
             >
               {{ capabilityReviewLabels[status] }}
@@ -2654,19 +2690,19 @@ watch(() => route.query.tab, tab => {
         </div>
         <div v-else class="overflow-hidden">
           <table class="w-full table-fixed text-sm">
-            <thead class="border-b border-themed text-left text-themed-muted">
-              <tr>
-                <th class="px-5 py-3">扩展</th>
-                <th class="px-5 py-3">能力</th>
-                <th class="px-5 py-3">风险</th>
-                <th class="px-5 py-3">状态</th>
-                <th class="px-5 py-3">Scope / Hook</th>
-                <th class="px-5 py-3">审核</th>
-                <th class="px-5 py-3">操作</th>
+            <thead>
+              <tr class="border-b border-themed">
+                <th class="nimbus-th w-[16%] px-5">扩展</th>
+                <th class="nimbus-th w-[22%] px-5">能力</th>
+                <th class="nimbus-th w-[10%] px-5">风险</th>
+                <th class="nimbus-th w-[10%] px-5">状态</th>
+                <th class="nimbus-th w-[16%] px-5">Scope / Hook</th>
+                <th class="nimbus-th w-[12%] px-5">审核</th>
+                <th class="nimbus-th w-[14%] px-5">操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="review in capabilityReviews" :key="review.id" class="border-b border-themed last:border-b-0">
+              <tr v-for="review in capabilityReviews" :key="review.id" class="nimbus-row border-b border-themed last:border-b-0">
                 <td class="px-5 py-4 align-top">
                   <div class="font-medium text-themed">{{ review.pluginName || review.pluginId }}</div>
                   <div class="font-mono text-xs text-themed-muted">{{ review.pluginId }}</div>
@@ -2678,13 +2714,13 @@ watch(() => route.query.tab, tab => {
                   <p v-if="review.description" class="mt-1 max-w-md text-xs leading-5 text-themed-muted">{{ review.description }}</p>
                 </td>
                 <td class="px-5 py-4 align-top">
-                  <span class="rounded border px-2 py-1 text-xs" :class="capabilityRiskClass(review.riskLevel)">
+                  <span class="nimbus-chip" :class="capabilityRiskClass(review.riskLevel)">
                     {{ capabilityRiskText(review.riskLevel) }}
                   </span>
                   <div class="mt-2 font-mono text-xs text-themed-muted">{{ review.capabilityType }}</div>
                 </td>
                 <td class="px-5 py-4 align-top">
-                  <span class="rounded border px-2 py-1 text-xs" :class="capabilityStatusClass(review.status)">
+                  <span class="nimbus-chip" :class="capabilityStatusClass(review.status)">
                     {{ capabilityStatusText(review.status) }}
                   </span>
                 </td>
@@ -2708,28 +2744,28 @@ watch(() => route.query.tab, tab => {
                 <td class="px-5 py-4 align-top">
                   <div class="flex flex-wrap gap-2">
                     <button
-                      class="btn-secondary"
+                      class="btn btn-secondary btn-sm"
                       :disabled="capabilityReviewActionId === review.id || review.status === 'approved'"
                       @click="reviewCapability(review, 'approved')"
                     >
                       批准
                     </button>
                     <button
-                      class="btn-secondary"
+                      class="btn btn-secondary btn-sm"
                       :disabled="capabilityReviewActionId === review.id || review.status === 'rejected'"
                       @click="reviewCapability(review, 'rejected')"
                     >
                       拒绝
                     </button>
                     <button
-                      class="btn-secondary"
+                      class="btn btn-secondary btn-sm"
                       :disabled="capabilityReviewActionId === review.id || review.status === 'revoked'"
                       @click="reviewCapability(review, 'revoked')"
                     >
                       撤销
                     </button>
                     <button
-                      class="btn-secondary"
+                      class="btn btn-secondary btn-sm"
                       :disabled="capabilityReviewActionId === review.id || review.status === 'pending'"
                       @click="reviewCapability(review, 'pending')"
                     >
@@ -2743,15 +2779,20 @@ watch(() => route.query.tab, tab => {
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'limits'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'limits'" class="card overflow-hidden">
         <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">公开 action 限流策略</h2>
-            <p class="mt-1 text-sm text-themed-muted">`*` 表示全局或全部 action；具体扩展和 action 会覆盖全局策略。</p>
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            <div>
+              <h2 class="text-base font-semibold text-themed">公开 action 限流策略</h2>
+              <p class="mt-0.5 text-sm text-themed-muted">`*` 表示全局或全部 action；具体扩展和 action 会覆盖全局策略。</p>
+            </div>
           </div>
           <div class="flex gap-2">
-            <button class="btn-secondary" :disabled="actionRateLimitsLoading" @click="addActionRateLimitDraft">添加策略</button>
-            <button class="btn-primary" :disabled="savingActionRateLimits || actionRateLimitsLoading" @click="saveActionRateLimits">
+            <button class="btn btn-secondary btn-sm" :disabled="actionRateLimitsLoading" @click="addActionRateLimitDraft">添加策略</button>
+            <button class="btn btn-primary btn-sm" :disabled="savingActionRateLimits || actionRateLimitsLoading" @click="saveActionRateLimits">
               {{ savingActionRateLimits ? '保存中...' : '保存策略' }}
             </button>
           </div>
@@ -2770,7 +2811,7 @@ watch(() => route.query.tab, tab => {
                   <div class="text-xs font-semibold uppercase tracking-wide text-themed-muted">策略 {{ index + 1 }}</div>
                   <div class="mt-1 truncate font-mono text-sm font-semibold text-themed">{{ policy.pluginId || '*' }}</div>
                 </div>
-                <button class="btn-secondary shrink-0" :disabled="actionRateLimitDrafts.length <= 1" @click="removeActionRateLimitDraft(index)">移除</button>
+                <button class="btn btn-secondary btn-sm shrink-0" :disabled="actionRateLimitDrafts.length <= 1" @click="removeActionRateLimitDraft(index)">移除</button>
               </div>
               <div class="grid gap-3">
                 <label class="grid gap-1 text-sm text-themed-secondary">
@@ -2827,19 +2868,19 @@ watch(() => route.query.tab, tab => {
           </div>
           <div class="hidden md:block">
           <table class="w-full table-fixed text-sm">
-            <thead class="border-b border-themed text-left text-themed-muted">
-              <tr>
-                <th class="w-[240px] px-5 py-3">扩展 ID</th>
-                <th class="w-[180px] px-5 py-3">Action</th>
-                <th class="w-[140px] px-5 py-3">策略</th>
-                <th class="w-[140px] px-5 py-3">窗口请求数</th>
-                <th class="w-[140px] px-5 py-3">窗口秒数</th>
-                <th class="w-[100px] px-5 py-3">启用</th>
-                <th class="w-[100px] px-5 py-3">操作</th>
+            <thead>
+              <tr class="border-b border-themed">
+                <th class="nimbus-th w-[22%] px-5">扩展 ID</th>
+                <th class="nimbus-th w-[16%] px-5">Action</th>
+                <th class="nimbus-th w-[14%] px-5">策略</th>
+                <th class="nimbus-th w-[15%] px-5">窗口请求数</th>
+                <th class="nimbus-th w-[15%] px-5">窗口秒数</th>
+                <th class="nimbus-th w-[9%] px-5">启用</th>
+                <th class="nimbus-th w-[9%] px-5">操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(policy, index) in actionRateLimitDrafts" :key="index" class="border-b border-themed">
+              <tr v-for="(policy, index) in actionRateLimitDrafts" :key="index" class="nimbus-row border-b border-themed">
                 <td class="px-5 py-4">
                   <input
                     v-model="policy.pluginId"
@@ -2885,7 +2926,7 @@ watch(() => route.query.tab, tab => {
                   </label>
                 </td>
                 <td class="px-5 py-4">
-                  <button class="btn-secondary" :disabled="actionRateLimitDrafts.length <= 1" @click="removeActionRateLimitDraft(index)">移除</button>
+                  <button class="btn btn-secondary btn-sm" :disabled="actionRateLimitDrafts.length <= 1" @click="removeActionRateLimitDraft(index)">移除</button>
                 </td>
               </tr>
             </tbody>
@@ -2897,22 +2938,27 @@ watch(() => route.query.tab, tab => {
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'events'" class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+      <section v-else-if="activeTab === 'events'" class="card overflow-hidden">
         <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">事件投递</h2>
-            <p class="mt-1 text-sm text-themed-muted">扩展事件投递失败会进入重试队列，多次失败后进入死信；可手动处理到期重试或重放单条事件。</p>
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 10V3L4 14h7v7l9-11h-7Z" />
+            </svg>
+            <div>
+              <h2 class="text-base font-semibold text-themed">事件投递</h2>
+              <p class="mt-0.5 text-sm text-themed-muted">扩展事件投递失败会进入重试队列，多次失败后进入死信；可手动处理到期重试或重放单条事件。</p>
+            </div>
           </div>
           <div class="flex flex-col gap-2 sm:items-end">
-            <button class="btn-primary" :disabled="retryingEvents" @click="retryDueEvents">
+            <button class="btn btn-primary btn-sm" :disabled="retryingEvents" @click="retryDueEvents">
               {{ retryingEvents ? '处理中...' : '处理到期重试' }}
             </button>
             <div class="flex flex-wrap gap-2">
               <button
                 v-for="result in (['retry_pending', 'dead_letter', 'duplicate_skipped', 'success', 'all'] as const)"
                 :key="result"
-                class="rounded border px-3 py-2 text-sm font-medium transition"
-                :class="eventResultFilter === result ? 'border-gray-900 bg-gray-900 text-white' : 'border-themed text-themed-muted hover:bg-themed-hover hover:text-themed'"
+                class="nimbus-seg"
+                :class="eventResultFilter === result ? 'nimbus-seg-active' : ''"
                 @click="loadPluginEvents(result)"
               >
                 {{ result === 'all' ? '全部' : eventResultText(result) }}
@@ -2946,7 +2992,7 @@ watch(() => route.query.tab, tab => {
             >
           </label>
           <div class="flex items-end">
-            <button class="btn-secondary w-full" :disabled="eventsLoading" @click="loadPluginEvents(eventResultFilter)">应用筛选</button>
+            <button class="btn btn-secondary btn-sm w-full" :disabled="eventsLoading" @click="loadPluginEvents(eventResultFilter)">应用筛选</button>
           </div>
         </div>
 
@@ -2977,35 +3023,35 @@ watch(() => route.query.tab, tab => {
         <div v-else-if="pluginEvents.length === 0" class="px-5 py-16 text-center text-sm text-themed-muted">当前筛选下暂无事件投递日志。</div>
         <div v-else class="overflow-hidden">
           <table class="w-full table-fixed text-sm">
-            <thead class="border-b border-themed text-left text-themed-muted">
-              <tr>
-                <th class="px-5 py-3">事件</th>
-                <th class="px-5 py-3">扩展</th>
-                <th class="px-5 py-3">状态</th>
-                <th class="px-5 py-3">重试</th>
-                <th class="px-5 py-3">时间</th>
-                <th class="px-5 py-3">操作</th>
+            <thead>
+              <tr class="border-b border-themed">
+                <th class="nimbus-th w-[34%] px-5">事件</th>
+                <th class="nimbus-th w-[16%] px-5">扩展</th>
+                <th class="nimbus-th w-[12%] px-5">状态</th>
+                <th class="nimbus-th w-[14%] px-5">重试</th>
+                <th class="nimbus-th w-[14%] px-5">时间</th>
+                <th class="nimbus-th w-[10%] px-5">操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="event in pluginEvents" :key="event.id" class="border-b border-themed">
+              <tr v-for="event in pluginEvents" :key="event.id" class="nimbus-row border-b border-themed">
                 <td class="px-5 py-4">
                   <div class="font-medium text-themed">#{{ event.id }} {{ event.eventName || event.action }}</div>
                   <div class="mt-1 font-mono text-xs text-themed-muted">{{ event.handler || '-' }}</div>
                   <div v-if="event.dedupeKey" class="mt-1 font-mono text-xs text-sky-700 dark:text-sky-300">dedupe {{ event.dedupeKey }}</div>
                   <p v-if="event.message" class="mt-2 max-w-xl text-xs leading-5 text-themed-muted">{{ event.message }}</p>
-                  <p v-if="event.lastError" class="mt-1 max-w-xl text-xs text-red-600">{{ event.lastError }}</p>
+                  <p v-if="event.lastError" class="mt-1 max-w-xl text-xs text-rose-600 dark:text-rose-400">{{ event.lastError }}</p>
                 </td>
-                <td class="px-5 py-4 font-mono text-xs text-themed">{{ event.pluginId }}</td>
+                <td class="truncate px-5 py-4 font-mono text-xs text-themed">{{ event.pluginId }}</td>
                 <td class="px-5 py-4">
-                  <span class="rounded border px-2 py-1 text-xs" :class="eventResultClass(event.result)">
+                  <span class="nimbus-chip" :class="eventResultClass(event.result)">
                     {{ eventResultText(event.result) }}
                   </span>
                 </td>
-                <td class="px-5 py-4 text-themed">
+                <td class="px-5 py-4 tabular-nums text-themed">
                   <div>{{ event.retryCount }} / {{ event.maxRetries }}</div>
                   <div v-if="event.nextRetryAt" class="mt-1 text-xs text-themed-muted">下次 {{ formatDate(event.nextRetryAt) }}</div>
-                  <div v-if="event.deadLetterAt" class="mt-1 text-xs text-red-600">死信 {{ formatDate(event.deadLetterAt) }}</div>
+                  <div v-if="event.deadLetterAt" class="mt-1 text-xs text-rose-600 dark:text-rose-400">死信 {{ formatDate(event.deadLetterAt) }}</div>
                 </td>
                 <td class="px-5 py-4 text-themed">
                   <div>{{ formatDate(event.createdAt) }}</div>
@@ -3013,7 +3059,7 @@ watch(() => route.query.tab, tab => {
                 </td>
                 <td class="px-5 py-4">
                   <button
-                    class="btn-secondary"
+                    class="btn btn-secondary btn-sm"
                     :disabled="event.result === 'success' || event.result === 'duplicate_skipped'"
                     @click="replayPluginEvent(event)"
                   >
@@ -3027,16 +3073,21 @@ watch(() => route.query.tab, tab => {
       </section>
 
       <section v-else class="grid gap-6 xl:grid-cols-[minmax(300px,440px)_1fr]">
-        <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+        <div class="card overflow-hidden">
           <div class="flex items-center justify-between gap-3 border-b border-themed px-5 py-4">
-            <div>
-              <h2 class="text-lg font-semibold text-themed">安装任务</h2>
-              <p class="mt-1 text-xs text-themed-muted">每页最多显示 7 条，选择任务后查看右侧日志。</p>
+            <div class="flex items-center gap-2">
+              <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+              <div>
+                <h2 class="text-base font-semibold text-themed">安装任务</h2>
+                <p class="mt-0.5 text-xs text-themed-muted">每页最多显示 7 条，选择任务后查看右侧日志。</p>
+              </div>
             </div>
-            <div class="flex gap-2 text-xs">
-              <span class="rounded border border-themed px-2 py-1 text-themed-muted">{{ taskSummary.total }} 条</span>
-              <span v-if="taskSummary.running" class="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700">{{ taskSummary.running }} 运行中</span>
-              <span v-if="taskSummary.failed" class="rounded border border-red-200 bg-red-50 px-2 py-1 text-red-700">{{ taskSummary.failed }} 失败</span>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="nimbus-chip text-themed-muted">{{ taskSummary.total }} 条</span>
+              <span v-if="taskSummary.running" class="nimbus-chip text-amber-600 dark:text-amber-400">{{ taskSummary.running }} 运行中</span>
+              <span v-if="taskSummary.failed" class="nimbus-chip text-rose-600 dark:text-rose-400">{{ taskSummary.failed }} 失败</span>
             </div>
           </div>
           <div v-if="tasks.length === 0" class="px-5 py-10 text-center text-sm text-themed-muted">暂无安装任务。</div>
@@ -3050,36 +3101,173 @@ watch(() => route.query.tab, tab => {
             >
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate font-medium text-themed">#{{ task.id }} {{ taskActionText(task.action) }}</span>
-                <span class="rounded border px-2 py-0.5 text-xs" :class="taskStatusClass(task.status)">
+                <span class="nimbus-chip shrink-0" :class="taskStatusClass(task.status)">
                   {{ taskStatusText(task.status) }}
                 </span>
               </div>
               <div class="mt-1 text-xs text-themed-muted">{{ task.pluginId || '-' }} · {{ formatDate(task.createdAt) }}</div>
-              <p v-if="task.errorMessage" class="mt-1 truncate text-xs text-red-600">{{ task.errorMessage }}</p>
+              <p v-if="task.errorMessage" class="mt-1 truncate text-xs text-rose-600 dark:text-rose-400">{{ task.errorMessage }}</p>
             </button>
           </div>
           <div class="flex min-h-[54px] items-center justify-between border-t border-themed px-5 py-3 text-xs text-themed-muted">
             <span>第 {{ taskPage }} / {{ totalTaskPages }} 页 · 共 {{ tasks.length }} 个任务</span>
             <div class="flex gap-2">
-              <button class="btn-secondary" :disabled="taskPage <= 1" @click="setTaskPage(taskPage - 1)">上一页</button>
-              <button class="btn-secondary" :disabled="taskPage >= totalTaskPages" @click="setTaskPage(taskPage + 1)">下一页</button>
+              <button class="btn btn-secondary btn-sm" :disabled="taskPage <= 1" @click="setTaskPage(taskPage - 1)">上一页</button>
+              <button class="btn btn-secondary btn-sm" :disabled="taskPage >= totalTaskPages" @click="setTaskPage(taskPage + 1)">下一页</button>
             </div>
           </div>
         </div>
 
-        <div class="overflow-hidden rounded-lg border border-themed bg-themed-surface">
+        <div class="card overflow-hidden">
           <div class="flex flex-col gap-3 border-b border-themed px-5 py-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 class="text-lg font-semibold text-themed">任务日志</h2>
-              <p class="mt-1 text-xs text-themed-muted">{{ selectedTask ? `任务 #${selectedTask.id} · ${taskStatusText(selectedTask.status)}` : '请选择任务' }}</p>
+            <div class="flex items-center gap-2">
+              <svg class="h-4 w-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M2.25 12c0 5.385 4.365 9.75 9.75 9.75s9.75-4.365 9.75-9.75S17.385 2.25 12 2.25 2.25 6.615 2.25 12Z" />
+              </svg>
+              <div>
+                <h2 class="text-base font-semibold text-themed">任务日志</h2>
+                <p class="mt-0.5 text-xs text-themed-muted">{{ selectedTask ? `任务 #${selectedTask.id} · ${taskStatusText(selectedTask.status)}` : '请选择任务' }}</p>
+              </div>
             </div>
-            <button class="btn-secondary" :disabled="!selectedTask || taskLogsLoading" @click="loadSelectedTaskLogs">
+            <button class="btn btn-secondary btn-sm" :disabled="!selectedTask || taskLogsLoading" @click="loadSelectedTaskLogs">
               {{ taskLogsLoading ? '加载中...' : '刷新日志' }}
             </button>
           </div>
-          <pre class="min-h-[460px] max-h-[620px] overflow-auto whitespace-pre-wrap bg-gray-950 p-5 text-xs leading-5 text-gray-100">{{ taskLogs || '暂无日志。' }}</pre>
+          <pre class="max-h-[620px] min-h-[460px] overflow-auto whitespace-pre-wrap bg-gray-950 p-5 text-xs leading-5 text-gray-100">{{ taskLogs || '暂无日志。' }}</pre>
         </div>
       </section>
     </template>
   </div>
 </template>
+
+<style scoped>
+/* Nimbus admin kit */
+.nimbus-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  color: var(--kawaii-primary);
+  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 28%, transparent);
+}
+
+.nimbus-stat {
+  position: relative;
+  overflow: hidden;
+}
+
+.nimbus-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2.25rem;
+  height: 2px;
+  background: var(--kawaii-primary);
+  border-radius: 0 0 2px 0;
+}
+
+.nimbus-stat-danger::before {
+  background: #f43f5e;
+}
+
+.nimbus-stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+}
+
+.nimbus-stat-value {
+  margin-top: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--kawaii-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.nimbus-th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+  white-space: nowrap;
+}
+
+.nimbus-row {
+  transition: background-color 0.12s ease;
+}
+
+.nimbus-row:hover {
+  background: color-mix(in srgb, var(--kawaii-primary) 5%, transparent);
+}
+
+/* Status / meta pill — color follows currentColor (text utility) */
+.nimbus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* Segmented filter buttons */
+.nimbus-seg {
+  border-radius: 0.5rem;
+  border: 1px solid var(--kawaii-line);
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--kawaii-muted);
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.nimbus-seg-sm {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+}
+
+.nimbus-seg:hover {
+  color: var(--kawaii-text);
+  background: color-mix(in srgb, var(--kawaii-primary) 7%, transparent);
+}
+
+.nimbus-seg-active,
+.nimbus-seg-active:hover {
+  border-color: var(--kawaii-primary);
+  background: var(--kawaii-primary);
+  color: #fff;
+}
+
+/* Card hover lift for market/theme article cards */
+.nimbus-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nimbus-card:hover {
+  border-color: color-mix(in srgb, var(--kawaii-primary) 40%, var(--kawaii-line));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--kawaii-primary) 10%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-row,
+  .nimbus-seg,
+  .nimbus-card {
+    transition: none;
+  }
+}
+</style>

@@ -738,10 +738,17 @@ function getSeriesTitle(seriesId: string): string {
 <template>
   <div class="kawaii-page animate-fade-in">
     <!-- 页面标题 -->
-    <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h1 class="page-title">{{ $t('entertainment.admin.title') }}</h1>
-        <p class="text-sm text-themed-muted mt-1">{{ $t('entertainment.admin.description') }}</p>
+    <div class="page-header">
+      <div class="flex items-center gap-3">
+        <span class="nimbus-title-icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a3 3 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a3 3 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="page-title">{{ $t('entertainment.admin.title') }}</h1>
+          <p class="page-description">{{ $t('entertainment.admin.description') }}</p>
+        </div>
       </div>
       <button v-if="activeTab === 'lotteries'" class="btn btn-primary" @click="openCreateLotteryModal">
         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -750,7 +757,7 @@ function getSeriesTitle(seriesId: string): string {
         {{ $t('entertainment.admin.createLottery') }}
       </button>
       <div v-else-if="activeTab === 'badges'" class="flex gap-2">
-        <button class="btn btn-ghost" @click="openCreateSeriesModal">
+        <button class="btn btn-secondary" @click="openCreateSeriesModal">
           {{ $t('entertainment.admin.badgeCatalog.addSeries') }}
         </button>
         <button class="btn btn-primary" :disabled="badgeSeries.length === 0" @click="openCreateBadgeModal(selectedBadgeSeriesId)">
@@ -760,47 +767,47 @@ function getSeriesTitle(seriesId: string): string {
     </div>
 
     <!-- TAB 切换 -->
-    <div class="flex border-b border-themed mb-6 overflow-x-auto">
+    <div class="mb-6 flex flex-wrap gap-1 border-b border-themed">
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px shrink-0 whitespace-nowrap"
-        :class="activeTab === 'lotteries' 
-          ? 'border-accent text-accent'
+        class="-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'lotteries'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('lotteries')"
       >
         {{ $t('entertainment.admin.tabs.lotteries') }}
       </button>
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px shrink-0 whitespace-nowrap"
-        :class="activeTab === 'records' 
-          ? 'border-accent text-accent'
+        class="-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'records'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('records')"
       >
         {{ $t('entertainment.admin.tabs.records') }}
       </button>
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px shrink-0 whitespace-nowrap"
-        :class="activeTab === 'users' 
-          ? 'border-accent text-accent'
+        class="-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'users'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('users')"
       >
         {{ $t('entertainment.admin.tabs.users') }}
       </button>
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px shrink-0 whitespace-nowrap"
+        class="-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'badges'
-          ? 'border-accent text-accent'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('badges')"
       >
         {{ $t('entertainment.admin.tabs.badges') }}
       </button>
       <button
-        class="px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px shrink-0 whitespace-nowrap"
+        class="-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'checkin'
-          ? 'border-accent text-accent'
+          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('checkin')"
       >
@@ -893,23 +900,23 @@ function getSeriesTitle(seriesId: string): string {
           <div class="hidden overflow-hidden lg:block">
             <table class="w-full table-fixed">
               <thead>
-                <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                  <th class="w-[22%] px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
-                  <th class="w-[14%] px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.date') }}</th>
-                  <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.points') }}</th>
-                  <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.streakDays') }}</th>
-                  <th class="w-[18%] px-4 py-3 font-medium">IP</th>
-                  <th class="w-[22%] px-4 py-3 font-medium">{{ $t('entertainment.admin.checkin.time') }}</th>
+                <tr class="border-b border-themed">
+                  <th class="nimbus-th w-[22%]">{{ $t('entertainment.admin.user') }}</th>
+                  <th class="nimbus-th w-[14%]">{{ $t('entertainment.admin.checkin.date') }}</th>
+                  <th class="nimbus-th w-[12%]">{{ $t('entertainment.admin.checkin.points') }}</th>
+                  <th class="nimbus-th w-[12%]">{{ $t('entertainment.admin.checkin.streakDays') }}</th>
+                  <th class="nimbus-th w-[18%]">IP</th>
+                  <th class="nimbus-th w-[22%]">{{ $t('entertainment.admin.checkin.time') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-themed">
-                <tr v-for="record in checkinLogs" :key="record.id" class="hover:bg-themed-hover">
+                <tr v-for="record in checkinLogs" :key="record.id" class="nimbus-row">
                   <td class="truncate px-4 py-3 text-sm text-themed">{{ record.username }} #{{ record.userId }}</td>
-                  <td class="truncate px-4 py-3 text-sm text-themed">{{ record.dateKey }}</td>
-                  <td class="px-4 py-3 text-sm font-medium text-amber-500">+{{ record.points }}</td>
-                  <td class="px-4 py-3 text-sm text-themed">{{ record.streakDays }}</td>
-                  <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ record.ipAddress || '-' }}</td>
-                  <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(record.createdAt) }}</td>
+                  <td class="truncate px-4 py-3 text-sm text-themed tabular-nums">{{ record.dateKey }}</td>
+                  <td class="px-4 py-3 text-sm font-medium text-amber-500 tabular-nums">+{{ record.points }}</td>
+                  <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ record.streakDays }}</td>
+                  <td class="truncate px-4 py-3 text-sm text-themed-muted tabular-nums">{{ record.ipAddress || '-' }}</td>
+                  <td class="truncate px-4 py-3 text-sm text-themed-muted tabular-nums">{{ formatDate(record.createdAt) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -1018,26 +1025,26 @@ function getSeriesTitle(seriesId: string): string {
         <div class="hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
             <thead>
-              <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                <th class="w-[30%] px-4 py-3 font-medium">{{ $t('entertainment.admin.lotteryName') }}</th>
-                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.costPoints') }}</th>
-                <th class="w-[10%] px-4 py-3 font-medium">{{ $t('entertainment.admin.prizes') }}</th>
-                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.totalDraws') }}</th>
-                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.status') }}</th>
-                <th class="w-[24%] px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
+              <tr class="border-b border-themed">
+                <th class="nimbus-th w-[30%]">{{ $t('entertainment.admin.lotteryName') }}</th>
+                <th class="nimbus-th w-[12%]">{{ $t('entertainment.admin.costPoints') }}</th>
+                <th class="nimbus-th w-[10%]">{{ $t('entertainment.admin.prizes') }}</th>
+                <th class="nimbus-th w-[12%]">{{ $t('entertainment.admin.totalDraws') }}</th>
+                <th class="nimbus-th w-[12%]">{{ $t('entertainment.admin.status') }}</th>
+                <th class="nimbus-th w-[24%]">{{ $t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
-              <tr v-for="lottery in lotteries" :key="lottery.id" class="hover:bg-themed-hover">
+              <tr v-for="lottery in lotteries" :key="lottery.id" class="nimbus-row">
                 <td class="px-4 py-3">
                   <div class="truncate text-sm font-medium text-themed">{{ lottery.name }}</div>
                   <div v-if="lottery.description" class="truncate text-xs text-themed-muted">
                     {{ lottery.description }}
                   </div>
                 </td>
-                <td class="px-4 py-3 text-sm text-themed">{{ lottery.costPoints }}</td>
-                <td class="px-4 py-3 text-sm text-themed">{{ lottery.prizesCount || lottery.prizes?.length || 0 }}</td>
-                <td class="px-4 py-3 text-sm text-themed">{{ lottery.totalDraws }}</td>
+                <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ lottery.costPoints }}</td>
+                <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ lottery.prizesCount || lottery.prizes?.length || 0 }}</td>
+                <td class="px-4 py-3 text-sm text-themed tabular-nums">{{ lottery.totalDraws }}</td>
                 <td class="px-4 py-3">
                   <span :class="['badge badge-sm', lottery.isActive ? 'badge-success' : 'badge-ghost']">
                     {{ lottery.isActive ? $t('entertainment.admin.active') : $t('entertainment.admin.inactive') }}
@@ -1201,24 +1208,24 @@ function getSeriesTitle(seriesId: string): string {
         <div class="hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
             <thead>
-              <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                <th class="w-[18%] px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
-                <th class="w-[20%] px-4 py-3 font-medium">{{ $t('entertainment.admin.lotteryName') }}</th>
-                <th class="w-[20%] px-4 py-3 font-medium">{{ $t('entertainment.admin.prize') }}</th>
-                <th class="w-[13%] px-4 py-3 font-medium">{{ $t('entertainment.admin.prizeType') }}</th>
-                <th class="w-[14%] px-4 py-3 font-medium">{{ $t('entertainment.admin.value') }}</th>
-                <th class="w-[15%] px-4 py-3 font-medium">{{ $t('entertainment.time') }}</th>
+              <tr class="border-b border-themed">
+                <th class="nimbus-th w-[18%]">{{ $t('entertainment.admin.user') }}</th>
+                <th class="nimbus-th w-[20%]">{{ $t('entertainment.admin.lotteryName') }}</th>
+                <th class="nimbus-th w-[20%]">{{ $t('entertainment.admin.prize') }}</th>
+                <th class="nimbus-th w-[13%]">{{ $t('entertainment.admin.prizeType') }}</th>
+                <th class="nimbus-th w-[14%]">{{ $t('entertainment.admin.value') }}</th>
+                <th class="nimbus-th w-[15%]">{{ $t('entertainment.time') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
-              <tr v-for="rec in records" :key="rec.id" class="hover:bg-themed-hover">
+              <tr v-for="rec in records" :key="rec.id" class="nimbus-row">
                 <td class="truncate px-4 py-3 text-sm text-themed">{{ rec.username || rec.userId }}</td>
                 <td class="truncate px-4 py-3 text-sm text-themed">{{ rec.lotteryName || '-' }}</td>
                 <td class="truncate px-4 py-3 text-sm text-themed">{{ rec.prizeName || '-' }}</td>
                 <td class="px-4 py-3 text-sm">
                   <span class="badge badge-sm">{{ getPrizeTypeName(rec.prizeType) }}</span>
                 </td>
-                <td class="truncate px-4 py-3 text-sm text-themed">
+                <td class="truncate px-4 py-3 text-sm text-themed tabular-nums">
                   <template v-if="rec.prizeType === 'points'">+{{ rec.prizeValue }}</template>
                   <template v-else-if="rec.prizeType === 'balance'">+¥{{ (rec.prizeValue / 100).toFixed(2) }}</template>
                   <template v-else-if="rec.prizeType === 'badge'">{{ rec.prizeName || $t('entertainment.prizeTypes.badge') }}</template>
@@ -1229,7 +1236,7 @@ function getSeriesTitle(seriesId: string): string {
                   <template v-else-if="rec.prizeType === 'traffic'">+{{ rec.prizeValue }}GB</template>
                   <template v-else>-</template>
                 </td>
-                <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(rec.createdAt) }}</td>
+                <td class="truncate px-4 py-3 text-sm text-themed-muted tabular-nums">{{ formatDate(rec.createdAt) }}</td>
               </tr>
             </tbody>
           </table>
@@ -1314,21 +1321,21 @@ function getSeriesTitle(seriesId: string): string {
         <div class="hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
             <thead>
-              <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                <th class="w-[28%] px-4 py-3 font-medium">{{ $t('entertainment.admin.user') }}</th>
-                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.admin.currentPoints') }}</th>
-                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.admin.totalEarned') }}</th>
-                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('entertainment.admin.totalSpent') }}</th>
-                <th class="w-[24%] px-4 py-3 font-medium">{{ $t('entertainment.admin.lastConvertedAt') }}</th>
+              <tr class="border-b border-themed">
+                <th class="nimbus-th w-[28%]">{{ $t('entertainment.admin.user') }}</th>
+                <th class="nimbus-th w-[16%]">{{ $t('entertainment.admin.currentPoints') }}</th>
+                <th class="nimbus-th w-[16%]">{{ $t('entertainment.admin.totalEarned') }}</th>
+                <th class="nimbus-th w-[16%]">{{ $t('entertainment.admin.totalSpent') }}</th>
+                <th class="nimbus-th w-[24%]">{{ $t('entertainment.admin.lastConvertedAt') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
-              <tr v-for="user in users" :key="user.userId" class="hover:bg-themed-hover">
+              <tr v-for="user in users" :key="user.userId" class="nimbus-row">
                 <td class="truncate px-4 py-3 text-sm text-themed">{{ user.username || user.userId }}</td>
-                <td class="px-4 py-3 text-sm font-medium text-amber-500">{{ user.points?.toLocaleString() }}</td>
-                <td class="px-4 py-3 text-sm text-green-500">+{{ user.totalEarned?.toLocaleString() }}</td>
-                <td class="px-4 py-3 text-sm text-red-500">-{{ user.totalSpent?.toLocaleString() }}</td>
-                <td class="truncate px-4 py-3 text-sm text-themed-muted">
+                <td class="px-4 py-3 text-sm font-medium text-amber-500 tabular-nums">{{ user.points?.toLocaleString() }}</td>
+                <td class="px-4 py-3 text-sm text-green-500 tabular-nums">+{{ user.totalEarned?.toLocaleString() }}</td>
+                <td class="px-4 py-3 text-sm text-red-500 tabular-nums">-{{ user.totalSpent?.toLocaleString() }}</td>
+                <td class="truncate px-4 py-3 text-sm text-themed-muted tabular-nums">
                   {{ user.lastConvertedAt ? formatDate(user.lastConvertedAt) : '-' }}
                 </td>
               </tr>
@@ -1473,17 +1480,17 @@ function getSeriesTitle(seriesId: string): string {
               <div class="hidden overflow-hidden lg:block">
                 <table class="w-full table-fixed">
                   <thead>
-                    <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                      <th class="w-[26%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableBadge') }}</th>
-                      <th class="w-[15%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableSeries') }}</th>
-                      <th class="w-[20%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableAssetUrl') }}</th>
-                      <th class="w-[12%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableStatus') }}</th>
-                      <th class="w-[15%] px-4 py-3 font-medium">{{ $t('entertainment.admin.badgeCatalog.badges.tableUsage') }}</th>
-                      <th class="w-[12%] px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
+                    <tr class="border-b border-themed">
+                      <th class="nimbus-th w-[26%]">{{ $t('entertainment.admin.badgeCatalog.badges.tableBadge') }}</th>
+                      <th class="nimbus-th w-[15%]">{{ $t('entertainment.admin.badgeCatalog.badges.tableSeries') }}</th>
+                      <th class="nimbus-th w-[20%]">{{ $t('entertainment.admin.badgeCatalog.badges.tableAssetUrl') }}</th>
+                      <th class="nimbus-th w-[12%]">{{ $t('entertainment.admin.badgeCatalog.badges.tableStatus') }}</th>
+                      <th class="nimbus-th w-[15%]">{{ $t('entertainment.admin.badgeCatalog.badges.tableUsage') }}</th>
+                      <th class="nimbus-th w-[12%]">{{ $t('common.actions') }}</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-themed">
-                    <tr v-for="badge in filteredBadges" :key="badge.id" class="hover:bg-themed-hover">
+                    <tr v-for="badge in filteredBadges" :key="badge.id" class="nimbus-row">
                       <td class="px-4 py-3">
                         <div class="flex items-center gap-3">
                           <img :src="badge.assetUrlLight || badge.assetUrl" :alt="badge.fullLabel" class="h-10 w-10 shrink-0 rounded-lg object-contain" loading="lazy" />
@@ -2039,3 +2046,103 @@ function getSeriesTitle(seriesId: string): string {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* Nimbus admin kit */
+.nimbus-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  color: var(--kawaii-primary);
+  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 28%, transparent);
+}
+
+.nimbus-stat {
+  position: relative;
+  overflow: hidden;
+}
+
+.nimbus-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2.25rem;
+  height: 2px;
+  background: var(--kawaii-primary);
+  border-radius: 0 0 2px 0;
+}
+
+.nimbus-stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+}
+
+.nimbus-stat-value {
+  margin-top: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--kawaii-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.nimbus-th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+  white-space: nowrap;
+}
+
+.nimbus-row {
+  transition: background-color 0.12s ease;
+}
+
+.nimbus-row:hover {
+  background: color-mix(in srgb, var(--kawaii-primary) 5%, transparent);
+}
+
+.nimbus-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.nimbus-pill .dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: currentColor;
+}
+
+.nimbus-field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--kawaii-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-row {
+    transition: none;
+  }
+}
+</style>

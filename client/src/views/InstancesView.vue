@@ -1471,7 +1471,7 @@ async function confirmBatchDestroy(): Promise<void> {
         <p class="page-description">
           <template v-if="filterUserId && filterUserName">
             {{ $t('instance.userInstances', { name: filterUserName }) }}
-            <button class="text-blue-500 hover:text-blue-400 ml-2 text-sm" @click="clearUserFilter">
+            <button class="text-primary-600 hover:text-primary-500 ml-2 text-sm font-medium transition-colors" @click="clearUserFilter">
               {{ $t('instance.clearFilter') }}
             </button>
           </template>
@@ -1508,15 +1508,15 @@ async function confirmBatchDestroy(): Promise<void> {
           class="hidden sm:flex items-center min-w-0 flex-1"
         >
           <div
-            class="flex items-center gap-2 overflow-x-auto pb-1 pr-1 min-w-0 scrollbar-thin"
+            class="flex flex-wrap items-center gap-2 min-w-0"
             @wheel="handleCountryStripWheel"
           >
             <button
               type="button"
-              class="h-10 px-3 rounded-xl border text-xs font-semibold shrink-0 transition-colors"
+              class="h-9 px-3.5 rounded-full border text-xs font-semibold shrink-0 transition-colors"
               :class="countryFilter === null
-                ? (themeStore.isDark ? 'border-blue-400 bg-blue-500/15 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
-                : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300')"
+                ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300'
+                : 'border-themed bg-themed-surface text-themed-muted hover:border-primary-500/40 hover:text-themed'"
               @click="setCountryFilter(null)"
             >
               {{ $t('common.all') }}
@@ -1525,10 +1525,10 @@ async function confirmBatchDestroy(): Promise<void> {
               v-for="code in countryFilterOptions"
               :key="`desktop-country-${code}`"
               type="button"
-              class="h-10 min-w-[92px] max-w-[150px] rounded-xl border flex items-center justify-center gap-2 px-3 text-xs font-semibold shrink-0 transition-all"
+              class="h-9 max-w-[150px] rounded-full border flex items-center justify-center gap-2 px-3.5 text-xs font-semibold shrink-0 transition-all"
               :class="countryFilter === code
-                ? (themeStore.isDark ? 'border-blue-400 bg-blue-500/15 text-blue-300 shadow-sm shadow-blue-500/10' : 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm shadow-blue-500/10')
-                : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300')"
+                ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300 shadow-sm shadow-primary-500/10'
+                : 'border-themed bg-themed-surface text-themed-muted hover:border-primary-500/40 hover:text-themed'"
               :title="getCountryLabel(code)"
               :aria-label="getCountryLabel(code)"
               @click="setCountryFilter(code)"
@@ -1541,8 +1541,7 @@ async function confirmBatchDestroy(): Promise<void> {
       </div>
       <div class="hidden sm:flex flex-wrap items-center gap-3 xl:justify-end">
         <div
-          class="inline-flex items-center rounded-xl border p-0.5"
-          :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/70' : 'border-gray-200 bg-gray-50/80'"
+          class="inline-flex items-center rounded-xl border border-themed bg-themed-secondary p-0.5"
         >
           <button
             type="button"
@@ -1569,13 +1568,13 @@ async function confirmBatchDestroy(): Promise<void> {
             <span class="hidden sm:inline">{{ $t('instance.cardLayout') }}</span>
           </button>
         </div>
-        <span class="text-sm text-themed-muted whitespace-nowrap">{{ $t('instance.totalCount', { count: total }) }}</span>
+        <span class="text-sm text-themed-muted whitespace-nowrap tabular-nums">{{ $t('instance.totalCount', { count: total }) }}</span>
         <div class="inline-flex items-center gap-2 shrink-0">
           <span class="text-sm text-themed-muted whitespace-nowrap">{{ $t('common.perPage') }}</span>
           <div class="relative">
             <select
               v-model.number="pageSize"
-              class="input h-10 min-w-[96px] appearance-none rounded-xl py-2 pl-3 pr-9 text-sm leading-none"
+              class="input h-10 w-24 appearance-none rounded-xl py-2 pl-3 pr-9 text-sm leading-none"
               @change="handlePageSizeChange"
             >
               <option v-for="size in pageSizeOptions" :key="size" :value="size">
@@ -1596,13 +1595,13 @@ async function confirmBatchDestroy(): Promise<void> {
     </div>
 
     <div class="sm:hidden flex items-center justify-between gap-3">
-      <span class="text-sm text-themed-muted whitespace-nowrap">{{ $t('instance.totalCount', { count: total }) }}</span>
+      <span class="text-sm text-themed-muted whitespace-nowrap tabular-nums">{{ $t('instance.totalCount', { count: total }) }}</span>
       <div class="flex items-center gap-2 shrink-0">
         <span class="text-sm text-themed-muted whitespace-nowrap">{{ $t('common.perPage') }}</span>
         <div class="relative">
           <select
             v-model.number="pageSize"
-            class="input h-10 min-w-[90px] appearance-none rounded-xl py-2 pl-3 pr-9 text-sm leading-none"
+            class="input h-10 w-24 appearance-none rounded-xl py-2 pl-3 pr-9 text-sm leading-none"
             @change="handlePageSizeChange"
           >
             <option v-for="size in pageSizeOptions" :key="size" :value="size">
@@ -1629,15 +1628,15 @@ async function confirmBatchDestroy(): Promise<void> {
         class="card p-3"
       >
         <div
-          class="flex items-center gap-2 overflow-x-auto min-w-0 scrollbar-thin"
+          class="flex flex-wrap items-center gap-2 min-w-0"
           @wheel="handleCountryStripWheel"
         >
           <button
             type="button"
-            class="h-10 px-3 rounded-xl border text-xs font-semibold shrink-0 transition-colors"
+            class="h-9 px-3.5 rounded-full border text-xs font-semibold shrink-0 transition-colors"
             :class="countryFilter === null
-              ? (themeStore.isDark ? 'border-blue-400 bg-blue-500/15 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
-              : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300')"
+              ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300'
+              : 'border-themed bg-themed-surface text-themed-muted hover:border-primary-500/40 hover:text-themed'"
             @click="setCountryFilter(null)"
           >
             {{ $t('common.all') }}
@@ -1646,10 +1645,10 @@ async function confirmBatchDestroy(): Promise<void> {
             v-for="code in countryFilterOptions"
             :key="`mobile-country-${code}`"
             type="button"
-            class="h-10 min-w-[92px] max-w-[140px] rounded-xl border flex items-center justify-center gap-2 px-3 text-xs font-semibold shrink-0 transition-all"
+            class="h-9 max-w-[140px] rounded-full border flex items-center justify-center gap-2 px-3.5 text-xs font-semibold shrink-0 transition-all"
             :class="countryFilter === code
-              ? (themeStore.isDark ? 'border-blue-400 bg-blue-500/15 text-blue-300 shadow-sm shadow-blue-500/10' : 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm shadow-blue-500/10')
-              : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300')"
+              ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300 shadow-sm shadow-primary-500/10'
+              : 'border-themed bg-themed-surface text-themed-muted hover:border-primary-500/40 hover:text-themed'"
             :title="getCountryLabel(code)"
             :aria-label="getCountryLabel(code)"
             @click="setCountryFilter(code)"
@@ -1670,7 +1669,7 @@ async function confirmBatchDestroy(): Promise<void> {
         <div class="flex flex-wrap items-center gap-3">
           <div
             class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
-            :class="themeStore.isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-700'"
+            :class="'bg-primary-500/10 text-primary-600 dark:text-primary-300'"
           >
             <span class="inline-flex h-2 w-2 rounded-full bg-current"></span>
             {{ $t('instance.batch.selectedCount', { count: selectedCount }) }}
@@ -1780,18 +1779,20 @@ async function confirmBatchDestroy(): Promise<void> {
 
     <!-- 加载失败 -->
     <div v-else-if="listError" class="card p-12 text-center">
-      <svg
-        class="w-16 h-16 mx-auto mb-4"
-        :class="themeStore.isDark ? 'text-red-400' : 'text-red-500'"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-      </svg>
+      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10">
+        <svg
+          class="h-8 w-8"
+          :class="themeStore.isDark ? 'text-red-400' : 'text-red-500'"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+        </svg>
+      </div>
       <h3
         class="text-lg font-medium mb-2"
-        :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'"
+        :class="'text-themed'"
       >
         {{ $t('common.loadFailed') }}
       </h3>
@@ -1801,16 +1802,17 @@ async function confirmBatchDestroy(): Promise<void> {
 
     <!-- 空状态 -->
     <div v-else-if="instances.length === 0" class="card p-12 text-center">
-      <svg 
-        class="w-16 h-16 mx-auto mb-4" 
-        :class="themeStore.isDark ? 'text-gray-700' : 'text-gray-300'"
-        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
-      </svg>
+      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-themed bg-themed-secondary text-themed-faint">
+        <svg
+          class="h-8 w-8"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+        </svg>
+      </div>
       <h3 
         class="text-lg font-medium mb-2"
-        :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
+        :class="'text-themed'"
       >
         {{ search ? $t('instance.noMatchingInstances') : $t('instance.noInstances') }}
       </h3>
@@ -1823,17 +1825,13 @@ async function confirmBatchDestroy(): Promise<void> {
       <!-- 列表布局 -->
       <div v-if="instanceLayoutMode === 'list'" class="hidden overflow-hidden sm:block card">
         <table class="w-full table-fixed">
-          <thead
-            class="border-b"
-            :class="themeStore.isDark ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-50 border-gray-200'"
-          >
+          <thead class="border-b border-themed bg-themed-secondary">
             <tr>
               <th class="px-4 py-3 w-12">
                 <div class="flex items-center justify-center">
                   <button
                     type="button"
-                    class="relative flex h-4 w-4 items-center justify-center rounded border transition-colors"
-                    :class="themeStore.isDark ? 'border-gray-600 bg-gray-950 text-blue-400' : 'border-gray-300 bg-white text-blue-600'"
+                    class="relative flex h-4 w-4 items-center justify-center rounded border border-themed bg-themed-surface text-primary-600 transition-colors dark:text-primary-400"
                     @click="toggleSelectAll"
                   >
                     <span v-if="isAllSelected" class="h-2 w-2 rounded-sm bg-current"></span>
@@ -1841,28 +1839,28 @@ async function confirmBatchDestroy(): Promise<void> {
                   </button>
                 </div>
               </th>
-              <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ $t('instance.name') }}</th>
-              <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-3 py-3">{{ $t('instance.statusLabel') }}</th>
-              <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-3 py-3">{{ $t('instance.ip') }}</th>
-              <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-3 py-3">{{ $t('instance.modeLabel') }}</th>
-              <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-3 py-3">{{ $t('instance.config') }}</th>
-              <th class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-3 py-3">{{ $t('instance.quotaLabel') }}</th>
-              <th v-if="isAdmin" class="text-left text-xs font-medium text-themed-muted uppercase tracking-wider px-3 py-3">{{ $t('instance.user') }}</th>
-              <th class="text-right text-xs font-medium text-themed-muted uppercase tracking-wider px-4 py-3">{{ $t('common.actions') }}</th>
+              <th class="w-[22%] text-left text-[11px] font-semibold text-themed-faint uppercase tracking-wider px-4 py-3">{{ $t('instance.name') }}</th>
+              <th class="w-[10%] text-left text-[11px] font-semibold text-themed-faint uppercase tracking-wider px-3 py-3">{{ $t('instance.statusLabel') }}</th>
+              <th class="w-[15%] text-left text-[11px] font-semibold text-themed-faint uppercase tracking-wider px-3 py-3">{{ $t('instance.ip') }}</th>
+              <th class="w-[12%] text-left text-[11px] font-semibold text-themed-faint uppercase tracking-wider px-3 py-3">{{ $t('instance.modeLabel') }}</th>
+              <th class="w-[16%] text-left text-[11px] font-semibold text-themed-faint uppercase tracking-wider px-3 py-3">{{ $t('instance.config') }}</th>
+              <th class="w-[16%] text-left text-[11px] font-semibold text-themed-faint uppercase tracking-wider px-3 py-3">{{ $t('instance.quotaLabel') }}</th>
+              <th v-if="isAdmin" class="w-[10%] text-left text-[11px] font-semibold text-themed-faint uppercase tracking-wider px-3 py-3">{{ $t('instance.user') }}</th>
+              <th class="w-[9%] text-right text-[11px] font-semibold text-themed-faint uppercase tracking-wider px-4 py-3">{{ $t('common.actions') }}</th>
             </tr>
           </thead>
           <TransitionGroup
             tag="tbody"
             name="instance-table-order"
-            :class="themeStore.isDark ? 'divide-y divide-gray-800' : 'divide-y divide-gray-100'"
+            class="divide-y divide-themed"
           >
             <tr
               v-for="instance in instances"
               :key="instance.id"
-              class="cursor-pointer"
+              class="cursor-pointer transition-colors"
               :class="[
-                themeStore.isDark ? 'hover:bg-gray-900/30' : 'hover:bg-gray-50',
-                selectedIds.has(instance.id) ? (themeStore.isDark ? 'bg-blue-500/10' : 'bg-blue-50/80') : '',
+                'hover:bg-black/[0.03] dark:hover:bg-white/[0.05]',
+                selectedIds.has(instance.id) ? 'bg-primary-500/10' : '',
                 recentlyOrderedInstanceId === instance.id ? (themeStore.isDark ? 'is-order-feedback-dark' : 'is-order-feedback-light') : '',
                 instance.status?.toLowerCase() === 'creating' ? 'creating-row' : ''
               ]"
@@ -1872,7 +1870,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <div class="flex items-center justify-center">
                   <input
                     type="checkbox"
-                    class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    class="w-4 h-4 rounded border-gray-300 accent-primary-600 cursor-pointer"
                     :checked="selectedIds.has(instance.id)"
                     @change="toggleSelect(instance.id)"
                   />
@@ -1882,7 +1880,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <div class="flex items-center gap-2.5">
                   <div
                     class="w-9 h-9 rounded flex items-center justify-center transition-colors flex-shrink-0 overflow-hidden"
-                    :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
+                    :class="'bg-themed-secondary'"
                   >
                     <InstanceDisplayIcon
                       v-if="instance.iconBadgeId || getPaidIconType(instance)"
@@ -1900,13 +1898,13 @@ async function confirmBatchDestroy(): Promise<void> {
                   <div class="min-w-0">
                     <div
                       class="font-medium text-sm truncate"
-                      :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
+                      :class="'text-themed'"
                     >
                       {{ instance.name }}
                     </div>
                     <div
                       class="text-xs truncate"
-                      :class="themeStore.isDark ? 'text-gray-600' : 'text-gray-400'"
+                      :class="'text-themed-faint'"
                     >
                       {{ formatImageName(instance.image, (instance as any).imageName) }}
                     </div>
@@ -1922,7 +1920,7 @@ async function confirmBatchDestroy(): Promise<void> {
                       <span
                         v-if="isInstanceExchangeLocked(instance)"
                         class="text-[10px]"
-                        :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-400'"
+                        :class="'text-themed-faint'"
                       >
                         {{ getInstanceExchangeState(instance)?.hint }}
                       </span>
@@ -1931,7 +1929,7 @@ async function confirmBatchDestroy(): Promise<void> {
 	                </div>
 	              </td>
               <td class="px-3 py-3">
-                <span :class="['badge inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs', getStatusInfo(instance.status, t).class]">
+                <span :class="['inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-mono text-[11px] tabular-nums', getStatusInfo(instance.status, t).class]">
                   <span :class="['w-1.5 h-1.5 rounded-full', getStatusInfo(instance.status, t).dot]"></span>
                   {{ getStatusInfo(instance.status, t).label }}
                 </span>
@@ -1945,7 +1943,7 @@ async function confirmBatchDestroy(): Promise<void> {
                         v-for="(ipObj, idx) in getIps(instance)"
                         :key="idx"
                         class="text-xs font-mono break-all"
-                        :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'"
+                        :class="'text-themed-muted'"
                         :title="ipObj.ip"
                       >
                         {{ ipObj.ip }}
@@ -1973,10 +1971,10 @@ async function confirmBatchDestroy(): Promise<void> {
               </td>
               <td class="px-3 py-3">
                 <div class="space-y-0.5">
-                  <div class="text-sm text-themed-muted">
+                  <div class="text-sm font-mono tabular-nums text-themed">
                     {{ instance.cpu }}% / {{ formatMemory(instance.memory) }} / {{ formatDisk(instance.disk) }}
                   </div>
-                  <div class="text-xs text-gray-400 dark:text-gray-500">
+                  <div class="text-xs font-mono tabular-nums text-themed-faint">
                     {{ formatBytes(Number((instance as any).monthlyTrafficUsed || 0)) }}
                     <span> / </span>
                     <template v-if="(instance as any).monthlyTrafficLimit">
@@ -2010,7 +2008,7 @@ async function confirmBatchDestroy(): Promise<void> {
               <td v-if="isAdmin" class="px-3 py-3">
                 <span
                   class="text-xs truncate"
-                  :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'"
+                  :class="'text-themed-muted'"
                 >{{ (instance as any).username || '-' }}</span>
               </td>
               <td class="px-4 py-3 text-right">
@@ -2060,7 +2058,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   <button
                     v-if="instance.status?.toLowerCase() === 'running'"
                     :disabled="!!actionLoading[instance.id]"
-                    class="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-colors disabled:opacity-50"
+                    class="p-1.5 rounded hover:bg-primary-500/10 text-primary-600 transition-colors disabled:opacity-50 dark:text-primary-400"
                     :title="$t('instance.actions.restart')"
                     @click.stop="handleAction(instance, 'restart')"
                   >
@@ -2073,7 +2071,7 @@ async function confirmBatchDestroy(): Promise<void> {
                     </svg>
                   </button>
                   <span
-                    class="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-themed-muted transition-colors"
+                    class="p-1.5 rounded hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-themed-muted transition-colors"
                     :title="$t('instance.details')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2093,11 +2091,11 @@ async function confirmBatchDestroy(): Promise<void> {
           <div
             v-for="instance in instances"
             :key="instance.id"
-            class="card overflow-hidden transition-all"
+            class="nimbus-card-lift card overflow-hidden transition-all"
             :class="[
               instance.status?.toLowerCase() === 'creating' ? 'creating-card' : '',
               recentlyOrderedInstanceId === instance.id ? (themeStore.isDark ? 'is-order-feedback-dark' : 'is-order-feedback-light') : '',
-              selectedIds.has(instance.id) ? (themeStore.isDark ? 'ring-1 ring-blue-500/40' : 'ring-1 ring-blue-500/30') : ''
+              selectedIds.has(instance.id) ? ('ring-1 ring-primary-500/40') : ''
             ]"
           >
             <div class="block p-4">
@@ -2105,7 +2103,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <div class="pt-1 shrink-0" @click.stop>
                   <input
                     type="checkbox"
-                    class="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer touch-manipulation"
+                    class="w-5 h-5 rounded border-gray-300 accent-primary-600 cursor-pointer touch-manipulation"
                     :checked="selectedIds.has(instance.id)"
                     @click.stop
                     @change.stop="toggleSelect(instance.id)"
@@ -2113,7 +2111,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 </div>
                 <div
                   class="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
-                  :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'"
+                  :class="'bg-themed-secondary'"
                 >
                   <InstanceDisplayIcon
                     v-if="instance.iconBadgeId || getPaidIconType(instance)"
@@ -2132,18 +2130,18 @@ async function confirmBatchDestroy(): Promise<void> {
                   <div class="flex items-center gap-2 mb-1">
                     <div
                       class="font-semibold truncate"
-                      :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'"
+                      :class="'text-themed'"
                     >
                       {{ instance.name }}
                     </div>
-                    <span :class="['badge badge-sm inline-flex items-center gap-1 flex-shrink-0', getStatusInfo(instance.status, t).class]">
+                    <span :class="['inline-flex items-center gap-1 flex-shrink-0 rounded-full px-2 py-0.5 font-mono', getStatusInfo(instance.status, t).class]">
                       <span :class="['w-1 h-1 rounded-full', getStatusInfo(instance.status, t).dot]"></span>
                       <span class="text-[10px]">{{ getStatusInfo(instance.status, t).label }}</span>
                     </span>
                   </div>
                   <div
                     class="text-xs truncate"
-                    :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'"
+                    :class="'text-themed-muted'"
                   >
                     {{ formatImageName(instance.image, (instance as any).imageName) }}
                   </div>
@@ -2165,7 +2163,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <div
                   v-if="(instance as any).packageName"
                   class="text-xs px-2 py-1 rounded truncate max-w-[180px]"
-                  :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-600'"
+                  :class="'bg-themed-secondary text-themed-muted'"
                   :title="(instance as any).packageName"
                   @click="openInstanceDetail(instance.id)"
                 >
@@ -2182,7 +2180,7 @@ async function confirmBatchDestroy(): Promise<void> {
                         v-for="(ipObj, idx) in getIps(instance)"
                         :key="idx"
                         class="font-mono text-xs max-w-[220px] break-all text-right"
-                        :class="[themeStore.isDark ? 'text-gray-300' : 'text-gray-700', ipObj.type === 'ipv6' ? 'opacity-75' : '']"
+                        :class="['text-themed', ipObj.type === 'ipv6' ? 'opacity-75' : '']"
                         :title="ipObj.ip"
                       >
                         {{ ipObj.ip }}
@@ -2194,8 +2192,8 @@ async function confirmBatchDestroy(): Promise<void> {
                 <div class="flex items-center justify-between">
                   <span class="text-themed-muted text-xs">{{ $t('instance.mobileCard.config') }}</span>
                   <span
-                    class="text-xs"
-                    :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
+                    class="text-xs font-mono tabular-nums"
+                    :class="'text-themed'"
                   >
                     {{ instance.cpu }}{{ $t('instance.mobileCard.cpuCore') }} / {{ formatMemory(instance.memory) }} / {{ formatDisk(instance.disk) }}
                   </span>
@@ -2204,7 +2202,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   <span class="text-themed-muted text-xs">{{ $t('instance.mobileCard.quota') }}</span>
                   <span
                     class="text-xs"
-                    :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
+                    :class="'text-themed'"
                   >
                     {{ getInstanceQuotaSummary(instance) }}
                   </span>
@@ -2212,8 +2210,8 @@ async function confirmBatchDestroy(): Promise<void> {
                 <div class="flex items-center justify-between">
                   <span class="text-themed-muted text-xs">{{ $t('instance.mobileCard.traffic') }}</span>
                   <span
-                    class="text-xs"
-                    :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
+                    class="text-xs font-mono tabular-nums"
+                    :class="'text-themed'"
                   >
                     <template v-if="(instance as any).monthlyTrafficLimit">
                       {{ formatBytes(Number((instance as any).monthlyTrafficUsed || 0)) }} / {{ formatBytes(Number((instance as any).monthlyTrafficLimit)) }}
@@ -2229,7 +2227,7 @@ async function confirmBatchDestroy(): Promise<void> {
                     <FlagIcon :code="(instance as any).host?.country_code || (instance as any).hostCountryCode || 'us'" size="xs" />
                     <span
                       class="uppercase text-xs font-medium"
-                      :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
+                      :class="'text-themed'"
                     >{{ (instance as any).host?.name || (instance as any).host || '-' }}</span>
                   </span>
                 </div>
@@ -2237,7 +2235,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   <span class="text-themed-muted text-xs">{{ $t('instance.expireAt') }}</span>
                   <span class="text-xs text-right" :title="getInstanceExpiryInfo(instance).title || ''">
                     <template v-if="getInstanceExpiryInfo(instance).dateText">
-                      <span class="text-themed-muted">{{ getInstanceExpiryInfo(instance).dateText }}</span>
+                      <span class="font-mono tabular-nums text-themed-muted">{{ getInstanceExpiryInfo(instance).dateText }}</span>
                       <span class="mx-1 text-themed-muted">|</span>
                     </template>
                     <span class="font-medium" :class="getInstanceExpiryInfo(instance).className">
@@ -2249,7 +2247,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   <span class="text-themed-muted text-xs">{{ $t('instance.mobileCard.user') }}</span>
                   <span
                     class="text-xs"
-                    :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-700'"
+                    :class="'text-themed'"
                   >
                     {{ (instance as any).username || '-' }}
                   </span>
@@ -2259,7 +2257,7 @@ async function confirmBatchDestroy(): Promise<void> {
 
             <div
               class="flex items-center justify-center gap-2 px-4 py-3 border-t"
-              :class="themeStore.isDark ? 'border-gray-800 bg-gray-900/30' : 'border-gray-100 bg-gray-50'"
+              :class="'border-themed bg-themed-secondary'"
             >
               <InstanceOrderMenu
                 v-if="canReorderInstances"
@@ -2342,26 +2340,23 @@ async function confirmBatchDestroy(): Promise<void> {
             :class="[
               instance.status?.toLowerCase() === 'creating' ? 'creating-card' : '',
               recentlyOrderedInstanceId === instance.id ? (themeStore.isDark ? 'is-order-feedback-dark' : 'is-order-feedback-light') : '',
-              selectedIds.has(instance.id) ? (themeStore.isDark ? 'ring-1 ring-blue-500/40' : 'ring-1 ring-blue-500/30') : '',
-              themeStore.isDark
-                ? 'border-gray-800 bg-gray-950 hover:border-gray-700'
-                : 'border-gray-200 bg-white hover:border-gray-300'
+              selectedIds.has(instance.id) ? ('ring-1 ring-primary-500/40') : '',
+              'border-themed bg-themed-surface hover:border-primary-500/40'
             ]"
           >
             <div class="flex items-start justify-between gap-4">
               <button type="button" class="min-w-0 flex-1 text-left" @click="openInstanceDetail(instance.id)">
                 <h2
-                  class="truncate text-xl font-bold leading-7"
-                  :class="themeStore.isDark ? 'text-gray-50' : 'text-gray-950'"
+                  class="truncate text-xl font-semibold leading-7 text-themed"
                   :title="instance.name"
                 >
                   {{ instance.name }}
                 </h2>
                 <div class="mt-2 flex min-w-0 flex-wrap items-center gap-2">
-                  <span :class="['inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium', getStatusInfo(instance.status, t).class]">
+                  <span :class="['inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[11px]', getStatusInfo(instance.status, t).class]">
                     {{ getStatusInfo(instance.status, t).label }}
                   </span>
-                  <span class="inline-flex min-w-0 items-center gap-1.5 text-sm" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'">
+                  <span class="inline-flex min-w-0 items-center gap-1.5 text-sm" :class="'text-themed-muted'">
                     <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12z" />
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -2396,7 +2391,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors"
                 :class="selectedIds.has(instance.id)
                   ? 'border-accent bg-accent text-white dark:text-black'
-                  : (themeStore.isDark ? 'border-gray-700 bg-gray-900 text-transparent hover:border-gray-600' : 'border-gray-300 bg-white text-transparent hover:border-gray-400')"
+                  : 'border-themed bg-themed-surface text-transparent hover:border-primary-500/50'"
                 :aria-pressed="selectedIds.has(instance.id)"
                 @click.stop="toggleSelect(instance.id)"
               >
@@ -2407,46 +2402,46 @@ async function confirmBatchDestroy(): Promise<void> {
             </div>
 
             <dl class="mt-3 grid grid-cols-[86px_minmax(0,1fr)] gap-y-1.5 text-[14px] leading-6">
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.region') }}</dt>
-              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.card.region') }}</dt>
+              <dd class="min-w-0 truncate" :class="'text-themed-muted'">
                 <FlagIcon :code="getInstanceRegionCode(instance)" size="xs" class="mr-1 inline-flex align-[-1px]" />
                 {{ getInstanceRegionLabel(instance) }}
               </dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.host') }}</dt>
-              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceHostName(instance) }}</dd>
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.host') }}</dt>
+              <dd class="min-w-0 truncate" :class="'text-themed-muted'">{{ getInstanceHostName(instance) }}</dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.package') }}</dt>
-              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'" :title="getInstancePlanName(instance)">
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.package') }}</dt>
+              <dd class="min-w-0 truncate" :class="'text-themed-muted'" :title="getInstancePlanName(instance)">
                 {{ getInstancePlanName(instance) }}
               </dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.config') }}</dt>
-              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceConfigSummary(instance) }}</dd>
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.config') }}</dt>
+              <dd class="min-w-0 truncate font-mono tabular-nums" :class="'text-themed-muted'">{{ getInstanceConfigSummary(instance) }}</dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.quotaLabel') }}</dt>
-              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceQuotaSummary(instance) }}</dd>
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.quotaLabel') }}</dt>
+              <dd class="min-w-0 truncate font-mono tabular-nums" :class="'text-themed-muted'">{{ getInstanceQuotaSummary(instance) }}</dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.network') }}</dt>
-              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'" :title="getInstanceNetworkSummary(instance)">
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.card.network') }}</dt>
+              <dd class="min-w-0 truncate" :class="'text-themed-muted'" :title="getInstanceNetworkSummary(instance)">
                 {{ getInstanceNetworkSummary(instance) }}
               </dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.trafficLabel') }}</dt>
-              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">{{ getInstanceTrafficUsage(instance) }}</dd>
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.trafficLabel') }}</dt>
+              <dd class="min-w-0 truncate font-mono tabular-nums" :class="'text-themed-muted'">{{ getInstanceTrafficUsage(instance) }}</dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.trafficReset') }}</dt>
-              <dd class="min-w-0 truncate text-themed">{{ getInstanceResetTrafficPrice(instance) }}</dd>
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.card.trafficReset') }}</dt>
+              <dd class="min-w-0 truncate font-mono tabular-nums text-themed">{{ getInstanceResetTrafficPrice(instance) }}</dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.card.price') }}</dt>
-              <dd class="min-w-0 truncate text-themed">{{ getInstanceMonthlyPrice(instance) }}</dd>
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.card.price') }}</dt>
+              <dd class="min-w-0 truncate font-mono tabular-nums text-themed">{{ getInstanceMonthlyPrice(instance) }}</dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ $t('instance.expireAt') }}</dt>
-              <dd class="min-w-0 truncate" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-600'">
+              <dt class="font-semibold" :class="'text-themed'">{{ $t('instance.expireAt') }}</dt>
+              <dd class="min-w-0 truncate font-mono tabular-nums" :class="'text-themed-muted'">
                 {{ getInstanceExpiryInfo(instance).dateText || '-' }}
               </dd>
 
-              <dt class="font-semibold" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">
+              <dt class="font-semibold" :class="'text-themed'">
                 <span class="inline-flex items-center gap-1">
                   {{ $t('instance.card.autoRenew') }}
                   <svg class="h-3.5 w-3.5 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2459,7 +2454,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   type="button"
                   class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   :class="(instance as any).autoRenew
-                    ? 'bg-blue-600'
+                    ? 'bg-primary-600'
                     : (themeStore.isDark ? 'bg-gray-700' : 'bg-gray-300')"
                   :disabled="!canUseInstanceBillingAction(instance) || !!actionLoading[instance.id]"
                   :aria-pressed="!!(instance as any).autoRenew"
@@ -2475,7 +2470,7 @@ async function confirmBatchDestroy(): Promise<void> {
 
             <div class="mt-4 flex items-center justify-between gap-3">
               <div class="inline-flex min-w-0 items-center gap-2">
-                <span :class="['h-5 w-5 rounded-full border-4', getStatusInfo(instance.status, t).dot, themeStore.isDark ? 'border-gray-900' : 'border-gray-100']"></span>
+                <span :class="['h-5 w-5 rounded-full border-4 border-themed', getStatusInfo(instance.status, t).dot]"></span>
                 <span class="truncate text-sm font-semibold" :class="getInstanceStatusTextClass(instance)">{{ getStatusInfo(instance.status, t).label }}</span>
               </div>
 
@@ -2495,7 +2490,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   v-if="!isAdminEntry"
                   type="button"
                   class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
-                  :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  :class="'bg-themed-secondary text-themed'"
                   @click.stop="openInstanceExchange(instance)"
                 >
                   交易所
@@ -2503,7 +2498,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <button
                   type="button"
                   class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
-                  :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  :class="'bg-themed-secondary text-themed'"
                   @click.stop="openInstanceDetail(instance.id)"
                 >
                   {{ $t('instance.card.manage') }}
@@ -2511,7 +2506,7 @@ async function confirmBatchDestroy(): Promise<void> {
                 <button
                   type="button"
                   class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
-                  :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  :class="'bg-themed-secondary text-themed'"
                   :disabled="!canTransferInstance(instance)"
                   @click.stop="openInstanceTransfer(instance)"
                 >
@@ -2529,7 +2524,7 @@ async function confirmBatchDestroy(): Promise<void> {
                   v-if="canResetInstanceTraffic(instance)"
                   type="button"
                   class="kawaii-action-button inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors"
-                  :class="themeStore.isDark ? 'bg-gray-900 text-gray-200 hover:bg-gray-800' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'"
+                  :class="'bg-themed-secondary text-themed'"
                   :disabled="!!actionLoading[instance.id]"
                   @click.stop="openResetTrafficModal(instance)"
                 >
@@ -2543,7 +2538,7 @@ async function confirmBatchDestroy(): Promise<void> {
     </template>
 
     <div v-if="!loading && instances.length > 0" class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-themed-muted">
-      <span>{{ $t('instance.totalRecords', { count: total }) }} · {{ page }} / {{ totalPages }}</span>
+      <span class="tabular-nums">{{ $t('instance.totalRecords', { count: total }) }} · {{ page }} / {{ totalPages }}</span>
       <div class="flex items-center gap-2">
         <button
           :disabled="page <= 1"
@@ -2552,7 +2547,7 @@ async function confirmBatchDestroy(): Promise<void> {
         >
           {{ $t('common.prevPage') }}
         </button>
-        <span class="min-w-[84px] text-center">{{ page }} / {{ totalPages }}</span>
+        <span class="w-20 text-center font-mono tabular-nums">{{ page }} / {{ totalPages }}</span>
         <button
           :disabled="page >= totalPages"
           class="btn-ghost btn-sm"
@@ -2572,11 +2567,11 @@ async function confirmBatchDestroy(): Promise<void> {
         <div class="absolute inset-0 bg-black/60" @click="closeResetTrafficModal()"></div>
         <div
           class="relative w-full max-w-md rounded-2xl p-5 shadow-2xl"
-          :class="themeStore.isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'"
+          :class="'bg-themed-surface border border-themed'"
         >
           <div class="flex items-start justify-between gap-4">
             <div>
-              <h3 class="text-lg font-semibold" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+              <h3 class="text-lg font-semibold" :class="'text-themed'">
                 {{ $t('admin.hosts.resetTrafficTitle') }}
               </h3>
               <p class="mt-1 text-sm text-themed-muted">
@@ -2584,16 +2579,16 @@ async function confirmBatchDestroy(): Promise<void> {
               </p>
             </div>
             <button class="p-1 rounded hover:bg-gray-500/20" :disabled="resetTrafficSubmitting" @click="closeResetTrafficModal()">
-              <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5" :class="'text-themed-muted'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          <div class="mt-4 space-y-2 rounded-xl border p-4 text-sm" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+          <div class="mt-4 space-y-2 rounded-xl border p-4 text-sm" :class="'border-themed bg-themed-secondary'">
             <div class="flex items-center justify-between gap-3">
               <span class="text-themed-muted">{{ $t('instance.trafficLabel') }}</span>
-              <span :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-800'">{{ getInstanceTrafficUsage(resetTrafficTarget) }}</span>
+              <span :class="'text-themed'">{{ getInstanceTrafficUsage(resetTrafficTarget) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3">
               <span class="text-themed-muted">{{ $t('instance.card.trafficReset') }}</span>
@@ -2634,17 +2629,17 @@ async function confirmBatchDestroy(): Promise<void> {
         <div class="absolute inset-0 bg-black/60" @click="closeBatchRenewModal()"></div>
         <div
           class="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl flex flex-col"
-          :class="themeStore.isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'"
+          :class="'bg-themed-surface border border-themed'"
         >
-          <div class="flex items-center justify-between px-5 py-4 border-b" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
+          <div class="flex items-center justify-between px-5 py-4 border-b" :class="'border-themed'">
             <div>
-              <h3 class="text-lg font-semibold" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+              <h3 class="text-lg font-semibold" :class="'text-themed'">
                 {{ configStore.freeSiteMode ? freeSiteCopy.instanceBatchRenewTitle : $t('instance.batch.renewTitle') }}
               </h3>
               <p class="text-sm text-themed-muted mt-1">{{ configStore.freeSiteMode ? freeSiteCopy.instanceBatchRenewDescription : $t('instance.batch.renewDescription') }}</p>
             </div>
             <button class="p-1 rounded hover:bg-gray-500/20" @click="closeBatchRenewModal()">
-              <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5" :class="'text-themed-muted'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -2652,7 +2647,7 @@ async function confirmBatchDestroy(): Promise<void> {
 
           <div class="flex-1 overflow-y-auto p-5 space-y-4">
             <div v-if="batchRenewLoading" class="flex items-center justify-center py-12">
-              <svg class="w-8 h-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+              <svg class="w-8 h-8 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
               </svg>
@@ -2660,36 +2655,34 @@ async function confirmBatchDestroy(): Promise<void> {
 
             <template v-else>
               <div class="grid gap-3 md:grid-cols-4">
-                <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+                <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
                   <div class="text-xs uppercase tracking-wide text-themed-muted">{{ $t('instance.batch.selectedCount', { count: selectedCount }) }}</div>
-                  <div class="mt-2 text-2xl font-semibold" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ selectedCount }}</div>
+                  <div class="mt-2 text-2xl font-semibold font-mono tabular-nums" :class="'text-themed'">{{ selectedCount }}</div>
                 </div>
-                <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+                <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
                   <div class="text-xs uppercase tracking-wide text-themed-muted">{{ $t('instance.batch.eligibleCount') }}</div>
-                  <div class="mt-2 text-2xl font-semibold text-emerald-500">{{ batchRenewEligibleItems.length }}</div>
+                  <div class="mt-2 text-2xl font-semibold font-mono tabular-nums text-emerald-500">{{ batchRenewEligibleItems.length }}</div>
                 </div>
-                <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+                <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
                   <div class="text-xs uppercase tracking-wide text-themed-muted">{{ configStore.freeSiteMode ? freeSiteCopy.instanceBatchTotalAmount : $t('instance.batch.totalAmount') }}</div>
-                  <div class="mt-2 text-2xl font-semibold" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ formatCurrency(batchRenewTotal) }}</div>
+                  <div class="mt-2 text-2xl font-semibold font-mono tabular-nums" :class="'text-themed'">{{ formatCurrency(batchRenewTotal) }}</div>
                 </div>
-                <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+                <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
                   <div class="text-xs uppercase tracking-wide text-themed-muted">{{ configStore.freeSiteMode ? freeSiteCopy.instanceBatchBalanceAfter : $t('billing.balanceAfterRenew') }}</div>
-                  <div class="mt-2 text-2xl font-semibold" :class="batchRenewInsufficientBalance ? 'text-red-500' : 'text-blue-500'">{{ formatCurrency(batchRenewBalanceAfter) }}</div>
+                  <div class="mt-2 text-2xl font-semibold font-mono tabular-nums" :class="batchRenewInsufficientBalance ? 'text-red-500' : 'text-primary-600 dark:text-primary-400'">{{ formatCurrency(batchRenewBalanceAfter) }}</div>
                 </div>
               </div>
 
-              <div v-if="batchRenewMonthOptions.length > 0" class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/50' : 'border-gray-200 bg-gray-50/80'">
-                <div class="text-sm font-medium" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ $t('instance.batch.selectedMonths') }}</div>
+              <div v-if="batchRenewMonthOptions.length > 0" class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
+                <div class="text-sm font-medium" :class="'text-themed'">{{ $t('instance.batch.selectedMonths') }}</div>
                 <div class="mt-3 flex flex-wrap gap-2">
                   <button
                     v-for="months in batchRenewMonthOptions"
                     :key="months"
                     class="px-3 py-2 rounded-lg border text-sm transition-colors"
                     :class="months === batchRenewMonths
-                      ? 'border-blue-500 bg-blue-500/10 text-blue-500'
-                      : themeStore.isDark
-                        ? 'border-gray-700 text-gray-300 hover:border-gray-600'
-                        : 'border-gray-200 text-gray-700 hover:border-gray-300'"
+                      ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300'
+                      : 'border-themed text-themed-muted hover:border-primary-500/40 hover:text-themed'"
                     @click="batchRenewMonths = months"
                   >
                     {{ getBatchRenewMonthsLabel(months) }}
@@ -2714,9 +2707,9 @@ async function confirmBatchDestroy(): Promise<void> {
                 <RouterLink :to="walletPath()" class="underline ml-1">{{ $t('billing.goRecharge') }}</RouterLink>
               </div>
 
-              <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/50' : 'border-gray-200 bg-white'">
+              <div class="rounded-xl border p-4" :class="'border-themed bg-themed-surface'">
                 <div class="flex items-center justify-between gap-3 mb-3">
-                  <h4 class="text-sm font-medium" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+                  <h4 class="text-sm font-medium" :class="'text-themed'">
                     {{ $t('instance.batch.eligibleList', { count: batchRenewEligibleItems.length }) }}
                   </h4>
                   <span class="text-xs text-themed-muted">{{ configStore.freeSiteMode ? freeSiteCopy.instanceBatchCurrentBalance : $t('billing.currentBalance') }}: {{ formatCurrency(batchRenewBalance.balance) }}</span>
@@ -2726,26 +2719,26 @@ async function confirmBatchDestroy(): Promise<void> {
                     v-for="item in batchRenewEligibleItems"
                     :key="item.id"
                     class="rounded-xl border px-3 py-3"
-                    :class="themeStore.isDark ? 'border-gray-800 bg-black/20' : 'border-gray-200 bg-gray-50/80'"
+                    :class="'border-themed bg-themed-secondary'"
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div class="min-w-0">
-                        <div class="text-sm font-medium truncate" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ item.name }}</div>
+                        <div class="text-sm font-medium truncate" :class="'text-themed'">{{ item.name }}</div>
                         <div class="mt-1 flex flex-wrap gap-2 text-xs">
-                          <span class="inline-flex items-center rounded-full px-2 py-0.5" :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'">
+                          <span class="inline-flex items-center rounded-full px-2 py-0.5" :class="'bg-themed-secondary text-themed'">
                             {{ item.autoRenew ? $t('billing.autoRenewEnabled') : $t('billing.autoRenewDisabled') }}
                           </span>
                           <span
                             v-if="item.isHostedInstance"
                             class="inline-flex items-center rounded-full px-2 py-0.5"
-                            :class="themeStore.isDark ? 'bg-blue-500/10 text-blue-300' : 'bg-blue-50 text-blue-700'"
+                            :class="'bg-primary-500/10 text-primary-600 dark:text-primary-300'"
                           >
                             {{ $t('instance.batch.hosted') }}
                           </span>
                         </div>
                       </div>
                       <div class="text-right shrink-0">
-                        <div class="text-sm font-semibold text-emerald-500">{{ formatCurrency(item.selectedOption?.discountedPrice) }}</div>
+                        <div class="text-sm font-semibold font-mono tabular-nums text-emerald-500">{{ formatCurrency(item.selectedOption?.discountedPrice) }}</div>
                         <div class="text-xs text-themed-muted">{{ formatDate(item.selectedOption?.expiresAt) }}</div>
                       </div>
                     </div>
@@ -2757,9 +2750,9 @@ async function confirmBatchDestroy(): Promise<void> {
               <div
                 v-if="batchRenewIneligibleItems.length > 0"
                 class="rounded-xl border p-4"
-                :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/50' : 'border-gray-200 bg-white'"
+                :class="'border-themed bg-themed-surface'"
               >
-                <h4 class="text-sm font-medium mb-3" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+                <h4 class="text-sm font-medium mb-3" :class="'text-themed'">
                   {{ $t('instance.batch.skippedList', { count: batchRenewIneligibleItems.length }) }}
                 </h4>
                 <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -2767,9 +2760,9 @@ async function confirmBatchDestroy(): Promise<void> {
                     v-for="item in batchRenewIneligibleItems"
                     :key="`renew-skip-${item.id}`"
                     class="rounded-lg border px-3 py-2"
-                    :class="themeStore.isDark ? 'border-gray-800 bg-black/20' : 'border-gray-200 bg-gray-50/80'"
+                    :class="'border-themed bg-themed-secondary'"
                   >
-                    <div class="text-sm font-medium" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ item.name }}</div>
+                    <div class="text-sm font-medium" :class="'text-themed'">{{ item.name }}</div>
                     <div class="mt-1 text-xs" :class="themeStore.isDark ? 'text-red-300' : 'text-red-600'">
                       {{ translateBatchReason(item.reason || (item.canRenew ? '该实例不支持当前续费时长' : undefined)) }}
                     </div>
@@ -2779,7 +2772,7 @@ async function confirmBatchDestroy(): Promise<void> {
             </template>
           </div>
 
-          <div class="flex items-center justify-between gap-3 px-5 py-4 border-t" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
+          <div class="flex items-center justify-between gap-3 px-5 py-4 border-t" :class="'border-themed'">
             <span class="text-xs text-themed-muted">{{ $t('instance.batch.currentPageOnly') }}</span>
             <div class="flex items-center gap-2">
               <button class="btn-ghost btn-sm" :disabled="batchRenewSubmitting" @click="closeBatchRenewModal()">
@@ -2807,17 +2800,17 @@ async function confirmBatchDestroy(): Promise<void> {
         <div class="absolute inset-0 bg-black/60" @click="closeBatchDestroyModal()"></div>
         <div
           class="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl flex flex-col"
-          :class="themeStore.isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'"
+          :class="'bg-themed-surface border border-themed'"
         >
-          <div class="flex items-center justify-between px-5 py-4 border-b" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
+          <div class="flex items-center justify-between px-5 py-4 border-b" :class="'border-themed'">
             <div>
-              <h3 class="text-lg font-semibold" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+              <h3 class="text-lg font-semibold" :class="'text-themed'">
                 {{ $t('instance.batch.destroyTitle') }}
               </h3>
               <p class="text-sm text-themed-muted mt-1">{{ $t('instance.batch.destroyDescription') }}</p>
             </div>
             <button class="p-1 rounded hover:bg-gray-500/20" @click="closeBatchDestroyModal()">
-              <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5" :class="'text-themed-muted'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -2844,21 +2837,21 @@ async function confirmBatchDestroy(): Promise<void> {
               </div>
 
               <div class="grid gap-3 md:grid-cols-4">
-                <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+                <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
                   <div class="text-xs uppercase tracking-wide text-themed-muted">{{ $t('instance.batch.selectedCount', { count: selectedCount }) }}</div>
-                  <div class="mt-2 text-2xl font-semibold" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ selectedCount }}</div>
+                  <div class="mt-2 text-2xl font-semibold font-mono tabular-nums" :class="'text-themed'">{{ selectedCount }}</div>
                 </div>
-                <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+                <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
                   <div class="text-xs uppercase tracking-wide text-themed-muted">{{ $t('instance.batch.eligibleCount') }}</div>
-                  <div class="mt-2 text-2xl font-semibold text-emerald-500">{{ batchDestroyEligibleItems.length }}</div>
+                  <div class="mt-2 text-2xl font-semibold font-mono tabular-nums text-emerald-500">{{ batchDestroyEligibleItems.length }}</div>
                 </div>
-                <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+                <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
                   <div class="text-xs uppercase tracking-wide text-themed-muted">{{ $t('instance.batch.refundTotal') }}</div>
-                  <div class="mt-2 text-2xl font-semibold text-emerald-500">{{ formatCurrency(batchDestroyTotalRefund) }}</div>
+                  <div class="mt-2 text-2xl font-semibold font-mono tabular-nums text-emerald-500">{{ formatCurrency(batchDestroyTotalRefund) }}</div>
                 </div>
-                <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/60' : 'border-gray-200 bg-gray-50'">
+                <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
                   <div class="text-xs uppercase tracking-wide text-themed-muted">{{ $t('instance.batch.feeTotal') }}</div>
-                  <div class="mt-2 text-2xl font-semibold" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ formatCurrency(batchDestroyTotalFee) }}</div>
+                  <div class="mt-2 text-2xl font-semibold font-mono tabular-nums" :class="'text-themed'">{{ formatCurrency(batchDestroyTotalFee) }}</div>
                 </div>
               </div>
 
@@ -2870,8 +2863,8 @@ async function confirmBatchDestroy(): Promise<void> {
                 {{ $t('instance.batch.destroyEmpty') }}
               </div>
 
-              <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/50' : 'border-gray-200 bg-white'">
-                <h4 class="text-sm font-medium mb-3" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+              <div class="rounded-xl border p-4" :class="'border-themed bg-themed-surface'">
+                <h4 class="text-sm font-medium mb-3" :class="'text-themed'">
                   {{ $t('instance.batch.eligibleList', { count: batchDestroyEligibleItems.length }) }}
                 </h4>
                 <div v-if="batchDestroyEligibleItems.length > 0" class="space-y-3 max-h-64 overflow-y-auto pr-1">
@@ -2879,16 +2872,16 @@ async function confirmBatchDestroy(): Promise<void> {
                     v-for="item in batchDestroyEligibleItems"
                     :key="item.id"
                     class="rounded-xl border px-3 py-3"
-                    :class="themeStore.isDark ? 'border-gray-800 bg-black/20' : 'border-gray-200 bg-gray-50/80'"
+                    :class="'border-themed bg-themed-secondary'"
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div class="min-w-0">
-                        <div class="text-sm font-medium truncate" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ item.name }}</div>
+                        <div class="text-sm font-medium truncate" :class="'text-themed'">{{ item.name }}</div>
                         <div class="mt-1 text-xs text-themed-muted">
                           {{ item.instance.hostName }} · {{ item.instance.planName || $t('billing.freeInstance') }}
                         </div>
                         <div class="mt-2 flex flex-wrap gap-2 text-xs">
-                          <span class="inline-flex items-center rounded-full px-2 py-0.5" :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'">
+                          <span class="inline-flex items-center rounded-full px-2 py-0.5" :class="'bg-themed-secondary text-themed'">
                             {{ item.isFreeInstance ? $t('billing.freeInstance') : $t('billing.paidInstance') }}
                           </span>
                           <span
@@ -2908,7 +2901,7 @@ async function confirmBatchDestroy(): Promise<void> {
                         </div>
                       </div>
                       <div class="text-right shrink-0">
-                        <div class="text-sm font-semibold text-emerald-500">{{ formatCurrency(item.refund.refundAmount) }}</div>
+                        <div class="text-sm font-semibold font-mono tabular-nums text-emerald-500">{{ formatCurrency(item.refund.refundAmount) }}</div>
                         <div class="text-xs text-themed-muted">{{ $t('instance.destroy.feeAmount') }} {{ formatCurrency(item.refund.feeAmount) }}</div>
                       </div>
                     </div>
@@ -2920,9 +2913,9 @@ async function confirmBatchDestroy(): Promise<void> {
               <div
                 v-if="batchDestroyIneligibleItems.length > 0"
                 class="rounded-xl border p-4"
-                :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/50' : 'border-gray-200 bg-white'"
+                :class="'border-themed bg-themed-surface'"
               >
-                <h4 class="text-sm font-medium mb-3" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+                <h4 class="text-sm font-medium mb-3" :class="'text-themed'">
                   {{ $t('instance.batch.skippedList', { count: batchDestroyIneligibleItems.length }) }}
                 </h4>
                 <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -2930,9 +2923,9 @@ async function confirmBatchDestroy(): Promise<void> {
                     v-for="item in batchDestroyIneligibleItems"
                     :key="`destroy-skip-${item.id}`"
                     class="rounded-lg border px-3 py-2"
-                    :class="themeStore.isDark ? 'border-gray-800 bg-black/20' : 'border-gray-200 bg-gray-50/80'"
+                    :class="'border-themed bg-themed-secondary'"
                   >
-                    <div class="text-sm font-medium" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">{{ item.name }}</div>
+                    <div class="text-sm font-medium" :class="'text-themed'">{{ item.name }}</div>
                     <div class="mt-1 text-xs" :class="themeStore.isDark ? 'text-red-300' : 'text-red-600'">
                       {{ item.cannotDestroyReason ? translateBatchReason(item.cannotDestroyReason) : $t('instance.destroy.cannotDestroy') }}
                     </div>
@@ -2940,8 +2933,8 @@ async function confirmBatchDestroy(): Promise<void> {
                 </div>
               </div>
 
-              <div class="rounded-xl border p-4" :class="themeStore.isDark ? 'border-gray-800 bg-gray-950/50' : 'border-gray-200 bg-gray-50/80'">
-                <label class="block text-sm font-medium mb-2" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
+              <div class="rounded-xl border p-4" :class="'border-themed bg-themed-secondary'">
+                <label class="block text-sm font-medium mb-2" :class="'text-themed'">
                   {{ $t('instance.batch.confirmHint') }}
                 </label>
                 <input
@@ -2954,7 +2947,7 @@ async function confirmBatchDestroy(): Promise<void> {
             </template>
           </div>
 
-          <div class="flex items-center justify-between gap-3 px-5 py-4 border-t" :class="themeStore.isDark ? 'border-gray-800' : 'border-gray-200'">
+          <div class="flex items-center justify-between gap-3 px-5 py-4 border-t" :class="'border-themed'">
             <span class="text-xs text-themed-muted">{{ $t('instance.batch.currentPageOnly') }}</span>
             <div class="flex items-center gap-2">
               <button class="btn-ghost btn-sm" :disabled="batchDestroySubmitting" @click="closeBatchDestroyModal()">
@@ -3006,6 +2999,36 @@ async function confirmBatchDestroy(): Promise<void> {
   .instance-stack-order-move,
   .instance-card-order-move {
     transition-duration: 1ms;
+  }
+}
+
+/* Nimbus: interactive card hover-lift (mobile instance stack) */
+.nimbus-card-lift {
+  transition:
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 200ms ease,
+    border-color 200ms ease;
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nimbus-card-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px rgb(15 23 42 / 0.12);
+  }
+
+  :global(.dark) .nimbus-card-lift:hover {
+    box-shadow: 0 16px 34px rgb(0 0 0 / 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-card-lift {
+    transition-duration: 1ms;
+  }
+
+  .nimbus-card-lift:hover {
+    transform: none;
   }
 }
 </style>

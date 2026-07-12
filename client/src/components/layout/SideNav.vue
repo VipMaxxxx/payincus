@@ -326,7 +326,7 @@ onUnmounted(() => {
         >
           <span class="nimbus-nav-indicator" aria-hidden="true"></span>
           <!-- Icons -->
-          <svg class="nimbus-nav-icon" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
+          <svg class="nimbus-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
             <path
               v-if="item.icon === 'home'" stroke-linecap="round" stroke-linejoin="round"
               d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
@@ -502,7 +502,14 @@ onUnmounted(() => {
 .nimbus-brand-logo {
   border-radius: 8px;
   object-fit: cover;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--kawaii-line) 82%, transparent);
+  background: linear-gradient(
+    135deg,
+    var(--kawaii-primary),
+    color-mix(in srgb, var(--kawaii-primary) 68%, #ffffff)
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--kawaii-line) 82%, transparent),
+    0 2px 10px -2px color-mix(in srgb, var(--kawaii-primary) 34%, transparent);
 }
 
 .nimbus-brand-name {
@@ -547,7 +554,7 @@ onUnmounted(() => {
   font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--kawaii-faint);
   background: transparent;
@@ -589,7 +596,7 @@ onUnmounted(() => {
 }
 
 .nimbus-nav-item:not(.is-active):hover {
-  background: color-mix(in srgb, var(--kawaii-surface-soft) 86%, transparent);
+  background: color-mix(in srgb, var(--kawaii-primary) 9%, transparent);
   color: var(--kawaii-text);
 }
 
@@ -624,8 +631,8 @@ onUnmounted(() => {
 
 /* Active state — override the legacy gradient with a flat indigo tint */
 .kawaii-sidebar .nimbus-nav-item.is-active {
-  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent) !important;
-  color: var(--kawaii-primary-strong) !important;
+  background: color-mix(in srgb, var(--kawaii-primary) 15%, transparent) !important;
+  color: var(--kawaii-text) !important;
   box-shadow: none !important;
   font-weight: 600;
 }
@@ -646,7 +653,7 @@ onUnmounted(() => {
 }
 .kawaii-sidebar .nimbus-nav-item.router-link-active:not(.is-active):hover,
 .kawaii-sidebar .nimbus-nav-item.router-link-exact-active:not(.is-active):hover {
-  background: color-mix(in srgb, var(--kawaii-surface-soft) 86%, transparent) !important;
+  background: color-mix(in srgb, var(--kawaii-primary) 9%, transparent) !important;
   color: var(--kawaii-text) !important;
 }
 
@@ -684,5 +691,15 @@ onUnmounted(() => {
   width: 28px;
   height: 28px;
   border-radius: 7px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-group-label,
+  .nimbus-group-chevron,
+  .nimbus-nav-item,
+  .nimbus-nav-icon,
+  .nimbus-nav-indicator {
+    transition: none;
+  }
 }
 </style>

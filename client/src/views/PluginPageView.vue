@@ -39,7 +39,10 @@ onMounted(async () => {
       <PluginFrame :title="currentExtension.title" :url="currentExtension.url" />
     </template>
 
-    <div v-else class="card p-8 text-center">
+    <div v-else class="card mx-auto max-w-md p-8 text-center">
+      <span class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-themed-secondary text-themed-faint">
+        <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7h5a2 2 0 0 1 2 2v5" /><path d="M10 21H5a2 2 0 0 1-2-2v-5" /><path d="M3 10V5a2 2 0 0 1 2-2h4" /><path d="m3 3 18 18" /></svg>
+      </span>
       <h1 class="text-xl font-semibold text-themed">插件不可用</h1>
       <p class="mt-2 text-sm text-themed-muted">该插件页面未启用，或当前账号无权访问。</p>
       <RouterLink :to="dashboardPath()" class="btn-primary mt-5 inline-flex">返回控制台</RouterLink>

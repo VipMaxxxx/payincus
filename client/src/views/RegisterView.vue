@@ -337,55 +337,49 @@ async function handleRegister(): Promise<void> {
 </script>
 
 <template>
-  <div ref="revealRoot" class="kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-lg">
+  <div ref="revealRoot" class="nimbus-auth kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen flex items-center justify-center p-4 sm:p-6">
+    <div class="nimbus-aurora" aria-hidden="true"></div>
+    <div class="relative z-10 w-full max-w-lg">
       <ThemeTemplateSlot
         slot-name="public.auth.aside"
         container-class="mb-6"
       />
 
-      <!-- Logo -->
-      <div class="text-center mb-8" data-reveal>
-        <img
-          :src="brand.brandLogoUrl"
-          :alt="brand.brandName"
-          class="w-16 h-16 mx-auto mb-2 rounded-xl"
-        />
-        <h2 
-          class="text-lg font-semibold mb-1"
-          :class="'text-themed'"
-        >
-          {{ brand.brandName }}
-        </h2>
-        <p 
-          class="text-sm"
-          :class="'text-themed-muted'"
-        >
-          {{ $t('auth.createAccount') }}
-        </p>
+      <!-- Logo lockup -->
+      <div class="nimbus-lockup" data-reveal>
+        <div class="nimbus-logo-tile">
+          <img :src="brand.brandLogoUrl" :alt="brand.brandName" />
+        </div>
+        <h1 class="nimbus-title">{{ brand.brandName }}</h1>
+        <p class="nimbus-subtitle">{{ $t('auth.createAccount') }}</p>
       </div>
 
       <!-- 注册成功 -->
-      <div v-if="success" class="card p-6 text-center">
-        <svg class="w-12 h-12 mx-auto mb-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p :class="'text-themed'">{{ $t('auth.registerSuccess') }}</p>
+      <div v-if="success" class="card nimbus-card nimbus-state" data-reveal>
+        <div class="nimbus-state-icon nimbus-state-icon--ok">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p class="text-themed font-medium">{{ $t('auth.registerSuccess') }}</p>
       </div>
 
-      <div v-else-if="configLoading" class="card p-6 text-center">
-        <p :class="'text-themed'">{{ $t('common.loading') }}...</p>
+      <div v-else-if="configLoading" class="card nimbus-card nimbus-state" data-reveal>
+        <div class="nimbus-spinner"></div>
+        <p class="text-themed-muted">{{ $t('common.loading') }}...</p>
       </div>
 
-      <div v-else-if="!registrationEnabled" class="card p-6 text-center">
-        <svg class="w-12 h-12 mx-auto mb-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m0 3.75h.007v.008H12v-.008z" />
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.34 3.94 1.82 18a1.875 1.875 0 0 0 1.604 2.812h17.152A1.875 1.875 0 0 0 22.18 18L13.66 3.94a1.875 1.875 0 0 0-3.32 0Z" />
-        </svg>
-        <h3 class="text-base font-semibold mb-2" :class="'text-themed'">
+      <div v-else-if="!registrationEnabled" class="card nimbus-card nimbus-state" data-reveal>
+        <div class="nimbus-state-icon nimbus-state-icon--warn">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M12 9v3.75m0 3.75h.007v.008H12v-.008z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M10.34 3.94 1.82 18a1.875 1.875 0 0 0 1.604 2.812h17.152A1.875 1.875 0 0 0 22.18 18L13.66 3.94a1.875 1.875 0 0 0-3.32 0Z" />
+          </svg>
+        </div>
+        <h3 class="text-base font-semibold text-themed">
           {{ $t('auth.registrationClosedTitle') }}
         </h3>
-        <p class="text-sm leading-6 mb-5" :class="'text-themed-muted'">
+        <p class="text-sm leading-6 text-themed-muted">
           {{ $t('auth.registrationClosedMessage') }}
         </p>
         <button type="button" class="btn-primary w-full" @click="router.push(loginPath())">
@@ -394,42 +388,33 @@ async function handleRegister(): Promise<void> {
       </div>
 
       <!-- 注册表单 -->
-      <div v-else class="card p-6" data-reveal>
+      <div v-else class="card nimbus-card" data-reveal>
         <form class="space-y-4" @submit.prevent="handleRegister">
-          <div v-if="requireInviteCode">
-            <label 
-              class="block text-sm mb-1.5"
-              :class="'text-themed-muted'"
-            >
-              {{ $t('auth.inviteCode') }} <span class="text-red-500">*</span>
+          <div v-if="requireInviteCode" class="nimbus-field">
+            <label class="nimbus-label">
+              {{ $t('auth.inviteCode') }} <span class="nimbus-req">*</span>
             </label>
-            <input v-model="form.inviteCode" type="text" class="input" :placeholder="$t('auth.inviteCodePlaceholder')" />
+            <input v-model="form.inviteCode" type="text" class="input font-mono" :placeholder="$t('auth.inviteCodePlaceholder')" />
           </div>
 
-          <div>
-            <label 
-              class="block text-sm mb-1.5"
-              :class="'text-themed-muted'"
-            >
-              {{ $t('auth.username') }} <span class="text-red-500">*</span>
+          <div class="nimbus-field">
+            <label class="nimbus-label">
+              {{ $t('auth.username') }} <span class="nimbus-req">*</span>
             </label>
             <input v-model="form.username" type="text" class="input" :placeholder="$t('auth.usernameHint')" />
           </div>
 
-          <div>
-            <label 
-              class="block text-sm mb-1.5"
-              :class="'text-themed-muted'"
-            >
-              {{ $t('auth.email') }} <span class="text-red-500">*</span>
+          <div class="nimbus-field">
+            <label class="nimbus-label">
+              {{ $t('auth.email') }} <span class="nimbus-req">*</span>
             </label>
             <!-- 邮箱白名单模式：左边输入用户名，右边选择域名 -->
             <div v-if="emailDomainWhitelistEnabled && allowedEmailDomains.length > 0" class="flex items-center gap-2">
-              <input 
-                v-model="emailUsername" 
-                type="text" 
-                class="input min-w-0 flex-1" 
-                :placeholder="$t('auth.emailUsernamePlaceholder')" 
+              <input
+                v-model="emailUsername"
+                type="text"
+                class="input min-w-0 flex-1"
+                :placeholder="$t('auth.emailUsernamePlaceholder')"
               />
               <div class="shrink-0 text-themed-muted">@</div>
               <select v-model="selectedEmailDomain" class="input w-32 max-w-[45%] shrink-0 sm:w-auto sm:min-w-[140px]">
@@ -443,20 +428,17 @@ async function handleRegister(): Promise<void> {
           </div>
 
           <!-- Email Verification Code -->
-          <div v-if="emailVerificationEnabled">
-            <label 
-              class="block text-sm mb-1.5"
-              :class="'text-themed-muted'"
-            >
-              {{ $t('auth.emailCode') }} <span class="text-red-500">*</span>
+          <div v-if="emailVerificationEnabled" class="nimbus-field">
+            <label class="nimbus-label">
+              {{ $t('auth.emailCode') }} <span class="nimbus-req">*</span>
             </label>
             <div class="flex flex-col gap-2 sm:flex-row">
-              <input 
-                v-model="form.emailCode" 
-                type="text" 
-                class="input min-w-0 flex-1" 
+              <input
+                v-model="form.emailCode"
+                type="text"
+                class="input min-w-0 flex-1 font-mono tracking-[0.3em]"
                 maxlength="6"
-                :placeholder="$t('auth.emailCodePlaceholder')" 
+                :placeholder="$t('auth.emailCodePlaceholder')"
               />
               <button
                 type="button"
@@ -476,31 +458,21 @@ async function handleRegister(): Promise<void> {
                 </template>
               </button>
             </div>
-            <p 
-              v-if="codeSent" 
-              class="text-xs mt-1"
-              :class="themeStore.isDark ? 'text-green-400' : 'text-green-600'"
-            >
+            <p v-if="codeSent" class="nimbus-hint nimbus-hint--ok">
               {{ $t('auth.codeSentHint') }}
             </p>
           </div>
 
-          <div>
-            <label 
-              class="block text-sm mb-1.5"
-              :class="'text-themed-muted'"
-            >
-              {{ $t('auth.password') }} <span class="text-red-500">*</span>
+          <div class="nimbus-field">
+            <label class="nimbus-label">
+              {{ $t('auth.password') }} <span class="nimbus-req">*</span>
             </label>
             <input v-model="form.password" type="password" class="input" :placeholder="$t('auth.passwordHint')" />
           </div>
 
-          <div>
-            <label 
-              class="block text-sm mb-1.5"
-              :class="'text-themed-muted'"
-            >
-              {{ $t('auth.confirmPassword') }} <span class="text-red-500">*</span>
+          <div class="nimbus-field">
+            <label class="nimbus-label">
+              {{ $t('auth.confirmPassword') }} <span class="nimbus-req">*</span>
             </label>
             <input v-model="form.confirmPassword" type="password" class="input" :placeholder="$t('auth.confirmPasswordPlaceholder')" />
           </div>
@@ -510,8 +482,7 @@ async function handleRegister(): Promise<void> {
             v-if="isTurnstileChallengeAvailable"
             ref="turnstileSectionRef"
             tabindex="-1"
-            class="rounded-lg border p-3"
-            :class="themeStore.isDark ? 'border-blue-500/30 bg-blue-900/20' : 'border-blue-200 bg-blue-50'"
+            class="nimbus-turnstile"
           >
             <TurnstileWidget
               ref="turnstileRef"
@@ -523,22 +494,18 @@ async function handleRegister(): Promise<void> {
           </div>
 
           <!-- 服务条款 -->
-          <div class="flex items-start gap-2">
+          <div class="flex items-start gap-2.5">
             <input
               id="agree-terms"
               v-model="agreedToTerms"
               type="checkbox"
-              class="mt-1 h-4 w-4 rounded border-themed bg-themed-surface text-sky-500 focus:ring-sky-300"
+              class="nimbus-checkbox mt-0.5"
             />
-            <label 
-              for="agree-terms" 
-              class="text-sm"
-              :class="'text-themed-muted'"
-            >
+            <label for="agree-terms" class="text-sm text-themed-muted leading-relaxed">
               {{ $t('auth.tos.agreePrefix') }}
               <button
                 type="button"
-                class="text-blue-500 hover:text-blue-400 hover:underline"
+                class="nimbus-textlink nimbus-textlink--accent"
                 @click="showTermsModal = true"
               >
                 {{ $t('auth.tos.termsLink') }}
@@ -546,12 +513,17 @@ async function handleRegister(): Promise<void> {
             </label>
           </div>
 
-          <div v-if="error" class="text-sm text-red-500">{{ error }}</div>
+          <div v-if="error" class="nimbus-alert" role="alert">
+            <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3.75m0 3.75h.008M10.34 3.94l-8.52 14.06A1.875 1.875 0 003.424 20.9h17.152a1.875 1.875 0 001.604-2.9L13.66 3.94a1.875 1.875 0 00-3.32 0z" />
+            </svg>
+            <span>{{ error }}</span>
+          </div>
 
-          <button 
-            type="submit" 
-            :disabled="loading || (emailVerificationEnabled && !form.emailCode) || !agreedToTerms" 
-            class="btn-primary w-full"
+          <button
+            type="submit"
+            :disabled="loading || (emailVerificationEnabled && !form.emailCode) || !agreedToTerms"
+            class="btn-primary w-full nimbus-submit"
           >
             {{ loading ? $t('auth.creatingAccount') : $t('auth.createAccount') }}
           </button>
@@ -612,13 +584,9 @@ async function handleRegister(): Promise<void> {
         </Transition>
       </Teleport>
 
-      <p class="mt-6 text-center text-sm" :class="'text-themed-muted'">
+      <p class="mt-6 text-center text-sm text-themed-muted">
         {{ $t('auth.hasAccount') }}
-        <RouterLink 
-          :to="loginPath()"
-          class="transition-colors"
-          :class="'text-themed-muted hover:text-themed'"
-        >
+        <RouterLink :to="loginPath()" class="nimbus-textlink nimbus-textlink--accent">
           {{ $t('auth.login') }}
         </RouterLink>
       </p>
@@ -641,3 +609,247 @@ async function handleRegister(): Promise<void> {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ============ Nimbus 认证画布 ============ */
+.nimbus-auth {
+  position: relative;
+  overflow: hidden;
+}
+
+.nimbus-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.nimbus-aurora::before {
+  content: '';
+  position: absolute;
+  top: -22%;
+  left: 50%;
+  width: min(760px, 128vw);
+  height: min(760px, 128vw);
+  transform: translateX(-50%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--kawaii-primary) 24%, transparent), transparent 62%);
+  opacity: 0.55;
+}
+
+.nimbus-aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in srgb, var(--kawaii-text) 9%, transparent) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 78% 52% at 50% 0%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse 78% 52% at 50% 0%, #000 0%, transparent 70%);
+  opacity: 0.5;
+}
+
+/* ============ Logo lockup ============ */
+.nimbus-lockup {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.nimbus-logo-tile {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 0.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--kawaii-surface);
+  border: 1px solid var(--kawaii-line);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 10px 26px rgb(79 70 229 / 0.12);
+}
+
+.nimbus-logo-tile img {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.nimbus-title {
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--kawaii-text);
+  line-height: 1.2;
+}
+
+.nimbus-subtitle {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--kawaii-muted);
+}
+
+/* ============ Card ============ */
+.nimbus-card {
+  border-radius: 16px;
+  padding: 1.75rem;
+}
+
+@media (min-width: 640px) {
+  .nimbus-card {
+    padding: 2rem;
+  }
+}
+
+/* ============ State cards ============ */
+.nimbus-state {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nimbus-state-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  margin-bottom: 0.25rem;
+}
+
+.nimbus-state-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.nimbus-state-icon--ok {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.nimbus-state-icon--warn {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.nimbus-spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid var(--kawaii-line);
+  border-top-color: var(--kawaii-primary);
+  animation: nimbus-spin 0.8s linear infinite;
+}
+
+@keyframes nimbus-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============ Fields ============ */
+.nimbus-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--kawaii-muted);
+}
+
+.nimbus-req {
+  color: var(--error);
+}
+
+.nimbus-hint {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--kawaii-faint);
+}
+
+.nimbus-hint--ok {
+  color: var(--success);
+}
+
+.nimbus-textlink {
+  font-size: 0.8125rem;
+  color: var(--kawaii-muted);
+  transition: color 0.15s ease;
+}
+
+.nimbus-textlink:hover {
+  color: var(--kawaii-text);
+}
+
+.nimbus-textlink--accent {
+  color: var(--kawaii-primary);
+  font-weight: 500;
+}
+
+.nimbus-textlink--accent:hover {
+  color: var(--kawaii-primary-strong);
+}
+
+/* ============ Checkbox ============ */
+.nimbus-checkbox {
+  height: 1rem;
+  width: 1rem;
+  border-radius: 5px;
+  border: 1px solid var(--kawaii-line-strong);
+  background: var(--kawaii-surface);
+  accent-color: var(--kawaii-primary);
+  cursor: pointer;
+}
+
+.nimbus-checkbox:focus-visible {
+  outline: 2px solid var(--kawaii-primary);
+  outline-offset: 2px;
+}
+
+/* ============ Turnstile shell ============ */
+.nimbus-turnstile {
+  border-radius: 12px;
+  border: 1px solid var(--kawaii-line);
+  background: var(--kawaii-surface-soft);
+  padding: 0.75rem;
+}
+
+.nimbus-turnstile:focus-visible {
+  outline: 2px solid var(--kawaii-primary);
+  outline-offset: 2px;
+}
+
+/* ============ Alert ============ */
+.nimbus-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 26%, transparent);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+}
+
+.nimbus-submit {
+  margin-top: 0.25rem;
+}
+
+/* ============ Entrance motion ============ */
+@media (prefers-reduced-motion: no-preference) {
+  .nimbus-logo-tile {
+    animation: nimbus-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes nimbus-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+</style>

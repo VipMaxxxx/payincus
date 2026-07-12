@@ -254,452 +254,251 @@ onMounted(refreshAll)
 </script>
 
 <template>
-  <div class="kawaii-page lifecycle-page animate-fade-in">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('userLifecycle.title') }}</h1>
-        <p>{{ t('userLifecycle.description') }}</p>
+  <div class="kawaii-page nimbus-view space-y-6 p-6 animate-fade-in">
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <div class="flex items-start gap-3">
+        <span class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500 sm:flex">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-xl font-semibold text-themed sm:text-2xl">{{ t('userLifecycle.title') }}</h1>
+          <p class="mt-1 text-sm text-themed-muted">{{ t('userLifecycle.description') }}</p>
+        </div>
       </div>
-      <div class="header-actions">
-        <button class="btn secondary" :disabled="actionLoading" @click="syncEvents">{{ t('userLifecycle.syncEvents') }}</button>
-        <button class="btn secondary" :disabled="actionLoading" @click="refreshSegments">{{ t('userLifecycle.refreshSegments') }}</button>
-        <button class="btn primary" :disabled="overviewLoading || loading" @click="refreshAll">{{ t('common.refresh') }}</button>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn-secondary" :disabled="actionLoading" @click="syncEvents">{{ t('userLifecycle.syncEvents') }}</button>
+        <button class="btn-secondary" :disabled="actionLoading" @click="refreshSegments">{{ t('userLifecycle.refreshSegments') }}</button>
+        <button class="btn-primary" :disabled="overviewLoading || loading" @click="refreshAll">{{ t('common.refresh') }}</button>
       </div>
-    </div>
+    </header>
 
-    <section class="overview-grid">
-      <div class="metric">
-        <span>{{ t('userLifecycle.metrics.totalUsers') }}</span>
-        <strong>{{ overview?.totalUsers ?? '-' }}</strong>
+    <section class="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5">
+        <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.metrics.totalUsers') }}</div>
+        <div class="mt-2 font-mono text-2xl font-semibold tabular-nums text-themed">{{ overview?.totalUsers ?? '-' }}</div>
       </div>
-      <div class="metric">
-        <span>{{ t('userLifecycle.metrics.activeUsers') }}</span>
-        <strong>{{ overview?.activeUsers ?? '-' }}</strong>
+      <div class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5">
+        <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.metrics.activeUsers') }}</div>
+        <div class="mt-2 font-mono text-2xl font-semibold tabular-nums text-themed">{{ overview?.activeUsers ?? '-' }}</div>
       </div>
-      <div class="metric">
-        <span>{{ t('userLifecycle.metrics.expiringInstances') }}</span>
-        <strong>{{ overview?.expiringInstances ?? '-' }}</strong>
+      <div class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5">
+        <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.metrics.expiringInstances') }}</div>
+        <div class="mt-2 font-mono text-2xl font-semibold tabular-nums text-themed">{{ overview?.expiringInstances ?? '-' }}</div>
       </div>
-      <div class="metric">
-        <span>{{ t('userLifecycle.metrics.selectedUsers') }}</span>
-        <strong>{{ selectedUserIds.length }}</strong>
+      <div class="nimbus-stat rounded-xl border border-primary-500/30 bg-primary-500/5 p-5">
+        <div class="text-xs font-medium uppercase tracking-wide text-primary-600 dark:text-primary-300">{{ t('userLifecycle.metrics.selectedUsers') }}</div>
+        <div class="mt-2 font-mono text-2xl font-semibold tabular-nums text-primary-600 dark:text-primary-300">{{ selectedUserIds.length }}</div>
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-title">{{ t('userLifecycle.filters.title') }}</div>
-      <div class="filter-grid">
-        <input v-model="filters.search" :placeholder="t('userLifecycle.filters.searchPlaceholder')" />
-        <select v-model="filters.tag">
+    <section class="rounded-xl border border-themed bg-themed-surface p-4">
+      <div class="text-sm font-medium text-themed">{{ t('userLifecycle.filters.title') }}</div>
+      <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <input v-model="filters.search" class="input" :placeholder="t('userLifecycle.filters.searchPlaceholder')" />
+        <select v-model="filters.tag" class="input">
           <option value="">{{ t('userLifecycle.filters.allTags') }}</option>
           <option v-for="tag in tagDefinitions" :key="tag.key" :value="tag.key">{{ tag.label }}（{{ tag.count || 0 }}）</option>
         </select>
-        <select v-model="filters.segment">
+        <select v-model="filters.segment" class="input">
           <option value="">{{ t('userLifecycle.filters.allSegments') }}</option>
           <option v-for="segment in segments" :key="segment.key" :value="segment.key">{{ segment.name }}（{{ segment.count || 0 }}）</option>
         </select>
-        <select v-model="filters.activeState">
+        <select v-model="filters.activeState" class="input">
           <option value="">{{ t('userLifecycle.filters.allActivityStates') }}</option>
           <option value="active">{{ t('userLifecycle.filters.active') }}</option>
           <option value="inactive">{{ t('userLifecycle.filters.inactive') }}</option>
         </select>
-        <input v-model="filters.minRecharge" :placeholder="t('userLifecycle.filters.minRecharge')" />
-        <input v-model="filters.maxRecharge" :placeholder="t('userLifecycle.filters.maxRecharge')" />
-        <input v-model="filters.minInstances" :placeholder="t('userLifecycle.filters.minInstances')" />
-        <input v-model="filters.maxInstances" :placeholder="t('userLifecycle.filters.maxInstances')" />
+        <input v-model="filters.minRecharge" class="input font-mono tabular-nums" :placeholder="t('userLifecycle.filters.minRecharge')" />
+        <input v-model="filters.maxRecharge" class="input font-mono tabular-nums" :placeholder="t('userLifecycle.filters.maxRecharge')" />
+        <input v-model="filters.minInstances" class="input font-mono tabular-nums" :placeholder="t('userLifecycle.filters.minInstances')" />
+        <input v-model="filters.maxInstances" class="input font-mono tabular-nums" :placeholder="t('userLifecycle.filters.maxInstances')" />
       </div>
-      <div class="panel-actions">
-        <button class="btn primary" @click="page = 1; loadUsers()">{{ t('common.search') }}</button>
-        <button class="btn secondary" @click="resetFilters">{{ t('common.reset') }}</button>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button class="btn-primary" @click="page = 1; loadUsers()">{{ t('common.search') }}</button>
+        <button class="btn-secondary" @click="resetFilters">{{ t('common.reset') }}</button>
       </div>
     </section>
 
-    <section class="workspace">
-      <div class="panel users-panel">
-        <div class="panel-title">{{ t('userLifecycle.userList') }}</div>
-        <div class="user-list" :class="loading ? 'is-loading' : ''">
+    <section class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div class="rounded-xl border border-themed bg-themed-surface p-4">
+        <div class="text-sm font-medium text-themed">{{ t('userLifecycle.userList') }}</div>
+        <div class="mt-3 space-y-2 transition-opacity" :class="loading ? 'opacity-50' : ''">
           <button
             v-for="user in users"
             :key="user.id"
             type="button"
-            class="user-row"
-            :class="selectedUser?.id === user.id ? 'is-active' : ''"
+            class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors"
+            :class="selectedUser?.id === user.id ? 'border-primary-500 bg-primary-500/5' : 'border-themed hover:bg-themed-hover'"
             @click="openUser(user)"
           >
-            <input :checked="selectedUserIds.includes(user.id)" type="checkbox" @click.stop="toggleSelect(user.id)" />
-            <div class="user-main">
-              <strong>#{{ user.id }} {{ user.username }}</strong>
-              <span>{{ user.emailMasked || '-' }}</span>
-              <div class="chips">
-                <span v-for="tag in user.tags" :key="tag.tagKey" class="chip">{{ getTagLabel(tag.tagKey) }}</span>
-                <span v-for="segment in user.segments" :key="segment.key" class="chip muted">{{ segment.name }}</span>
+            <input :checked="selectedUserIds.includes(user.id)" type="checkbox" class="mt-1 h-4 w-4 shrink-0 rounded accent-primary-500" @click.stop="toggleSelect(user.id)" />
+            <div class="min-w-0 flex-1">
+              <div class="font-medium text-themed"><span class="font-mono">#{{ user.id }}</span> {{ user.username }}</div>
+              <div class="mt-0.5 text-xs text-themed-muted">{{ user.emailMasked || '-' }}</div>
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                <span v-for="tag in user.tags" :key="tag.tagKey" class="rounded-full bg-primary-500/10 px-2 py-0.5 text-2xs font-medium text-primary-600 dark:text-primary-300">{{ getTagLabel(tag.tagKey) }}</span>
+                <span v-for="segment in user.segments" :key="segment.key" class="rounded-full bg-themed-secondary px-2 py-0.5 text-2xs text-themed-muted">{{ segment.name }}</span>
               </div>
             </div>
-            <div class="user-metrics">
-              <span>{{ formatMoney(user.metrics?.totalRecharge) }}</span>
-              <span>{{ t('userLifecycle.instanceCount', { count: user.metrics?.instanceCount || 0 }) }}</span>
-              <span>{{ t('userLifecycle.expiringCount', { count: user.metrics?.expiringSoonInstances || 0 }) }}</span>
+            <div class="shrink-0 space-y-0.5 text-right text-xs">
+              <div class="font-mono font-semibold tabular-nums text-themed">{{ formatMoney(user.metrics?.totalRecharge) }}</div>
+              <div class="text-themed-muted">{{ t('userLifecycle.instanceCount', { count: user.metrics?.instanceCount || 0 }) }}</div>
+              <div class="text-themed-muted">{{ t('userLifecycle.expiringCount', { count: user.metrics?.expiringSoonInstances || 0 }) }}</div>
             </div>
           </button>
-          <div v-if="users.length === 0" class="empty">{{ t('userLifecycle.noMatchingUsers') }}</div>
+          <div v-if="users.length === 0" class="rounded-xl border border-dashed border-themed p-10 text-center text-sm text-themed-muted">
+            <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+              </svg>
+            </span>
+            {{ t('userLifecycle.noMatchingUsers') }}
+          </div>
         </div>
-        <div class="pagination">
-          <span>{{ t('userLifecycle.pagination', { total, page, totalPages }) }}</span>
-          <button class="btn secondary" :disabled="page <= 1" @click="page--; loadUsers()">{{ t('common.prevPage') }}</button>
-          <button class="btn secondary" :disabled="page >= totalPages" @click="page++; loadUsers()">{{ t('common.nextPage') }}</button>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-themed pt-3 text-xs text-themed-muted">
+          <span class="font-mono tabular-nums">{{ t('userLifecycle.pagination', { total, page, totalPages }) }}</span>
+          <div class="flex gap-2">
+            <button class="btn-secondary btn-sm" :disabled="page <= 1" @click="page--; loadUsers()">{{ t('common.prevPage') }}</button>
+            <button class="btn-secondary btn-sm" :disabled="page >= totalPages" @click="page++; loadUsers()">{{ t('common.nextPage') }}</button>
+          </div>
         </div>
       </div>
 
-      <div class="panel detail-panel">
+      <div class="rounded-xl border border-themed bg-themed-surface p-4">
         <template v-if="selectedUser">
-          <div class="panel-title">{{ t('userLifecycle.summary.title') }}</div>
-          <div class="summary-grid">
-            <div><span>{{ t('userLifecycle.summary.user') }}</span><strong>#{{ selectedUser.id }} {{ selectedUser.username }}</strong></div>
-            <div><span>{{ t('userLifecycle.summary.email') }}</span><strong>{{ selectedUser.emailMasked || '-' }}</strong></div>
-            <div><span>{{ t('userLifecycle.summary.totalRecharge') }}</span><strong>{{ formatMoney(selectedUser.metrics?.totalRecharge) }}</strong></div>
-            <div><span>{{ t('userLifecycle.summary.totalConsume') }}</span><strong>{{ formatMoney(selectedUser.metrics?.totalConsume) }}</strong></div>
-            <div><span>{{ t('userLifecycle.summary.instances') }}</span><strong>{{ t('userLifecycle.summary.instanceValue', { total: selectedUser.metrics?.instanceCount || 0, running: selectedUser.metrics?.runningInstances || 0 }) }}</strong></div>
-            <div><span>{{ t('userLifecycle.summary.earliestExpiry') }}</span><strong>{{ formatDate(selectedUser.metrics?.earliestExpiry) }}</strong></div>
-            <div><span>{{ t('userLifecycle.summary.tickets') }}</span><strong>{{ t('userLifecycle.summary.ticketValue', { total: selectedUser.tickets.total, open: selectedUser.tickets.open }) }}</strong></div>
-            <div><span>{{ t('userLifecycle.summary.lastLogin') }}</span><strong>{{ formatDate(selectedUser.metrics?.lastLoginAt) }}</strong></div>
+          <div class="text-sm font-medium text-themed">{{ t('userLifecycle.summary.title') }}</div>
+          <div class="mt-3 grid grid-cols-2 gap-3">
+            <div class="rounded-lg border border-themed p-3">
+              <span class="text-2xs uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.summary.user') }}</span>
+              <strong class="mt-1 block font-medium text-themed"><span class="font-mono">#{{ selectedUser.id }}</span> {{ selectedUser.username }}</strong>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <span class="text-2xs uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.summary.email') }}</span>
+              <strong class="mt-1 block font-medium text-themed">{{ selectedUser.emailMasked || '-' }}</strong>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <span class="text-2xs uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.summary.totalRecharge') }}</span>
+              <strong class="mt-1 block font-mono font-semibold tabular-nums text-themed">{{ formatMoney(selectedUser.metrics?.totalRecharge) }}</strong>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <span class="text-2xs uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.summary.totalConsume') }}</span>
+              <strong class="mt-1 block font-mono font-semibold tabular-nums text-themed">{{ formatMoney(selectedUser.metrics?.totalConsume) }}</strong>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <span class="text-2xs uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.summary.instances') }}</span>
+              <strong class="mt-1 block font-medium text-themed">{{ t('userLifecycle.summary.instanceValue', { total: selectedUser.metrics?.instanceCount || 0, running: selectedUser.metrics?.runningInstances || 0 }) }}</strong>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <span class="text-2xs uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.summary.earliestExpiry') }}</span>
+              <strong class="mt-1 block font-mono text-xs tabular-nums text-themed">{{ formatDate(selectedUser.metrics?.earliestExpiry) }}</strong>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <span class="text-2xs uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.summary.tickets') }}</span>
+              <strong class="mt-1 block font-medium text-themed">{{ t('userLifecycle.summary.ticketValue', { total: selectedUser.tickets.total, open: selectedUser.tickets.open }) }}</strong>
+            </div>
+            <div class="rounded-lg border border-themed p-3">
+              <span class="text-2xs uppercase tracking-wide text-themed-muted">{{ t('userLifecycle.summary.lastLogin') }}</span>
+              <strong class="mt-1 block font-mono text-xs tabular-nums text-themed">{{ formatDate(selectedUser.metrics?.lastLoginAt) }}</strong>
+            </div>
           </div>
 
-          <div class="section-title">{{ t('userLifecycle.tags') }}</div>
-          <div class="chips block">
-            <span v-for="tag in selectedUser.tags.filter(item => item.active !== false)" :key="tag.tagKey" class="chip">
+          <div class="mt-6 text-sm font-medium text-themed">{{ t('userLifecycle.tags') }}</div>
+          <div class="mt-3 flex flex-wrap gap-1.5">
+            <span v-for="tag in selectedUser.tags.filter(item => item.active !== false)" :key="tag.tagKey" class="inline-flex items-center gap-1 rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-primary-600 dark:text-primary-300">
               {{ getTagLabel(tag.tagKey) }}
-              <button type="button" @click="removeTag(tag.tagKey)">x</button>
+              <button type="button" class="text-primary-500/70 transition-colors hover:text-primary-500" @click="removeTag(tag.tagKey)">
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </span>
           </div>
-          <div class="inline-form">
-            <select v-model="tagForm.tagKey">
+          <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select v-model="tagForm.tagKey" class="input sm:w-40">
               <option v-for="tag in tagDefinitions" :key="tag.key" :value="tag.key">{{ tag.label }}</option>
             </select>
-            <input v-model="tagForm.note" :placeholder="t('userLifecycle.optionalNote')" />
-            <button class="btn primary" :disabled="actionLoading" @click="addTag">{{ t('userLifecycle.addTag') }}</button>
+            <input v-model="tagForm.note" class="input flex-1" :placeholder="t('userLifecycle.optionalNote')" />
+            <button class="btn-primary btn-sm shrink-0" :disabled="actionLoading" @click="addTag">{{ t('userLifecycle.addTag') }}</button>
           </div>
 
-          <div class="section-title">{{ t('userLifecycle.redeemCode.title') }}</div>
-          <div class="inline-form code-form">
-            <input v-model="codeForm.hostId" :placeholder="t('userLifecycle.redeemCode.hostId')" />
-            <select v-model="codeForm.codeType">
+          <div class="mt-6 text-sm font-medium text-themed">{{ t('userLifecycle.redeemCode.title') }}</div>
+          <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <input v-model="codeForm.hostId" class="input font-mono tabular-nums" :placeholder="t('userLifecycle.redeemCode.hostId')" />
+            <select v-model="codeForm.codeType" class="input">
               <option value="c">CPU</option>
               <option value="r">{{ t('userLifecycle.redeemCode.memory') }}</option>
               <option value="d">{{ t('userLifecycle.redeemCode.disk') }}</option>
               <option value="t">{{ t('userLifecycle.redeemCode.traffic') }}</option>
             </select>
-            <input v-model="codeForm.codeValue" :placeholder="t('userLifecycle.redeemCode.value', { unit: getCodeUnit(codeForm.codeType) })" />
-            <input v-model="codeForm.expiresInDays" :placeholder="t('userLifecycle.redeemCode.validDays')" />
-            <input v-model="codeForm.remark" :placeholder="t('userLifecycle.optionalNote')" />
-            <button class="btn primary" :disabled="actionLoading" @click="issueRedeemCode">{{ t('userLifecycle.redeemCode.issue') }}</button>
+            <input v-model="codeForm.codeValue" class="input font-mono tabular-nums" :placeholder="t('userLifecycle.redeemCode.value', { unit: getCodeUnit(codeForm.codeType) })" />
+            <input v-model="codeForm.expiresInDays" class="input font-mono tabular-nums" :placeholder="t('userLifecycle.redeemCode.validDays')" />
+            <input v-model="codeForm.remark" class="input" :placeholder="t('userLifecycle.optionalNote')" />
+            <button class="btn-primary btn-sm" :disabled="actionLoading" @click="issueRedeemCode">{{ t('userLifecycle.redeemCode.issue') }}</button>
           </div>
-          <div class="offer-list">
-            <div v-for="offer in selectedUser.offers" :key="offer.id" class="offer-item">
-              <strong>{{ offer.code }}</strong>
-              <span>{{ offer.host.name }} · {{ offer.codeType }} +{{ offer.codeValue }}{{ getCodeUnit(offer.codeType) }}</span>
-              <span>{{ offer.used ? t('userLifecycle.used') : t('userLifecycle.unused') }} · {{ formatDate(offer.expiresAt) }}</span>
+          <div class="mt-3 space-y-2">
+            <div v-for="offer in selectedUser.offers" :key="offer.id" class="rounded-lg border border-themed p-3 text-sm">
+              <strong class="block font-mono font-semibold text-themed">{{ offer.code }}</strong>
+              <span class="mt-1 block text-xs text-themed-muted">{{ offer.host.name }} · {{ offer.codeType }} +{{ offer.codeValue }}{{ getCodeUnit(offer.codeType) }}</span>
+              <span class="mt-1 block text-xs text-themed-muted">{{ offer.used ? t('userLifecycle.used') : t('userLifecycle.unused') }} · {{ formatDate(offer.expiresAt) }}</span>
             </div>
           </div>
 
-          <div class="section-title">{{ t('userLifecycle.lifecycle') }}</div>
-          <div class="timeline">
-            <div v-for="event in selectedUser.events" :key="event.id" class="timeline-item">
-              <strong>{{ event.eventType }}</strong>
-              <span>{{ formatDate(event.occurredAt) }}</span>
+          <div class="mt-6 text-sm font-medium text-themed">{{ t('userLifecycle.lifecycle') }}</div>
+          <div class="mt-3 space-y-2">
+            <div v-for="event in selectedUser.events" :key="event.id" class="flex items-center justify-between gap-3 rounded-lg border border-themed p-3 text-sm">
+              <strong class="font-medium text-themed">{{ event.eventType }}</strong>
+              <span class="font-mono text-xs tabular-nums text-themed-muted">{{ formatDate(event.occurredAt) }}</span>
             </div>
           </div>
 
-          <div class="section-title">{{ t('userLifecycle.operations') }}</div>
-          <div class="timeline">
-            <div v-for="action in selectedUser.actions" :key="action.id" class="timeline-item">
-              <strong>{{ action.actionType }} · {{ action.status }}</strong>
-              <span>{{ action.actorUsername }} · {{ formatDate(action.createdAt) }}</span>
-              <p v-if="action.message">{{ action.message }}</p>
+          <div class="mt-6 text-sm font-medium text-themed">{{ t('userLifecycle.operations') }}</div>
+          <div class="mt-3 space-y-2">
+            <div v-for="action in selectedUser.actions" :key="action.id" class="rounded-lg border border-themed p-3 text-sm">
+              <strong class="block font-medium text-themed">{{ action.actionType }} · {{ action.status }}</strong>
+              <span class="mt-1 block text-xs text-themed-muted">{{ action.actorUsername }} · {{ formatDate(action.createdAt) }}</span>
+              <p v-if="action.message" class="mt-1 text-xs text-themed-secondary">{{ action.message }}</p>
             </div>
           </div>
         </template>
-        <div v-else class="empty detail-empty">{{ t('userLifecycle.selectUserHint') }}</div>
+        <div v-else class="flex min-h-[220px] flex-col items-center justify-center text-center text-sm text-themed-muted">
+          <span class="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59" />
+            </svg>
+          </span>
+          {{ t('userLifecycle.selectUserHint') }}
+        </div>
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-title">{{ t('userLifecycle.reminder.title') }}</div>
-      <div class="reminder-grid">
-        <input v-model="reminderForm.title" :placeholder="t('userLifecycle.reminder.titlePlaceholder')" />
-        <textarea v-model="reminderForm.content" :placeholder="t('userLifecycle.reminder.contentPlaceholder')"></textarea>
-        <label class="confirm-line">
-          <input v-model="reminderForm.confirm" type="checkbox" />
-          {{ t('userLifecycle.reminder.confirm', { count: selectedUserIds.length }) }}
-        </label>
-        <button class="btn primary" :disabled="!hasSelectedUsers || actionLoading" @click="sendReminder">{{ t('userLifecycle.reminder.send') }}</button>
+    <section class="rounded-xl border border-themed bg-themed-surface p-4">
+      <div class="text-sm font-medium text-themed">{{ t('userLifecycle.reminder.title') }}</div>
+      <div class="mt-3 grid grid-cols-1 gap-3">
+        <input v-model="reminderForm.title" class="input" :placeholder="t('userLifecycle.reminder.titlePlaceholder')" />
+        <textarea v-model="reminderForm.content" class="input min-h-[80px] resize-y" :placeholder="t('userLifecycle.reminder.contentPlaceholder')"></textarea>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <label class="flex items-center gap-2 text-sm text-themed-secondary">
+            <input v-model="reminderForm.confirm" type="checkbox" class="h-4 w-4 rounded accent-primary-500" />
+            {{ t('userLifecycle.reminder.confirm', { count: selectedUserIds.length }) }}
+          </label>
+          <button class="btn-primary shrink-0" :disabled="!hasSelectedUsers || actionLoading" @click="sendReminder">{{ t('userLifecycle.reminder.send') }}</button>
+        </div>
       </div>
     </section>
   </div>
 </template>
 
 <style scoped>
-.lifecycle-page {
-  padding: 28px;
-  color: var(--text-primary);
+.nimbus-stat {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.page-header,
-.panel-actions,
-.header-actions,
-.pagination,
-.inline-form,
-.confirm-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.page-header {
-  justify-content: space-between;
-  margin-bottom: 22px;
-}
-
-h1 {
-  margin: 0;
-  font-size: 26px;
-}
-
-p {
-  margin: 6px 0 0;
-  color: var(--text-secondary);
-}
-
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.metric,
-.panel {
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  border-radius: 8px;
-}
-
-.metric {
-  padding: 18px;
-}
-
-.metric span,
-.summary-grid span,
-.user-main span,
-.user-metrics span,
-.timeline-item span,
-.offer-item span {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.metric strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 26px;
-}
-
-.panel {
-  padding: 18px;
-  margin-bottom: 16px;
-}
-
-.panel-title,
-.section-title {
-  font-weight: 700;
-  margin-bottom: 14px;
-}
-
-.section-title {
-  margin-top: 22px;
-}
-
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-input,
-select,
-textarea {
-  width: 100%;
-  min-height: 38px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 6px;
-  padding: 8px 10px;
-  box-sizing: border-box;
-}
-
-textarea {
-  min-height: 86px;
-  resize: vertical;
-}
-
-.btn {
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 9px 14px;
-  cursor: pointer;
-}
-
-.btn.primary {
-  background: #111;
-  color: white;
-  border-color: #111;
-}
-
-.btn.secondary {
-  background: var(--bg-card);
-  color: var(--text-primary);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.workspace {
-  display: grid;
-  grid-template-columns: minmax(420px, 0.9fr) minmax(520px, 1.1fr);
-  gap: 16px;
-}
-
-.user-list {
-  display: grid;
-  gap: 10px;
-}
-
-.user-row {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 150px;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  border-radius: 8px;
-  padding: 14px;
-  color: var(--text-primary);
-}
-
-.user-row.is-active {
-  border-color: #111;
-}
-
-.user-main,
-.user-metrics,
-.offer-item,
-.timeline-item {
-  display: grid;
-  gap: 6px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chips.block {
-  margin-bottom: 12px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #f2f2f4;
-  color: #3a3a40;
-  font-size: 12px;
-}
-
-.chip.muted {
-  background: #f3f4f6;
-  color: #4b5563;
-}
-
-.chip button {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  color: inherit;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.summary-grid > div {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 12px;
-  display: grid;
-  gap: 6px;
-}
-
-.code-form {
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  display: grid;
-  gap: 10px;
-}
-
-.offer-list,
-.timeline {
-  display: grid;
-  gap: 8px;
-}
-
-.offer-item,
-.timeline-item {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.timeline-item p {
-  margin: 0;
-}
-
-.reminder-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.6fr) minmax(220px, 1fr) auto;
-  gap: 10px;
-  align-items: start;
-}
-
-.reminder-grid textarea {
-  grid-column: 1 / -1;
-  min-height: 80px;
-}
-
-.empty {
-  padding: 28px;
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-@media (max-width: 1100px) {
-  .overview-grid,
-  .filter-grid,
-  .workspace,
-  .reminder-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .code-form {
-    grid-template-columns: 1fr;
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-view *,
+  .nimbus-view *::before,
+  .nimbus-view *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
   }
 }
 </style>

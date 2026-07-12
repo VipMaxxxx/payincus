@@ -158,9 +158,9 @@ onMounted(loadStatus)
 </script>
 
 <template>
-  <div class="card p-5">
-    <h2 class="text-sm font-medium text-themed-secondary mb-4">{{ $t('profile.twoFactorAuth.title') }}</h2>
-    
+  <div class="card nimbus-section">
+    <h2 class="nimbus-section-title mb-5">{{ $t('profile.twoFactorAuth.title') }}</h2>
+
     <!-- Status display -->
     <div v-if="!setupMode && !disableMode && !regenerateMode" class="space-y-4">
       <div class="flex items-center justify-between">
@@ -194,18 +194,18 @@ onMounted(loadStatus)
       <div v-if="enabled && recoveryCodesStatus" class="mt-4 p-3 bg-themed-tertiary rounded">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm text-themed-primary">{{ $t('profile.twoFactorAuth.recoveryCodesStatus') }}</span>
-          <button 
-            class="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          <button
+            class="text-xs text-primary-500 hover:text-primary-400 transition-colors"
             @click="regenerateMode = true"
           >
             {{ $t('profile.twoFactorAuth.regenerate') }}
           </button>
         </div>
         <div class="flex items-center space-x-4 text-xs">
-          <span class="text-themed-muted">
+          <span class="text-themed-muted tabular-nums">
             {{ $t('profile.twoFactorAuth.remaining') }}: <span class="text-themed-primary font-medium">{{ recoveryCodesStatus.remaining }}</span> / {{ recoveryCodesStatus.total }}
           </span>
-          <span v-if="recoveryCodesStatus.used > 0" class="text-yellow-400">
+          <span v-if="recoveryCodesStatus.used > 0" class="text-yellow-500 tabular-nums">
             {{ $t('profile.twoFactorAuth.used') }}: {{ recoveryCodesStatus.used }}
           </span>
         </div>
@@ -342,3 +342,17 @@ onMounted(loadStatus)
     <div v-if="success" class="mt-3 text-sm text-green-400">{{ success }}</div>
   </div>
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+</style>

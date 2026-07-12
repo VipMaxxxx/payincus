@@ -354,74 +354,87 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="kawaii-page space-y-6 p-6 animate-fade-in">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-themed">交付保障</h1>
-        <p class="mt-1 text-sm text-themed-muted">跟踪实例交付任务、失败原因和通知投递状态。</p>
+  <div class="kawaii-page nimbus-view space-y-6 p-6 animate-fade-in">
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <div class="flex items-start gap-3">
+        <span class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500 sm:flex">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-xl font-semibold text-themed sm:text-2xl">交付保障</h1>
+          <p class="mt-1 text-sm text-themed-muted">跟踪实例交付任务、失败原因和通知投递状态。</p>
+        </div>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
         <button class="btn-secondary" :disabled="refreshing" @click="refreshAll(true)">
+          <svg class="h-4 w-4" :class="refreshing ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           {{ refreshing ? '刷新中...' : '刷新' }}
         </button>
         <RouterLink class="btn-secondary" to="/admin/logs">查看日志</RouterLink>
       </div>
-    </div>
+    </header>
 
-    <div v-if="loading" class="rounded-lg border border-themed bg-themed-secondary p-6 text-sm text-themed-muted">
+    <div v-if="loading" class="rounded-xl border border-themed bg-themed-surface p-10 text-center text-sm text-themed-muted">
       加载中...
     </div>
 
     <template v-else>
-      <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div
           v-for="item in taskRiskItems"
           :key="item.label"
-          class="rounded-lg border border-themed bg-themed-secondary p-4"
+          class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5"
         >
-          <div class="text-sm text-themed-muted">{{ item.label }}</div>
-          <div class="mt-2 text-3xl font-semibold text-themed">{{ item.value }}</div>
-          <div class="mt-3 inline-flex rounded-md border px-2 py-1 text-xs" :class="toneClass(item.tone)">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ item.label }}</span>
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
+            </span>
+          </div>
+          <div class="mt-3 font-mono text-3xl font-semibold tabular-nums text-themed">{{ item.value }}</div>
+          <div class="mt-3 inline-flex items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="toneClass(item.tone)">
             {{ item.caption }}
           </div>
         </div>
       </section>
 
-      <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div
           v-for="item in caseItems"
           :key="item.label"
-          class="flex items-center justify-between rounded-lg border border-themed bg-themed-secondary p-4"
+          class="flex items-center justify-between gap-3 rounded-xl border border-themed bg-themed-surface px-4 py-3.5"
         >
-          <span class="text-sm text-themed-muted">{{ item.label }}</span>
-          <span class="rounded-md border px-2 py-1 text-sm font-semibold" :class="toneClass(item.tone)">
+          <span class="text-sm text-themed-secondary">{{ item.label }}</span>
+          <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 font-mono text-sm font-semibold tabular-nums" :class="toneClass(item.tone)">
             {{ item.value }}
           </span>
         </div>
       </section>
 
-      <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div
           v-for="item in notificationItems"
           :key="item.label"
-          class="flex items-center justify-between rounded-lg border border-themed bg-themed-secondary p-4"
+          class="flex items-center justify-between gap-3 rounded-xl border border-themed bg-themed-surface px-4 py-3.5"
         >
-          <span class="text-sm text-themed-muted">{{ item.label }}</span>
-          <span class="rounded-md border px-2 py-1 text-sm font-semibold" :class="toneClass(item.tone)">
+          <span class="text-sm text-themed-secondary">{{ item.label }}</span>
+          <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 font-mono text-sm font-semibold tabular-nums" :class="toneClass(item.tone)">
             {{ item.value }}
           </span>
         </div>
       </section>
 
-      <section class="rounded-lg border border-themed bg-themed-secondary">
+      <section class="overflow-hidden rounded-xl border border-themed bg-themed-surface">
         <div class="border-b border-themed p-4">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
             <div class="min-w-[220px]">
-              <h2 class="text-lg font-semibold text-themed">升级同步修复</h2>
+              <h2 class="text-base font-semibold text-themed">升级同步修复</h2>
               <p class="mt-1 text-sm text-themed-muted">处理方案升级已扣费但 Incus 资源或带宽未同步的实例。</p>
             </div>
             <div class="min-w-[180px] lg:ml-auto">
-              <label class="mb-1 block text-sm text-themed-muted">状态</label>
+              <label class="mb-1 block text-2xs uppercase tracking-wide text-themed-muted">状态</label>
               <select v-model="repairStatusFilter" class="input w-full" @change="applyRepairFilters">
                 <option v-for="option in caseStatusOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
@@ -429,7 +442,7 @@ onMounted(() => {
               </select>
             </div>
             <div class="min-w-[240px] flex-1">
-              <label class="mb-1 block text-sm text-themed-muted">搜索</label>
+              <label class="mb-1 block text-2xs uppercase tracking-wide text-themed-muted">搜索</label>
               <input
                 v-model.trim="repairSearch"
                 class="input w-full"
@@ -449,43 +462,48 @@ onMounted(() => {
         </div>
 
         <div class="space-y-3 p-4 lg:hidden">
-          <div v-if="repairCases.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+          <div v-if="repairCases.length === 0" class="rounded-xl border border-dashed border-themed p-10 text-center text-sm text-themed-muted">
+            <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
+            </span>
             暂无升级同步修复任务
           </div>
           <div
             v-for="item in repairCases"
             :key="item.id"
-            class="rounded-lg border border-themed bg-themed p-4 text-sm"
+            class="rounded-xl border border-themed bg-themed-surface p-4 text-sm"
           >
             <div class="flex items-start justify-between gap-3">
               <div>
-                <div class="font-semibold text-themed">#{{ item.id }} {{ issueTypeLabel(item.assuranceCase.issueType) }}</div>
+                <div class="font-semibold text-themed"><span class="font-mono">#{{ item.id }}</span> {{ issueTypeLabel(item.assuranceCase.issueType) }}</div>
                 <div class="mt-1 text-xs text-themed-muted">
                   {{ item.instance?.name || `#${item.instanceId}` }} · {{ item.user?.username || `用户 #${item.userId}` }}
                 </div>
               </div>
-              <span class="shrink-0 rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(item.assuranceCase.status)">
+              <span class="inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="caseStatusClass(item.assuranceCase.status)">
                 {{ caseStatusLabel(item.assuranceCase.status) }}
               </span>
             </div>
             <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">节点</div>
+              <div class="rounded-lg bg-themed-tertiary p-2.5">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">节点</div>
                 <div class="mt-1 text-themed">{{ item.host?.name || `节点 #${item.hostId}` }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">最近扣费</div>
-                <div class="mt-1 text-themed">{{ formatAmount(item.billing?.amount) }} · {{ formatDate(item.billing?.createdAt) }}</div>
+              <div class="rounded-lg bg-themed-tertiary p-2.5">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">最近扣费</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">{{ formatAmount(item.billing?.amount) }} · {{ formatDate(item.billing?.createdAt) }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
-                <div class="text-themed-muted">目标资源</div>
-                <div class="mt-1 text-themed">
+              <div class="rounded-lg bg-themed-tertiary p-2.5 sm:col-span-2">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">目标资源</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">
                   CPU {{ item.instance?.cpu ?? '-' }}% / 内存 {{ item.instance?.memory ?? '-' }} MB / 磁盘 {{ item.instance?.disk ?? '-' }} MB
                 </div>
-                <div class="mt-1 text-themed">带宽 {{ item.instance?.limitsIngress || '不限速' }} / {{ item.instance?.limitsEgress || '不限速' }}</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">带宽 {{ item.instance?.limitsIngress || '不限速' }} / {{ item.instance?.limitsEgress || '不限速' }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
-                <div class="text-themed-muted">错误</div>
+              <div class="rounded-lg bg-themed-tertiary p-2.5 sm:col-span-2">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">错误</div>
                 <div class="mt-1 break-words text-themed">{{ item.assuranceCase.lastError || item.assuranceCase.title }}</div>
                 <div v-if="item.assuranceCase.handledByUsername" class="mt-1 text-themed-muted">
                   {{ item.assuranceCase.handledByUsername }} · {{ formatDate(item.assuranceCase.handledAt) }}
@@ -519,39 +537,39 @@ onMounted(() => {
         </div>
         <div class="hidden overflow-hidden lg:block">
           <table class="w-full table-fixed text-left text-sm">
-            <thead class="border-b border-themed text-xs uppercase text-themed-muted">
-              <tr>
-                <th class="w-[10%] px-4 py-3 font-medium">Case</th>
-                <th class="w-[15%] px-4 py-3 font-medium">实例</th>
-                <th class="w-[16%] px-4 py-3 font-medium">目标资源</th>
-                <th class="w-[12%] px-4 py-3 font-medium">最近扣费</th>
-                <th class="w-[10%] px-4 py-3 font-medium">状态</th>
-                <th class="w-[17%] px-4 py-3 font-medium">错误</th>
-                <th class="w-[20%] px-4 py-3 font-medium">操作</th>
+            <thead>
+              <tr class="border-b border-themed text-2xs font-medium uppercase tracking-wide text-themed-muted">
+                <th class="w-[10%] px-4 py-3">Case</th>
+                <th class="w-[15%] px-4 py-3">实例</th>
+                <th class="w-[16%] px-4 py-3">目标资源</th>
+                <th class="w-[12%] px-4 py-3">最近扣费</th>
+                <th class="w-[10%] px-4 py-3">状态</th>
+                <th class="w-[17%] px-4 py-3">错误</th>
+                <th class="w-[20%] px-4 py-3">操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in repairCases" :key="item.id" class="border-b border-themed last:border-b-0">
+              <tr v-for="item in repairCases" :key="item.id" class="border-b border-themed transition-colors last:border-b-0 hover:bg-themed-hover">
                 <td class="break-words px-4 py-3">
-                  <div class="font-medium text-themed">#{{ item.id }}</div>
+                  <div class="font-mono font-medium text-themed">#{{ item.id }}</div>
                   <div class="text-xs text-themed-muted">{{ issueTypeLabel(item.assuranceCase.issueType) }}</div>
                 </td>
                 <td class="px-4 py-3">
                   <div class="font-medium text-themed">{{ item.instance?.name || `#${item.instanceId}` }}</div>
                   <div class="text-xs text-themed-muted">{{ item.user?.username || `用户 #${item.userId}` }} · {{ item.host?.name || `节点 #${item.hostId}` }}</div>
                 </td>
-                <td class="px-4 py-3 text-xs text-themed-muted">
+                <td class="px-4 py-3 font-mono text-xs tabular-nums text-themed-muted">
                   <div>CPU {{ item.instance?.cpu ?? '-' }}%</div>
                   <div>内存 {{ item.instance?.memory ?? '-' }} MB</div>
                   <div>磁盘 {{ item.instance?.disk ?? '-' }} MB</div>
                   <div>带宽 {{ item.instance?.limitsIngress || '不限速' }} / {{ item.instance?.limitsEgress || '不限速' }}</div>
                 </td>
                 <td class="px-4 py-3">
-                  <div class="text-themed">{{ formatAmount(item.billing?.amount) }}</div>
-                  <div class="text-xs text-themed-muted">{{ formatDate(item.billing?.createdAt) }}</div>
+                  <div class="font-mono tabular-nums text-themed">{{ formatAmount(item.billing?.amount) }}</div>
+                  <div class="font-mono text-xs tabular-nums text-themed-muted">{{ formatDate(item.billing?.createdAt) }}</div>
                 </td>
                 <td class="px-4 py-3">
-                  <span class="rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(item.assuranceCase.status)">
+                  <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="caseStatusClass(item.assuranceCase.status)">
                     {{ caseStatusLabel(item.assuranceCase.status) }}
                   </span>
                 </td>
@@ -590,7 +608,12 @@ onMounted(() => {
                 </td>
               </tr>
               <tr v-if="repairCases.length === 0">
-                <td colspan="7" class="px-4 py-10 text-center text-sm text-themed-muted">
+                <td colspan="7" class="px-4 py-12 text-center text-sm text-themed-muted">
+                  <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                    </svg>
+                  </span>
                   暂无升级同步修复任务
                 </td>
               </tr>
@@ -599,21 +622,21 @@ onMounted(() => {
         </div>
 
         <div class="flex items-center justify-between border-t border-themed p-4 text-sm text-themed-muted">
-          <span>共 {{ repairTotal }} 条</span>
+          <span class="font-mono text-xs tabular-nums">共 {{ repairTotal }} 条</span>
           <div class="flex items-center gap-2">
-            <button class="btn-secondary" :disabled="repairPage <= 1" @click="goRepairPage(repairPage - 1)">上一页</button>
-            <span>{{ repairPage }} / {{ repairTotalPages }}</span>
-            <button class="btn-secondary" :disabled="repairPage >= repairTotalPages" @click="goRepairPage(repairPage + 1)">下一页</button>
+            <button class="btn-secondary btn-sm" :disabled="repairPage <= 1" @click="goRepairPage(repairPage - 1)">上一页</button>
+            <span class="font-mono text-xs tabular-nums">{{ repairPage }} / {{ repairTotalPages }}</span>
+            <button class="btn-secondary btn-sm" :disabled="repairPage >= repairTotalPages" @click="goRepairPage(repairPage + 1)">下一页</button>
           </div>
         </div>
       </section>
 
       <section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div class="rounded-lg border border-themed bg-themed-secondary">
+        <div class="overflow-hidden rounded-xl border border-themed bg-themed-surface">
           <div class="border-b border-themed p-4">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
               <div class="min-w-[180px]">
-                <label class="mb-1 block text-sm text-themed-muted">状态</label>
+                <label class="mb-1 block text-2xs uppercase tracking-wide text-themed-muted">状态</label>
                 <select v-model="statusFilter" class="input w-full" @change="applyFilters">
                   <option v-for="option in statusOptions" :key="option.value" :value="option.value">
                     {{ option.label }}
@@ -621,7 +644,7 @@ onMounted(() => {
                 </select>
               </div>
               <div class="flex-1">
-                <label class="mb-1 block text-sm text-themed-muted">搜索</label>
+                <label class="mb-1 block text-2xs uppercase tracking-wide text-themed-muted">搜索</label>
                 <input
                   v-model.trim="search"
                   class="input w-full"
@@ -635,78 +658,83 @@ onMounted(() => {
           </div>
 
         <div class="space-y-3 p-4 lg:hidden">
-          <div v-if="tasks.length === 0" class="rounded-lg border border-dashed border-themed p-6 text-center text-sm text-themed-muted">
+          <div v-if="tasks.length === 0" class="rounded-xl border border-dashed border-themed p-10 text-center text-sm text-themed-muted">
+            <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661z" />
+              </svg>
+            </span>
             暂无交付任务
           </div>
           <button
             v-for="task in tasks"
             :key="task.id"
             type="button"
-            class="block w-full rounded-lg border border-themed bg-themed p-4 text-left text-sm transition hover:bg-themed-tertiary"
-            :class="selectedTaskId === task.id ? 'bg-themed-tertiary ring-1 ring-primary/30' : ''"
+            class="block w-full rounded-xl border bg-themed-surface p-4 text-left text-sm transition-colors"
+            :class="selectedTaskId === task.id ? 'border-primary-500 ring-1 ring-primary-500/30' : 'border-themed hover:bg-themed-hover'"
             @click="selectedTaskId = task.id"
           >
             <div class="flex items-start justify-between gap-3">
               <div>
-                <div class="font-semibold text-themed">#{{ task.id }} {{ taskTypeLabel(task.taskType) }}</div>
+                <div class="font-semibold text-themed"><span class="font-mono">#{{ task.id }}</span> {{ taskTypeLabel(task.taskType) }}</div>
                 <div class="mt-1 text-xs text-themed-muted">{{ task.progress || '暂无进度' }}</div>
               </div>
-              <span class="shrink-0 rounded-md border px-2 py-1 text-xs" :class="badgeClass(task.status)">
+              <span class="inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="badgeClass(task.status)">
                 {{ statusLabel(task.status) }}
               </span>
             </div>
             <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">实例</div>
+              <div class="rounded-lg bg-themed-tertiary p-2.5">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">实例</div>
                 <div class="mt-1 text-themed">{{ task.instance?.name || `#${task.instanceId}` }}</div>
                 <div class="mt-1 truncate">{{ task.instance?.image || '-' }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">用户</div>
+              <div class="rounded-lg bg-themed-tertiary p-2.5">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">用户</div>
                 <div class="mt-1 text-themed">{{ task.user?.username || `#${task.userId}` }}</div>
                 <div class="mt-1 truncate">{{ task.user?.email || '-' }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">节点</div>
+              <div class="rounded-lg bg-themed-tertiary p-2.5">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">节点</div>
                 <div class="mt-1 text-themed">{{ task.host?.name || `#${task.hostId}` }}</div>
                 <div class="mt-1">{{ task.host?.location || task.host?.countryCode || '-' }}</div>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2">
-                <div class="text-themed-muted">保障</div>
-                <span class="mt-1 inline-flex rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(task.assuranceCase?.status)">
+              <div class="rounded-lg bg-themed-tertiary p-2.5">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">保障</div>
+                <span class="mt-1 inline-flex items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="caseStatusClass(task.assuranceCase?.status)">
                   {{ caseStatusLabel(task.assuranceCase?.status) }}
                 </span>
               </div>
-              <div class="rounded-md bg-themed-secondary p-2 sm:col-span-2">
-                <div class="text-themed-muted">创建时间</div>
-                <div class="mt-1 text-themed">{{ formatDate(task.createdAt) }}</div>
+              <div class="rounded-lg bg-themed-tertiary p-2.5 sm:col-span-2">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">创建时间</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">{{ formatDate(task.createdAt) }}</div>
               </div>
             </div>
           </button>
         </div>
         <div class="hidden overflow-hidden lg:block">
           <table class="w-full table-fixed text-left text-sm">
-              <thead class="border-b border-themed text-xs uppercase text-themed-muted">
-                <tr>
-                  <th class="w-[18%] px-4 py-3 font-medium">任务</th>
-                  <th class="w-[18%] px-4 py-3 font-medium">实例</th>
-                  <th class="w-[17%] px-4 py-3 font-medium">用户</th>
-                  <th class="w-[15%] px-4 py-3 font-medium">节点</th>
-                  <th class="w-[10%] px-4 py-3 font-medium">状态</th>
-                  <th class="w-[10%] px-4 py-3 font-medium">保障</th>
-                  <th class="w-[12%] px-4 py-3 font-medium">时间</th>
+              <thead>
+                <tr class="border-b border-themed text-2xs font-medium uppercase tracking-wide text-themed-muted">
+                  <th class="w-[18%] px-4 py-3">任务</th>
+                  <th class="w-[18%] px-4 py-3">实例</th>
+                  <th class="w-[17%] px-4 py-3">用户</th>
+                  <th class="w-[15%] px-4 py-3">节点</th>
+                  <th class="w-[10%] px-4 py-3">状态</th>
+                  <th class="w-[10%] px-4 py-3">保障</th>
+                  <th class="w-[12%] px-4 py-3">时间</th>
                 </tr>
               </thead>
               <tbody>
                 <tr
                   v-for="task in tasks"
                   :key="task.id"
-                  class="cursor-pointer border-b border-themed last:border-b-0 hover:bg-themed-tertiary"
-                  :class="selectedTaskId === task.id ? 'bg-themed-tertiary' : ''"
+                  class="cursor-pointer border-b border-themed transition-colors last:border-b-0 hover:bg-themed-hover"
+                  :class="selectedTaskId === task.id ? 'bg-primary-500/5' : ''"
                   @click="selectedTaskId = task.id"
                 >
                   <td class="break-words px-4 py-3">
-                    <div class="font-medium text-themed">#{{ task.id }} {{ taskTypeLabel(task.taskType) }}</div>
+                    <div class="font-medium text-themed"><span class="font-mono">#{{ task.id }}</span> {{ taskTypeLabel(task.taskType) }}</div>
                     <div class="text-xs text-themed-muted">{{ task.progress || '暂无进度' }}</div>
                   </td>
                   <td class="px-4 py-3">
@@ -722,21 +750,26 @@ onMounted(() => {
                     <div class="text-xs text-themed-muted">{{ task.host?.location || task.host?.countryCode || '-' }}</div>
                   </td>
                   <td class="px-4 py-3">
-                    <span class="rounded-md border px-2 py-1 text-xs" :class="badgeClass(task.status)">
+                    <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="badgeClass(task.status)">
                       {{ statusLabel(task.status) }}
                     </span>
                   </td>
                   <td class="px-4 py-3">
-                    <span class="rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(task.assuranceCase?.status)">
+                    <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="caseStatusClass(task.assuranceCase?.status)">
                       {{ caseStatusLabel(task.assuranceCase?.status) }}
                     </span>
                   </td>
-                  <td class="break-words px-4 py-3 text-xs text-themed-muted">
+                  <td class="break-words px-4 py-3 font-mono text-xs tabular-nums text-themed-muted">
                     {{ formatDate(task.createdAt) }}
                   </td>
                 </tr>
                 <tr v-if="tasks.length === 0">
-                  <td colspan="7" class="px-4 py-10 text-center text-sm text-themed-muted">
+                  <td colspan="7" class="px-4 py-12 text-center text-sm text-themed-muted">
+                    <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661z" />
+                      </svg>
+                    </span>
                     暂无交付任务
                   </td>
                 </tr>
@@ -745,26 +778,26 @@ onMounted(() => {
           </div>
 
           <div class="flex items-center justify-between border-t border-themed p-4 text-sm text-themed-muted">
-            <span>共 {{ total }} 条</span>
+            <span class="font-mono text-xs tabular-nums">共 {{ total }} 条</span>
             <div class="flex items-center gap-2">
-              <button class="btn-secondary" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
-              <span>{{ page }} / {{ totalPages }}</span>
-              <button class="btn-secondary" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
+              <button class="btn-secondary btn-sm" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
+              <span class="font-mono text-xs tabular-nums">{{ page }} / {{ totalPages }}</span>
+              <button class="btn-secondary btn-sm" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
             </div>
           </div>
         </div>
 
-        <aside class="rounded-lg border border-themed bg-themed-secondary p-4">
+        <aside class="rounded-xl border border-themed bg-themed-surface p-4">
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-themed">任务详情</h2>
-            <span v-if="selectedTask" class="rounded-md border px-2 py-1 text-xs" :class="badgeClass(selectedTask.status)">
+            <h2 class="text-base font-semibold text-themed">任务详情</h2>
+            <span v-if="selectedTask" class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="badgeClass(selectedTask.status)">
               {{ statusLabel(selectedTask.status) }}
             </span>
           </div>
 
           <div v-if="selectedTask" class="mt-4 space-y-4">
             <div>
-              <div class="text-xl font-semibold text-themed">#{{ selectedTask.id }} {{ taskTypeLabel(selectedTask.taskType) }}</div>
+              <div class="text-lg font-semibold text-themed"><span class="font-mono">#{{ selectedTask.id }}</span> {{ taskTypeLabel(selectedTask.taskType) }}</div>
               <div class="mt-1 text-sm text-themed-muted">
                 {{ selectedTask.instance?.name || `实例 #${selectedTask.instanceId}` }}
               </div>
@@ -772,35 +805,35 @@ onMounted(() => {
 
             <div class="grid grid-cols-2 gap-3 text-sm">
               <div class="rounded-lg border border-themed p-3">
-                <div class="text-themed-muted">创建时间</div>
-                <div class="mt-1 text-themed">{{ formatDate(selectedTask.createdAt) }}</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">创建时间</div>
+                <div class="mt-1 font-mono text-xs tabular-nums text-themed">{{ formatDate(selectedTask.createdAt) }}</div>
               </div>
               <div class="rounded-lg border border-themed p-3">
-                <div class="text-themed-muted">完成时间</div>
-                <div class="mt-1 text-themed">{{ formatDate(selectedTask.finishedAt) }}</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">完成时间</div>
+                <div class="mt-1 font-mono text-xs tabular-nums text-themed">{{ formatDate(selectedTask.finishedAt) }}</div>
               </div>
               <div class="rounded-lg border border-themed p-3">
-                <div class="text-themed-muted">用户</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">用户</div>
                 <div class="mt-1 text-themed">{{ selectedTask.user?.username || `#${selectedTask.userId}` }}</div>
               </div>
               <div class="rounded-lg border border-themed p-3">
-                <div class="text-themed-muted">节点</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">节点</div>
                 <div class="mt-1 text-themed">{{ selectedTask.host?.name || `#${selectedTask.hostId}` }}</div>
               </div>
               <div class="rounded-lg border border-themed p-3">
-                <div class="text-themed-muted">Agent</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">Agent</div>
                 <div class="mt-1 text-themed">{{ formatAgent(selectedTask) }}</div>
               </div>
               <div class="rounded-lg border border-themed p-3">
-                <div class="text-themed-muted">最近扣费</div>
-                <div class="mt-1 text-themed">{{ formatAmount(selectedTask.billing?.amount) }}</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">最近扣费</div>
+                <div class="mt-1 font-mono tabular-nums text-themed">{{ formatAmount(selectedTask.billing?.amount) }}</div>
               </div>
             </div>
 
             <div class="rounded-lg border border-themed p-3 text-sm">
               <div class="flex items-center justify-between">
-                <div class="text-themed-muted">保障状态</div>
-                <span class="rounded-md border px-2 py-1 text-xs" :class="caseStatusClass(selectedTask.assuranceCase?.status)">
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">保障状态</div>
+                <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="caseStatusClass(selectedTask.assuranceCase?.status)">
                   {{ caseStatusLabel(selectedTask.assuranceCase?.status) }}
                 </span>
               </div>
@@ -810,18 +843,18 @@ onMounted(() => {
               <div v-if="selectedTask.assuranceCase?.handledByUsername" class="mt-1 text-xs text-themed-muted">
                 处理人：{{ selectedTask.assuranceCase.handledByUsername }} · {{ formatDate(selectedTask.assuranceCase.handledAt) }}
               </div>
-              <div v-if="selectedTask.assuranceCase?.note" class="mt-2 rounded-md bg-themed-tertiary p-2 text-xs text-themed-muted">
+              <div v-if="selectedTask.assuranceCase?.note" class="mt-2 rounded-lg bg-themed-tertiary p-2 text-xs text-themed-muted">
                 {{ selectedTask.assuranceCase.note }}
               </div>
             </div>
 
             <div class="rounded-lg border border-themed p-3 text-sm">
-              <div class="text-themed-muted">失败原因 / 当前进度</div>
-              <pre class="mt-2 whitespace-pre-wrap break-words rounded-md bg-black p-3 text-xs text-white">{{ selectedTask.assuranceCase?.lastError || selectedTask.error || selectedTask.progress || '暂无异常信息' }}</pre>
+              <div class="text-2xs uppercase tracking-wide text-themed-muted">失败原因 / 当前进度</div>
+              <pre class="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-gray-950 p-3 font-mono text-xs text-gray-300">{{ selectedTask.assuranceCase?.lastError || selectedTask.error || selectedTask.progress || '暂无异常信息' }}</pre>
             </div>
 
             <div class="rounded-lg border border-themed p-3 text-sm">
-              <label class="mb-1 block text-themed-muted">处理备注</label>
+              <label class="mb-1 block text-2xs uppercase tracking-wide text-themed-muted">处理备注</label>
               <textarea
                 v-model="actionNote"
                 class="input min-h-[84px] w-full resize-y"
@@ -829,20 +862,20 @@ onMounted(() => {
                 placeholder="填写处理说明，最多 500 字"
               />
               <div class="mt-3 flex flex-wrap gap-2">
-                <button class="btn-secondary" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('takeover')">
+                <button class="btn-secondary btn-sm" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('takeover')">
                   {{ actionLoading === 'takeover' ? '处理中...' : '人工接管' }}
                 </button>
                 <button
-                  class="btn-primary"
+                  class="btn-primary btn-sm"
                   :disabled="!!actionLoading || !selectedTask.assuranceCase?.retryable"
                   @click="runCaseAction('retry')"
                 >
                   {{ actionLoading === 'retry' ? '入队中...' : '自动重试' }}
                 </button>
-                <button class="btn-secondary" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('recovered')">
+                <button class="btn-secondary btn-sm" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('recovered')">
                   标记恢复
                 </button>
-                <button class="btn-secondary" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('closed')">
+                <button class="btn-secondary btn-sm" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('closed')">
                   关闭
                 </button>
               </div>
@@ -852,21 +885,26 @@ onMounted(() => {
                   <option value="recovered">已恢复</option>
                   <option value="contact_support">需联系客服</option>
                 </select>
-                <button class="btn-secondary" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('notify')">
+                <button class="btn-secondary btn-sm" :disabled="!!actionLoading || !selectedTask.assuranceCase" @click="runCaseAction('notify')">
                   {{ actionLoading === 'notify' ? '发送中...' : '通知用户' }}
                 </button>
               </div>
             </div>
 
             <div class="flex flex-wrap gap-2">
-              <RouterLink class="btn-primary" :to="`/admin/instances/${selectedTask.instanceId}`">查看实例</RouterLink>
-              <RouterLink class="btn-secondary" :to="`/admin/resources/hosts/${selectedTask.hostId}?tab=instances`">查看节点</RouterLink>
-              <RouterLink class="btn-secondary" to="/admin/users">查看用户</RouterLink>
-              <RouterLink class="btn-secondary" to="/admin/logs">查看日志</RouterLink>
+              <RouterLink class="btn-primary btn-sm" :to="`/admin/instances/${selectedTask.instanceId}`">查看实例</RouterLink>
+              <RouterLink class="btn-secondary btn-sm" :to="`/admin/resources/hosts/${selectedTask.hostId}?tab=instances`">查看节点</RouterLink>
+              <RouterLink class="btn-secondary btn-sm" to="/admin/users">查看用户</RouterLink>
+              <RouterLink class="btn-secondary btn-sm" to="/admin/logs">查看日志</RouterLink>
             </div>
           </div>
 
-          <div v-else class="mt-8 text-center text-sm text-themed-muted">
+          <div v-else class="mt-8 flex flex-col items-center rounded-lg border border-dashed border-themed p-10 text-center text-sm text-themed-muted">
+            <span class="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59" />
+              </svg>
+            </span>
             选择任务查看详情
           </div>
         </aside>
@@ -874,3 +912,18 @@ onMounted(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.nimbus-stat {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-view *,
+  .nimbus-view *::before,
+  .nimbus-view *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+</style>

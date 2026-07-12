@@ -307,29 +307,29 @@ function formatDate(value: string): string {
       </button>
     </div>
 
-    <div class="border-b border-themed mb-6 overflow-x-auto whitespace-nowrap">
+    <div class="border-b border-themed mb-6 flex gap-1 overflow-x-auto">
       <button
-        class="px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors"
+        class="border-b-2 -mb-px whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'owners'
-          ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
+          ? (themeStore.isDark ? 'border-primary-400 text-primary-400' : 'border-primary-600 text-primary-600')
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('owners')"
       >
         {{ t('admin.hosting.tabs.owners') }}
       </button>
       <button
-        class="px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors"
+        class="border-b-2 -mb-px whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'zones'
-          ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
+          ? (themeStore.isDark ? 'border-primary-400 text-primary-400' : 'border-primary-600 text-primary-600')
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('zones')"
       >
         {{ t('admin.hosting.tabs.zones') }}
       </button>
       <button
-        class="px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors"
+        class="border-b-2 -mb-px whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'hostingVipLevels'
-          ? (themeStore.isDark ? 'border-white text-white' : 'border-gray-900 text-gray-900')
+          ? (themeStore.isDark ? 'border-primary-400 text-primary-400' : 'border-primary-600 text-primary-600')
           : 'border-transparent text-themed-muted hover:text-themed'"
         @click="switchTab('hostingVipLevels')"
       >
@@ -344,10 +344,30 @@ function formatDate(value: string): string {
 
     <div v-else-if="activeTab === 'owners'" class="space-y-6">
       <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div v-for="card in summaryCards" :key="card.key" class="card p-4">
-          <p class="text-sm text-themed-muted">{{ card.label }}</p>
-          <p class="mt-2 text-2xl font-semibold text-themed">{{ card.value }}</p>
-          <p class="mt-1 text-xs text-themed-faint">{{ card.caption }}</p>
+        <div v-for="card in summaryCards" :key="card.key" class="card p-4 sm:p-5">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
+              <svg v-if="card.key === 'owners'" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm4.5 1.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm-11 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM12 13c-3.314 0-6 1.79-6 4v1h12v-1c0-2.21-2.686-4-6-4Zm7.5.5c1.933.42 3.5 1.57 3.5 3v1h-3m-15-4c-1.933.42-3.5 1.57-3.5 3v1h3" />
+              </svg>
+              <svg v-else-if="card.key === 'hosts'" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="7" rx="1.5" stroke-width="1.8" />
+                <rect x="3" y="13" width="18" height="7" rx="1.5" stroke-width="1.8" />
+                <path stroke-linecap="round" stroke-width="1.8" d="M7 7.5h.01M7 16.5h.01" />
+              </svg>
+              <svg v-else-if="card.key === 'instances'" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 7.5 12 2.75 3 7.5v9L12 21.25l9-4.75v-9Z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m3 7.5 9 4.75m0 0 9-4.75m-9 4.75v9" />
+              </svg>
+              <svg v-else class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke-width="1.8" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14.5 9.5A2.5 2.5 0 0 0 12 8c-1.38 0-2.5.9-2.5 2s1.12 2 2.5 2 2.5.9 2.5 2-1.12 2-2.5 2a2.5 2.5 0 0 1-2.5-1.5M12 6.5v11" />
+              </svg>
+            </div>
+            <p class="text-[11px] font-medium uppercase tracking-wider text-themed-faint">{{ card.label }}</p>
+          </div>
+          <p class="mt-3 font-mono text-2xl font-semibold tabular-nums text-themed">{{ card.value }}</p>
+          <p class="mt-1 text-xs text-themed-muted">{{ card.caption }}</p>
         </div>
       </div>
 
@@ -382,6 +402,11 @@ function formatDate(value: string): string {
         </div>
 
         <div v-else-if="owners.length === 0" class="p-12 text-center">
+          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM6 20v-1c0-2.21 2.686-4 6-4s6 1.79 6 4v1" />
+            </svg>
+          </div>
           <p class="text-themed-secondary">{{ t('admin.hosting.owners.empty') }}</p>
           <p class="text-sm text-themed-muted mt-2">{{ t('admin.hosting.owners.emptyHint') }}</p>
         </div>
@@ -431,15 +456,15 @@ function formatDate(value: string): string {
               <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <div class="text-themed-muted">{{ t('admin.hosting.owners.hostingBalance') }}</div>
-                  <div class="mt-1 font-mono font-medium text-themed">{{ formatMoney(owner.hostingBalance.available) }}</div>
+                  <div class="mt-1 font-mono font-medium tabular-nums text-themed">{{ formatMoney(owner.hostingBalance.available) }}</div>
                 </div>
                 <div>
                   <div class="text-themed-muted">{{ t('admin.hosting.owners.frozenBalance') }}</div>
-                  <div class="mt-1 font-mono font-medium text-themed">{{ formatMoney(owner.hostingBalance.frozen) }}</div>
+                  <div class="mt-1 font-mono font-medium tabular-nums text-themed">{{ formatMoney(owner.hostingBalance.frozen) }}</div>
                 </div>
                 <div>
                   <div class="text-themed-muted">{{ t('admin.hosting.owners.totalIncome') }}</div>
-                  <div class="mt-1 font-mono font-medium text-themed">{{ formatMoney(owner.hostingBalance.historicalTotal) }}</div>
+                  <div class="mt-1 font-mono font-medium tabular-nums text-themed">{{ formatMoney(owner.hostingBalance.historicalTotal) }}</div>
                 </div>
                 <div>
                   <div class="text-themed-muted">{{ t('admin.hosting.owners.createdAt') }}</div>
@@ -460,11 +485,11 @@ function formatDate(value: string): string {
             <table class="w-full table-fixed">
               <thead class="bg-themed-secondary border-b border-themed">
                 <tr>
-                  <th class="w-[18%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.user') }}</th>
+                  <th class="w-[18%] px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.hosting.owners.user') }}</th>
                   <th
                     v-for="column in sortableOwnerColumns"
                     :key="column.key"
-                    class="px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider"
+                    class="px-4 py-2.5 text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint"
                     :class="[
                       column.align === 'right' ? 'text-right' : 'text-left',
                       column.key === 'vipLevel' ? 'w-[8%]' : '',
@@ -487,13 +512,13 @@ function formatDate(value: string): string {
                       @click="toggleOwnerSort(column.key)"
                     >
                       <span>{{ t(column.labelKey) }}</span>
-                      <span class="inline-flex w-3 justify-center text-[10px] leading-none text-themed-muted">
+                      <span class="inline-flex w-3 justify-center text-[10px] leading-none text-themed-faint">
                         <template v-if="sortBy === column.key">{{ sortOrder === 'asc' ? '↑' : '↓' }}</template>
                         <template v-else>↕</template>
                       </span>
                     </button>
                   </th>
-                  <th class="w-[17%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.createdAt') }}</th>
+                  <th class="w-[17%] px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.hosting.owners.createdAt') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-themed">
@@ -510,7 +535,7 @@ function formatDate(value: string): string {
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">
                           <span class="break-words font-medium text-themed">{{ owner.username }}</span>
-                          <span class="text-xs text-themed-muted">#{{ owner.id }}</span>
+                          <span class="text-xs font-mono text-themed-muted">#{{ owner.id }}</span>
                         </div>
                         <div class="break-words text-xs text-themed-muted">{{ owner.email || t('admin.hosting.owners.noEmail') }}</div>
                       </div>
@@ -525,13 +550,13 @@ function formatDate(value: string): string {
                       VIP {{ owner.vipLevel }}
                     </span>
                   </td>
-                  <td class="break-words px-4 py-3 text-right font-mono text-sm text-themed">{{ formatMoney(owner.hostingBalance.available) }}</td>
-                  <td class="break-words px-4 py-3 text-right font-mono text-sm text-themed">{{ formatMoney(owner.hostingBalance.frozen) }}</td>
-                  <td class="break-words px-4 py-3 text-right font-mono text-sm text-themed">{{ formatMoney(owner.hostingBalance.historicalTotal) }}</td>
-                  <td class="break-words px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(owner.hostCount) }}</td>
-                  <td class="break-words px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(owner.listedPackageCount) }}</td>
-                  <td class="break-words px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(owner.instanceCount) }}</td>
-                  <td class="break-words px-4 py-3 text-sm text-themed-muted">{{ formatDate(owner.createdAt) }}</td>
+                  <td class="break-words px-4 py-3 text-right font-mono text-[13px] tabular-nums text-themed">{{ formatMoney(owner.hostingBalance.available) }}</td>
+                  <td class="break-words px-4 py-3 text-right font-mono text-[13px] tabular-nums text-themed">{{ formatMoney(owner.hostingBalance.frozen) }}</td>
+                  <td class="break-words px-4 py-3 text-right font-mono text-[13px] tabular-nums text-themed">{{ formatMoney(owner.hostingBalance.historicalTotal) }}</td>
+                  <td class="break-words px-4 py-3 text-right font-mono text-[13px] tabular-nums text-themed">{{ numberFormatter.format(owner.hostCount) }}</td>
+                  <td class="break-words px-4 py-3 text-right font-mono text-[13px] tabular-nums text-themed">{{ numberFormatter.format(owner.listedPackageCount) }}</td>
+                  <td class="break-words px-4 py-3 text-right font-mono text-[13px] tabular-nums text-themed">{{ numberFormatter.format(owner.instanceCount) }}</td>
+                  <td class="break-words px-4 py-3 text-[13px] text-themed-muted">{{ formatDate(owner.createdAt) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -647,6 +672,12 @@ function formatDate(value: string): string {
         </div>
 
         <div v-else-if="zones.length === 0" class="p-12 text-center">
+          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M21 7.5 12 2.75 3 7.5v9L12 21.25l9-4.75v-9Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="m3 7.5 9 4.75m0 0 9-4.75m-9 4.75v9" />
+            </svg>
+          </div>
           <p class="text-themed-secondary">{{ t('admin.hosting.zones.empty') }}</p>
           <p class="text-sm text-themed-muted mt-2">{{ t('admin.hosting.zones.emptyHint') }}</p>
         </div>
@@ -703,12 +734,12 @@ function formatDate(value: string): string {
             <table class="w-full table-fixed">
               <thead class="bg-themed-secondary border-b border-themed">
                 <tr>
-                  <th class="w-[22%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.zones.zone') }}</th>
-                  <th class="w-[26%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.zones.owner') }}</th>
-                  <th class="w-[10%] text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.hostCount') }}</th>
-                  <th class="w-[12%] text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.packageCount') }}</th>
-                  <th class="w-[16%] text-left px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('admin.hosting.owners.createdAt') }}</th>
-                  <th class="w-[14%] text-right px-4 py-3 text-xs font-medium text-themed-muted uppercase tracking-wider">{{ t('common.actions') }}</th>
+                  <th class="w-[22%] px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.hosting.zones.zone') }}</th>
+                  <th class="w-[26%] px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.hosting.zones.owner') }}</th>
+                  <th class="w-[10%] px-4 py-2.5 text-right text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.hosting.owners.hostCount') }}</th>
+                  <th class="w-[12%] px-4 py-2.5 text-right text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.hosting.owners.packageCount') }}</th>
+                  <th class="w-[16%] px-4 py-2.5 text-left text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">{{ t('admin.hosting.owners.createdAt') }}</th>
+                  <th class="w-[14%] px-4 py-2.5 text-right text-[11px] font-mono font-medium uppercase tracking-wider text-themed-faint">{{ t('common.actions') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-themed">
@@ -718,7 +749,7 @@ function formatDate(value: string): string {
                       <img :src="zone.logoUrl" :alt="zone.name" class="w-10 h-10 rounded-full object-cover border border-themed" />
                       <div class="min-w-0">
                         <div class="break-words font-medium text-themed">{{ zone.name }}</div>
-                        <div class="text-xs text-themed-muted">#{{ zone.id }}</div>
+                        <div class="text-xs font-mono text-themed-muted">#{{ zone.id }}</div>
                       </div>
                     </div>
                   </td>
@@ -732,14 +763,14 @@ function formatDate(value: string): string {
                         :size="32"
                       />
                       <div class="min-w-0">
-                        <div class="break-words font-medium text-themed">{{ zone.owner.username }} <span class="text-xs text-themed-muted">#{{ zone.owner.id }}</span></div>
+                        <div class="break-words font-medium text-themed">{{ zone.owner.username }} <span class="text-xs font-mono text-themed-muted">#{{ zone.owner.id }}</span></div>
                         <div class="break-words text-xs text-themed-muted">{{ zone.owner.email || t('admin.hosting.owners.noEmail') }}</div>
                       </div>
                     </div>
                   </td>
-                  <td class="break-words px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(zone.hostCount) }}</td>
-                  <td class="break-words px-4 py-3 text-right text-sm text-themed">{{ numberFormatter.format(zone.listedPackageCount) }}</td>
-                  <td class="break-words px-4 py-3 text-sm text-themed-muted">{{ formatDate(zone.createdAt) }}</td>
+                  <td class="break-words px-4 py-3 text-right font-mono text-[13px] tabular-nums text-themed">{{ numberFormatter.format(zone.hostCount) }}</td>
+                  <td class="break-words px-4 py-3 text-right font-mono text-[13px] tabular-nums text-themed">{{ numberFormatter.format(zone.listedPackageCount) }}</td>
+                  <td class="break-words px-4 py-3 text-[13px] text-themed-muted">{{ formatDate(zone.createdAt) }}</td>
                   <td class="break-words px-4 py-3 text-right">
                     <button class="btn btn-ghost btn-sm text-rose-600 dark:text-rose-400" :disabled="deletingZoneId === zone.id" @click="deleteZone(zone)">
                       {{ deletingZoneId === zone.id ? t('common.processing') : t('common.delete') }}
@@ -756,3 +787,22 @@ function formatDate(value: string): string {
     <VipLevelRulesEditor v-else-if="activeTab === 'hostingVipLevels'" type="hosting" />
   </div>
 </template>
+
+<style scoped>
+/* Nimbus console polish */
+.card {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.card:hover {
+  border-color: var(--kawaii-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+</style>

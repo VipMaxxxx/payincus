@@ -88,10 +88,13 @@ defineExpose({ loadUserDetails })
 
 <template>
   <!-- 账户信息 -->
-  <div class="card p-5">
-    <div class="flex items-start justify-between mb-4">
-      <h2 class="text-sm font-medium text-themed-secondary">{{ $t('profile.account.title') }}</h2>
-      <UserAvatar 
+  <div class="card nimbus-section">
+    <div class="flex items-start justify-between mb-5">
+      <div>
+        <h2 class="nimbus-section-title">{{ $t('profile.account.title') }}</h2>
+        <p class="nimbus-section-desc">{{ authStore.user?.username }}</p>
+      </div>
+      <UserAvatar
         :username="authStore.user?.username || ''" 
         :email="authStore.user?.email"
         :avatar-style="authStore.user?.avatarStyle || ''"
@@ -104,7 +107,7 @@ defineExpose({ loadUserDetails })
         <dd class="flex flex-wrap items-center justify-end gap-2 text-themed font-medium">
           <span>{{ authStore.user?.username }}</span>
           <span
-            class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+            class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums"
             :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-600'"
           >
             {{ $t('profile.account.uid') }} {{ authStore.user?.id }}
@@ -174,8 +177,8 @@ defineExpose({ loadUserDetails })
                   :key="style"
                   class="flex flex-col items-center gap-1 p-1.5 rounded-lg border-2 transition-all"
                   :class="[
-                    selectedAvatarStyle === style 
-                      ? 'border-blue-500 bg-blue-500/10' 
+                    selectedAvatarStyle === style
+                      ? 'border-primary-500 bg-primary-500/10'
                       : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
                   ]"
                   :title="getStyleLabel(style)"
@@ -212,3 +215,23 @@ defineExpose({ loadUserDetails })
     @updated="handleEmailUpdated"
   />
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+
+.nimbus-section-desc {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--kawaii-muted);
+}
+</style>

@@ -1169,56 +1169,60 @@ onMounted(async () => {
 
 <template>
   <div class="kawaii-page space-y-6">
-    <div class="kawaii-dashboard-hero rounded-2xl p-5">
-      <h1 class="text-2xl font-semibold text-themed">交易所</h1>
-      <p class="mt-1 text-sm text-themed-muted">出售的是实例剩余使用权。成交后平台托管资金，并强制重装后匿名交割。</p>
-    </div>
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <h1 class="text-2xl font-semibold tracking-tight text-themed">交易所</h1>
+        <p class="mt-1.5 text-sm text-themed-muted">出售的是实例剩余使用权。成交后平台托管资金，并强制重装后匿名交割。</p>
+      </div>
+    </header>
 
-    <div class="kawaii-notice rounded-2xl px-4 py-3 text-sm">
-      上架前必须先暂停实例；成交后原系统和数据不可恢复。买卖双方互不可见，提现进入人工审核。
+    <div class="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+      <svg class="mt-0.5 h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>上架前必须先暂停实例；成交后原系统和数据不可恢复。买卖双方互不可见，提现进入人工审核。</span>
     </div>
 
     <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm">
-        <div class="font-medium text-themed">交易费率</div>
-        <p class="mt-1 text-themed-muted">{{ policyFeeSummary() }}</p>
+      <div class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-4 text-sm shadow-sm">
+        <div class="text-xs font-medium text-themed-muted">交易费率</div>
+        <p class="mt-1.5 text-themed">{{ policyFeeSummary() }}</p>
       </div>
-      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm">
-        <div class="font-medium text-themed">交割确认</div>
-        <p class="mt-1 text-themed-muted">
+      <div class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-4 text-sm shadow-sm">
+        <div class="text-xs font-medium text-themed-muted">交割确认</div>
+        <p class="mt-1.5 text-themed">
           确认期 {{ exchangeConfig.confirmationHours }} 小时，{{ exchangeConfig.autoConfirmEnabled ? '到期无争议自动放款' : '需平台人工确认放款' }}
         </p>
       </div>
-      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm">
-        <div class="font-medium text-themed">提现规则</div>
-        <p class="mt-1 text-themed-muted">{{ policyWithdrawalSummary() }}</p>
+      <div class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-4 text-sm shadow-sm">
+        <div class="text-xs font-medium text-themed-muted">提现规则</div>
+        <p class="mt-1.5 text-themed">{{ policyWithdrawalSummary() }}</p>
       </div>
-      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm">
-        <div class="font-medium text-themed">交易限制</div>
-        <p class="mt-1 text-themed-muted">
+      <div class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-4 text-sm shadow-sm">
+        <div class="text-xs font-medium text-themed-muted">交易限制</div>
+        <p class="mt-1.5 text-themed">
           每用户最多 {{ exchangeConfig.maxActiveListingsPerUser }} 个挂牌，每日最多购买 {{ exchangeConfig.maxPurchasesPerUserPerDay }} 次
         </p>
       </div>
-      <div class="kawaii-stat-tile rounded-2xl p-4 text-sm md:col-span-2 xl:col-span-4">
-        <div class="font-medium text-themed">准入和交割策略</div>
-        <p class="mt-1 text-themed-muted">
+      <div class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-4 text-sm shadow-sm md:col-span-2 xl:col-span-4">
+        <div class="text-xs font-medium text-themed-muted">准入和交割策略</div>
+        <p class="mt-1.5 text-themed">
           最低剩余 {{ exchangeConfig.minRemainingDays }} 天，{{ exchangeConfig.expiringSoonDays }} 天内到期不可挂牌；最高溢价 {{ exchangeConfig.maxMarkupPercent }}%；独立 IP {{ exchangeConfig.allowPublicIpTransfer ? '允许随实例转让' : '不允许随实例转让' }}；买家自选镜像 {{ exchangeConfig.allowBuyerImageSelection ? '已开放' : '未开放' }}；争议超时 {{ exchangeConfig.disputeTimeoutHours }} 小时。
         </p>
       </div>
     </section>
 
-    <div class="flex flex-wrap gap-2">
+    <nav class="-mb-px flex flex-wrap items-center gap-x-1 border-b border-themed">
       <button
         v-for="tab in tabs"
         :key="tab.key"
         type="button"
-        class="rounded-lg border px-3 py-2 text-sm transition-colors"
+        class="nimbus-tab relative px-3.5 py-2.5 text-sm font-medium transition-colors"
         :class="tabClass(tab.key)"
         @click="activeTab = tab.key"
       >
         {{ tab.label }}
+        <span v-show="activeTab === tab.key" class="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-primary-500"></span>
       </button>
-    </div>
+    </nav>
 
     <section v-if="activeTab === 'market'" class="space-y-4">
       <div class="flex items-center justify-between">
@@ -1229,7 +1233,7 @@ onMounted(async () => {
         <span class="text-sm text-themed-muted">套餐分类</span>
         <button
           type="button"
-          class="rounded-lg border px-3 py-1.5 text-sm transition-colors"
+          class="nimbus-chip rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors"
           :class="marketPackageFilterClass(null)"
           @click="selectMarketPackage(null)"
         >
@@ -1239,54 +1243,61 @@ onMounted(async () => {
           v-for="pkg in marketPackages"
           :key="pkg.id"
           type="button"
-          class="rounded-lg border px-3 py-1.5 text-sm transition-colors"
+          class="nimbus-chip rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors"
           :class="marketPackageFilterClass(pkg.id)"
           @click="selectMarketPackage(pkg.id)"
         >
-          {{ pkg.name }} · {{ pkg.count }}
+          {{ pkg.name }} · <span class="font-mono tabular-nums">{{ pkg.count }}</span>
         </button>
       </div>
-      <div v-if="marketLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
-      <div v-else-if="market.length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无可购买挂牌。</div>
+      <div v-if="marketLoading" class="rounded-xl border border-themed bg-themed-surface p-8 text-center text-sm text-themed-muted">加载中...</div>
+      <div v-else-if="market.length === 0" class="rounded-xl border border-themed bg-themed-surface p-10 text-center">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+          <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+          </svg>
+        </div>
+        <p class="text-sm text-themed-secondary">暂无可购买挂牌。</p>
+      </div>
       <div v-else class="grid gap-4 xl:grid-cols-3 lg:grid-cols-2">
         <article v-for="listing in market" :key="listing.id" :class="cardClass('p-5 space-y-4')">
           <div class="flex items-start justify-between gap-3">
-            <div>
-	              <div class="text-lg font-semibold text-themed">{{ listing.publicCode }}</div>
-	              <div class="mt-1 flex flex-wrap gap-1.5 text-xs">
-	                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300">{{ statusLabel(listing.status) }}</span>
-	                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300">暂停交割</span>
-	                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300">强制重装</span>
-	                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300">匿名交易</span>
+            <div class="min-w-0">
+              <div class="font-mono text-lg font-semibold tracking-tight text-themed">{{ listing.publicCode }}</div>
+              <div class="mt-2 flex flex-wrap gap-1.5 text-xs">
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium" :class="listing.status === 'active' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : ['delivery_failed', 'force_delisted', 'failed'].includes(listing.status) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : ['sold', 'completed', 'delivered', 'delisted'].includes(listing.status) ? 'bg-themed-secondary text-themed-muted' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'"><span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ statusLabel(listing.status) }}</span>
+                <span class="rounded-full bg-themed-secondary px-2.5 py-0.5 text-themed-muted">暂停交割</span>
+                <span class="rounded-full bg-themed-secondary px-2.5 py-0.5 text-themed-muted">强制重装</span>
+                <span class="rounded-full bg-themed-secondary px-2.5 py-0.5 text-themed-muted">匿名交易</span>
               </div>
             </div>
-            <div class="text-xl font-semibold text-themed">{{ money(listing.price) }}</div>
+            <div class="font-mono text-xl font-semibold tabular-nums text-themed">{{ money(listing.price) }}</div>
           </div>
 
-          <dl class="grid grid-cols-[88px_minmax(0,1fr)] gap-y-2 text-sm">
-            <dt class="font-medium text-themed">地区</dt>
-            <dd class="text-themed-muted">{{ hostRegionLabel(snapshotOf(listing)) }}</dd>
-            <dt class="font-medium text-themed">节点</dt>
-            <dd class="text-themed-muted">{{ hostNodeLabel(snapshotOf(listing)) }}</dd>
-            <dt class="font-medium text-themed">套餐</dt>
-            <dd class="text-themed-muted">{{ packageLabel(snapshotOf(listing)) }}</dd>
-            <dt class="font-medium text-themed">配置</dt>
-            <dd class="text-themed-muted">{{ snapshotOf(listing).cpu }}% 核 {{ formatMemory(snapshotOf(listing).memory) }} {{ formatDisk(snapshotOf(listing).disk) }}</dd>
-            <dt class="font-medium text-themed">网络</dt>
-            <dd class="text-themed-muted">{{ networkLabel(snapshotOf(listing)) }} · {{ bandwidthLabel(snapshotOf(listing)) }}</dd>
-            <dt class="font-medium text-themed">交割方式</dt>
-            <dd class="text-themed-muted">暂停锁定后强制重装</dd>
-            <dt class="font-medium text-themed">续费价格</dt>
-            <dd class="text-themed-muted">{{ renewalPriceLabel(snapshotOf(listing)) }}</dd>
-            <dt class="font-medium text-themed">IP</dt>
-            <dd class="text-themed-muted">{{ ipSummary(snapshotOf(listing)) }}</dd>
-            <dt class="font-medium text-themed">流量</dt>
-            <dd class="text-themed-muted">{{ bytesLabel(snapshotOf(listing).monthlyTrafficUsed) }} / {{ bytesLabel(snapshotOf(listing).monthlyTrafficLimit) }}</dd>
-            <dt class="font-medium text-themed">剩余有效期</dt>
-            <dd class="text-themed-muted">{{ remainingDays(snapshotOf(listing).expiresAt) }}，到期 {{ formatDateOnly(snapshotOf(listing).expiresAt) }}</dd>
+          <dl class="grid grid-cols-[88px_minmax(0,1fr)] gap-y-2 border-t border-themed pt-4 text-sm">
+            <dt class="font-medium text-themed-muted">地区</dt>
+            <dd class="text-themed">{{ hostRegionLabel(snapshotOf(listing)) }}</dd>
+            <dt class="font-medium text-themed-muted">节点</dt>
+            <dd class="text-themed">{{ hostNodeLabel(snapshotOf(listing)) }}</dd>
+            <dt class="font-medium text-themed-muted">套餐</dt>
+            <dd class="text-themed">{{ packageLabel(snapshotOf(listing)) }}</dd>
+            <dt class="font-medium text-themed-muted">配置</dt>
+            <dd class="text-themed"><span class="font-mono tabular-nums">{{ snapshotOf(listing).cpu }}</span>% 核 {{ formatMemory(snapshotOf(listing).memory) }} {{ formatDisk(snapshotOf(listing).disk) }}</dd>
+            <dt class="font-medium text-themed-muted">网络</dt>
+            <dd class="text-themed">{{ networkLabel(snapshotOf(listing)) }} · {{ bandwidthLabel(snapshotOf(listing)) }}</dd>
+            <dt class="font-medium text-themed-muted">交割方式</dt>
+            <dd class="text-themed">暂停锁定后强制重装</dd>
+            <dt class="font-medium text-themed-muted">续费价格</dt>
+            <dd class="font-mono tabular-nums text-themed">{{ renewalPriceLabel(snapshotOf(listing)) }}</dd>
+            <dt class="font-medium text-themed-muted">IP</dt>
+            <dd class="font-mono text-themed">{{ ipSummary(snapshotOf(listing)) }}</dd>
+            <dt class="font-medium text-themed-muted">流量</dt>
+            <dd class="font-mono tabular-nums text-themed">{{ bytesLabel(snapshotOf(listing).monthlyTrafficUsed) }} / {{ bytesLabel(snapshotOf(listing).monthlyTrafficLimit) }}</dd>
+            <dt class="font-medium text-themed-muted">剩余有效期</dt>
+            <dd class="text-themed">{{ remainingDays(snapshotOf(listing).expiresAt) }}，到期 {{ formatDateOnly(snapshotOf(listing).expiresAt) }}</dd>
           </dl>
 
-          <div class="kawaii-card-soft rounded-xl p-3 text-xs text-themed-muted">
+          <div class="rounded-lg border border-themed bg-themed-secondary p-3 text-xs text-themed-muted">
             购买后进入资金托管和交割任务。买家获得重装后的新实例，不包含卖家原数据。
           </div>
           <div class="grid grid-cols-2 gap-2">
@@ -1309,26 +1320,33 @@ onMounted(async () => {
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-lg font-semibold text-themed">实例检测</h2>
-            <p class="text-sm text-themed-muted">只有暂停且通过风控、欠费、到期、任务、套餐和节点检测的实例可以上架。</p>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">实例检测</h2>
+            <p class="mt-1 text-sm text-themed-muted">只有暂停且通过风控、欠费、到期、任务、套餐和节点检测的实例可以上架。</p>
           </div>
           <button class="btn btn-secondary" type="button" @click="loadInstances">刷新</button>
         </div>
-        <div v-if="instancesLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
-        <div v-else-if="instances.length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无实例。</div>
+        <div v-if="instancesLoading" class="rounded-xl border border-themed bg-themed-surface p-8 text-center text-sm text-themed-muted">加载中...</div>
+        <div v-else-if="instances.length === 0" class="rounded-xl border border-themed bg-themed-surface p-10 text-center">
+          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+            <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-3-4h.01M17 16h.01" />
+            </svg>
+          </div>
+          <p class="text-sm text-themed-secondary">暂无实例。</p>
+        </div>
         <div v-else class="space-y-3">
           <article v-for="instance in instances" :key="instance.id" :class="cardClass('p-4')">
             <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="text-base font-semibold text-themed">{{ instance.name }}</span>
-                  <span class="rounded px-2 py-0.5 text-xs" :class="eligibilityBadge(eligibilityMap[instance.id]).tone">
+                  <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="eligibilityBadge(eligibilityMap[instance.id]).tone">
                     {{ eligibilityBadge(eligibilityMap[instance.id]).label }}
                   </span>
                   <span class="text-xs text-themed-muted">{{ instanceStatusLabel(instance.status) }}</span>
                 </div>
                 <div class="mt-2 text-sm text-themed-muted">
-                  {{ instance.cpu }}% 核 · {{ formatMemory(instance.memory) }} · {{ formatDisk(instance.disk) }}
+                  <span class="font-mono tabular-nums">{{ instance.cpu }}</span>% 核 · {{ formatMemory(instance.memory) }} · {{ formatDisk(instance.disk) }}
                 </div>
               </div>
               <div class="flex flex-wrap gap-2">
@@ -1351,33 +1369,33 @@ onMounted(async () => {
 
             <div
               v-if="instanceNeedsStopBeforeListing(instance)"
-              class="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200"
+              class="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
             >
               上架交易所前必须先暂停实例。暂停后实例将停止运行，挂牌期间保持暂停/锁定；成交后会强制重装并交割给买家，原数据不可恢复。
             </div>
 
-            <div v-if="eligibilityMap[instance.id]" class="mt-4 space-y-3">
+            <div v-if="eligibilityMap[instance.id]" class="mt-4 space-y-3 border-t border-themed pt-4">
               <div>
-                <div class="mb-2 text-xs font-semibold text-themed">准入检测结果</div>
+                <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-themed-muted">准入检测结果</div>
                 <div class="grid gap-2 md:grid-cols-2">
                   <div
                     v-for="check in admissionEligibilityChecks(eligibilityMap[instance.id])"
                     :key="check.key"
-                    class="rounded border px-3 py-2 text-xs"
-                    :class="check.passed ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-200'"
+                    class="rounded-lg border px-3 py-2 text-xs"
+                    :class="check.passed ? 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'"
                   >
                     <span class="font-medium">{{ check.label }}</span>：{{ check.message }}
                   </div>
                 </div>
               </div>
               <div v-if="deliveryPolicyEligibilityChecks(eligibilityMap[instance.id]).length">
-                <div class="mb-2 text-xs font-semibold text-themed">交割清理和转移策略</div>
+                <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-themed-muted">交割清理和转移策略</div>
                 <div class="grid gap-2 md:grid-cols-2">
                   <div
                     v-for="check in deliveryPolicyEligibilityChecks(eligibilityMap[instance.id])"
                     :key="check.key"
-                    class="rounded border px-3 py-2 text-xs"
-                    :class="check.passed ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-200'"
+                    class="rounded-lg border px-3 py-2 text-xs"
+                    :class="check.passed ? 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'"
                   >
                     <span class="font-medium">{{ check.label }}</span>：{{ check.message }}
                   </div>
@@ -1385,7 +1403,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div v-if="eligibilityMap[instance.id]" class="kawaii-card-soft mt-3 rounded-xl p-3 text-xs text-themed-muted">
+            <div v-if="eligibilityMap[instance.id]" class="mt-3 rounded-lg border border-themed bg-themed-secondary p-3 text-xs text-themed-muted">
               交割时平台会清理 SSH key、终端会话、控制台 token、端口映射、代理站点、旧快照和备份策略；流量用量和剩余额度按挂牌实例当前状态交割。
             </div>
           </article>
@@ -1394,29 +1412,29 @@ onMounted(async () => {
 
       <form :class="cardClass('p-5 space-y-4')" @submit.prevent="requestCreateListing">
         <div>
-          <h2 class="text-lg font-semibold text-themed">创建挂牌</h2>
-          <p class="text-sm text-themed-muted">提交前会再次确认强制重装和数据不可恢复。</p>
+          <h2 class="text-lg font-semibold tracking-tight text-themed">创建挂牌</h2>
+          <p class="mt-1 text-sm text-themed-muted">提交前会再次确认强制重装和数据不可恢复。</p>
         </div>
-        <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
           只有已暂停并通过检测的实例可以提交挂牌。运行中实例请先在左侧点击“先暂停实例”，暂停完成后重新检测。
         </div>
         <label class="block text-sm">
-          <span class="text-themed">实例 ID</span>
-          <input v-model.number="listingForm.instanceId" class="input mt-1 w-full" type="number" min="1" readonly>
+          <span class="font-medium text-themed">实例 ID</span>
+          <input v-model.number="listingForm.instanceId" class="input mt-1 w-full font-mono tabular-nums" type="number" min="1" readonly>
         </label>
         <label class="block text-sm">
-          <span class="text-themed">售价</span>
-          <input v-model.number="listingForm.price" class="input mt-1 w-full" type="number" min="0" step="0.01" placeholder="例如 30.00">
+          <span class="font-medium text-themed">售价</span>
+          <input v-model.number="listingForm.price" class="input mt-1 w-full font-mono tabular-nums" type="number" min="0" step="0.01" placeholder="例如 30.00">
         </label>
         <label class="block text-sm">
-          <span class="text-themed">自动下架时间，可选</span>
+          <span class="font-medium text-themed">自动下架时间，可选</span>
           <input v-model="listingForm.autoDelistAt" class="input mt-1 w-full" type="datetime-local">
         </label>
         <label class="block text-sm">
-          <span class="text-themed">说明，可选</span>
+          <span class="font-medium text-themed">说明，可选</span>
           <textarea v-model="listingForm.description" class="input mt-1 w-full" rows="4" placeholder="不允许填写联系方式或暴露身份信息"></textarea>
         </label>
-        <div class="rounded bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-200">
+        <div class="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400">
           成交后实例会锁定并强制重装交割，原系统和数据不会交付给买家，也不可恢复。
         </div>
         <button class="btn btn-primary w-full" type="submit" :disabled="listingSubmitting || !listingForm.instanceId">
@@ -1427,24 +1445,34 @@ onMounted(async () => {
 
     <section v-else-if="activeTab === 'listings'" class="space-y-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-themed">我的挂牌</h2>
+        <h2 class="text-lg font-semibold tracking-tight text-themed">我的挂牌</h2>
         <button class="btn btn-secondary" type="button" @click="loadMyListings">刷新</button>
       </div>
-      <div v-if="myListingsLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
-      <div v-else-if="myListings.length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无挂牌。</div>
+      <div v-if="myListingsLoading" class="rounded-xl border border-themed bg-themed-surface p-8 text-center text-sm text-themed-muted">加载中...</div>
+      <div v-else-if="myListings.length === 0" class="rounded-xl border border-themed bg-themed-surface p-10 text-center">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+          <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+          </svg>
+        </div>
+        <p class="text-sm text-themed-secondary">暂无挂牌。</p>
+      </div>
       <div v-else class="grid gap-4 lg:grid-cols-2">
         <article v-for="listing in myListings" :key="listing.id" :class="cardClass('p-5 space-y-3')">
-          <div class="flex items-start justify-between">
-            <div>
-              <div class="font-semibold text-themed">{{ listing.publicCode }}</div>
-              <div class="text-sm text-themed-muted">{{ snapshotOf(listing).name }} · {{ statusLabel(listing.status) }}</div>
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-mono font-semibold text-themed">{{ listing.publicCode }}</div>
+              <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-themed-muted">
+                <span>{{ snapshotOf(listing).name }}</span>
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium" :class="listing.status === 'active' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : ['delivery_failed', 'force_delisted', 'failed'].includes(listing.status) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : ['sold', 'completed', 'delivered', 'delisted'].includes(listing.status) ? 'bg-themed-secondary text-themed-muted' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'"><span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ statusLabel(listing.status) }}</span>
+              </div>
             </div>
-            <div class="text-lg font-semibold text-themed">{{ money(listing.price) }}</div>
+            <div class="font-mono text-lg font-semibold tabular-nums text-themed">{{ money(listing.price) }}</div>
           </div>
-          <div class="text-sm text-themed-muted">卖家预计到账 {{ money(listing.sellerReceivesAmount) }}，手续费 {{ money(listing.feeAmount) }}</div>
-          <div class="flex justify-end gap-2">
-            <button v-if="listing.status === 'active'" class="btn btn-secondary" type="button" @click="requestEditListing(listing)">修改</button>
-            <button v-if="['active', 'paused'].includes(listing.status)" class="btn btn-secondary" type="button" @click="requestDelist(listing)">下架</button>
+          <div class="text-sm text-themed-muted">卖家预计到账 <span class="font-mono tabular-nums text-themed">{{ money(listing.sellerReceivesAmount) }}</span>，手续费 <span class="font-mono tabular-nums text-themed">{{ money(listing.feeAmount) }}</span></div>
+          <div class="flex justify-end gap-2 border-t border-themed pt-3">
+            <button v-if="listing.status === 'active'" class="btn btn-secondary btn-sm" type="button" @click="requestEditListing(listing)">修改</button>
+            <button v-if="['active', 'paused'].includes(listing.status)" class="btn btn-secondary btn-sm" type="button" @click="requestDelist(listing)">下架</button>
           </div>
         </article>
       </div>
@@ -1460,19 +1488,27 @@ onMounted(async () => {
 
     <section v-else-if="activeTab === 'buys' || activeTab === 'sales'" class="space-y-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-themed">{{ activeTab === 'buys' ? '我的买入' : '我的卖出' }}</h2>
+        <h2 class="text-lg font-semibold tracking-tight text-themed">{{ activeTab === 'buys' ? '我的买入' : '我的卖出' }}</h2>
         <button class="btn btn-secondary" type="button" @click="activeTab === 'buys' ? loadBuys() : loadSales()">刷新</button>
       </div>
-      <div v-if="activeTab === 'buys' ? buysLoading : salesLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
-      <div v-else-if="(activeTab === 'buys' ? buys : sales).length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无订单。</div>
+      <div v-if="activeTab === 'buys' ? buysLoading : salesLoading" class="rounded-xl border border-themed bg-themed-surface p-8 text-center text-sm text-themed-muted">加载中...</div>
+      <div v-else-if="(activeTab === 'buys' ? buys : sales).length === 0" class="rounded-xl border border-themed bg-themed-surface p-10 text-center">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+          <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        </div>
+        <p class="text-sm text-themed-secondary">暂无订单。</p>
+      </div>
       <div v-else class="space-y-3">
         <article v-for="order in (activeTab === 'buys' ? buys : sales)" :key="order.id" :class="cardClass('p-4')">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div class="font-semibold text-themed">{{ order.orderNo }}</div>
-              <div class="mt-1 text-sm text-themed-muted">
-                {{ packageLabel(snapshotOf(order)) }} · {{ statusLabel(order.status) }}
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono font-semibold text-themed">{{ order.orderNo }}</span>
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium" :class="['completed', 'delivered', 'confirming'].includes(order.status) ? 'bg-green-500/10 text-green-600 dark:text-green-400' : ['failed', 'delivery_failed', 'disputed', 'refunded', 'cancelled'].includes(order.status) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'"><span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ statusLabel(order.status) }}</span>
               </div>
+              <div class="mt-1 text-sm text-themed-muted">{{ packageLabel(snapshotOf(order)) }}</div>
               <div class="mt-2 text-xs text-themed-muted">交割任务：{{ order.deliveryTask ? statusLabel(order.deliveryTask.status) : '等待创建' }} / {{ statusLabel(order.deliveryTask?.step || order.status) }}</div>
               <div v-if="order.deliveryTask?.startedAt || order.deliveryTask?.finishedAt" class="mt-1 text-xs text-themed-muted">
                 开始：{{ formatDate(order.deliveryTask.startedAt) }} · 完成：{{ formatDate(order.deliveryTask.finishedAt) }}
@@ -1481,45 +1517,45 @@ onMounted(async () => {
                 重装镜像：{{ order.deliveryTask.imageAlias || '使用原实例镜像' }} · SSH Key：{{ order.deliveryTask.sshKeyId ? `#${order.deliveryTask.sshKeyId}` : '未指定' }}
               </div>
               <div class="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300">匿名交易</span>
-                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300">强制重装交割</span>
-                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300">资金托管</span>
+                <span class="rounded-full bg-themed-secondary px-2.5 py-0.5 text-themed-muted">匿名交易</span>
+                <span class="rounded-full bg-themed-secondary px-2.5 py-0.5 text-themed-muted">强制重装交割</span>
+                <span class="rounded-full bg-themed-secondary px-2.5 py-0.5 text-themed-muted">资金托管</span>
               </div>
             </div>
             <div class="text-right">
-              <div class="text-lg font-semibold text-themed">{{ money(order.price) }}</div>
+              <div class="font-mono text-lg font-semibold tabular-nums text-themed">{{ money(order.price) }}</div>
               <div class="mt-2 flex flex-wrap justify-end gap-2">
                 <button
-                  class="btn btn-secondary"
+                  class="btn btn-secondary btn-sm"
                   type="button"
                   :disabled="orderRefreshingId === order.id"
                   @click="refreshOrderDetail(order)"
                 >
                   {{ orderRefreshingId === order.id ? '刷新中...' : '刷新进度' }}
                 </button>
-                <button class="btn btn-secondary" type="button" @click="requestCreateDispute(order)">发起争议</button>
+                <button class="btn btn-secondary btn-sm" type="button" @click="requestCreateDispute(order)">发起争议</button>
               </div>
             </div>
           </div>
-          <div class="mt-3 grid gap-2 text-xs grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+          <div class="mt-3 grid gap-2 text-xs grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 border-t border-themed pt-3">
             <div
               v-for="step in deliveryProgressSteps(order)"
               :key="`${order.id}:${step}`"
-              class="rounded border p-2"
+              class="rounded-lg border p-2"
               :class="deliveryStepClass(order, step)"
             >
-              <div class="font-semibold">{{ deliveryStepMarker(order, step) }} {{ deliveryStepLabels[step] || step }}</div>
+              <div class="font-medium">{{ deliveryStepMarker(order, step) }} {{ deliveryStepLabels[step] || step }}</div>
             </div>
           </div>
           <div
             v-if="order.deliveryTask?.error || order.failureReason"
-            class="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
+            class="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-600 dark:text-rose-400"
           >
             {{ order.deliveryTask?.error || order.failureReason }}
           </div>
           <div
             v-else-if="order.status === 'confirming'"
-            class="mt-3 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200"
+            class="mt-3 rounded-lg border border-themed bg-themed-secondary px-3 py-2 text-xs text-themed-muted"
           >
             交割已完成，确认期截止 {{ formatDate(order.confirmationDueAt) }}。确认期结束后托管款扣除手续费进入卖家交易所余额。
           </div>
@@ -1558,28 +1594,28 @@ onMounted(async () => {
 
     <section v-else-if="activeTab === 'wallet'" class="space-y-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-themed">交易所余额</h2>
+        <h2 class="text-lg font-semibold tracking-tight text-themed">交易所余额</h2>
         <button class="btn btn-secondary" type="button" @click="loadWallet">刷新</button>
       </div>
       <div class="grid gap-4 md:grid-cols-2">
         <div :class="cardClass('p-5')">
-          <div class="text-sm text-themed-muted">可用余额</div>
-          <div class="mt-2 text-3xl font-semibold text-themed">{{ money(wallet?.availableAmount) }}</div>
+          <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">可用余额</div>
+          <div class="mt-2 font-mono text-3xl font-semibold figure-stat tabular-nums text-themed">{{ money(wallet?.availableAmount) }}</div>
         </div>
         <div :class="cardClass('p-5')">
-          <div class="text-sm text-themed-muted">冻结金额</div>
-          <div class="mt-2 text-3xl font-semibold text-themed">{{ money(wallet?.frozenAmount) }}</div>
+          <div class="text-xs font-medium uppercase tracking-wide text-themed-muted">冻结金额</div>
+          <div class="mt-2 font-mono text-3xl font-semibold figure-stat tabular-nums text-themed">{{ money(wallet?.frozenAmount) }}</div>
         </div>
       </div>
       <div class="grid gap-4 lg:grid-cols-2">
         <form :class="cardClass('p-5 space-y-3')" @submit.prevent="transferToBalance">
-          <h3 class="font-semibold text-themed">划转到账户余额</h3>
+          <h3 class="text-base font-semibold tracking-tight text-themed">划转到账户余额</h3>
           <p class="text-xs text-themed-muted">
             {{ exchangeConfig.allowBalanceTransfer ? '划转会即时进入账户余额，但仍会先通过风控和二次验证。' : '当前交易所策略未开放划转到账户余额。' }}
           </p>
           <input
             v-model.number="transferAmount"
-            class="input w-full"
+            class="input w-full font-mono tabular-nums"
             type="number"
             min="0"
             :max="walletAvailableAmount"
@@ -1596,13 +1632,13 @@ onMounted(async () => {
           </button>
         </form>
         <form :class="cardClass('p-5 space-y-3')" @submit.prevent="createWithdrawal">
-          <h3 class="font-semibold text-themed">申请提现</h3>
+          <h3 class="text-base font-semibold tracking-tight text-themed">申请提现</h3>
           <p class="text-xs text-themed-muted">
-            提现必须人工审核，最低提现 {{ money(exchangeConfig.withdrawalMinAmount) }}；存在未完结争议或确认期未结束的成交时会被后台拒绝。
+            提现必须人工审核，最低提现 <span class="font-mono tabular-nums">{{ money(exchangeConfig.withdrawalMinAmount) }}</span>；存在未完结争议或确认期未结束的成交时会被后台拒绝。
           </p>
           <input
             v-model.number="withdrawalForm.amount"
-            class="input w-full"
+            class="input w-full font-mono tabular-nums"
             type="number"
             :min="exchangeConfig.withdrawalMinAmount"
             :max="walletAvailableAmount"
@@ -1618,14 +1654,21 @@ onMounted(async () => {
       </div>
       <div class="grid gap-4 lg:grid-cols-2">
         <div :class="cardClass('overflow-hidden')">
-          <div class="border-b border-themed px-4 py-3 font-semibold text-themed">余额流水</div>
-          <div v-if="walletLoading" class="p-6 text-center text-themed-muted">加载中...</div>
-          <div v-else-if="walletLogs.length === 0" class="p-6 text-center text-themed-muted">暂无流水。</div>
+          <div class="border-b border-themed px-4 py-3 text-sm font-semibold tracking-tight text-themed">余额流水</div>
+          <div v-if="walletLoading" class="p-6 text-center text-sm text-themed-muted">加载中...</div>
+          <div v-else-if="walletLogs.length === 0" class="p-8 text-center">
+            <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+              <svg class="h-6 w-6 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p class="text-sm text-themed-secondary">暂无流水。</p>
+          </div>
           <div v-else class="divide-y divide-themed">
             <div v-for="log in walletLogs" :key="log.id" class="px-4 py-3 text-sm">
               <div class="flex justify-between gap-3">
                 <span class="text-themed">{{ log.remark || statusLabel(log.type) }}</span>
-                <span :class="log.amount >= 0 ? 'text-emerald-600' : 'text-red-500'">{{ money(log.amount) }}</span>
+                <span class="font-mono font-medium tabular-nums" :class="log.amount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-rose-600 dark:text-rose-400'">{{ money(log.amount) }}</span>
               </div>
               <div class="mt-1 text-xs text-themed-muted">{{ formatDate(log.createdAt) }}</div>
             </div>
@@ -1634,20 +1677,30 @@ onMounted(async () => {
             <span class="text-themed-muted">{{ pageSummary(walletLogsTotal, walletLogsPage, recordPageSize) }}</span>
             <div class="flex items-center gap-2">
               <button class="btn btn-secondary btn-sm" type="button" :disabled="walletLogsPage <= 1" @click="changeWalletLogsPage(-1)">上一页</button>
-              <span class="text-themed-muted">{{ walletLogsPage }} / {{ walletLogsTotalPages }}</span>
+              <span class="font-mono tabular-nums text-themed-muted">{{ walletLogsPage }} / {{ walletLogsTotalPages }}</span>
               <button class="btn btn-secondary btn-sm" type="button" :disabled="walletLogsPage >= walletLogsTotalPages" @click="changeWalletLogsPage(1)">下一页</button>
             </div>
           </div>
         </div>
         <div :class="cardClass('overflow-hidden')">
-          <div class="border-b border-themed px-4 py-3 font-semibold text-themed">提现记录</div>
-          <div v-if="walletLoading" class="p-6 text-center text-themed-muted">加载中...</div>
-          <div v-else-if="withdrawals.length === 0" class="p-6 text-center text-themed-muted">暂无提现。</div>
+          <div class="border-b border-themed px-4 py-3 text-sm font-semibold tracking-tight text-themed">提现记录</div>
+          <div v-if="walletLoading" class="p-6 text-center text-sm text-themed-muted">加载中...</div>
+          <div v-else-if="withdrawals.length === 0" class="p-8 text-center">
+            <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+              <svg class="h-6 w-6 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p class="text-sm text-themed-secondary">暂无提现。</p>
+          </div>
           <div v-else class="divide-y divide-themed">
             <div v-for="item in withdrawals" :key="item.id" class="px-4 py-3 text-sm">
-              <div class="flex justify-between gap-3">
-                <span class="text-themed">{{ item.withdrawalNo }} · {{ statusLabel(item.status) }}</span>
-                <span class="text-themed">{{ money(item.amount) }}</span>
+              <div class="flex items-center justify-between gap-3">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono text-themed">{{ item.withdrawalNo }}</span>
+                  <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium" :class="['completed', 'approved', 'paying'].includes(item.status) ? 'bg-green-500/10 text-green-600 dark:text-green-400' : ['rejected', 'failed', 'cancelled'].includes(item.status) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'"><span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ statusLabel(item.status) }}</span>
+                </span>
+                <span class="font-mono font-medium tabular-nums text-themed">{{ money(item.amount) }}</span>
               </div>
               <div class="mt-1 text-xs text-themed-muted">{{ formatDate(item.createdAt) }}</div>
             </div>
@@ -1667,23 +1720,30 @@ onMounted(async () => {
     <section v-else-if="activeTab === 'records'" class="space-y-4">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-lg font-semibold text-themed">交易记录</h2>
-          <p class="text-sm text-themed-muted">记录托管入账、手续费扣除、放款、提现、划转和人工调整等交易所资金动作。</p>
+          <h2 class="text-lg font-semibold tracking-tight text-themed">交易记录</h2>
+          <p class="mt-1 text-sm text-themed-muted">记录托管入账、手续费扣除、放款、提现、划转和人工调整等交易所资金动作。</p>
         </div>
         <button class="btn btn-secondary" type="button" @click="loadWallet">刷新</button>
       </div>
       <div :class="cardClass('overflow-hidden')">
-        <div v-if="walletLoading" class="p-6 text-center text-themed-muted">加载中...</div>
-        <div v-else-if="walletLogs.length === 0" class="p-6 text-center text-themed-muted">暂无交易记录。</div>
+        <div v-if="walletLoading" class="p-6 text-center text-sm text-themed-muted">加载中...</div>
+        <div v-else-if="walletLogs.length === 0" class="p-10 text-center">
+          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+            <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <p class="text-sm text-themed-secondary">暂无交易记录。</p>
+        </div>
         <div v-else class="divide-y divide-themed">
           <div v-for="log in walletLogs" :key="log.id" class="px-4 py-3 text-sm">
             <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
+              <div class="min-w-0">
                 <div class="font-medium text-themed">{{ statusLabel(log.type) }}</div>
                 <div class="mt-1 text-xs text-themed-muted">{{ log.remark || '-' }}</div>
               </div>
               <div class="text-right">
-                <div :class="log.amount >= 0 ? 'text-emerald-600' : 'text-red-500'">{{ money(log.amount) }}</div>
+                <div class="font-mono font-medium tabular-nums" :class="log.amount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-rose-600 dark:text-rose-400'">{{ money(log.amount) }}</div>
                 <div class="mt-1 text-xs text-themed-muted">{{ formatDate(log.createdAt) }}</div>
               </div>
             </div>
@@ -1702,21 +1762,31 @@ onMounted(async () => {
 
     <section v-else-if="activeTab === 'disputes'" class="space-y-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-themed">争议记录</h2>
+        <h2 class="text-lg font-semibold tracking-tight text-themed">争议记录</h2>
         <button class="btn btn-secondary" type="button" @click="loadDisputes">刷新</button>
       </div>
-      <div v-if="disputesLoading" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">加载中...</div>
-      <div v-else-if="disputes.length === 0" class="kawaii-card card rounded-2xl p-8 text-center text-themed-muted">暂无争议。</div>
+      <div v-if="disputesLoading" class="rounded-xl border border-themed bg-themed-surface p-8 text-center text-sm text-themed-muted">加载中...</div>
+      <div v-else-if="disputes.length === 0" class="rounded-xl border border-themed bg-themed-surface p-10 text-center">
+        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+          <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <p class="text-sm text-themed-secondary">暂无争议。</p>
+      </div>
       <div v-else class="space-y-3">
         <article v-for="item in disputes" :key="item.id" :class="cardClass('p-4')">
           <div class="flex flex-wrap justify-between gap-3">
-            <div>
-              <div class="font-semibold text-themed">{{ item.orderNo }} · {{ statusLabel(item.status) }}</div>
-              <div class="mt-1 text-sm text-themed-muted">{{ item.reason }}</div>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono font-semibold text-themed">{{ item.orderNo }}</span>
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium" :class="['resolved', 'released', 'completed', 'closed'].includes(item.status) ? 'bg-green-500/10 text-green-600 dark:text-green-400' : ['rejected', 'failed'].includes(item.status) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'"><span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ statusLabel(item.status) }}</span>
+              </div>
+              <div class="mt-1.5 text-sm text-themed-muted">{{ item.reason }}</div>
             </div>
             <div class="text-sm text-themed-muted">{{ formatDate(item.createdAt) }}</div>
           </div>
-          <div v-if="item.resolution" class="mt-3 rounded bg-themed-secondary p-3 text-sm text-themed-muted">{{ item.resolution }}</div>
+          <div v-if="item.resolution" class="mt-3 rounded-lg border border-themed bg-themed-secondary p-3 text-sm text-themed-muted">{{ item.resolution }}</div>
         </article>
       </div>
       <div v-if="!disputesLoading && disputesTotal > 0" class="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -1734,71 +1804,71 @@ onMounted(async () => {
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6"
       @click.self="closeListingDetail"
     >
-      <section class="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-lg border border-themed bg-themed p-6 shadow-xl">
+      <section class="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl border border-themed bg-themed-surface p-6 shadow-xl">
         <div class="flex items-start justify-between gap-4">
-          <div>
-            <h2 class="text-xl font-semibold text-themed">{{ selectedListing.publicCode }}</h2>
+          <div class="min-w-0">
+            <h2 class="font-mono text-xl font-semibold tracking-tight text-themed">{{ selectedListing.publicCode }}</h2>
             <p class="mt-1 text-sm text-themed-muted">匿名交易的实例剩余使用权，成交后由平台强制重装交割。</p>
           </div>
-          <button class="btn btn-secondary" type="button" @click="closeListingDetail">关闭</button>
+          <button class="btn btn-secondary btn-sm" type="button" @click="closeListingDetail">关闭</button>
         </div>
 
-        <div v-if="listingDetailLoading" class="mt-6 rounded bg-themed-secondary p-6 text-center text-themed-muted">加载详情中...</div>
+        <div v-if="listingDetailLoading" class="mt-6 rounded-lg border border-themed bg-themed-secondary p-6 text-center text-sm text-themed-muted">加载详情中...</div>
         <template v-else>
           <div class="mt-5 flex flex-wrap gap-2 text-xs">
-            <span class="rounded bg-gray-100 px-2 py-1 text-gray-700 dark:bg-gray-800 dark:text-gray-300">暂停锁定后交割</span>
-            <span class="rounded bg-gray-100 px-2 py-1 text-gray-700 dark:bg-gray-800 dark:text-gray-300">成交强制重装</span>
-            <span class="rounded bg-gray-100 px-2 py-1 text-gray-700 dark:bg-gray-800 dark:text-gray-300">匿名交易</span>
-            <span class="rounded bg-themed-secondary px-2 py-1 text-themed">平台资金托管</span>
+            <span class="rounded-full bg-themed-secondary px-2.5 py-1 text-themed-muted">暂停锁定后交割</span>
+            <span class="rounded-full bg-themed-secondary px-2.5 py-1 text-themed-muted">成交强制重装</span>
+            <span class="rounded-full bg-themed-secondary px-2.5 py-1 text-themed-muted">匿名交易</span>
+            <span class="rounded-full bg-primary-500/10 px-2.5 py-1 font-medium text-primary-600 dark:text-primary-400">平台资金托管</span>
           </div>
 
-          <dl class="mt-5 grid gap-3 text-sm md:grid-cols-[120px_minmax(0,1fr)_120px_minmax(0,1fr)]">
-            <dt class="font-medium text-themed">地区</dt>
-            <dd class="text-themed-muted">{{ hostRegionLabel(snapshotOf(selectedListing)) }}</dd>
-            <dt class="font-medium text-themed">节点</dt>
-            <dd class="text-themed-muted">{{ hostNodeLabel(snapshotOf(selectedListing)) }}</dd>
-            <dt class="font-medium text-themed">套餐</dt>
-            <dd class="text-themed-muted">{{ packageLabel(snapshotOf(selectedListing)) }}</dd>
-            <dt class="font-medium text-themed">配置</dt>
-            <dd class="text-themed-muted">{{ snapshotOf(selectedListing).cpu }}% 核 {{ formatMemory(snapshotOf(selectedListing).memory) }} {{ formatDisk(snapshotOf(selectedListing).disk) }}</dd>
-            <dt class="font-medium text-themed">网络类型</dt>
-            <dd class="text-themed-muted">{{ networkLabel(snapshotOf(selectedListing)) }}</dd>
-            <dt class="font-medium text-themed">独立 IP</dt>
-            <dd class="text-themed-muted">{{ ipSummary(snapshotOf(selectedListing)) }}</dd>
-            <dt class="font-medium text-themed">带宽</dt>
-            <dd class="text-themed-muted">{{ bandwidthLabel(snapshotOf(selectedListing)) }}</dd>
-            <dt class="font-medium text-themed">续费价格</dt>
-            <dd class="text-themed-muted">{{ renewalPriceLabel(snapshotOf(selectedListing)) }}</dd>
-            <dt class="font-medium text-themed">剩余流量</dt>
-            <dd class="text-themed-muted">{{ bytesLabel(snapshotOf(selectedListing).monthlyTrafficUsed) }} / {{ bytesLabel(snapshotOf(selectedListing).monthlyTrafficLimit) }}</dd>
-            <dt class="font-medium text-themed">剩余有效期</dt>
-            <dd class="text-themed-muted">{{ remainingDays(snapshotOf(selectedListing).expiresAt) }}，到期 {{ formatDateOnly(snapshotOf(selectedListing).expiresAt) }}</dd>
-            <dt class="font-medium text-themed">售价</dt>
-            <dd class="text-themed">{{ money(selectedListing.price) }}</dd>
-	            <dt class="font-medium text-themed">手续费</dt>
-	            <dd class="text-themed-muted">平台手续费 {{ money(selectedListing.feeAmount) }}</dd>
-	            <dt class="font-medium text-themed">交易状态</dt>
+          <dl class="mt-5 grid gap-x-3 gap-y-2.5 border-t border-themed pt-5 text-sm md:grid-cols-[120px_minmax(0,1fr)_120px_minmax(0,1fr)]">
+            <dt class="font-medium text-themed-muted">地区</dt>
+            <dd class="text-themed">{{ hostRegionLabel(snapshotOf(selectedListing)) }}</dd>
+            <dt class="font-medium text-themed-muted">节点</dt>
+            <dd class="text-themed">{{ hostNodeLabel(snapshotOf(selectedListing)) }}</dd>
+            <dt class="font-medium text-themed-muted">套餐</dt>
+            <dd class="text-themed">{{ packageLabel(snapshotOf(selectedListing)) }}</dd>
+            <dt class="font-medium text-themed-muted">配置</dt>
+            <dd class="text-themed"><span class="font-mono tabular-nums">{{ snapshotOf(selectedListing).cpu }}</span>% 核 {{ formatMemory(snapshotOf(selectedListing).memory) }} {{ formatDisk(snapshotOf(selectedListing).disk) }}</dd>
+            <dt class="font-medium text-themed-muted">网络类型</dt>
+            <dd class="text-themed">{{ networkLabel(snapshotOf(selectedListing)) }}</dd>
+            <dt class="font-medium text-themed-muted">独立 IP</dt>
+            <dd class="font-mono text-themed">{{ ipSummary(snapshotOf(selectedListing)) }}</dd>
+            <dt class="font-medium text-themed-muted">带宽</dt>
+            <dd class="text-themed">{{ bandwidthLabel(snapshotOf(selectedListing)) }}</dd>
+            <dt class="font-medium text-themed-muted">续费价格</dt>
+            <dd class="font-mono tabular-nums text-themed">{{ renewalPriceLabel(snapshotOf(selectedListing)) }}</dd>
+            <dt class="font-medium text-themed-muted">剩余流量</dt>
+            <dd class="font-mono tabular-nums text-themed">{{ bytesLabel(snapshotOf(selectedListing).monthlyTrafficUsed) }} / {{ bytesLabel(snapshotOf(selectedListing).monthlyTrafficLimit) }}</dd>
+            <dt class="font-medium text-themed-muted">剩余有效期</dt>
+            <dd class="text-themed">{{ remainingDays(snapshotOf(selectedListing).expiresAt) }}，到期 {{ formatDateOnly(snapshotOf(selectedListing).expiresAt) }}</dd>
+            <dt class="font-medium text-themed-muted">售价</dt>
+            <dd class="font-mono font-semibold tabular-nums text-themed">{{ money(selectedListing.price) }}</dd>
+	            <dt class="font-medium text-themed-muted">手续费</dt>
+	            <dd class="text-themed">平台手续费 <span class="font-mono tabular-nums">{{ money(selectedListing.feeAmount) }}</span></dd>
+	            <dt class="font-medium text-themed-muted">交易状态</dt>
 	            <dd class="text-themed-muted">{{ statusLabel(selectedListing.status) }}，成交前实例保持暂停锁定</dd>
-	            <dt class="font-medium text-themed">挂牌说明</dt>
+	            <dt class="font-medium text-themed-muted">挂牌说明</dt>
 	            <dd class="text-themed-muted">{{ selectedListing.description || '卖家未填写说明，平台仍会按强制重装交割。' }}</dd>
 	          </dl>
 
-          <div class="mt-5 space-y-2 rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+          <div class="mt-5 space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
             <p>购买后获得的是实例剩余使用权，不包含卖家原系统、原数据、账号信息或历史订单。</p>
             <p>实例当前已用流量和剩余额度会按挂牌时状态交割，不会因交易重置。</p>
             <p>付款后资金进入平台托管，实例会先清理访问权限、端口、代理站点、快照和凭据，再强制重装并转移给买家。</p>
             <p>买卖双方前台互不可见；如交割异常，可提交争议等待平台人工处理。</p>
           </div>
 
-          <div class="mt-5 rounded border border-themed p-4">
+          <div class="mt-5 rounded-xl border border-themed p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 class="font-semibold text-themed">交割设置</h3>
+                <h3 class="text-base font-semibold tracking-tight text-themed">交割设置</h3>
                 <p class="mt-1 text-sm text-themed-muted">成交后平台会强制重装。镜像选择受后台交易所策略和节点镜像白名单限制。</p>
               </div>
-              <span class="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">重装后交割</span>
+              <span class="rounded-full bg-themed-secondary px-2.5 py-1 text-xs text-themed-muted">重装后交割</span>
             </div>
-            <div v-if="purchaseOptionsLoading" class="mt-4 rounded bg-themed-secondary p-4 text-sm text-themed-muted">加载交割设置中...</div>
+            <div v-if="purchaseOptionsLoading" class="mt-4 rounded-lg border border-themed bg-themed-secondary p-4 text-sm text-themed-muted">加载交割设置中...</div>
             <div v-else class="mt-4 grid gap-3 md:grid-cols-2">
               <label v-if="exchangeConfig.allowBuyerImageSelection" class="block text-sm">
                 <span class="text-themed">重装镜像</span>
@@ -1810,7 +1880,7 @@ onMounted(async () => {
                 </select>
                 <span class="mt-1 block text-xs text-themed-muted">所选镜像仍会经过节点镜像白名单、类型和内存兼容性校验。</span>
               </label>
-              <div v-else class="rounded border border-themed bg-themed-secondary p-3 text-sm">
+              <div v-else class="rounded-lg border border-themed bg-themed-secondary p-3 text-sm">
                 <div class="font-medium text-themed">重装镜像</div>
                 <p class="mt-1 text-xs text-themed-muted">当前交易所策略未开放买家自选镜像，成交后平台会按默认/原实例镜像强制重装。</p>
               </div>
@@ -1851,16 +1921,16 @@ onMounted(async () => {
       <section :class="cardClass('w-full max-w-lg p-5 shadow-xl')">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-themed">确认上架交易所</h2>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">确认上架交易所</h2>
             <p class="mt-1 text-sm text-themed-muted">实例 ID {{ listingForm.instanceId }} 将进入交易所挂牌流程。</p>
           </div>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="listingSubmitting" @click="cancelCreateListing">取消</button>
         </div>
-        <div class="mt-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-700/60 dark:bg-red-950/30 dark:text-red-200">
+        <div class="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-600 dark:text-rose-400">
           成交后实例会被锁定并强制重装交割，原系统和数据不会交付给买家，也不可恢复。挂牌期间实例保持暂停/交易锁定，只允许改价、改说明、下架或查看交易状态。
         </div>
         <div class="mt-4 grid gap-2 text-sm text-themed-muted">
-          <div>售价：<span class="text-themed">{{ money(Number(listingForm.price)) }}</span></div>
+          <div>售价：<span class="font-mono font-medium tabular-nums text-themed">{{ money(Number(listingForm.price)) }}</span></div>
           <div>自动下架：{{ listingForm.autoDelistAt || '未设置' }}</div>
           <div>说明：{{ listingForm.description || '未填写' }}</div>
         </div>
@@ -1880,12 +1950,12 @@ onMounted(async () => {
       <section :class="cardClass('w-full max-w-lg p-5 shadow-xl')">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-themed">确认购买交易所实例</h2>
-            <p class="mt-1 text-sm text-themed-muted">{{ pendingPurchaseListing.publicCode }} · {{ money(pendingPurchaseListing.price) }}</p>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">确认购买交易所实例</h2>
+            <p class="mt-1 text-sm text-themed-muted"><span class="font-mono text-themed">{{ pendingPurchaseListing.publicCode }}</span> · <span class="font-mono tabular-nums text-themed">{{ money(pendingPurchaseListing.price) }}</span></p>
           </div>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="purchaseSubmitting" @click="cancelPurchaseListing">取消</button>
         </div>
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           该实例成交后会由平台强制重装交割。你购买的是剩余使用权，不包含卖家原数据或原系统环境；当前已用流量和剩余额度会原样交割，不会重置；买卖双方互不可见。
         </div>
         <div class="mt-4 grid gap-2 text-sm text-themed-muted">
@@ -1909,20 +1979,20 @@ onMounted(async () => {
       <section :class="cardClass('w-full max-w-lg p-5 shadow-xl')">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-themed">修改挂牌信息</h2>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">修改挂牌信息</h2>
             <p class="mt-1 text-sm text-themed-muted">
-              {{ listingEditDraft.listing.publicCode }} 仍会保持暂停/交易锁定状态。
+<span class="font-mono text-themed">{{ listingEditDraft.listing.publicCode }}</span> 仍会保持暂停/交易锁定状态。
             </p>
           </div>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="listingActionSubmitting" @click="cancelEditListing">取消</button>
         </div>
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           只允许修改售价、说明和自动下架时间，不能更换挂牌实例。成交后仍会强制重装交割，原系统和数据不会交付给买家。
         </div>
         <div class="mt-4 space-y-3">
           <label class="block text-sm">
-            <span class="text-themed">售价</span>
-            <input v-model.number="listingEditDraft.price" class="input mt-1 w-full" type="number" min="0" step="0.01">
+            <span class="font-medium text-themed">售价</span>
+            <input v-model.number="listingEditDraft.price" class="input mt-1 w-full font-mono tabular-nums" type="number" min="0" step="0.01">
           </label>
           <label class="block text-sm">
             <span class="text-themed">自动下架时间，可选</span>
@@ -1949,14 +2019,14 @@ onMounted(async () => {
       <section :class="cardClass('w-full max-w-lg p-5 shadow-xl')">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-themed">确认下架交易所</h2>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">确认下架交易所</h2>
             <p class="mt-1 text-sm text-themed-muted">
-              {{ pendingDelistListing.publicCode }} 下架后会解除交易锁定。
+<span class="font-mono text-themed">{{ pendingDelistListing.publicCode }}</span> 下架后会解除交易锁定。
             </p>
           </div>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="listingActionSubmitting" @click="cancelDelist">取消</button>
         </div>
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           下架只会移出交易所并解除交易锁定，实例仍保持暂停状态。是否启动实例由你之后自行决定；下架不会恢复成交流程。
         </div>
         <div class="mt-5 flex justify-end gap-2">
@@ -1975,14 +2045,14 @@ onMounted(async () => {
       <section :class="cardClass('w-full max-w-lg p-5 shadow-xl')">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-themed">发起交易争议</h2>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">发起交易争议</h2>
             <p class="mt-1 text-sm text-themed-muted">
-              订单 {{ disputeDraft.order.orderNo }} 将进入平台人工处理。
+              订单 <span class="font-mono text-themed">{{ disputeDraft.order.orderNo }}</span> 将进入平台人工处理。
             </p>
           </div>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="disputeSubmitting" @click="cancelCreateDispute">取消</button>
         </div>
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           争议提交后，平台会冻结/暂停自动结算并核对交割记录。请只填写问题说明，不要填写联系方式或对方身份信息。
         </div>
         <label class="mt-4 block text-sm">
@@ -2005,12 +2075,12 @@ onMounted(async () => {
       <section :class="cardClass('w-full max-w-lg p-5 shadow-xl')">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-themed">确认划转到账户余额</h2>
-            <p class="mt-1 text-sm text-themed-muted">划转金额 {{ money(Number(transferAmount)) }}</p>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">确认划转到账户余额</h2>
+            <p class="mt-1 text-sm text-themed-muted">划转金额 <span class="font-mono font-medium tabular-nums text-themed">{{ money(Number(transferAmount)) }}</span></p>
           </div>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="walletActionLoading === 'transfer'" @click="cancelTransferToBalance">取消</button>
         </div>
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           划转会从交易所可用余额进入账户余额，并写入完整资金流水。划转完成后不能作为提现申请自动撤回。
         </div>
         <div class="mt-5 flex justify-end gap-2">
@@ -2029,21 +2099,21 @@ onMounted(async () => {
       <section :class="cardClass('w-full max-w-lg p-5 shadow-xl')">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-themed">确认提交提现审核</h2>
-            <p class="mt-1 text-sm text-themed-muted">提现金额 {{ money(Number(withdrawalForm.amount)) }}</p>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">确认提交提现审核</h2>
+            <p class="mt-1 text-sm text-themed-muted">提现金额 <span class="font-mono font-medium tabular-nums text-themed">{{ money(Number(withdrawalForm.amount)) }}</span></p>
           </div>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="walletActionLoading === 'withdraw'" @click="cancelCreateWithdrawal">取消</button>
         </div>
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           提交后会冻结对应交易所余额，并进入平台人工审核。审核通过后仍需要管理员线下打款并标记完成。
         </div>
         <dl class="mt-4 grid grid-cols-[96px_minmax(0,1fr)] gap-y-2 text-sm">
-          <dt class="font-medium text-themed">提现方式</dt>
-          <dd class="break-all text-themed-muted">{{ withdrawalForm.method }}</dd>
-          <dt class="font-medium text-themed">收款账号</dt>
-          <dd class="break-all text-themed-muted">{{ withdrawalForm.account }}</dd>
-          <dt class="font-medium text-themed">备注</dt>
-          <dd class="break-all text-themed-muted">{{ withdrawalForm.remark || '未填写' }}</dd>
+          <dt class="font-medium text-themed-muted">提现方式</dt>
+          <dd class="break-all text-themed">{{ withdrawalForm.method }}</dd>
+          <dt class="font-medium text-themed-muted">收款账号</dt>
+          <dd class="break-all font-mono text-themed">{{ withdrawalForm.account }}</dd>
+          <dt class="font-medium text-themed-muted">备注</dt>
+          <dd class="break-all text-themed">{{ withdrawalForm.remark || '未填写' }}</dd>
         </dl>
         <div class="mt-5 flex justify-end gap-2">
           <button class="btn btn-secondary" type="button" :disabled="walletActionLoading === 'withdraw'" @click="cancelCreateWithdrawal">取消</button>
@@ -2061,14 +2131,14 @@ onMounted(async () => {
       <section :class="cardClass('w-full max-w-lg p-5 shadow-xl')">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-themed">先暂停实例</h2>
+            <h2 class="text-lg font-semibold tracking-tight text-themed">先暂停实例</h2>
             <p class="mt-1 text-sm text-themed-muted">
               {{ stopConfirmInstance.name }} 需要先暂停后才能上架交易所。
             </p>
           </div>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="!!stopSubmittingId" @click="cancelStopBeforeListing">取消</button>
         </div>
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           上架交易所前必须先暂停实例。暂停后实例将停止运行，挂牌期间保持暂停/交易锁定；成交后系统会强制重装并交割给买家，原系统和数据不可恢复。
         </div>
         <div class="mt-5 flex justify-end gap-2">
@@ -2088,3 +2158,85 @@ onMounted(async () => {
     />
   </div>
 </template>
+
+<style scoped>
+/* Nimbus lift for pure-Nimbus tiles */
+.nimbus-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.nimbus-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgb(16 24 40 / 0.18);
+}
+
+/* Flatten the legacy kawaii card chrome into clean Nimbus surfaces for this view */
+.kawaii-card {
+  border-radius: 0.75rem !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06) !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+}
+.kawaii-card::before {
+  display: none !important;
+  content: none !important;
+}
+.kawaii-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px -8px rgb(16 24 40 / 0.18) !important;
+}
+
+/* In-page tab bar: underline instead of gradient pill */
+.nimbus-tab.kawaii-tab-active,
+.nimbus-tab.kawaii-tab-idle,
+.nimbus-tab.kawaii-tab-idle:hover {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.nimbus-tab.kawaii-tab-idle {
+  color: #737378 !important;
+}
+.nimbus-tab.kawaii-tab-idle:hover {
+  color: #3a3a40 !important;
+}
+.nimbus-tab.kawaii-tab-active {
+  color: #4f46e5 !important;
+}
+:where(.dark) .nimbus-tab.kawaii-tab-idle:hover {
+  color: #e6e6e9 !important;
+}
+:where(.dark) .nimbus-tab.kawaii-tab-active {
+  color: #a5a3f7 !important;
+}
+
+/* Package filter chips: flat solid indigo when active, quiet outline when idle */
+.nimbus-chip.kawaii-tab-active {
+  border-color: #4f46e5 !important;
+  background: #4f46e5 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+.nimbus-chip.kawaii-tab-idle,
+.nimbus-chip.kawaii-tab-idle:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Linear 样板：关键 display 数字字距收紧 */
+.figure-stat {
+  letter-spacing: -0.03em;
+  font-feature-settings: 'tnum';
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-lift,
+  .nimbus-lift:hover,
+  .kawaii-card,
+  .kawaii-card:hover {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+</style>

@@ -219,11 +219,11 @@ defineExpose({ loadNotificationChannels })
 </script>
 
 <template>
-  <div class="card p-5">
-    <div class="flex items-center justify-between mb-4">
+  <div class="card nimbus-section">
+    <div class="flex items-center justify-between mb-5">
       <div>
-        <h2 class="text-sm font-medium text-themed-secondary">{{ $t('profile.notifications.title') }}</h2>
-        <p class="text-xs text-themed-faint mt-0.5">{{ $t('profile.notifications.description') }}</p>
+        <h2 class="nimbus-section-title">{{ $t('profile.notifications.title') }}</h2>
+        <p class="nimbus-section-desc">{{ $t('profile.notifications.description') }}</p>
       </div>
       <div class="flex items-center gap-2">
         <button class="btn-ghost btn-sm" @click="openHistory">
@@ -242,7 +242,7 @@ defineExpose({ loadNotificationChannels })
     </div>
 
     <!-- 添加通知渠道表单 -->
-    <div v-if="showAddNotification" class="mb-4 p-4 bg-themed-tertiary border border-themed rounded-lg space-y-3">
+    <div v-if="showAddNotification" class="mb-4 p-4 bg-themed-tertiary border border-themed rounded-xl space-y-3">
       <div>
         <label class="block text-xs text-themed-muted mb-1.5">{{ $t('profile.notifications.type') }}</label>
         <select v-model="notificationForm.type" class="input" @change="notificationForm.config = {}">
@@ -297,7 +297,7 @@ defineExpose({ loadNotificationChannels })
     </div>
 
     <TransitionGroup v-if="notificationChannels.length" name="list" tag="div" class="space-y-2">
-      <div v-for="channel in notificationChannels" :key="channel.id" class="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-themed-tertiary border border-themed rounded-lg hover:border-themed-secondary transition-colors">
+      <div v-for="channel in notificationChannels" :key="channel.id" class="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-themed-tertiary border border-themed rounded-xl hover:border-themed-secondary transition-colors">
         <div class="flex items-center gap-3 min-w-0 flex-1">
           <div class="w-8 h-8 rounded bg-themed-secondary flex items-center justify-center">
             <svg v-if="channel.type === 'telegram'" class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
@@ -356,7 +356,7 @@ defineExpose({ loadNotificationChannels })
             <div class="flex items-center justify-between p-4 border-b border-themed">
               <div>
                 <h3 class="text-sm font-medium text-themed-secondary">{{ $t('profile.notifications.historyTitle') }}</h3>
-                <div v-if="notificationStats" class="text-xs text-themed-faint mt-1 flex gap-3">
+                <div v-if="notificationStats" class="text-xs text-themed-faint mt-1 flex gap-3 tabular-nums">
                   <span>{{ $t('profile.notifications.statsTotal', { count: notificationStats.total }) }}</span>
                   <span class="text-green-500">{{ $t('profile.notifications.statsSent', { count: notificationStats.sent }) }}</span>
                   <span class="text-red-500">{{ $t('profile.notifications.statsFailed', { count: notificationStats.failed }) }}</span>
@@ -403,7 +403,7 @@ defineExpose({ loadNotificationChannels })
                 <div
                   v-for="log in notificationLogs"
                   :key="log.id"
-                  class="p-3 bg-themed-tertiary border border-themed rounded-lg"
+                  class="p-3 bg-themed-tertiary border border-themed rounded-xl"
                 >
                   <div class="flex items-start justify-between gap-2">
                     <div class="flex-1 min-w-0">
@@ -439,7 +439,7 @@ defineExpose({ loadNotificationChannels })
               >
                 {{ $t('common.prevPage') }}
               </button>
-              <span class="text-xs text-themed-muted">{{ logsPage }} / {{ totalPages }}</span>
+              <span class="text-xs text-themed-muted tabular-nums">{{ logsPage }} / {{ totalPages }}</span>
               <button
                 :disabled="logsPage >= totalPages"
                 class="px-3 py-1 text-xs rounded border border-themed disabled:opacity-50"
@@ -454,3 +454,23 @@ defineExpose({ loadNotificationChannels })
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+
+.nimbus-section-desc {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--kawaii-muted);
+}
+</style>

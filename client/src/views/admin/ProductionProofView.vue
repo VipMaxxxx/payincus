@@ -244,98 +244,134 @@ async function copyCommand(key: string, command: string): Promise<void> {
 </script>
 
 <template>
-  <div class="kawaii-page page-container animate-fade-in">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">生产验收</h1>
-        <p class="page-description">按真实业务链路收口生产 proof。此页面只读，不会执行支付、资源删除、Turnstile 变更或 OTA 回滚。</p>
+  <div class="kawaii-page nimbus-view page-container animate-fade-in">
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex items-start gap-3">
+        <span class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500 sm:flex">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-xl font-semibold text-themed sm:text-2xl">生产验收</h1>
+          <p class="mt-1 text-sm text-themed-muted">按真实业务链路收口生产 proof。此页面只读，不会执行支付、资源删除、Turnstile 变更或 OTA 回滚。</p>
+        </div>
       </div>
-      <RouterLink to="/admin/system-update" class="btn-secondary">
+      <RouterLink to="/admin/system-update" class="btn-secondary shrink-0">
         查看版本更新
       </RouterLink>
-    </div>
+    </header>
 
-    <section class="grid grid-cols-1 gap-4 md:grid-cols-4">
-      <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">生产 proof 收口</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ progressPercent }}%</div>
-        <div class="mt-2 h-2 rounded-full bg-themed-muted">
-          <div class="h-2 rounded-full bg-accent" :style="{ width: `${progressPercent}%` }"></div>
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-xs font-medium uppercase tracking-wide text-themed-muted">生产 proof 收口</span>
+          <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+          </span>
+        </div>
+        <div class="mt-3 font-mono text-3xl font-semibold tabular-nums text-themed">{{ progressPercent }}%</div>
+        <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-themed-secondary">
+          <div class="proof-bar-fill h-1.5 rounded-full bg-primary-500 transition-all duration-500" :style="{ width: `${progressPercent}%` }"></div>
         </div>
         <div class="mt-2 text-xs text-themed-muted">{{ closedProofItems }}/{{ proofStats.total }} 项已证明或已豁免</div>
       </div>
-      <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">已证明证据</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.verified }}</div>
+      <div class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-xs font-medium uppercase tracking-wide text-themed-muted">已证明证据</span>
+          <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 13l4 4L19 7" /></svg>
+          </span>
+        </div>
+        <div class="mt-3 font-mono text-3xl font-semibold tabular-nums text-themed">{{ proofStats.verified }}</div>
         <div class="mt-2 text-xs text-themed-muted">历史 proof 仍需跟随版本和配置变化复核</div>
       </div>
-      <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">待补 / 需操作</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ attentionProofItems }}</div>
+      <div class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-xs font-medium uppercase tracking-wide text-themed-muted">待补 / 需操作</span>
+          <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8v4m0 4h.01M12 3l9 16H3l9-16z" /></svg>
+          </span>
+        </div>
+        <div class="mt-3 font-mono text-3xl font-semibold tabular-nums text-themed">{{ attentionProofItems }}</div>
         <div class="mt-2 text-xs text-themed-muted">不等同于最终 Go blocker，需按状态分账处理</div>
       </div>
-      <div class="rounded-lg border border-themed bg-themed-surface p-5">
-        <div class="text-sm text-themed-muted">已豁免 / 维护窗口</div>
-        <div class="mt-2 text-3xl font-semibold text-themed">{{ proofStats.waived }} / {{ proofStats.operator }}</div>
+      <div class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-xs font-medium uppercase tracking-wide text-themed-muted">已豁免 / 维护窗口</span>
+          <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-themed-secondary text-themed-muted">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </span>
+        </div>
+        <div class="mt-3 font-mono text-3xl font-semibold tabular-nums text-themed">{{ proofStats.waived }} / {{ proofStats.operator }}</div>
         <div class="mt-2 text-xs text-themed-muted">豁免项和维护窗口不得写成已执行 proof</div>
       </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-themed bg-themed-surface">
+    <section class="mt-6 overflow-hidden rounded-xl border border-themed bg-themed-surface">
       <div class="border-b border-themed px-5 py-4">
-        <h2 class="text-lg font-semibold text-themed">执行顺序</h2>
+        <h2 class="text-base font-semibold text-themed">执行顺序</h2>
         <p class="mt-1 text-sm text-themed-muted">先只读，再低风险投递，最后处理会产生费用、资源或会话影响的操作。</p>
       </div>
       <div class="grid grid-cols-1 divide-y divide-themed md:grid-cols-3 md:divide-x md:divide-y-0">
         <div class="p-5">
-          <div class="text-sm font-semibold text-themed">1. 只读快照</div>
+          <div class="flex items-center gap-2">
+            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-500/10 font-mono text-2xs font-semibold text-primary-500">1</span>
+            <div class="text-sm font-semibold text-themed">只读快照</div>
+          </div>
           <p class="mt-2 text-sm text-themed-muted">运行脱敏 proof 快照、生产预检、日志和安全头检查，确认当前环境基线。</p>
         </div>
         <div class="p-5">
-          <div class="text-sm font-semibold text-themed">2. 真实投递 proof</div>
+          <div class="flex items-center gap-2">
+            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-500/10 font-mono text-2xs font-semibold text-primary-500">2</span>
+            <div class="text-sm font-semibold text-themed">真实投递 proof</div>
+          </div>
           <p class="mt-2 text-sm text-themed-muted">SMTP 与 Telegram 已证明；Lsky 删除清理 proof 已按运营方决定排除出最终阻塞项。</p>
         </div>
         <div class="p-5">
-          <div class="text-sm font-semibold text-themed">3. 高风险业务 proof</div>
+          <div class="flex items-center gap-2">
+            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-500/10 font-mono text-2xs font-semibold text-primary-500">3</span>
+            <div class="text-sm font-semibold text-themed">高风险业务 proof</div>
+          </div>
           <p class="mt-2 text-sm text-themed-muted">支付、Incus 生命周期和终端已有测试证据；交易所真实交割和回滚复核只在维护窗口执行。</p>
         </div>
       </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-themed bg-themed-surface">
+    <section class="mt-6 overflow-hidden rounded-xl border border-themed bg-themed-surface">
       <div class="border-b border-themed px-5 py-4">
-        <h2 class="text-lg font-semibold text-themed">Proof 清单</h2>
+        <h2 class="text-base font-semibold text-themed">Proof 清单</h2>
         <p class="mt-1 text-sm text-themed-muted">状态只代表当前账本口径，最终通过必须以生产日志、后台页面、数据库脱敏摘要或用户提供输出为准。</p>
       </div>
       <div class="space-y-3 p-4 lg:hidden">
         <div
           v-for="item in proofItems"
           :key="item.key"
-          class="rounded-lg border border-themed bg-themed-surface p-4 shadow-sm"
+          class="rounded-xl border border-themed bg-themed-surface p-4"
         >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 font-medium text-themed">{{ item.title }}</div>
-            <span class="inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium" :class="statusClass(item.status)">
+            <span class="inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="statusClass(item.status)">
               {{ statusLabel(item.status) }}
             </span>
           </div>
-          <div class="mt-3 text-sm font-medium" :class="riskClass(item.risk)">{{ riskLabel(item.risk) }}</div>
+          <div class="mt-3 text-xs font-semibold uppercase tracking-wide" :class="riskClass(item.risk)">{{ riskLabel(item.risk) }}</div>
           <div class="mt-3 space-y-3 text-sm">
             <div>
-              <div class="text-xs text-themed-muted">当前证据口径</div>
-              <div class="mt-1 text-themed-muted">{{ item.evidence }}</div>
+              <div class="text-2xs uppercase tracking-wide text-themed-muted">当前证据口径</div>
+              <div class="mt-1 text-themed-secondary">{{ item.evidence }}</div>
             </div>
             <div>
-              <div class="text-xs text-themed-muted">记录要求</div>
-              <div class="mt-1 text-themed-muted">{{ item.safeNote }}</div>
+              <div class="text-2xs uppercase tracking-wide text-themed-muted">记录要求</div>
+              <div class="mt-1 text-themed-secondary">{{ item.safeNote }}</div>
             </div>
           </div>
         </div>
       </div>
       <div class="hidden overflow-hidden lg:block">
-        <table class="w-full table-fixed divide-y divide-themed text-sm">
-          <thead class="bg-themed-muted/40 text-left text-xs uppercase text-themed-muted">
-            <tr>
+        <table class="w-full table-fixed text-sm">
+          <thead>
+            <tr class="border-b border-themed text-left text-2xs font-medium uppercase tracking-wide text-themed-muted">
               <th class="w-[18%] px-5 py-3">项目</th>
               <th class="w-[12%] px-5 py-3">状态</th>
               <th class="w-[10%] px-5 py-3">风险</th>
@@ -343,46 +379,75 @@ async function copyCommand(key: string, command: string): Promise<void> {
               <th class="w-[30%] px-5 py-3">记录要求</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-themed">
-            <tr v-for="item in proofItems" :key="item.key" class="align-top">
+          <tbody>
+            <tr v-for="item in proofItems" :key="item.key" class="border-b border-themed align-top transition-colors last:border-0 hover:bg-themed-hover">
               <td class="px-5 py-4 font-medium text-themed">{{ item.title }}</td>
               <td class="px-5 py-4">
-                <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium" :class="statusClass(item.status)">
+                <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="statusClass(item.status)">
                   {{ statusLabel(item.status) }}
                 </span>
               </td>
-              <td class="px-5 py-4 font-medium" :class="riskClass(item.risk)">{{ riskLabel(item.risk) }}</td>
-              <td class="px-5 py-4 text-themed-muted">{{ item.evidence }}</td>
-              <td class="px-5 py-4 text-themed-muted">{{ item.safeNote }}</td>
+              <td class="px-5 py-4 text-xs font-semibold uppercase tracking-wide" :class="riskClass(item.risk)">{{ riskLabel(item.risk) }}</td>
+              <td class="px-5 py-4 text-themed-secondary">{{ item.evidence }}</td>
+              <td class="px-5 py-4 text-themed-secondary">{{ item.safeNote }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <section class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4">
-      <div v-for="command in commands" :key="command.title" class="rounded-lg border border-themed bg-themed-surface">
+    <section class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div v-for="command in commands" :key="command.title" class="flex flex-col overflow-hidden rounded-xl border border-themed bg-themed-surface">
         <div class="border-b border-themed px-5 py-4">
           <div class="flex items-start justify-between gap-3">
-            <div>
-              <h3 class="font-semibold text-themed">{{ command.title }}</h3>
+            <div class="min-w-0">
+              <h3 class="flex items-center gap-2 font-semibold text-themed">
+                <svg class="h-4 w-4 shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 9l3 3-3 3m5 0h3M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z" /></svg>
+                {{ command.title }}
+              </h3>
               <p class="mt-1 text-sm text-themed-muted">{{ command.description }}</p>
             </div>
-            <button class="btn-secondary whitespace-nowrap" @click="copyCommand(command.title, command.command)">
+            <button class="btn-secondary btn-sm shrink-0 whitespace-nowrap" @click="copyCommand(command.title, command.command)">
+              <svg v-if="copiedKey === command.title" class="h-3.5 w-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+              <svg v-else class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
               {{ copiedKey === command.title ? '已复制' : '复制' }}
             </button>
           </div>
         </div>
-        <pre class="m-0 overflow-x-auto rounded-b-lg bg-black p-4 text-xs leading-6 text-green-100"><code>{{ command.command }}</code></pre>
+        <pre class="m-0 mt-auto overflow-x-auto bg-gray-950 p-4 font-mono text-xs leading-6 text-gray-300"><code>{{ command.command }}</code></pre>
       </div>
     </section>
 
-    <section class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-      <h2 class="font-semibold">禁止写入审计记录的内容</h2>
-      <p class="mt-2">
-        不要记录服务器密码、API secret、支付密钥、SMTP 密码、Telegram token、Lsky token、完整回调 payload、
-        Turnstile token、session cookie、JWT、实例 root 密码、宿主机 URL、证书路径或用户隐私明文。
-      </p>
+    <section class="mt-6 flex gap-3 rounded-xl border border-rose-500/30 bg-rose-500/5 p-5 text-sm">
+      <svg class="mt-0.5 h-5 w-5 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+      <div>
+        <h2 class="font-semibold text-themed">禁止写入审计记录的内容</h2>
+        <p class="mt-2 text-themed-secondary">
+          不要记录服务器密码、API secret、支付密钥、SMTP 密码、Telegram token、Lsky token、完整回调 payload、
+          Turnstile token、session cookie、JWT、实例 root 密码、宿主机 URL、证书路径或用户隐私明文。
+        </p>
+      </div>
     </section>
   </div>
 </template>
+
+<style scoped>
+.nimbus-stat {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.proof-bar-fill {
+  background-image: linear-gradient(90deg, var(--kawaii-primary), var(--kawaii-primary-strong));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-view *,
+  .nimbus-view *::before,
+  .nimbus-view *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+</style>

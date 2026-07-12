@@ -1133,15 +1133,15 @@ function handleVisibilityChange() {
 <template>
   <div class="kawaii-page space-y-6 animate-fade-in">
     <!-- 页面头部 -->
-    <div class="page-header flex-col sm:flex-row gap-4 sm:gap-0">
-      <div>
-        <h1 class="page-title text-lg sm:text-xl">{{ t('nav.terminal') }}</h1>
-        <p class="page-description">{{ t('terminalPage.description') }}</p>
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <h1 class="text-2xl font-semibold tracking-tight text-themed">{{ t('nav.terminal') }}</h1>
+        <p class="mt-1.5 text-sm text-themed-muted">{{ t('terminalPage.description') }}</p>
       </div>
-      <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-        <button 
+      <div class="flex w-full flex-shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <button
           v-if="tabs.length < MAX_TABS"
-          class="btn-primary w-full sm:w-auto justify-center"
+          class="btn-primary w-full justify-center sm:w-auto"
           @click="openInstanceSelector"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1151,7 +1151,7 @@ function handleVisibilityChange() {
         </button>
         <button
           v-if="isMobileDevice"
-          class="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
+          class="btn-secondary w-full justify-center sm:w-auto"
           @click="showSavedCommandsMobile = true"
         >
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1160,40 +1160,40 @@ function handleVisibilityChange() {
           {{ t('terminal.savedCommands.title') }}
         </button>
       </div>
-    </div>
+    </header>
 
     <!-- 终端窗口 -->
-    <div class="rounded-lg overflow-hidden border border-neutral-800 shadow-2xl">
+    <div class="overflow-hidden rounded-xl border border-themed shadow-sm">
       <!-- 工具栏（有标签时才显示） -->
-      <div 
+      <div
         v-if="tabs.length > 0"
-        class="flex items-center justify-between h-10 px-3 bg-[#0a0a0a] border-b border-neutral-800"
+        class="flex items-center justify-between gap-2 border-b border-themed bg-themed-surface px-2 py-1.5 sm:px-3"
       >
         <!-- 左侧：标签栏 -->
-        <div class="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+        <div class="flex flex-1 flex-wrap items-center gap-1 min-w-0">
           <button
             v-for="tab in tabs"
             :key="tab.id"
-            class="group flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap"
-            :class="activeTabId === tab.id 
-              ? 'bg-neutral-800 text-white' 
-              : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+            class="group flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors"
+            :class="activeTabId === tab.id
+              ? 'bg-themed-hover text-themed shadow-sm'
+              : 'text-themed-muted hover:bg-themed-hover hover:text-themed'"
             @click="switchTab(tab.id)"
           >
             <!-- 状态指示点 -->
             <span
-              class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+              class="h-1.5 w-1.5 flex-shrink-0 rounded-full"
               :class="{
-                'bg-emerald-400': tab.status === 'connected',
-                'bg-yellow-400 animate-pulse': tab.status === 'connecting' || tab.status === 'reconnecting',
-                'bg-red-400': tab.status === 'error',
-                'bg-orange-400': tab.status === 'disconnected'
+                'bg-green-500': tab.status === 'connected',
+                'bg-amber-500 animate-pulse': tab.status === 'connecting' || tab.status === 'reconnecting',
+                'bg-rose-500': tab.status === 'error',
+                'bg-neutral-400 dark:bg-neutral-500': tab.status === 'disconnected'
               }"
             />
-            <span class="truncate max-w-[120px]">{{ tab.label }}</span>
+            <span class="max-w-[120px] truncate font-mono">{{ tab.label }}</span>
             <!-- 关闭按钮 -->
             <button
-              class="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-neutral-700 transition-opacity"
+              class="ml-1 rounded p-0.5 text-themed-muted opacity-0 transition-opacity hover:bg-themed-secondary hover:text-themed group-hover:opacity-100"
               @click.stop="closeTab(tab.id)"
             >
               <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1201,11 +1201,11 @@ function handleVisibilityChange() {
               </svg>
             </button>
           </button>
-          
+
           <!-- 新建标签按钮（工具栏内） -->
           <button
             v-if="tabs.length > 0 && tabs.length < MAX_TABS"
-            class="flex items-center justify-center w-6 h-6 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+            class="flex h-6 w-6 items-center justify-center rounded-lg text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
             :title="t('terminalPage.newConnection')"
             @click="openInstanceSelector"
           >
@@ -1220,12 +1220,12 @@ function handleVisibilityChange() {
           <!-- 状态 -->
           <span
             v-if="activeTab"
-            class="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-full"
+            class="hidden items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex"
             :class="{
-              'bg-emerald-500/10 text-emerald-400': activeTab.status === 'connected',
-              'bg-yellow-500/10 text-yellow-400': activeTab.status === 'connecting' || activeTab.status === 'reconnecting',
-              'bg-red-500/10 text-red-400': activeTab.status === 'error',
-              'bg-orange-500/10 text-orange-400 border border-orange-500/30': activeTab.status === 'disconnected'
+              'bg-green-500/10 text-green-600 dark:text-green-400': activeTab.status === 'connected',
+              'bg-amber-500/10 text-amber-600 dark:text-amber-400': activeTab.status === 'connecting' || activeTab.status === 'reconnecting',
+              'bg-rose-500/10 text-rose-600 dark:text-rose-400': activeTab.status === 'error',
+              'bg-themed-secondary text-themed-muted': activeTab.status === 'disconnected'
             }"
           >
             <!-- 断开状态图标 -->
@@ -1236,7 +1236,7 @@ function handleVisibilityChange() {
           </span>
           <span
             v-if="activeTab?.connectionMode"
-            class="hidden sm:inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-neutral-800 text-neutral-300"
+            class="hidden items-center rounded-full bg-themed-secondary px-2.5 py-0.5 text-xs font-medium text-themed-muted sm:inline-flex"
           >
             {{ getConnectionModeLabel(activeTab.connectionMode) }}
           </span>
@@ -1244,7 +1244,7 @@ function handleVisibilityChange() {
           <!-- 字体大小（移动端隐藏，可用手势缩放） -->
           <select
             :value="fontSize"
-            class="hidden sm:block h-6 px-1.5 text-xs bg-neutral-900 border border-neutral-700 rounded text-neutral-300 cursor-pointer hover:border-neutral-500 transition-colors"
+            class="hidden h-7 cursor-pointer rounded-lg border border-themed bg-themed-surface px-1.5 font-mono text-xs text-themed-secondary transition-colors hover:bg-themed-hover sm:block"
             @change="updateFontSize(Number(($event.target as HTMLSelectElement).value))"
           >
             <option v-for="size in fontSizeOptions" :key="size" :value="size">{{ size }}px</option>
@@ -1252,7 +1252,7 @@ function handleVisibilityChange() {
 
           <!-- 清空 -->
           <button
-            class="p-1 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+            class="rounded-lg p-1.5 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
             :title="t('terminal.clear')"
             @click="clearTerminal"
           >
@@ -1263,7 +1263,7 @@ function handleVisibilityChange() {
 
           <!-- 导出日志（移动端隐藏） -->
           <button
-            class="hidden sm:block p-1 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+            class="hidden rounded-lg p-1.5 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed sm:block"
             :title="t('terminal.exportLog')"
             @click="exportTerminalLog"
           >
@@ -1274,7 +1274,7 @@ function handleVisibilityChange() {
 
           <!-- 设置 -->
           <button
-            class="p-1 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+            class="rounded-lg p-1.5 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
             :title="t('terminal.settings')"
             @click="showSettings = true"
           >
@@ -1286,7 +1286,7 @@ function handleVisibilityChange() {
 
           <!-- 帮助（移动端隐藏） -->
           <button
-            class="hidden sm:block p-1 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+            class="hidden rounded-lg p-1.5 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed sm:block"
             :title="t('terminal.help')"
             @click="showHelp = true"
           >
@@ -1298,7 +1298,7 @@ function handleVisibilityChange() {
           <!-- 重连 -->
           <button
             v-if="activeTab && (activeTab.status === 'disconnected' || activeTab.status === 'error')"
-            class="p-1 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+            class="rounded-lg p-1.5 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
             :title="t('terminal.reconnect')"
             @click="reconnectTab(activeTabId)"
           >
@@ -1318,7 +1318,7 @@ function handleVisibilityChange() {
             class="absolute inset-0 flex items-center justify-center bg-[#0a0a0a]"
           >
             <div class="text-center px-6">
-              <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-800 flex items-center justify-center">
+              <div class="w-16 h-16 mx-auto mb-4 rounded-2xl border border-neutral-700 bg-neutral-800/80 flex items-center justify-center">
                 <svg class="w-8 h-8 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -1521,84 +1521,49 @@ function handleVisibilityChange() {
       <Transition name="fade">
         <div v-if="showInstanceSelector" class="fixed inset-0 z-50 flex items-end justify-center p-2 sm:items-center sm:p-4">
           <div
-            class="absolute inset-0 backdrop-blur-sm"
-            :class="themeStore.isDark
-              ? 'bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.08),transparent_28%),radial-gradient(circle_at_bottom,rgba(59,130,246,0.12),transparent_32%),rgba(3,7,18,0.74)]'
-              : 'bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.10),transparent_30%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.08),transparent_34%),rgba(244,246,249,0.82)]'"
+            class="absolute inset-0 bg-black/50 backdrop-blur-sm"
             @click="showInstanceSelector = false"
           />
           <div
-            class="relative flex w-full max-w-4xl flex-col overflow-hidden rounded-[28px] max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100vh-2rem)]"
-            :class="themeStore.isDark
-              ? 'border border-white/10 bg-[linear-gradient(180deg,rgba(38,38,41,0.98),rgba(26,26,29,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.58)]'
-              : 'border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,251,0.98))] shadow-[0_28px_90px_rgba(15,23,42,0.18)]'"
+            class="relative flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-themed bg-themed-surface shadow-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100vh-2rem)]"
           >
-            <div
-              class="relative overflow-hidden px-4 py-4 sm:p-6"
-              :class="themeStore.isDark
-                ? 'border-b border-white/8 bg-gradient-to-br from-stone-800 via-neutral-800 to-slate-900'
-                : 'border-b border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.97)_58%,rgba(241,245,249,0.96)_100%)]'"
-            >
-              <div
-                class="absolute inset-x-0 top-0 h-24"
-                :class="themeStore.isDark
-                  ? 'bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_55%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.14),transparent_50%)]'
-                  : 'bg-[radial-gradient(circle_at_top_left,rgba(148,163,184,0.16),transparent_52%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_48%)]'"
-              />
-              <div class="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div class="border-b border-themed px-4 py-4 sm:p-6">
+              <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                 <div class="space-y-3">
-                  <div
-                    class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium"
-                    :class="themeStore.isDark
-                      ? 'border border-emerald-400/25 bg-emerald-300/10 text-emerald-200'
-                      : 'border border-emerald-500/20 bg-emerald-50 text-emerald-700'"
-                  >
-                    <span class="h-2 w-2 rounded-full bg-emerald-400" />
+                  <div class="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-600 dark:text-green-400">
+                    <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
                     {{ t('terminalPage.runningCount', { count: runningInstances.length }) }}
                   </div>
                   <div>
-                    <h3
-                      class="text-xl font-semibold sm:text-2xl"
-                      :class="themeStore.isDark ? 'text-white' : 'text-slate-900'"
-                    >
+                    <h3 class="text-xl font-semibold tracking-tight text-themed sm:text-2xl">
                       {{ t('terminalPage.selectInstance') }}
                     </h3>
-                    <p class="mt-1 text-sm" :class="themeStore.isDark ? 'text-neutral-300/90' : 'text-slate-600'">
+                    <p class="mt-1 text-sm text-themed-muted">
                       {{ t('terminalPage.selectionHint') }}
                     </p>
                   </div>
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:min-w-[360px]">
-                  <div
-                    class="rounded-2xl p-3 shadow-inner backdrop-blur-sm"
-                    :class="themeStore.isDark
-                      ? 'border border-white/10 bg-white/[0.06] shadow-black/10'
-                      : 'border border-slate-200 bg-white/90 shadow-slate-200/70'"
-                  >
-                    <div class="text-[11px] uppercase tracking-[0.2em]" :class="themeStore.isDark ? 'text-neutral-400' : 'text-slate-500'">
+                  <div class="rounded-xl border border-themed bg-themed-secondary p-3">
+                    <div class="text-[11px] uppercase tracking-[0.18em] text-themed-faint">
                       {{ t('terminalPage.selectedInstance') }}
                     </div>
-                    <div class="mt-2 truncate text-sm font-medium" :class="themeStore.isDark ? 'text-white' : 'text-slate-900'">
+                    <div class="mt-2 truncate text-sm font-medium text-themed">
                       {{ selectedInstance?.name || t('common.notSet') }}
                     </div>
-                    <div class="mt-1 truncate text-xs" :class="themeStore.isDark ? 'text-neutral-300/75' : 'text-slate-500'">
+                    <div class="mt-1 truncate font-mono text-xs text-themed-muted">
                       {{ selectedInstance?.imageName || t('terminalPage.selectInstance') }}
                     </div>
                   </div>
-                  <div
-                    class="rounded-2xl p-3 shadow-inner backdrop-blur-sm"
-                    :class="themeStore.isDark
-                      ? 'border border-white/10 bg-white/[0.06] shadow-black/10'
-                      : 'border border-slate-200 bg-white/90 shadow-slate-200/70'"
-                  >
-                    <div class="text-[11px] uppercase tracking-[0.2em]" :class="themeStore.isDark ? 'text-neutral-400' : 'text-slate-500'">
+                  <div class="rounded-xl border border-themed bg-themed-secondary p-3">
+                    <div class="text-[11px] uppercase tracking-[0.18em] text-themed-faint">
                       {{ t('terminalPage.connect') }}
                     </div>
-                    <div class="mt-2 text-sm font-medium" :class="themeStore.isDark ? 'text-white' : 'text-slate-900'">
+                    <div class="mt-2 text-sm font-medium text-themed">
                       {{ t('terminalPage.directShell') }}
                     </div>
-                    <div class="mt-1 text-xs" :class="themeStore.isDark ? 'text-neutral-300/75' : 'text-slate-500'">
+                    <div class="mt-1 text-xs text-themed-muted">
                       {{ t('terminalPage.directShellHint') }}
                     </div>
                   </div>
@@ -1607,8 +1572,7 @@ function handleVisibilityChange() {
 
               <div class="relative mt-4 sm:mt-5">
                 <svg
-                  class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2"
-                  :class="themeStore.isDark ? 'text-neutral-400' : 'text-slate-400'"
+                  class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-themed-faint"
                   fill="none" viewBox="0 0 24 24" stroke="currentColor"
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1617,18 +1581,12 @@ function handleVisibilityChange() {
                   type="text"
                   :value="instanceSearchQuery"
                   :placeholder="t('terminalPage.searchInstances')"
-                  class="w-full rounded-2xl py-3 pl-11 pr-10 text-sm transition-all focus:outline-none focus:ring-2"
-                  :class="themeStore.isDark
-                    ? 'border border-white/10 bg-white/[0.07] text-white placeholder:text-neutral-400 focus:border-emerald-400/60 focus:ring-emerald-400/20'
-                    : 'border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-emerald-500/50 focus:ring-emerald-500/15'"
+                  class="w-full rounded-xl border border-themed bg-themed-surface py-2.5 pl-10 pr-10 text-sm text-themed transition-colors placeholder:text-themed-faint focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30"
                   @input="handleInstanceSearch(($event.target as HTMLInputElement).value)"
                 >
                 <button
                   v-if="instanceSearchQuery"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 transition-colors"
-                  :class="themeStore.isDark
-                    ? 'text-neutral-400 hover:bg-white/10 hover:text-neutral-100'
-                    : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'"
+                  class="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
                   @click="handleInstanceSearch('')"
                 >
                   <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1641,61 +1599,45 @@ function handleVisibilityChange() {
             <div class="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr),280px]">
               <div class="min-h-0 overflow-y-auto px-4 py-4 sm:p-5">
                 <div v-if="loadingInstances" class="flex items-center justify-center py-20">
-                  <div
-                    class="h-8 w-8 rounded-full border-2 border-t-emerald-400 animate-spin"
-                    :class="themeStore.isDark ? 'border-neutral-700' : 'border-slate-300'"
-                  />
+                  <div class="h-8 w-8 animate-spin rounded-full border-2 border-themed border-t-primary-500" />
                 </div>
-                <div v-else-if="runningInstances.length === 0" class="flex h-full flex-col items-center justify-center text-center px-6 py-20">
-                  <div
-                    class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
-                    :class="themeStore.isDark ? 'border border-white/10 bg-white/[0.05]' : 'border border-slate-200 bg-slate-50'"
-                  >
-                    <svg class="h-8 w-8" :class="themeStore.isDark ? 'text-neutral-500' : 'text-slate-400'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div v-else-if="runningInstances.length === 0" class="flex h-full flex-col items-center justify-center px-6 py-20 text-center">
+                  <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+                    <svg class="h-8 w-8 text-themed-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M12 5l7 7-7 7" />
                     </svg>
                   </div>
-                  <p class="text-base font-medium" :class="themeStore.isDark ? 'text-white' : 'text-slate-900'">{{ t('terminalPage.noRunningInstances') }}</p>
-                  <p class="mt-2 text-sm" :class="themeStore.isDark ? 'text-neutral-400' : 'text-slate-500'">{{ t('terminalPage.noRunningInstancesHint') }}</p>
+                  <p class="text-base font-medium text-themed">{{ t('terminalPage.noRunningInstances') }}</p>
+                  <p class="mt-2 text-sm text-themed-muted">{{ t('terminalPage.noRunningInstancesHint') }}</p>
                 </div>
-                <div v-else-if="filteredRunningInstances.length === 0" class="flex h-full flex-col items-center justify-center text-center px-6 py-20">
-                  <div
-                    class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
-                    :class="themeStore.isDark ? 'border border-white/10 bg-white/[0.05]' : 'border border-slate-200 bg-slate-50'"
-                  >
-                    <svg class="h-8 w-8" :class="themeStore.isDark ? 'text-neutral-500' : 'text-slate-400'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div v-else-if="filteredRunningInstances.length === 0" class="flex h-full flex-col items-center justify-center px-6 py-20 text-center">
+                  <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+                    <svg class="h-8 w-8 text-themed-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </div>
-                  <p class="text-base font-medium" :class="themeStore.isDark ? 'text-white' : 'text-slate-900'">{{ t('terminalPage.noMatchingInstances') }}</p>
-                  <p class="mt-2 text-sm" :class="themeStore.isDark ? 'text-neutral-400' : 'text-slate-500'">{{ t('terminalPage.noMatchingInstancesHint') }}</p>
+                  <p class="text-base font-medium text-themed">{{ t('terminalPage.noMatchingInstances') }}</p>
+                  <p class="mt-2 text-sm text-themed-muted">{{ t('terminalPage.noMatchingInstancesHint') }}</p>
                 </div>
                 <div v-else class="space-y-2.5 sm:space-y-3">
                   <button
                     v-for="instance in paginatedInstances"
                     :key="instance.id"
                     type="button"
-                    class="group w-full rounded-2xl border p-3 sm:p-4 text-left transition-all duration-200 shadow-sm"
+                    class="nimbus-lift group w-full rounded-xl border p-3 text-left shadow-sm sm:p-4"
                     :class="selectedInstanceId === instance.id
-                      ? (themeStore.isDark
-                        ? 'border-emerald-400/70 bg-emerald-400/10 ring-1 ring-emerald-400/35'
-                        : 'border-emerald-500/40 bg-emerald-50 ring-1 ring-emerald-500/20')
-                      : (themeStore.isDark
-                        ? 'border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.08]'
-                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50')"
+                      ? 'border-primary-500 bg-primary-500/5 ring-1 ring-primary-500/30'
+                      : 'border-themed bg-themed-surface hover:border-themed hover:bg-themed-hover'"
                     @click="selectedInstanceId = instance.id"
                   >
                     <div class="flex items-start gap-3 sm:gap-4">
                       <div class="relative flex-shrink-0">
-                        <div
-                          class="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl"
-                          :class="themeStore.isDark ? 'border border-white/10 bg-white/[0.05]' : 'border border-slate-200 bg-slate-50'"
-                        >
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-themed bg-themed-secondary sm:h-12 sm:w-12">
                           <FlagIcon :code="instance.hostCountryCode" class="h-3.5 w-5 sm:h-4 sm:w-6" />
                         </div>
                         <span
-                          class="absolute -bottom-1 -right-1 h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full border-2 bg-emerald-400"
-                          :class="themeStore.isDark ? 'border-[#1f2024]' : 'border-white'"
+                          class="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full border-2 bg-green-500 sm:h-3 sm:w-3"
+                          :class="themeStore.isDark ? 'border-[#171717]' : 'border-white'"
                         />
                       </div>
 
@@ -1703,25 +1645,18 @@ function handleVisibilityChange() {
                         <div class="flex items-start justify-between gap-2">
                           <div class="min-w-0">
                             <div class="flex items-center gap-1.5 sm:gap-2">
-                              <span class="truncate text-sm font-semibold" :class="themeStore.isDark ? 'text-white' : 'text-slate-900'">{{ instance.name }}</span>
-                              <span
-                                class="rounded-full px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] uppercase tracking-[0.14em] sm:tracking-[0.18em]"
-                                :class="themeStore.isDark
-                                  ? 'border border-white/10 bg-white/[0.04] text-neutral-300'
-                                  : 'border border-slate-200 bg-slate-50 text-slate-500'"
-                              >
+                              <span class="truncate text-sm font-semibold text-themed">{{ instance.name }}</span>
+                              <span class="rounded-full border border-themed bg-themed-secondary px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-themed-muted sm:px-2 sm:text-[10px] sm:tracking-[0.18em]">
                                 #{{ instance.id }}
                               </span>
                             </div>
-                            <div class="mt-0.5 sm:mt-1 truncate text-xs sm:text-sm" :class="themeStore.isDark ? 'text-neutral-300/75' : 'text-slate-500'">{{ instance.imageName }}</div>
+                            <div class="mt-0.5 truncate font-mono text-xs text-themed-muted sm:mt-1 sm:text-sm">{{ instance.imageName }}</div>
                           </div>
                           <div
-                            class="mt-0.5 flex h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0 items-center justify-center rounded-full border transition-colors"
+                            class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border transition-colors sm:h-6 sm:w-6"
                             :class="selectedInstanceId === instance.id
-                              ? (themeStore.isDark
-                                ? 'border-emerald-400 bg-emerald-400 text-[#09130d]'
-                                : 'border-emerald-500 bg-emerald-500 text-white')
-                              : (themeStore.isDark ? 'border-white/15 text-transparent' : 'border-slate-300 text-transparent')"
+                              ? 'border-primary-500 bg-primary-500 text-white'
+                              : 'border-themed text-transparent'"
                           >
                             <svg class="h-3 w-3 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -1732,29 +1667,18 @@ function handleVisibilityChange() {
                         <div class="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
                           <span
                             v-if="instance.hostName"
-                            class="rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs leading-5"
-                            :class="themeStore.isDark
-                              ? 'border border-sky-400/20 bg-sky-400/10 text-sky-200'
-                              : 'border border-sky-200 bg-sky-50 text-sky-700'"
+                            class="rounded-full border border-themed bg-themed-secondary px-2 py-0.5 text-[11px] leading-5 text-themed-muted sm:px-2.5 sm:py-1 sm:text-xs"
                           >
                             {{ t('terminalPage.host') }}: {{ instance.hostName }}
                           </span>
                           <span
                             v-if="instance.packageName"
-                            class="rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs leading-5"
-                            :class="themeStore.isDark
-                              ? 'border border-violet-400/20 bg-violet-400/10 text-violet-200'
-                              : 'border border-violet-200 bg-violet-50 text-violet-700'"
+                            class="rounded-full border border-themed bg-themed-secondary px-2 py-0.5 text-[11px] leading-5 text-themed-muted sm:px-2.5 sm:py-1 sm:text-xs"
                           >
                             {{ t('terminalPage.package') }}: {{ instance.packageName }}
                           </span>
-                          <span
-                            class="rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs leading-5"
-                            :class="themeStore.isDark
-                              ? 'border border-white/10 bg-white/[0.04] text-neutral-300/80'
-                              : 'border border-slate-200 bg-slate-50 text-slate-600'"
-                          >
-                            {{ t('terminalPage.statusRunning') }}
+                          <span class="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] font-medium leading-5 text-green-600 dark:text-green-400 sm:px-2.5 sm:py-1 sm:text-xs">
+                            <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80" />{{ t('terminalPage.statusRunning') }}
                           </span>
                         </div>
                       </div>
@@ -1764,37 +1688,22 @@ function handleVisibilityChange() {
 
                 <div
                   v-if="filteredRunningInstances.length > instancePageSize"
-                  class="mt-4 flex items-center justify-between rounded-2xl border px-3.5 sm:px-4 py-2.5 sm:py-3"
-                  :class="themeStore.isDark ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-slate-50/90'"
+                  class="mt-4 flex items-center justify-between rounded-xl border border-themed bg-themed-secondary px-3.5 py-2.5 sm:px-4 sm:py-3"
                 >
-                  <span class="text-xs" :class="themeStore.isDark ? 'text-neutral-500' : 'text-slate-500'">
+                  <span class="font-mono text-xs text-themed-muted">
                     {{ (instancePage - 1) * instancePageSize + 1 }}-{{ Math.min(instancePage * instancePageSize, filteredRunningInstances.length) }} / {{ filteredRunningInstances.length }}
                   </span>
                   <div class="flex items-center gap-2">
                     <button
-                      class="rounded-xl border px-3 py-1.5 text-xs transition-colors"
-                      :class="instancePage <= 1
-                        ? (themeStore.isDark
-                          ? 'border-white/5 text-neutral-600 cursor-not-allowed'
-                          : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed')
-                        : (themeStore.isDark
-                          ? 'border-white/10 text-neutral-200 hover:border-white/20 hover:bg-white/[0.05]'
-                          : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-100')"
+                      class="rounded-lg border border-themed bg-themed-surface px-3 py-1.5 text-xs text-themed-secondary transition-colors hover:bg-themed-hover disabled:cursor-not-allowed disabled:opacity-50"
                       :disabled="instancePage <= 1"
                       @click="instancePage--"
                     >
                       {{ t('common.prevPage') }}
                     </button>
-                    <span class="text-sm" :class="themeStore.isDark ? 'text-white' : 'text-slate-900'">{{ instancePage }} / {{ instanceTotalPages }}</span>
+                    <span class="font-mono text-sm text-themed">{{ instancePage }} / {{ instanceTotalPages }}</span>
                     <button
-                      class="rounded-xl border px-3 py-1.5 text-xs transition-colors"
-                      :class="instancePage >= instanceTotalPages
-                        ? (themeStore.isDark
-                          ? 'border-white/5 text-neutral-600 cursor-not-allowed'
-                          : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed')
-                        : (themeStore.isDark
-                          ? 'border-white/10 text-neutral-200 hover:border-white/20 hover:bg-white/[0.05]'
-                          : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-100')"
+                      class="rounded-lg border border-themed bg-themed-surface px-3 py-1.5 text-xs text-themed-secondary transition-colors hover:bg-themed-hover disabled:cursor-not-allowed disabled:opacity-50"
                       :disabled="instancePage >= instanceTotalPages"
                       @click="instancePage++"
                     >
@@ -1804,87 +1713,61 @@ function handleVisibilityChange() {
                 </div>
               </div>
 
-              <div
-                class="hidden min-h-0 overflow-y-auto p-5 lg:block"
-                :class="themeStore.isDark ? 'border-l border-white/8 bg-white/[0.03]' : 'border-l border-slate-200 bg-slate-50/80'"
-              >
-                <div
-                  class="rounded-2xl p-4"
-                  :class="themeStore.isDark ? 'border border-white/10 bg-white/[0.05]' : 'border border-slate-200 bg-white'"
-                >
-                  <div class="text-[11px] uppercase tracking-[0.2em]" :class="themeStore.isDark ? 'text-neutral-500' : 'text-slate-500'">{{ t('terminalPage.selectedInstance') }}</div>
+              <div class="hidden min-h-0 overflow-y-auto border-l border-themed bg-themed-secondary p-5 lg:block">
+                <div class="rounded-xl border border-themed bg-themed-surface p-4">
+                  <div class="text-[11px] uppercase tracking-[0.18em] text-themed-faint">{{ t('terminalPage.selectedInstance') }}</div>
                   <template v-if="selectedInstance">
                     <div class="mt-4 flex items-start gap-3">
-                      <div
-                        class="flex h-11 w-11 items-center justify-center rounded-2xl"
-                        :class="themeStore.isDark ? 'border border-white/10 bg-white/[0.05]' : 'border border-slate-200 bg-slate-50'"
-                      >
+                      <div class="flex h-11 w-11 items-center justify-center rounded-xl border border-themed bg-themed-secondary">
                         <FlagIcon :code="selectedInstance.hostCountryCode" class="h-4 w-6" />
                       </div>
                       <div class="min-w-0">
-                        <div class="truncate text-sm font-semibold" :class="themeStore.isDark ? 'text-white' : 'text-slate-900'">{{ selectedInstance.name }}</div>
-                        <div class="mt-1 text-xs" :class="themeStore.isDark ? 'text-neutral-300/75' : 'text-slate-500'">{{ selectedInstance.imageName }}</div>
+                        <div class="truncate text-sm font-semibold text-themed">{{ selectedInstance.name }}</div>
+                        <div class="mt-1 font-mono text-xs text-themed-muted">{{ selectedInstance.imageName }}</div>
                       </div>
                     </div>
                     <div class="mt-4 space-y-2 text-sm">
                       <div class="flex items-center justify-between gap-3">
-                        <span :class="themeStore.isDark ? 'text-neutral-500' : 'text-slate-500'">{{ t('terminalPage.host') }}</span>
-                        <span class="truncate text-right" :class="themeStore.isDark ? 'text-neutral-200' : 'text-slate-900'">{{ selectedInstance.hostName || '-' }}</span>
+                        <span class="text-themed-muted">{{ t('terminalPage.host') }}</span>
+                        <span class="truncate text-right text-themed">{{ selectedInstance.hostName || '-' }}</span>
                       </div>
                       <div class="flex items-center justify-between gap-3">
-                        <span :class="themeStore.isDark ? 'text-neutral-500' : 'text-slate-500'">{{ t('terminalPage.package') }}</span>
-                        <span class="truncate text-right" :class="themeStore.isDark ? 'text-neutral-200' : 'text-slate-900'">{{ selectedInstance.packageName || '-' }}</span>
+                        <span class="text-themed-muted">{{ t('terminalPage.package') }}</span>
+                        <span class="truncate text-right text-themed">{{ selectedInstance.packageName || '-' }}</span>
                       </div>
                       <div class="flex items-center justify-between gap-3">
-                        <span :class="themeStore.isDark ? 'text-neutral-500' : 'text-slate-500'">{{ t('terminalPage.instanceId') }}</span>
-                        <span :class="themeStore.isDark ? 'text-neutral-200' : 'text-slate-900'">#{{ selectedInstance.id }}</span>
+                        <span class="text-themed-muted">{{ t('terminalPage.instanceId') }}</span>
+                        <span class="font-mono text-themed">#{{ selectedInstance.id }}</span>
                       </div>
                     </div>
                   </template>
                   <template v-else>
-                    <div
-                      class="mt-4 rounded-2xl border border-dashed px-4 py-10 text-center text-sm"
-                      :class="themeStore.isDark ? 'border-white/10 text-neutral-500' : 'border-slate-200 text-slate-500'"
-                    >
+                    <div class="mt-4 rounded-xl border border-dashed border-themed px-4 py-10 text-center text-sm text-themed-muted">
                       {{ t('terminalPage.selectionHint') }}
                     </div>
                   </template>
                 </div>
 
-                <div
-                  class="mt-4 rounded-2xl p-4 text-sm"
-                  :class="themeStore.isDark ? 'border border-white/10 bg-white/[0.04] text-neutral-300/80' : 'border border-slate-200 bg-white text-slate-600'"
-                >
-                  <div class="font-medium" :class="themeStore.isDark ? 'text-neutral-200' : 'text-slate-900'">{{ t('terminalPage.directShell') }}</div>
+                <div class="mt-4 rounded-xl border border-themed bg-themed-surface p-4 text-sm text-themed-muted">
+                  <div class="font-medium text-themed">{{ t('terminalPage.directShell') }}</div>
                   <p class="mt-2 leading-6">{{ t('terminalPage.directShellHint') }}</p>
                 </div>
               </div>
             </div>
 
-            <div
-              class="flex shrink-0 flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
-              :class="themeStore.isDark
-                ? 'border-t border-white/8 bg-[linear-gradient(180deg,rgba(29,29,32,0.96),rgba(20,20,23,0.98))]'
-                : 'border-t border-slate-200 bg-[linear-gradient(180deg,rgba(250,250,251,0.98),rgba(244,246,249,0.98))]'"
-            >
-              <div class="text-xs" :class="themeStore.isDark ? 'text-neutral-400' : 'text-slate-500'">
+            <div class="flex shrink-0 flex-col gap-3 border-t border-themed bg-themed-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div class="text-xs text-themed-muted">
                 {{ t('terminalPage.runningCount', { count: filteredRunningInstances.length }) }}
               </div>
               <div class="flex gap-3 sm:justify-end">
                 <button
-                  class="flex-1 rounded-xl border px-4 py-2 text-sm font-medium transition-colors sm:flex-none"
-                  :class="themeStore.isDark
-                    ? 'border-white/12 bg-white/[0.04] text-neutral-100 hover:border-white/20 hover:bg-white/[0.08]'
-                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'"
+                  class="btn-secondary flex-1 justify-center sm:flex-none"
                   @click="showInstanceSelector = false"
                 >
                   {{ t('common.cancel') }}
                 </button>
                 <button
-                  class="flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
-                  :class="themeStore.isDark
-                    ? 'bg-white text-neutral-900 hover:bg-neutral-100'
-                    : 'bg-slate-900 text-white hover:bg-slate-800'"
+                  class="btn-primary flex-1 justify-center sm:flex-none"
                   :disabled="!selectedInstanceId"
                   @click="confirmAddInstance"
                 >
@@ -1902,14 +1785,14 @@ function handleVisibilityChange() {
       <Transition name="fade">
         <div
           v-if="showHelp"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
           @click.self="showHelp = false"
         >
-          <div class="bg-themed border border-themed rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-lg font-medium text-themed">{{ t('terminal.helpTitle') }}</h3>
+          <div class="w-full max-w-md rounded-2xl border border-themed bg-themed-surface p-6 shadow-xl">
+            <div class="mb-5 flex items-center justify-between">
+              <h3 class="text-lg font-semibold tracking-tight text-themed">{{ t('terminal.helpTitle') }}</h3>
               <button
-                class="p-1 text-themed-muted hover:text-themed rounded transition-colors"
+                class="rounded-lg p-1.5 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
                 @click="showHelp = false"
               >
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1922,13 +1805,13 @@ function handleVisibilityChange() {
             <div class="mb-4">
               <h4 class="text-sm font-medium text-themed mb-2">{{ t('terminal.helpShortcuts') }}</h4>
               <div class="space-y-1.5 text-sm">
-                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutSearch') }}</span><kbd class="px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded text-themed-muted text-xs">Ctrl+Shift+F</kbd></div>
-                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutCopy') }}</span><kbd class="px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded text-themed-muted text-xs">Ctrl+Shift+C</kbd></div>
-                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutPaste') }}</span><kbd class="px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded text-themed-muted text-xs">Ctrl+Shift+V</kbd></div>
-                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutFontIncrease') }}</span><kbd class="px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded text-themed-muted text-xs">Ctrl++</kbd></div>
-                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutFontDecrease') }}</span><kbd class="px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded text-themed-muted text-xs">Ctrl+-</kbd></div>
-                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutFontReset') }}</span><kbd class="px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded text-themed-muted text-xs">Ctrl+0</kbd></div>
-                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutExport') }}</span><kbd class="px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded text-themed-muted text-xs">Ctrl+Shift+S</kbd></div>
+                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutSearch') }}</span><kbd class="rounded-md border border-themed bg-themed-secondary px-1.5 py-0.5 font-mono text-xs text-themed-secondary">Ctrl+Shift+F</kbd></div>
+                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutCopy') }}</span><kbd class="rounded-md border border-themed bg-themed-secondary px-1.5 py-0.5 font-mono text-xs text-themed-secondary">Ctrl+Shift+C</kbd></div>
+                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutPaste') }}</span><kbd class="rounded-md border border-themed bg-themed-secondary px-1.5 py-0.5 font-mono text-xs text-themed-secondary">Ctrl+Shift+V</kbd></div>
+                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutFontIncrease') }}</span><kbd class="rounded-md border border-themed bg-themed-secondary px-1.5 py-0.5 font-mono text-xs text-themed-secondary">Ctrl++</kbd></div>
+                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutFontDecrease') }}</span><kbd class="rounded-md border border-themed bg-themed-secondary px-1.5 py-0.5 font-mono text-xs text-themed-secondary">Ctrl+-</kbd></div>
+                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutFontReset') }}</span><kbd class="rounded-md border border-themed bg-themed-secondary px-1.5 py-0.5 font-mono text-xs text-themed-secondary">Ctrl+0</kbd></div>
+                <div class="flex justify-between"><span class="text-themed-muted">{{ t('terminal.helpShortcutExport') }}</span><kbd class="rounded-md border border-themed bg-themed-secondary px-1.5 py-0.5 font-mono text-xs text-themed-secondary">Ctrl+Shift+S</kbd></div>
               </div>
             </div>
 
@@ -1973,14 +1856,14 @@ function handleVisibilityChange() {
       <Transition name="fade">
         <div
           v-if="showSettings"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
           @click.self="showSettings = false"
         >
-          <div class="bg-themed border border-themed rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-lg font-medium text-themed">{{ t('terminal.settings') }}</h3>
+          <div class="w-full max-w-md rounded-2xl border border-themed bg-themed-surface p-6 shadow-xl">
+            <div class="mb-5 flex items-center justify-between">
+              <h3 class="text-lg font-semibold tracking-tight text-themed">{{ t('terminal.settings') }}</h3>
               <button
-                class="p-1 text-themed-muted hover:text-themed rounded transition-colors"
+                class="rounded-lg p-1.5 text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
                 @click="showSettings = false"
               >
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1998,7 +1881,7 @@ function handleVisibilityChange() {
                 </div>
                 <button
                   class="relative w-11 h-6 rounded-full transition-colors"
-                  :class="terminalStore.bellEnabled ? 'bg-blue-600' : 'bg-neutral-400 dark:bg-neutral-700'"
+                  :class="terminalStore.bellEnabled ? 'bg-primary-500' : 'bg-neutral-300 dark:bg-neutral-700'"
                   @click="terminalStore.toggleBell()"
                 >
                   <span
@@ -2016,7 +1899,7 @@ function handleVisibilityChange() {
                 </div>
                 <button
                   class="relative w-11 h-6 rounded-full transition-colors"
-                  :class="terminalStore.autoCopyOnSelect ? 'bg-blue-600' : 'bg-neutral-400 dark:bg-neutral-700'"
+                  :class="terminalStore.autoCopyOnSelect ? 'bg-primary-500' : 'bg-neutral-300 dark:bg-neutral-700'"
                   @click="terminalStore.toggleAutoCopy()"
                 >
                   <span
@@ -2034,7 +1917,7 @@ function handleVisibilityChange() {
                 </div>
                 <button
                   class="relative w-11 h-6 rounded-full transition-colors"
-                  :class="terminalStore.linkPreview ? 'bg-blue-600' : 'bg-neutral-400 dark:bg-neutral-700'"
+                  :class="terminalStore.linkPreview ? 'bg-primary-500' : 'bg-neutral-300 dark:bg-neutral-700'"
                   @click="terminalStore.linkPreview = !terminalStore.linkPreview"
                 >
                   <span
@@ -2052,7 +1935,7 @@ function handleVisibilityChange() {
                 </div>
                 <button
                   class="relative w-11 h-6 rounded-full transition-colors"
-                  :class="terminalStore.touchEnabled ? 'bg-blue-600' : 'bg-neutral-400 dark:bg-neutral-700'"
+                  :class="terminalStore.touchEnabled ? 'bg-primary-500' : 'bg-neutral-300 dark:bg-neutral-700'"
                   @click="terminalStore.toggleTouch()"
                 >
                   <span
@@ -2070,7 +1953,7 @@ function handleVisibilityChange() {
                 </div>
                 <select
                   :value="terminalStore.theme"
-                  class="px-2 py-1 text-sm bg-themed border border-themed rounded text-themed"
+                  class="cursor-pointer rounded-lg border border-themed bg-themed-surface px-2.5 py-1.5 text-sm text-themed transition-colors hover:bg-themed-hover"
                   @change="handleThemeChange($event)"
                 >
                   <option value="dark">{{ t('terminal.themeDark') }}</option>
@@ -2084,8 +1967,8 @@ function handleVisibilityChange() {
                 <div class="text-xs text-themed-secondary mb-2">{{ t('terminal.currentStatus') }}</div>
                 <div class="flex items-center gap-4 text-xs text-themed">
                   <span class="flex items-center gap-1">
-                    <span class="w-2 h-2 rounded-full" :class="activeTab?.isWebGLEnabled ? 'bg-emerald-400' : 'bg-yellow-400'" />
-                    {{ activeTab?.isWebGLEnabled ? 'WebGL' : 'Canvas' }}
+                    <span class="h-2 w-2 rounded-full" :class="activeTab?.isWebGLEnabled ? 'bg-green-500' : 'bg-amber-500'" />
+                    <span class="font-mono">{{ activeTab?.isWebGLEnabled ? 'WebGL' : 'Canvas' }}</span>
                   </span>
                   <span v-if="networkLatency.get(activeTabId)">
                     {{ t('terminal.latency') }}: {{ networkLatency.get(activeTabId) }}ms
@@ -2109,6 +1992,23 @@ function handleVisibilityChange() {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.nimbus-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.nimbus-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgb(16 24 40 / 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-lift,
+  .nimbus-lift:hover {
+    transition: none;
+    transform: none;
+  }
 }
 
 .terminal-area {

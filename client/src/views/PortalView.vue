@@ -605,10 +605,24 @@ onMounted(() => {
   letter-spacing: 0.03em;
 }
 .nimbus-eyebrow-dot {
+  position: relative;
   width: 0.4rem;
   height: 0.4rem;
   border-radius: 999px;
   background: var(--kawaii-primary);
+}
+.nimbus-eyebrow-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  border: 1px solid var(--kawaii-primary);
+  opacity: 0;
+  animation: nimbus-eyebrow-ping 2.6s ease-out infinite;
+}
+@keyframes nimbus-eyebrow-ping {
+  0% { transform: scale(0.55); opacity: 0.6; }
+  100% { transform: scale(1.75); opacity: 0; }
 }
 .nimbus-hero-title {
   font-size: clamp(2.375rem, 5vw + 1rem, 3.75rem);
@@ -857,7 +871,7 @@ onMounted(() => {
 }
 .nimbus-feature-card:hover {
   border-color: color-mix(in srgb, var(--kawaii-primary) 35%, var(--kawaii-line));
-  box-shadow: var(--kawaii-shadow);
+  box-shadow: 0 18px 38px -24px color-mix(in srgb, var(--kawaii-primary) 45%, transparent);
 }
 .nimbus-feature-title {
   font-size: 1rem;

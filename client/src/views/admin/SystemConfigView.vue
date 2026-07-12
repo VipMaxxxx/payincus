@@ -773,8 +773,8 @@ async function sendTestEmail() {
         :to="item.path"
         class="min-w-0 rounded-lg border px-3 py-2 text-center text-xs font-medium transition-colors sm:shrink-0 sm:rounded-none sm:border-0 sm:border-b-2 sm:px-4 sm:py-3 sm:text-left sm:text-sm"
         :class="route.path === item.path
-          ? 'border-black bg-themed-secondary text-gray-900 dark:border-white dark:text-white sm:bg-transparent'
-          : 'border-gray-200 text-gray-500 hover:text-gray-700 dark:border-gray-700 dark:hover:text-gray-300 sm:border-transparent'"
+          ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-400 sm:bg-transparent sm:border-primary-500'
+          : 'border-themed text-themed-muted hover:text-themed sm:border-transparent'"
       >
         {{ t(item.labelKey) }}
       </router-link>
@@ -791,14 +791,14 @@ async function sendTestEmail() {
     <!-- Config Form -->
     <div v-else class="space-y-6">
       <div v-if="isPopupAnnouncementTab" class="card p-6">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
           <div>
-            <h3 class="text-themed font-medium">{{ t('admin.system.popupAnnouncement.title') }}</h3>
+            <h3 class="text-themed font-semibold">{{ t('admin.system.popupAnnouncement.title') }}</h3>
             <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.popupAnnouncement.description') }}</p>
           </div>
           <button
             type="button"
-            class="btn-primary text-sm px-4 py-1.5"
+            class="btn-primary text-sm px-4 py-1.5 shrink-0"
             :disabled="!hasPopupAnnouncementChanges || savingPopupAnnouncement || form.popup_announcement.length > 5000"
             @click="savePopupAnnouncement"
           >
@@ -819,7 +819,7 @@ async function sendTestEmail() {
           />
           <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p class="text-xs text-themed-muted">{{ t('admin.system.popupAnnouncement.hint') }}</p>
-            <p class="text-xs" :class="form.popup_announcement.length > 5000 ? 'text-rose-600 dark:text-rose-400' : 'text-themed-muted'">
+            <p class="text-xs tabular-nums" :class="form.popup_announcement.length > 5000 ? 'text-rose-600 dark:text-rose-400' : 'text-themed-muted'">
               {{ form.popup_announcement.length }}/5000
             </p>
           </div>
@@ -827,14 +827,14 @@ async function sendTestEmail() {
       </div>
 
       <div v-if="isPopupAnnouncementTab" class="card p-6">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
           <div>
-            <h3 class="text-themed font-medium">{{ t('admin.system.popupAnnouncement.promoTitle') }}</h3>
+            <h3 class="text-themed font-semibold">{{ t('admin.system.popupAnnouncement.promoTitle') }}</h3>
             <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.popupAnnouncement.promoDescription') }}</p>
           </div>
           <button
             type="button"
-            class="btn-primary text-sm px-4 py-1.5"
+            class="btn-primary text-sm px-4 py-1.5 shrink-0"
             :disabled="!hasPopupPromoChanges || savingPopupPromo || form.popup_promo_image_url.length > 1000"
             @click="savePopupPromo"
           >
@@ -852,12 +852,12 @@ async function sendTestEmail() {
                 v-model="form.popup_promo_image_url"
                 type="url"
                 maxlength="1000"
-                class="input w-full"
+                class="input w-full font-mono text-xs"
                 :placeholder="t('admin.system.popupAnnouncement.promoImagePlaceholder')"
               />
               <div class="mt-1 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <p class="text-xs text-themed-muted">{{ t('admin.system.popupAnnouncement.promoImageHint') }}</p>
-                <p class="text-xs" :class="form.popup_promo_image_url.length > 1000 ? 'text-rose-600 dark:text-rose-400' : 'text-themed-muted'">
+                <p class="text-xs tabular-nums" :class="form.popup_promo_image_url.length > 1000 ? 'text-rose-600 dark:text-rose-400' : 'text-themed-muted'">
                   {{ form.popup_promo_image_url.length }}/1000
                 </p>
               </div>
@@ -886,8 +886,8 @@ async function sendTestEmail() {
             </div>
           </div>
 
-          <div class="rounded-lg border border-themed overflow-hidden bg-themed-secondary/30">
-            <div class="max-h-[360px] min-h-[160px] bg-themed-secondary flex items-center justify-center overflow-hidden">
+          <div class="overflow-hidden rounded-xl border border-themed bg-themed-surface shadow-sm">
+            <div class="max-h-[360px] min-h-[160px] flex items-center justify-center overflow-hidden bg-themed-secondary/60">
               <img
                 v-if="form.popup_promo_image_url"
                 :src="form.popup_promo_image_url"
@@ -898,9 +898,9 @@ async function sendTestEmail() {
                 {{ t('admin.system.popupAnnouncement.promoPreviewEmpty') }}
               </div>
             </div>
-            <div class="p-4">
-              <p class="text-xs text-themed-muted">{{ t('admin.system.popupAnnouncement.promoPreview') }}</p>
-              <p class="mt-1 text-sm font-medium text-themed truncate">
+            <div class="border-t border-themed p-4">
+              <p class="text-2xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">{{ t('admin.system.popupAnnouncement.promoPreview') }}</p>
+              <p class="mt-1.5 text-sm font-semibold text-themed truncate">
                 {{ selectedPopupPromoPackage?.name || t('admin.system.popupAnnouncement.promoNoPackage') }}
               </p>
               <button type="button" class="btn-primary w-full mt-3 text-sm" disabled>
@@ -913,14 +913,14 @@ async function sendTestEmail() {
 
       <template v-else>
         <div v-if="isOperationsSection" class="card p-6">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
             <div>
-              <h3 class="text-themed font-medium">平台权限白名单</h3>
+              <h3 class="text-themed font-semibold">平台权限白名单</h3>
               <p class="text-sm text-themed-muted mt-1">配置高风险后台能力允许操作的管理员 UID。多个 UID 用英文逗号分隔，环境变量会作为兜底白名单合并生效。</p>
             </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasPlatformPermissionChanges || savingPlatformPermissions"
               @click="savePlatformPermissions"
             >
@@ -931,36 +931,36 @@ async function sendTestEmail() {
           <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">OTA 更新管理员 UID</label>
-              <input v-model="form.system_update_allowed_admin_ids" type="text" class="input" placeholder="1,2,3" />
+              <input v-model="form.system_update_allowed_admin_ids" type="text" class="input font-mono" placeholder="1,2,3" />
               <p class="text-xs text-themed-muted">控制版本检查后的在线更新、回滚等高风险操作。留空时仅 admin 用户名可操作。</p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">礼品卡管理员 UID</label>
-              <input v-model="form.payincus_gift_card_admin_ids" type="text" class="input" placeholder="1,2,3" />
+              <input v-model="form.payincus_gift_card_admin_ids" type="text" class="input font-mono" placeholder="1,2,3" />
               <p class="text-xs text-themed-muted">生产环境建议必须配置；未在白名单内的管理员不能生成、禁用或删除礼品卡。</p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">扩展中心管理员 UID</label>
-              <input v-model="form.plugin_manager_allowed_admin_ids" type="text" class="input" placeholder="1,2,3" />
+              <input v-model="form.plugin_manager_allowed_admin_ids" type="text" class="input font-mono" placeholder="1,2,3" />
               <p class="text-xs text-themed-muted">控制扩展上传、安装、启停、卸载、事件重放和扩展市场审核。</p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">主题系统管理员 UID</label>
-              <input v-model="form.theme_manager_allowed_admin_ids" type="text" class="input" placeholder="1,2,3" />
+              <input v-model="form.theme_manager_allowed_admin_ids" type="text" class="input font-mono" placeholder="1,2,3" />
               <p class="text-xs text-themed-muted">控制主题上传、安装、启停、卸载和主题市场审核；留空时继承扩展/OTA 白名单。</p>
             </div>
           </div>
         </div>
 
         <div v-if="isOperationsSection" class="card p-6">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
             <div>
-              <h3 class="text-themed font-medium">在线扩展与主题市场</h3>
+              <h3 class="text-themed font-semibold">在线扩展与主题市场</h3>
               <p class="text-sm text-themed-muted mt-1">配置扩展中心和主题系统实时读取的市场目录、可信下载域名，以及审核发布后生成的公开地址。</p>
             </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasMarketConfigChanges || savingMarketConfig"
               @click="saveMarketConfig"
             >
@@ -971,51 +971,51 @@ async function sendTestEmail() {
           <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">扩展市场索引 URL</label>
-              <input v-model="form.plugin_market_index_url" type="url" class="input" placeholder="https://payincus.com/plugin-market/index.json" />
+              <input v-model="form.plugin_market_index_url" type="url" class="input font-mono text-xs" placeholder="https://payincus.com/plugin-market/index.json" />
               <p class="text-xs text-themed-muted">扩展中心市场页会实时读取这个 index.json。</p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">扩展市场公开地址</label>
-              <input v-model="form.plugin_market_public_base_url" type="url" class="input" placeholder="https://payincus.com/plugin-market" />
+              <input v-model="form.plugin_market_public_base_url" type="url" class="input font-mono text-xs" placeholder="https://payincus.com/plugin-market" />
               <p class="text-xs text-themed-muted">审核发布扩展市场 index.json 时生成 manifest URL 使用。</p>
             </div>
             <div class="space-y-2 lg:col-span-2">
               <label class="block text-sm text-themed-secondary">扩展市场可信域名</label>
-              <input v-model="form.plugin_market_trusted_hosts" type="text" class="input" placeholder="payincus.com,github.com,objects.githubusercontent.com" />
+              <input v-model="form.plugin_market_trusted_hosts" type="text" class="input font-mono text-xs" placeholder="payincus.com,github.com,objects.githubusercontent.com" />
               <p class="text-xs text-themed-muted">只有这些 HTTPS 域名下的索引和包允许被读取或安装。</p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">主题市场索引 URL</label>
-              <input v-model="form.theme_market_index_url" type="url" class="input" placeholder="https://payincus.com/theme-market/index.json" />
+              <input v-model="form.theme_market_index_url" type="url" class="input font-mono text-xs" placeholder="https://payincus.com/theme-market/index.json" />
               <p class="text-xs text-themed-muted">主题市场页会实时读取这个 index.json。</p>
             </div>
             <div class="space-y-2">
               <label class="block text-sm text-themed-secondary">主题市场公开地址</label>
-              <input v-model="form.theme_market_public_base_url" type="url" class="input" placeholder="https://payincus.com/theme-market" />
+              <input v-model="form.theme_market_public_base_url" type="url" class="input font-mono text-xs" placeholder="https://payincus.com/theme-market" />
               <p class="text-xs text-themed-muted">审核发布主题市场 index.json 时生成 manifest URL 使用。</p>
             </div>
             <div class="space-y-2 lg:col-span-2">
               <label class="block text-sm text-themed-secondary">主题市场可信域名</label>
-              <input v-model="form.theme_market_trusted_hosts" type="text" class="input" placeholder="payincus.com,github.com,objects.githubusercontent.com" />
+              <input v-model="form.theme_market_trusted_hosts" type="text" class="input font-mono text-xs" placeholder="payincus.com,github.com,objects.githubusercontent.com" />
               <p class="text-xs text-themed-muted">主题包、manifest 和预览资源必须来自可信 HTTPS 域名。</p>
             </div>
             <div class="space-y-2 lg:col-span-2">
               <label class="block text-sm text-themed-secondary">第三方扩展提交公开基础地址</label>
-              <input v-model="form.plugin_submission_public_base_url" type="url" class="input" placeholder="https://pay.payincus.com" />
+              <input v-model="form.plugin_submission_public_base_url" type="url" class="input font-mono text-xs" placeholder="https://pay.payincus.com" />
               <p class="text-xs text-themed-muted">第三方上传扩展包后，返回给开发者的 packageUrl/manifestUrl 会使用这个基础地址；留空时使用站点地址。</p>
             </div>
           </div>
         </div>
 
         <div v-if="isOperationsSection" class="card p-6">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
             <div>
-              <h3 class="text-themed font-medium">扩展数据备份</h3>
+              <h3 class="text-themed font-semibold">扩展数据备份</h3>
               <p class="text-sm text-themed-muted mt-1">控制扩展 storage 的定时归档策略。修改开关或周期后，后端进程需要重启才会重新安排定时器；保留数量下一轮备份会读取最新值。</p>
             </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasPluginBackupChanges || savingPluginBackup"
               @click="savePluginBackup"
             >
@@ -1048,7 +1048,7 @@ async function sendTestEmail() {
               <div class="space-y-2">
                 <label class="block text-sm text-themed-secondary">备份周期</label>
                 <div class="relative max-w-xs">
-                  <input v-model.number="form.plugin_storage_backup_interval_hours" type="number" min="1" max="720" step="1" class="input pr-14" />
+                  <input v-model.number="form.plugin_storage_backup_interval_hours" type="number" min="1" max="720" step="1" class="input pr-14 tabular-nums" />
                   <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">小时</span>
                 </div>
                 <p class="text-xs text-themed-muted">范围 1-720 小时。</p>
@@ -1056,7 +1056,7 @@ async function sendTestEmail() {
               <div class="space-y-2">
                 <label class="block text-sm text-themed-secondary">每个扩展保留归档数</label>
                 <div class="relative max-w-xs">
-                  <input v-model.number="form.plugin_storage_backup_retention_count" type="number" min="1" max="365" step="1" class="input pr-12" />
+                  <input v-model.number="form.plugin_storage_backup_retention_count" type="number" min="1" max="365" step="1" class="input pr-12 tabular-nums" />
                   <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">份</span>
                 </div>
                 <p class="text-xs text-themed-muted">范围 1-365 份，超出后自动清理旧归档。</p>
@@ -1067,18 +1067,20 @@ async function sendTestEmail() {
 
         <!-- Registration settings -->
         <div v-if="isAccessSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.registration') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.registration') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.registrationDesc') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasRegistrationChanges || savingRegistration"
               @click="saveRegistration"
             >
               {{ savingRegistration ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.registrationDesc') }}</p>
 
           <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50 mb-4">
             <div class="flex-1">
@@ -1147,18 +1149,20 @@ async function sendTestEmail() {
         </div>
 
         <div v-if="isAccessSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.affRates.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.affRates.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.affRates.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasAffRateChanges || savingAffRates"
               @click="saveAffRates"
             >
               {{ savingAffRates ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.affRates.description') }}</p>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-2">
@@ -1169,7 +1173,7 @@ async function sendTestEmail() {
                 min="0"
                 :max="MAX_AFF_COMMISSION_RATE"
                 step="0.01"
-                class="input"
+                class="input tabular-nums"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.affRates.commissionRateHint') }}</p>
             </div>
@@ -1181,7 +1185,7 @@ async function sendTestEmail() {
                 min="0"
                 :max="MAX_AFF_DISCOUNT_RATE"
                 step="0.01"
-                class="input"
+                class="input tabular-nums"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.affRates.discountRateHint') }}</p>
             </div>
@@ -1189,18 +1193,20 @@ async function sendTestEmail() {
         </div>
 
         <div v-if="isAccessSection" class="card p-6">
-          <div class="flex items-center justify-between gap-4 mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.vipBenefits.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.vipBenefits.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.vipBenefits.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasVipBenefitsChanges || savingVipBenefits"
               @click="saveVipBenefits"
             >
               {{ savingVipBenefits ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.vipBenefits.description') }}</p>
 
           <div class="space-y-3">
             <div
@@ -1208,7 +1214,7 @@ async function sendTestEmail() {
               :key="level"
               class="grid grid-cols-1 gap-3 rounded-lg bg-themed-secondary/50 p-4 md:grid-cols-4 md:items-end"
             >
-              <div class="text-sm font-medium text-themed">VIP {{ level }}</div>
+              <div class="inline-flex w-fit items-center rounded-md bg-primary-500/10 px-2 py-1 text-xs font-semibold font-mono tabular-nums text-primary-600 dark:text-primary-400">VIP {{ level }}</div>
               <label class="space-y-1 text-sm text-themed-secondary">
                 <span>{{ t('admin.system.vipBenefits.orderDiscount') }}</span>
                 <input
@@ -1217,7 +1223,7 @@ async function sendTestEmail() {
                   min="0"
                   max="100"
                   step="0.01"
-                  class="input"
+                  class="input tabular-nums"
                 />
               </label>
               <label class="space-y-1 text-sm text-themed-secondary">
@@ -1228,7 +1234,7 @@ async function sendTestEmail() {
                   min="0"
                   max="100"
                   step="0.01"
-                  class="input"
+                  class="input tabular-nums"
                 />
               </label>
               <label class="space-y-1 text-sm text-themed-secondary">
@@ -1239,7 +1245,7 @@ async function sendTestEmail() {
                   min="0"
                   max="100"
                   step="0.01"
-                  class="input"
+                  class="input tabular-nums"
                 />
               </label>
             </div>
@@ -1248,18 +1254,20 @@ async function sendTestEmail() {
         </div>
 
         <div v-if="isAccessSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">邀请码生成定价</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">邀请码生成定价</h3>
+              <p class="text-sm text-themed-muted mt-1">配置普通用户生成一个邀请码需要消耗的资源。当前支持余额和积分，价格保存为可扩展的成本项列表。</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasInvitePricingChanges || savingInvitePricing"
               @click="saveInvitePricing"
             >
               {{ savingInvitePricing ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">配置普通用户生成一个邀请码需要消耗的资源。当前支持余额和积分，价格保存为可扩展的成本项列表。</p>
 
           <div class="grid gap-4 lg:grid-cols-2">
             <div
@@ -1302,7 +1310,7 @@ async function sendTestEmail() {
                     type="number"
                     min="0"
                     :step="option.resource === 'balance' ? '0.01' : '1'"
-                    class="input"
+                    class="input tabular-nums"
                     :class="option.resource === 'balance' ? 'pl-8' : ''"
                   />
                 </div>
@@ -1319,7 +1327,7 @@ async function sendTestEmail() {
                 min="0"
                 max="3650"
                 step="1"
-                class="input pr-12"
+                class="input pr-12 tabular-nums"
               />
               <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">天</span>
             </div>
@@ -1328,18 +1336,20 @@ async function sendTestEmail() {
         </div>
 
         <div v-if="isHostingSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.hostingFeature.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.hostingFeature.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.hostingFeature.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasHostingFeatureChanges || savingHostingFeature"
               @click="saveHostingFeature"
             >
               {{ savingHostingFeature ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.hostingFeature.description') }}</p>
 
           <div class="space-y-4">
             <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50">
@@ -1423,18 +1433,20 @@ async function sendTestEmail() {
 
         <!-- Transfer Settings -->
         <div v-if="isAccessSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.transfer.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.transfer.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.transfer.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasTransferChanges || savingTransfer"
               @click="saveTransfer"
             >
               {{ savingTransfer ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.transfer.description') }}</p>
 
           <div class="space-y-2">
             <label class="block text-sm text-themed-secondary">
@@ -1448,7 +1460,7 @@ async function sendTestEmail() {
                 min="0"
                 :max="MAX_TRANSFER_FEE"
                 step="0.01"
-                class="input pl-8 pr-12"
+                class="input pl-8 pr-12 tabular-nums"
                 placeholder="0.00"
               />
               <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">
@@ -1461,18 +1473,20 @@ async function sendTestEmail() {
 
         <!-- Footer Contact Settings -->
         <div v-if="isBrandSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.footerLinks.title') || '底部联系方式' }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.footerLinks.title') || '底部联系方式' }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.footerLinks.description') || '配置侧边栏底部的邮箱按钮' }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasFooterLinkChanges || savingFooterLinks"
               @click="saveFooterLinks"
             >
               {{ savingFooterLinks ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.footerLinks.description') || '配置侧边栏底部的邮箱按钮' }}</p>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-2">
@@ -1482,7 +1496,7 @@ async function sendTestEmail() {
               <input
                 v-model="form.footer_contact_email"
                 type="text"
-                class="input"
+                class="input font-mono"
                 :placeholder="t('admin.system.footerLinks.emailPlaceholder') || 'support@example.com 或 mailto:support@example.com'"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.footerLinks.emailDesc') || '留空则隐藏邮箱按钮；支持填写邮箱地址或完整 mailto: 链接。' }}</p>
@@ -1492,18 +1506,20 @@ async function sendTestEmail() {
 
         <!-- Brand Settings -->
         <div v-if="isBrandSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.brand.title') || '品牌设置' }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.brand.title') || '品牌设置' }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.brand.description') || '配置站点顶部、登录页、SEO 等位置使用的系统名称与 Logo。留空则使用默认值。' }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasBrandChanges || savingBrand"
               @click="saveBrand"
             >
               {{ savingBrand ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.brand.description') || '配置站点顶部、登录页、SEO 等位置使用的系统名称与 Logo。留空则使用默认值。' }}</p>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-2">
@@ -1536,7 +1552,7 @@ async function sendTestEmail() {
               <input
                 v-model="form.brand_logo_url"
                 type="text"
-                class="input"
+                class="input font-mono"
                 placeholder="/incudal_logo.webp"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.brand.logoDesc') || '支持 http(s) 图片地址或站点内绝对路径。' }}</p>
@@ -1546,18 +1562,20 @@ async function sendTestEmail() {
 
         <!-- Free Site Settings -->
         <div v-if="isHostingSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.freeSite.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.freeSite.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.freeSite.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasFreeSiteChanges || savingFreeSite"
               @click="saveFreeSite"
             >
               {{ savingFreeSite ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.freeSite.description') }}</p>
 
           <div class="space-y-4">
             <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50">
@@ -1642,7 +1660,7 @@ async function sendTestEmail() {
                       type="number"
                       min="0"
                       step="0.01"
-                      class="input pl-8"
+                      class="input pl-8 tabular-nums"
                       placeholder="0.00"
                       :disabled="!form.free_site_mode || !form.free_site_register_gift_enabled"
                     />
@@ -1659,7 +1677,7 @@ async function sendTestEmail() {
                     type="number"
                     min="0"
                     step="1"
-                    class="input"
+                    class="input tabular-nums"
                     placeholder="0"
                     :disabled="!form.free_site_mode || !form.free_site_register_gift_enabled"
                   />
@@ -1676,18 +1694,20 @@ async function sendTestEmail() {
 
         <!-- Ticket Settings -->
         <div v-if="isTicketSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.ticket.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.ticket.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.ticket.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasTicketChanges || savingTicket"
               @click="saveTicket"
             >
               {{ savingTicket ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.ticket.description') }}</p>
 
           <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50">
             <div class="flex-1">
@@ -1749,7 +1769,7 @@ async function sendTestEmail() {
                 type="number"
                 min="1"
                 step="1"
-                class="input"
+                class="input tabular-nums"
                 :disabled="!form.ticket_auto_close_enabled"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.ticket.autoCloseHoursDesc') }}</p>
@@ -1759,18 +1779,20 @@ async function sendTestEmail() {
 
         <!-- Ticket Image Settings -->
         <div v-if="isTicketSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.ticketImages.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.ticketImages.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.ticketImages.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasTicketImageChanges || savingTicketImages"
               @click="saveTicketImages"
             >
               {{ savingTicketImages ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.ticketImages.description') }}</p>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-2">
@@ -1780,7 +1802,7 @@ async function sendTestEmail() {
               <input
                 v-model="form.ticket_image_lsky_base_url"
                 type="text"
-                class="input"
+                class="input font-mono"
                 :placeholder="t('admin.system.ticketImages.baseUrlPlaceholder')"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.ticketImages.baseUrlDesc') }}</p>
@@ -1792,7 +1814,7 @@ async function sendTestEmail() {
               <input
                 v-model="form.ticket_image_lsky_token"
                 type="password"
-                class="input"
+                class="input font-mono"
                 :placeholder="t('admin.system.ticketImages.tokenPlaceholder')"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.ticketImages.tokenDesc') }}</p>
@@ -1814,7 +1836,7 @@ async function sendTestEmail() {
               <input
                 v-model="form.ticket_image_lsky_target_id"
                 type="text"
-                class="input"
+                class="input font-mono"
                 :placeholder="t('admin.system.ticketImages.targetIdPlaceholder')"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.ticketImages.targetIdDesc') }}</p>
@@ -1824,18 +1846,20 @@ async function sendTestEmail() {
 
         <!-- Default user quota -->
         <div v-if="isAccessSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.defaultQuota') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.defaultQuota') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.defaultQuotaDesc') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasQuotaChanges || savingQuota"
               @click="saveQuota"
             >
               {{ savingQuota ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.defaultQuotaDesc') }}</p>
 
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div v-for="(meta, key) in configMeta" :key="key" class="space-y-2">
@@ -1847,7 +1871,7 @@ async function sendTestEmail() {
                   v-model.number="(form as any)[key]"
                   type="number"
                   min="0"
-                  class="input pr-12"
+                  class="input pr-12 tabular-nums"
                   :placeholder="meta.label"
                 />
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-themed-muted">
@@ -1861,18 +1885,20 @@ async function sendTestEmail() {
 
         <!-- Turnstile Settings -->
         <div v-if="isSecuritySection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.turnstile.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.turnstile.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.turnstile.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasTurnstileChanges || savingTurnstile"
               @click="saveTurnstile"
             >
               {{ savingTurnstile ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.turnstile.description') }}</p>
 
           <!-- Enable Toggle -->
           <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50 mb-6">
@@ -1916,7 +1942,7 @@ async function sendTestEmail() {
               <input
                 v-model="form.turnstile_site_key"
                 type="text"
-                class="input"
+                class="input font-mono"
                 :placeholder="t('admin.system.turnstile.siteKeyPlaceholder')"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.turnstile.siteKeyDesc') }}</p>
@@ -1928,7 +1954,7 @@ async function sendTestEmail() {
               <input
                 v-model="form.turnstile_secret_key"
                 type="password"
-                class="input"
+                class="input font-mono"
                 :placeholder="t('admin.system.turnstile.secretKeyPlaceholder')"
               />
               <p class="text-xs text-themed-muted">{{ t('admin.system.turnstile.secretKeyDesc') }}</p>
@@ -1953,18 +1979,20 @@ async function sendTestEmail() {
 
         <!-- Avatar API Settings -->
         <div v-if="isBrandSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.avatar.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.avatar.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.avatar.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasAvatarChanges || savingAvatar"
               @click="saveAvatar"
             >
               {{ savingAvatar ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.avatar.description') }}</p>
 
           <div class="space-y-2">
             <label class="block text-sm text-themed-secondary">
@@ -1973,7 +2001,7 @@ async function sendTestEmail() {
             <input
               v-model="form.avatar_api_base"
               type="text"
-              class="input"
+              class="input font-mono"
               placeholder="https://api.dicebear.com/9.x"
             />
             <p class="text-xs text-themed-muted">{{ t('admin.system.avatar.apiBaseDesc') }}</p>
@@ -1997,18 +2025,20 @@ async function sendTestEmail() {
 
         <!-- SMTP Email Settings -->
         <div v-if="isMailSection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.smtp.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.smtp.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.smtp.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasSmtpChanges || savingSmtp"
               @click="saveSmtp"
             >
               {{ savingSmtp ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.smtp.description') }}</p>
 
           <!-- Enable Toggle -->
           <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50 mb-6">
@@ -2052,7 +2082,7 @@ async function sendTestEmail() {
               <input
                 v-model="form.smtp_host"
                 type="text"
-                class="input"
+                class="input font-mono"
                 :placeholder="t('admin.system.smtp.hostPlaceholder')"
               />
             </div>
@@ -2063,7 +2093,7 @@ async function sendTestEmail() {
               <input
                 v-model.number="form.smtp_port"
                 type="number"
-                class="input"
+                class="input tabular-nums"
                 placeholder="587"
               />
             </div>
@@ -2187,18 +2217,20 @@ async function sendTestEmail() {
 
         <!-- Email Domain Whitelist Settings -->
         <div v-if="isSecuritySection" class="card p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-themed font-medium">{{ t('admin.system.emailDomain.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <h3 class="text-themed font-semibold">{{ t('admin.system.emailDomain.title') }}</h3>
+              <p class="text-sm text-themed-muted mt-1">{{ t('admin.system.emailDomain.description') }}</p>
+            </div>
             <button
               type="button"
-              class="btn-primary text-sm px-4 py-1.5"
+              class="btn-primary text-sm px-4 py-1.5 shrink-0"
               :disabled="!hasEmailDomainChanges || savingEmailDomain"
               @click="saveEmailDomain"
             >
               {{ savingEmailDomain ? t('admin.system.saving') : t('admin.system.save') }}
             </button>
           </div>
-          <p class="text-sm text-themed-muted mb-6">{{ t('admin.system.emailDomain.description') }}</p>
 
           <!-- Enable Toggle -->
           <div class="flex items-center justify-between p-4 rounded-lg bg-themed-secondary/50 mb-6">
@@ -2258,13 +2290,38 @@ async function sendTestEmail() {
     </div>
     <!-- Notes -->
     <div v-if="isAccessSection" class="card p-6">
-      <h3 class="text-themed font-medium mb-4">{{ t('admin.system.notes') }}</h3>
-      <div class="space-y-2 text-sm text-themed-secondary">
-        <p>• {{ t('admin.system.note1') }}</p>
-        <p>• {{ t('admin.system.note2') }}</p>
-        <p>• {{ t('admin.system.note3') }}</p>
-        <p>• {{ t('admin.system.note4') }}</p>
+      <h3 class="text-themed font-semibold mb-4">{{ t('admin.system.notes') }}</h3>
+      <div class="space-y-2.5 text-sm text-themed-secondary">
+        <p class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary-500"></span>{{ t('admin.system.note1') }}</p>
+        <p class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary-500"></span>{{ t('admin.system.note2') }}</p>
+        <p class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary-500"></span>{{ t('admin.system.note3') }}</p>
+        <p class="flex gap-2"><span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary-500"></span>{{ t('admin.system.note4') }}</p>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ============================================================
+   Nimbus console · 系统设置页
+   卡片仅做极轻的边框/阴影响应，靛蓝信号色随 .light/.dark 主题类切换。
+   ============================================================ */
+.card {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.light .card:hover {
+  border-color: #d4d8e2;
+  box-shadow: 0 6px 20px -14px rgb(15 23 42 / 0.18);
+}
+
+.dark .card:hover {
+  border-color: #2a303b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}
+</style>

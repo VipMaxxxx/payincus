@@ -334,8 +334,8 @@ function formatAmount() {
 </script>
 
 <template>
-  <div id="billing" class="card p-5">
-    <h2 class="text-sm font-medium text-themed-secondary mb-4">{{ $t('profile.billing.title') }}</h2>
+  <div id="billing" class="card nimbus-section">
+    <h2 class="nimbus-section-title mb-5">{{ $t('profile.billing.title') }}</h2>
     
     <!-- 余额显示 -->
     <div v-if="loading" class="animate-pulse">
@@ -344,7 +344,7 @@ function formatAmount() {
     <div v-else class="space-y-4">
       <div class="flex items-center justify-between">
         <div>
-          <div class="text-3xl font-bold text-themed">{{ formatMoney(balance.balance) }}</div>
+          <div class="text-3xl font-bold text-themed tabular-nums tracking-tight">{{ formatMoney(balance.balance) }}</div>
           <div class="text-sm text-themed-muted mt-1">{{ $t('profile.billing.currentBalance') }}</div>
         </div>
         <button class="btn btn-primary" @click="openRechargeModal">
@@ -356,11 +356,11 @@ function formatAmount() {
       <div class="grid grid-cols-2 gap-4 pt-4 border-t border-themed">
         <div>
           <div class="text-sm text-themed-muted">{{ $t('profile.billing.totalRecharge') }}</div>
-          <div class="text-lg font-medium text-green-500">{{ formatMoney(balance.totalRecharge) }}</div>
+          <div class="text-lg font-medium text-green-500 tabular-nums">{{ formatMoney(balance.totalRecharge) }}</div>
         </div>
         <div>
           <div class="text-sm text-themed-muted">{{ $t('profile.billing.totalConsume') }}</div>
-          <div class="text-lg font-medium text-red-500">{{ formatMoney(balance.totalConsume) }}</div>
+          <div class="text-lg font-medium text-red-500 tabular-nums">{{ formatMoney(balance.totalConsume) }}</div>
         </div>
       </div>
 
@@ -394,9 +394,9 @@ function formatAmount() {
               >
                 <div>
                   <div class="text-sm text-themed">{{ getLogTypeName(log.type) }}</div>
-                  <div class="text-xs text-themed-muted">{{ formatDate(log.createdAt) }}</div>
+                  <div class="text-xs text-themed-muted tabular-nums">{{ formatDate(log.createdAt) }}</div>
                 </div>
-                <div :class="log.amount >= 0 ? 'text-green-500' : 'text-red-500'">
+                <div class="tabular-nums" :class="log.amount >= 0 ? 'text-green-500' : 'text-red-500'">
                   {{ log.amount >= 0 ? '+' : '' }}{{ formatMoney(log.amount) }}
                 </div>
               </div>
@@ -410,7 +410,7 @@ function formatAmount() {
                 >
                   {{ $t('common.prev') }}
                 </button>
-                <span class="text-xs text-themed-muted self-center">{{ logsPage }}/{{ logsTotalPages }}</span>
+                <span class="text-xs text-themed-muted self-center tabular-nums">{{ logsPage }}/{{ logsTotalPages }}</span>
                 <button
                   class="btn btn-xs btn-ghost"
                   :disabled="logsPage >= logsTotalPages"
@@ -453,8 +453,8 @@ function formatAmount() {
                 class="flex items-start justify-between gap-3 py-2 border-b border-themed last:border-0"
               >
                 <div class="min-w-0">
-                  <div class="text-sm text-themed">{{ formatMoney(rec.amount) }}</div>
-                  <div class="text-xs text-themed-muted">{{ formatDate(rec.createdAt) }}</div>
+                  <div class="text-sm text-themed tabular-nums">{{ formatMoney(rec.amount) }}</div>
+                  <div class="text-xs text-themed-muted tabular-nums">{{ formatDate(rec.createdAt) }}</div>
                   <div v-if="rec.provider?.name || getRechargeMethodDisplay(rec)" class="text-xs text-themed-muted">
                     {{ rec.provider?.name || '-' }}<span v-if="getRechargeMethodDisplay(rec)"> · {{ getRechargeMethodDisplay(rec) }}</span>
                   </div>
@@ -488,7 +488,7 @@ function formatAmount() {
                 >
                   {{ $t('common.prev') }}
                 </button>
-                <span class="text-xs text-themed-muted self-center">{{ recordsPage }}/{{ recordsTotalPages }}</span>
+                <span class="text-xs text-themed-muted self-center tabular-nums">{{ recordsPage }}/{{ recordsTotalPages }}</span>
                 <button
                   class="btn btn-xs btn-ghost"
                   :disabled="recordsPage >= recordsTotalPages"
@@ -531,8 +531,8 @@ function formatAmount() {
                   v-for="p in providers"
                   :key="p.id"
                   class="p-3 rounded-lg border-2 text-sm transition-colors"
-                  :class="selectedProvider === p.id 
-                    ? 'border-blue-500 bg-blue-500/10' 
+                  :class="selectedProvider === p.id
+                    ? 'border-primary-500 bg-primary-500/10'
                     : 'border-themed hover:border-gray-400'"
                   @click="selectedProvider = p.id; selectedPaymentMethod = ''"
                 >
@@ -550,7 +550,7 @@ function formatAmount() {
                   :key="method"
                   class="p-2 rounded-lg border-2 text-xs transition-colors flex items-center justify-center gap-1"
                   :class="selectedPaymentMethod === method || (!selectedPaymentMethod && selectedProviderInfo.methods[0] === method)
-                    ? 'border-blue-500 bg-blue-500/10' 
+                    ? 'border-primary-500 bg-primary-500/10'
                     : 'border-themed hover:border-gray-400'"
                   @click="selectedPaymentMethod = method"
                 >
@@ -586,15 +586,15 @@ function formatAmount() {
                 step="0.01"
                 @blur="formatAmount"
               />
-              <div v-if="selectedProviderInfo" class="text-xs text-themed-muted mt-1">
-                {{ $t('profile.billing.amountRange') }}: 
+              <div v-if="selectedProviderInfo" class="text-xs text-themed-muted mt-1 tabular-nums">
+                {{ $t('profile.billing.amountRange') }}:
                 {{ selectedProviderInfo.minAmount.toFixed(2) }} - 
                 {{ selectedProviderInfo.maxAmount ? selectedProviderInfo.maxAmount.toFixed(2) : $t('common.unlimited') }}
               </div>
             </div>
 
             <!-- 费用预览 -->
-            <div v-if="selectedProviderInfo && selectedRechargeFee > 0" class="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">
+            <div v-if="selectedProviderInfo && selectedRechargeFee > 0" class="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400 tabular-nums">
               <div>
                 {{ $t('profile.billing.feeNote') }}:
                 <span v-if="selectedFeeConfig.feeRate > 0" class="font-medium">{{ (selectedFeeConfig.feeRate * 100).toFixed(2) }}%</span>
@@ -615,13 +615,13 @@ function formatAmount() {
                 id="agree-terms-billing"
                 v-model="agreedToTerms"
                 type="checkbox"
-                class="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-transparent"
+                class="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 bg-transparent"
               />
               <label for="agree-terms-billing" class="text-xs text-themed-muted leading-relaxed">
                 {{ $t('auth.tos.agreePrefix') }}
                 <button
                   type="button"
-                  class="text-blue-500 hover:text-blue-400 hover:underline"
+                  class="text-primary-500 hover:text-primary-400 hover:underline"
                   @click="showTermsModal = true"
                 >
                   {{ $t('auth.tos.termsLink') }}
@@ -651,3 +651,17 @@ function formatAmount() {
     />
   </div>
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+</style>

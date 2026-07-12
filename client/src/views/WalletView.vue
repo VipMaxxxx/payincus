@@ -971,10 +971,10 @@ function formatAmount() {
 </script>
 
 <template>
-  <div ref="revealRoot" class="kawaii-page kawaii-wallet-page space-y-5 animate-fade-in">
-    <div data-reveal class="kawaii-dashboard-hero page-header rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0">
+  <div ref="revealRoot" class="space-y-5 animate-fade-in">
+    <div data-reveal class="page-header flex-col gap-4 sm:flex-row sm:items-center sm:gap-0">
       <div>
-        <h1 class="page-title text-lg sm:text-xl">{{ configStore.freeSiteMode ? freeSiteCopy.walletBalanceTab : $t('wallet.title') }}</h1>
+        <h1 class="page-title">{{ configStore.freeSiteMode ? freeSiteCopy.walletBalanceTab : $t('wallet.title') }}</h1>
         <p class="page-description">
           {{ configStore.freeSiteMode ? freeSiteCopy.walletDescription : $t('wallet.description') }}
         </p>
@@ -989,10 +989,10 @@ function formatAmount() {
 
     <ThemeTemplateSlot slot-name="user.wallet.banner" container-class="mb-5 overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
-    <!-- 顶部胶囊 Tabs -->
-    <div data-reveal class="mb-4 flex justify-center overflow-x-auto pb-1 sm:mb-5">
+    <!-- Nimbus 下划线 Tabs -->
+    <div data-reveal class="nimbus-tabs border-b border-themed">
       <div
-        class="kawaii-browse-wrap inline-flex max-w-full min-w-max rounded-full p-1"
+        class="nimbus-tab-scroll -mb-px flex min-w-max gap-1 overflow-x-auto"
         role="tablist"
         :aria-label="$t('wallet.title')"
       >
@@ -1002,8 +1002,10 @@ function formatAmount() {
           type="button"
           role="tab"
           :aria-selected="activeTab === tab.key"
-          class="kawaii-market-pill whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 focus-visible:outline-none sm:px-5"
-          :class="activeTab === tab.key ? 'active' : ''"
+          class="nimbus-tab whitespace-nowrap border-b-2 px-4 py-2.5 text-sm transition-colors focus-visible:outline-none"
+          :class="activeTab === tab.key
+            ? 'border-primary-500 font-semibold text-primary-600 dark:text-primary-300'
+            : 'border-transparent font-medium text-themed-muted hover:text-themed'"
           @click="switchTab(tab.key)"
         >
           {{ tab.label }}
@@ -1013,21 +1015,21 @@ function formatAmount() {
 
     <!-- 账户余额 TAB -->
     <div v-show="activeTab === 'balance'" class="space-y-6">
-      <div data-reveal class="card rounded-[28px] border border-zinc-200/80 bg-white/95 p-6 shadow-[0_24px_80px_-56px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-zinc-950/60 sm:p-8">
+      <div data-reveal class="card nimbus-lift rounded-2xl border border-themed bg-themed-surface p-6 sm:p-8">
         <div v-if="loading" class="animate-pulse space-y-6">
           <div class="h-3 w-24 rounded bg-themed-secondary"></div>
           <div class="h-16 w-64 rounded bg-themed-secondary"></div>
           <div class="grid gap-3 sm:grid-cols-3">
-            <div v-for="i in 3" :key="i" class="h-32 rounded-lg bg-themed-secondary"></div>
+            <div v-for="i in 3" :key="i" class="h-32 rounded-xl bg-themed-secondary"></div>
           </div>
         </div>
         <div v-else>
           <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div class="max-w-3xl">
-              <div class="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+              <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                 {{ configStore.freeSiteMode ? freeSiteCopy.walletCurrentBalance : $t('wallet.currentBalance') }}
               </div>
-              <div class="mt-4 text-5xl font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-6xl">
+              <div class="mt-4 font-mono text-5xl font-semibold figure-hero text-themed tabular-nums sm:text-6xl">
                 {{ formatMoney(balance.balance) }}
               </div>
               <p class="mt-4 max-w-2xl text-sm leading-6 text-themed-muted">
@@ -1040,15 +1042,15 @@ function formatAmount() {
             <div
               v-for="metric in balanceMetrics"
               :key="metric.label"
-              class="rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+              class="nimbus-lift rounded-xl border border-themed bg-themed p-5"
             >
               <div class="flex items-center gap-2">
                 <span class="h-2 w-2 rounded-full" :class="getMetricDotClass(metric.tone)"></span>
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                   {{ metric.label }}
                 </div>
               </div>
-              <div class="mt-4 text-[30px] font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+              <div class="mt-4 font-mono text-[30px] font-semibold figure-stat text-themed tabular-nums">
                 {{ metric.value }}
               </div>
             </div>
@@ -1059,14 +1061,14 @@ function formatAmount() {
 
     <!-- 余额明细 TAB -->
     <div v-show="activeTab === 'logs'" class="space-y-6">
-      <div class="card rounded-[28px] border border-zinc-200/80 bg-white/95 p-6 shadow-[0_24px_80px_-56px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-zinc-950/60 sm:p-7">
+      <div class="card nimbus-lift rounded-2xl border border-themed bg-themed-surface p-6 sm:p-7">
         <div class="flex flex-col gap-6">
           <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div class="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+              <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                 {{ configStore.freeSiteMode ? freeSiteCopy.walletLogsTab : $t('wallet.tabs.logs') }}
               </div>
-              <div class="mt-4 text-4xl font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-5xl">
+              <div class="mt-4 font-mono text-4xl font-semibold figure-hero text-themed tabular-nums sm:text-5xl">
                 {{ logsTotal.toLocaleString() }}
               </div>
               <div class="mt-2 text-sm text-themed-muted">
@@ -1075,10 +1077,10 @@ function formatAmount() {
             </div>
 
             <button
-              class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors"
+              class="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
               :class="showLotteryGiftOnly
-                ? 'border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900'
-                : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:text-zinc-950 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-300 dark:hover:text-white'"
+                ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300'
+                : 'border-themed bg-themed-surface text-themed-secondary hover:border-themed hover:bg-themed-hover hover:text-themed'"
               @click="showLotteryGiftOnly = !showLotteryGiftOnly; logsPage = 1; loadLogs()"
             >
               <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1092,15 +1094,15 @@ function formatAmount() {
             <div
               v-for="metric in logMetrics"
               :key="metric.label"
-              class="rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+              class="nimbus-lift rounded-xl border border-themed bg-themed p-5"
             >
               <div class="flex items-center gap-2">
                 <span class="h-2 w-2 rounded-full" :class="getMetricDotClass(metric.tone)"></span>
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                   {{ metric.label }}
                 </div>
               </div>
-              <div class="mt-4 text-[28px] font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+              <div class="mt-4 font-mono text-[28px] font-semibold figure-stat text-themed tabular-nums">
                 {{ metric.value }}
               </div>
             </div>
@@ -1108,7 +1110,7 @@ function formatAmount() {
         </div>
       </div>
 
-      <div class="card overflow-hidden rounded-[28px] border border-zinc-200/80 bg-white/95 dark:border-white/10 dark:bg-zinc-950/60">
+      <div class="card overflow-hidden rounded-2xl border border-themed bg-themed-surface">
         <div class="border-b border-themed px-5 py-5 sm:px-6">
           <div class="text-base font-semibold text-themed">{{ configStore.freeSiteMode ? freeSiteCopy.walletLogsTab : $t('wallet.tabs.logs') }}</div>
           <div class="mt-1 text-sm text-themed-muted">
@@ -1119,11 +1121,16 @@ function formatAmount() {
         <div v-if="logsLoading" class="p-8 text-center text-themed-muted">
           {{ $t('common.loading') }}...
         </div>
-        <div v-else-if="logs.length === 0" class="p-8 text-center text-themed-muted">
-          {{ $t('wallet.noLogs') }}
+        <div v-else-if="logs.length === 0" class="p-12 text-center">
+          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+            <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <p class="text-themed-secondary">{{ $t('wallet.noLogs') }}</p>
         </div>
         <div v-else>
-          <div class="hidden grid-cols-[minmax(0,1fr)_128px_128px_196px] gap-5 border-b border-themed px-5 py-4 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:grid sm:px-6">
+          <div class="hidden grid-cols-[minmax(0,1fr)_128px_128px_196px] gap-5 border-b border-themed bg-themed-tertiary px-5 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:grid sm:px-6">
             <div>{{ $t('wallet.instanceOrRemark') }}</div>
             <div>{{ $t('wallet.amount') }}</div>
             <div>{{ $t('wallet.balanceAfter') }}</div>
@@ -1134,7 +1141,7 @@ function formatAmount() {
             <div
               v-for="log in logs"
               :key="log.id"
-              class="grid gap-4 px-5 py-5 transition-colors hover:bg-zinc-50/60 dark:hover:bg-white/[0.03] sm:px-6 lg:grid-cols-[minmax(0,1fr)_128px_128px_196px] lg:items-center lg:py-3.5"
+              class="grid gap-4 px-5 py-5 transition-colors hover:bg-themed-hover sm:px-6 lg:grid-cols-[minmax(0,1fr)_128px_128px_196px] lg:items-center lg:py-3.5"
             >
               <div class="min-w-0">
                 <div class="lg:hidden">
@@ -1144,13 +1151,13 @@ function formatAmount() {
                     </span>
                     <button
                       v-if="log.instanceId"
-                      class="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
+                      class="text-sm font-medium text-primary-600 transition-colors hover:underline dark:text-primary-300"
                       @click="router.push(instanceDetailPath(log.instanceId))"
                     >
                       #{{ log.instanceId }}
                     </button>
                   </div>
-                  <div class="mt-3 truncate text-[15px] leading-7 text-zinc-500 dark:text-zinc-400">
+                  <div class="mt-3 truncate text-[15px] leading-7 text-themed-muted">
                     {{ log.remark || '-' }}
                   </div>
                 </div>
@@ -1161,40 +1168,40 @@ function formatAmount() {
                   </span>
                   <button
                     v-if="log.instanceId"
-                    class="shrink-0 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
+                    class="shrink-0 text-sm font-medium text-primary-600 transition-colors hover:underline dark:text-primary-300"
                     @click="router.push(instanceDetailPath(log.instanceId))"
                   >
                     #{{ log.instanceId }}
                   </button>
-                  <span class="min-w-0 truncate text-[15px] leading-6 text-zinc-600 dark:text-zinc-400">
+                  <span class="min-w-0 truncate text-[15px] leading-6 text-themed-secondary">
                     {{ log.remark || '-' }}
                   </span>
                 </div>
               </div>
 
               <div class="flex items-center justify-between gap-3 lg:block">
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                   {{ $t('wallet.amount') }}
                 </div>
-                <div class="text-[15px] font-semibold tracking-normal tabular-nums" :class="getAmountValueClass(log.amount)">
+                <div class="font-mono text-[15px] font-semibold tabular-nums" :class="getAmountValueClass(log.amount)">
                   {{ log.amount >= 0 ? '+' : '-' }}{{ formatMoney(Math.abs(log.amount)) }}
                 </div>
               </div>
 
               <div class="flex items-center justify-between gap-3 lg:block">
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                   {{ $t('wallet.balanceAfter') }}
                 </div>
-                <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+                <div class="font-mono text-[15px] font-medium text-themed tabular-nums">
                   {{ formatMoney(log.balanceAfter) }}
                 </div>
               </div>
 
               <div class="flex items-center justify-between gap-3 lg:block">
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                   {{ $t('wallet.time') }}
                 </div>
-                <div class="text-[15px] leading-6 text-zinc-700 dark:text-zinc-300">
+                <div class="text-[15px] leading-6 text-themed-secondary">
                   {{ formatDate(log.createdAt) }}
                 </div>
               </div>
@@ -1231,14 +1238,14 @@ function formatAmount() {
 
     <!-- 充值记录 TAB -->
     <div v-if="!configStore.freeSiteMode" v-show="activeTab === 'records'" class="space-y-6">
-      <div class="card rounded-[28px] border border-zinc-200/80 bg-white/95 p-6 shadow-[0_24px_80px_-56px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-zinc-950/60 sm:p-7">
+      <div class="card nimbus-lift rounded-2xl border border-themed bg-themed-surface p-6 sm:p-7">
         <div class="flex flex-col gap-6">
           <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div class="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+              <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                 {{ $t('wallet.tabs.records') }}
               </div>
-              <div class="mt-4 text-4xl font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-5xl">
+              <div class="mt-4 font-mono text-4xl font-semibold figure-hero text-themed tabular-nums sm:text-5xl">
                 {{ recordsTotal.toLocaleString() }}
               </div>
               <div class="mt-2 text-sm text-themed-muted">
@@ -1261,15 +1268,15 @@ function formatAmount() {
             <div
               v-for="metric in recordMetrics"
               :key="metric.label"
-              class="rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+              class="nimbus-lift rounded-xl border border-themed bg-themed p-5"
             >
               <div class="flex items-center gap-2">
                 <span class="h-2 w-2 rounded-full" :class="getMetricDotClass(metric.tone)"></span>
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                   {{ metric.label }}
                 </div>
               </div>
-              <div class="mt-4 text-[28px] font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+              <div class="mt-4 font-mono text-[28px] font-semibold figure-stat text-themed tabular-nums">
                 {{ metric.value }}
               </div>
             </div>
@@ -1277,7 +1284,7 @@ function formatAmount() {
         </div>
       </div>
 
-      <div class="card overflow-hidden rounded-[28px] border border-zinc-200/80 bg-white/95 dark:border-white/10 dark:bg-zinc-950/60">
+      <div class="card overflow-hidden rounded-2xl border border-themed bg-themed-surface">
         <div class="border-b border-themed px-5 py-5 sm:px-6">
           <div class="text-base font-semibold text-themed">{{ $t('wallet.tabs.records') }}</div>
           <div class="mt-1 text-sm text-themed-muted">{{ $t('wallet.description') }}</div>
@@ -1286,11 +1293,16 @@ function formatAmount() {
         <div v-if="recordsLoading" class="p-8 text-center text-themed-muted">
           {{ $t('common.loading') }}...
         </div>
-        <div v-else-if="rechargeRecords.length === 0" class="p-8 text-center text-themed-muted">
-          {{ $t('wallet.noRecords') }}
+        <div v-else-if="rechargeRecords.length === 0" class="p-12 text-center">
+          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+            <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+          </div>
+          <p class="text-themed-secondary">{{ $t('wallet.noRecords') }}</p>
         </div>
         <div v-else>
-          <div class="hidden grid-cols-[minmax(0,1fr)_110px_150px_110px_188px_auto] gap-5 border-b border-themed px-5 py-4 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:grid sm:px-6">
+          <div class="hidden grid-cols-[minmax(0,1fr)_110px_150px_110px_188px_auto] gap-5 border-b border-themed bg-themed-tertiary px-5 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:grid sm:px-6">
             <div>{{ $t('wallet.orderNo') }}</div>
             <div>{{ $t('wallet.amount') }}</div>
             <div>{{ $t('wallet.paymentChannel') }}</div>
@@ -1303,18 +1315,18 @@ function formatAmount() {
             <div
               v-for="rec in rechargeRecords"
               :key="rec.id"
-              class="grid gap-4 px-5 py-5 transition-colors hover:bg-zinc-50/60 dark:hover:bg-white/[0.03] sm:px-6 lg:grid-cols-[minmax(0,1fr)_110px_150px_110px_188px_auto] lg:items-center lg:py-3.5"
+              class="grid gap-4 px-5 py-5 transition-colors hover:bg-themed-hover sm:px-6 lg:grid-cols-[minmax(0,1fr)_110px_150px_110px_188px_auto] lg:items-center lg:py-3.5"
             >
               <div class="min-w-0">
                 <div class="lg:hidden">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="truncate text-[15px] font-semibold tracking-normal text-zinc-950 dark:text-zinc-50">{{ rec.orderNo }}</span>
+                    <span class="truncate font-mono text-[15px] font-semibold text-themed">{{ rec.orderNo }}</span>
                   </div>
-                  <div class="mt-2 text-[15px] leading-7 text-zinc-500 dark:text-zinc-400">
+                  <div class="mt-2 text-[15px] leading-7 text-themed-muted">
                     {{ rec.provider?.name || '-' }}
                     <span v-if="getRechargeMethodDisplay(rec)">· {{ getRechargeMethodDisplay(rec) }}</span>
                   </div>
-                  <div v-if="rec.paymentUuid || rec.paymentTxid || rec.completedAt" class="mt-1 break-all text-xs leading-6 text-zinc-500 dark:text-zinc-400">
+                  <div v-if="rec.paymentUuid || rec.paymentTxid || rec.completedAt" class="mt-1 break-all font-mono text-xs leading-6 text-themed-muted">
                     <span v-if="rec.paymentUuid">{{ $t('wallet.paymentUuid') }} {{ rec.paymentUuid }}</span>
                     <span v-if="rec.paymentUuid && (rec.paymentTxid || rec.completedAt)"> · </span>
                     <span v-if="rec.paymentTxid">{{ $t('wallet.paymentTxid') }} {{ rec.paymentTxid }}</span>
@@ -1324,59 +1336,59 @@ function formatAmount() {
                 </div>
 
                 <div class="hidden lg:block">
-                  <span class="block truncate text-[15px] font-semibold tracking-normal text-zinc-950 dark:text-zinc-50">
+                  <span class="block truncate font-mono text-[15px] font-semibold text-themed">
                     {{ rec.orderNo }}
                   </span>
                 </div>
               </div>
 
               <div class="flex items-center justify-between gap-3 lg:block">
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                   {{ $t('wallet.amount') }}
                 </div>
-                <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+                <div class="font-mono text-[15px] font-medium text-themed tabular-nums">
                   {{ formatMoney(rec.amount) }}
                 </div>
-                <div v-if="rec.actualAmount !== null" class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <div v-if="rec.actualAmount !== null" class="mt-1 font-mono text-xs text-themed-muted">
                   {{ $t(getRechargeCreditLabelKey(rec.status)) }} {{ formatMoney(rec.actualAmount) }}
                 </div>
               </div>
 
               <div class="flex items-center justify-between gap-3 lg:block">
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                   {{ $t('wallet.paymentChannel') }}
                 </div>
-                <div class="text-[15px] leading-6 text-zinc-700 dark:text-zinc-300 lg:truncate">
+                <div class="text-[15px] leading-6 text-themed-secondary lg:truncate">
                   {{ rec.provider?.name || '-' }}<span v-if="getRechargeMethodDisplay(rec)"> · {{ getRechargeMethodDisplay(rec) }}</span>
                 </div>
-                <div v-if="rec.paymentUuid" class="mt-1 hidden truncate text-xs text-zinc-500 dark:text-zinc-400 lg:block" :title="rec.paymentUuid">
+                <div v-if="rec.paymentUuid" class="mt-1 hidden truncate font-mono text-xs text-themed-muted lg:block" :title="rec.paymentUuid">
                   {{ $t('wallet.paymentUuid') }} {{ rec.paymentUuid }}
                 </div>
-                <div v-if="rec.paymentTxid" class="mt-1 hidden truncate text-xs text-zinc-500 dark:text-zinc-400 lg:block" :title="rec.paymentTxid">
+                <div v-if="rec.paymentTxid" class="mt-1 hidden truncate font-mono text-xs text-themed-muted lg:block" :title="rec.paymentTxid">
                   {{ $t('wallet.paymentTxid') }} {{ rec.paymentTxid }}
                 </div>
               </div>
 
               <div class="flex items-center justify-between gap-3 lg:block">
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                   {{ $t('wallet.statusLabel') }}
                 </div>
                 <span :class="['inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium', getStatusTagClass(rec.status)]">
                   {{ getStatusName(rec.status) }}
                 </span>
-                <div v-if="getRechargeGatewayStatusText(rec)" class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <div v-if="getRechargeGatewayStatusText(rec)" class="mt-1 text-xs text-themed-muted">
                   {{ getRechargeGatewayStatusText(rec) }}
                 </div>
               </div>
 
               <div class="flex items-center justify-between gap-3 lg:block">
-                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                   {{ $t('wallet.time') }}
                 </div>
-                <div class="text-[15px] leading-6 text-zinc-700 dark:text-zinc-300">
+                <div class="text-[15px] leading-6 text-themed-secondary">
                   {{ formatDate(rec.createdAt) }}
                 </div>
-                <div v-if="rec.completedAt" class="mt-1 hidden text-xs text-zinc-500 dark:text-zinc-400 lg:block">
+                <div v-if="rec.completedAt" class="mt-1 hidden text-xs text-themed-muted lg:block">
                   {{ $t('wallet.completedAt') }} {{ formatDate(rec.completedAt) }}
                 </div>
               </div>
@@ -1445,10 +1457,10 @@ function formatAmount() {
         {{ $t('common.loading') }}...
       </div>
 
-      <div v-else-if="affStatus && !affStatus.activated" class="card rounded-[28px] border border-zinc-200/80 bg-white/95 p-8 text-center shadow-[0_24px_80px_-56px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-zinc-950/60 sm:p-10">
+      <div v-else-if="affStatus && !affStatus.activated" class="card rounded-2xl border border-themed bg-themed-surface p-8 text-center sm:p-10">
         <div>
-          <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-200/80 bg-zinc-50 dark:border-white/10 dark:bg-white/[0.03]">
-            <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-500/10 text-primary-600 dark:text-primary-300">
+            <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
@@ -1463,14 +1475,14 @@ function formatAmount() {
       </div>
 
       <template v-else-if="affStatus && affStatus.activated">
-        <div class="card rounded-[28px] border border-zinc-200/80 bg-white/95 p-6 shadow-[0_24px_80px_-56px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-zinc-950/60 sm:p-8">
+        <div class="card nimbus-lift rounded-2xl border border-themed bg-themed-surface p-6 sm:p-8">
           <div class="flex flex-col gap-6">
             <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div class="min-w-0 flex-1">
-                <div class="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                   {{ $t('aff.affBalance') }}
                 </div>
-                <div class="mt-4 text-5xl font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50 sm:text-6xl">
+                <div class="mt-4 font-mono text-5xl font-semibold figure-hero text-themed tabular-nums sm:text-6xl">
                   {{ formatMoney(affStatus.currentBalance) }}
                 </div>
                 <p class="mt-4 max-w-2xl text-sm leading-6 text-themed-muted">
@@ -1479,7 +1491,7 @@ function formatAmount() {
               </div>
 
               <div class="flex flex-wrap gap-2">
-                <button class="btn btn-ghost" @click="openLeaderboardModal">
+                <button class="btn btn-secondary" @click="openLeaderboardModal">
                   <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
@@ -1499,15 +1511,15 @@ function formatAmount() {
               <div
                 v-for="metric in affMetrics"
                 :key="metric.label"
-                class="rounded-lg border border-zinc-200/80 bg-zinc-50/80 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+                class="nimbus-lift rounded-xl border border-themed bg-themed p-5"
               >
                 <div class="flex items-center gap-2">
                   <span class="h-2 w-2 rounded-full" :class="getMetricDotClass(metric.tone)"></span>
-                  <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">
                     {{ metric.label }}
                   </div>
                 </div>
-                <div class="mt-4 text-[28px] font-semibold tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+                <div class="mt-4 font-mono text-[28px] font-semibold figure-stat text-themed tabular-nums">
                   {{ metric.value }}
                 </div>
               </div>
@@ -1515,7 +1527,7 @@ function formatAmount() {
           </div>
         </div>
 
-        <div class="card overflow-hidden rounded-[28px] border border-zinc-200/80 bg-white/95 dark:border-white/10 dark:bg-zinc-950/60">
+        <div class="card overflow-hidden rounded-2xl border border-themed bg-themed-surface">
           <div class="flex flex-col gap-4 border-b border-themed px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
               <div class="text-base font-semibold text-themed">{{ $t('aff.myCodes') }}</div>
@@ -1534,11 +1546,16 @@ function formatAmount() {
           <div v-if="affCodesLoading" class="p-8 text-center text-themed-muted">
             {{ $t('common.loading') }}...
           </div>
-          <div v-else-if="affCodes.length === 0" class="p-8 text-center text-themed-muted">
-            {{ $t('aff.noCodes') }}
+          <div v-else-if="affCodes.length === 0" class="p-12 text-center">
+            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+              <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+            </div>
+            <p class="text-themed-secondary">{{ $t('aff.noCodes') }}</p>
           </div>
           <div v-else>
-            <div class="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1.25fr)_150px_100px_120px_auto] gap-5 border-b border-themed px-5 py-4 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:grid sm:px-6">
+            <div class="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1.25fr)_150px_100px_120px_auto] gap-5 border-b border-themed bg-themed-tertiary px-5 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:grid sm:px-6">
               <div>{{ $t('aff.code') }}</div>
               <div>{{ $t('aff.plan') }}</div>
               <div>{{ $t('aff.discount') }}/{{ $t('aff.commission') }}</div>
@@ -1551,11 +1568,11 @@ function formatAmount() {
               <div
                 v-for="code in affCodes"
                 :key="code.id"
-                class="grid gap-4 px-5 py-5 transition-colors hover:bg-zinc-50/60 dark:hover:bg-white/[0.03] sm:px-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.25fr)_150px_100px_120px_auto] lg:items-center lg:py-3.5"
+                class="grid gap-4 px-5 py-5 transition-colors hover:bg-themed-hover sm:px-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.25fr)_150px_100px_120px_auto] lg:items-center lg:py-3.5"
               >
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-[15px] font-semibold tracking-normal text-zinc-950 dark:text-zinc-50">{{ code.code }}</span>
+                    <span class="font-mono text-[15px] font-semibold text-themed">{{ code.code }}</span>
                     <button class="text-themed-muted transition-colors hover:text-themed" @click="copyCode(code.code)">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -1570,33 +1587,33 @@ function formatAmount() {
                   </div>
                 </div>
 
-                <div class="text-[15px] leading-6 text-zinc-700 dark:text-zinc-300 lg:truncate">
+                <div class="text-[15px] leading-6 text-themed-secondary lg:truncate">
                   {{ code.isGlobal ? $t('aff.globalCode') : `${code.packageName} / ${code.planName}` }}
                 </div>
 
                 <div class="flex items-center justify-between gap-3 lg:block">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                     {{ $t('aff.discount') }}/{{ $t('aff.commission') }}
                   </div>
-                  <div class="text-[15px] leading-6 text-zinc-700 dark:text-zinc-300">
+                  <div class="font-mono text-[15px] leading-6 text-themed-secondary tabular-nums">
                     {{ (code.discountRate * 100).toFixed(0) }}% / {{ (code.commissionRate * 100).toFixed(0) }}%
                   </div>
                 </div>
 
                 <div class="flex items-center justify-between gap-3 lg:block">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                     {{ $t('aff.usedCount') }}
                   </div>
-                  <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+                  <div class="font-mono text-[15px] font-medium text-themed tabular-nums">
                     {{ code.usedCount.toLocaleString() }}
                   </div>
                 </div>
 
                 <div class="flex items-center justify-between gap-3 lg:block">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                     {{ $t('aff.earnings') }}
                   </div>
-                  <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+                  <div class="font-mono text-[15px] font-medium text-themed tabular-nums">
                     {{ formatMoney(code.totalEarnings) }}
                   </div>
                 </div>
@@ -1624,20 +1641,25 @@ function formatAmount() {
         </div>
 
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.95fr)]">
-          <div class="card overflow-hidden rounded-[28px] border border-zinc-200/80 bg-white/95 dark:border-white/10 dark:bg-zinc-950/60">
+          <div class="card overflow-hidden rounded-2xl border border-themed bg-themed-surface">
             <div class="border-b border-themed px-5 py-5 sm:px-6">
               <div class="text-base font-semibold text-themed">{{ $t('aff.earningsLog') }}</div>
               <div class="mt-1 text-sm text-themed-muted">{{ $t('common.total') }} {{ affLogsTotal }} {{ $t('common.items') }}</div>
             </div>
-            
+
             <div v-if="affLogsLoading" class="p-8 text-center text-themed-muted">
               {{ $t('common.loading') }}...
             </div>
-            <div v-else-if="affLogs.length === 0" class="p-8 text-center text-themed-muted">
-              {{ $t('aff.noLogs') }}
+            <div v-else-if="affLogs.length === 0" class="p-12 text-center">
+              <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+                <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p class="text-themed-secondary">{{ $t('aff.noLogs') }}</p>
             </div>
             <div v-else>
-              <div class="hidden grid-cols-[minmax(0,1fr)_128px_128px_196px] gap-5 border-b border-themed px-5 py-4 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:grid sm:px-6">
+              <div class="hidden grid-cols-[minmax(0,1fr)_128px_128px_196px] gap-5 border-b border-themed bg-themed-tertiary px-5 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:grid sm:px-6">
                 <div>{{ $t('wallet.instanceOrRemark') }}</div>
                 <div>{{ $t('wallet.amount') }}</div>
                 <div>{{ $t('wallet.balanceAfter') }}</div>
@@ -1648,7 +1670,7 @@ function formatAmount() {
                 <div
                   v-for="log in affLogs"
                   :key="log.id"
-                  class="grid gap-4 px-5 py-5 transition-colors hover:bg-zinc-50/60 dark:hover:bg-white/[0.03] sm:px-6 lg:grid-cols-[minmax(0,1fr)_128px_128px_196px] lg:items-center lg:py-3.5"
+                  class="grid gap-4 px-5 py-5 transition-colors hover:bg-themed-hover sm:px-6 lg:grid-cols-[minmax(0,1fr)_128px_128px_196px] lg:items-center lg:py-3.5"
                 >
                   <div class="min-w-0">
                     <div class="lg:hidden">
@@ -1658,16 +1680,16 @@ function formatAmount() {
                         </span>
                         <button
                           v-if="log.instanceId"
-                          class="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
+                          class="text-sm font-medium text-primary-600 transition-colors hover:underline dark:text-primary-300"
                           @click="router.push(instanceDetailPath(log.instanceId))"
                         >
                           #{{ log.instanceId }}
                         </button>
-                        <span v-else-if="log.affCode" class="text-sm text-zinc-500 dark:text-zinc-400">
+                        <span v-else-if="log.affCode" class="font-mono text-sm text-themed-muted">
                           {{ log.affCode }}
                         </span>
                       </div>
-                      <div class="mt-3 truncate text-[15px] leading-7 text-zinc-500 dark:text-zinc-400">
+                      <div class="mt-3 truncate text-[15px] leading-7 text-themed-muted">
                         {{ log.remark || '-' }}
                       </div>
                     </div>
@@ -1678,43 +1700,43 @@ function formatAmount() {
                       </span>
                       <button
                         v-if="log.instanceId"
-                        class="shrink-0 text-sm font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
+                        class="shrink-0 text-sm font-medium text-primary-600 transition-colors hover:underline dark:text-primary-300"
                         @click="router.push(instanceDetailPath(log.instanceId))"
                       >
                         #{{ log.instanceId }}
                       </button>
-                      <span v-else-if="log.affCode" class="shrink-0 text-sm text-zinc-500 dark:text-zinc-400">
+                      <span v-else-if="log.affCode" class="shrink-0 font-mono text-sm text-themed-muted">
                         {{ log.affCode }}
                       </span>
-                      <span class="min-w-0 truncate text-[15px] leading-6 text-zinc-600 dark:text-zinc-400">
+                      <span class="min-w-0 truncate text-[15px] leading-6 text-themed-secondary">
                         {{ log.remark || '-' }}
                       </span>
                     </div>
                   </div>
 
                   <div class="flex items-center justify-between gap-3 lg:block">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                       {{ $t('wallet.amount') }}
                     </div>
-                    <div class="text-[15px] font-semibold tracking-normal tabular-nums" :class="getAmountValueClass(log.amount)">
+                    <div class="font-mono text-[15px] font-semibold tabular-nums" :class="getAmountValueClass(log.amount)">
                       {{ log.amount >= 0 ? '+' : '-' }}{{ formatMoney(Math.abs(log.amount)) }}
                     </div>
                   </div>
 
                   <div class="flex items-center justify-between gap-3 lg:block">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                       {{ $t('wallet.balanceAfter') }}
                     </div>
-                    <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+                    <div class="font-mono text-[15px] font-medium text-themed tabular-nums">
                       {{ formatMoney(log.balanceAfter) }}
                     </div>
                   </div>
 
                   <div class="flex items-center justify-between gap-3 lg:block">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                       {{ $t('wallet.time') }}
                     </div>
-                    <div class="text-[15px] leading-6 text-zinc-700 dark:text-zinc-300">
+                    <div class="text-[15px] leading-6 text-themed-secondary">
                       {{ formatDate(log.createdAt) }}
                     </div>
                   </div>
@@ -1748,20 +1770,25 @@ function formatAmount() {
             </div>
           </div>
 
-          <div class="card overflow-hidden rounded-[28px] border border-zinc-200/80 bg-white/95 dark:border-white/10 dark:bg-zinc-950/60">
+          <div class="card overflow-hidden rounded-2xl border border-themed bg-themed-surface">
             <div class="border-b border-themed px-5 py-5 sm:px-6">
               <div class="text-base font-semibold text-themed">{{ $t('aff.withdrawals') }}</div>
               <div class="mt-1 text-sm text-themed-muted">{{ $t('common.total') }} {{ affWithdrawalsTotal }} {{ $t('common.items') }}</div>
             </div>
-            
+
             <div v-if="affWithdrawalsLoading" class="p-8 text-center text-themed-muted">
               {{ $t('common.loading') }}...
             </div>
-            <div v-else-if="affWithdrawals.length === 0" class="p-8 text-center text-themed-muted">
-              {{ $t('aff.noWithdrawals') }}
+            <div v-else-if="affWithdrawals.length === 0" class="p-12 text-center">
+              <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-themed bg-themed-secondary">
+                <svg class="h-7 w-7 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p class="text-themed-secondary">{{ $t('aff.noWithdrawals') }}</p>
             </div>
             <div v-else>
-              <div class="hidden grid-cols-[120px_110px_180px_minmax(0,1fr)] gap-5 border-b border-themed px-5 py-4 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:grid sm:px-6">
+              <div class="hidden grid-cols-[120px_110px_180px_minmax(0,1fr)] gap-5 border-b border-themed bg-themed-tertiary px-5 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:grid sm:px-6">
                 <div>{{ $t('wallet.amount') }}</div>
                 <div>{{ $t('aff.status') }}</div>
                 <div>{{ $t('aff.requestTime') }}</div>
@@ -1772,19 +1799,19 @@ function formatAmount() {
                 <div
                   v-for="w in affWithdrawals"
                   :key="w.id"
-                  class="grid gap-4 px-5 py-5 transition-colors hover:bg-zinc-50/60 dark:hover:bg-white/[0.03] sm:px-6 lg:grid-cols-[120px_110px_180px_minmax(0,1fr)] lg:items-center lg:py-3.5"
+                  class="grid gap-4 px-5 py-5 transition-colors hover:bg-themed-hover sm:px-6 lg:grid-cols-[120px_110px_180px_minmax(0,1fr)] lg:items-center lg:py-3.5"
                 >
                   <div class="flex items-center justify-between gap-3 lg:block">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                       {{ $t('wallet.amount') }}
                     </div>
-                    <div class="text-[15px] font-medium tracking-normal text-zinc-950 tabular-nums dark:text-zinc-50">
+                    <div class="font-mono text-[15px] font-medium text-themed tabular-nums">
                       {{ formatMoney(w.amount) }}
                     </div>
                   </div>
 
                   <div class="flex items-center justify-between gap-3 lg:block">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                       {{ $t('aff.status') }}
                     </div>
                     <span :class="['inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium', getWithdrawalStatusTagClass(w.status)]">
@@ -1793,15 +1820,15 @@ function formatAmount() {
                   </div>
 
                   <div class="flex items-center justify-between gap-3 lg:block">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400 lg:hidden">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted lg:hidden">
                       {{ $t('aff.requestTime') }}
                     </div>
-                    <div class="text-[15px] leading-6 text-zinc-700 dark:text-zinc-300">
+                    <div class="text-[15px] leading-6 text-themed-secondary">
                       {{ formatDate(w.createdAt) }}
                     </div>
                   </div>
 
-                  <div class="text-[15px] leading-7 text-zinc-500 dark:text-zinc-400 lg:truncate lg:leading-6">
+                  <div class="text-[15px] leading-7 text-themed-muted lg:truncate lg:leading-6">
                     {{ w.rejectReason || '-' }}
                   </div>
                 </div>
@@ -1842,15 +1869,15 @@ function formatAmount() {
       <div v-if="showRechargeModal && !configStore.freeSiteMode" class="modal-overlay" @click.self="showRechargeModal = false">
         <div class="modal-content max-w-md">
           <!-- 头部 -->
-          <div class="modal-header border-b-0 pb-2">
+          <div class="modal-header">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-900 dark:bg-white">
-                <svg class="w-5 h-5 text-white dark:text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500/10 text-primary-600 dark:text-primary-300">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
-                <h3 class="modal-title text-lg">{{ $t('wallet.recharge') }}</h3>
+                <h3 class="modal-title text-base sm:text-lg">{{ $t('wallet.recharge') }}</h3>
                 <p class="text-xs text-themed-muted">{{ $t('wallet.description') }}</p>
               </div>
             </div>
@@ -1860,12 +1887,12 @@ function formatAmount() {
               </svg>
             </button>
           </div>
-          
-          <div class="modal-body space-y-5 pt-4">
+
+          <div class="modal-body space-y-5">
             <!-- 支付渠道选择 -->
             <div>
-              <label class="label text-xs uppercase tracking-wide text-themed-muted mb-2">{{ $t('wallet.paymentMethod') }}</label>
-              <div v-if="providersLoading" class="text-themed-muted text-sm p-4 rounded-lg bg-themed-secondary text-center">
+              <label class="mb-2 block text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('wallet.paymentMethod') }}</label>
+              <div v-if="providersLoading" class="rounded-lg border border-themed bg-themed-secondary p-4 text-center text-sm text-themed-muted">
                 <span class="inline-flex items-center justify-center gap-2">
                   <svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -1874,17 +1901,17 @@ function formatAmount() {
                   {{ $t('common.loading') }}
                 </span>
               </div>
-              <div v-else-if="providers.length === 0" class="text-themed-muted text-sm p-4 rounded-lg bg-themed-secondary text-center">
+              <div v-else-if="providers.length === 0" class="rounded-lg border border-themed bg-themed-secondary p-4 text-center text-sm text-themed-muted">
                 {{ $t('wallet.noProviders') }}
               </div>
               <div v-else class="grid grid-cols-2 gap-3">
                 <button
                   v-for="p in providers"
                   :key="p.id"
-                  class="p-4 rounded-xl border-2 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2"
-                  :class="selectedProvider === p.id 
-                    ? 'border-gray-900 dark:border-white bg-gray-900/5 dark:bg-white/10' 
-                    : 'border-themed hover:border-gray-400 hover:bg-themed-hover'"
+                  class="flex items-center justify-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all duration-200"
+                  :class="selectedProvider === p.id
+                    ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300'
+                    : 'border-themed text-themed hover:border-themed hover:bg-themed-hover'"
                   @click="selectedProvider = p.id; selectedPaymentMethod = ''"
                 >
                   {{ p.name }}
@@ -1894,7 +1921,7 @@ function formatAmount() {
 
             <!-- 支付方式选择 (仅当所选渠道支持多种方式时显示) -->
             <div v-if="selectedProviderInfo && selectedProviderInfo.type !== 'heleket' && selectedProviderInfo.methods && selectedProviderInfo.methods.length > 1">
-              <label class="label text-xs uppercase tracking-wide text-themed-muted mb-2">{{ $t('wallet.paymentMethodType') }}</label>
+              <label class="mb-2 block text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('wallet.paymentMethodType') }}</label>
               <div class="grid grid-cols-2 gap-3">
                 <button
                   v-for="method in selectedProviderInfo.methods"
@@ -1928,32 +1955,32 @@ function formatAmount() {
               </div>
             </div>
 
-            <div v-else-if="selectedProviderInfo?.type === 'heleket'" class="text-xs text-themed-muted rounded-lg bg-themed-secondary px-3 py-2">
+            <div v-else-if="selectedProviderInfo?.type === 'heleket'" class="rounded-lg border border-themed bg-themed-secondary px-3 py-2 text-xs text-themed-muted">
               {{ $t('wallet.heleketSelectionHint') }}
             </div>
 
             <!-- 充值金额 -->
             <div>
-              <label class="label text-xs uppercase tracking-wide text-themed-muted mb-2">{{ $t('wallet.amountLabel') }}</label>
-              <div class="grid grid-cols-4 gap-2 mb-3">
+              <label class="mb-2 block text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('wallet.amountLabel') }}</label>
+              <div class="mb-3 grid grid-cols-4 gap-2">
                 <button
                   v-for="amt in [10, 50, 100, 200]"
                   :key="amt"
-                  class="py-2.5 rounded-lg text-sm font-semibold transition-all duration-200"
-                  :class="rechargeAmount === amt 
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' 
-                    : 'bg-themed-secondary hover:bg-themed-hover text-themed'"
+                  class="rounded-lg border py-2.5 font-mono text-sm font-semibold tabular-nums transition-all duration-200"
+                  :class="rechargeAmount === amt
+                    ? 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-300'
+                    : 'border-themed bg-themed-surface text-themed hover:bg-themed-hover'"
                   @click="rechargeAmount = amt"
                 >
                   ¥{{ amt }}
                 </button>
               </div>
               <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-themed-muted font-medium">¥</span>
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 font-medium text-themed-muted">¥</span>
                 <input
                   v-model.number="rechargeAmount"
                   type="number"
-                  class="input w-full pl-8 text-lg font-semibold"
+                  class="input w-full pl-8 font-mono text-lg font-semibold tabular-nums"
                   :min="selectedProviderInfo?.minAmount || 1"
                   :max="selectedProviderInfo?.maxAmount || undefined"
                   step="0.01"
@@ -1961,12 +1988,12 @@ function formatAmount() {
                   @blur="formatAmount"
                 />
               </div>
-              <div v-if="selectedProviderInfo" class="text-xs text-themed-muted mt-2 flex items-center gap-1">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div v-if="selectedProviderInfo" class="mt-2 flex items-center gap-1 text-xs text-themed-muted">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                {{ $t('wallet.amountRange') }}: 
-                {{ selectedProviderInfo.minAmount.toFixed(2) }} - 
+                {{ $t('wallet.amountRange') }}:
+                {{ selectedProviderInfo.minAmount.toFixed(2) }} -
                 {{ selectedProviderInfo.maxAmount ? selectedProviderInfo.maxAmount.toFixed(2) : $t('common.unlimited') }}
               </div>
             </div>
@@ -1974,24 +2001,24 @@ function formatAmount() {
             <!-- 费用预览 -->
             <div
               v-if="selectedProviderInfo && selectedRechargeFee > 0"
-              class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm"
+              class="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm"
             >
               <div class="flex items-start gap-2 text-amber-600 dark:text-amber-400">
-                <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <div class="min-w-0 space-y-1">
                   <div>
                     {{ $t('wallet.feeNote') }}:
-                    <span v-if="selectedFeeConfig.feeRate > 0" class="font-medium">{{ (selectedFeeConfig.feeRate * 100).toFixed(2) }}%</span>
+                    <span v-if="selectedFeeConfig.feeRate > 0" class="font-mono font-medium tabular-nums">{{ (selectedFeeConfig.feeRate * 100).toFixed(2) }}%</span>
                     <span v-if="selectedFeeConfig.feeRate > 0 && selectedFeeConfig.feeFixed > 0"> + </span>
-                    <span v-if="selectedFeeConfig.feeFixed > 0" class="font-medium">¥{{ selectedFeeConfig.feeFixed.toFixed(2) }}</span>
-                    <span class="font-medium"> = ¥{{ selectedRechargeFee.toFixed(2) }}</span>
+                    <span v-if="selectedFeeConfig.feeFixed > 0" class="font-mono font-medium tabular-nums">¥{{ selectedFeeConfig.feeFixed.toFixed(2) }}</span>
+                    <span class="font-mono font-medium tabular-nums"> = ¥{{ selectedRechargeFee.toFixed(2) }}</span>
                   </div>
                   <div>
                     {{ $t('wallet.payableAmount') }}:
-                    <span class="font-semibold">¥{{ selectedPayableAmount.toFixed(2) }}</span>
-                    <span class="text-themed-muted"> / {{ $t('wallet.actualAmount') }} ¥{{ selectedCreditAmount.toFixed(2) }}</span>
+                    <span class="font-mono font-semibold tabular-nums">¥{{ selectedPayableAmount.toFixed(2) }}</span>
+                    <span class="text-themed-muted"> / {{ $t('wallet.actualAmount') }} <span class="font-mono tabular-nums">¥{{ selectedCreditAmount.toFixed(2) }}</span></span>
                   </div>
                 </div>
               </div>
@@ -2047,7 +2074,7 @@ function formatAmount() {
             </div>
           </div>
           
-          <div class="modal-footer border-t-0 pt-2">
+          <div class="modal-footer">
             <button class="btn btn-ghost" @click="showRechargeModal = false">{{ $t('common.cancel') }}</button>
             <button
               class="btn btn-primary min-w-[120px]"
@@ -2085,22 +2112,22 @@ function formatAmount() {
           </div>
 
           <div class="modal-body space-y-4">
-            <div class="grid gap-3 rounded-lg border border-themed bg-themed-secondary p-4 text-sm sm:grid-cols-2">
+            <div class="grid gap-3 rounded-xl border border-themed bg-themed-secondary p-4 text-sm sm:grid-cols-2">
               <div>
-                <div class="text-themed-muted">{{ $t('wallet.orderNo') }}</div>
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('wallet.orderNo') }}</div>
                 <div class="mt-1 break-all font-mono font-semibold text-themed">{{ manualPaymentInfo.orderNo }}</div>
               </div>
               <div>
-                <div class="text-themed-muted">{{ $t('wallet.payableAmount') }}</div>
-                <div class="mt-1 font-semibold text-themed">¥{{ manualPaymentInfo.payableAmount.toFixed(2) }}</div>
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('wallet.payableAmount') }}</div>
+                <div class="mt-1 font-mono font-semibold text-themed tabular-nums">¥{{ manualPaymentInfo.payableAmount.toFixed(2) }}</div>
               </div>
               <div v-if="manualPaymentInfo.providerName">
-                <div class="text-themed-muted">{{ $t('wallet.paymentChannel') }}</div>
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('wallet.paymentChannel') }}</div>
                 <div class="mt-1 font-semibold text-themed">{{ manualPaymentInfo.providerName }}</div>
               </div>
               <div>
-                <div class="text-themed-muted">{{ $t('wallet.actualAmount') }}</div>
-                <div class="mt-1 font-semibold text-themed">¥{{ (manualPaymentInfo.actualAmount ?? manualPaymentInfo.payableAmount).toFixed(2) }}</div>
+                <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('wallet.actualAmount') }}</div>
+                <div class="mt-1 font-mono font-semibold text-themed tabular-nums">¥{{ (manualPaymentInfo.actualAmount ?? manualPaymentInfo.payableAmount).toFixed(2) }}</div>
               </div>
             </div>
 
@@ -2145,52 +2172,52 @@ function formatAmount() {
               <div v-else-if="affPlans.length === 0" class="p-4 text-center text-themed-muted">
                 {{ $t('aff.noCodes') }}
               </div>
-              <div v-else class="space-y-2 max-h-64 overflow-y-auto">
+              <div v-else class="max-h-64 space-y-2 overflow-y-auto">
                 <!-- 全局优惠码选项 -->
                 <label
-                  class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                  class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors"
                   :class="[
-                    selectedPlanId === -1 
-                      ? 'border-blue-500 bg-blue-500/10' 
-                      : 'border-themed hover:border-gray-400 hover:bg-themed-hover'
+                    selectedPlanId === -1
+                      ? 'border-primary-500 bg-primary-500/10'
+                      : 'border-themed hover:border-themed hover:bg-themed-hover'
                   ]"
                 >
                   <input
                     v-model="selectedPlanId"
                     type="radio"
                     :value="-1"
-                    class="w-4 h-4"
+                    class="h-4 w-4"
                   />
-                  <div class="flex-1 min-w-0">
+                  <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2">
                       <span class="font-medium text-themed">{{ $t('aff.globalCode') }}</span>
-                      <span class="badge badge-xs badge-primary">{{ $t('aff.globalCodeBadge') }}</span>
+                      <span class="badge badge-default text-[10px]">{{ $t('aff.globalCodeBadge') }}</span>
                     </div>
                     <div class="text-xs text-themed-muted">{{ $t('aff.globalCodeHint') }}</div>
                   </div>
                 </label>
-                
+
                 <!-- 分隔线 -->
                 <div v-if="affPlans.length > 0" class="relative py-2">
                   <div class="absolute inset-0 flex items-center">
                     <div class="w-full border-t border-themed"></div>
                   </div>
                   <div class="relative flex justify-center text-xs">
-                    <span class="px-2 bg-themed text-themed-muted">{{ $t('aff.orSelectPlan') }}</span>
+                    <span class="bg-themed px-2 text-themed-muted">{{ $t('aff.orSelectPlan') }}</span>
                   </div>
                 </div>
-                
+
                 <!-- 方案专有码选项 -->
                 <label
                   v-for="plan in affPlans"
                   :key="plan.id"
-                  class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                  class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors"
                   :class="[
-                    plan.hasCode 
-                      ? 'border-themed bg-themed-secondary cursor-not-allowed opacity-50'
-                      : selectedPlanId === plan.id 
-                        ? 'border-blue-500 bg-blue-500/10' 
-                        : 'border-themed hover:border-gray-400 hover:bg-themed-hover'
+                    plan.hasCode
+                      ? 'cursor-not-allowed border-themed bg-themed-secondary opacity-50'
+                      : selectedPlanId === plan.id
+                        ? 'border-primary-500 bg-primary-500/10'
+                        : 'border-themed hover:border-themed hover:bg-themed-hover'
                   ]"
                 >
                   <input
@@ -2198,28 +2225,28 @@ function formatAmount() {
                     type="radio"
                     :value="plan.id"
                     :disabled="plan.hasCode"
-                    class="w-4 h-4"
+                    class="h-4 w-4"
                   />
-                  <div class="flex-1 min-w-0">
+                  <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2">
                       <span class="font-medium text-themed">{{ plan.name }}</span>
                       <span v-if="plan.hasCode" class="text-xs text-themed-muted">({{ $t('aff.alreadyCreated') }})</span>
                     </div>
-                    <div class="text-xs text-themed-muted">{{ plan.packageName }} · ¥{{ (parseFloat(plan.price) / 100).toFixed(2) }}</div>
+                    <div class="text-xs text-themed-muted">{{ plan.packageName }} · <span class="font-mono tabular-nums">¥{{ (parseFloat(plan.price) / 100).toFixed(2) }}</span></div>
                   </div>
                 </label>
               </div>
             </div>
-            
+
             <!-- 固定折扣说明 -->
-            <div class="mt-5 pt-4 border-t border-themed">
+            <div class="mt-5 border-t border-themed pt-4">
               <div class="flex items-center justify-between">
                 <div>
                   <label class="text-sm font-medium text-themed">{{ $t('aff.fixedRate') }}</label>
-                  <p class="text-xs text-themed-muted mt-0.5">{{ $t('aff.fixedRateHint') }}</p>
+                  <p class="mt-0.5 text-xs text-themed-muted">{{ $t('aff.fixedRateHint') }}</p>
                 </div>
                 <div class="text-right">
-                  <div class="text-2xl font-bold text-themed tabular-nums">5%</div>
+                  <div class="font-mono text-2xl font-bold text-themed tabular-nums">5%</div>
                   <div class="text-xs text-themed-muted">{{ $t('aff.discount') }} 5% / {{ $t('aff.commission') }} 5%</div>
                 </div>
               </div>
@@ -2255,29 +2282,29 @@ function formatAmount() {
           
           <div class="modal-body space-y-4">
             <div>
-              <label class="label text-sm mb-1">{{ $t('aff.convertModal.currentBalance') }}</label>
-              <div class="text-2xl font-bold text-themed">¥{{ affStatus?.currentBalance.toFixed(2) || '0.00' }}</div>
+              <label class="mb-1 block text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('aff.convertModal.currentBalance') }}</label>
+              <div class="font-mono text-2xl font-bold text-themed tabular-nums">¥{{ affStatus?.currentBalance.toFixed(2) || '0.00' }}</div>
             </div>
-            
+
             <div>
-              <label class="label text-sm mb-2">{{ $t('aff.convertModal.amount') }}</label>
+              <label class="mb-2 block text-[11px] font-medium uppercase tracking-[0.18em] text-themed-muted">{{ $t('aff.convertModal.amount') }}</label>
               <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-themed-muted font-medium">¥</span>
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 font-medium text-themed-muted">¥</span>
                 <input
                   v-model.number="convertAmount"
                   type="number"
-                  class="input w-full pl-8"
+                  class="input w-full pl-8 font-mono tabular-nums"
                   :max="affStatus?.currentBalance || 0"
                   min="2"
                   step="0.01"
                 />
               </div>
-              <p class="text-xs text-themed-muted mt-1">{{ $t('aff.convertModal.minAmount') }}</p>
+              <p class="mt-1 text-xs text-themed-muted">{{ $t('aff.convertModal.minAmount') }}</p>
             </div>
-            
-            <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-              <div class="flex items-start gap-2 text-amber-600 dark:text-amber-400 text-sm">
-                <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+            <div class="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+              <div class="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400">
+                <svg class="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <span>{{ $t('aff.convertModal.hint') }}</span>
@@ -2332,19 +2359,19 @@ function formatAmount() {
             
             <!-- 榜单列表 -->
             <div v-else class="divide-y divide-themed">
-              <div 
-                v-for="(entry, index) in leaderboard" 
+              <div
+                v-for="(entry, index) in leaderboard"
                 :key="entry.rank"
                 class="flex items-center justify-between px-4 py-3 transition-all duration-300"
                 :class="[
-                  entry.isCurrentUser ? 'bg-blue-500/10 dark:bg-blue-500/20' : 'hover:bg-themed-hover',
+                  entry.isCurrentUser ? 'bg-primary-500/10' : 'hover:bg-themed-hover',
                 ]"
                 :style="{ animationDelay: `${index * 50}ms` }"
               >
                 <div class="flex items-center gap-3">
                   <!-- 排名 -->
-                  <div 
-                    class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                  <div
+                    class="flex h-8 w-8 items-center justify-center rounded-full font-mono text-sm font-bold tabular-nums"
                     :class="getRankStyle(entry.rank)"
                   >
                     <span v-if="entry.rank <= 3">{{ getRankEmoji(entry.rank) }}</span>
@@ -2352,20 +2379,20 @@ function formatAmount() {
                   </div>
                   <!-- 用户名 -->
                   <div class="flex flex-col">
-                    <span 
+                    <span
                       class="font-medium"
-                      :class="entry.isCurrentUser ? 'text-blue-500' : 'text-themed'"
+                      :class="entry.isCurrentUser ? 'text-primary-600 dark:text-primary-300' : 'text-themed'"
                     >
                       {{ entry.username }}
                     </span>
-                    <span v-if="entry.isCurrentUser" class="text-xs text-blue-500">
+                    <span v-if="entry.isCurrentUser" class="text-xs text-primary-600 dark:text-primary-300">
                       {{ $t('aff.leaderboard.you') }}
                     </span>
                   </div>
                 </div>
                 <!-- 收益金额 -->
                 <div class="text-right">
-                  <span class="text-green-500 font-semibold">¥{{ entry.totalEarnings.toFixed(2) }}</span>
+                  <span class="font-mono font-semibold text-green-600 tabular-nums dark:text-green-400">¥{{ entry.totalEarnings.toFixed(2) }}</span>
                 </div>
               </div>
             </div>
@@ -2387,3 +2414,49 @@ function formatAmount() {
     />
   </div>
 </template>
+
+<style scoped>
+/* Nimbus 下划线 Tabs */
+.nimbus-tab {
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+/* Linear 样板：关键 display 数字字距收紧（¥/大数字更紧凑、更“被设计过”） */
+.figure-hero {
+  letter-spacing: -0.04em;
+  font-feature-settings: 'tnum';
+}
+
+.figure-stat {
+  letter-spacing: -0.03em;
+  font-feature-settings: 'tnum';
+}
+
+.nimbus-tab-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nimbus-tab-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 交互卡片的轻微上浮 */
+.nimbus-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.nimbus-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -8px rgba(15, 23, 42, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-tab,
+  .nimbus-lift,
+  .nimbus-lift:hover {
+    transform: none;
+    transition: none;
+  }
+}
+</style>

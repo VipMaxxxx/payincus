@@ -424,7 +424,9 @@ function getInstanceRowClass(): string {
     <header data-reveal class="nimbus-header flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div class="min-w-0">
         <h1 class="truncate text-xl font-semibold tracking-tight text-themed sm:text-2xl">{{ greetingText }}</h1>
-        <p class="mt-1 text-sm text-themed-muted">{{ funnyQuote }}</p>
+        <p class="nimbus-status-line mt-1.5 flex items-center gap-2 text-sm text-themed-muted">
+          <span class="nimbus-live-dot" aria-hidden="true"></span>{{ funnyQuote }}
+        </p>
       </div>
       <div class="flex items-center gap-2">
         <a
@@ -463,8 +465,16 @@ function getInstanceRowClass(): string {
               <path d="M7 7.5h.01M7 16.5h.01" />
             </svg>
           </span>
-          <svg class="nimbus-spark" viewBox="0 0 60 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="0,17 10,15 20,16 30,10 40,12 50,6 60,8" />
+          <svg class="nimbus-spark" viewBox="0 0 60 24" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="nbSpark1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="currentColor" stop-opacity="0.26" />
+                <stop offset="1" stop-color="currentColor" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path class="nimbus-spark-area" d="M0 17L9 15L19 16L28 11L38 13L47 8L57 9L57 24L0 24Z" fill="url(#nbSpark1)" />
+            <path class="nimbus-spark-line" d="M0 17L9 15L19 16L28 11L38 13L47 8L57 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            <circle class="nimbus-spark-dot" cx="57" cy="9" r="2" fill="currentColor" />
           </svg>
         </div>
         <div class="mt-4 nimbus-metric-label">{{ t('dashboard.totalInstances') }}</div>
@@ -483,17 +493,27 @@ function getInstanceRowClass(): string {
               <path d="M3 12h4l2 6 4-13 2 8h6" />
             </svg>
           </span>
-          <svg class="nimbus-spark" viewBox="0 0 60 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="0,18 10,12 20,14 30,8 40,9 50,5 60,3" />
+          <svg class="nimbus-spark" viewBox="0 0 60 24" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="nbSpark2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="currentColor" stop-opacity="0.26" />
+                <stop offset="1" stop-color="currentColor" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path class="nimbus-spark-area" d="M0 18L9 13L19 15L28 9L38 10L47 6L57 4L57 24L0 24Z" fill="url(#nbSpark2)" />
+            <path class="nimbus-spark-line" d="M0 18L9 13L19 15L28 9L38 10L47 6L57 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            <circle class="nimbus-spark-dot" cx="57" cy="4" r="2" fill="currentColor" />
           </svg>
         </div>
         <div class="mt-4 nimbus-metric-label">{{ t('dashboard.runningInstances') }}</div>
         <div class="mt-1 nimbus-metric-value font-mono tabular-nums">{{ stats.running }}</div>
         <div class="mt-1.5 nimbus-metric-delta" :class="stats.running > 0 ? 'nimbus-metric-delta--up' : ''">
-          <svg v-if="stats.running > 0" class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-            <path d="M6 2.5 10 8H2z" />
-          </svg>
-          <span class="font-mono tabular-nums">{{ stats.running }}</span>
+          <span class="nimbus-delta-chip">
+            <svg v-if="stats.running > 0" class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+              <path d="M6 2.5 10 8H2z" />
+            </svg>
+            <span class="font-mono tabular-nums">{{ stats.running }}</span>
+          </span>
           <span class="text-themed-muted">/ {{ stats.total }} {{ t('dashboard.totalInstances') }}</span>
         </div>
       </div>
@@ -507,8 +527,16 @@ function getInstanceRowClass(): string {
               <path d="M3 8V7a2 2 0 0 1 2-2h11" /><path d="M16.5 12.5h.01" />
             </svg>
           </span>
-          <svg class="nimbus-spark" viewBox="0 0 60 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="0,14 10,15 20,11 30,12 40,7 50,9 60,5" />
+          <svg class="nimbus-spark" viewBox="0 0 60 24" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="nbSpark3" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="currentColor" stop-opacity="0.26" />
+                <stop offset="1" stop-color="currentColor" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path class="nimbus-spark-area" d="M0 15L9 16L19 12L28 13L38 8L47 10L57 6L57 24L0 24Z" fill="url(#nbSpark3)" />
+            <path class="nimbus-spark-line" d="M0 15L9 16L19 12L28 13L38 8L47 10L57 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            <circle class="nimbus-spark-dot" cx="57" cy="6" r="2" fill="currentColor" />
           </svg>
         </div>
         <div class="mt-4 nimbus-metric-label">{{ t('dashboard.accountOverview') }}</div>
@@ -527,8 +555,16 @@ function getInstanceRowClass(): string {
               <path d="M12 3.5 14.4 8.6 20 9.4l-4 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4-3.9 5.6-.8z" />
             </svg>
           </span>
-          <svg class="nimbus-spark" viewBox="0 0 60 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="0,16 10,14 20,15 30,11 40,12 50,9 60,10" />
+          <svg class="nimbus-spark" viewBox="0 0 60 24" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="nbSpark4" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="currentColor" stop-opacity="0.26" />
+                <stop offset="1" stop-color="currentColor" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path class="nimbus-spark-area" d="M0 16L9 14L19 15L28 11L38 12L47 9L57 7L57 24L0 24Z" fill="url(#nbSpark4)" />
+            <path class="nimbus-spark-line" d="M0 16L9 14L19 15L28 11L38 12L47 9L57 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            <circle class="nimbus-spark-dot" cx="57" cy="7" r="2" fill="currentColor" />
           </svg>
         </div>
         <div class="mt-4 nimbus-metric-label">{{ t('dashboard.userPoints') }}</div>
@@ -582,8 +618,8 @@ function getInstanceRowClass(): string {
             </div>
           </div>
 
-          <div class="nimbus-bar mt-4">
-            <div class="nimbus-bar-fill" :style="vipProgressStyle"></div>
+          <div class="nimbus-bar nimbus-bar--lg mt-4">
+            <div class="nimbus-bar-fill nimbus-bar-fill--vip" :style="vipProgressStyle"></div>
           </div>
           <div class="mt-2 text-xs text-themed-muted">{{ vipProgressHint }}</div>
 
@@ -616,7 +652,7 @@ function getInstanceRowClass(): string {
                   <div class="text-[11px] text-themed-muted">{{ t('dashboard.vipProgressRemaining') }}</div>
                   <div
                     class="mt-1 truncate text-sm font-semibold font-mono tabular-nums"
-                    :class="condition.matched ? 'nimbus-ok-text' : 'text-themed'"
+                    :class="condition.matched ? 'nimbus-ok-text' : 'nimbus-remaining'"
                   >
                     {{ formatVipProgressRemaining(condition) }}
                   </div>
@@ -678,29 +714,35 @@ function getInstanceRowClass(): string {
         <div class="mt-5 space-y-4">
           <div v-for="item in statusOverviewItems" :key="item.key">
             <div class="flex items-center justify-between text-xs">
-              <span class="text-themed-muted">{{ item.label }}</span>
+              <span class="nimbus-sname text-themed-muted">
+                <span class="nimbus-sdot" :class="item.key === 'running' ? 'nimbus-sdot--ok' : 'nimbus-sdot--faint'"></span>{{ item.label }}
+              </span>
               <span class="font-mono tabular-nums text-themed">{{ item.value }}</span>
             </div>
             <div class="nimbus-bar mt-2">
-              <div class="nimbus-bar-fill" :style="{ width: (stats.total ? Math.round((item.value / stats.total) * 100) : 0) + '%' }"></div>
+              <div class="nimbus-bar-fill" :class="item.key === 'running' ? 'nimbus-bar-fill--ok' : 'nimbus-bar-fill--faint'" :style="{ width: (stats.total ? Math.round((item.value / stats.total) * 100) : 0) + '%' }"></div>
             </div>
           </div>
           <div>
             <div class="flex items-center justify-between text-xs">
-              <span class="text-themed-muted">{{ t('dashboard.containerInstances') }}</span>
+              <span class="nimbus-sname text-themed-muted">
+                <span class="nimbus-sdot nimbus-sdot--accent"></span>{{ t('dashboard.containerInstances') }}
+              </span>
               <span class="font-mono tabular-nums text-themed">{{ instanceTypeStats.container }}</span>
             </div>
             <div class="nimbus-bar mt-2">
-              <div class="nimbus-bar-fill" :style="{ width: (stats.total ? Math.round((instanceTypeStats.container / stats.total) * 100) : 0) + '%' }"></div>
+              <div class="nimbus-bar-fill nimbus-bar-fill--accent" :style="{ width: (stats.total ? Math.round((instanceTypeStats.container / stats.total) * 100) : 0) + '%' }"></div>
             </div>
           </div>
           <div>
             <div class="flex items-center justify-between text-xs">
-              <span class="text-themed-muted">{{ t('dashboard.vmInstances') }}</span>
+              <span class="nimbus-sname text-themed-muted">
+                <span class="nimbus-sdot nimbus-sdot--faint"></span>{{ t('dashboard.vmInstances') }}
+              </span>
               <span class="font-mono tabular-nums text-themed">{{ instanceTypeStats.vm }}</span>
             </div>
             <div class="nimbus-bar mt-2">
-              <div class="nimbus-bar-fill" :style="{ width: (stats.total ? Math.round((instanceTypeStats.vm / stats.total) * 100) : 0) + '%' }"></div>
+              <div class="nimbus-bar-fill nimbus-bar-fill--faint" :style="{ width: (stats.total ? Math.round((instanceTypeStats.vm / stats.total) * 100) : 0) + '%' }"></div>
             </div>
           </div>
         </div>
@@ -849,217 +891,382 @@ function getInstanceRowClass(): string {
 </template>
 <style scoped>
 /* ============================================================
-   Nimbus console · 结构化仪表盘（白底为主 + 单一靛蓝信号色）
+   Nimbus console · Linear 级仪表盘（发丝线 + 柔阴影 + 单一靛蓝信号色）
    颜色全部走 --kawaii-* token，随 .light/.dark 自动明暗切换。
+   本页局部语义变量 --nb-* 统一映射，便于收口质感。
    ============================================================ */
-
-/* --- 卡片外壳 --- */
-.nimbus-card {
-  position: relative;
-  border: 1px solid var(--kawaii-line);
-  border-radius: 14px;
-  box-shadow: var(--kawaii-shadow);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+.nimbus-dashboard {
+  --nb-accent: var(--kawaii-primary);
+  --nb-accent-strong: var(--kawaii-primary-strong);
+  --nb-green: var(--kawaii-mint);
+  --nb-amber: var(--kawaii-amber);
+  --nb-text: var(--kawaii-text);
+  --nb-muted: var(--kawaii-muted);
+  --nb-faint: var(--kawaii-faint);
+  --nb-line: var(--kawaii-line);
+  --nb-line-strong: var(--kawaii-line-strong);
+  --nb-surface: var(--kawaii-surface);
+  --nb-surface-soft: var(--kawaii-surface-soft);
+  --nb-tint: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  --nb-tint-2: color-mix(in srgb, var(--kawaii-primary) 18%, transparent);
+  --nb-glow: color-mix(in srgb, var(--kawaii-primary) 32%, transparent);
+  --nb-green-tint: color-mix(in srgb, var(--kawaii-mint) 15%, transparent);
+  --nb-display: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont,
+    "SF Pro Display", "PingFang SC", "Noto Sans SC", sans-serif;
 }
 
-.nimbus-card--hover:hover {
+/* --- 卡片外壳：发丝线 + 多层柔阴影 --- */
+.nimbus-card {
+  position: relative;
+  border: 1px solid var(--nb-line);
+  border-radius: 14px;
+  background: var(--nb-surface);
+  box-shadow: var(--kawaii-shadow);
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+/* 悬浮上浮 2px + accent 微光（大卡片与指标卡通用） */
+.nimbus-card--hover:hover,
+.nimbus-metric:hover {
   transform: translateY(-2px);
-  border-color: var(--kawaii-line-strong);
-  box-shadow: 0 10px 30px -12px rgb(15 23 42 / 0.22);
+  border-color: color-mix(in srgb, var(--nb-accent) 42%, var(--nb-line));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--nb-accent) 22%, transparent),
+    0 16px 38px -18px var(--nb-glow),
+    0 4px 14px -8px rgb(15 23 42 / 0.14);
 }
 
 /* --- 页头图标按钮 --- */
 .nimbus-icon-btn {
-  color: var(--kawaii-primary);
-  background: color-mix(in srgb, var(--kawaii-primary) 10%, transparent);
+  color: var(--nb-accent);
+  background: var(--nb-tint);
   transition: background 0.18s ease, transform 0.18s ease;
 }
 .nimbus-icon-btn:hover {
-  background: color-mix(in srgb, var(--kawaii-primary) 18%, transparent);
+  background: var(--nb-tint-2);
+  transform: translateY(-1px);
 }
 
-/* --- 指标卡 --- */
+/* --- 页头实时状态行 --- */
+.nimbus-status-line {
+  color: var(--nb-muted);
+}
+.nimbus-live-dot {
+  position: relative;
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--nb-green);
+}
+.nimbus-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-green);
+  opacity: 0;
+  animation: nimbusPing 2.2s ease-out infinite;
+}
+
+/* --- 指标卡：错峰入场 --- */
 .nimbus-metric {
-  animation: nimbusRise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--i, 0) * 70ms);
+  cursor: default;
+  animation: nimbusRise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 80ms);
 }
 
+/* 左上图标块：accent-tint 底 + accent 图标 + 内发丝线 */
 .nimbus-tile-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 11px;
-  color: var(--kawaii-primary);
-  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  color: var(--nb-accent);
+  background: var(--nb-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nb-accent) 10%, transparent);
+  transition: background 0.18s ease;
 }
 .nimbus-tile-icon svg {
-  width: 21px;
-  height: 21px;
+  width: 20px;
+  height: 20px;
+}
+.nimbus-metric:hover .nimbus-tile-icon {
+  background: var(--nb-tint-2);
 }
 
+/* 右上 sparkline：渐变面积 + 折线 draw 入场 + 端点圆点 */
 .nimbus-spark {
-  width: 58px;
-  height: 22px;
-  color: var(--kawaii-primary);
-  opacity: 0.4;
+  width: 60px;
+  height: 24px;
+  color: var(--nb-accent);
   flex-shrink: 0;
+  overflow: visible;
+}
+.nimbus-spark-line {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  animation: nimbusDraw 1.1s 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.nimbus-spark-area {
+  opacity: 0;
+  animation: nimbusFade 0.7s 0.5s ease forwards;
+}
+.nimbus-spark-dot {
+  opacity: 0;
+  animation: nimbusFade 0.35s 1.1s ease forwards;
 }
 
 .nimbus-metric-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  color: var(--kawaii-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--nb-faint);
 }
 
+/* 收紧字距的 display 大数字 */
 .nimbus-metric-value {
-  font-size: 1.75rem;
-  line-height: 1.1;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--kawaii-text);
+  font-family: var(--nb-display);
+  font-size: 1.9rem;
+  line-height: 1.05;
+  font-weight: 640;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  color: var(--nb-text);
 }
 
 .nimbus-metric-delta {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.75rem;
-  color: var(--kawaii-faint);
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  color: var(--nb-muted);
 }
-.nimbus-metric-delta--up {
-  color: var(--kawaii-mint);
+.nimbus-delta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+/* delta 绿色 chip（↑ 运行占比） */
+.nimbus-metric-delta--up .nimbus-delta-chip {
+  padding: 0.05rem 0.42rem 0.05rem 0.3rem;
+  border-radius: 999px;
+  background: var(--nb-green-tint);
+  color: var(--nb-green);
+  font-weight: 600;
+}
+.nimbus-metric-delta--up .nimbus-delta-chip svg {
+  color: var(--nb-green);
 }
 
 /* --- 大标题数字 / 眉标 --- */
 .nimbus-eyebrow {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--kawaii-muted);
+  color: var(--nb-faint);
 }
 
 .nimbus-hero-value {
-  font-size: 2rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  color: var(--kawaii-text);
+  font-family: var(--nb-display);
+  font-size: 2.15rem;
+  font-weight: 660;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  color: var(--nb-text);
 }
 @media (min-width: 640px) {
   .nimbus-hero-value {
-    font-size: 2.25rem;
+    font-size: 2.5rem;
   }
 }
 
-/* --- 内层面板圆角对齐 --- */
+/* --- 内层面板：柔和二级底 --- */
 .nimbus-inner {
+  border: 1px solid var(--nb-line);
   border-radius: 12px;
+  background: var(--nb-surface-soft);
 }
 
-/* --- 进度条（会员成长 / 状态分布），靛蓝填充 --- */
+/* --- 进度条（会员成长 / 状态分布） --- */
 .nimbus-bar {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--kawaii-muted) 16%, transparent);
+  background: color-mix(in srgb, var(--nb-muted) 15%, transparent);
+}
+.nimbus-bar--lg {
+  height: 8px;
 }
 .nimbus-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: var(--kawaii-primary);
-  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  background: var(--nb-accent);
+  transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nimbus-bar-fill--ok {
+  background: var(--nb-green);
+}
+.nimbus-bar-fill--accent {
+  background: var(--nb-accent);
+}
+.nimbus-bar-fill--faint {
+  background: color-mix(in srgb, var(--nb-faint) 75%, transparent);
+}
+/* 会员成长：靛紫渐变 + 流光 shimmer */
+.nimbus-bar-fill--vip {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--nb-accent), var(--nb-accent-strong));
+}
+.nimbus-bar-fill--vip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, #ffffff 55%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: nimbusShimmer 2.6s ease-in-out infinite;
+}
+
+/* 状态行名称 + 圆点 */
+.nimbus-sname {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nimbus-sdot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+.nimbus-sdot--ok {
+  background: var(--nb-green);
+  box-shadow: 0 0 0 3px var(--nb-green-tint);
+}
+.nimbus-sdot--accent {
+  background: var(--nb-accent);
+  box-shadow: 0 0 0 3px var(--nb-tint);
+}
+.nimbus-sdot--faint {
+  background: var(--nb-faint);
 }
 
 .nimbus-pct {
-  color: var(--kawaii-primary-strong);
-  background: color-mix(in srgb, var(--kawaii-primary) 13%, transparent);
+  color: var(--nb-accent-strong);
+  background: var(--nb-tint);
 }
 
 /* 语义 chip：已满足=绿，默认=中性 */
 .nimbus-chip-ok {
-  color: var(--kawaii-mint);
-  background: color-mix(in srgb, var(--kawaii-mint) 15%, transparent);
+  color: var(--nb-green);
+  background: var(--nb-green-tint);
 }
 .nimbus-chip-idle {
-  color: var(--kawaii-muted);
-  background: color-mix(in srgb, var(--kawaii-muted) 12%, transparent);
+  color: var(--nb-muted);
+  background: color-mix(in srgb, var(--nb-muted) 12%, transparent);
 }
 .nimbus-ok-text {
-  color: var(--kawaii-mint);
+  color: var(--nb-green);
+}
+/* 会员进度「还差」用 accent 语义色 */
+.nimbus-remaining {
+  color: var(--nb-accent-strong);
 }
 
 /* --- 链接 / 幽灵按钮 --- */
 .nimbus-link {
-  color: var(--kawaii-primary);
+  color: var(--nb-accent);
   transition: color 0.18s ease;
 }
 .nimbus-link:hover {
-  color: var(--kawaii-primary-strong);
+  color: var(--nb-accent-strong);
 }
 
 .nimbus-ghost-btn {
-  border-color: var(--kawaii-line);
-  color: var(--kawaii-muted);
-  background: var(--kawaii-surface);
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  border-color: var(--nb-line);
+  color: var(--nb-muted);
+  background: var(--nb-surface);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 .nimbus-ghost-btn:hover {
-  color: var(--kawaii-text);
-  border-color: var(--kawaii-line-strong);
-  background: var(--kawaii-surface-soft);
+  color: var(--nb-text);
+  border-color: color-mix(in srgb, var(--nb-accent) 45%, var(--nb-line));
+  background: var(--nb-surface-soft);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--nb-accent) 15%, transparent);
 }
 
 /* --- 面板头/脚分隔线 --- */
 .nimbus-panel-head,
 .nimbus-panel-foot {
-  border-color: var(--kawaii-line);
+  border-color: var(--nb-line);
 }
 
 /* --- 最近实例行 --- */
 .nimbus-row {
+  border-color: var(--nb-line);
   border-radius: 12px !important;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  background: var(--nb-surface);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+    background-color 0.18s ease;
 }
 .nimbus-row:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 22px -14px rgb(15 23 42 / 0.28);
+  border-color: color-mix(in srgb, var(--nb-accent) 40%, var(--nb-line)) !important;
+  background: color-mix(in srgb, var(--nb-accent) 5%, var(--nb-surface));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--nb-accent) 14%, transparent),
+    0 12px 28px -18px var(--nb-glow);
 }
 
 .nimbus-row-name {
   font-weight: 620;
-  color: var(--kawaii-text);
+  letter-spacing: -0.01em;
+  color: var(--nb-text);
 }
 
 .nimbus-row-icon {
-  color: var(--kawaii-muted);
-  background: color-mix(in srgb, var(--kawaii-muted) 12%, transparent);
+  color: var(--nb-muted);
+  background: color-mix(in srgb, var(--nb-muted) 12%, transparent);
   transition: background 0.18s ease, color 0.18s ease;
 }
 .nimbus-row:hover .nimbus-row-icon {
-  color: var(--kawaii-primary);
-  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  color: var(--nb-accent);
+  background: var(--nb-tint);
 }
 
 .nimbus-dot {
-  color: color-mix(in srgb, var(--kawaii-muted) 55%, transparent);
+  color: color-mix(in srgb, var(--nb-muted) 50%, transparent);
 }
 
 .nimbus-meta-chip {
-  color: var(--kawaii-muted);
-  background: color-mix(in srgb, var(--kawaii-muted) 10%, transparent);
+  color: var(--nb-muted);
+  background: color-mix(in srgb, var(--nb-muted) 10%, transparent);
 }
 
 .nimbus-row-chevron {
-  color: var(--kawaii-faint);
-  background: color-mix(in srgb, var(--kawaii-muted) 10%, transparent);
+  color: var(--nb-faint);
+  background: color-mix(in srgb, var(--nb-muted) 10%, transparent);
   transition: background 0.18s ease, color 0.18s ease;
 }
 .nimbus-row:hover .nimbus-row-chevron {
-  color: var(--kawaii-primary);
-  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  color: var(--nb-accent);
+  background: var(--nb-tint);
 }
 
 /* --- 实例负载条：CPU 真实占用，>85% 转红，>60% 转琥珀 --- */
@@ -1067,16 +1274,16 @@ function getInstanceRowClass(): string {
   height: 5px;
   border-radius: 999px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--kawaii-muted) 14%, transparent);
+  background: color-mix(in srgb, var(--nb-muted) 14%, transparent);
 }
 .nimbus-load-fill {
   height: 100%;
   border-radius: 999px;
-  background: var(--kawaii-primary);
-  transition: width 0.4s ease;
+  background: var(--nb-accent);
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .nimbus-load-fill--warn {
-  background: var(--kawaii-amber);
+  background: var(--nb-amber);
 }
 .nimbus-load-fill--danger {
   background: #dc2626;
@@ -1084,33 +1291,79 @@ function getInstanceRowClass(): string {
 
 /* --- 空状态图标 --- */
 .nimbus-empty-icon {
-  color: var(--kawaii-faint);
-  background: color-mix(in srgb, var(--kawaii-muted) 12%, transparent);
+  color: var(--nb-faint);
+  background: color-mix(in srgb, var(--nb-muted) 12%, transparent);
 }
 
-/* --- 入场动画（尊重减少动态） --- */
+/* --- 入场 / 动效关键帧 --- */
 @keyframes nimbusRise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
+@keyframes nimbusDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes nimbusFade {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes nimbusShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%,
+  100% {
+    transform: translateX(320%);
+  }
+}
+@keyframes nimbusPing {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
 
+/* --- 尊重减少动态 --- */
 @media (prefers-reduced-motion: reduce) {
   .nimbus-metric {
     animation: none;
+    opacity: 1;
+    transform: none;
   }
   .nimbus-card--hover:hover,
+  .nimbus-metric:hover,
   .nimbus-row:hover {
     transform: none;
+  }
+  .nimbus-spark-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .nimbus-spark-area,
+  .nimbus-spark-dot {
+    animation: none;
+    opacity: 1;
   }
   .nimbus-bar-fill,
   .nimbus-load-fill {
     transition: none;
+  }
+  .nimbus-bar-fill--vip::after,
+  .nimbus-live-dot::after {
+    animation: none;
   }
 }
 </style>

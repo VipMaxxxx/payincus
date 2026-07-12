@@ -1152,27 +1152,28 @@ async function createRiskReviewTicket(): Promise<void> {
 
 <template>
   <div class="kawaii-page animate-fade-in lg:h-full lg:flex lg:flex-col">
-    <div class="kawaii-dashboard-hero page-header mb-4 rounded-2xl p-5 flex-col gap-4 sm:flex-row sm:gap-0 lg:mb-3 lg:shrink-0">
-      <div>
-        <h1 class="page-title text-lg sm:text-xl">{{ $t('instance.createPage.title') }}</h1>
-        <p class="page-description">{{ $t('instance.createPage.description') }}</p>
+    <header class="mb-4 flex flex-col gap-4 border-b border-themed pb-4 sm:flex-row sm:items-end sm:justify-between lg:mb-3 lg:shrink-0">
+      <div class="min-w-0">
+        <h1 class="text-xl font-semibold tracking-tight text-themed sm:text-2xl">{{ $t('instance.createPage.title') }}</h1>
+        <p class="mt-1.5 text-sm text-themed-muted">{{ $t('instance.createPage.description') }}</p>
       </div>
-      <RouterLink :to="instancesPath()" class="btn btn-secondary w-full justify-center sm:w-auto">
+      <RouterLink :to="instancesPath()" class="btn btn-secondary w-full shrink-0 justify-center gap-1.5 sm:w-auto">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
         {{ $t('common.back') }}
       </RouterLink>
-    </div>
+    </header>
 
     <!-- 套餐来源切换器 -->
     <div v-if="!loading" class="flex justify-center mb-4 lg:mb-3 shrink-0">
       <div
-        class="kawaii-browse-wrap inline-flex max-w-full overflow-x-auto rounded-full p-1 scrollbar-hide"
+        class="nimbus-segmented inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-themed bg-themed-surface p-1 shadow-sm scrollbar-hide"
       >
         <button
           v-for="source in sourceTabs"
           :key="source.key"
           type="button"
           :disabled="sourceLoading"
-          class="kawaii-market-pill relative shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all duration-300"
+          class="nimbus-seg-pill relative shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200"
           :class="[
             packageSource === source.key ? 'active' : '',
             sourceLoading ? 'cursor-not-allowed opacity-50' : ''
@@ -1221,11 +1222,12 @@ async function createRiskReviewTicket(): Promise<void> {
     <form v-else class="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col" @submit.prevent="handleSubmit">
       <div class="lg:flex lg:flex-1 lg:min-h-0 lg:gap-6">
         <!-- LEFT: 选择区（独立滚动）-->
-        <div class="space-y-4 mb-4 lg:mb-0 lg:flex-[3] lg:overflow-y-auto lg:pr-1 lg:pb-4 scrollbar-hide">
+        <div class="nimbus-pane space-y-4 mb-4 lg:mb-0 lg:flex-[3] lg:overflow-y-auto lg:pr-1 lg:pb-4 scrollbar-hide">
           <div
             v-if="selectedHostingZone"
-            class="rounded-lg border border-themed bg-themed-tertiary px-5 py-3 text-center"
+            class="flex items-center gap-3 rounded-xl border border-themed bg-themed-tertiary px-5 py-3"
           >
+            <svg class="h-5 w-5 shrink-0 text-primary-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
             <p class="text-sm font-medium leading-6 text-themed-secondary">
               {{ $t('instance.createPage.zoneNotice.content', { uid: selectedHostingZone.ownerId, username: selectedHostingZone.ownerUsername }) }}
             </p>
@@ -1252,12 +1254,13 @@ async function createRiskReviewTicket(): Promise<void> {
         </div>
         <!-- RIGHT: 配置区（独立滚动）-->
         <div class="lg:flex-[2] lg:overflow-y-auto lg:pb-4 scrollbar-hide">
-          <div ref="rightPanelScrollRef" class="space-y-4">
+          <div ref="rightPanelScrollRef" class="nimbus-pane space-y-4">
             <div
               v-if="flashSaleItemId"
-              class="rounded-lg border px-4 py-3 text-sm border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300"
+              class="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
             >
-              当前通过秒杀活动开通。提交时会校验活动时间、库存、账号限购、人机验证和实时节点资源。
+              <svg class="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+              <span>当前通过秒杀活动开通。提交时会校验活动时间、库存、账号限购、人机验证和实时节点资源。</span>
             </div>
             <PlanSelector
               v-if="isPaidPackage"
@@ -1277,8 +1280,7 @@ async function createRiskReviewTicket(): Promise<void> {
             />
             <div
               v-else-if="prerequisiteMissing"
-              class="rounded-lg border px-4 py-3 text-sm"
-              :class="themeStore.isDark ? 'border-amber-500/30 bg-amber-900/20 text-amber-300' : 'border-amber-200 bg-amber-50 text-amber-700'"
+              class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
             >
               {{ prerequisiteMessage }}
             </div>
@@ -1329,40 +1331,43 @@ async function createRiskReviewTicket(): Promise<void> {
             <!-- 订单概览 -->
             <div v-if="isPaidPackage && form.planId && selectedPlan" class="card p-5">
               <div class="flex items-center gap-3 mb-5">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-100'">
-                  <svg class="w-5 h-5" :class="themeStore.isDark ? 'text-gray-300' : 'text-gray-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-primary-500/10 text-primary-600 dark:text-primary-400">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
                 </div>
-                <div>
+                <div class="min-w-0">
                   <h3 class="font-semibold text-themed">{{ configStore.freeSiteMode ? freeSiteCopy.createOrderSummary : $t('instance.createPage.orderSummary') }}</h3>
-                  <p class="text-xs text-themed-muted">{{ selectedPackage?.name }} - {{ selectedPlan.name }}</p>
+                  <p class="text-xs text-themed-muted truncate">{{ selectedPackage?.name }} - {{ selectedPlan.name }}</p>
                 </div>
               </div>
               <div class="space-y-4">
-                <div class="p-4 rounded-xl border-2" :class="themeStore.isDark ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50'">
+                <div class="p-4 rounded-xl border border-themed bg-themed-tertiary">
                   <div class="flex items-center justify-between mb-3">
-                    <span class="px-2.5 py-1 rounded-full text-xs font-medium" :class="themeStore.isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'">{{ getBillingCycleLabel(selectedPlan.billingCycle) }}</span>
+                    <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-themed-secondary text-themed-secondary">{{ getBillingCycleLabel(selectedPlan.billingCycle) }}</span>
                     <span v-if="selectedPlan.slaGuarantee" class="flex items-center gap-1 text-xs text-green-500">
                       <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
                       SLA {{ selectedPlan.slaGuarantee }}%
                     </span>
                   </div>
                   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                    <div><div class="text-lg font-bold" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">{{ selectedPlan.cpu }}%</div><div class="text-xs text-themed-muted">CPU</div></div>
+                    <div><div class="text-lg font-mono font-semibold tabular-nums text-themed">{{ selectedPlan.cpu }}%</div><div class="text-xs text-themed-muted">CPU</div></div>
                     <div>
-                      <div class="text-lg font-bold" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">{{ formatMemory(selectedPlan.memory) }}</div>
+                      <div class="text-lg font-mono font-semibold tabular-nums text-themed">{{ formatMemory(selectedPlan.memory) }}</div>
                       <div class="text-xs text-themed-muted leading-tight">
                         <div>{{ $t('instance.memory') }}</div>
-                        <div v-if="selectedPackage?.instance_type !== 'vm' && selectedPlan.swapSize > 0" class="opacity-60">SWAP ✅</div>
+                        <div v-if="selectedPackage?.instance_type !== 'vm' && selectedPlan.swapSize > 0" class="mt-0.5 flex items-center justify-center gap-1 text-green-500">
+                          <span>SWAP</span>
+                          <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 111.4-1.4l3.1 3.1 6.8-6.8a1 1 0 011.4 0z" clip-rule="evenodd" /></svg>
+                        </div>
                       </div>
                     </div>
-                    <div><div class="text-lg font-bold" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">{{ formatDisk(selectedPlan.disk) }}</div><div class="text-xs text-themed-muted">{{ $t('instance.disk') }}</div></div>
-                    <div><div class="text-lg font-bold" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">{{ formatTraffic(selectedPlan.trafficLimit) }}</div><div class="text-xs text-themed-muted">{{ $t('billing.traffic') }} <span class="opacity-60">({{ $t('billing.trafficBidirectional') }})</span></div></div>
+                    <div><div class="text-lg font-mono font-semibold tabular-nums text-themed">{{ formatDisk(selectedPlan.disk) }}</div><div class="text-xs text-themed-muted">{{ $t('instance.disk') }}</div></div>
+                    <div><div class="text-lg font-mono font-semibold tabular-nums text-themed">{{ formatTraffic(selectedPlan.trafficLimit) }}</div><div class="text-xs text-themed-muted">{{ $t('billing.traffic') }} <span class="opacity-60">({{ $t('billing.trafficBidirectional') }})</span></div></div>
                   </div>
-                  <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mt-3 pt-3 border-t text-xs" :class="themeStore.isDark ? 'border-gray-700' : 'border-gray-200'">
-                    <span class="text-themed-muted"><span class="opacity-75">{{ $t('instance.ports') }}:</span> {{ selectedPlan.portLimit }}</span>
-                    <span class="text-themed-muted"><span class="opacity-75">{{ $t('instance.snapshots') }}:</span> {{ selectedPlan.snapshotLimit }}</span>
+                  <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mt-3 pt-3 border-t border-themed text-xs">
+                    <span class="text-themed-muted"><span class="opacity-75">{{ $t('instance.ports') }}:</span> <span class="font-mono tabular-nums text-themed-secondary">{{ selectedPlan.portLimit }}</span></span>
+                    <span class="text-themed-muted"><span class="opacity-75">{{ $t('instance.snapshots') }}:</span> <span class="font-mono tabular-nums text-themed-secondary">{{ selectedPlan.snapshotLimit }}</span></span>
                   </div>
                 </div>
                 <!-- 优惠码 -->
@@ -1378,7 +1383,7 @@ async function createRiskReviewTicket(): Promise<void> {
                     <p v-if="promoCodeValid === true" class="text-xs text-green-500 mt-1.5 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>{{ configStore.freeSiteMode ? freeSiteCopy.createPromoValid.replace('{rate}', (promoCodeDiscount * 100).toFixed(0) + '%') : $t('aff.promoCodeValid', { rate: (promoCodeDiscount * 100).toFixed(0) + '%' }) }}</p>
                     <p v-else-if="promoCodeError" class="text-xs text-red-500 mt-1.5">{{ promoCodeError }}</p>
                   </div>
-                  <div v-if="promoCodeValid === true" class="p-3 rounded-lg text-sm" :class="themeStore.isDark ? 'bg-gray-800/40 border border-gray-700 text-gray-300' : 'bg-gray-50 border border-gray-200 text-gray-700'">
+                  <div v-if="promoCodeValid === true" class="p-3 rounded-xl border border-themed bg-themed-tertiary text-sm text-themed-secondary">
                     <div class="flex items-start gap-2">
                       <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
                       <div>
@@ -1391,26 +1396,26 @@ async function createRiskReviewTicket(): Promise<void> {
                 </div>
                 <!-- 价格明细 -->
                 <div v-if="planPriceInfo" class="space-y-3">
-                  <div v-if="promoCodeValid && planPriceInfo.discountAmount > 0" class="p-4 rounded-xl space-y-2" :class="themeStore.isDark ? 'bg-gray-800/50' : 'bg-gray-100'">
-                    <div class="flex justify-between text-sm"><span class="text-themed-muted">{{ configStore.freeSiteMode ? freeSiteCopy.createPlanFee : $t('instance.createPage.planFee') }}</span><span class="text-themed font-medium">¥{{ planPriceInfo.planPrice.toFixed(2) }}</span></div>
-                    <div v-if="promoCodeValid && planPriceInfo.discountAmount > 0" class="flex justify-between text-sm pt-1 border-t border-themed/20">
+                  <div v-if="promoCodeValid && planPriceInfo.discountAmount > 0" class="p-4 rounded-xl space-y-2 bg-themed-tertiary">
+                    <div class="flex justify-between text-sm"><span class="text-themed-muted">{{ configStore.freeSiteMode ? freeSiteCopy.createPlanFee : $t('instance.createPage.planFee') }}</span><span class="font-mono tabular-nums font-medium text-themed">¥{{ planPriceInfo.planPrice.toFixed(2) }}</span></div>
+                    <div v-if="promoCodeValid && planPriceInfo.discountAmount > 0" class="flex justify-between text-sm pt-1 border-t border-themed/40">
                       <span class="text-green-500 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 2a2 2 0 00-2 2v14l3.5-2 3.5 2 3.5-2 3.5 2V4a2 2 0 00-2-2H5zm2.5 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm6.207.293a1 1 0 00-1.414 0l-6 6a1 1 0 101.414 1.414l6-6a1 1 0 000-1.414zM12.5 10a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" clip-rule="evenodd" /></svg>{{ $t('aff.discountAmount') }} (-{{ (planPriceInfo.discountRate * 100).toFixed(0) }}%)</span>
-                      <span class="text-green-600 dark:text-green-400 font-medium">-¥{{ planPriceInfo.discountAmount.toFixed(2) }}</span>
+                      <span class="font-mono tabular-nums font-medium text-green-600 dark:text-green-400">-¥{{ planPriceInfo.discountAmount.toFixed(2) }}</span>
                     </div>
                   </div>
-                  <div class="rounded-xl overflow-hidden" :class="themeStore.isDark ? 'border border-gray-700' : 'border border-gray-200'">
-                    <div class="p-5 flex items-center justify-between" :class="themeStore.isDark ? 'bg-gray-800/40' : 'bg-gray-50'">
-                      <div>
-                        <div class="text-sm font-medium" :class="themeStore.isDark ? 'text-gray-200' : 'text-gray-700'">{{ configStore.freeSiteMode ? freeSiteCopy.finalPrice : $t('aff.finalPrice') }}</div>
+                  <div class="rounded-xl overflow-hidden border border-themed">
+                    <div class="p-5 flex items-center justify-between gap-3 bg-themed-secondary">
+                      <div class="min-w-0">
+                        <div class="text-sm font-medium text-themed-secondary">{{ configStore.freeSiteMode ? freeSiteCopy.finalPrice : $t('aff.finalPrice') }}</div>
                         <div v-if="selectedPlan.billingCycle > 1" class="text-xs mt-1">
-                          <span :class="themeStore.isDark ? 'text-gray-400' : 'text-gray-500'">{{ configStore.freeSiteMode ? freeSiteCopy.createMonthlyEquivalent : `≈ ¥${(planPriceInfo.finalPrice / selectedPlan.billingCycle).toFixed(2)}/${$t('instance.createPage.month')}` }}</span>
+                          <span class="font-mono tabular-nums text-themed-muted">{{ configStore.freeSiteMode ? freeSiteCopy.createMonthlyEquivalent : `≈ ¥${(planPriceInfo.finalPrice / selectedPlan.billingCycle).toFixed(2)}/${$t('instance.createPage.month')}` }}</span>
                         </div>
                       </div>
-                      <div class="text-3xl font-bold" :class="themeStore.isDark ? 'text-white' : 'text-gray-900'">¥{{ planPriceInfo.finalPrice.toFixed(2) }}</div>
+                      <div class="text-3xl font-mono font-semibold tabular-nums tracking-tight text-themed"><span class="align-[0.14em] text-[0.62em] font-medium text-themed-muted">¥</span>{{ planPriceInfo.finalPrice.toFixed(2) }}</div>
                     </div>
-                    <div v-if="isHostedMarketPackage" class="px-4 py-3 flex items-center gap-2" :class="themeStore.isDark ? 'bg-amber-900/20 border-t border-amber-500/20' : 'bg-amber-50/80 border-t border-amber-200'">
-                      <svg class="w-4 h-4 flex-shrink-0" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                      <p class="text-xs" :class="themeStore.isDark ? 'text-amber-300/90' : 'text-amber-700'"><span class="font-medium">{{ $t('instance.createPage.hostedDisclaimer.title') }}</span> {{ $t('instance.createPage.hostedDisclaimer.content', { uid: selectedPackage?.ownerId }) }}</p>
+                    <div v-if="isHostedMarketPackage" class="px-4 py-3 flex items-center gap-2 bg-amber-500/10 border-t border-amber-500/25">
+                      <svg class="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                      <p class="text-xs text-amber-700 dark:text-amber-300"><span class="font-medium">{{ $t('instance.createPage.hostedDisclaimer.title') }}</span> {{ $t('instance.createPage.hostedDisclaimer.content', { uid: selectedPackage?.ownerId }) }}</p>
                     </div>
                   </div>
                 </div>
@@ -1419,10 +1424,10 @@ async function createRiskReviewTicket(): Promise<void> {
           </div><!-- end scrollable -->
 
           <!-- 吸底提交区 -->
-          <div class="card p-4 mt-4 space-y-3">
+          <div class="nimbus-submit card p-4 mt-4 space-y-3 lg:sticky lg:bottom-0 lg:z-10">
             <div>
-              <label class="block text-sm text-themed-secondary mb-1.5">{{ $t('instance.createPage.instanceName') }}</label>
-              <p v-if="showDestroyTrafficNotice" class="mb-2 text-xs leading-relaxed flex items-start gap-1.5" :class="themeStore.isDark ? 'text-amber-300' : 'text-amber-700'">
+              <label class="block text-sm font-medium text-themed-secondary mb-1.5">{{ $t('instance.createPage.instanceName') }}</label>
+              <p v-if="showDestroyTrafficNotice" class="mb-2 text-xs leading-relaxed flex items-start gap-1.5 text-amber-700 dark:text-amber-300">
                 <svg class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 3a9 9 0 110 18 9 9 0 010-18z" />
                 </svg>
@@ -1447,30 +1452,29 @@ async function createRiskReviewTicket(): Promise<void> {
               </div>
               <p class="mt-1.5 text-xs text-themed-muted">{{ $t('instance.createPage.autoNameHint') }}</p>
             </div>
-            <div v-if="sshKeys.length === 0" class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-400 dark:border-yellow-500/30 rounded-lg">
-              <p class="text-sm text-yellow-800 dark:text-yellow-300 font-medium mb-1">{{ $t('instance.createPage.missingSshKey') }}</p>
-              <p class="text-xs text-yellow-700 dark:text-yellow-400">{{ $t('instance.createPage.missingSshKeyDesc') }} <router-link :to="profilePath()" class="underline hover:text-yellow-900 dark:hover:text-yellow-200 font-medium">{{ $t('instance.createPage.profileSettings') }}</router-link> {{ $t('instance.createPage.addSshKey') }}</p>
+            <div v-if="sshKeys.length === 0" class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+              <p class="text-sm font-medium mb-1 text-amber-700 dark:text-amber-300">{{ $t('instance.createPage.missingSshKey') }}</p>
+              <p class="text-xs text-amber-700/90 dark:text-amber-300/90">{{ $t('instance.createPage.missingSshKeyDesc') }} <router-link :to="profilePath()" class="font-medium underline hover:text-amber-900 dark:hover:text-amber-200">{{ $t('instance.createPage.profileSettings') }}</router-link> {{ $t('instance.createPage.addSshKey') }}</p>
             </div>
-            <div v-if="!quotaCheck.valid" class="p-3 rounded-lg border" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30' : 'bg-red-50 border-red-200'">
-              <p class="text-sm font-medium mb-2" :class="themeStore.isDark ? 'text-red-400' : 'text-red-700'">{{ $t('instance.createPage.quotaInsufficient') }}</p>
-              <ul class="text-xs space-y-1" :class="themeStore.isDark ? 'text-red-300' : 'text-red-600'"><li v-for="(err, idx) in quotaCheck.errors" :key="idx">• {{ err }}</li></ul>
+            <div v-if="!quotaCheck.valid" class="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10">
+              <p class="text-sm font-medium mb-2 text-rose-700 dark:text-rose-400">{{ $t('instance.createPage.quotaInsufficient') }}</p>
+              <ul class="text-xs space-y-1 text-rose-600 dark:text-rose-300"><li v-for="(err, idx) in quotaCheck.errors" :key="idx">• {{ err }}</li></ul>
             </div>
-            <div v-if="!resourceLimitCheck.valid" class="p-3 rounded-lg border" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30' : 'bg-red-50 border-red-200'">
-              <p class="text-sm font-medium mb-2" :class="themeStore.isDark ? 'text-red-400' : 'text-red-700'">{{ $t('instance.createPage.resourceLimit.title') }}</p>
-              <ul class="text-xs space-y-1" :class="themeStore.isDark ? 'text-red-300' : 'text-red-600'"><li v-for="(err, idx) in resourceLimitCheck.errors" :key="idx">• {{ err }}</li></ul>
+            <div v-if="!resourceLimitCheck.valid" class="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10">
+              <p class="text-sm font-medium mb-2 text-rose-700 dark:text-rose-400">{{ $t('instance.createPage.resourceLimit.title') }}</p>
+              <ul class="text-xs space-y-1 text-rose-600 dark:text-rose-300"><li v-for="(err, idx) in resourceLimitCheck.errors" :key="idx">• {{ err }}</li></ul>
             </div>
-            <div v-if="isOwnPaidPackage" class="p-3 rounded-lg border" :class="themeStore.isDark ? 'bg-amber-900/20 border-amber-500/30' : 'bg-amber-50 border-amber-200'">
-              <p class="text-sm font-medium" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-700'">{{ $t('instance.createPage.ownPaidPackageWarning') }}</p>
+            <div v-if="isOwnPaidPackage" class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+              <p class="text-sm font-medium text-amber-700 dark:text-amber-400">{{ $t('instance.createPage.ownPaidPackageWarning') }}</p>
             </div>
-            <div v-if="prerequisiteMissing" class="p-3 rounded-lg border" :class="themeStore.isDark ? 'bg-amber-900/20 border-amber-500/30' : 'bg-amber-50 border-amber-200'">
-              <p class="text-sm font-medium" :class="themeStore.isDark ? 'text-amber-400' : 'text-amber-700'">{{ prerequisiteMessage }}</p>
+            <div v-if="prerequisiteMissing" class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+              <p class="text-sm font-medium text-amber-700 dark:text-amber-400">{{ prerequisiteMessage }}</p>
             </div>
             <div
               v-if="isCreateTurnstileRequired"
               ref="turnstileSectionRef"
               tabindex="-1"
-              class="space-y-3 p-3 rounded-lg border text-sm"
-              :class="themeStore.isDark ? 'bg-gray-800/40 border-gray-700 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'"
+              class="space-y-3 p-3 rounded-xl border border-themed bg-themed-tertiary text-sm text-themed-secondary"
             >
               <div>
                 <p class="font-medium">{{ $t('instance.createPage.turnstileRequiredTitle') }}</p>
@@ -1489,8 +1493,7 @@ async function createRiskReviewTicket(): Promise<void> {
             </div>
             <div
               v-if="activeOrderRiskRestriction"
-              class="space-y-3 rounded-lg border p-3 text-sm"
-              :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30 text-red-300' : 'bg-red-50 border-red-200 text-red-700'"
+              class="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-300"
             >
               <div>
                 <p class="font-medium">当前账号因实例资源风控限制下单</p>
@@ -1505,7 +1508,7 @@ async function createRiskReviewTicket(): Promise<void> {
                 {{ creatingRiskReviewTicket ? '创建审核工单中...' : '提交人工审核工单' }}
               </button>
             </div>
-            <div v-if="error" class="space-y-3 rounded-lg border p-3 text-sm" :class="themeStore.isDark ? 'bg-red-900/20 border-red-500/30 text-red-400' : 'bg-red-50 border-red-200 text-red-700'">
+            <div v-if="error" class="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-300">
               <div>{{ error }}</div>
               <button
                 v-if="orderRiskReviewAvailable"
@@ -1565,8 +1568,8 @@ async function createRiskReviewTicket(): Promise<void> {
                   :size="56"
                 />
                 <div class="flex-1">
-                  <p class="font-medium text-themed">{{ hostOwnerInfo.username }}</p>
-                  <p class="text-sm text-themed-muted">UID: {{ hostOwnerInfo.id }}</p>
+                  <p class="font-medium text-themed truncate">{{ hostOwnerInfo.username }}</p>
+                  <p class="text-sm text-themed-muted">UID: <span class="font-mono tabular-nums">{{ hostOwnerInfo.id }}</span></p>
                 </div>
                 <!-- VIP徽章 -->
                 <div 
@@ -1582,38 +1585,29 @@ async function createRiskReviewTicket(): Promise<void> {
               </div>
               <!-- 详细信息 -->
               <div class="space-y-3">
-                <div 
-                  class="flex items-center justify-between p-3 rounded-lg"
-                  :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'"
-                >
+                <div class="flex items-center justify-between p-3 rounded-xl bg-themed-tertiary">
                   <span class="text-sm text-themed-muted flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
                     </svg>
                     {{ $t('instance.detail.info.hostOwnerHostCount') }}
                   </span>
-                  <span class="text-sm font-semibold text-themed">
+                  <span class="text-sm font-mono font-semibold tabular-nums text-themed">
                     {{ hostOwnerInfo.hostCount }}
                   </span>
                 </div>
-                <div 
-                  class="flex items-center justify-between p-3 rounded-lg"
-                  :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'"
-                >
+                <div class="flex items-center justify-between p-3 rounded-xl bg-themed-tertiary">
                   <span class="text-sm text-themed-muted flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                     {{ $t('instance.detail.info.hostOwnerInstanceCount') }}
                   </span>
-                  <span class="text-sm font-semibold text-themed">
+                  <span class="text-sm font-mono font-semibold tabular-nums text-themed">
                     {{ hostOwnerInfo.instanceCount }}
                   </span>
                 </div>
-                <div 
-                  class="flex items-center justify-between p-3 rounded-lg"
-                  :class="themeStore.isDark ? 'bg-gray-800' : 'bg-gray-50'"
-                >
+                <div class="flex items-center justify-between p-3 rounded-xl bg-themed-tertiary">
                   <span class="text-sm text-themed-muted flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1621,7 +1615,7 @@ async function createRiskReviewTicket(): Promise<void> {
                     {{ $t('instance.detail.info.hostOwnerRegisteredDays') }}
                   </span>
                   <span class="text-sm font-semibold text-themed">
-                    {{ hostOwnerInfo.registeredDays }} {{ $t('common.days') }}
+                    <span class="font-mono tabular-nums">{{ hostOwnerInfo.registeredDays }}</span> {{ $t('common.days') }}
                   </span>
                 </div>
               </div>
@@ -1637,3 +1631,64 @@ async function createRiskReviewTicket(): Promise<void> {
     </Transition>
   </Teleport>
 </template>
+
+<style scoped>
+/* ============ Nimbus polish — create-instance view ============ */
+
+/* Segmented source switcher */
+.nimbus-segmented {
+  backdrop-filter: blur(8px);
+}
+
+.nimbus-seg-pill:not(.active) {
+  color: var(--kawaii-muted);
+}
+
+.nimbus-seg-pill:not(.active):not(:disabled):hover {
+  color: var(--kawaii-text);
+  background: color-mix(in srgb, var(--kawaii-text) 7%, transparent);
+}
+
+.nimbus-seg-pill.active {
+  @apply bg-primary-600 text-white;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 5px 12px -5px color-mix(in srgb, var(--kawaii-primary) 55%, transparent);
+}
+
+/* Selector step cards: subtle hover-lift + staggered entrance */
+.nimbus-pane :deep(.card) {
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  animation: nimbus-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.nimbus-pane :deep(.card):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -16px rgb(0 0 0 / 0.35);
+}
+
+.nimbus-pane :deep(.card):nth-child(1) { animation-delay: 0.02s; }
+.nimbus-pane :deep(.card):nth-child(2) { animation-delay: 0.06s; }
+.nimbus-pane :deep(.card):nth-child(3) { animation-delay: 0.10s; }
+.nimbus-pane :deep(.card):nth-child(4) { animation-delay: 0.14s; }
+.nimbus-pane :deep(.card):nth-child(n + 5) { animation-delay: 0.18s; }
+
+/* Sticky submit block: soft top edge above scrolling content */
+.nimbus-submit {
+  box-shadow: 0 -10px 26px -20px rgb(0 0 0 / 0.55), 0 1px 3px 0 rgb(0 0 0 / 0.08);
+}
+
+@keyframes nimbus-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-seg-pill,
+  .nimbus-pane :deep(.card) {
+    transition: none !important;
+    animation: none !important;
+  }
+  .nimbus-pane :deep(.card):hover {
+    transform: none;
+  }
+}
+</style>

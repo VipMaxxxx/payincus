@@ -799,22 +799,55 @@ onMounted(loadActive)
 
 <template>
   <div class="kawaii-page space-y-6 animate-fade-in">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-semibold text-themed">交易所管理</h1>
-        <p class="mt-1 text-sm text-themed-muted">管理匿名挂牌、托管订单、重装交割、提现审核、争议和策略配置。</p>
+    <div class="page-header">
+      <div class="flex items-center gap-3">
+        <span class="nimbus-title-icon">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5M16.5 3 21 7.5m0 0L16.5 12M21 7.5H7.5" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="page-title">交易所管理</h1>
+          <p class="page-description">管理匿名挂牌、托管订单、重装交割、提现审核、争议和策略配置。</p>
+        </div>
       </div>
-      <button class="btn btn-secondary" type="button" @click="loadActive">刷新</button>
+      <button class="btn btn-secondary" type="button" @click="loadActive">
+        <svg class="h-4 w-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 4v5h.58m15.36 2A8 8 0 0 0 5.07 8.11M20 20v-5h-.58m0 0A8 8 0 0 1 4.06 12.03" />
+        </svg>
+        刷新
+      </button>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-      <div class="card p-4"><div class="text-xs text-themed-muted">挂牌中</div><div class="mt-2 text-2xl font-semibold text-themed">{{ overview.activeListings }}</div></div>
-      <div class="card p-4"><div class="text-xs text-themed-muted">交易锁定</div><div class="mt-2 text-2xl font-semibold text-themed">{{ overview.lockedListings }}</div></div>
-      <div class="card p-4"><div class="text-xs text-themed-muted">交割订单</div><div class="mt-2 text-2xl font-semibold text-themed">{{ overview.deliveringOrders }}</div></div>
-      <div class="card p-4"><div class="text-xs text-themed-muted">争议订单</div><div class="mt-2 text-2xl font-semibold text-themed">{{ overview.disputedOrders }}</div></div>
-      <div class="card p-4"><div class="text-xs text-themed-muted">待审提现</div><div class="mt-2 text-2xl font-semibold text-themed">{{ overview.pendingWithdrawals }}</div></div>
-      <div class="card p-4"><div class="text-xs text-themed-muted">开放争议</div><div class="mt-2 text-2xl font-semibold text-themed">{{ overview.openDisputes }}</div></div>
-      <div class="card p-4"><div class="text-xs text-themed-muted">待交割</div><div class="mt-2 text-2xl font-semibold text-themed">{{ overview.pendingDeliveryTasks }}</div></div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">挂牌中</div>
+        <div class="nimbus-stat-value">{{ overview.activeListings }}</div>
+      </div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">交易锁定</div>
+        <div class="nimbus-stat-value">{{ overview.lockedListings }}</div>
+      </div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">交割订单</div>
+        <div class="nimbus-stat-value">{{ overview.deliveringOrders }}</div>
+      </div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">争议订单</div>
+        <div class="nimbus-stat-value">{{ overview.disputedOrders }}</div>
+      </div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">待审提现</div>
+        <div class="nimbus-stat-value">{{ overview.pendingWithdrawals }}</div>
+      </div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">开放争议</div>
+        <div class="nimbus-stat-value">{{ overview.openDisputes }}</div>
+      </div>
+      <div class="card nimbus-stat p-4">
+        <div class="nimbus-stat-label">待交割</div>
+        <div class="nimbus-stat-value">{{ overview.pendingDeliveryTasks }}</div>
+      </div>
     </div>
 
     <div class="border-b border-themed">
@@ -822,7 +855,7 @@ onMounted(loadActive)
         <button
           v-for="tab in tabs"
           :key="tab.key"
-          class="border-b-2 px-3 py-2 text-sm font-medium"
+          class="-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors"
           :class="tabClass(tab.key)"
           type="button"
           @click="switchTab(tab.key)"
@@ -842,7 +875,7 @@ onMounted(loadActive)
         <select
           v-if="activeStatusOptions.length"
           v-model="activeListState.status"
-          class="input h-9 min-w-[150px]"
+          class="input h-9 w-full sm:w-52"
           @change="changeActiveStatus"
         >
           <option v-for="option in activeStatusOptions" :key="option.value" :value="option.value">
@@ -875,60 +908,75 @@ onMounted(loadActive)
     </div>
 
     <section v-if="!loading && activeTab === 'listings'" class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-themed-secondary text-left text-themed-muted">
-          <tr><th class="p-3">挂牌</th><th class="p-3">实例状态</th><th class="p-3">卖家</th><th class="p-3">价格</th><th class="p-3">锁定/不可交易原因</th><th class="p-3 text-right">操作</th></tr>
+      <table class="w-full table-fixed text-sm">
+        <thead>
+          <tr class="border-b border-themed">
+            <th class="nimbus-th w-[12%]">挂牌</th>
+            <th class="nimbus-th w-[22%]">实例状态</th>
+            <th class="nimbus-th w-[16%]">卖家</th>
+            <th class="nimbus-th w-[12%]">价格</th>
+            <th class="nimbus-th w-[24%]">锁定/不可交易原因</th>
+            <th class="nimbus-th w-[14%] text-right">操作</th>
+          </tr>
         </thead>
-        <tbody class="divide-y divide-themed">
-          <tr v-for="item in listings" :key="item.id">
-            <td class="p-3">
+        <tbody>
+          <tr v-for="item in listings" :key="item.id" class="nimbus-row border-b border-themed align-top">
+            <td class="px-4 py-3">
               <div class="font-medium text-themed">#{{ item.id }}</div>
-              <div class="text-xs text-themed-muted">{{ statusLabel(item.status) }}</div>
+              <div class="mt-1"><span class="nimbus-pill" :class="['active','sold','completed','COMPLETED','approved','released','delivered'].includes(item.status) ? 'text-green-600 dark:text-green-400' : ['force_delisted','disputed','failed','FAILED','rejected'].includes(item.status) ? 'text-rose-600 dark:text-rose-400' : ['locked','escrowed','delivering','confirming','manual_review','PENDING','PROCESSING','pending','paying','open','processing','redelivering'].includes(item.status) ? 'text-amber-600 dark:text-amber-400' : 'text-themed-muted'"><span class="dot"></span>{{ statusLabel(item.status) }}</span></div>
             </td>
-            <td class="p-3">
-              <div class="font-medium text-themed">{{ item.instance?.name || item.instanceId }}</div>
+            <td class="px-4 py-3">
+              <div class="break-words font-medium text-themed">{{ item.instance?.name || item.instanceId }}</div>
               <div class="mt-1">
                 <span class="inline-flex rounded border px-2 py-0.5 text-xs" :class="instanceTradeState(item).className">{{ instanceTradeState(item).label }}</span>
               </div>
               <div class="mt-1 text-xs text-themed-muted">当前实例：{{ item.instance?.status || item.snapshot?.status || '-' }}</div>
             </td>
-            <td class="p-3">{{ item.seller?.username }} / #{{ item.seller?.id }}</td>
-            <td class="p-3">{{ money(item.price) }}</td>
-            <td class="p-3">
+            <td class="px-4 py-3 break-words text-themed">{{ item.seller?.username }} / #{{ item.seller?.id }}</td>
+            <td class="px-4 py-3 font-medium tabular-nums text-themed">{{ money(item.price) }}</td>
+            <td class="px-4 py-3">
               <div class="text-sm text-themed">{{ listingLockLabel(item) }}</div>
-              <div class="mt-1 max-w-xs text-xs text-themed-muted">{{ listingReasonText(item) }}</div>
+              <div class="mt-1 text-xs text-themed-muted">{{ listingReasonText(item) }}</div>
             </td>
-            <td class="p-3 text-right">
+            <td class="px-4 py-3 text-right">
               <button class="btn btn-secondary btn-sm" type="button" @click="forceDelist(item)">强制下架</button>
             </td>
           </tr>
-          <tr v-if="listings.length === 0"><td class="p-6 text-center text-themed-muted" colspan="6">暂无挂牌。</td></tr>
+          <tr v-if="listings.length === 0"><td class="px-4 py-8 text-center text-themed-muted" colspan="6">暂无挂牌。</td></tr>
         </tbody>
       </table>
     </section>
 
     <section v-else-if="activeTab === 'orders'" class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-themed-secondary text-left text-themed-muted">
-          <tr><th class="p-3">订单</th><th class="p-3">实例</th><th class="p-3">买家</th><th class="p-3">卖家</th><th class="p-3">金额/托管</th><th class="p-3">交割任务</th><th class="p-3 text-right">操作</th></tr>
+      <table class="w-full table-fixed text-sm">
+        <thead>
+          <tr class="border-b border-themed">
+            <th class="nimbus-th w-[12%]">订单</th>
+            <th class="nimbus-th w-[14%]">实例</th>
+            <th class="nimbus-th w-[13%]">买家</th>
+            <th class="nimbus-th w-[13%]">卖家</th>
+            <th class="nimbus-th w-[15%]">金额/托管</th>
+            <th class="nimbus-th w-[19%]">交割任务</th>
+            <th class="nimbus-th w-[14%] text-right">操作</th>
+          </tr>
         </thead>
-        <tbody class="divide-y divide-themed">
-          <tr v-for="item in orders" :key="item.id">
-            <td class="p-3">{{ item.orderNo }}</td>
-            <td class="p-3">{{ item.instance?.name || item.instanceId }} <span class="text-themed-muted">({{ item.instance?.status || '-' }})</span></td>
-            <td class="p-3">{{ item.buyer?.username }} / #{{ item.buyer?.id }}</td>
-            <td class="p-3">{{ item.seller?.username }} / #{{ item.seller?.id }}</td>
-            <td class="p-3">
-              <div class="font-medium text-themed">{{ money(item.price) }}</div>
+        <tbody>
+          <tr v-for="item in orders" :key="item.id" class="nimbus-row border-b border-themed align-top">
+            <td class="px-4 py-3 break-words font-medium text-themed">{{ item.orderNo }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.instance?.name || item.instanceId }} <span class="text-themed-muted">({{ item.instance?.status || '-' }})</span></td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.buyer?.username }} / #{{ item.buyer?.id }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.seller?.username }} / #{{ item.seller?.id }}</td>
+            <td class="px-4 py-3">
+              <div class="font-medium tabular-nums text-themed">{{ money(item.price) }}</div>
               <div class="mt-1 text-xs text-themed-muted">{{ orderEscrowText(item) }}</div>
               <div class="mt-1 text-xs text-themed-muted">手续费 {{ money(item.feeAmount) }}</div>
             </td>
-            <td class="p-3">
-              <div>{{ statusLabel(item.status) }}</div>
+            <td class="px-4 py-3">
+              <div><span class="nimbus-pill" :class="['active','sold','completed','COMPLETED','approved','released','delivered'].includes(item.status) ? 'text-green-600 dark:text-green-400' : ['force_delisted','disputed','failed','FAILED','rejected'].includes(item.status) ? 'text-rose-600 dark:text-rose-400' : ['locked','escrowed','delivering','confirming','manual_review','PENDING','PROCESSING','pending','paying','open','processing','redelivering'].includes(item.status) ? 'text-amber-600 dark:text-amber-400' : 'text-themed-muted'"><span class="dot"></span>{{ statusLabel(item.status) }}</span></div>
               <div class="mt-1 text-xs text-themed-muted">任务：{{ item.deliveryTasks?.[0] ? statusLabel(item.deliveryTasks[0].status) : '等待创建' }} / {{ item.deliveryTasks?.[0] ? deliveryStepText(item.deliveryTasks[0]) : '-' }}</div>
-              <div v-if="item.failureReason" class="mt-1 max-w-xs text-xs text-rose-600 dark:text-rose-400">{{ item.failureReason }}</div>
+              <div v-if="item.failureReason" class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ item.failureReason }}</div>
             </td>
-            <td class="p-3 text-right">
+            <td class="px-4 py-3 text-right">
               <div class="flex flex-wrap justify-end gap-2">
               <button
                 v-if="!['completed', 'refunded', 'cancelled', 'manual_review'].includes(item.status)"
@@ -965,34 +1013,41 @@ onMounted(loadActive)
               </div>
             </td>
           </tr>
-          <tr v-if="orders.length === 0"><td class="p-6 text-center text-themed-muted" colspan="7">暂无订单。</td></tr>
+          <tr v-if="orders.length === 0"><td class="px-4 py-8 text-center text-themed-muted" colspan="7">暂无订单。</td></tr>
         </tbody>
       </table>
     </section>
 
     <section v-else-if="activeTab === 'delivery'" class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-themed-secondary text-left text-themed-muted">
-          <tr><th class="p-3">任务</th><th class="p-3">订单</th><th class="p-3">实例</th><th class="p-3">交割步骤</th><th class="p-3">状态/托管</th><th class="p-3 text-right">操作</th></tr>
+      <table class="w-full table-fixed text-sm">
+        <thead>
+          <tr class="border-b border-themed">
+            <th class="nimbus-th w-[8%]">任务</th>
+            <th class="nimbus-th w-[16%]">订单</th>
+            <th class="nimbus-th w-[14%]">实例</th>
+            <th class="nimbus-th w-[22%]">交割步骤</th>
+            <th class="nimbus-th w-[22%]">状态/托管</th>
+            <th class="nimbus-th w-[18%] text-right">操作</th>
+          </tr>
         </thead>
-        <tbody class="divide-y divide-themed">
-          <tr v-for="item in deliveryTasks" :key="item.id">
-            <td class="p-3">#{{ item.id }}</td>
-            <td class="p-3">{{ item.order?.orderNo || item.orderId }} <span class="text-themed-muted">({{ statusLabel(item.order?.status || '-') }})</span></td>
-            <td class="p-3">{{ item.instance?.name || item.instanceId }} <span class="text-themed-muted">({{ item.instance?.status || '-' }})</span></td>
-            <td class="p-3">
-              <div>{{ deliveryStepText(item) }}</div>
+        <tbody>
+          <tr v-for="item in deliveryTasks" :key="item.id" class="nimbus-row border-b border-themed align-top">
+            <td class="px-4 py-3 font-medium text-themed">#{{ item.id }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.order?.orderNo || item.orderId }} <span class="text-themed-muted">({{ statusLabel(item.order?.status || '-') }})</span></td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.instance?.name || item.instanceId }} <span class="text-themed-muted">({{ item.instance?.status || '-' }})</span></td>
+            <td class="px-4 py-3">
+              <div class="text-themed">{{ deliveryStepText(item) }}</div>
               <div class="mt-1 text-xs text-themed-muted">重试 {{ item.retryCount || 0 }} 次</div>
               <div class="mt-1 text-xs text-themed-muted">开始 {{ formatDate(item.startedAt) }} / 完成 {{ formatDate(item.finishedAt) }}</div>
             </td>
-            <td class="p-3">
-              <div>{{ statusLabel(item.status) }}</div>
+            <td class="px-4 py-3">
+              <div><span class="nimbus-pill" :class="['active','sold','completed','COMPLETED','approved','released','delivered'].includes(item.status) ? 'text-green-600 dark:text-green-400' : ['force_delisted','disputed','failed','FAILED','rejected'].includes(item.status) ? 'text-rose-600 dark:text-rose-400' : ['locked','escrowed','delivering','confirming','manual_review','PENDING','PROCESSING','pending','paying','open','processing','redelivering'].includes(item.status) ? 'text-amber-600 dark:text-amber-400' : 'text-themed-muted'"><span class="dot"></span>{{ statusLabel(item.status) }}</span></div>
               <div class="mt-1 text-xs text-themed-muted">订单资金：{{ item.order ? orderEscrowText(item.order) : '-' }}</div>
               <div v-if="item.order" class="mt-1 text-xs text-themed-muted">订单金额：{{ money(item.order.price) }} / 手续费 {{ money(item.order.feeAmount) }}</div>
-              <div v-if="item.error" class="mt-1 max-w-xs text-xs text-rose-600 dark:text-rose-400">{{ item.error }}</div>
+              <div v-if="item.error" class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ item.error }}</div>
             </td>
-            <td class="p-3 text-right">
-              <div class="flex justify-end gap-2">
+            <td class="px-4 py-3 text-right">
+              <div class="flex flex-wrap justify-end gap-2">
                 <button class="btn btn-secondary btn-sm" type="button" @click="retryDelivery(item)">重试</button>
                 <button class="btn btn-secondary btn-sm" type="button" @click="rollbackDelivery(item)">回滚</button>
                 <button
@@ -1007,23 +1062,29 @@ onMounted(loadActive)
               </div>
             </td>
           </tr>
-          <tr v-if="deliveryTasks.length === 0"><td class="p-6 text-center text-themed-muted" colspan="6">暂无交割任务。</td></tr>
+          <tr v-if="deliveryTasks.length === 0"><td class="px-4 py-8 text-center text-themed-muted" colspan="6">暂无交割任务。</td></tr>
         </tbody>
       </table>
     </section>
 
     <section v-else-if="activeTab === 'wallets'" class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-themed-secondary text-left text-themed-muted">
-          <tr><th class="p-3">用户</th><th class="p-3">可用余额</th><th class="p-3">冻结金额</th><th class="p-3">更新时间</th><th class="p-3 text-right">操作</th></tr>
+      <table class="w-full table-fixed text-sm">
+        <thead>
+          <tr class="border-b border-themed">
+            <th class="nimbus-th w-[24%]">用户</th>
+            <th class="nimbus-th w-[16%]">可用余额</th>
+            <th class="nimbus-th w-[16%]">冻结金额</th>
+            <th class="nimbus-th w-[20%]">更新时间</th>
+            <th class="nimbus-th w-[24%] text-right">操作</th>
+          </tr>
         </thead>
-        <tbody class="divide-y divide-themed">
-          <tr v-for="item in wallets" :key="item.id">
-            <td class="p-3">{{ item.user?.username || '-' }} / #{{ item.userId }}</td>
-            <td class="p-3 text-themed font-medium">{{ money(item.availableAmount) }}</td>
-            <td class="p-3 text-themed-muted">{{ money(item.frozenAmount) }}</td>
-            <td class="p-3">{{ formatDate(item.updatedAt) }}</td>
-            <td class="p-3 text-right">
+        <tbody>
+          <tr v-for="item in wallets" :key="item.id" class="nimbus-row border-b border-themed align-top">
+            <td class="px-4 py-3 break-words text-themed">{{ item.user?.username || '-' }} / #{{ item.userId }}</td>
+            <td class="px-4 py-3 font-medium tabular-nums text-themed">{{ money(item.availableAmount) }}</td>
+            <td class="px-4 py-3 tabular-nums text-themed-muted">{{ money(item.frozenAmount) }}</td>
+            <td class="px-4 py-3 text-themed-muted">{{ formatDate(item.updatedAt) }}</td>
+            <td class="px-4 py-3 text-right">
               <div class="flex flex-wrap justify-end gap-2">
               <button class="btn btn-secondary btn-sm" type="button" @click="freezeWallet(item)">冻结</button>
               <button class="btn btn-secondary btn-sm" type="button" @click="unfreezeWallet(item)">解冻</button>
@@ -1031,24 +1092,31 @@ onMounted(loadActive)
               </div>
             </td>
           </tr>
-          <tr v-if="wallets.length === 0"><td class="p-6 text-center text-themed-muted" colspan="5">暂无交易所余额。</td></tr>
+          <tr v-if="wallets.length === 0"><td class="px-4 py-8 text-center text-themed-muted" colspan="5">暂无交易所余额。</td></tr>
         </tbody>
       </table>
     </section>
 
     <section v-else-if="activeTab === 'withdrawals'" class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-themed-secondary text-left text-themed-muted">
-          <tr><th class="p-3">提现单</th><th class="p-3">用户</th><th class="p-3">金额</th><th class="p-3">方式</th><th class="p-3">状态</th><th class="p-3 text-right">操作</th></tr>
+      <table class="w-full table-fixed text-sm">
+        <thead>
+          <tr class="border-b border-themed">
+            <th class="nimbus-th w-[18%]">提现单</th>
+            <th class="nimbus-th w-[20%]">用户</th>
+            <th class="nimbus-th w-[12%]">金额</th>
+            <th class="nimbus-th w-[14%]">方式</th>
+            <th class="nimbus-th w-[14%]">状态</th>
+            <th class="nimbus-th w-[22%] text-right">操作</th>
+          </tr>
         </thead>
-        <tbody class="divide-y divide-themed">
-          <tr v-for="item in withdrawals" :key="item.id">
-            <td class="p-3">{{ item.withdrawalNo }}</td>
-            <td class="p-3">{{ item.user?.username }} / #{{ item.user?.id }}</td>
-            <td class="p-3">{{ money(item.amount) }}</td>
-            <td class="p-3">{{ item.method || '-' }}</td>
-            <td class="p-3">{{ statusLabel(item.status) }}</td>
-            <td class="p-3 text-right">
+        <tbody>
+          <tr v-for="item in withdrawals" :key="item.id" class="nimbus-row border-b border-themed align-top">
+            <td class="px-4 py-3 break-words font-medium text-themed">{{ item.withdrawalNo }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.user?.username }} / #{{ item.user?.id }}</td>
+            <td class="px-4 py-3 font-medium tabular-nums text-themed">{{ money(item.amount) }}</td>
+            <td class="px-4 py-3 break-words text-themed-muted">{{ item.method || '-' }}</td>
+            <td class="px-4 py-3"><span class="nimbus-pill" :class="['active','sold','completed','COMPLETED','approved','released','delivered'].includes(item.status) ? 'text-green-600 dark:text-green-400' : ['force_delisted','disputed','failed','FAILED','rejected'].includes(item.status) ? 'text-rose-600 dark:text-rose-400' : ['locked','escrowed','delivering','confirming','manual_review','PENDING','PROCESSING','pending','paying','open','processing','redelivering'].includes(item.status) ? 'text-amber-600 dark:text-amber-400' : 'text-themed-muted'"><span class="dot"></span>{{ statusLabel(item.status) }}</span></td>
+            <td class="px-4 py-3 text-right">
               <div class="flex flex-wrap items-center justify-end gap-2">
               <button v-if="item.status === 'pending'" class="btn btn-secondary btn-sm" type="button" @click="approveWithdrawal(item)">通过</button>
               <button v-if="['approved', 'paying'].includes(item.status)" class="btn btn-secondary btn-sm" type="button" @click="completeWithdrawal(item)">完成</button>
@@ -1057,25 +1125,33 @@ onMounted(loadActive)
               </div>
             </td>
           </tr>
-          <tr v-if="withdrawals.length === 0"><td class="p-6 text-center text-themed-muted" colspan="6">暂无提现。</td></tr>
+          <tr v-if="withdrawals.length === 0"><td class="px-4 py-8 text-center text-themed-muted" colspan="6">暂无提现。</td></tr>
         </tbody>
       </table>
     </section>
 
     <section v-else-if="activeTab === 'disputes'" class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-themed-secondary text-left text-themed-muted">
-          <tr><th class="p-3">争议</th><th class="p-3">订单</th><th class="p-3">提交人</th><th class="p-3">原因</th><th class="p-3">状态</th><th class="p-3">时间</th><th class="p-3 text-right">操作</th></tr>
+      <table class="w-full table-fixed text-sm">
+        <thead>
+          <tr class="border-b border-themed">
+            <th class="nimbus-th w-[8%]">争议</th>
+            <th class="nimbus-th w-[14%]">订单</th>
+            <th class="nimbus-th w-[16%]">提交人</th>
+            <th class="nimbus-th w-[22%]">原因</th>
+            <th class="nimbus-th w-[12%]">状态</th>
+            <th class="nimbus-th w-[14%]">时间</th>
+            <th class="nimbus-th w-[14%] text-right">操作</th>
+          </tr>
         </thead>
-        <tbody class="divide-y divide-themed">
-          <tr v-for="item in disputes" :key="item.id">
-            <td class="p-3">#{{ item.id }}</td>
-            <td class="p-3">{{ item.order?.orderNo || item.orderId }}</td>
-            <td class="p-3">{{ item.creator?.username }} / #{{ item.creator?.id }}</td>
-            <td class="p-3">{{ item.reason }}</td>
-            <td class="p-3">{{ statusLabel(item.status) }}</td>
-            <td class="p-3">{{ formatDate(item.createdAt) }}</td>
-            <td class="p-3 text-right">
+        <tbody>
+          <tr v-for="item in disputes" :key="item.id" class="nimbus-row border-b border-themed align-top">
+            <td class="px-4 py-3 font-medium text-themed">#{{ item.id }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.order?.orderNo || item.orderId }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.creator?.username }} / #{{ item.creator?.id }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.reason }}</td>
+            <td class="px-4 py-3"><span class="nimbus-pill" :class="['active','sold','completed','COMPLETED','approved','released','delivered'].includes(item.status) ? 'text-green-600 dark:text-green-400' : ['force_delisted','disputed','failed','FAILED','rejected'].includes(item.status) ? 'text-rose-600 dark:text-rose-400' : ['locked','escrowed','delivering','confirming','manual_review','PENDING','PROCESSING','pending','paying','open','processing','redelivering'].includes(item.status) ? 'text-amber-600 dark:text-amber-400' : 'text-themed-muted'"><span class="dot"></span>{{ statusLabel(item.status) }}</span></td>
+            <td class="px-4 py-3 text-themed-muted">{{ formatDate(item.createdAt) }}</td>
+            <td class="px-4 py-3 text-right">
               <div class="flex flex-wrap justify-end gap-2">
               <button v-if="activeDisputeStatuses.includes(item.status)" class="btn btn-secondary btn-sm" type="button" @click="runDisputeAction(item, 'reject')">拒绝</button>
               <button v-if="activeDisputeStatuses.includes(item.status)" class="btn btn-danger btn-sm" type="button" @click="runDisputeAction(item, 'refund')">退款</button>
@@ -1083,73 +1159,84 @@ onMounted(loadActive)
               </div>
             </td>
           </tr>
-          <tr v-if="disputes.length === 0"><td class="p-6 text-center text-themed-muted" colspan="7">暂无争议。</td></tr>
+          <tr v-if="disputes.length === 0"><td class="px-4 py-8 text-center text-themed-muted" colspan="7">暂无争议。</td></tr>
         </tbody>
       </table>
     </section>
 
     <section v-else-if="activeTab === 'risk'" class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-themed-secondary text-left text-themed-muted">
-          <tr><th class="p-3">实例</th><th class="p-3">用户</th><th class="p-3">节点</th><th class="p-3">评分</th><th class="p-3">状态</th><th class="p-3">原因</th><th class="p-3">更新时间</th></tr>
-        </thead>
-        <tbody class="divide-y divide-themed">
-          <tr v-for="item in riskRecords" :key="item.id">
-            <td class="p-3">{{ item.instance?.name || item.instanceId }} <span class="text-themed-muted">({{ item.instance?.status || '-' }})</span></td>
-            <td class="p-3">{{ item.user?.username || '-' }} / #{{ item.userId }}</td>
-            <td class="p-3">{{ item.host?.name || item.hostId }}</td>
-            <td class="p-3">{{ item.score }} / {{ item.level }}</td>
-            <td class="p-3">{{ item.status }} <span v-if="item.currentBandwidthLimit" class="text-themed-muted">· {{ item.currentBandwidthLimit }}</span></td>
-            <td class="p-3 max-w-md truncate">{{ item.reason || '-' }}</td>
-            <td class="p-3">{{ formatDate(item.updatedAt) }}</td>
+      <table class="w-full table-fixed text-sm">
+        <thead>
+          <tr class="border-b border-themed">
+            <th class="nimbus-th w-[16%]">实例</th>
+            <th class="nimbus-th w-[14%]">用户</th>
+            <th class="nimbus-th w-[12%]">节点</th>
+            <th class="nimbus-th w-[10%]">评分</th>
+            <th class="nimbus-th w-[14%]">状态</th>
+            <th class="nimbus-th w-[20%]">原因</th>
+            <th class="nimbus-th w-[14%]">更新时间</th>
           </tr>
-          <tr v-if="riskRecords.length === 0"><td class="p-6 text-center text-themed-muted" colspan="7">暂无风控记录。</td></tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in riskRecords" :key="item.id" class="nimbus-row border-b border-themed align-top">
+            <td class="px-4 py-3 break-words text-themed">{{ item.instance?.name || item.instanceId }} <span class="text-themed-muted">({{ item.instance?.status || '-' }})</span></td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.user?.username || '-' }} / #{{ item.userId }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.host?.name || item.hostId }}</td>
+            <td class="px-4 py-3 tabular-nums text-themed">{{ item.score }} / {{ item.level }}</td>
+            <td class="px-4 py-3">
+              <span class="nimbus-pill" :class="item.status === 'normal' ? 'text-green-600 dark:text-green-400' : item.status === 'suspended' ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'"><span class="dot"></span>{{ item.status }}</span>
+              <span v-if="item.currentBandwidthLimit" class="mt-1 block text-xs text-themed-muted">· {{ item.currentBandwidthLimit }}</span>
+            </td>
+            <td class="px-4 py-3 text-themed-muted"><span class="block break-words">{{ item.reason || '-' }}</span></td>
+            <td class="px-4 py-3 text-themed-muted">{{ formatDate(item.updatedAt) }}</td>
+          </tr>
+          <tr v-if="riskRecords.length === 0"><td class="px-4 py-8 text-center text-themed-muted" colspan="7">暂无风控记录。</td></tr>
         </tbody>
       </table>
     </section>
 
-    <section v-else-if="activeTab === 'config'" class="card p-5">
+    <section v-else-if="activeTab === 'config'" class="card p-6">
       <form class="grid gap-4 md:grid-cols-3" @submit.prevent="saveConfig">
-        <label class="flex items-center gap-2 md:col-span-3">
-          <input v-model="policy.enabled" type="checkbox">
-          <span class="text-sm text-themed">启用交易所</span>
+        <label class="flex items-center gap-3 rounded-lg border border-themed bg-themed-surface p-3 md:col-span-3">
+          <input v-model="policy.enabled" type="checkbox" class="h-4 w-4 rounded text-accent">
+          <span class="text-sm font-medium text-themed">启用交易所</span>
         </label>
-        <div class="rounded border border-themed bg-themed-secondary p-3 text-sm md:col-span-3">
+        <div class="nimbus-note md:col-span-3">
           <div class="font-medium text-themed">强制暂停状态上架：固定开启，不可关闭</div>
           <div class="mt-1 text-themed-muted">所有挂牌必须先暂停实例；挂牌后实例保持暂停/交易锁定，成交后强制重装交割。</div>
         </div>
-        <div class="rounded border border-themed bg-themed-secondary p-3 text-sm md:col-span-3">
+        <div class="nimbus-note md:col-span-3">
           <div class="font-medium text-themed">自动确认规则：可配置</div>
           <div class="mt-1 text-themed-muted">交割完成进入确认期；启用自动放款时，超过确认期且无未完结争议后结算到卖家交易所余额。</div>
         </div>
-        <label class="text-sm">最低剩余有效期<input v-model.number="policy.minRemainingDays" class="input mt-1 w-full" type="number" min="1"></label>
-        <label class="text-sm">即将到期阈值<input v-model.number="policy.expiringSoonDays" class="input mt-1 w-full" type="number" min="1"></label>
-        <label class="text-sm">最低售价<input v-model.number="policy.minPrice" class="input mt-1 w-full" type="number" min="0" step="0.01"></label>
-        <label class="text-sm">最高售价<input v-model.number="policy.maxPrice" class="input mt-1 w-full" type="number" min="0" step="0.01"></label>
-        <label class="text-sm">最大溢价 %<input v-model.number="policy.maxMarkupPercent" class="input mt-1 w-full" type="number" min="0"></label>
-        <label class="text-sm">手续费 %<input v-model.number="policy.feePercent" class="input mt-1 w-full" type="number" min="0" step="0.01"></label>
-        <label class="text-sm">最低手续费<input v-model.number="policy.minFee" class="input mt-1 w-full" type="number" min="0" step="0.01"></label>
-        <label class="text-sm">最高手续费<input v-model.number="policy.maxFee" class="input mt-1 w-full" type="number" min="0" step="0.01"></label>
-        <label class="text-sm">确认期小时<input v-model.number="policy.confirmationHours" class="input mt-1 w-full" type="number" min="1"></label>
-        <label class="flex items-center gap-2"><input v-model="policy.autoConfirmEnabled" type="checkbox"><span class="text-sm">确认期结束自动放款</span></label>
-        <label class="text-sm">最低提现金额<input v-model.number="policy.minWithdrawalAmount" class="input mt-1 w-full" type="number" min="0" step="0.01"></label>
-        <label class="text-sm">每日提现上限<input v-model.number="policy.dailyWithdrawalLimit" class="input mt-1 w-full" type="number" min="0" step="0.01"></label>
-        <label class="text-sm">每日提现次数<input v-model.number="policy.dailyWithdrawalCountLimit" class="input mt-1 w-full" type="number" min="1"></label>
-        <label class="text-sm">最大挂牌数<input v-model.number="policy.maxActiveListingsPerUser" class="input mt-1 w-full" type="number" min="1"></label>
-        <label class="text-sm">每日购买数<input v-model.number="policy.maxPurchasesPerUserPerDay" class="input mt-1 w-full" type="number" min="1"></label>
-        <label class="text-sm">争议超时小时<input v-model.number="policy.disputeTimeoutHours" class="input mt-1 w-full" type="number" min="1"></label>
-        <label class="flex items-center gap-2"><input v-model="policy.allowBalanceTransfer" type="checkbox"><span class="text-sm">允许划转余额</span></label>
-        <label class="flex items-center gap-2"><input v-model="policy.allowPublicIpTransfer" type="checkbox"><span class="text-sm">允许独立 IP 跟随</span></label>
-        <label class="flex items-center gap-2"><input v-model="policy.allowBuyerImageSelection" type="checkbox"><span class="text-sm">允许买家选镜像</span></label>
-        <label class="text-sm md:col-span-3">
-          允许交易的套餐 ID
-          <textarea v-model="policy.packageAllowlistText" class="input mt-1 w-full" rows="2" placeholder="留空表示全部允许；多个 ID 用逗号或空格分隔"></textarea>
+        <label class="space-y-1.5"><span class="nimbus-field-label">最低剩余有效期</span><input v-model.number="policy.minRemainingDays" class="input w-full" type="number" min="1"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">即将到期阈值</span><input v-model.number="policy.expiringSoonDays" class="input w-full" type="number" min="1"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">最低售价</span><input v-model.number="policy.minPrice" class="input w-full" type="number" min="0" step="0.01"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">最高售价</span><input v-model.number="policy.maxPrice" class="input w-full" type="number" min="0" step="0.01"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">最大溢价 %</span><input v-model.number="policy.maxMarkupPercent" class="input w-full" type="number" min="0"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">手续费 %</span><input v-model.number="policy.feePercent" class="input w-full" type="number" min="0" step="0.01"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">最低手续费</span><input v-model.number="policy.minFee" class="input w-full" type="number" min="0" step="0.01"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">最高手续费</span><input v-model.number="policy.maxFee" class="input w-full" type="number" min="0" step="0.01"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">确认期小时</span><input v-model.number="policy.confirmationHours" class="input w-full" type="number" min="1"></label>
+        <label class="flex items-center gap-2 rounded-lg border border-themed bg-themed-surface p-3"><input v-model="policy.autoConfirmEnabled" type="checkbox" class="h-4 w-4 rounded text-accent"><span class="text-sm text-themed">确认期结束自动放款</span></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">最低提现金额</span><input v-model.number="policy.minWithdrawalAmount" class="input w-full" type="number" min="0" step="0.01"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">每日提现上限</span><input v-model.number="policy.dailyWithdrawalLimit" class="input w-full" type="number" min="0" step="0.01"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">每日提现次数</span><input v-model.number="policy.dailyWithdrawalCountLimit" class="input w-full" type="number" min="1"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">最大挂牌数</span><input v-model.number="policy.maxActiveListingsPerUser" class="input w-full" type="number" min="1"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">每日购买数</span><input v-model.number="policy.maxPurchasesPerUserPerDay" class="input w-full" type="number" min="1"></label>
+        <label class="space-y-1.5"><span class="nimbus-field-label">争议超时小时</span><input v-model.number="policy.disputeTimeoutHours" class="input w-full" type="number" min="1"></label>
+        <label class="flex items-center gap-2 rounded-lg border border-themed bg-themed-surface p-3"><input v-model="policy.allowBalanceTransfer" type="checkbox" class="h-4 w-4 rounded text-accent"><span class="text-sm text-themed">允许划转余额</span></label>
+        <label class="flex items-center gap-2 rounded-lg border border-themed bg-themed-surface p-3"><input v-model="policy.allowPublicIpTransfer" type="checkbox" class="h-4 w-4 rounded text-accent"><span class="text-sm text-themed">允许独立 IP 跟随</span></label>
+        <label class="flex items-center gap-2 rounded-lg border border-themed bg-themed-surface p-3"><input v-model="policy.allowBuyerImageSelection" type="checkbox" class="h-4 w-4 rounded text-accent"><span class="text-sm text-themed">允许买家选镜像</span></label>
+        <label class="space-y-1.5 md:col-span-3">
+          <span class="nimbus-field-label">允许交易的套餐 ID</span>
+          <textarea v-model="policy.packageAllowlistText" class="input w-full" rows="2" placeholder="留空表示全部允许；多个 ID 用逗号或空格分隔"></textarea>
         </label>
-        <label class="text-sm md:col-span-3">
-          允许交易的节点 ID
-          <textarea v-model="policy.hostAllowlistText" class="input mt-1 w-full" rows="2" placeholder="留空表示全部允许；多个 ID 用逗号或空格分隔"></textarea>
+        <label class="space-y-1.5 md:col-span-3">
+          <span class="nimbus-field-label">允许交易的节点 ID</span>
+          <textarea v-model="policy.hostAllowlistText" class="input w-full" rows="2" placeholder="留空表示全部允许；多个 ID 用逗号或空格分隔"></textarea>
         </label>
-        <div class="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 md:col-span-3 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="nimbus-warn md:col-span-3">
           “强制暂停状态上架”为固定规则，不能关闭。白名单为空时表示全部套餐/节点允许进入交易所。
         </div>
         <div class="md:col-span-3">
@@ -1159,19 +1246,25 @@ onMounted(loadActive)
     </section>
 
     <section v-else-if="activeTab === 'audit'" class="card overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-themed-secondary text-left text-themed-muted">
-          <tr><th class="p-3">动作</th><th class="p-3">对象</th><th class="p-3">操作人</th><th class="p-3">详情</th><th class="p-3">时间</th></tr>
-        </thead>
-        <tbody class="divide-y divide-themed">
-          <tr v-for="item in auditLogs" :key="item.id">
-            <td class="p-3">{{ item.action }}</td>
-            <td class="p-3">{{ item.targetType }} #{{ item.targetId || '-' }}</td>
-            <td class="p-3">{{ item.actor?.username || '-' }}</td>
-            <td class="p-3 max-w-md truncate">{{ JSON.stringify(item.detail || {}) }}</td>
-            <td class="p-3">{{ formatDate(item.createdAt) }}</td>
+      <table class="w-full table-fixed text-sm">
+        <thead>
+          <tr class="border-b border-themed">
+            <th class="nimbus-th w-[18%]">动作</th>
+            <th class="nimbus-th w-[16%]">对象</th>
+            <th class="nimbus-th w-[16%]">操作人</th>
+            <th class="nimbus-th w-[32%]">详情</th>
+            <th class="nimbus-th w-[18%]">时间</th>
           </tr>
-          <tr v-if="auditLogs.length === 0"><td class="p-6 text-center text-themed-muted" colspan="5">暂无审计日志。</td></tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in auditLogs" :key="item.id" class="nimbus-row border-b border-themed align-top">
+            <td class="px-4 py-3 break-words font-medium text-themed">{{ item.action }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.targetType }} #{{ item.targetId || '-' }}</td>
+            <td class="px-4 py-3 break-words text-themed">{{ item.actor?.username || '-' }}</td>
+            <td class="px-4 py-3 text-themed-muted"><span class="block truncate font-mono text-xs">{{ JSON.stringify(item.detail || {}) }}</span></td>
+            <td class="px-4 py-3 text-themed-muted">{{ formatDate(item.createdAt) }}</td>
+          </tr>
+          <tr v-if="auditLogs.length === 0"><td class="px-4 py-8 text-center text-themed-muted" colspan="5">暂无审计日志。</td></tr>
         </tbody>
       </table>
     </section>
@@ -1181,31 +1274,38 @@ onMounted(loadActive)
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
       @click.self="closeAdminAction"
     >
-      <section class="card w-full max-w-xl p-5 shadow-xl">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <h2 class="text-lg font-semibold text-themed">{{ adminActionDialog.title }}</h2>
-            <p class="mt-1 text-sm text-themed-muted">{{ adminActionDialog.message }}</p>
+      <section class="card w-full max-w-xl p-6 shadow-xl">
+        <div class="flex items-start justify-between gap-4 border-b border-themed pb-4">
+          <div class="flex items-start gap-3">
+            <span class="nimbus-title-icon shrink-0" :class="adminActionDialog.danger ? 'nimbus-title-icon--danger' : ''">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 9v3.75m0 3.75h.008M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h17.78A1.5 1.5 0 0 0 22.18 18L13.71 3.86a1.5 1.5 0 0 0-2.58 0Z" />
+              </svg>
+            </span>
+            <div>
+              <h2 class="text-lg font-semibold text-themed">{{ adminActionDialog.title }}</h2>
+              <p class="mt-1 text-sm text-themed-muted">{{ adminActionDialog.message }}</p>
+            </div>
           </div>
-          <button class="btn btn-secondary btn-sm" type="button" :disabled="adminActionSubmitting" @click="closeAdminAction">关闭</button>
+          <button class="btn btn-secondary btn-sm shrink-0" type="button" :disabled="adminActionSubmitting" @click="closeAdminAction">关闭</button>
         </div>
 
-        <div class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
           该操作会写入交易所审计日志。涉及退款、提现、交割回滚、余额调整时，请确认线下证据和当前订单状态后再执行。
         </div>
 
         <div class="mt-4 space-y-3">
           <label v-if="adminActionDialog.requiresAmount" class="block text-sm">
-            <span class="text-themed">{{ adminActionDialog.amountLabel || '金额' }}</span>
+            <span class="nimbus-field-label">{{ adminActionDialog.amountLabel || '金额' }}</span>
             <input v-model.number="adminActionDialog.amount" class="input mt-1 w-full" type="number" step="0.01">
             <span v-if="adminActionDialog.amountHelp" class="mt-1 block text-xs text-themed-muted">{{ adminActionDialog.amountHelp }}</span>
           </label>
           <label v-if="adminActionDialog.proofUrlLabel" class="block text-sm">
-            <span class="text-themed">{{ adminActionDialog.proofUrlLabel }}</span>
+            <span class="nimbus-field-label">{{ adminActionDialog.proofUrlLabel }}</span>
             <input v-model="adminActionDialog.proofUrl" class="input mt-1 w-full" placeholder="https://...">
           </label>
           <label class="block text-sm">
-            <span class="text-themed">{{ adminActionDialog.reasonLabel || '操作备注' }}</span>
+            <span class="nimbus-field-label">{{ adminActionDialog.reasonLabel || '操作备注' }}</span>
             <textarea
               v-model="adminActionDialog.reason"
               class="input mt-1 w-full"
@@ -1231,3 +1331,135 @@ onMounted(loadActive)
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Nimbus admin kit */
+.nimbus-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  color: var(--kawaii-primary);
+  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kawaii-primary) 28%, transparent);
+}
+
+.nimbus-title-icon--danger {
+  color: #dc2626;
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #dc2626 28%, transparent);
+}
+
+:global(.dark) .nimbus-title-icon--danger {
+  color: #f87171;
+}
+
+.nimbus-stat {
+  position: relative;
+  overflow: hidden;
+}
+
+.nimbus-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2.25rem;
+  height: 2px;
+  background: var(--kawaii-primary);
+  border-radius: 0 0 2px 0;
+}
+
+.nimbus-stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+}
+
+.nimbus-stat-value {
+  margin-top: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--kawaii-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.nimbus-th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+  vertical-align: bottom;
+}
+
+.nimbus-row {
+  transition: background-color 0.12s ease;
+}
+
+.nimbus-row:hover {
+  background: color-mix(in srgb, var(--kawaii-primary) 5%, transparent);
+}
+
+.nimbus-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.nimbus-pill .dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: currentColor;
+}
+
+.nimbus-field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--kawaii-muted);
+}
+
+.nimbus-note {
+  border-radius: 0.5rem;
+  border: 1px solid var(--kawaii-line);
+  background: var(--kawaii-surface-soft);
+  padding: 0.75rem 0.875rem;
+  font-size: 0.8125rem;
+}
+
+.nimbus-warn {
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, #d97706 40%, transparent);
+  background: color-mix(in srgb, #d97706 8%, transparent);
+  padding: 0.75rem 0.875rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #92400e;
+}
+
+:global(.dark) .nimbus-warn {
+  color: #fcd34d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-row {
+    transition: none;
+  }
+}
+</style>

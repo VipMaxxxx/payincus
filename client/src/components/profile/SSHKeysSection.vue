@@ -201,11 +201,11 @@ defineExpose({ loadSSHKeys })
 </script>
 
 <template>
-  <div class="card p-5">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+  <div class="card nimbus-section">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
       <div>
-        <h2 class="text-sm font-medium text-themed-secondary">{{ $t('profile.sshKeys.title') }}</h2>
-        <p class="text-xs text-themed-faint mt-0.5">{{ $t('profile.sshKeys.description') }}</p>
+        <h2 class="nimbus-section-title">{{ $t('profile.sshKeys.title') }}</h2>
+        <p class="nimbus-section-desc">{{ $t('profile.sshKeys.description') }}</p>
       </div>
       <div class="flex items-center gap-2">
         <button class="btn-primary btn-sm flex-1 sm:flex-none" :disabled="generating" @click="generateKey">
@@ -228,7 +228,7 @@ defineExpose({ loadSSHKeys })
     </div>
 
     <!-- 添加表单 -->
-    <div v-if="showAddKey" class="mb-4 p-4 bg-themed-tertiary border border-themed rounded-lg space-y-3">
+    <div v-if="showAddKey" class="mb-4 p-4 bg-themed-tertiary border border-themed rounded-xl space-y-3">
       <div>
         <label class="block text-xs text-themed-muted mb-1.5">{{ $t('profile.sshKeys.name') }}</label>
         <input v-model="newKey.name" type="text" class="input" :placeholder="$t('profile.sshKeys.namePlaceholder')" />
@@ -249,7 +249,7 @@ defineExpose({ loadSSHKeys })
 
     <!-- SSH 密钥列表 -->
     <div v-if="sshKeys.length" class="space-y-2">
-      <div v-for="key in paginatedKeys" :key="key.id" class="group flex items-center justify-between gap-3 p-3 bg-themed-tertiary border border-themed rounded-lg hover:border-themed-secondary transition-colors">
+      <div v-for="key in paginatedKeys" :key="key.id" class="group flex items-center justify-between gap-3 p-3 bg-themed-tertiary border border-themed rounded-xl hover:border-themed-secondary transition-colors">
         <div class="flex items-center gap-3 min-w-0 flex-1">
           <div class="w-8 h-8 rounded bg-themed-secondary flex items-center justify-center flex-shrink-0">
             <svg class="w-4 h-4 icon-themed" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -258,11 +258,11 @@ defineExpose({ loadSSHKeys })
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-sm text-themed-secondary truncate">{{ key.name }}</div>
-            <div class="text-xs text-themed-faint font-mono truncate">{{ key.fingerprint }}</div>
+            <div class="text-xs text-themed-faint font-mono truncate tabular-nums">{{ key.fingerprint }}</div>
           </div>
         </div>
         <div class="flex items-center gap-3 flex-shrink-0">
-          <span class="text-xs text-themed-faint hidden sm:inline">{{ key.created_at }}</span>
+          <span class="text-xs text-themed-faint hidden sm:inline tabular-nums">{{ key.created_at }}</span>
           <button 
             class="text-themed-faint hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100 transition-all" 
             @click="deleteKey(key.id)"
@@ -277,7 +277,7 @@ defineExpose({ loadSSHKeys })
 
     <!-- 分页控件 -->
     <div v-if="totalPages > 1" class="flex items-center justify-between mt-4 pt-3 border-t border-themed">
-      <span class="text-xs text-themed-muted">
+      <span class="text-xs text-themed-muted tabular-nums">
         {{ $t('profile.sshKeys.pageInfo', { current: currentPage, total: totalPages, count: sshKeys.length }) }}
       </span>
       <div class="flex items-center gap-2">
@@ -381,3 +381,23 @@ defineExpose({ loadSSHKeys })
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+
+.nimbus-section-desc {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--kawaii-muted);
+}
+</style>

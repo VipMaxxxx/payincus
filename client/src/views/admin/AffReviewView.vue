@@ -166,8 +166,13 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
       <div v-if="loading" class="p-8 text-center text-themed-muted">
         {{ $t('common.loading') }}...
       </div>
-      <div v-else-if="withdrawals.length === 0" class="p-8 text-center text-themed-muted">
-        {{ $t('aff.noRequests') }}
+      <div v-else-if="withdrawals.length === 0" class="flex flex-col items-center gap-3 p-12 text-center">
+        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-themed-secondary text-themed-muted">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </span>
+        <p class="text-sm text-themed-muted">{{ $t('aff.noRequests') }}</p>
       </div>
       <template v-else>
         <div class="space-y-3 p-4 lg:hidden">
@@ -178,9 +183,9 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
           >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <div class="font-mono text-xs text-themed-muted">#{{ w.id }}</div>
+                <div class="font-mono text-xs text-themed-muted tabular-nums">#{{ w.id }}</div>
                 <div class="mt-1 truncate text-sm font-semibold text-themed">{{ w.username }}</div>
-                <div class="mt-1 text-xs text-themed-muted">ID: {{ w.userId }}</div>
+                <div class="mt-1 text-xs text-themed-muted tabular-nums">ID: {{ w.userId }}</div>
               </div>
               <span :class="['badge badge-sm shrink-0', getStatusBadge(w.status)]">
                 {{ getStatusName(w.status) }}
@@ -188,19 +193,19 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
             </div>
             <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
               <div>
-                <div class="text-themed-muted">{{ $t('aff.requestAmount') }}</div>
-                <div class="mt-1 font-semibold text-themed">{{ formatMoney(w.amount) }}</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">{{ $t('aff.requestAmount') }}</div>
+                <div class="mt-1 font-semibold text-themed tabular-nums">{{ formatMoney(w.amount) }}</div>
               </div>
               <div>
-                <div class="text-themed-muted">{{ $t('aff.userBalance') }}</div>
-                <div class="mt-1 font-medium text-themed">{{ formatMoney(w.userAffBalance) }}</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">{{ $t('aff.userBalance') }}</div>
+                <div class="mt-1 font-medium text-themed tabular-nums">{{ formatMoney(w.userAffBalance) }}</div>
               </div>
               <div class="col-span-2">
-                <div class="text-themed-muted">{{ $t('aff.requestTime') }}</div>
-                <div class="mt-1 font-medium text-themed">{{ formatDate(w.createdAt) }}</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">{{ $t('aff.requestTime') }}</div>
+                <div class="mt-1 font-medium text-themed tabular-nums">{{ formatDate(w.createdAt) }}</div>
               </div>
               <div class="col-span-2">
-                <div class="text-themed-muted">{{ $t('aff.rejectReason') }}</div>
+                <div class="text-2xs uppercase tracking-wide text-themed-muted">{{ $t('aff.rejectReason') }}</div>
                 <div class="mt-1 break-words font-medium text-themed">{{ w.rejectReason || '-' }}</div>
               </div>
             </div>
@@ -224,32 +229,32 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
         <div class="hidden overflow-hidden lg:block">
           <table class="w-full table-fixed">
             <thead>
-              <tr class="border-b border-themed text-left text-sm text-themed-muted">
-                <th class="w-[8%] px-4 py-3 font-medium">ID</th>
-                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('aff.user') }}</th>
-                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('aff.requestAmount') }}</th>
-                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('aff.userBalance') }}</th>
-                <th class="w-[10%] px-4 py-3 font-medium">{{ $t('aff.status') }}</th>
-                <th class="w-[16%] px-4 py-3 font-medium">{{ $t('aff.requestTime') }}</th>
-                <th class="w-[14%] px-4 py-3 font-medium">{{ $t('aff.rejectReason') }}</th>
-                <th class="w-[12%] px-4 py-3 font-medium">{{ $t('common.actions') }}</th>
+              <tr class="border-b border-themed text-left text-2xs font-medium uppercase tracking-wide text-themed-muted">
+                <th class="w-[8%] px-4 py-3">ID</th>
+                <th class="w-[16%] px-4 py-3">{{ $t('aff.user') }}</th>
+                <th class="w-[12%] px-4 py-3">{{ $t('aff.requestAmount') }}</th>
+                <th class="w-[12%] px-4 py-3">{{ $t('aff.userBalance') }}</th>
+                <th class="w-[10%] px-4 py-3">{{ $t('aff.status') }}</th>
+                <th class="w-[16%] px-4 py-3">{{ $t('aff.requestTime') }}</th>
+                <th class="w-[14%] px-4 py-3">{{ $t('aff.rejectReason') }}</th>
+                <th class="w-[12%] px-4 py-3">{{ $t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-themed">
               <tr v-for="w in withdrawals" :key="w.id" class="hover:bg-themed-hover">
-                <td class="px-4 py-3 text-sm text-themed font-mono">#{{ w.id }}</td>
+                <td class="px-4 py-3 text-sm text-themed font-mono tabular-nums">#{{ w.id }}</td>
                 <td class="px-4 py-3">
                   <div class="truncate text-sm text-themed font-medium">{{ w.username }}</div>
-                  <div class="text-xs text-themed-muted">ID: {{ w.userId }}</div>
+                  <div class="text-xs text-themed-muted tabular-nums">ID: {{ w.userId }}</div>
                 </td>
-                <td class="px-4 py-3 text-sm font-medium text-themed">{{ formatMoney(w.amount) }}</td>
-                <td class="px-4 py-3 text-sm text-themed-muted">{{ formatMoney(w.userAffBalance) }}</td>
+                <td class="px-4 py-3 text-sm font-medium text-themed tabular-nums">{{ formatMoney(w.amount) }}</td>
+                <td class="px-4 py-3 text-sm text-themed-muted tabular-nums">{{ formatMoney(w.userAffBalance) }}</td>
                 <td class="px-4 py-3">
                   <span :class="['badge badge-sm', getStatusBadge(w.status)]">
                     {{ getStatusName(w.status) }}
                   </span>
                 </td>
-                <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ formatDate(w.createdAt) }}</td>
+                <td class="truncate px-4 py-3 text-sm text-themed-muted tabular-nums">{{ formatDate(w.createdAt) }}</td>
                 <td class="truncate px-4 py-3 text-sm text-themed-muted">{{ w.rejectReason || '-' }}</td>
                 <td class="px-4 py-3">
                   <template v-if="w.status === 'pending'">
@@ -287,7 +292,7 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
           >
             {{ $t('common.prevPage') }}
           </button>
-          <span class="text-sm text-themed-muted">{{ page }} / {{ totalPages }}</span>
+          <span class="text-sm text-themed-muted tabular-nums">{{ page }} / {{ totalPages }}</span>
           <button
             class="btn btn-sm btn-ghost"
             :disabled="page >= totalPages"
@@ -343,3 +348,15 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-in *,
+  .animate-fade-in *::before,
+  .animate-fade-in *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+</style>

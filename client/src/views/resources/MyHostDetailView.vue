@@ -351,24 +351,25 @@ const tabs = [
     <template v-else-if="host">
       <!-- Header -->
       <div class="page-header flex-col sm:flex-row gap-4">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 min-w-0">
           <RouterLink
             :to="hostsPath()"
-            class="transition-colors"
-            :class="themeStore.isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'"
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-themed bg-themed-surface text-themed-muted transition-colors hover:bg-themed-hover hover:text-themed"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7" />
             </svg>
           </RouterLink>
-          <div>
-            <div class="flex items-center gap-3">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2.5">
               <FlagIcon v-if="host.countryCode" :code="host.countryCode" size="md" />
-              <div :class="['w-2.5 h-2.5 rounded-full', statusInfo.dot]"></div>
-              <h1 class="page-title uppercase">{{ host.name }}</h1>
-              <span :class="['badge', statusInfo.class]">{{ statusInfo.label }}</span>
+              <h1 class="page-title uppercase truncate">{{ host.name }}</h1>
+              <span :class="['inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-mono', statusInfo.class]">
+                <span :class="['h-1.5 w-1.5 rounded-full', statusInfo.dot]"></span>
+                {{ statusInfo.label }}
+              </span>
             </div>
-            <p class="page-description mt-0.5">{{ host.location || host.url }}</p>
+            <p class="page-description mt-1 truncate font-mono text-themed-muted">{{ host.location || host.url }}</p>
           </div>
         </div>
 
@@ -439,20 +440,16 @@ const tabs = [
       </div>
 
       <!-- Tab Navigation -->
-      <div class="relative">
-        <!-- 滚动容器 -->
-        <div
-          class="flex gap-1 p-1 rounded-xl overflow-x-auto scrollbar-hide scroll-smooth"
-          :class="themeStore.isDark ? 'bg-gray-900' : 'bg-gray-100'"
-        >
+      <div class="border-b border-themed">
+        <div class="flex gap-1 overflow-x-auto scrollbar-hide scroll-smooth -mb-px">
           <button
             v-for="tab in tabs"
             :key="tab.key"
             :class="[
-              'flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all whitespace-nowrap shrink-0',
+              'nimbus-tab flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm rounded-t-lg whitespace-nowrap shrink-0 border-b-2',
               activeTab === tab.key
-                ? (themeStore.isDark ? 'bg-gray-800 text-white shadow-sm' : 'bg-white text-gray-900 shadow-sm')
-                : (themeStore.isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50' : 'text-gray-500 hover:text-gray-900 hover:bg-white/50')
+                ? 'text-themed font-semibold border-primary-500'
+                : 'text-themed-muted font-medium border-transparent hover:text-themed hover:bg-themed-hover'
             ]"
             @click="activeTab = tab.key as TabType"
           >
@@ -493,8 +490,11 @@ const tabs = [
                 </button>
               </div>
               <div class="modal-body space-y-4">
-                <div class="p-3 rounded-lg" :class="themeStore.isDark ? 'bg-blue-500/10' : 'bg-blue-50'">
-                  <p class="text-sm" :class="themeStore.isDark ? 'text-blue-400' : 'text-blue-600'">
+                <div class="flex gap-2.5 rounded-lg border border-themed bg-themed-secondary p-3">
+                  <svg class="mt-0.5 h-4 w-4 shrink-0 text-themed-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p class="text-sm text-themed-secondary">
                     {{ t('admin.hosts.extendHint', { count: paidInstanceCount }) }}
                   </p>
                 </div>
@@ -594,7 +594,7 @@ const tabs = [
                     <span class="text-sm font-medium text-themed">{{ t('admin.hosts.step1RunScript') }}</span>
                   </div>
                   <p class="text-xs text-themed-muted ml-8">{{ t('admin.hosts.runOnHost') }}</p>
-                  <div class="bg-gray-900 rounded-lg p-4 ml-8 overflow-x-auto">
+                  <div class="ml-8 overflow-x-auto rounded-lg border border-gray-800 bg-gray-950 p-4">
                     <code class="text-green-400 text-sm break-all whitespace-pre-wrap font-mono">{{ reinstallCommand }}</code>
                   </div>
                   <div class="ml-8 mb-4">
@@ -650,3 +650,16 @@ const tabs = [
     </template>
   </div>
 </template>
+
+<style scoped>
+/* Nimbus in-page tabs: indigo underline, smooth colour/underline transition */
+.nimbus-tab {
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-tab {
+    transition: none;
+  }
+}
+</style>

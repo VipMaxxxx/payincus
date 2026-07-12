@@ -13,20 +13,20 @@ const neutralRamp = {
   950: '#0a0a0a'
 }
 
-// Nimbus 信号色阶（靛蓝）：给散落的 bg-primary-*/text-primary-*/ring-primary-* 等
-// accent 死类恢复为可见的靛蓝主色（与 --kawaii-primary=#4f46e5 一致）。
+// Nimbus 信号色阶（Linear 靛紫）：给散落的 bg-primary-*/text-primary-*/ring-primary-* 等
+// accent 死类恢复为可见的靛紫主色（与 --kawaii-primary=#5e6ad2 一致，500=#5e6ad2、600=#4f5bc9）。
 const indigoRamp = {
-  50: '#eef0fe',
-  100: '#e0e2fd',
-  200: '#c7c8fb',
-  300: '#a5a3f7',
-  400: '#847ff1',
-  500: '#4f46e5',
-  600: '#4338ca',
-  700: '#3730a3',
-  800: '#2e2a82',
-  900: '#26236a',
-  950: '#1a183f'
+  50: '#f0f1fb',
+  100: '#e2e4f7',
+  200: '#c9ccf0',
+  300: '#a9ade6',
+  400: '#868cdc',
+  500: '#5e6ad2',
+  600: '#4f5bc9',
+  700: '#4149a8',
+  800: '#373d85',
+  900: '#31376b',
+  950: '#1f2140'
 }
 
 // rose 在代码里被广泛用作「危险/严重/亏损」的红色语义（非装饰），

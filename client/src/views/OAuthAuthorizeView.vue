@@ -143,48 +143,66 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen px-4 py-10">
-    <section class="mx-auto w-full max-w-xl">
-      <div class="card p-6">
+  <main class="nimbus-auth kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen flex items-center justify-center px-4 py-10">
+    <div class="nimbus-aurora" aria-hidden="true"></div>
+    <section class="relative z-10 mx-auto w-full max-w-xl">
+      <div class="card nimbus-card">
         <div v-if="loading" class="space-y-3">
-          <div class="h-5 w-40 animate-pulse rounded bg-themed-secondary"></div>
-          <div class="h-4 w-full animate-pulse rounded bg-themed-tertiary"></div>
-          <div class="h-4 w-4/5 animate-pulse rounded bg-themed-tertiary"></div>
+          <div class="h-11 w-11 animate-pulse rounded-xl skeleton-bg"></div>
+          <div class="h-5 w-40 animate-pulse rounded skeleton-bg"></div>
+          <div class="h-4 w-full animate-pulse rounded skeleton-bg-soft"></div>
+          <div class="h-4 w-4/5 animate-pulse rounded skeleton-bg-soft"></div>
         </div>
 
         <div v-else-if="error" class="space-y-4">
+          <div class="nimbus-consent-icon nimbus-consent-icon--warn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M12 9v3.75m0 3.75h.008M10.34 3.94l-8.52 14.06A1.875 1.875 0 003.424 20.9h17.152a1.875 1.875 0 001.604-2.9L13.66 3.94a1.875 1.875 0 00-3.32 0z" />
+            </svg>
+          </div>
           <h1 class="text-lg font-semibold text-themed">OAuth 授权失败</h1>
           <p class="text-sm text-red-600">{{ error }}</p>
-          <p v-if="errorHint" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p v-if="errorHint" class="nimbus-consent-hint">
             {{ errorHint }}
           </p>
           <button class="btn-secondary w-full" @click="router.push(dashboardPath())">返回控制台</button>
         </div>
 
         <div v-else-if="consent" class="space-y-6">
-          <div>
+          <div class="text-center">
+            <div class="nimbus-consent-icon nimbus-consent-icon--app">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+              </svg>
+            </div>
             <h1 class="text-lg font-semibold text-themed">授权 {{ consent.app.name }}</h1>
-            <p class="mt-2 break-all text-sm text-themed-muted">{{ consent.request.redirectUri }}</p>
+            <p class="mt-2 break-all text-xs font-mono text-themed-muted">{{ consent.request.redirectUri }}</p>
           </div>
 
           <div class="space-y-2">
+            <p class="nimbus-consent-section-label">{{ consent.app.name }}</p>
             <div
               v-for="scope in requestedScopes"
               :key="scope"
-              class="flex items-start justify-between gap-4 rounded-md border border-themed bg-themed-surface px-3 py-2"
+              class="nimbus-scope"
             >
-              <div>
+              <div class="nimbus-scope-tick">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div class="min-w-0 flex-1">
                 <div class="text-sm font-medium text-themed">
                   {{ scopeMetadataByScope.get(scope)?.title || scope }}
                 </div>
                 <div class="text-xs text-themed-muted">{{ scopeMetadataByScope.get(scope)?.description || '访问授权范围内的公共 API' }}</div>
-                <div v-if="scopeMetadataByScope.get(scope)?.resources.length" class="mt-1 text-[11px] text-themed-faint">
+                <div v-if="scopeMetadataByScope.get(scope)?.resources.length" class="mt-1 font-mono text-[11px] text-themed-faint">
                   {{ scopeMetadataByScope.get(scope)?.resources.join(', ') }}
                 </div>
               </div>
               <span
                 v-if="consent.existingScopes.includes(scope)"
-                class="shrink-0 rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700"
+                class="nimbus-scope-badge"
               >
                 已授权
               </span>
@@ -202,3 +220,150 @@ onMounted(() => {
     </section>
   </main>
 </template>
+
+<style scoped>
+.nimbus-auth {
+  position: relative;
+  overflow: hidden;
+}
+
+.nimbus-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.nimbus-aurora::before {
+  content: '';
+  position: absolute;
+  top: -22%;
+  left: 50%;
+  width: min(760px, 128vw);
+  height: min(760px, 128vw);
+  transform: translateX(-50%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--kawaii-primary) 22%, transparent), transparent 62%);
+  opacity: 0.5;
+}
+
+.nimbus-aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in srgb, var(--kawaii-text) 9%, transparent) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 78% 52% at 50% 0%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse 78% 52% at 50% 0%, #000 0%, transparent 70%);
+  opacity: 0.45;
+}
+
+.nimbus-card {
+  border-radius: 16px;
+  padding: 1.75rem;
+}
+
+@media (min-width: 640px) {
+  .nimbus-card {
+    padding: 2rem;
+  }
+}
+
+.nimbus-consent-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  margin: 0 auto;
+}
+
+.nimbus-consent-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.nimbus-consent-icon--app {
+  color: var(--kawaii-primary);
+  background: color-mix(in srgb, var(--kawaii-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kawaii-primary) 22%, transparent);
+  margin-bottom: 0.85rem;
+}
+
+.nimbus-consent-icon--warn {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.nimbus-consent-hint {
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: color-mix(in srgb, var(--warning) 82%, var(--kawaii-text));
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.nimbus-consent-section-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+}
+
+.nimbus-scope {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--kawaii-line);
+  background: var(--kawaii-surface-soft);
+  padding: 0.75rem 0.85rem;
+}
+
+.nimbus-scope-tick {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--kawaii-primary);
+  background: color-mix(in srgb, var(--kawaii-primary) 14%, transparent);
+}
+
+.nimbus-scope-tick svg {
+  width: 13px;
+  height: 13px;
+}
+
+.nimbus-scope-badge {
+  flex-shrink: 0;
+  align-self: center;
+  border-radius: 9999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nimbus-consent-icon--app {
+    animation: nimbus-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes nimbus-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+</style>

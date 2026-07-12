@@ -211,42 +211,28 @@ function getProviderInfo(provider: string): ProviderInfo {
 </script>
 
 <template>
-  <div ref="revealRoot" class="kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md">
+  <div ref="revealRoot" class="nimbus-auth kawaii-public-shell kawaii-auth-shell kawaii-user-auth min-h-screen flex items-center justify-center p-4 sm:p-6">
+    <div class="nimbus-aurora" aria-hidden="true"></div>
+    <div class="relative z-10 w-full max-w-md">
       <ThemeTemplateSlot
         slot-name="public.auth.aside"
         container-class="mb-6"
       />
 
-      <!-- Logo -->
-      <div class="text-center mb-8" data-reveal>
-        <img
-          :src="brand.brandLogoUrl"
-          :alt="brand.brandName"
-          class="w-16 h-16 mx-auto mb-2 rounded-xl"
-        />
-        <h2 
-          class="text-lg font-semibold mb-1"
-          :class="'text-themed'"
-        >
-          {{ brand.brandName }}
-        </h2>
-        <p 
-          class="text-sm"
-          :class="'text-themed-muted'"
-        >
-          {{ $t('auth.loginTo') }}
-        </p>
+      <!-- Logo lockup -->
+      <div class="nimbus-lockup" data-reveal>
+        <div class="nimbus-logo-tile">
+          <img :src="brand.brandLogoUrl" :alt="brand.brandName" />
+        </div>
+        <h1 class="nimbus-title">{{ brand.brandName }}</h1>
+        <p class="nimbus-subtitle">{{ $t('auth.loginTo') }}</p>
       </div>
 
       <!-- 登录表单 -->
-      <div class="card p-6" data-reveal>
+      <div class="card nimbus-card" data-reveal>
         <form class="space-y-4" @submit.prevent="handleLogin">
-          <div>
-            <label 
-              class="block text-sm mb-1.5"
-              :class="'text-themed-muted'"
-            >{{ $t('auth.usernameOrEmail') }}</label>
+          <div class="nimbus-field">
+            <label class="nimbus-label">{{ $t('auth.usernameOrEmail') }}</label>
             <input
               v-model="username"
               type="text"
@@ -256,11 +242,8 @@ function getProviderInfo(provider: string): ProviderInfo {
             />
           </div>
 
-          <div>
-            <label 
-              class="block text-sm mb-1.5"
-              :class="'text-themed-muted'"
-            >{{ $t('auth.password') }}</label>
+          <div class="nimbus-field">
+            <label class="nimbus-label">{{ $t('auth.password') }}</label>
             <input
               v-model="password"
               type="password"
@@ -271,51 +254,42 @@ function getProviderInfo(provider: string): ProviderInfo {
           </div>
 
           <!-- 2FA 验证码输入（始终显示，可选） -->
-          <div>
+          <div class="nimbus-field">
             <!-- TOTP 验证码 -->
             <div v-if="!useRecoveryCode">
-              <label 
-                class="block text-sm mb-1.5"
-                :class="'text-themed-muted'"
-              >
-                {{ $t('auth.twoFactorCode') }}
-                <span class="ml-2 text-xs text-themed-muted">
-                  ({{ $t('auth.twoFactorOptional') }})
-                </span>
+              <label class="nimbus-label flex items-center gap-2">
+                <span>{{ $t('auth.twoFactorCode') }}</span>
+                <span class="nimbus-chip">{{ $t('auth.twoFactorOptional') }}</span>
               </label>
               <input
                 v-model="totpCode"
                 type="text"
                 maxlength="6"
-                class="input"
+                class="input font-mono tracking-[0.3em]"
                 :placeholder="$t('auth.twoFactorCodePlaceholder')"
                 autocomplete="one-time-code"
               />
-              <p class="text-xs mt-1" :class="'text-themed-muted'">
+              <p class="nimbus-hint">
                 {{ $t('auth.twoFactorOptionalHint') }}
               </p>
             </div>
             <!-- 恢复码 -->
             <div v-else>
-              <label 
-                class="block text-sm mb-1.5"
-                :class="'text-themed-muted'"
-              >{{ $t('auth.recoveryCode') }}</label>
+              <label class="nimbus-label">{{ $t('auth.recoveryCode') }}</label>
               <input
                 v-model="recoveryCode"
                 type="text"
-                class="input"
+                class="input font-mono"
                 :placeholder="$t('auth.recoveryCodePlaceholder')"
               />
-              <p class="text-xs mt-1" :class="'text-themed-muted'">
+              <p class="nimbus-hint">
                 {{ $t('auth.recoveryCodeHint') }}
               </p>
             </div>
             <!-- 切换按钮 -->
             <button
               type="button"
-              class="text-xs mt-2 transition-colors"
-              :class="'text-themed-muted hover:text-themed'"
+              class="nimbus-textlink mt-2.5"
               @click="useRecoveryCode = !useRecoveryCode; totpCode = ''; recoveryCode = ''"
             >
               {{ useRecoveryCode ? $t('auth.useTotpCode') : $t('auth.useRecoveryCode') }}
@@ -327,8 +301,7 @@ function getProviderInfo(provider: string): ProviderInfo {
             v-if="isTurnstileChallengeAvailable"
             ref="turnstileSectionRef"
             tabindex="-1"
-            class="rounded-lg border p-3"
-            :class="themeStore.isDark ? 'border-blue-500/30 bg-blue-900/20' : 'border-blue-200 bg-blue-50'"
+            class="nimbus-turnstile"
           >
             <TurnstileWidget
               ref="turnstileRef"
@@ -340,43 +313,39 @@ function getProviderInfo(provider: string): ProviderInfo {
           </div>
 
           <!-- 错误提示 -->
-          <div v-if="error" class="text-sm text-red-500">
-            {{ error }}
+          <div v-if="error" class="nimbus-alert" role="alert">
+            <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3.75m0 3.75h.008M10.34 3.94l-8.52 14.06A1.875 1.875 0 003.424 20.9h17.152a1.875 1.875 0 001.604-2.9L13.66 3.94a1.875 1.875 0 00-3.32 0z" />
+            </svg>
+            <span>{{ error }}</span>
           </div>
 
           <button
             type="submit"
             :disabled="loading"
-            class="btn-primary w-full"
+            class="btn-primary w-full nimbus-submit"
           >
             {{ loading ? $t('auth.loggingIn') : $t('auth.continue') }}
           </button>
 
-          <div
-            v-if="demoAccount"
-            class="rounded-lg border p-3 text-sm"
-            :class="themeStore.isDark ? 'border-gray-800 bg-gray-900/60 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-700'"
-          >
-            <div class="mb-2 flex items-center justify-between gap-3">
-              <span class="font-medium" :class="themeStore.isDark ? 'text-gray-100' : 'text-gray-900'">
-                {{ demoAccount.label }}
-              </span>
+          <div v-if="demoAccount" class="nimbus-demo">
+            <div class="nimbus-demo-head">
+              <span class="nimbus-demo-title">{{ demoAccount.label }}</span>
               <button
                 type="button"
                 :disabled="loading"
-                class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                :class="themeStore.isDark ? 'bg-gray-100 text-gray-950 hover:bg-white disabled:opacity-60' : 'bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60'"
+                class="nimbus-demo-btn"
                 @click="loginWithDemoAccount"
               >
                 一键登录
               </button>
             </div>
-            <div class="grid grid-cols-[52px_1fr] gap-x-2 gap-y-1 font-mono text-xs">
-              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">账号</span>
+            <div class="nimbus-demo-grid">
+              <span class="nimbus-demo-key">账号</span>
               <span>{{ demoAccount.username }}</span>
-              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">邮箱</span>
+              <span class="nimbus-demo-key">邮箱</span>
               <span>{{ demoAccount.email }}</span>
-              <span :class="themeStore.isDark ? 'text-gray-500' : 'text-gray-500'">密码</span>
+              <span class="nimbus-demo-key">密码</span>
               <span>{{ demoAccount.password }}</span>
             </div>
           </div>
@@ -384,19 +353,8 @@ function getProviderInfo(provider: string): ProviderInfo {
 
         <!-- OAuth Quick Login -->
         <div v-if="oauthProviders.length > 0" class="mt-6">
-          <div class="relative">
-            <div class="absolute inset-0 flex items-center">
-              <div 
-                class="w-full border-t"
-                :class="'border-themed'"
-              ></div>
-            </div>
-            <div class="relative flex justify-center text-sm">
-              <span 
-                class="px-2"
-                :class="'bg-themed-surface text-themed-muted'"
-              >{{ $t('auth.orUse') }}</span>
-            </div>
+          <div class="nimbus-divider">
+            <span>{{ $t('auth.orUse') }}</span>
           </div>
 
           <div class="mt-4 grid gap-3" :class="oauthProviders.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
@@ -414,36 +372,25 @@ function getProviderInfo(provider: string): ProviderInfo {
               {{ getProviderInfo(provider).name }}
             </button>
           </div>
-          
-          <p 
-            class="mt-3 text-xs text-center"
-            :class="'text-themed-muted'"
-          >
+
+          <p class="mt-3 text-xs text-center text-themed-muted">
             {{ $t('auth.oauthBindHint') }}
           </p>
         </div>
       </div>
 
       <div class="mt-6 space-y-2 text-center text-sm">
-        <p v-if="registrationEnabled" :class="'text-themed-muted'">
+        <p v-if="registrationEnabled" class="text-themed-muted">
           {{ $t('auth.noAccount') }}
-          <RouterLink 
-            :to="registerPath()"
-            class="transition-colors"
-            :class="'text-themed-muted hover:text-themed'"
-          >
+          <RouterLink :to="registerPath()" class="nimbus-textlink nimbus-textlink--accent">
             {{ $t('auth.register') }}
           </RouterLink>
         </p>
-        <p v-else :class="'text-themed-muted'">
+        <p v-else class="text-themed-muted">
           {{ $t('auth.registrationClosedShort') }}
         </p>
-        <p :class="'text-themed-muted'">
-          <RouterLink 
-            :to="forgotPasswordPath()"
-            class="transition-colors"
-            :class="'text-themed-muted hover:text-themed'"
-          >
+        <p class="text-themed-muted">
+          <RouterLink :to="forgotPasswordPath()" class="nimbus-textlink">
             {{ $t('auth.forgotPasswordLink') }}
           </RouterLink>
         </p>
@@ -490,3 +437,268 @@ function getProviderInfo(provider: string): ProviderInfo {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ============ Nimbus 认证画布 ============ */
+.nimbus-auth {
+  position: relative;
+  overflow: hidden;
+}
+
+.nimbus-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.nimbus-aurora::before {
+  content: '';
+  position: absolute;
+  top: -22%;
+  left: 50%;
+  width: min(760px, 128vw);
+  height: min(760px, 128vw);
+  transform: translateX(-50%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--kawaii-primary) 24%, transparent), transparent 62%);
+  opacity: 0.55;
+}
+
+.nimbus-aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in srgb, var(--kawaii-text) 9%, transparent) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 78% 52% at 50% 0%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse 78% 52% at 50% 0%, #000 0%, transparent 70%);
+  opacity: 0.5;
+}
+
+/* ============ Logo lockup ============ */
+.nimbus-lockup {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.nimbus-logo-tile {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 0.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--kawaii-surface);
+  border: 1px solid var(--kawaii-line);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 10px 26px rgb(79 70 229 / 0.12);
+}
+
+.nimbus-logo-tile img {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.nimbus-title {
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--kawaii-text);
+  line-height: 1.2;
+}
+
+.nimbus-subtitle {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--kawaii-muted);
+}
+
+/* ============ Card ============ */
+.nimbus-card {
+  border-radius: 16px;
+  padding: 1.75rem;
+}
+
+@media (min-width: 640px) {
+  .nimbus-card {
+    padding: 2rem;
+  }
+}
+
+/* ============ Fields ============ */
+.nimbus-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--kawaii-muted);
+}
+
+.nimbus-hint {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--kawaii-faint);
+}
+
+.nimbus-chip {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  padding: 0.05rem 0.45rem;
+  border-radius: 9999px;
+  color: var(--kawaii-muted);
+  background: var(--kawaii-surface-soft);
+  border: 1px solid var(--kawaii-line);
+}
+
+.nimbus-textlink {
+  font-size: 0.8125rem;
+  color: var(--kawaii-muted);
+  transition: color 0.15s ease;
+}
+
+.nimbus-textlink:hover {
+  color: var(--kawaii-text);
+}
+
+.nimbus-textlink--accent {
+  color: var(--kawaii-primary);
+  font-weight: 500;
+}
+
+.nimbus-textlink--accent:hover {
+  color: var(--kawaii-primary-strong);
+}
+
+/* ============ Turnstile shell ============ */
+.nimbus-turnstile {
+  border-radius: 12px;
+  border: 1px solid var(--kawaii-line);
+  background: var(--kawaii-surface-soft);
+  padding: 0.75rem;
+}
+
+.nimbus-turnstile:focus-visible {
+  outline: 2px solid var(--kawaii-primary);
+  outline-offset: 2px;
+}
+
+/* ============ Alert ============ */
+.nimbus-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 26%, transparent);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+}
+
+.nimbus-submit {
+  margin-top: 0.25rem;
+}
+
+/* ============ Demo panel ============ */
+.nimbus-demo {
+  border-radius: 12px;
+  border: 1px solid var(--kawaii-line);
+  background: var(--kawaii-surface-soft);
+  padding: 0.85rem;
+}
+
+.nimbus-demo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.nimbus-demo-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--kawaii-text);
+}
+
+.nimbus-demo-btn {
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--kawaii-primary);
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.nimbus-demo-btn:hover:not(:disabled) {
+  background: var(--kawaii-primary-strong);
+}
+
+.nimbus-demo-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.nimbus-demo-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nimbus-demo-grid {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 0.28rem 0.6rem;
+  font-family: var(--font-mono, 'JetBrains Mono Variable', monospace);
+  font-size: 0.75rem;
+  color: var(--kawaii-text);
+  word-break: break-all;
+}
+
+.nimbus-demo-key {
+  color: var(--kawaii-faint);
+}
+
+/* ============ OAuth divider ============ */
+.nimbus-divider {
+  position: relative;
+  text-align: center;
+}
+
+.nimbus-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--kawaii-line);
+}
+
+.nimbus-divider span {
+  position: relative;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--kawaii-muted);
+  background: var(--kawaii-surface);
+}
+
+/* ============ Entrance motion ============ */
+@media (prefers-reduced-motion: no-preference) {
+  .nimbus-logo-tile {
+    animation: nimbus-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes nimbus-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+</style>

@@ -1417,7 +1417,7 @@ function copyToClipboard(text: string) {
     <!-- 页面头部 -->
     <div class="page-header">
       <h1 class="page-title">{{ $t('admin.billing.title') }}</h1>
-      <p class="text-sm text-themed-muted mt-1">{{ $t('admin.billing.description') }}</p>
+      <p class="page-description">{{ $t('admin.billing.description') }}</p>
     </div>
     <ThemeTemplateSlot slot-name="admin.billing.banner" container-class="mb-6 overflow-hidden rounded-lg border border-themed bg-themed-surface" />
 
@@ -1429,7 +1429,7 @@ function copyToClipboard(text: string) {
           :key="tab"
           class="border-b-2 px-1 pb-3 text-sm font-medium transition-colors"
           :class="activeTab === tab
-            ? 'border-gray-900 text-gray-900 dark:border-white dark:text-white'
+            ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
             : 'border-transparent text-themed-muted hover:text-themed'"
           @click="switchTab(tab)"
         >
@@ -1478,11 +1478,11 @@ function copyToClipboard(text: string) {
               <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0">
                   <p class="text-sm font-medium text-themed-muted">{{ $t('admin.billing.netRevenueLabel') }}</p>
-                  <p class="mt-3 break-words text-3xl font-semibold leading-tight tracking-normal text-themed md:text-4xl">
+                  <p class="mt-3 break-words font-mono text-3xl font-semibold leading-tight tracking-normal tabular-nums text-themed md:text-4xl">
                     {{ formatMoney(overview.netRevenue) }}
                   </p>
                 </div>
-                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-themed-secondary text-themed-muted">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
                   <BillingOverviewIcon name="wallet" class="h-5 w-5" />
                 </div>
               </div>
@@ -1490,12 +1490,12 @@ function copyToClipboard(text: string) {
               <div class="mt-6 grid gap-4 sm:grid-cols-2">
                 <div class="min-w-0 border-l-2 border-themed pl-3">
                   <p class="text-xs text-themed-muted">{{ $t('admin.billing.todayRevenue') }}</p>
-                  <p class="mt-1 break-words text-xl font-semibold text-themed">{{ formatMoney(overview.todayRevenue) }}</p>
+                  <p class="mt-1 break-words font-mono text-xl font-semibold tabular-nums text-themed">{{ formatMoney(overview.todayRevenue) }}</p>
                   <p class="mt-1 text-xs text-themed-muted">{{ $t('admin.billing.todayRecharge') }} {{ formatMoney(overview.recharge.todayAmount) }}</p>
                 </div>
                 <div class="min-w-0 border-l-2 border-themed pl-3">
                   <p class="text-xs text-themed-muted">{{ $t('admin.billing.thisMonthRevenue') }}</p>
-                  <p class="mt-1 break-words text-xl font-semibold text-themed">{{ formatMoney(overview.thisMonthRevenue) }}</p>
+                  <p class="mt-1 break-words font-mono text-xl font-semibold tabular-nums text-themed">{{ formatMoney(overview.thisMonthRevenue) }}</p>
                   <p class="mt-1 text-xs" :class="monthlyRevenueChange !== null && monthlyRevenueChange < 0 ? 'text-rose-500 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300'">
                     {{ $t('admin.billing.thisMonthVsLastMonth') }} {{ formatSignedPercent(monthlyRevenueChange) }}
                   </p>
@@ -1507,9 +1507,9 @@ function copyToClipboard(text: string) {
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="text-sm text-themed-muted">{{ $t('admin.billing.totalRevenue') }}</p>
-                  <p class="mt-2 break-words text-2xl font-semibold text-themed">{{ formatMoney(overview.totalRevenue) }}</p>
+                  <p class="mt-2 break-words font-mono text-2xl font-semibold tabular-nums text-themed">{{ formatMoney(overview.totalRevenue) }}</p>
                 </div>
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-themed-secondary text-themed-muted">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
                   <BillingOverviewIcon name="chart" class="h-5 w-5" />
                 </div>
               </div>
@@ -1520,9 +1520,9 @@ function copyToClipboard(text: string) {
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="text-sm text-themed-muted">{{ $t('admin.billing.totalRecharge') }}</p>
-                  <p class="mt-2 break-words text-2xl font-semibold text-themed">{{ formatMoney(overview.recharge.totalAmount) }}</p>
+                  <p class="mt-2 break-words font-mono text-2xl font-semibold tabular-nums text-themed">{{ formatMoney(overview.recharge.totalAmount) }}</p>
                 </div>
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-themed-secondary text-themed-muted">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
                   <BillingOverviewIcon name="wallet" class="h-5 w-5" />
                 </div>
               </div>
@@ -1533,9 +1533,9 @@ function copyToClipboard(text: string) {
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="text-sm text-themed-muted">{{ $t('admin.billing.hostedRevenueShare') }}</p>
-                  <p class="mt-2 break-words text-2xl font-semibold text-themed">{{ formatPercent(hostedRevenueShare) }}</p>
+                  <p class="mt-2 break-words font-mono text-2xl font-semibold tabular-nums text-themed">{{ formatPercent(hostedRevenueShare) }}</p>
                 </div>
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-themed-secondary text-themed-muted">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
                   <BillingOverviewIcon name="cloud" class="h-5 w-5" />
                 </div>
               </div>
@@ -1546,9 +1546,9 @@ function copyToClipboard(text: string) {
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="text-sm text-themed-muted">{{ $t('admin.billing.totalRefunds') }}</p>
-                  <p class="mt-2 break-words text-2xl font-semibold text-themed">{{ formatMoney(overview.totalRefunds) }}</p>
+                  <p class="mt-2 break-words font-mono text-2xl font-semibold tabular-nums text-themed">{{ formatMoney(overview.totalRefunds) }}</p>
                 </div>
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-themed-secondary text-themed-muted">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
                   <BillingOverviewIcon name="ban" class="h-5 w-5" />
                 </div>
               </div>
@@ -1586,13 +1586,13 @@ function copyToClipboard(text: string) {
                   <div class="flex items-center justify-between gap-4 pb-3">
                     <dt class="text-sm text-themed-muted">{{ $t('admin.billing.rechargeLabel') }}</dt>
                     <dd class="min-w-0 text-right">
-                      <div class="break-words text-lg font-semibold text-themed">{{ formatMoney(period.rechargeAmount) }}</div>
+                      <div class="break-words font-mono text-lg font-semibold tabular-nums text-themed">{{ formatMoney(period.rechargeAmount) }}</div>
                       <div class="mt-1 text-xs text-themed-muted">{{ formatCount(period.rechargeCount) }} {{ $t('admin.billing.orders') }}</div>
                     </dd>
                   </div>
                   <div class="flex items-center justify-between gap-4 pt-3">
                     <dt class="text-sm text-themed-muted">{{ $t('admin.billing.revenueLabel') }}</dt>
-                    <dd class="min-w-0 break-words text-right text-lg font-semibold text-themed">{{ formatMoney(period.revenueAmount) }}</dd>
+                    <dd class="min-w-0 break-words text-right font-mono text-lg font-semibold tabular-nums text-themed">{{ formatMoney(period.revenueAmount) }}</dd>
                   </div>
                 </dl>
               </article>
@@ -1606,7 +1606,7 @@ function copyToClipboard(text: string) {
                   <h2 class="text-base font-semibold text-themed">{{ $t('admin.billing.revenueBreakdownTitle') }}</h2>
                   <p class="mt-1 text-sm text-themed-muted">{{ $t('admin.billing.directRevenue') }} / {{ $t('admin.billing.hostedRevenue') }}</p>
                 </div>
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-themed-secondary text-themed-muted">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
                   <BillingOverviewIcon name="chart" class="h-5 w-5" />
                 </div>
               </div>
@@ -1614,12 +1614,12 @@ function copyToClipboard(text: string) {
               <div class="mt-5 grid gap-4 sm:grid-cols-2">
                 <div class="min-w-0 border-l-2 border-sky-500 pl-3">
                   <p class="text-sm text-themed-muted">{{ $t('admin.billing.directRevenue') }}</p>
-                  <p class="mt-1 break-words text-2xl font-semibold text-themed">{{ formatMoney(overview.revenueMix.direct.totalAmount) }}</p>
+                  <p class="mt-1 break-words font-mono text-2xl font-semibold tabular-nums text-themed">{{ formatMoney(overview.revenueMix.direct.totalAmount) }}</p>
                   <p class="mt-1 text-xs text-themed-muted">{{ formatPercent(revenueMixRows[0]?.directRatio || 0) }}</p>
                 </div>
                 <div class="min-w-0 border-l-2 border-amber-500 pl-3">
                   <p class="text-sm text-themed-muted">{{ $t('admin.billing.hostedRevenue') }}</p>
-                  <p class="mt-1 break-words text-2xl font-semibold text-themed">{{ formatMoney(overview.revenueMix.hosted.totalAmount) }}</p>
+                  <p class="mt-1 break-words font-mono text-2xl font-semibold tabular-nums text-themed">{{ formatMoney(overview.revenueMix.hosted.totalAmount) }}</p>
                   <p class="mt-1 text-xs text-themed-muted">{{ formatPercent(revenueMixRows[0]?.hostedRatio || 0) }}</p>
                 </div>
               </div>
@@ -1681,7 +1681,7 @@ function copyToClipboard(text: string) {
                   <h2 class="text-base font-semibold text-themed">{{ $t('admin.billing.instanceHealthTitle') }}</h2>
                   <p class="mt-1 text-sm text-themed-muted">{{ formatCount(overview.activePaidInstancesCount) }} / {{ formatCount(overview.paidInstancesCount) }}</p>
                 </div>
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-themed-secondary text-themed-muted">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400">
                   <BillingOverviewIcon name="server" class="h-5 w-5" />
                 </div>
               </div>
@@ -1690,7 +1690,7 @@ function copyToClipboard(text: string) {
                 <div class="flex items-end justify-between gap-4">
                   <div class="min-w-0">
                     <p class="text-sm text-themed-muted">{{ $t('admin.billing.paidInstances') }}</p>
-                    <p class="mt-1 break-words text-3xl font-semibold text-themed">{{ formatCount(overview.paidInstancesCount) }}</p>
+                    <p class="mt-1 break-words font-mono text-3xl font-semibold tabular-nums text-themed">{{ formatCount(overview.paidInstancesCount) }}</p>
                   </div>
                   <div class="rounded-md bg-emerald-500/10 px-2.5 py-1 text-sm font-medium text-emerald-600 dark:text-emerald-300">
                     {{ formatPercent(activeInstanceShare) }}
@@ -1718,7 +1718,7 @@ function copyToClipboard(text: string) {
                         <p class="mt-1 text-xs text-themed-muted">{{ formatPercent(card.progress || 0) }}</p>
                       </div>
                     </div>
-                    <div class="shrink-0 text-xl font-semibold text-themed">{{ formatCount(card.value) }}</div>
+                    <div class="shrink-0 font-mono text-xl font-semibold tabular-nums text-themed">{{ formatCount(card.value) }}</div>
                   </div>
                   <div class="mt-3 h-2 overflow-hidden rounded-full bg-themed-tertiary">
                     <div class="h-full rounded-full bg-current" :class="card.toneClass" :style="{ width: `${card.progress || 0}%` }"></div>
@@ -1745,7 +1745,7 @@ function copyToClipboard(text: string) {
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
                     <p class="text-sm text-themed-muted">{{ card.label }}</p>
-                    <p class="mt-2 break-words text-2xl font-semibold text-themed">
+                    <p class="mt-2 break-words font-mono text-2xl font-semibold tabular-nums text-themed">
                       {{ card.format === 'money' ? formatMoney(card.value) : formatCount(card.value) }}
                     </p>
                   </div>
@@ -2788,22 +2788,22 @@ function copyToClipboard(text: string) {
           </div>
           <div class="card p-4">
             <div class="text-xs text-themed-muted">成功充值</div>
-            <div class="mt-2 text-xl font-semibold text-themed">{{ formatMoney(getSummaryMoney('recharge')) }}</div>
+            <div class="mt-2 font-mono text-xl font-semibold tabular-nums text-themed">{{ formatMoney(getSummaryMoney('recharge')) }}</div>
             <div class="mt-1 text-xs text-themed-muted">{{ formatCount(getSummaryCount('recharge')) }} 笔</div>
           </div>
           <div class="card p-4">
             <div class="text-xs text-themed-muted">余额流水</div>
-            <div class="mt-2 text-xl font-semibold text-themed">{{ formatMoney(getSummaryMoney('balanceLogs')) }}</div>
+            <div class="mt-2 font-mono text-xl font-semibold tabular-nums text-themed">{{ formatMoney(getSummaryMoney('balanceLogs')) }}</div>
             <div class="mt-1 text-xs text-themed-muted">{{ formatCount(getSummaryCount('balanceLogs')) }} 条</div>
           </div>
           <div class="card p-4">
             <div class="text-xs text-themed-muted">实例扣费</div>
-            <div class="mt-2 text-xl font-semibold text-themed">{{ formatMoney(getSummaryMoney('instanceBilling')) }}</div>
+            <div class="mt-2 font-mono text-xl font-semibold tabular-nums text-themed">{{ formatMoney(getSummaryMoney('instanceBilling')) }}</div>
             <div class="mt-1 text-xs text-themed-muted">{{ formatCount(getSummaryCount('instanceBilling')) }} 条</div>
           </div>
           <div class="card p-4">
             <div class="text-xs text-themed-muted">差异项</div>
-            <div class="mt-2 text-xl font-semibold text-themed">{{ formatCount(reconciliation.summary?.discrepancies?.total || 0) }}</div>
+            <div class="mt-2 font-mono text-xl font-semibold tabular-nums text-themed">{{ formatCount(reconciliation.summary?.discrepancies?.total || 0) }}</div>
             <div class="mt-1 text-xs text-themed-muted">重跑不会重复写入</div>
           </div>
         </div>
@@ -3535,3 +3535,29 @@ function copyToClipboard(text: string) {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* Nimbus console: mono, uppercased column headers on the locked billing data tables */
+thead th {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kawaii-faint);
+}
+
+/* Tabular figures keep amounts, ids, and dates vertically aligned across rows */
+tbody td {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+</style>

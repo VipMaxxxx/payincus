@@ -303,7 +303,7 @@ onUnmounted(() => {
               <div
                 class="rounded-xl border px-4 py-3"
                 :class="step === 'verifyCurrent'
-                  ? (themeStore.isDark ? 'border-blue-500/40 bg-blue-500/10' : 'border-blue-200 bg-blue-50')
+                  ? (themeStore.isDark ? 'border-primary-500/40 bg-primary-500/10' : 'border-primary-200 bg-primary-50')
                   : (themeStore.isDark ? 'border-gray-700 bg-gray-800/80' : 'border-gray-200 bg-gray-50')"
               >
                 <span
@@ -322,7 +322,7 @@ onUnmounted(() => {
               <div
                 class="rounded-xl border px-4 py-3"
                 :class="step === 'verifyNew'
-                  ? (themeStore.isDark ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50')
+                  ? (themeStore.isDark ? 'border-primary-500/40 bg-primary-500/10' : 'border-primary-200 bg-primary-50')
                   : (themeStore.isDark ? 'border-gray-700 bg-gray-800/80' : 'border-gray-200 bg-gray-50')"
               >
                 <span
@@ -385,11 +385,11 @@ onUnmounted(() => {
               class="rounded-2xl border p-4 space-y-4"
               :class="themeStore.isDark ? 'border-gray-700 bg-gray-900/70' : 'border-gray-200 bg-white'"
             >
-              <div class="rounded-xl border px-4 py-3" :class="themeStore.isDark ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50'">
-                <p class="text-sm font-medium" :class="themeStore.isDark ? 'text-emerald-200' : 'text-emerald-900'">
+              <div class="rounded-xl border border-themed bg-themed-tertiary px-4 py-3">
+                <p class="text-sm font-medium text-themed">
                   {{ t('profile.account.emailDialog.verifyNewTitle') }}
                 </p>
-                <p class="mt-1 text-xs leading-5" :class="themeStore.isDark ? 'text-emerald-300/80' : 'text-emerald-700'">
+                <p class="mt-1 text-xs leading-5 text-themed-muted">
                   {{
                     hasCurrentEmail
                       ? t('profile.account.emailDialog.verifyNewDesc')

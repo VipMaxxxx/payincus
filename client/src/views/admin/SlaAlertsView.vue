@@ -254,77 +254,90 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="kawaii-page p-6 space-y-6 animate-fade-in">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-themed">SLA 与告警</h1>
-        <p class="mt-1 text-sm text-themed-muted">统一查看节点、Agent、交付、支付、通知和 OTA 异常。</p>
+  <div class="kawaii-page nimbus-view space-y-6 p-6 animate-fade-in">
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <div class="flex items-start gap-3">
+        <span class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500 sm:flex">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-xl font-semibold text-themed sm:text-2xl">SLA 与告警</h1>
+          <p class="mt-1 text-sm text-themed-muted">统一查看节点、Agent、交付、支付、通知和 OTA 异常。</p>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button class="btn btn-secondary" :disabled="refreshing || loading" @click="refreshAll(true)">
+        <button class="btn-secondary" :disabled="refreshing || loading" @click="refreshAll(true)">
+          <svg class="h-4 w-4" :class="refreshing ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           {{ refreshing ? '刷新中' : '刷新' }}
         </button>
-        <button class="btn btn-primary" :disabled="scanning" @click="runScan">
+        <button class="btn-primary" :disabled="scanning" @click="runScan">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
           {{ scanning ? '扫描中' : '立即扫描' }}
         </button>
       </div>
-    </div>
+    </header>
 
-    <div v-if="loading" class="rounded-lg border border-themed bg-themed-secondary p-8 text-center text-sm text-themed-muted">
+    <div v-if="loading" class="rounded-xl border border-themed bg-themed-surface p-10 text-center text-sm text-themed-muted">
       正在加载告警数据...
     </div>
 
     <template v-else>
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div
           v-for="item in summaryCards"
           :key="item.label"
-          class="rounded-lg border p-4"
-          :class="toneClass(item.tone)"
+          class="nimbus-stat rounded-xl border border-themed bg-themed-surface p-5"
         >
-          <div class="text-sm">{{ item.label }}</div>
-          <div class="mt-2 text-2xl font-semibold">{{ item.value }}</div>
-          <div class="mt-1 text-xs opacity-80">{{ item.caption }}</div>
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-xs font-medium uppercase tracking-wide text-themed-muted">{{ item.label }}</span>
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/10 text-primary-500">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+            </span>
+          </div>
+          <div class="mt-3 font-mono text-2xl font-semibold tabular-nums text-themed">{{ item.value }}</div>
+          <div class="mt-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-2xs font-medium" :class="toneClass(item.tone)">{{ item.caption }}</div>
         </div>
       </div>
 
-      <div class="rounded-lg border border-themed bg-themed-secondary p-4">
+      <div class="rounded-xl border border-themed bg-themed-surface p-4">
         <div class="grid grid-cols-1 gap-3 lg:grid-cols-[160px_160px_160px_1fr_auto_auto]">
-          <select v-model="statusFilter" class="form-select">
+          <select v-model="statusFilter" class="input">
             <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
           </select>
-          <select v-model="severityFilter" class="form-select">
+          <select v-model="severityFilter" class="input">
             <option v-for="item in severityOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
           </select>
-          <select v-model="moduleFilter" class="form-select">
+          <select v-model="moduleFilter" class="input">
             <option v-for="item in moduleOptions" :key="item" :value="item">
               {{ item === 'all' ? '全部模块' : moduleLabel(item) }}
             </option>
           </select>
           <input
             v-model="search"
-            class="form-input"
+            class="input"
             placeholder="搜索告警标题、对象、规则编号..."
             @keyup.enter="applyFilters"
           />
-          <button class="btn btn-primary" @click="applyFilters">搜索</button>
-          <button class="btn btn-secondary" @click="resetFilters">重置</button>
+          <button class="btn-primary" @click="applyFilters">搜索</button>
+          <button class="btn-secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
-        <section class="rounded-lg border border-themed bg-themed-secondary">
-          <div class="border-b border-themed p-4">
+        <section class="overflow-hidden rounded-xl border border-themed bg-themed-surface">
+          <div class="flex items-center justify-between gap-3 border-b border-themed p-4">
             <div class="font-medium text-themed">告警事件</div>
-            <div class="mt-1 text-xs text-themed-muted">共 {{ total }} 条记录</div>
+            <div class="font-mono text-xs tabular-nums text-themed-muted">共 {{ total }} 条记录</div>
           </div>
           <div v-if="alerts.length > 0" class="space-y-3 p-4 lg:hidden">
             <button
               v-for="alert in alerts"
               :key="alert.id"
               type="button"
-              class="w-full rounded-lg border border-themed bg-themed-surface p-4 text-left shadow-sm"
-              :class="selectedAlertId === alert.id ? 'ring-2 ring-accent' : ''"
+              class="w-full rounded-xl border bg-themed-surface p-4 text-left transition-colors"
+              :class="selectedAlertId === alert.id ? 'border-primary-500 ring-1 ring-primary-500/30' : 'border-themed hover:bg-themed-hover'"
               @click="selectedAlertId = alert.id"
             >
               <div class="flex items-start justify-between gap-3">
@@ -332,95 +345,100 @@ onMounted(() => {
                   <div class="font-medium text-themed">{{ alert.title }}</div>
                   <div class="mt-1 line-clamp-2 text-xs text-themed-muted">{{ alert.message }}</div>
                 </div>
-                <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs" :class="severityClass(alert.severity)">
+                <span class="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-2xs font-medium" :class="severityClass(alert.severity)">
                   {{ severityLabel(alert.severity) }}
                 </span>
               </div>
               <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <div class="text-themed-muted">状态</div>
-                  <span class="mt-1 inline-flex rounded-full border px-2 py-0.5" :class="statusClass(alert.status)">
+                  <div class="text-2xs uppercase tracking-wide text-themed-muted">状态</div>
+                  <span class="mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-medium" :class="statusClass(alert.status)">
                     {{ statusLabel(alert.status) }}
                   </span>
                 </div>
                 <div>
-                  <div class="text-themed-muted">模块</div>
+                  <div class="text-2xs uppercase tracking-wide text-themed-muted">模块</div>
                   <div class="mt-1 font-medium text-themed">{{ moduleLabel(alert.module) }}</div>
                 </div>
                 <div>
-                  <div class="text-themed-muted">次数</div>
-                  <div class="mt-1 font-medium text-themed">{{ alert.triggerCount }}</div>
+                  <div class="text-2xs uppercase tracking-wide text-themed-muted">次数</div>
+                  <div class="mt-1 font-mono font-medium tabular-nums text-themed">{{ alert.triggerCount }}</div>
                 </div>
                 <div>
-                  <div class="text-themed-muted">最近触发</div>
-                  <div class="mt-1 font-medium text-themed">{{ formatDate(alert.lastTriggeredAt) }}</div>
+                  <div class="text-2xs uppercase tracking-wide text-themed-muted">最近触发</div>
+                  <div class="mt-1 font-mono text-xs tabular-nums text-themed">{{ formatDate(alert.lastTriggeredAt) }}</div>
                 </div>
               </div>
             </button>
           </div>
           <div class="hidden overflow-hidden lg:block">
-            <table class="w-full table-fixed divide-y divide-themed text-sm">
+            <table class="w-full table-fixed text-sm">
               <thead>
-                <tr class="text-left text-xs text-themed-muted">
-                  <th class="w-[10%] px-4 py-3 font-medium">等级</th>
-                  <th class="w-[10%] px-4 py-3 font-medium">状态</th>
-                  <th class="w-[14%] px-4 py-3 font-medium">模块</th>
-                  <th class="w-[42%] px-4 py-3 font-medium">告警</th>
-                  <th class="w-[8%] px-4 py-3 font-medium">次数</th>
-                  <th class="w-[16%] px-4 py-3 font-medium">最近触发</th>
+                <tr class="border-b border-themed text-left text-2xs font-medium uppercase tracking-wide text-themed-muted">
+                  <th class="w-[10%] px-4 py-3">等级</th>
+                  <th class="w-[10%] px-4 py-3">状态</th>
+                  <th class="w-[14%] px-4 py-3">模块</th>
+                  <th class="w-[42%] px-4 py-3">告警</th>
+                  <th class="w-[8%] px-4 py-3">次数</th>
+                  <th class="w-[16%] px-4 py-3">最近触发</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-themed">
+              <tbody>
                 <tr
                   v-for="alert in alerts"
                   :key="alert.id"
-                  class="cursor-pointer hover:bg-themed-tertiary"
-                  :class="selectedAlertId === alert.id ? 'bg-themed-tertiary' : ''"
+                  class="cursor-pointer border-b border-themed transition-colors last:border-0 hover:bg-themed-hover"
+                  :class="selectedAlertId === alert.id ? 'bg-primary-500/5' : ''"
                   @click="selectedAlertId = alert.id"
                 >
                   <td class="px-4 py-3">
-                    <span class="rounded-full border px-2 py-0.5 text-xs" :class="severityClass(alert.severity)">
+                    <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-medium" :class="severityClass(alert.severity)">
                       {{ severityLabel(alert.severity) }}
                     </span>
                   </td>
                   <td class="px-4 py-3">
-                    <span class="rounded-full border px-2 py-0.5 text-xs" :class="statusClass(alert.status)">
+                    <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-medium" :class="statusClass(alert.status)">
                       {{ statusLabel(alert.status) }}
                     </span>
                   </td>
                   <td class="break-words px-4 py-3 text-themed-muted">{{ moduleLabel(alert.module) }}</td>
                   <td class="break-words px-4 py-3">
                     <div class="font-medium text-themed">{{ alert.title }}</div>
-                    <div class="mt-1 text-xs text-themed-muted">{{ alert.message }}</div>
+                    <div class="mt-1 line-clamp-2 text-xs text-themed-muted">{{ alert.message }}</div>
                   </td>
-                  <td class="px-4 py-3 text-themed-muted">{{ alert.triggerCount }}</td>
-                  <td class="break-words px-4 py-3 text-themed-muted">{{ formatDate(alert.lastTriggeredAt) }}</td>
+                  <td class="px-4 py-3 font-mono tabular-nums text-themed-muted">{{ alert.triggerCount }}</td>
+                  <td class="break-words px-4 py-3 font-mono text-xs tabular-nums text-themed-muted">{{ formatDate(alert.lastTriggeredAt) }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div v-if="alerts.length === 0" class="px-4 py-8 text-center text-sm text-themed-muted">
+          <div v-if="alerts.length === 0" class="px-4 py-12 text-center text-sm text-themed-muted">
+            <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-secondary text-themed-faint">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+              </svg>
+            </span>
             暂无匹配告警
           </div>
           <div class="flex items-center justify-between border-t border-themed p-4 text-sm text-themed-muted">
-            <span>第 {{ page }} / {{ totalPages }} 页</span>
+            <span class="font-mono text-xs tabular-nums">第 {{ page }} / {{ totalPages }} 页</span>
             <div class="flex gap-2">
-              <button class="btn btn-secondary" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
-              <button class="btn btn-secondary" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
+              <button class="btn-secondary btn-sm" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
+              <button class="btn-secondary btn-sm" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
             </div>
           </div>
         </section>
 
         <aside class="space-y-4">
-          <section class="rounded-lg border border-themed bg-themed-secondary p-4">
+          <section class="rounded-xl border border-themed bg-themed-surface p-4">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <div class="font-medium text-themed">告警详情</div>
-                <div class="mt-1 text-xs text-themed-muted">最近扫描：{{ formatDate(overview?.summary.lastScanAt) }}</div>
+                <div class="mt-1 font-mono text-xs tabular-nums text-themed-muted">最近扫描：{{ formatDate(overview?.summary.lastScanAt) }}</div>
               </div>
               <span
                 v-if="selectedAlert"
-                class="rounded-full border px-2 py-0.5 text-xs"
+                class="inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-medium"
                 :class="severityClass(selectedAlert.severity)"
               >
                 {{ severityLabel(selectedAlert.severity) }}
@@ -429,60 +447,60 @@ onMounted(() => {
 
             <div v-if="selectedAlert" class="mt-4 space-y-4">
               <div>
-                <div class="text-lg font-semibold text-themed">{{ selectedAlert.title }}</div>
+                <div class="text-base font-semibold text-themed">{{ selectedAlert.title }}</div>
                 <p class="mt-2 whitespace-pre-wrap text-sm text-themed-muted">{{ selectedAlert.message }}</p>
               </div>
 
               <dl class="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt class="text-themed-muted">规则</dt>
-                  <dd class="mt-1 text-themed">{{ selectedAlert.ruleCode }}</dd>
+                <div class="rounded-lg border border-themed p-3">
+                  <dt class="text-2xs uppercase tracking-wide text-themed-muted">规则</dt>
+                  <dd class="mt-1 font-mono text-xs text-themed">{{ selectedAlert.ruleCode }}</dd>
                 </div>
-                <div>
-                  <dt class="text-themed-muted">状态</dt>
+                <div class="rounded-lg border border-themed p-3">
+                  <dt class="text-2xs uppercase tracking-wide text-themed-muted">状态</dt>
                   <dd class="mt-1 text-themed">{{ statusLabel(selectedAlert.status) }}</dd>
                 </div>
-                <div>
-                  <dt class="text-themed-muted">关联对象</dt>
+                <div class="rounded-lg border border-themed p-3">
+                  <dt class="text-2xs uppercase tracking-wide text-themed-muted">关联对象</dt>
                   <dd class="mt-1 text-themed">{{ selectedAlert.objectLabel || '-' }}</dd>
                 </div>
-                <div>
-                  <dt class="text-themed-muted">触发次数</dt>
-                  <dd class="mt-1 text-themed">{{ selectedAlert.triggerCount }}</dd>
+                <div class="rounded-lg border border-themed p-3">
+                  <dt class="text-2xs uppercase tracking-wide text-themed-muted">触发次数</dt>
+                  <dd class="mt-1 font-mono tabular-nums text-themed">{{ selectedAlert.triggerCount }}</dd>
                 </div>
-                <div>
-                  <dt class="text-themed-muted">首次触发</dt>
-                  <dd class="mt-1 text-themed">{{ formatDate(selectedAlert.firstTriggeredAt) }}</dd>
+                <div class="rounded-lg border border-themed p-3">
+                  <dt class="text-2xs uppercase tracking-wide text-themed-muted">首次触发</dt>
+                  <dd class="mt-1 font-mono text-xs tabular-nums text-themed">{{ formatDate(selectedAlert.firstTriggeredAt) }}</dd>
                 </div>
-                <div>
-                  <dt class="text-themed-muted">最近触发</dt>
-                  <dd class="mt-1 text-themed">{{ formatDate(selectedAlert.lastTriggeredAt) }}</dd>
+                <div class="rounded-lg border border-themed p-3">
+                  <dt class="text-2xs uppercase tracking-wide text-themed-muted">最近触发</dt>
+                  <dd class="mt-1 font-mono text-xs tabular-nums text-themed">{{ formatDate(selectedAlert.lastTriggeredAt) }}</dd>
                 </div>
               </dl>
 
               <RouterLink
                 v-if="objectLink(selectedAlert)"
                 :to="objectLink(selectedAlert)!"
-                class="btn btn-secondary w-full justify-center"
+                class="btn-secondary w-full justify-center"
               >
                 查看关联对象
               </RouterLink>
 
               <div class="space-y-3">
-                <textarea v-model="actionNote" class="form-textarea min-h-20" placeholder="处理备注"></textarea>
+                <textarea v-model="actionNote" class="input min-h-20 resize-y" placeholder="处理备注"></textarea>
                 <div class="grid grid-cols-2 gap-2">
-                  <button class="btn btn-secondary" :disabled="!!actionLoading" @click="runAlertAction('acknowledge')">
+                  <button class="btn-secondary btn-sm" :disabled="!!actionLoading" @click="runAlertAction('acknowledge')">
                     {{ actionLoading === 'acknowledge' ? '处理中' : '认领处理' }}
                   </button>
-                  <button class="btn btn-secondary" :disabled="!!actionLoading" @click="runAlertAction('recovered')">
+                  <button class="btn-secondary btn-sm" :disabled="!!actionLoading" @click="runAlertAction('recovered')">
                     {{ actionLoading === 'recovered' ? '处理中' : '标记恢复' }}
                   </button>
-                  <button class="btn btn-secondary" :disabled="!!actionLoading" @click="runAlertAction('ignored')">
+                  <button class="btn-secondary btn-sm" :disabled="!!actionLoading" @click="runAlertAction('ignored')">
                     {{ actionLoading === 'ignored' ? '处理中' : '忽略' }}
                   </button>
                   <div class="flex gap-2">
-                    <input v-model.number="silenceMinutes" type="number" min="5" max="10080" class="form-input w-24" />
-                    <button class="btn btn-secondary flex-1" :disabled="!!actionLoading" @click="runAlertAction('silence')">
+                    <input v-model.number="silenceMinutes" type="number" min="5" max="10080" class="input w-20 font-mono tabular-nums" />
+                    <button class="btn-secondary btn-sm flex-1" :disabled="!!actionLoading" @click="runAlertAction('silence')">
                       {{ actionLoading === 'silence' ? '处理中' : '静默' }}
                     </button>
                   </div>
@@ -495,11 +513,11 @@ onMounted(() => {
                   <div
                     v-for="action in selectedAlert.actions"
                     :key="action.id"
-                    class="rounded border border-themed bg-themed-tertiary p-2 text-xs text-themed-muted"
+                    class="rounded-lg border border-themed bg-themed-tertiary p-2 text-xs text-themed-muted"
                   >
                     <div class="flex items-center justify-between gap-2">
-                      <span>{{ action.actionType }}</span>
-                      <span>{{ formatDate(action.createdAt) }}</span>
+                      <span class="font-medium text-themed">{{ action.actionType }}</span>
+                      <span class="font-mono tabular-nums">{{ formatDate(action.createdAt) }}</span>
                     </div>
                     <div v-if="action.actorUsername" class="mt-1">处理人：{{ action.actorUsername }}</div>
                     <div v-if="action.note" class="mt-1 whitespace-pre-wrap">{{ action.note }}</div>
@@ -509,24 +527,29 @@ onMounted(() => {
               </div>
             </div>
 
-            <div v-else class="mt-4 rounded border border-themed bg-themed-tertiary p-4 text-sm text-themed-muted">
+            <div v-else class="mt-4 flex flex-col items-center rounded-lg border border-dashed border-themed bg-themed-tertiary p-8 text-center text-sm text-themed-muted">
+              <span class="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-themed-surface text-themed-faint">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59" />
+                </svg>
+              </span>
               请选择一条告警查看详情
             </div>
           </section>
 
-          <section class="rounded-lg border border-themed bg-themed-secondary p-4">
+          <section class="rounded-xl border border-themed bg-themed-surface p-4">
             <div class="font-medium text-themed">告警规则</div>
             <div class="mt-3 space-y-2">
               <div
                 v-for="rule in rules"
                 :key="rule.code"
-                class="flex items-center justify-between gap-3 rounded border border-themed bg-themed-tertiary p-3"
+                class="flex items-center justify-between gap-3 rounded-lg border border-themed bg-themed-tertiary p-3"
               >
                 <div class="min-w-0">
                   <div class="truncate text-sm font-medium text-themed">{{ rule.title }}</div>
-                  <div class="mt-1 text-xs text-themed-muted">{{ moduleLabel(rule.module) }} · {{ rule.code }}</div>
+                  <div class="mt-1 font-mono text-2xs text-themed-muted">{{ moduleLabel(rule.module) }} · {{ rule.code }}</div>
                 </div>
-                <button class="btn btn-secondary shrink-0" @click="toggleRule(rule)">
+                <button class="btn-secondary btn-sm shrink-0" @click="toggleRule(rule)">
                   {{ rule.enabled ? '停用' : '启用' }}
                 </button>
               </div>
@@ -537,3 +560,18 @@ onMounted(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.nimbus-stat {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-view *,
+  .nimbus-view *::before,
+  .nimbus-view *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+</style>

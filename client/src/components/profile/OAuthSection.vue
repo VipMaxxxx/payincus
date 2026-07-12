@@ -137,17 +137,17 @@ onActivated(() => {
 </script>
 
 <template>
-  <div class="card p-5">
-    <div class="mb-4">
-      <h2 class="text-sm font-medium text-themed-secondary">{{ $t('profile.oauth.title') }}</h2>
-      <p class="text-xs text-themed-faint mt-0.5">{{ $t('profile.oauth.description') }}</p>
+  <div class="card nimbus-section">
+    <div class="mb-5">
+      <h2 class="nimbus-section-title">{{ $t('profile.oauth.title') }}</h2>
+      <p class="nimbus-section-desc">{{ $t('profile.oauth.description') }}</p>
     </div>
 
     <div class="space-y-3">
       <!-- GitHub -->
       <div 
         v-if="enabledOAuthProviders.includes('github')"
-        class="flex items-center justify-between p-3 bg-themed-tertiary border border-themed rounded-lg"
+        class="flex items-center justify-between p-3.5 bg-themed-tertiary border border-themed rounded-xl"
       >
         <div class="flex items-center gap-3">
           <div 
@@ -156,7 +156,7 @@ onActivated(() => {
           ></div>
           <div>
             <div class="text-sm text-themed font-medium">GitHub</div>
-            <div v-if="isOAuthBound('github')" class="text-xs text-green-400">
+            <div v-if="isOAuthBound('github')" class="text-xs text-green-500">
               {{ $t('profile.oauth.bound') }}: {{ (() => { const b = getOAuthBinding('github'); return b?.username || b?.email || ''; })() }}
             </div>
             <div v-else class="text-xs text-themed-muted">{{ $t('profile.oauth.notBound') }}</div>
@@ -182,7 +182,7 @@ onActivated(() => {
       <!-- Google -->
       <div 
         v-if="enabledOAuthProviders.includes('google')"
-        class="flex items-center justify-between p-3 bg-themed-tertiary border border-themed rounded-lg"
+        class="flex items-center justify-between p-3.5 bg-themed-tertiary border border-themed rounded-xl"
       >
         <div class="flex items-center gap-3">
           <div 
@@ -191,7 +191,7 @@ onActivated(() => {
           ></div>
           <div>
             <div class="text-sm text-themed font-medium">Google</div>
-            <div v-if="isOAuthBound('google')" class="text-xs text-green-400">
+            <div v-if="isOAuthBound('google')" class="text-xs text-green-500">
               {{ $t('profile.oauth.bound') }}: {{ (() => { const b = getOAuthBinding('google'); return b?.username || b?.email || ''; })() }}
             </div>
             <div v-else class="text-xs text-themed-muted">{{ $t('profile.oauth.notBound') }}</div>
@@ -224,3 +224,23 @@ onActivated(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+
+.nimbus-section-desc {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--kawaii-muted);
+}
+</style>

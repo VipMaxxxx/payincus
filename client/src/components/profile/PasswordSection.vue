@@ -115,8 +115,8 @@ async function onVerificationSuccess(): Promise<void> {
 </script>
 
 <template>
-  <div class="card p-5">
-    <h2 class="text-sm font-medium text-themed-secondary mb-4">{{ $t('profile.password.title') }}</h2>
+  <div class="card nimbus-section">
+    <h2 class="nimbus-section-title mb-5">{{ $t('profile.password.title') }}</h2>
     <form class="space-y-4" @submit.prevent="updatePassword">
       <div>
         <label class="block text-xs text-themed-muted mb-1.5">{{ $t('profile.password.current') }}</label>
@@ -149,13 +149,13 @@ async function onVerificationSuccess(): Promise<void> {
         />
       </div>
       
-      <div v-if="passwordError" class="text-sm text-red-400">{{ passwordError }}</div>
-      <div v-if="passwordSuccess" class="text-sm text-green-400">{{ $t('profile.password.updated') }}</div>
+      <div v-if="passwordError" class="text-sm text-red-500">{{ passwordError }}</div>
+      <div v-if="passwordSuccess" class="text-sm text-green-500">{{ $t('profile.password.updated') }}</div>
       
-      <button 
-        type="submit" 
+      <button
+        type="submit"
         :disabled="passwordLoading || !passwordForm.currentPassword || !passwordForm.newPassword"
-        class="btn-secondary"
+        class="btn-primary"
       >
         {{ passwordLoading ? $t('profile.password.updating') : $t('profile.password.update') }}
       </button>
@@ -170,3 +170,17 @@ async function onVerificationSuccess(): Promise<void> {
     />
   </div>
 </template>
+
+<style scoped>
+.nimbus-section {
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.nimbus-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kawaii-text);
+}
+</style>

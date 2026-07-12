@@ -608,17 +608,17 @@ onUnmounted(() => {
       <div class="mx-auto max-w-7xl">
         <div class="market-toolbar" data-reveal>
           <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-            <div class="market-seg inline-flex shrink-0 rounded-xl p-1">
+            <div class="inline-flex shrink-0 items-center gap-0.5 rounded-xl border border-themed bg-themed-surface p-1">
               <button
                 class="h-9 rounded-lg px-4 text-sm font-semibold tracking-normal transition-colors duration-150"
-                :class="packageSource === 'official' ? ui.chipActive : ui.chipIdle"
+                :class="packageSource === 'official' ? 'bg-primary-500 text-white shadow-sm' : 'text-themed-muted hover:text-themed'"
                 @click="switchSource('official')"
               >
                 {{ t('publicSite.market.official') }}
               </button>
               <button
                 class="h-9 rounded-lg px-4 text-sm font-semibold tracking-normal transition-colors duration-150"
-                :class="packageSource === 'market' ? ui.chipActive : ui.chipIdle"
+                :class="packageSource === 'market' ? 'bg-primary-500 text-white shadow-sm' : 'text-themed-muted hover:text-themed'"
                 @click="switchSource('market')"
               >
                 {{ t('publicSite.market.market') }}
@@ -878,7 +878,7 @@ onUnmounted(() => {
                               </div>
                             </div>
                             <div class="shrink-0 text-right">
-                              <div class="text-sm font-extrabold">
+                              <div class="font-mono text-sm font-extrabold tabular-nums">
                                 {{ configStore.freeSiteMode ? freeSiteCopy.moneyJustForShow : `¥${formatPublicPrice(plan.price)}` }}
                               </div>
                               <div class="mt-0.5 text-[11px] opacity-70">
@@ -887,7 +887,7 @@ onUnmounted(() => {
                             </div>
                           </div>
 
-                          <div class="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                          <div class="mt-2 flex flex-wrap gap-1.5 font-mono text-[11px] tabular-nums">
                             <span class="rounded-lg border px-2 py-0.5 font-semibold" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">CPU {{ plan.cpu }}%</span>
                             <span class="rounded-lg border px-2 py-0.5 font-semibold" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">{{ formatMemory(plan.memory) }}</span>
                             <span class="rounded-lg border px-2 py-0.5 font-semibold" :class="selectedPlan?.id === plan.id ? 'border-current' : ui.statChip">{{ formatDisk(plan.disk) }}</span>
@@ -923,7 +923,7 @@ onUnmounted(() => {
                         </div>
                       </div>
                       <div class="shrink-0 text-right">
-                        <div class="text-xl font-extrabold tracking-normal" :class="ui.title">
+                        <div class="font-mono text-xl font-extrabold tabular-nums" :class="ui.title">
                           {{ configStore.freeSiteMode ? freeSiteCopy.moneyJustForShow : `¥${formatPublicPrice(selectedPlan.price)}` }}
                         </div>
                         <div class="mt-0.5 text-[11px]" :class="ui.statBlockLabel">
@@ -932,7 +932,7 @@ onUnmounted(() => {
                       </div>
                     </div>
 
-                    <div class="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+                    <div class="mt-3 flex flex-wrap gap-1.5 font-mono text-[11px] tabular-nums">
                       <span class="rounded-lg border border-current px-2 py-0.5 font-semibold opacity-90">CPU {{ selectedPlan.cpu }}%</span>
                       <span class="rounded-lg border border-current px-2 py-0.5 font-semibold opacity-90">{{ formatMemory(selectedPlan.memory) }}</span>
                       <span class="rounded-lg border border-current px-2 py-0.5 font-semibold opacity-90">{{ formatDisk(selectedPlan.disk) }}</span>
@@ -1058,5 +1058,21 @@ onUnmounted(() => {
 .market-empty-title {
   font-size: 15px;
   font-weight: 700;
+}
+
+/* Nimbus catalog card hover-lift */
+.kawaii-market-package-grid > button {
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
+}
+.kawaii-market-package-grid > button:not(.opacity-70):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgb(16 24 40 / .18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .kawaii-market-package-grid > button,
+  .kawaii-market-package-grid > button:hover {
+    transition: none;
+    transform: none;
+  }
 }
 </style>

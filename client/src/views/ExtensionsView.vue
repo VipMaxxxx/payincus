@@ -534,45 +534,42 @@ loadCommands()
 
 <template>
   <div class="kawaii-page space-y-6 animate-fade-in">
-    <div class="page-header">
-      <h1 class="page-title">{{ $t('nav.extensions') }}</h1>
-      <p class="text-sm text-themed-muted mt-1">{{ $t('extensions.description') }}</p>
-    </div>
+    <header class="flex flex-col gap-4 border-b border-themed pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <h1 class="text-2xl font-semibold tracking-tight text-themed">{{ $t('nav.extensions') }}</h1>
+        <p class="mt-1.5 text-sm text-themed-muted">{{ $t('extensions.description') }}</p>
+      </div>
+    </header>
 
-    <ThemeTemplateSlot slot-name="user.extensions.banner" container-class="overflow-hidden rounded-lg border border-themed bg-themed-surface" />
+    <ThemeTemplateSlot slot-name="user.extensions.banner" container-class="overflow-hidden rounded-xl border border-themed bg-themed-surface" />
 
     <!-- TAB 导航 -->
-    <div class="border-b border-themed">
-      <nav class="flex -mb-px">
-        <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-          :class="activeTab === 'init-commands' 
-            ? 'border-primary-500 text-primary-600 dark:text-primary-400' 
-            : 'border-transparent text-themed-muted hover:text-themed-secondary hover:border-themed'"
-          @click="activeTab = 'init-commands'"
-        >
-          {{ $t('extensions.initCommands.title') }}
-        </button>
-        <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-          :class="activeTab === 'developer-submissions'
-            ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-            : 'border-transparent text-themed-muted hover:text-themed-secondary hover:border-themed'"
-          @click="openDeveloperSubmissions"
-        >
-          开发者投稿
-        </button>
-        <button
-          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-          :class="activeTab === 'theme-submissions'
-            ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-            : 'border-transparent text-themed-muted hover:text-themed-secondary hover:border-themed'"
-          @click="openThemeSubmissions"
-        >
-          {{ $t('extensions.themeSubmissions.entry') }}
-        </button>
-      </nav>
-    </div>
+    <nav class="-mb-px flex flex-wrap items-center gap-x-1 border-b border-themed">
+      <button
+        class="relative px-3.5 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'init-commands' ? 'text-primary-500' : 'text-themed-muted hover:text-themed'"
+        @click="activeTab = 'init-commands'"
+      >
+        {{ $t('extensions.initCommands.title') }}
+        <span v-show="activeTab === 'init-commands'" class="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-primary-500"></span>
+      </button>
+      <button
+        class="relative px-3.5 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'developer-submissions' ? 'text-primary-500' : 'text-themed-muted hover:text-themed'"
+        @click="openDeveloperSubmissions"
+      >
+        开发者投稿
+        <span v-show="activeTab === 'developer-submissions'" class="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-primary-500"></span>
+      </button>
+      <button
+        class="relative px-3.5 py-2.5 text-sm font-medium transition-colors"
+        :class="activeTab === 'theme-submissions' ? 'text-primary-500' : 'text-themed-muted hover:text-themed'"
+        @click="openThemeSubmissions"
+      >
+        {{ $t('extensions.themeSubmissions.entry') }}
+        <span v-show="activeTab === 'theme-submissions'" class="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-primary-500"></span>
+      </button>
+    </nav>
 
     <!-- 初始化命令 TAB -->
     <div v-if="activeTab === 'init-commands'" class="card p-5">
@@ -598,16 +595,16 @@ loadCommands()
       </div>
 
       <!-- 命令列表 -->
-      <div v-else-if="commands.length" class="space-y-2">
-        <div 
-          v-for="cmd in paginatedCommands" 
-          :key="cmd.id" 
-          class="group flex items-center justify-between gap-3 p-3 bg-themed-tertiary border border-themed rounded-lg hover:border-themed-secondary transition-colors"
+      <div v-else-if="commands.length" class="space-y-2.5">
+        <div
+          v-for="cmd in paginatedCommands"
+          :key="cmd.id"
+          class="nimbus-lift group flex items-center justify-between gap-3 rounded-xl border border-themed bg-themed-surface p-3.5"
           :class="{ 'opacity-50': !cmd.enabled }"
         >
           <div class="flex items-center gap-3 min-w-0 flex-1">
             <!-- 图标 -->
-            <div class="w-9 h-9 rounded-lg bg-themed-secondary flex items-center justify-center flex-shrink-0">
+            <div class="w-9 h-9 rounded-xl bg-themed-secondary flex items-center justify-center flex-shrink-0">
               <svg class="w-5 h-5 icon-themed" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -615,9 +612,9 @@ loadCommands()
             <!-- 信息 -->
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="text-sm text-themed-secondary font-medium truncate">{{ cmd.name }}</span>
-                <span v-if="!cmd.enabled" class="text-xs px-1.5 py-0.5 rounded bg-themed-secondary text-themed-muted">
-                  {{ $t('extensions.initCommands.statusDisabled') }}
+                <span class="text-sm text-themed font-medium truncate">{{ cmd.name }}</span>
+                <span v-if="!cmd.enabled" class="inline-flex items-center gap-1.5 rounded-full bg-themed-secondary px-2 py-0.5 text-xs font-medium text-themed-muted">
+                  <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ $t('extensions.initCommands.statusDisabled') }}
                 </span>
               </div>
               <div class="text-xs text-themed-faint truncate mt-0.5">
@@ -684,7 +681,7 @@ loadCommands()
       </div>
 
       <!-- 空状态 -->
-      <div v-else class="text-center py-12 border border-dashed border-themed rounded-lg">
+      <div v-else class="text-center py-12 border border-dashed border-themed rounded-xl">
         <svg class="w-12 h-12 mx-auto mb-3 text-themed-faint opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
@@ -726,7 +723,7 @@ loadCommands()
           <p class="mt-1 text-sm text-themed-muted">可以上传扩展包由平台生成待审核下载源，也可以提交已有 HTTPS Release、manifest、包地址、SHA256 和权限说明。</p>
         </div>
 
-        <div class="mb-5 rounded-lg border border-themed bg-themed p-4">
+        <div class="mb-5 rounded-xl border border-themed bg-themed-secondary p-4">
           <div class="flex flex-col gap-3 md:flex-row md:items-end">
             <label class="flex-1 space-y-1">
               <span class="text-sm text-themed-muted">上传扩展包</span>
@@ -826,16 +823,21 @@ loadCommands()
         </div>
 
         <div v-if="submissionsLoading" class="py-8 text-center text-themed-muted">加载中...</div>
-        <div v-else-if="submissions.length === 0" class="py-8 text-center text-sm text-themed-muted">暂无投稿。</div>
+        <div v-else-if="submissions.length === 0" class="mt-4 flex flex-col items-center gap-3 py-10 text-center">
+          <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-themed-secondary text-themed-faint">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M22 12h-6l-2 3h-4l-2-3H2" /><path stroke-linecap="round" stroke-linejoin="round" d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></svg>
+          </span>
+          <p class="text-sm text-themed-muted">暂无投稿。</p>
+        </div>
         <div v-else class="mt-4 space-y-3">
-          <article v-for="submission in submissions" :key="submission.id" class="rounded-lg border border-themed bg-themed p-3">
+          <article v-for="submission in submissions" :key="submission.id" class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-4">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <h3 class="truncate text-sm font-medium text-themed">{{ submission.name }}</h3>
-                <p class="mt-1 truncate font-mono text-xs text-themed-muted">{{ submission.pluginId }}@{{ submission.version }}</p>
+                <p class="mt-1 truncate font-mono text-xs tabular-nums text-themed-muted">{{ submission.pluginId }}@{{ submission.version }}</p>
               </div>
-              <span class="rounded border px-2 py-1 text-xs" :class="submissionStatusClass(submission.reviewStatus)">
-                {{ submissionReviewLabels[submission.reviewStatus] }}
+              <span class="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="submissionStatusClass(submission.reviewStatus)">
+                <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ submissionReviewLabels[submission.reviewStatus] }}
               </span>
             </div>
             <div class="mt-3 grid gap-2 text-xs text-themed-muted">
@@ -848,8 +850,8 @@ loadCommands()
             <div class="mt-3 rounded border border-themed bg-themed-surface p-3">
               <div class="flex items-center justify-between gap-3">
                 <span class="text-xs font-medium text-themed">事件投递健康</span>
-                <span class="rounded border px-2 py-1 text-xs" :class="eventHealthStatusClass(eventHealthByPluginId.get(submission.pluginId))">
-                  {{ eventHealthStatusText(eventHealthByPluginId.get(submission.pluginId)) }}
+                <span class="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="eventHealthStatusClass(eventHealthByPluginId.get(submission.pluginId))">
+                  <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ eventHealthStatusText(eventHealthByPluginId.get(submission.pluginId)) }}
                 </span>
               </div>
               <div class="mt-3 rounded border border-themed bg-themed p-2 text-xs text-themed-muted">
@@ -997,8 +999,8 @@ loadCommands()
                       <div class="truncate font-mono text-[11px] text-themed">{{ item.eventName }}</div>
                       <div class="truncate text-[11px] text-themed-muted">handler: {{ item.handler }}</div>
                     </div>
-                    <span class="shrink-0 rounded border px-2 py-0.5 text-[11px]" :class="eventHealthStatusClass(item)">
-                      {{ eventHealthStatusText(item) }}
+                    <span class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium" :class="eventHealthStatusClass(item)">
+                      <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ eventHealthStatusText(item) }}
                     </span>
                   </div>
                   <div class="mt-2 grid grid-cols-2 gap-1 text-xs text-themed-muted">
@@ -1035,7 +1037,7 @@ loadCommands()
           <p class="mt-1 text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.description') }}</p>
         </div>
 
-        <div class="mb-5 rounded-lg border border-themed bg-themed p-4 text-sm text-themed-muted">
+        <div class="mb-5 rounded-xl border border-themed bg-themed-secondary p-4 text-sm text-themed-muted">
           {{ $t('extensions.themeSubmissions.freeReviewHint') }}
         </div>
 
@@ -1124,16 +1126,21 @@ loadCommands()
         </div>
 
         <div v-if="themeSubmissionsLoading" class="py-8 text-center text-themed-muted">{{ $t('extensions.themeSubmissions.loading') }}</div>
-        <div v-else-if="themeSubmissions.length === 0" class="py-8 text-center text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.empty') }}</div>
+        <div v-else-if="themeSubmissions.length === 0" class="mt-4 flex flex-col items-center gap-3 py-10 text-center">
+          <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-themed-secondary text-themed-faint">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M22 12h-6l-2 3h-4l-2-3H2" /><path stroke-linecap="round" stroke-linejoin="round" d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></svg>
+          </span>
+          <p class="text-sm text-themed-muted">{{ $t('extensions.themeSubmissions.empty') }}</p>
+        </div>
         <div v-else class="mt-4 space-y-3">
-          <article v-for="submission in themeSubmissions" :key="submission.id" class="rounded-lg border border-themed bg-themed p-3">
+          <article v-for="submission in themeSubmissions" :key="submission.id" class="nimbus-lift rounded-xl border border-themed bg-themed-surface p-4">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <h3 class="truncate text-sm font-medium text-themed">{{ submission.name }}</h3>
-                <p class="mt-1 truncate font-mono text-xs text-themed-muted">{{ submission.themeId }}@{{ submission.version }}</p>
+                <p class="mt-1 truncate font-mono text-xs tabular-nums text-themed-muted">{{ submission.themeId }}@{{ submission.version }}</p>
               </div>
-              <span class="rounded border px-2 py-1 text-xs" :class="submissionStatusClass(submission.reviewStatus)">
-                {{ themeSubmissionReviewLabels[submission.reviewStatus] }}
+              <span class="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="submissionStatusClass(submission.reviewStatus)">
+                <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>{{ themeSubmissionReviewLabels[submission.reviewStatus] }}
               </span>
             </div>
             <div class="mt-3 grid gap-2 text-xs text-themed-muted">
@@ -1163,3 +1170,11 @@ loadCommands()
     />
   </div>
 </template>
+
+<style scoped>
+.nimbus-lift { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.nimbus-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -8px rgb(16 24 40 / .18); }
+@media (prefers-reduced-motion: reduce) {
+  .nimbus-lift, .nimbus-lift:hover { transition: none; transform: none; }
+}
+</style>
